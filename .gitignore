@@ -3,7 +3,6 @@ node_modules/
 *.log
 __pycache__/
 *.pyc
-queue/
 logs/
 specs/*.md
 !specs/SPEC-TEMPLATE.md
