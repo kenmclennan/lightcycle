@@ -1,6 +1,9 @@
 ---
 model: opus
 step: review
+requires:
+  spec: required
+  branch: required
 routes:
   done: open-pr
   rejected: build

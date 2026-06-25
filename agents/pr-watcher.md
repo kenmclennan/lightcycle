@@ -1,6 +1,10 @@
 ---
 model: sonnet
 step: open-pr
+requires:
+  branch: required
+produces:
+  pr: required
 routes:
   done: ready-merge
   ci-failed: build

@@ -109,7 +109,14 @@ def claim_next(role):
     arr = bd_json("ready", "--label", "for:%s" % role, "--claim", "--json")
     if not arr:
         return None
-    return task_from_bead(arr[0])
+    t = task_from_bead(arr[0])
+    missing = required_inputs(meta_for_step(t["step"])) - present_types(t)
+    if missing:
+        _route_to_human(t["id"],
+                        "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)),
+                        role)
+        return None
+    return t
 
 # ---- flow engine ------------------------------------------------------------
 
@@ -144,6 +151,44 @@ def flow_next(step, outcome):
     if not next_step:
         return None
     return (next_step, owner.get(next_step, "human"))
+
+# ---- artifact contracts -----------------------------------------------------
+
+# Artifact types tg file attaches to a freshly filed story; the entry budget.
+FILE_PROVIDES = {"spec"}
+
+def _artifact_types(meta, key):
+    """Frontmatter requires/produces block -> {type: required_bool}."""
+    d = meta.get(key)
+    if not isinstance(d, dict):
+        return {}
+    return {t: str(v).strip().lower() != "optional" for t, v in d.items()}
+
+def required_inputs(meta):
+    return {t for t, req in _artifact_types(meta, "requires").items() if req}
+
+def required_outputs(meta):
+    return {t for t, req in _artifact_types(meta, "produces").items() if req}
+
+def meta_for_step(step):
+    owner, _ = load_flow()
+    role = owner.get(step)
+    if not role:
+        return {}
+    a = parse_agent(role)
+    return a["meta"] if a else {}
+
+def present_types(task):
+    story = task.get("parent") or task["id"]
+    return {a["type"] for a in story_artifacts(story)}
+
+def _route_to_human(tid, note, role):
+    bd("note", tid, note)
+    if role and role != "human":
+        bd("label", "remove", tid, "for:%s" % role)
+    bd("label", "add", tid, "for:human")
+    bd("update", tid, "--status", "open")
+    bd("assign", tid, "")
 
 def advance(tid, outcome):
     t = get_task(tid)
@@ -387,37 +432,99 @@ def cmd_ready_roles(argv):
     print(" ".join(ready_roles()))
     return 0
 
+def _guaranteed_artifacts(steps, routes, req, prod, entries):
+    """Greatest fixpoint: artifact types guaranteed present when each step starts.
+
+    A step's guaranteed set is the intersection over its incoming contexts: the
+    entry context (FILE_PROVIDES, if the step can be filed) plus, per route edge
+    A -> step, A's guaranteed set unioned with what A produces. Intersection (not
+    union) means 'present on every path', so rework targets stay honest.
+    """
+    universe = set().union(FILE_PROVIDES, *prod.values()) if steps else set()
+    incoming = {s: [] for s in steps}
+    for src in steps:
+        for nxt in routes.get(src, {}).values():
+            if nxt in incoming:
+                incoming[nxt].append(src)
+    ga = {s: set(universe) for s in steps}
+    for _ in range(len(steps) + 2):
+        for s in steps:
+            ctxs = []
+            if s in entries:
+                ctxs.append(set(FILE_PROVIDES))
+            for src in incoming[s]:
+                ctxs.append(ga[src] | prod[src])
+            ga[s] = set(universe) if not ctxs else set.intersection(*ctxs)
+    return ga
+
 def cmd_flow(argv):
     ap = argparse.ArgumentParser(prog="tg flow")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     owner, routes = load_flow()
+    steps = sorted(owner)
+    req = {s: required_inputs(meta_for_step(s)) for s in steps}
+    prod = {s: required_outputs(meta_for_step(s)) for s in steps}
+    entries = [s for s in steps if req[s] <= FILE_PROVIDES]
+    ga = _guaranteed_artifacts(steps, routes, req, prod, entries)
+
+    reach, stack = set(), list(entries)
+    while stack:
+        s = stack.pop()
+        if s in reach:
+            continue
+        reach.add(s)
+        stack += [n for n in routes.get(s, {}).values() if n in owner]
+    unreachable = [s for s in steps if s not in reach]
+    missing = {s: sorted(req[s] - ga[s]) for s in steps if s in reach and req[s] - ga[s]}
+
     targets = set()
     for rmap in routes.values():
         targets.update(rmap.values())
     terminals = sorted(t for t in targets if t not in owner)
     seen, dups = {}, []
     for role in agent_roles():
-        ag = parse_agent(role)
-        step = (ag["meta"] if ag else {}).get("step")
+        step = (parse_agent(role) or {"meta": {}})["meta"].get("step")
         if step:
             if step in seen:
                 dups.append("step '%s' owned by both %s and %s" % (step, seen[step], role))
             else:
                 seen[step] = role
+    ok = not missing and not dups
+
     if a.json:
         print(json.dumps({"owner": owner, "routes": routes,
-                          "terminals": terminals, "conflicts": dups}, indent=2))
-        return 1 if dups else 0
-    for step in sorted(owner):
-        print("%s  (%s)" % (step, owner[step]))
-        for outcome, nxt in sorted(routes.get(step, {}).items()):
+                          "requires": {s: sorted(req[s]) for s in steps},
+                          "produces": {s: sorted(prod[s]) for s in steps},
+                          "entries": entries, "terminals": terminals,
+                          "unreachable": unreachable, "missing_inputs": missing,
+                          "conflicts": dups, "ok": ok}, indent=2))
+        return 0 if ok else 1
+
+    for s in steps:
+        tags = []
+        if req[s]:
+            tags.append("needs " + ", ".join(sorted(req[s])))
+        if prod[s]:
+            tags.append("makes " + ", ".join(sorted(prod[s])))
+        print("%s  (%s)%s" % (s, owner[s], "  [" + "; ".join(tags) + "]" if tags else ""))
+        for outcome, nxt in sorted(routes.get(s, {}).items()):
             print("  %-10s -> %s  [%s]" % (outcome, nxt, owner.get(nxt, "human")))
     if terminals:
         print("human terminals: %s" % ", ".join(terminals))
+    if entries:
+        print("entry steps: %s" % ", ".join(sorted(entries)))
+    else:
+        sys.stderr.write("warning: no entry step (none requires only %s)\n"
+                         % ", ".join(sorted(FILE_PROVIDES)))
+    for s, miss in sorted(missing.items()):
+        sys.stderr.write("composition: step '%s' needs %s, not guaranteed upstream\n"
+                         % (s, ", ".join(miss)))
+    for s in unreachable:
+        sys.stderr.write("warning: step '%s' is unreachable from any entry\n" % s)
     for d in dups:
         sys.stderr.write("conflict: %s\n" % d)
-    return 1 if dups else 0
+    return 0 if ok else 1
 
 def cmd_done(argv):
     ap = argparse.ArgumentParser(prog="tg done")
@@ -429,6 +536,12 @@ def cmd_done(argv):
         sys.stderr.write(
             "no transition for step=%s outcome=%s; not closing. "
             "Fix the flow or use a defined outcome.\n" % (t["step"], a.outcome))
+        return 1
+    missing = required_outputs(meta_for_step(t["step"])) - present_types(t)
+    if missing:
+        sys.stderr.write(
+            "cannot close %s: step '%s' must produce %s; none on the story. "
+            "tg link the artifact first.\n" % (a.id, t["step"], ", ".join(sorted(missing))))
         return 1
     bd("note", a.id, "outcome: %s" % a.outcome)
     bd("close", a.id, "--reason", a.outcome)
@@ -553,6 +666,12 @@ def cmd_file(argv):
     if not role:
         sys.stderr.write("unknown step '%s'; owned steps: %s\n"
                          % (a.step, ", ".join(sorted(owner)) or "(none)"))
+        return 1
+    unmet = required_inputs(meta_for_step(a.step)) - FILE_PROVIDES
+    if unmet:
+        sys.stderr.write(
+            "step '%s' requires %s; a filed story only carries a spec. "
+            "File at an entry step.\n" % (a.step, ", ".join(sorted(unmet))))
         return 1
     base = os.path.splitext(os.path.basename(a.spec))[0]
     labels = []

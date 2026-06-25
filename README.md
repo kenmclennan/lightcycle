@@ -40,6 +40,15 @@ any directory.
 - **Artifacts live on the story** as a `{type, value, label?}` list (spec, branch,
   pr, ticket, doc, ...). Tasks read their parent story's artifacts - nothing is
   copied between tasks.
+- **Agents can declare an artifact contract** (optional) in frontmatter:
+  `requires:` and `produces:`, keyed by artifact type (`<type>: required|optional`).
+  `tg` enforces it mechanically: a task whose required inputs are absent routes to
+  `for:human` instead of running (precondition); `tg done` refuses to close until
+  the required outputs are linked (postcondition); `tg file --step` rejects a step
+  whose inputs a fresh story can't satisfy; and `tg flow` statically checks the
+  whole pipeline composes - every step's required inputs are guaranteed by some
+  upstream producer on every path. Presence-only: it checks the story's artifact
+  list, never git/GitHub reality. Agents with no contract are unconstrained.
 - **Everything is a task.** "build", "review", "open-pr" are tasks chained by
   dependencies; closing one makes its dependents ready. Which task is ready IS the
   stage. The chain is defined by the agents themselves: each agent declares its
@@ -73,7 +82,7 @@ Run the parts standalone, or use `tg up` to start them together.
 | `tg logs <task\|role\|run> [-f]`           | tail a worker's or the loop's log                               |
 | `tg show <id>`                             | a story (artifacts + child tasks) or a task (+ story artifacts) |
 | `tg trace <story>`                         | story + its artifacts + child tasks + logs                      |
-| `tg flow [--json]`                         | print the assembled flow (steps, routes, human terminals)       |
+| `tg flow [--json]`                         | print + check the assembled flow (steps, routes, contracts, composition) |
 | `tg file <spec> --step <step> [--epic/--project/--goal]` | create a story (spec attached) + first task at `<step>` |
 | `tg link <story> <type> <value> [--label]` | attach an artifact to a story                                   |
 | `tg add "<title>"`                         | create a standalone human task (no story/flow)                  |

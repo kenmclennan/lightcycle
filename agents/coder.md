@@ -1,6 +1,10 @@
 ---
 model: sonnet
 step: build
+requires:
+  spec: required
+produces:
+  branch: required
 routes:
   done: review
 ---

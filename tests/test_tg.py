@@ -35,7 +35,7 @@ _AGENT_SPECS = {
 
 
 def write_agents(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
-    """Write the standard pipeline agents (frontmatter routing) into root."""
+    """Write the standard pipeline agents (routing only, no artifact contracts)."""
     adir = Path(root) / "agents"
     adir.mkdir(exist_ok=True)
     for r in roles:
@@ -46,6 +46,34 @@ def write_agents(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
         if routes:
             fm.append("routes:")
             fm += ["  %s: %s" % (o, n) for o, n in routes.items()]
+        fm += ["---", "# %s" % r, "stub"]
+        (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
+
+
+_CONTRACT_SPECS = {
+    "coder": dict(model="sonnet", step="build", requires={"spec": "required"},
+                  produces={"branch": "required"}, routes={"done": "review"}),
+    "reviewer": dict(model="opus", step="review",
+                     requires={"spec": "required", "branch": "required"}, produces={},
+                     routes={"done": "open-pr", "rejected": "build"}),
+    "pr-watcher": dict(model="sonnet", step="open-pr", requires={"branch": "required"},
+                       produces={"pr": "required"},
+                       routes={"done": "ready-merge", "ci-failed": "build"}),
+}
+
+
+def write_contract_agents(root, specs=None):
+    """Write agents that declare requires/produces artifact contracts."""
+    specs = specs or _CONTRACT_SPECS
+    adir = Path(root) / "agents"
+    adir.mkdir(exist_ok=True)
+    for r, s in specs.items():
+        fm = ["---", "model: %s" % s["model"], "step: %s" % s["step"]]
+        for blk in ("requires", "produces", "routes"):
+            d = s.get(blk) or {}
+            if d:
+                fm.append("%s:" % blk)
+                fm += ["  %s: %s" % (k, v) for k, v in d.items()]
         fm += ["---", "# %s" % r, "stub"]
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
 
@@ -479,6 +507,80 @@ class TestFileStep(unittest.TestCase):
         r = subprocess.run([sys.executable, TG, "spawn", "reviewer"], capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 1)
         self.assertIn("model", r.stderr)
+
+
+class TestArtifactContracts(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_contract_agents(self.root)
+
+    def _bead(self, bid):
+        return json.loads(bd_in(self.root, "show", bid, "--json"))[0]
+
+    def test_claim_escalates_when_required_input_missing(self):
+        b = json.loads(bd_in(self.root, "create", "build: x", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        r = run_tg("claim", "coder", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), "")  # not claimed
+        bead = self._bead(b)
+        self.assertIn("for:human", bead["labels"])
+        self.assertNotIn("for:coder", bead["labels"])
+        self.assertEqual(bead["status"], "open")
+
+    def test_claim_proceeds_when_inputs_present(self):
+        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
+        r = run_tg("claim", "coder", root=self.root)
+        t = json.loads(r.stdout)
+        self.assertEqual(t["status"], "in-progress")
+        self.assertEqual(t["parent"], sid)
+
+    def test_done_refused_when_required_output_missing(self):
+        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
+        task = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
+        r = run_tg("done", task, "done", root=self.root)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("branch", r.stderr)
+        self.assertEqual(self._bead(task)["status"], "open")
+
+    def test_done_succeeds_when_output_present(self):
+        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
+        task = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
+        run_tg("link", sid, "branch", "grid/x", root=self.root)
+        r = run_tg("done", task, "done", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self._bead(task)["status"], "closed")
+
+    def test_file_rejects_non_entry_step(self):
+        r = run_tg("file", "specs/X.md", "--step", "review", root=self.root)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("branch", r.stderr)
+
+    def test_flow_reports_composition_ok(self):
+        r = run_tg("flow", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("branch", r.stdout)  # produces shown
+
+    def test_flow_flags_broken_composition(self):
+        specs = {k: dict(v) for k, v in _CONTRACT_SPECS.items()}
+        specs["reviewer"] = dict(specs["reviewer"],
+                                 requires={"spec": "required", "design": "required"})
+        write_contract_agents(self.root, specs)
+        r = run_tg("flow", root=self.root)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("design", r.stderr)
+
+
+class TestContractsOptional(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_agents(self.root)  # no requires/produces
+
+    def test_done_without_contract_needs_no_artifacts(self):
+        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        r = run_tg("done", b, "done", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 if __name__ == "__main__":
