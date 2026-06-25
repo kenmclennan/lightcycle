@@ -1,7 +1,7 @@
 ---
 model: sonnet
 step: open-pr
-requires:
+accepts:
   branch: required
 produces:
   pr: required

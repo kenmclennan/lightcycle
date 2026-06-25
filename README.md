@@ -41,14 +41,17 @@ any directory.
   pr, ticket, doc, ...). Tasks read their parent story's artifacts - nothing is
   copied between tasks.
 - **Agents can declare an artifact contract** (optional) in frontmatter:
-  `requires:` and `produces:`, keyed by artifact type (`<type>: required|optional`).
-  `tg` enforces it mechanically: a task whose required inputs are absent routes to
-  `for:human` instead of running (precondition); `tg done` refuses to close until
-  the required outputs are linked (postcondition); `tg file --step` rejects a step
-  whose inputs a fresh story can't satisfy; and `tg flow` statically checks the
-  whole pipeline composes - every step's required inputs are guaranteed by some
-  upstream producer on every path. Presence-only: it checks the story's artifact
-  list, never git/GitHub reality. Agents with no contract are unconstrained.
+  `accepts:` (inputs) and `produces:` (outputs), keyed by artifact type
+  (`<type>: required|optional`). A required input gates the work; an optional input
+  is read if present but never gates (e.g. the coder accepts `branch: optional`,
+  since on a rework pass the branch already exists). `tg` enforces the required
+  parts mechanically: a task whose required inputs are absent routes to `for:human`
+  instead of running (precondition); `tg done` refuses to close until the required
+  outputs are linked (postcondition); `tg file --step` rejects a step whose inputs a
+  fresh story can't satisfy; and `tg flow` statically checks the whole pipeline
+  composes - every step's required inputs are guaranteed by some upstream producer
+  on every path. Presence-only: it checks the story's artifact list, never
+  git/GitHub reality. Agents with no contract are unconstrained.
 - **Everything is a task.** "build", "review", "open-pr" are tasks chained by
   dependencies; closing one makes its dependents ready. Which task is ready IS the
   stage. The chain is defined by the agents themselves: each agent declares its

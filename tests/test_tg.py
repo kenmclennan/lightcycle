@@ -51,25 +51,26 @@ def write_agents(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
 
 
 _CONTRACT_SPECS = {
-    "coder": dict(model="sonnet", step="build", requires={"spec": "required"},
+    "coder": dict(model="sonnet", step="build",
+                  accepts={"spec": "required", "branch": "optional"},
                   produces={"branch": "required"}, routes={"done": "review"}),
     "reviewer": dict(model="opus", step="review",
-                     requires={"spec": "required", "branch": "required"}, produces={},
+                     accepts={"spec": "required", "branch": "required"}, produces={},
                      routes={"done": "open-pr", "rejected": "build"}),
-    "pr-watcher": dict(model="sonnet", step="open-pr", requires={"branch": "required"},
+    "pr-watcher": dict(model="sonnet", step="open-pr", accepts={"branch": "required"},
                        produces={"pr": "required"},
                        routes={"done": "ready-merge", "ci-failed": "build"}),
 }
 
 
 def write_contract_agents(root, specs=None):
-    """Write agents that declare requires/produces artifact contracts."""
+    """Write agents that declare accepts/produces artifact contracts."""
     specs = specs or _CONTRACT_SPECS
     adir = Path(root) / "agents"
     adir.mkdir(exist_ok=True)
     for r, s in specs.items():
         fm = ["---", "model: %s" % s["model"], "step: %s" % s["step"]]
-        for blk in ("requires", "produces", "routes"):
+        for blk in ("accepts", "produces", "routes"):
             d = s.get(blk) or {}
             if d:
                 fm.append("%s:" % blk)
@@ -88,6 +89,19 @@ class TestSkeleton(unittest.TestCase):
     def test_unknown_subcommand_exits_2(self):
         r = run_tg("wibble")
         self.assertEqual(r.returncode, 2)
+
+    def test_help_is_grouped_and_described(self):
+        r = run_tg("--help")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("See what's happening", r.stdout)   # a group header
+        self.assertIn("Start working", r.stdout)
+        # a command must carry a real description, not just its name
+        for line in r.stdout.splitlines():
+            if line.strip().startswith("status "):
+                self.assertGreater(len(line.split()), 3)
+                break
+        else:
+            self.fail("status command not listed with a description")
 
 
 class TestModel(unittest.TestCase):
@@ -564,7 +578,7 @@ class TestArtifactContracts(unittest.TestCase):
     def test_flow_flags_broken_composition(self):
         specs = {k: dict(v) for k, v in _CONTRACT_SPECS.items()}
         specs["reviewer"] = dict(specs["reviewer"],
-                                 requires={"spec": "required", "design": "required"})
+                                 accepts={"spec": "required", "design": "required"})
         write_contract_agents(self.root, specs)
         r = run_tg("flow", root=self.root)
         self.assertEqual(r.returncode, 1)

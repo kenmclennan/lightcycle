@@ -1,7 +1,7 @@
 ---
 model: opus
 step: review
-requires:
+accepts:
   spec: required
   branch: required
 routes:

@@ -1,8 +1,9 @@
 ---
 model: sonnet
 step: build
-requires:
+accepts:
   spec: required
+  branch: optional
 produces:
   branch: required
 routes:
