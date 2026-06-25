@@ -75,7 +75,7 @@ Run the parts standalone, or use `tg up` to start them together.
 | Command                                    | What it does                                                    |
 | ------------------------------------------ | --------------------------------------------------------------- |
 | `tg up`                                    | ensure beads, background `tg run`, open the driver              |
-| `tg run [--once]`                          | the loop: sweep, then spawn a worker per ready role             |
+| `tg run [--once]`                          | the loop: sweep, then start a worker for each role with work waiting |
 | `tg driver`                                | open the interactive driver `claude` (your seat)                |
 | `tg status`                                | all buckets: mine / active / queue / blocked                    |
 | `tg mine`                                  | tasks that need you (`for:human`)                               |

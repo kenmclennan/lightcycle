@@ -337,7 +337,7 @@ def stamp_bead(spawnid, bead):
 COMMAND_GROUPS = [
     ("Start working", [
         ("up", "", "ensure the store, start the run-loop in the background, open the driver"),
-        ("run", "[--once]", "the loop: each tick, sweep then spawn a worker for every ready role"),
+        ("run", "[--once]", "the loop: each tick, sweep stale claims, then start a worker for each role that has work waiting"),
         ("driver", "", "open the interactive driver - your seat to shape and file work"),
     ]),
     ("See what's happening", [
