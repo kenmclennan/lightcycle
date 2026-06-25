@@ -585,6 +585,46 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertIn("design", r.stderr)
 
 
+class TestPruneWorkers(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        self.wfile = Path(self.root) / "logs" / "workers.json"
+
+    def _dead_pid(self):
+        p = subprocess.Popen(["true"])
+        p.wait()
+        return p.pid
+
+    def _write(self, workers):
+        self.wfile.write_text(json.dumps(workers))
+
+    def _sweep(self, history=None):
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root)
+        if history is not None:
+            env["GRID_WORKER_HISTORY"] = str(history)
+        return subprocess.run([sys.executable, TG, "sweep"], capture_output=True, text=True, env=env)
+
+    def test_sweep_prunes_dead_keeps_live(self):
+        dead = self._dead_pid()
+        self._write([
+            {"spawnid": "a", "role": "coder", "pid": os.getpid(), "log": "x", "bead": None},
+            {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "bead": None},
+        ])
+        r = self._sweep(history=0)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        ids = [w["spawnid"] for w in json.loads(self.wfile.read_text())]
+        self.assertEqual(ids, ["a"])
+
+    def test_sweep_keeps_recent_dead_for_log_lookup(self):
+        dead = self._dead_pid()
+        self._write([{"spawnid": "d%d" % i, "role": "coder", "pid": dead, "log": "l", "bead": None}
+                     for i in range(3)])
+        self._sweep(history=2)
+        ids = [w["spawnid"] for w in json.loads(self.wfile.read_text())]
+        self.assertEqual(ids, ["d1", "d2"])
+
+
 class TestInitAndStoreGuard(unittest.TestCase):
     def _bare(self):
         d = tempfile.mkdtemp()

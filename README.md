@@ -103,6 +103,9 @@ Each role declares its own model in the `model:` frontmatter of its agent file
 ## Telemetry / logs
 
 - `logs/workers.json` - role, bead (stamped at claim), pid, log path per worker.
+  Each `tg sweep` (and so each run-loop tick) prunes dead entries, keeping all live
+  workers plus the most recent `GRID_WORKER_HISTORY` dead ones (default 20) so
+  `tg logs` can still reach recently finished workers.
 - `logs/worker-<role>-<spawnid>.log` - each worker's output (`tg logs` finds it).
 - `logs/run.log` - the run-loop's activity.
 - Beads history gives cycle time, rework, throughput.

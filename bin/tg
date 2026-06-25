@@ -366,7 +366,7 @@ COMMAND_GROUPS = [
          "escalate to a human with resume-state"),
     ]),
     ("Maintenance", [
-        ("sweep", "", "release orphaned claims (dead worker -> task reclaimable)"),
+        ("sweep", "", "reclaim orphaned task claims and prune dead worker entries (kept: GRID_WORKER_HISTORY, default 20)"),
     ]),
     ("Plumbing (the loop uses these)", [
         ("advance", "<id> <outcome>", "create the next task for an outcome without closing"),
@@ -667,6 +667,21 @@ def cmd_trace(argv):
             print("  task %s  %s  [%s]%s" % (t["id"], t["step"] or "-", t["status"], log))
     return 0
 
+def prune_workers(keep_dead=None):
+    """Drop dead worker entries from the registry, keeping all live workers plus
+    the most recent `keep_dead` dead ones (so tg logs can still find recently
+    finished workers). Returns the number pruned."""
+    if keep_dead is None:
+        keep_dead = int(os.environ.get("GRID_WORKER_HISTORY", "20"))
+    workers = workers_state()
+    dead_idx = [i for i, w in enumerate(workers) if not pid_alive(w.get("pid", -1))]
+    n_drop = max(0, len(dead_idx) - keep_dead)
+    if not n_drop:
+        return 0
+    drop = set(dead_idx[:n_drop])
+    _write_workers([w for i, w in enumerate(workers) if i not in drop])
+    return n_drop
+
 def cmd_sweep(argv):
     live_beads = set()
     for w in workers_state():
@@ -679,6 +694,9 @@ def cmd_sweep(argv):
         bd("update", bid, "--status", "open")
         bd("assign", bid, "")
         print("swept %s" % bid)
+    pruned = prune_workers()
+    if pruned:
+        print("pruned %d dead worker entr%s" % (pruned, "y" if pruned == 1 else "ies"))
     return 0
 
 # ---- read views -------------------------------------------------------------
