@@ -1,34 +1,33 @@
 ---
-id: SPEC-ID
-title: Short title
-source: <ticket/PRD url or "hand-authored">
+id:
+title:
+source:
 status: locked
 coder_skills: []
 reviewer_skills: []
 ---
 
 <!--
-coder_skills / reviewer_skills: the Driver chooses these per spec based on the
-task's complexity. List the IL skills the Coder/Reviewer must invoke before
-working. Examples:
-  coder_skills: [il:code-standards]                  # light: a config/one-liner
-  coder_skills: [il:generate-code, il:kotlin-micronaut-service]  # full feature
-  reviewer_skills: [il:review-checklist]             # light
-  reviewer_skills: [il:review-code]                  # full independent review
-Leave empty ([]) only for trivial changes where no skill adds value.
+Required fields. Fill what the work actually needs; do not pad a section with
+invented content to make it look complete.
+- source: where the requirement came from (ticket/PRD url, or "hand-authored"). Never invent one.
+- status: locked once settled; the spec is immutable after it enters the pipeline.
+- coder_skills / reviewer_skills: skills the Coder / Reviewer must invoke, chosen by complexity. [] if none helps.
 -->
 
 ## What to build
 
-<concrete requirement, enough to code from>
+What the change must accomplish, concrete enough to code from.
 
 ## Acceptance checks
 
-- [ ] <verifiable check the Reviewer asserts against>
-- [ ] <...>
+- [ ] A verifiable check the Reviewer asserts against. One per line.
 
 ## Provenance
 
-| Claim                           | Source               | Trust             |
-| ------------------------------- | -------------------- | ----------------- |
-| <assertion the build relies on> | <where it came from> | locked \| assumed |
+Claims the build relies on, each with its source and trust (locked | assumed).
+Omit the table if the build relies on nothing beyond this spec; never fabricate
+a source to fill a row.
+
+| Claim | Source | Trust |
+| ----- | ------ | ----- |
