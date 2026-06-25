@@ -25,9 +25,9 @@ tg active              # what agents are working now
 tg queue 10            # next 10 upcoming agent tasks
 tg ps                  # running workers: role, bead, pid, alive/dead
 tg logs run -f         # tail the run-loop
-tg logs <bead> -f      # tail the worker on a bead
+tg logs <task> -f      # tail the worker on a task
 tg logs coder -f       # tail the most recent coder
-tg show <bead>         # one task incl. resume-state (for escalations)
+tg show <task>         # one task incl. resume-state (for escalations)
 ```
 
 ## Drive work in

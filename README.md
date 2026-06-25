@@ -62,7 +62,7 @@ Run the parts standalone, or use `tg up` to start them together.
 | `tg active`                                | tasks being worked now                                          |
 | `tg queue [N]`                             | next N upcoming agent tasks                                     |
 | `tg ps [--json]`                           | running workers (role, bead, pid, alive)                        |
-| `tg logs <bead\|role\|run> [-f]`           | tail a worker's or the loop's log                               |
+| `tg logs <task\|role\|run> [-f]`           | tail a worker's or the loop's log                               |
 | `tg show <id>`                             | a story (artifacts + child tasks) or a task (+ story artifacts) |
 | `tg trace <story>`                         | story + its artifacts + child tasks + logs                      |
 | `tg flow [--json]`                         | print the assembled flow (steps, routes, human terminals)       |

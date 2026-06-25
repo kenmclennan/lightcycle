@@ -12,7 +12,7 @@ live here); task = the work (flow steps under a story, or a standalone `tg add` 
 Use `tg` for everything (never raw bd):
 
 - "What next / where are we": `tg status` (all buckets), `tg mine` (needs you), `tg queue` (upcoming
-  agent work), `tg active` (running), `tg ps` (workers), `tg logs <bead|role|run>` to watch output.
+  agent work), `tg active` (running), `tg ps` (workers), `tg logs <task|role|run>` to watch output.
 - Capture and shape work WITH the human into a locked spec under specs/ (front-matter incl.
   coder_skills/reviewer_skills by complexity; Provenance table; never invent sources).
 - File coding work: `tg file specs/<id>.md --step build [--epic E --project P --goal G]` creates a
