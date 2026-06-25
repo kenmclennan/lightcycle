@@ -151,6 +151,15 @@ class TestClaim(unittest.TestCase):
         r = run_tg("claim", "coder", root=self.root)
         self.assertEqual(r.stdout.strip(), "")
 
+    def test_claim_assigns_worker_spawnid(self):
+        b = json.loads(bd_in(self.root, "create", "build: y", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWNID="spawn-xyz")
+        r = subprocess.run([sys.executable, TG, "claim", "coder"], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        self.assertEqual(bead.get("assignee"), "spawn-xyz")
+
 
 class TestFlow(unittest.TestCase):
     def setUp(self):
@@ -223,6 +232,37 @@ class TestSweep(unittest.TestCase):
         bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
         self.assertEqual(bead["status"], "open")
         self.assertIn(bead.get("assignee"), (None, ""))
+
+    def test_sweep_keeps_task_of_live_worker_before_stamp(self):
+        # Reproduces the double-claim TOCTOU: a worker has claimed the task
+        # (assignee = its spawnid) but has not yet stamped its registry bead.
+        # Sweep must NOT reclaim it - the owning worker is alive.
+        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
+            [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "bead": None}]))
+        bd_in(self.root, "assign", b, "S")
+        bd_in(self.root, "update", b, "--status", "in_progress")
+        r = run_tg("sweep", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        self.assertEqual(bead["status"], "in_progress")
+        self.assertEqual(bead.get("assignee"), "S")
+
+    def test_sweep_reclaims_dead_worker_claim(self):
+        dead = subprocess.Popen(["true"]); dead.wait()
+        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
+            [{"spawnid": "D", "role": "coder", "pid": dead.pid, "log": "x", "bead": b}]))
+        bd_in(self.root, "assign", b, "D")
+        bd_in(self.root, "update", b, "--status", "in_progress")
+        r = run_tg("sweep", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        self.assertEqual(bead["status"], "open")
 
 
 class TestSpawn(unittest.TestCase):

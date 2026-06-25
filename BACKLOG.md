@@ -35,12 +35,16 @@ The first dogfood run (story the-grid-idz, a one-line banner fix) produced the
 correct code change but surfaced three orchestration bugs. The run was paused and
 the fix landed manually (commit d3b46b5).
 
-- [ ] **Claim is not atomic (top priority).** `bd ready --claim` assigns to the git
-      user (e.g. `Ken McLennan`), not a unique worker identity, so two concurrent
-      claimers both "win" the same task - a double-claim. Need a real mutex: assign
-      to the worker's spawnid (or a conditional/transactional claim that only
-      succeeds if the task is still open+unassigned), so exactly one worker holds a
-      task. Without this the pipeline is unsafe to run with any concurrency.
+- [x] **Double-claim (FIXED).** Root cause was NOT bd: `bd --claim` is atomic across
+      processes (verified). The bug was a TOCTOU in tg's two-step claim - `bd --claim`
+      flips the task to in_progress, but ownership was recorded separately in
+      `workers.json` (`stamp_bead`) a few hundred ms later; `sweep` judged "orphaned"
+      from that lagging registry field, reset the just-claimed task to open, and a
+      second worker re-claimed it. Fixed by making the bd assignee the single source
+      of truth: a worker claims under its unique spawnid (via GIT_CONFIG env override,
+      atomic with the claim), and sweep keys liveness off assignee -> spawnid -> pid
+      (a mapping written at spawn, so it never lags). Verified with a 6-claimer +
+      concurrent-sweeper stress test: exactly one winner.
 - [ ] **Over-spawn: poll interval << worker boot time.** The loop spawns one worker
       per ready role per tick (5s), but `claude -p` takes ~10-30s to boot and claim,
       so the same ready task triggers a fresh spawn every tick until one claims

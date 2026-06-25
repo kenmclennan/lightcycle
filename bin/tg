@@ -25,9 +25,22 @@ _BD_NOISE = ("bd --json output format will change", "beads.role not configured",
 def _is_noise(line):
     return any(n in line for n in _BD_NOISE)
 
+def _bd_env():
+    """Env for bd calls. Inside a worker (GRID_SPAWNID set), make bd record the
+    worker's UNIQUE spawnid as the claim assignee (via git's env-config override)
+    so a claim's ownership is atomic - exactly one worker holds a task, and sweep
+    can key liveness off assignee -> spawnid -> pid with no registry lag."""
+    env = dict(os.environ)
+    spawnid = env.get("GRID_SPAWNID")
+    if spawnid:
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = "user.name"
+        env["GIT_CONFIG_VALUE_0"] = spawnid
+    return env
+
 def bd(*args):
     root = grid_root()
-    proc = subprocess.run(["bd", "-C", root, *args], capture_output=True, text=True)
+    proc = subprocess.run(["bd", "-C", root, *args], capture_output=True, text=True, env=_bd_env())
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr)
         raise SystemExit("bd failed: " + " ".join(args))
@@ -683,14 +696,15 @@ def prune_workers(keep_dead=None):
     return n_drop
 
 def cmd_sweep(argv):
-    live_beads = set()
-    for w in workers_state():
-        if w.get("bead") and pid_alive(w.get("pid", -1)):
-            live_beads.add(w["bead"])
+    # A task is owned by a live worker iff its assignee is the spawnid of a worker
+    # whose pid is alive. The spawnid->pid mapping is written at spawn (before the
+    # claim), so it never lags - a just-claimed task is protected immediately.
+    live = {w.get("spawnid") for w in workers_state()
+            if w.get("spawnid") and pid_alive(w.get("pid", -1))}
     for bead in bd_json("list", "--status", "in_progress", "--json"):
-        bid = bead["id"]
-        if bid in live_beads:
+        if bead.get("assignee") in live:
             continue
+        bid = bead["id"]
         bd("update", bid, "--status", "open")
         bd("assign", bid, "")
         print("swept %s" % bid)
