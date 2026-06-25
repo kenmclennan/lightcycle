@@ -108,5 +108,3 @@ These were scoped out of the MVP deliberately. Each likely becomes its own spec.
 - [ ] **Reviewer vs Copilot gap.** The IL review skill historically misses things
       Copilot catches. Track `copilot_caught_missed` in done records and use it to
       strengthen the Reviewer prompt.
-- [ ] **Spec schema validation.** No check that a spec actually follows
-      SPEC-TEMPLATE.md before it enters the pipeline.

@@ -13,8 +13,9 @@ Use `tg` for everything (never raw bd):
 
 - "What next / where are we": `tg status` (all buckets), `tg mine` (needs you), `tg queue` (upcoming
   agent work), `tg active` (running), `tg ps` (workers), `tg logs <task|role|run>` to watch output.
-- Capture and shape work WITH the human into a locked spec under specs/ (front-matter incl.
-  coder_skills/reviewer_skills by complexity; Provenance table; never invent sources).
+- The spec is whatever the human gives you: a file they already wrote, or one you draft together if
+  they ask. the-grid imposes no spec format - do not reshape what they hand you. Save it under specs/
+  and file it as-is. (If you draft one, never invent facts or sources.)
 - File coding work: `tg file specs/<id>.md --step build [--epic E --project P --goal G]` creates a
   STORY (with the spec attached as an artifact) and its first task at the named step. `--step` is
   required; `tg flow` lists the valid steps. Attach more artifacts anytime:

@@ -5,7 +5,7 @@ root="${GRID_ROOT_OVERRIDE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 if [[ $# -eq 0 ]]; then
   echo "specs:"
-  ls -1 "$root/specs"/*.md 2>/dev/null | grep -v SPEC-TEMPLATE | sed "s#$root/specs/##; s#\.md##"
+  ls -1 "$root/specs"/*.md 2>/dev/null | sed "s#$root/specs/##; s#\.md##"
   echo ""
   echo "usage: grid-spec.sh <spec-id>"
   exit 0

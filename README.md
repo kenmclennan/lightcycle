@@ -1,12 +1,13 @@
 # the-grid
 
-An agent pipeline fronted by **`tg`**, a single Python CLI that owns all work and
-its lifecycle. Work lives in **beads** (`bd`, hidden behind `tg`) as tasks chained
-by dependencies. A run-loop spawns headless `claude -p` workers that each claim one
-task, do it, and exit. tmux is optional - every part runs as a standalone command.
+A workflow-agnostic agent engine fronted by **`tg`**, a single Python CLI that owns
+all work and its lifecycle. Work lives in **beads** (`bd`, hidden behind `tg`) as
+tasks chained by dependencies. A run-loop spawns headless `claude -p` workers that
+each claim one task, do it, and exit. tmux is optional - every part runs as a
+standalone command. You define how you work by editing the agents in `agents/`; the
+engine imposes no spec format or fixed pipeline.
 
-See `BACKLOG.md` for the roadmap and known gaps, and `specs/SPEC-TEMPLATE.md` for
-the spec format that feeds the pipeline.
+See `BACKLOG.md` for the roadmap and known gaps.
 
 ## Prerequisites
 
@@ -25,10 +26,17 @@ any directory.
 
 ## Model
 
+- **The engine is workflow-agnostic.** `tg` owns tasks, stories, and the flow, but
+  has no opinion on *how you work* - including your spec format. It only stores a
+  spec's path as an artifact; it never parses it. The agents in `agents/` are an
+  *example* workflow (a feature pipeline: coder -> reviewer -> pr-watcher). You
+  define your own way of working by editing and creating agents - their steps,
+  routes, and whatever a "spec" means to them. A spec is whatever your agents
+  understand; hand the Driver one you wrote and it flows in as-is.
 - **Hierarchy: epic / story / task.** An **epic** is a goal; a **story** is a
   deliverable outcome (one spec -> one branch -> one PR) and **holds the
   artifacts**; a **task** is the work (a flow step under a story, or a standalone
-  `tg add` item). `tg file` creates a story + its first build task.
+  `tg add` item). `tg file` creates a story + its first task at the step you name.
 - **Artifacts live on the story** as a `{type, value, label?}` list (spec, branch,
   pr, ticket, doc, ...). Tasks read their parent story's artifacts - nothing is
   copied between tasks.
