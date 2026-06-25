@@ -335,8 +335,10 @@ def stamp_bead(spawnid, bead):
 # Command catalog: (group, [(verb, usage-args, description), ...]). The order is
 # the help order; VERBS is derived from it, so adding a command here registers it.
 COMMAND_GROUPS = [
+    ("Setup", [
+        ("init", "", "create the grid store for this project (run once)"),
+    ]),
     ("Start working", [
-        ("up", "", "ensure the store, start the run-loop in the background, open the driver"),
         ("run", "[--once]", "the loop: each tick, sweep stale claims, then start a worker for each role that has work waiting"),
         ("driver", "", "open the interactive driver - your seat to shape and file work"),
     ]),
@@ -769,6 +771,8 @@ def cmd_run(argv):
     ap = argparse.ArgumentParser(prog="tg run")
     ap.add_argument("--once", action="store_true")
     a = ap.parse_args(argv)
+    if not require_store():
+        return 1
     if a.once:
         _run_tick()
         return 0
@@ -779,6 +783,8 @@ def cmd_run(argv):
         time.sleep(interval)
 
 def cmd_driver(argv):
+    if not require_store():
+        return 1
     root = grid_root()
     agent = parse_agent("driver")
     if agent is None or not agent["meta"].get("model"):
@@ -795,14 +801,22 @@ def ensure_beads():
     subprocess.run(["bd", "init", "--skip-agents", "--skip-hooks",
                     "--non-interactive", "--quiet"], cwd=root, check=True)
 
-def cmd_up(argv):
-    root = grid_root()
+def store_ready():
+    return os.path.isdir(os.path.join(grid_root(), ".beads"))
+
+def require_store():
+    if store_ready():
+        return True
+    sys.stderr.write("no grid store here - run `tg init` first.\n")
+    return False
+
+def cmd_init(argv):
+    argparse.ArgumentParser(prog="tg init").parse_args(argv)
+    existed = store_ready()
     ensure_beads()
-    os.makedirs(os.path.join(root, "logs"), exist_ok=True)
-    logf = open(os.path.join(root, "logs", "run.log"), "a")
-    subprocess.Popen([sys.executable, os.path.join(root, "bin", "tg"), "run"],
-                     stdout=logf, stderr=logf, cwd=root)
-    return cmd_driver(argv)
+    os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
+    print("grid store already initialised" if existed else "grid store initialised")
+    return 0
 
 def _bucket(tasks):
     buckets = {"mine": [], "active": [], "queue": [], "blocked": [], "done": []}

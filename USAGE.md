@@ -6,10 +6,10 @@ like.
 ## Start working
 
 ```bash
-tg up            # ensure beads, background the run-loop, open the driver
+tg init          # one-time: create the grid store for this project
 ```
 
-Or run the parts yourself, in separate terminals:
+Then run the parts in separate terminals:
 
 ```bash
 tg run           # the loop (foreground; shows activity live). Ctrl-C to stop.
@@ -48,7 +48,8 @@ merge) show up in `tg mine`.
 tg sweep   # release any orphaned claims (dead worker -> task reclaimable)
 ```
 
-`tg up` runs this for you on startup. Kill-and-restart is a first-class operation.
+The run-loop runs this each tick, so dead workers self-heal. Kill-and-restart is a
+first-class operation.
 
 ## glow spec render
 

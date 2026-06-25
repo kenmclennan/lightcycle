@@ -585,6 +585,35 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertIn("design", r.stderr)
 
 
+class TestInitAndStoreGuard(unittest.TestCase):
+    def _bare(self):
+        d = tempfile.mkdtemp()
+        subprocess.run(["git", "init", "-q"], cwd=d, check=True)
+        return d
+
+    def test_init_creates_store(self):
+        d = self._bare()
+        r = run_tg("init", root=d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isdir(os.path.join(d, ".beads")))
+
+    def test_init_idempotent(self):
+        d = self._bare()
+        run_tg("init", root=d)
+        r = run_tg("init", root=d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_run_without_store_errors(self):
+        d = self._bare()
+        r = run_tg("run", "--once", root=d)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("init", r.stderr)
+
+    def test_up_is_gone(self):
+        r = run_tg("up")
+        self.assertEqual(r.returncode, 2)
+
+
 class TestContractsOptional(unittest.TestCase):
     def setUp(self):
         self.root = new_store()

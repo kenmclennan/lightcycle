@@ -70,11 +70,11 @@ any directory.
 
 ## Commands
 
-Run the parts standalone, or use `tg up` to start them together.
+Initialise once with `tg init`, then run the parts in separate terminals.
 
 | Command                                    | What it does                                                    |
 | ------------------------------------------ | --------------------------------------------------------------- |
-| `tg up`                                    | ensure beads, background `tg run`, open the driver              |
+| `tg init`                                  | one-time: create the grid store for this project                |
 | `tg run [--once]`                          | the loop: sweep, then start a worker for each role with work waiting |
 | `tg driver`                                | open the interactive driver `claude` (your seat)                |
 | `tg status`                                | all buckets: mine / active / queue / blocked                    |
@@ -116,4 +116,5 @@ bash tests/run.sh          # python3 -m unittest discover
 ## Tear down
 
 `tg run` is foreground - Ctrl-C it. Workers are ephemeral and exit on their own.
-If `tg up` backgrounded the loop, find it with `tg ps` / kill the `tg run` process.
+If you backgrounded the loop yourself, find it with `tg ps` / kill the `tg run`
+process.

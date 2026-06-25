@@ -20,7 +20,7 @@ persistent Driver + a non-AI supervisor that spawns ephemeral single-task agents
       human use `tg` verbs, never raw `bd`. Prompts speak "task", not "bead".
 - [x] **Kill-and-resume idempotency.** `tg sweep` releases orphaned claims (resets
       status open AND clears assignee) for any in_progress task whose worker PID is
-      dead; runs on `tg up` startup and each `tg run` tick.
+      dead; runs each `tg run` tick.
 - [x] **Escalation + handoff contract.** `tg block <id> --branch --pr --reason
 --tried --needs` writes structured resume-state to bead metadata and routes to
       `for:human`; available to every role. `tg done` validates the outcome against
