@@ -1,0 +1,581 @@
+#!/usr/bin/env python3
+"""tg - the-grid domain CLI. Single stdlib-only file; the only caller of bd."""
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+# ---- paths / config ---------------------------------------------------------
+
+def grid_root():
+    override = os.environ.get("GRID_ROOT_OVERRIDE")
+    if override:
+        return override
+    p = Path(__file__).resolve()  # resolve() follows symlinks to the real file
+    return str(p.parent.parent)
+
+# ---- bd adapter -------------------------------------------------------------
+
+# bd prints assorted advisory noise to stderr; filter the known-benign lines.
+_BD_NOISE = ("bd --json output format will change", "beads.role not configured",
+             "Fix: git config", "Or:  git config")
+
+def _is_noise(line):
+    return any(n in line for n in _BD_NOISE)
+
+def bd(*args):
+    root = grid_root()
+    proc = subprocess.run(["bd", "-C", root, *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stderr)
+        raise SystemExit("bd failed: " + " ".join(args))
+    err = "\n".join(l for l in proc.stderr.splitlines() if not _is_noise(l))
+    if err.strip():
+        sys.stderr.write(err + "\n")
+    return proc.stdout
+
+def bd_json(*args):
+    return json.loads(bd(*args))
+
+# ---- Task model -------------------------------------------------------------
+
+import re
+
+def _labels(bead):
+    return bead.get("labels") or []
+
+def _label_value(bead, prefix):
+    for l in _labels(bead):
+        if l.startswith(prefix):
+            return l[len(prefix):]
+    return None
+
+def task_from_bead(bead):
+    role = _label_value(bead, "for:")
+    bd_status = bead.get("status")
+    assignee = bead.get("assignee")
+    if bd_status == "closed":
+        status = "done"
+    elif assignee or bd_status == "in_progress":
+        status = "in-progress"
+    elif role == "human":
+        status = "needs-human"
+    else:
+        status = "ready"
+    return {
+        "id": bead["id"], "title": bead.get("title", ""),
+        "type": bead.get("issue_type"), "parent": bead.get("parent"),
+        "role": role, "step": _label_value(bead, "step:"),
+        "status": status,
+        "project": _label_value(bead, "project:"), "goal": _label_value(bead, "goal:"),
+        "artifacts": (bead.get("metadata") or {}).get("artifacts") or [],
+        "outcome": bead.get("close_reason"),
+        "deps": bead.get("dependency_count") or 0,
+    }
+
+def story_artifacts(story_id):
+    arr = bd_json("show", story_id, "--json")
+    meta = arr[0].get("metadata") or {}
+    return meta.get("artifacts") or []
+
+def add_artifact(story_id, atype, value, label=None):
+    arr = bd_json("show", story_id, "--json")
+    meta = arr[0].get("metadata") or {}
+    artifacts = meta.get("artifacts") or []
+    entry = {"type": atype, "value": value}
+    if label:
+        entry["label"] = label
+    artifacts.append(entry)
+    meta["artifacts"] = artifacts
+    bd("update", story_id, "--metadata", json.dumps(meta))
+
+def all_tasks():
+    return [task_from_bead(b) for b in bd_json("list", "--json")]
+
+def get_task(tid):
+    return task_from_bead(bd_json("show", tid, "--json")[0])
+
+def task_view(tid):
+    t = get_task(tid)
+    if t.get("parent"):
+        t["story_artifacts"] = story_artifacts(t["parent"])
+    else:
+        t["story_artifacts"] = t.get("artifacts") or []
+    return t
+
+def claim_next(role):
+    arr = bd_json("ready", "--label", "for:%s" % role, "--claim", "--json")
+    if not arr:
+        return None
+    return task_from_bead(arr[0])
+
+# ---- flow engine ------------------------------------------------------------
+
+AUTOMATED_ROLES = ["coder", "reviewer", "pr-watcher"]
+
+def flow_path():
+    return os.path.join(grid_root(), "flows", "feature.tsv")
+
+def flow_next(step, outcome):
+    fp = flow_path()
+    if not os.path.exists(fp):
+        return None
+    with open(fp) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 4 or not parts[0] or parts[0].startswith("#"):
+                continue
+            s, o, ns, no = parts[0], parts[1], parts[2], parts[3]
+            if s == step and o == outcome:
+                if ns == "-":
+                    return None
+                return (ns, no)
+    return None
+
+def advance(tid, outcome):
+    t = get_task(tid)
+    nxt = flow_next(t["step"], outcome)
+    if nxt is None:
+        return None
+    ns, no = nxt
+    title = re.sub(r"^[a-z-]+:\s*", "", t["title"])
+    create = ["create", "%s: %s" % (ns, title), "-t", "task",
+              "-l", "for:%s,step:%s" % (no, ns), "--deps", tid, "--json"]
+    if t.get("parent"):
+        create += ["--parent", t["parent"]]
+    return bd_json(*create)["id"]
+
+def ready_roles():
+    out = []
+    for role in AUTOMATED_ROLES:
+        if bd_json("ready", "--label", "for:%s" % role, "--json"):
+            out.append(role)
+    return out
+
+# ---- worker run-state -------------------------------------------------------
+
+def workers_path():
+    return os.path.join(grid_root(), "logs", "workers.json")
+
+def workers_state():
+    p = workers_path()
+    if not os.path.exists(p):
+        return []
+    try:
+        return json.loads(open(p).read())
+    except Exception:
+        return []
+
+def pid_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+# ---- worker process lifecycle -----------------------------------------------
+
+import uuid
+import shlex
+
+def _read_json_file(path, default):
+    if not os.path.exists(path):
+        return default
+    try:
+        return json.loads(open(path).read())
+    except Exception:
+        return default
+
+def model_for(role):
+    cfg = _read_json_file(os.path.join(grid_root(), "config", "models.json"), {})
+    return cfg.get(role, "sonnet")
+
+def _write_workers(workers):
+    os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
+    with open(workers_path(), "w") as f:
+        f.write(json.dumps(workers, indent=2))
+
+def spawn_worker(role):
+    root = grid_root()
+    agent = os.path.join(root, "agents", "%s.md" % role)
+    if not os.path.exists(agent):
+        sys.stderr.write("no agent definition for role %s\n" % role)
+        return None
+    spawnid = uuid.uuid4().hex[:8]
+    log = os.path.join(root, "logs", "worker-%s-%s.log" % (role, spawnid))
+    os.makedirs(os.path.dirname(log), exist_ok=True)
+    model = model_for(role)
+    kickoff = ("You are the %s. Claim your next task and complete it per your role "
+               "instructions, then exit." % role)
+    logf = open(log, "a")
+    env = dict(os.environ, GRID_ROOT_OVERRIDE=root, GRID_SPAWNID=spawnid, GRID_ROLE=role)
+    override = os.environ.get("GRID_SPAWN_CMD")
+    if override:
+        cmd = ["bash", "-c", override.format(log=shlex.quote(log), role=role)]
+        proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env)
+    else:
+        sysprompt = open(agent).read()
+        cmd = ["claude", "-p", kickoff, "--model", model,
+               "--session-id", str(uuid.uuid4()),
+               "--append-system-prompt", sysprompt, "--add-dir", root,
+               "--dangerously-skip-permissions"]
+        proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=root, env=env)
+    workers = workers_state()
+    workers.append({"spawnid": spawnid, "role": role, "pid": proc.pid,
+                    "log": log, "bead": None})
+    _write_workers(workers)
+    return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
+
+def stamp_bead(spawnid, bead):
+    workers = workers_state()
+    for w in workers:
+        if w.get("spawnid") == spawnid:
+            w["bead"] = bead
+    _write_workers(workers)
+
+# ---- CLI dispatch -----------------------------------------------------------
+
+VERBS = ("status", "mine", "active", "queue", "ps", "logs", "show",
+         "claim", "done", "block", "link", "file", "add", "advance", "trace",
+         "ready-roles", "run", "up", "driver", "sweep", "spawn")
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="tg", description="the-grid domain CLI")
+    sub = p.add_subparsers(dest="cmd")
+    for verb in VERBS:
+        sub.add_parser(verb)
+    return p
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0] in ("-h", "--help"):
+        build_parser().print_help()
+        return 0
+    cmd = argv[0]
+    if cmd not in VERBS:
+        sys.stderr.write("unknown subcommand: %s\n" % cmd)
+        return 2
+    fn = globals().get("cmd_" + cmd.replace("-", "_"))
+    if fn is None:
+        sys.stderr.write("not implemented: %s\n" % cmd)
+        return 2
+    return fn(argv[1:]) or 0
+
+# ---- commands ---------------------------------------------------------------
+
+def cmd_show(argv):
+    ap = argparse.ArgumentParser(prog="tg show")
+    ap.add_argument("id")
+    a = ap.parse_args(argv)
+    print(json.dumps(task_view(a.id), indent=2))
+    return 0
+
+def cmd_claim(argv):
+    ap = argparse.ArgumentParser(prog="tg claim")
+    ap.add_argument("role")
+    a = ap.parse_args(argv)
+    t = claim_next(a.role)
+    if t is None:
+        return 0
+    spawnid = os.environ.get("GRID_SPAWNID")
+    if spawnid:
+        stamp_bead(spawnid, t["id"])
+    print(json.dumps(task_view(t["id"]), indent=2))
+    return 0
+
+def cmd_spawn(argv):
+    ap = argparse.ArgumentParser(prog="tg spawn")
+    ap.add_argument("role")
+    a = ap.parse_args(argv)
+    return 0 if spawn_worker(a.role) else 1
+
+def cmd_ps(argv):
+    ap = argparse.ArgumentParser(prog="tg ps")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    rows = [dict(w, alive=pid_alive(w.get("pid", -1))) for w in workers_state()]
+    if a.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        for w in rows:
+            print("  %-11s bead=%-18s pid=%s %s" % (
+                w["role"], w.get("bead") or "-", w["pid"], "alive" if w["alive"] else "dead"))
+    return 0
+
+def cmd_logs(argv):
+    ap = argparse.ArgumentParser(prog="tg logs")
+    ap.add_argument("target")
+    ap.add_argument("-f", action="store_true")
+    a = ap.parse_args(argv)
+    if a.target == "run":
+        path = os.path.join(grid_root(), "logs", "run.log")
+    else:
+        path = None
+        for w in reversed(workers_state()):
+            if w.get("bead") == a.target or w.get("role") == a.target:
+                path = w["log"]
+                break
+    if not path or not os.path.exists(path):
+        sys.stderr.write("no log for %s\n" % a.target)
+        return 1
+    if a.f:
+        subprocess.run(["tail", "-f", path])
+    else:
+        sys.stdout.write(open(path).read())
+    return 0
+
+def cmd_advance(argv):
+    ap = argparse.ArgumentParser(prog="tg advance")
+    ap.add_argument("id")
+    ap.add_argument("outcome")
+    a = ap.parse_args(argv)
+    new = advance(a.id, a.outcome)
+    if new:
+        print(new)
+    return 0
+
+def cmd_ready_roles(argv):
+    print(" ".join(ready_roles()))
+    return 0
+
+def cmd_done(argv):
+    ap = argparse.ArgumentParser(prog="tg done")
+    ap.add_argument("id")
+    ap.add_argument("outcome")
+    a = ap.parse_args(argv)
+    t = get_task(a.id)
+    if flow_next(t["step"], a.outcome) is None:
+        sys.stderr.write(
+            "no transition for step=%s outcome=%s; not closing. "
+            "Fix the flow or use a defined outcome.\n" % (t["step"], a.outcome))
+        return 1
+    bd("note", a.id, "outcome: %s" % a.outcome)
+    bd("close", a.id, "--reason", a.outcome)
+    new = advance(a.id, a.outcome)
+    if new:
+        print(new)
+    return 0
+
+def cmd_block(argv):
+    ap = argparse.ArgumentParser(prog="tg block")
+    ap.add_argument("id")
+    for opt in ("branch", "pr", "reason", "tried", "needs"):
+        ap.add_argument("--%s" % opt)
+    a = ap.parse_args(argv)
+    if not a.needs:
+        sys.stderr.write("tg block requires --needs (what the human must decide/provide)\n")
+        return 2
+    resume = {}
+    for k in ("branch", "pr", "reason", "tried", "needs"):
+        v = getattr(a, k, None)
+        if v:
+            resume[k] = v
+    bd("update", a.id, "--metadata", json.dumps(resume))
+    bd("note", a.id, "BLOCKED: %s" % a.needs)
+    role = get_task(a.id)["role"]
+    if role and role != "human":
+        bd("label", "remove", a.id, "for:%s" % role)
+    bd("label", "add", a.id, "for:human")
+    bd("update", a.id, "--status", "open")
+    print("blocked -> human")
+    return 0
+
+def cmd_link(argv):
+    ap = argparse.ArgumentParser(prog="tg link")
+    ap.add_argument("story")
+    ap.add_argument("type")
+    ap.add_argument("value")
+    ap.add_argument("--label")
+    a = ap.parse_args(argv)
+    add_artifact(a.story, a.type, a.value, a.label)
+    return 0
+
+def _log_for_bead(bid):
+    for w in reversed(workers_state()):
+        if w.get("bead") == bid:
+            return w.get("log")
+    return None
+
+def cmd_trace(argv):
+    ap = argparse.ArgumentParser(prog="tg trace")
+    ap.add_argument("story")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    story = get_task(a.story)
+    arts = story_artifacts(a.story)
+    tasks = []
+    for k in bd_json("children", a.story, "--json"):
+        kt = task_from_bead(k)
+        tasks.append({"id": kt["id"], "step": kt["step"], "status": kt["status"],
+                      "log": _log_for_bead(kt["id"])})
+    out = {"story": {"id": story["id"], "title": story["title"], "status": story["status"]},
+           "artifacts": arts, "tasks": tasks}
+    if a.json:
+        print(json.dumps(out, indent=2))
+    else:
+        print("story %s  %s  [%s]" % (story["id"], story["title"], story["status"]))
+        for art in arts:
+            print("  artifact %s: %s" % (art["type"], art["value"]))
+        for t in tasks:
+            log = "  log:" + t["log"] if t["log"] else ""
+            print("  task %s  %s  [%s]%s" % (t["id"], t["step"] or "-", t["status"], log))
+    return 0
+
+def cmd_sweep(argv):
+    live_beads = set()
+    for w in workers_state():
+        if w.get("bead") and pid_alive(w.get("pid", -1)):
+            live_beads.add(w["bead"])
+    for bead in bd_json("list", "--status", "in_progress", "--json"):
+        bid = bead["id"]
+        if bid in live_beads:
+            continue
+        bd("update", bid, "--status", "open")
+        bd("assign", bid, "")
+        print("swept %s" % bid)
+    return 0
+
+# ---- read views -------------------------------------------------------------
+
+def _filter(status):
+    return [t for t in all_tasks() if t["status"] == status]
+
+def cmd_mine(argv):
+    for t in _filter("needs-human"):
+        print("  %s  %s" % (t["id"], t["title"]))
+    return 0
+
+def cmd_active(argv):
+    for t in _filter("in-progress"):
+        print("  %s  %s" % (t["id"], t["title"]))
+    return 0
+
+def cmd_queue(argv):
+    ap = argparse.ArgumentParser(prog="tg queue")
+    ap.add_argument("n", nargs="?", type=int, default=10)
+    a = ap.parse_args(argv)
+    tasks = _filter("ready") + _filter("blocked")
+    for t in tasks[:a.n]:
+        print("  %-8s %s  %s" % (t["status"], t["id"], t["title"]))
+    return 0
+
+def cmd_file(argv):
+    ap = argparse.ArgumentParser(prog="tg file")
+    ap.add_argument("spec")
+    ap.add_argument("--epic")
+    ap.add_argument("--project")
+    ap.add_argument("--goal")
+    a = ap.parse_args(argv)
+    base = os.path.splitext(os.path.basename(a.spec))[0]
+    labels = []
+    if a.project:
+        labels.append("project:%s" % a.project)
+    if a.goal:
+        labels.append("goal:%s" % a.goal)
+    create = ["create", base, "-t", "story", "--json"]
+    if a.epic:
+        create += ["--parent", a.epic]
+    if labels:
+        create += ["-l", ",".join(labels)]
+    story = bd_json(*create)["id"]
+    add_artifact(story, "spec", a.spec)
+    bd("create", "build: %s" % base, "-t", "task",
+       "-l", "for:coder,step:build", "--parent", story)
+    print(story)
+    return 0
+
+def cmd_add(argv):
+    ap = argparse.ArgumentParser(prog="tg add")
+    ap.add_argument("title")
+    ap.add_argument("--goal")
+    ap.add_argument("--project")
+    a = ap.parse_args(argv)
+    labels = ["for:human"]
+    if a.goal:
+        labels.append("goal:%s" % a.goal)
+    if a.project:
+        labels.append("project:%s" % a.project)
+    new = bd_json("create", a.title, "-t", "task", "-l", ",".join(labels), "--json")["id"]
+    print(new)
+    return 0
+
+# ---- run loop / launch ------------------------------------------------------
+
+import time
+
+def _run_tick():
+    cmd_sweep([])
+    for role in ready_roles():
+        spawn_worker(role)
+
+def cmd_run(argv):
+    ap = argparse.ArgumentParser(prog="tg run")
+    ap.add_argument("--once", action="store_true")
+    a = ap.parse_args(argv)
+    if a.once:
+        _run_tick()
+        return 0
+    interval = int(os.environ.get("GRID_POLL_SECONDS", "5"))
+    print("tg run up (poll %ds)" % interval)
+    while True:
+        _run_tick()
+        time.sleep(interval)
+
+def cmd_driver(argv):
+    root = grid_root()
+    model = _read_json_file(os.path.join(root, "config", "models.json"), {}).get("driver", "opus")
+    agent = os.path.join(root, "agents", "driver.md")
+    sysprompt = open(agent).read() if os.path.exists(agent) else ""
+    os.execvp("claude", ["claude", "--model", model, "--name", "driver",
+                         "--append-system-prompt", sysprompt, "--add-dir", root,
+                         "--dangerously-skip-permissions"])
+
+def ensure_beads():
+    root = grid_root()
+    if os.path.isdir(os.path.join(root, ".beads", "embeddeddolt")):
+        return
+    subprocess.run(["bd", "init", "--skip-agents", "--skip-hooks",
+                    "--non-interactive", "--quiet"], cwd=root, check=True)
+
+def cmd_up(argv):
+    root = grid_root()
+    ensure_beads()
+    os.makedirs(os.path.join(root, "logs"), exist_ok=True)
+    logf = open(os.path.join(root, "logs", "run.log"), "a")
+    subprocess.Popen([sys.executable, os.path.join(root, "bin", "tg"), "run"],
+                     stdout=logf, stderr=logf, cwd=root)
+    return cmd_driver(argv)
+
+def _bucket(tasks):
+    buckets = {"mine": [], "active": [], "queue": [], "blocked": [], "done": []}
+    for t in tasks:
+        if t["status"] == "done":
+            buckets["done"].append(t)
+        elif t["status"] == "in-progress":
+            buckets["active"].append(t)
+        elif t["status"] == "needs-human":
+            buckets["mine"].append(t)
+        elif t["status"] == "ready":
+            buckets["queue"].append(t)
+        else:
+            buckets["blocked"].append(t)
+    return buckets
+
+def cmd_status(argv):
+    ap = argparse.ArgumentParser(prog="tg status")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    buckets = _bucket(all_tasks())
+    if a.json:
+        print(json.dumps(buckets, indent=2))
+    else:
+        for name in ("mine", "active", "queue", "blocked"):
+            print("== %s (%d) ==" % (name, len(buckets[name])))
+            for t in buckets[name]:
+                print("  %s  %s" % (t["id"], t["title"]))
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
