@@ -63,6 +63,19 @@ the fix landed manually (commit d3b46b5).
 
 ## Still open (next design priorities)
 
+- [ ] **Hide bd's id namespace from external ids.** Every bead id carries bd's
+      per-store prefix (`the-grid-idz`, `the-grid-idz.1`); it is constant noise the
+      `tg` surface should not expose - same "hide bd internals" line as bead->task.
+      Doable: the prefix is discoverable (`bd config get issue_prefix` -> `the-grid`),
+      so never hardcode it. Translate at the CLI boundary only - keep bd's canonical
+      ids in the data layer, workers.json, and all bd calls; strip the prefix on
+      every output (incl. the id/parent/deps fields inside `--json`), add it back on
+      every id arg. Be lenient internalising (if an arg already has the prefix, use
+      as-is - idempotent) and strict externalising. Keep the `.N` child suffix.
+      Encapsulate the rule in one small value object/helper so there is a single
+      place that knows the prefix; agents will round-trip the short ids, so the
+      boundary must be airtight (a missed spot = "bead not found"). Needs thorough
+      tests across every command that prints or accepts an id.
 - [ ] **Visibility TUI.** `tg status`/`ps`/`logs` give the data; a live TUI that
       renders them (and tails a chosen worker) is the next ergonomic step. The
       `tg` layer was built precisely so the TUI is a thin renderer over it.
