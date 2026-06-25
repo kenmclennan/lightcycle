@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "the_grid",
+  "project_id": "62807a68-743c-4547-998e-a95a11a40339"
+}
