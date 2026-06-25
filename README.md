@@ -71,8 +71,9 @@ Run the parts standalone, or use `tg up` to start them together.
 
 ## Models
 
-Each role runs on its own model from `config/models.json` (`opus` driver+reviewer,
-`sonnet` coder+watcher by default). `tg` reads it per spawn.
+Each role declares its own model in the `model:` frontmatter of its agent file
+(`agents/<role>.md`): `opus` for driver+reviewer, `sonnet` for coder+pr-watcher.
+`tg` reads it per spawn and refuses to spawn a role whose file lacks a `model:`.
 
 ## Telemetry / logs
 

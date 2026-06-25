@@ -170,12 +170,11 @@ class TestSweep(unittest.TestCase):
 class TestSpawn(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        for d in ("agents", "logs", "config"):
+        for d in ("agents", "logs"):
             (Path(self.root) / d).mkdir(exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
-            (Path(self.root) / "agents" / ("%s.md" % r)).write_text("stub %s" % r)
-        (Path(self.root) / "config" / "models.json").write_text(
-            json.dumps({"coder": "sonnet", "reviewer": "opus", "pr-watcher": "sonnet"}))
+            (Path(self.root) / "agents" / ("%s.md" % r)).write_text(
+                "---\nmodel: sonnet\n---\nstub %s" % r)
 
     def test_spawn_records_worker_and_log(self):
         env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo started >> {log}")
@@ -197,11 +196,11 @@ class TestSpawn(unittest.TestCase):
 class TestRun(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        for d in ("agents", "logs", "config", "flows"):
+        for d in ("agents", "logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
-            (Path(self.root) / "agents" / ("%s.md" % r)).write_text("stub %s" % r)
-        (Path(self.root) / "config" / "models.json").write_text(json.dumps({"coder": "sonnet"}))
+            (Path(self.root) / "agents" / ("%s.md" % r)).write_text(
+                "---\nmodel: sonnet\n---\nstub %s" % r)
 
     def test_run_once_spawns_for_ready_role(self):
         bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
@@ -361,6 +360,44 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(tr["artifacts"][0]["value"], "specs/Z.md")
         self.assertEqual(len(tr["tasks"]), 1)
         self.assertEqual(tr["tasks"][0]["step"], "build")
+
+
+class TestAgentFrontmatter(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        (Path(self.root) / "agents").mkdir(exist_ok=True)
+        (Path(self.root) / "agents" / "coder.md").write_text(
+            "---\nmodel: sonnet\n---\n# Coder\n\nDo the thing.\n")
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+
+    def _tg(self):
+        import importlib.util
+        from importlib.machinery import SourceFileLoader
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        loader = SourceFileLoader("tgmod_fm", TG)
+        spec = importlib.util.spec_from_loader("tgmod_fm", loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        return mod
+
+    def test_parse_agent_extracts_model_and_strips_frontmatter(self):
+        tg = self._tg()
+        a = tg.parse_agent("coder")
+        self.assertEqual(a["meta"]["model"], "sonnet")
+        self.assertTrue(a["body"].startswith("# Coder"))
+        self.assertNotIn("model:", a["body"])
+
+    def test_spawn_uses_frontmatter_model(self):
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
+        r = subprocess.run([sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_spawn_refuses_when_model_missing(self):
+        (Path(self.root) / "agents" / "reviewer.md").write_text("no frontmatter here")
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
+        r = subprocess.run([sys.executable, TG, "spawn", "reviewer"], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("model", r.stderr)
 
 
 if __name__ == "__main__":

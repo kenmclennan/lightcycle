@@ -180,17 +180,28 @@ def pid_alive(pid):
 import uuid
 import shlex
 
-def _read_json_file(path, default):
-    if not os.path.exists(path):
-        return default
-    try:
-        return json.loads(open(path).read())
-    except Exception:
-        return default
+def parse_agent(role):
+    """Read agents/<role>.md; return {meta, body, path} or None if absent.
 
-def model_for(role):
-    cfg = _read_json_file(os.path.join(grid_root(), "config", "models.json"), {})
-    return cfg.get(role, "sonnet")
+    Leading frontmatter (--- ... ---) is parsed into meta as simple key: value
+    lines and stripped from body. body is what becomes the system prompt.
+    """
+    path = os.path.join(grid_root(), "agents", "%s.md" % role)
+    if not os.path.exists(path):
+        return None
+    text = open(path).read()
+    meta, body = {}, text
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                for fl in lines[1:i]:
+                    if ":" in fl:
+                        k, v = fl.split(":", 1)
+                        meta[k.strip()] = v.strip()
+                body = "\n".join(lines[i + 1:]).lstrip("\n")
+                break
+    return {"meta": meta, "body": body, "path": path}
 
 def _write_workers(workers):
     os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
@@ -199,14 +210,17 @@ def _write_workers(workers):
 
 def spawn_worker(role):
     root = grid_root()
-    agent = os.path.join(root, "agents", "%s.md" % role)
-    if not os.path.exists(agent):
+    agent = parse_agent(role)
+    if agent is None:
         sys.stderr.write("no agent definition for role %s\n" % role)
+        return None
+    model = agent["meta"].get("model")
+    if not model:
+        sys.stderr.write("agent %s has no 'model' in frontmatter\n" % role)
         return None
     spawnid = uuid.uuid4().hex[:8]
     log = os.path.join(root, "logs", "worker-%s-%s.log" % (role, spawnid))
     os.makedirs(os.path.dirname(log), exist_ok=True)
-    model = model_for(role)
     kickoff = ("You are the %s. Claim your next task and complete it per your role "
                "instructions, then exit." % role)
     logf = open(log, "a")
@@ -216,7 +230,7 @@ def spawn_worker(role):
         cmd = ["bash", "-c", override.format(log=shlex.quote(log), role=role)]
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env)
     else:
-        sysprompt = open(agent).read()
+        sysprompt = agent["body"]
         cmd = ["claude", "-p", kickoff, "--model", model,
                "--session-id", str(uuid.uuid4()),
                "--append-system-prompt", sysprompt, "--add-dir", root,
@@ -525,11 +539,12 @@ def cmd_run(argv):
 
 def cmd_driver(argv):
     root = grid_root()
-    model = _read_json_file(os.path.join(root, "config", "models.json"), {}).get("driver", "opus")
-    agent = os.path.join(root, "agents", "driver.md")
-    sysprompt = open(agent).read() if os.path.exists(agent) else ""
-    os.execvp("claude", ["claude", "--model", model, "--name", "driver",
-                         "--append-system-prompt", sysprompt, "--add-dir", root,
+    agent = parse_agent("driver")
+    if agent is None or not agent["meta"].get("model"):
+        sys.stderr.write("agents/driver.md is missing or has no 'model' in frontmatter\n")
+        return 1
+    os.execvp("claude", ["claude", "--model", agent["meta"]["model"], "--name", "driver",
+                         "--append-system-prompt", agent["body"], "--add-dir", root,
                          "--dangerously-skip-permissions"])
 
 def ensure_beads():

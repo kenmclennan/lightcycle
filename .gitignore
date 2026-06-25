@@ -13,3 +13,5 @@ specs/*.md
 .beads-credential-key
 .beads/issues.jsonl
 .beads/interactions.jsonl
+
+.vscode/
