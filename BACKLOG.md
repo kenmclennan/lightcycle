@@ -45,12 +45,14 @@ the fix landed manually (commit d3b46b5).
       atomic with the claim), and sweep keys liveness off assignee -> spawnid -> pid
       (a mapping written at spawn, so it never lags). Verified with a 6-claimer +
       concurrent-sweeper stress test: exactly one winner.
-- [ ] **Over-spawn: poll interval << worker boot time.** The loop spawns one worker
-      per ready role per tick (5s), but `claude -p` takes ~10-30s to boot and claim,
-      so the same ready task triggers a fresh spawn every tick until one claims
-      (~7 coders for one task). Fix: don't spawn a role that already has a live
-      worker which hasn't claimed/exited (track unclaimed live workers), and/or add
-      a per-role spawn cooldown.
+- [x] **Over-spawn: poll interval << worker boot time (FIXED).** The loop spawned a
+      worker per ready role every 5s tick, but `claude -p` takes ~10-30s to boot and
+      claim, so the same ready task triggered a fresh spawn every tick (~7 coders for
+      one task). Fixed: `_run_tick` skips a role that has an "in flight" worker - one
+      that is alive but has not yet claimed (registry `bead` is None). Now exactly one
+      worker boots per role until it claims (or dies), then the next can spawn.
+      Caveat (follow-up): a worker that hangs forever in boot (alive, never claims)
+      blocks that role indefinitely; a max-boot-age cooldown would bound it.
 - [ ] **Workers branch in-place instead of in an isolated worktree.** The coder ran
       `git checkout -b` in its cwd (the repo root) rather than `git worktree add`,
       switching the main working tree to the feature branch with uncommitted edits.

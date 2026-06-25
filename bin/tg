@@ -796,7 +796,15 @@ import time
 
 def _run_tick():
     cmd_sweep([])
+    # A worker that has spawned but not yet claimed (bead is None) and is still
+    # alive is "in flight" - it will claim the ready task once it boots. Don't
+    # spawn another for that role; claude's boot time (~10-30s) far exceeds the
+    # poll, so without this the loop spawns many redundant workers per task.
+    inflight = {w.get("role") for w in workers_state()
+                if w.get("bead") is None and pid_alive(w.get("pid", -1))}
     for role in ready_roles():
+        if role in inflight:
+            continue
         spawn_worker(role)
 
 def cmd_run(argv):

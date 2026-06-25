@@ -314,6 +314,30 @@ class TestRun(unittest.TestCase):
         r = run_tg("queue", "5", root=self.root)
         self.assertIn(c, r.stdout)
 
+    def _run_once(self):
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
+        return subprocess.run([sys.executable, TG, "run", "--once"], capture_output=True, text=True, env=env)
+
+    def test_run_skips_role_with_inflight_worker(self):
+        # A coder is already booting (alive, has not claimed yet -> bead None).
+        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
+            [{"spawnid": "boot", "role": "coder", "pid": os.getpid(), "log": "x", "bead": None}]))
+        r = self._run_once()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
+        self.assertEqual(len(workers), 1)  # no second coder spawned
+
+    def test_run_spawns_when_prior_worker_already_claimed(self):
+        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
+        # prior coder already claimed something (bead set) -> not inflight
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
+            [{"spawnid": "old", "role": "coder", "pid": os.getpid(), "log": "x", "bead": "other-1"}]))
+        r = self._run_once()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
+        self.assertEqual(len(workers), 2)  # a fresh coder spawned for the ready task
+
 
 class TestAdd(unittest.TestCase):
     def setUp(self):
