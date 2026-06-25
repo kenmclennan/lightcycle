@@ -29,6 +29,34 @@ persistent Driver + a non-AI supervisor that spawns ephemeral single-task agents
       spawned via Popen and tracked in `logs/workers.json`; they exit on completion.
       tmux is no longer load-bearing.
 
+## Orchestration bugs - must fix before unattended runs (first live run, 2026-06-25)
+
+The first dogfood run (story the-grid-idz, a one-line banner fix) produced the
+correct code change but surfaced three orchestration bugs. The run was paused and
+the fix landed manually (commit d3b46b5).
+
+- [ ] **Claim is not atomic (top priority).** `bd ready --claim` assigns to the git
+      user (e.g. `Ken McLennan`), not a unique worker identity, so two concurrent
+      claimers both "win" the same task - a double-claim. Need a real mutex: assign
+      to the worker's spawnid (or a conditional/transactional claim that only
+      succeeds if the task is still open+unassigned), so exactly one worker holds a
+      task. Without this the pipeline is unsafe to run with any concurrency.
+- [ ] **Over-spawn: poll interval << worker boot time.** The loop spawns one worker
+      per ready role per tick (5s), but `claude -p` takes ~10-30s to boot and claim,
+      so the same ready task triggers a fresh spawn every tick until one claims
+      (~7 coders for one task). Fix: don't spawn a role that already has a live
+      worker which hasn't claimed/exited (track unclaimed live workers), and/or add
+      a per-role spawn cooldown.
+- [ ] **Workers branch in-place instead of in an isolated worktree.** The coder ran
+      `git checkout -b` in its cwd (the repo root) rather than `git worktree add`,
+      switching the main working tree to the feature branch with uncommitted edits.
+      The coder prompt says "worktree" but it is guidance, not enforced. Have `tg`
+      create the worktree and hand the worker its path (spawn cwd = worktree), so a
+      worker can never mutate the primary tree. Especially hazardous when dogfooding:
+      target repo == engine repo == the running loop's source, so a worker edits the
+      live engine. Consider running the engine from a separate checkout than the
+      target repo.
+
 ## Still open (next design priorities)
 
 - [ ] **Visibility TUI.** `tg status`/`ps`/`logs` give the data; a live TUI that
