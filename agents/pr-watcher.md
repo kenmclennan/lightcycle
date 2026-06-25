@@ -1,5 +1,9 @@
 ---
 model: sonnet
+step: open-pr
+routes:
+  done: ready-merge
+  ci-failed: build
 ---
 
 # PR-watcher

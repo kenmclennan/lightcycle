@@ -113,26 +113,37 @@ def claim_next(role):
 
 # ---- flow engine ------------------------------------------------------------
 
-AUTOMATED_ROLES = ["coder", "reviewer", "pr-watcher"]
+def agent_roles():
+    adir = os.path.join(grid_root(), "agents")
+    if not os.path.isdir(adir):
+        return []
+    return sorted(f[:-3] for f in os.listdir(adir) if f.endswith(".md"))
 
-def flow_path():
-    return os.path.join(grid_root(), "flows", "feature.tsv")
+def load_flow():
+    """Assemble the flow from agent frontmatter.
+
+    Returns (owner, routes): owner maps step -> role; routes maps
+    step -> {outcome: next_step}. An agent with no `step` (the driver) owns
+    nothing. A route target absent from owner is a human terminal.
+    """
+    owner, routes = {}, {}
+    for role in agent_roles():
+        a = parse_agent(role)
+        meta = a["meta"] if a else {}
+        step = meta.get("step")
+        if not step:
+            continue
+        owner[step] = role
+        rts = meta.get("routes")
+        routes[step] = dict(rts) if isinstance(rts, dict) else {}
+    return owner, routes
 
 def flow_next(step, outcome):
-    fp = flow_path()
-    if not os.path.exists(fp):
+    owner, routes = load_flow()
+    next_step = (routes.get(step) or {}).get(outcome)
+    if not next_step:
         return None
-    with open(fp) as f:
-        for line in f:
-            parts = line.rstrip("\n").split("\t")
-            if len(parts) < 4 or not parts[0] or parts[0].startswith("#"):
-                continue
-            s, o, ns, no = parts[0], parts[1], parts[2], parts[3]
-            if s == step and o == outcome:
-                if ns == "-":
-                    return None
-                return (ns, no)
-    return None
+    return (next_step, owner.get(next_step, "human"))
 
 def advance(tid, outcome):
     t = get_task(tid)
@@ -149,8 +160,9 @@ def advance(tid, outcome):
 
 def ready_roles():
     out = []
-    for role in AUTOMATED_ROLES:
-        if bd_json("ready", "--label", "for:%s" % role, "--json"):
+    for b in bd_json("ready", "--json"):
+        role = _label_value(b, "for:")
+        if role and role != "human" and role not in out:
             out.append(role)
     return out
 
@@ -195,13 +207,34 @@ def parse_agent(role):
     if lines and lines[0].strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
-                for fl in lines[1:i]:
-                    if ":" in fl:
-                        k, v = fl.split(":", 1)
-                        meta[k.strip()] = v.strip()
+                meta = _parse_frontmatter(lines[1:i])
                 body = "\n".join(lines[i + 1:]).lstrip("\n")
                 break
     return {"meta": meta, "body": body, "path": path}
+
+def _parse_frontmatter(lines):
+    """Parse simple `key: value` lines, with one level of `key:` + indented block."""
+    meta = {}
+    pending = None
+    for fl in lines:
+        if not fl.strip():
+            continue
+        if fl[0] in " \t" and pending is not None:
+            if ":" in fl:
+                k, v = fl.split(":", 1)
+                meta[pending][k.strip()] = v.strip()
+            continue
+        pending = None
+        if ":" not in fl:
+            continue
+        k, v = fl.split(":", 1)
+        k, v = k.strip(), v.strip()
+        if v == "":
+            meta[k] = {}
+            pending = k
+        else:
+            meta[k] = v
+    return meta
 
 def _write_workers(workers):
     os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
@@ -253,7 +286,7 @@ def stamp_bead(spawnid, bead):
 
 VERBS = ("status", "mine", "active", "queue", "ps", "logs", "show",
          "claim", "done", "block", "link", "file", "add", "advance", "trace",
-         "ready-roles", "run", "up", "driver", "sweep", "spawn")
+         "flow", "ready-roles", "run", "up", "driver", "sweep", "spawn")
 
 def build_parser():
     p = argparse.ArgumentParser(prog="tg", description="the-grid domain CLI")
@@ -353,6 +386,38 @@ def cmd_advance(argv):
 def cmd_ready_roles(argv):
     print(" ".join(ready_roles()))
     return 0
+
+def cmd_flow(argv):
+    ap = argparse.ArgumentParser(prog="tg flow")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    owner, routes = load_flow()
+    targets = set()
+    for rmap in routes.values():
+        targets.update(rmap.values())
+    terminals = sorted(t for t in targets if t not in owner)
+    seen, dups = {}, []
+    for role in agent_roles():
+        ag = parse_agent(role)
+        step = (ag["meta"] if ag else {}).get("step")
+        if step:
+            if step in seen:
+                dups.append("step '%s' owned by both %s and %s" % (step, seen[step], role))
+            else:
+                seen[step] = role
+    if a.json:
+        print(json.dumps({"owner": owner, "routes": routes,
+                          "terminals": terminals, "conflicts": dups}, indent=2))
+        return 1 if dups else 0
+    for step in sorted(owner):
+        print("%s  (%s)" % (step, owner[step]))
+        for outcome, nxt in sorted(routes.get(step, {}).items()):
+            print("  %-10s -> %s  [%s]" % (outcome, nxt, owner.get(nxt, "human")))
+    if terminals:
+        print("human terminals: %s" % ", ".join(terminals))
+    for d in dups:
+        sys.stderr.write("conflict: %s\n" % d)
+    return 1 if dups else 0
 
 def cmd_done(argv):
     ap = argparse.ArgumentParser(prog="tg done")
@@ -478,10 +543,17 @@ def cmd_queue(argv):
 def cmd_file(argv):
     ap = argparse.ArgumentParser(prog="tg file")
     ap.add_argument("spec")
+    ap.add_argument("--step", required=True)
     ap.add_argument("--epic")
     ap.add_argument("--project")
     ap.add_argument("--goal")
     a = ap.parse_args(argv)
+    owner, _ = load_flow()
+    role = owner.get(a.step)
+    if not role:
+        sys.stderr.write("unknown step '%s'; owned steps: %s\n"
+                         % (a.step, ", ".join(sorted(owner)) or "(none)"))
+        return 1
     base = os.path.splitext(os.path.basename(a.spec))[0]
     labels = []
     if a.project:
@@ -495,8 +567,8 @@ def cmd_file(argv):
         create += ["-l", ",".join(labels)]
     story = bd_json(*create)["id"]
     add_artifact(story, "spec", a.spec)
-    bd("create", "build: %s" % base, "-t", "task",
-       "-l", "for:coder,step:build", "--parent", story)
+    bd("create", "%s: %s" % (a.step, base), "-t", "task",
+       "-l", "for:%s,step:%s" % (role, a.step), "--parent", story)
     print(story)
     return 0
 

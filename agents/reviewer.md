@@ -1,5 +1,9 @@
 ---
 model: opus
+step: review
+routes:
+  done: open-pr
+  rejected: build
 ---
 
 # Reviewer

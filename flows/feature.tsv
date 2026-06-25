@@ -1,7 +1,0 @@
-spec	done	build	coder
-build	done	review	reviewer
-build	blocked	-	human
-review	done	open-pr	pr-watcher
-review	rejected	build	coder
-open-pr	done	ready-merge	human
-open-pr	ci-failed	build	coder

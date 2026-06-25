@@ -35,7 +35,7 @@ tg show <bead>         # one task incl. resume-state (for escalations)
 In the driver, shape a spec with the human, then:
 
 ```bash
-tg file specs/<id>.md  # enters it into the pipeline (creates the build task)
+tg file specs/<id>.md --step build  # enters it into the pipeline at the build step
 ```
 
 The run-loop spawns a coder within a tick; it claims, builds, and exits, then the

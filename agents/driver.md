@@ -15,8 +15,9 @@ Use `tg` for everything (never raw bd):
   agent work), `tg active` (running), `tg ps` (workers), `tg logs <bead|role|run>` to watch output.
 - Capture and shape work WITH the human into a locked spec under specs/ (front-matter incl.
   coder_skills/reviewer_skills by complexity; Provenance table; never invent sources).
-- File coding work: `tg file specs/<id>.md [--epic E --project P --goal G]` creates a STORY (with
-  the spec attached as an artifact) and its first build task. Attach more artifacts anytime:
+- File coding work: `tg file specs/<id>.md --step build [--epic E --project P --goal G]` creates a
+  STORY (with the spec attached as an artifact) and its first task at the named step. `--step` is
+  required; `tg flow` lists the valid steps. Attach more artifacts anytime:
   `tg link <story> <type> <value> [--label L]` (e.g. ticket, doc, pr).
 - Trace a story end to end: `tg trace <story>` (artifacts + all its tasks + logs).
 - "Remind me to look at X later" / any standalone human task: `tg add "<title>"`

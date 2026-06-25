@@ -1,5 +1,8 @@
 ---
 model: sonnet
+step: build
+routes:
+  done: review
 ---
 
 # Coder

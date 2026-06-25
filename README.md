@@ -34,7 +34,11 @@ any directory.
   copied between tasks.
 - **Everything is a task.** "build", "review", "open-pr" are tasks chained by
   dependencies; closing one makes its dependents ready. Which task is ready IS the
-  stage. The chain lives in `flows/feature.tsv` - `tg` is flow-agnostic.
+  stage. The chain is defined by the agents themselves: each agent declares its
+  `step` and `routes:` (`outcome -> next-step`) in frontmatter, and `tg` assembles
+  the flow from them - the next role is derived from whichever agent owns the next
+  step (an unowned target is a `for:human` terminal). `tg flow` prints the
+  assembled graph.
 - **`tg` owns the domain and the processes.** It is the only caller of `bd`. It
   spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own task.** The loop spawns a role
@@ -61,7 +65,8 @@ Run the parts standalone, or use `tg up` to start them together.
 | `tg logs <bead\|role\|run> [-f]`           | tail a worker's or the loop's log                               |
 | `tg show <id>`                             | a story (artifacts + child tasks) or a task (+ story artifacts) |
 | `tg trace <story>`                         | story + its artifacts + child tasks + logs                      |
-| `tg file <spec> [--epic/--project/--goal]` | create a story (spec attached) + first build task               |
+| `tg flow [--json]`                         | print the assembled flow (steps, routes, human terminals)       |
+| `tg file <spec> --step <step> [--epic/--project/--goal]` | create a story (spec attached) + first task at `<step>` |
 | `tg link <story> <type> <value> [--label]` | attach an artifact to a story                                   |
 | `tg add "<title>"`                         | create a standalone human task (no story/flow)                  |
 | `tg sweep`                                 | release orphaned claims (dead worker -> task reclaimable)       |

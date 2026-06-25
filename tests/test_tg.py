@@ -26,6 +26,30 @@ def bd_in(root, *a):
     return subprocess.run(["bd", "-C", root, *a], capture_output=True, text=True, check=True).stdout
 
 
+_AGENT_SPECS = {
+    "coder": ("sonnet", "build", {"done": "review"}),
+    "reviewer": ("opus", "review", {"done": "open-pr", "rejected": "build"}),
+    "pr-watcher": ("sonnet", "open-pr", {"done": "ready-merge", "ci-failed": "build"}),
+    "driver": ("opus", None, None),
+}
+
+
+def write_agents(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
+    """Write the standard pipeline agents (frontmatter routing) into root."""
+    adir = Path(root) / "agents"
+    adir.mkdir(exist_ok=True)
+    for r in roles:
+        model, step, routes = _AGENT_SPECS[r]
+        fm = ["---", "model: %s" % model]
+        if step:
+            fm.append("step: %s" % step)
+        if routes:
+            fm.append("routes:")
+            fm += ["  %s: %s" % (o, n) for o, n in routes.items()]
+        fm += ["---", "# %s" % r, "stub"]
+        (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
+
+
 class TestSkeleton(unittest.TestCase):
     def test_help_lists_subcommands(self):
         r = run_tg("--help")
@@ -89,13 +113,7 @@ class TestClaim(unittest.TestCase):
 class TestFlow(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        flows = Path(self.root) / "flows"
-        flows.mkdir()
-        (flows / "feature.tsv").write_text(
-            "build\tdone\treview\treviewer\n"
-            "review\tdone\topen-pr\tpr-watcher\n"
-            "review\trejected\tbuild\tcoder\n"
-        )
+        write_agents(self.root)
 
     def test_advance_creates_next_step(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
@@ -118,9 +136,7 @@ class TestFlow(unittest.TestCase):
 class TestDoneBlock(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        flows = Path(self.root) / "flows"
-        flows.mkdir()
-        (flows / "feature.tsv").write_text("build\tdone\treview\treviewer\n")
+        write_agents(self.root)
 
     def test_done_closes_and_advances(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
@@ -303,11 +319,10 @@ class TestModelV2(unittest.TestCase):
 class TestFileStory(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        flows = Path(self.root) / "flows"; flows.mkdir()
-        (flows / "feature.tsv").write_text("build\tdone\treview\treviewer\n")
+        write_agents(self.root)
 
     def test_file_creates_story_with_spec_and_build_task(self):
-        sid = run_tg("file", "specs/HSS-435.md", root=self.root).stdout.strip()
+        sid = run_tg("file", "specs/HSS-435.md", "--step", "build", root=self.root).stdout.strip()
         self.assertTrue(sid)
         story = json.loads(bd_in(self.root, "show", sid, "--json"))[0]
         self.assertEqual(story["issue_type"], "story")
@@ -318,7 +333,7 @@ class TestFileStory(unittest.TestCase):
         self.assertEqual(kid_step, "build")
 
     def test_advance_parents_next_task_to_same_story(self):
-        sid = run_tg("file", "specs/X.md", root=self.root).stdout.strip()
+        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
         build = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
         bd_in(self.root, "close", build, "--reason", "done")
         new = run_tg("advance", build, "done", root=self.root).stdout.strip()
@@ -331,11 +346,10 @@ class TestFileStory(unittest.TestCase):
 class TestClaimArtifacts(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        flows = Path(self.root) / "flows"; flows.mkdir()
-        (flows / "feature.tsv").write_text("build\tdone\treview\treviewer\n")
+        write_agents(self.root)
 
     def test_claim_surfaces_story_artifacts(self):
-        run_tg("file", "specs/Y.md", root=self.root)
+        run_tg("file", "specs/Y.md", "--step", "build", root=self.root)
         r = run_tg("claim", "coder", root=self.root)
         t = json.loads(r.stdout)
         self.assertEqual(t["story_artifacts"][0]["value"], "specs/Y.md")
@@ -348,11 +362,10 @@ class TestClaimArtifacts(unittest.TestCase):
 class TestTrace(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        flows = Path(self.root) / "flows"; flows.mkdir()
-        (flows / "feature.tsv").write_text("build\tdone\treview\treviewer\n")
+        write_agents(self.root)
 
     def test_trace_shows_story_artifacts_and_tasks(self):
-        sid = run_tg("file", "specs/Z.md", root=self.root).stdout.strip()
+        sid = run_tg("file", "specs/Z.md", "--step", "build", root=self.root).stdout.strip()
         r = run_tg("trace", sid, "--json", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         tr = json.loads(r.stdout)
@@ -386,6 +399,74 @@ class TestAgentFrontmatter(unittest.TestCase):
         self.assertEqual(a["meta"]["model"], "sonnet")
         self.assertTrue(a["body"].startswith("# Coder"))
         self.assertNotIn("model:", a["body"])
+
+    def test_parse_agent_reads_nested_routes(self):
+        (Path(self.root) / "agents" / "reviewer.md").write_text(
+            "---\nmodel: opus\nstep: review\nroutes:\n  done: open-pr\n"
+            "  rejected: build\n---\n# Reviewer\n")
+        tg = self._tg()
+        a = tg.parse_agent("reviewer")
+        self.assertEqual(a["meta"]["step"], "review")
+        self.assertEqual(a["meta"]["routes"], {"done": "open-pr", "rejected": "build"})
+        self.assertTrue(a["body"].startswith("# Reviewer"))
+
+
+class TestFlowFromAgents(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_agents(self.root)
+
+    def _tg(self):
+        import importlib.util
+        from importlib.machinery import SourceFileLoader
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        loader = SourceFileLoader("tgmod_flow", TG)
+        spec = importlib.util.spec_from_loader("tgmod_flow", loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        return mod
+
+    def test_flow_next_derives_role_from_owner(self):
+        tg = self._tg()
+        self.assertEqual(tg.flow_next("build", "done"), ("review", "reviewer"))
+        self.assertEqual(tg.flow_next("review", "rejected"), ("build", "coder"))
+
+    def test_flow_next_unowned_target_routes_to_human(self):
+        tg = self._tg()
+        self.assertEqual(tg.flow_next("open-pr", "done"), ("ready-merge", "human"))
+
+    def test_flow_next_unknown_outcome_is_none(self):
+        tg = self._tg()
+        self.assertIsNone(tg.flow_next("build", "banana"))
+
+    def test_flow_command_lists_steps_and_human_terminal(self):
+        r = run_tg("flow", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("build", r.stdout)
+        self.assertIn("review", r.stdout)
+        self.assertIn("human", r.stdout)
+
+
+class TestFileStep(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_agents(self.root)
+
+    def test_file_requires_step(self):
+        r = run_tg("file", "specs/X.md", root=self.root)
+        self.assertEqual(r.returncode, 2)
+
+    def test_file_rejects_unknown_step(self):
+        r = run_tg("file", "specs/X.md", "--step", "bogus", root=self.root)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("bogus", r.stderr)
+
+    def test_file_starts_at_given_step(self):
+        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
+        kids = json.loads(bd_in(self.root, "children", sid, "--json"))
+        kid = json.loads(run_tg("show", kids[0]["id"], root=self.root).stdout)
+        self.assertEqual(kid["step"], "build")
+        self.assertEqual(kid["role"], "coder")
 
     def test_spawn_uses_frontmatter_model(self):
         env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
