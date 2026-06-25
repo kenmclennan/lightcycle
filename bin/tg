@@ -795,7 +795,7 @@ def cmd_run(argv):
         _run_tick()
         return 0
     interval = int(os.environ.get("GRID_POLL_SECONDS", "5"))
-    print("tg run up (poll %ds)" % interval)
+    print("tg run (poll %ds)" % interval)
     while True:
         _run_tick()
         time.sleep(interval)
