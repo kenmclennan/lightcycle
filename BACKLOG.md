@@ -71,6 +71,22 @@ the fix landed manually (commit d3b46b5).
 
 ## Still open (next design priorities)
 
+- [ ] **Test suite is far too slow - refactor bin/tg into testable units.** The suite
+      is ~5 min because nearly every test shells out to `tg`/`bd` against a real
+      embedded-Dolt store (each `bd init` + subprocess is seconds). `bin/tg` is one
+      big script; pull the domain logic (task/flow/contract/workspace/config pure
+      functions) into units that can be unit-tested in-process with a fake/in-memory
+      bd, and keep a small set of end-to-end integration tests that actually drive
+      the CLI + store. Goal: fast unit + integration split, seconds not minutes.
+- [ ] **`tg file --repo <name>` should validate at file time.** A repo name that does
+      not exist under `projects_root` is accepted now and only fails silently at claim
+      (no workspace). Fail fast like `--step` does: check `projects_root()/<name>` is a
+      git repo and error with the list of available repos.
+- [ ] **Decouple the engine's data home for a deployed binary.** `agents/`, `.beads/`,
+      and `logs/` still live at `grid_root` (where `bin/tg` resolves). Fine while
+      dogfooding, but a deployed `tg` (not in the workspace) needs its data home set
+      independently - a config key or `~/.local/share/the-grid` - distinct from the
+      `projects`/`specs` roots (which are now HOME-configured).
 - [ ] **Hide bd's id namespace from external ids.** Every bead id carries bd's
       per-store prefix (`the-grid-idz`, `the-grid-idz.1`); it is constant noise the
       `tg` surface should not expose - same "hide bd internals" line as bead->task.
