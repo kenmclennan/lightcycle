@@ -1,7 +1,5 @@
 """tg - the-grid domain CLI. Wires the pure core to the IO adapters; all cmd_*."""
 import argparse
-import collections
-import hashlib
 import json
 import os
 import sys
@@ -10,6 +8,8 @@ import time
 from the_grid.core import config as cconfig
 from the_grid.core import contracts as ccontracts
 from the_grid.core import flow as cflow
+from the_grid.core import reflect as creflect
+from the_grid.core import retro as cretro
 from the_grid.core import tasks as ctasks
 from the_grid.core import workspace as cworkspace
 from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
@@ -815,48 +815,23 @@ def cmd_status(argv):
 
 
 def _spec_hash(task):
-    """First 8 hex chars of SHA-256 of the story's spec file; 'unknown' if absent."""
     story = task.get("parent") or task["id"]
     arts = story_artifacts(story)
     spec = next((a["value"] for a in arts if a["type"] == "spec"), None)
     if not spec or not os.path.exists(spec):
         return "unknown"
     with open(spec, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()[:8]
+        return creflect.spec_hash_from_bytes(f.read())
 
 
 def _story_signals(story_id):
-    """Derive objective signals for a story from its child tasks' bd history.
-
-    Returns {"blocks": int, "review_rounds": int, "conflict": bool}.
-    - blocks: in_progress->open transitions across all build tasks (proxy for tg block calls).
-    - review_rounds: review tasks closed with outcome "rejected".
-    - conflict: any open-pr task closed with "conflict" in its outcome.
-    """
     children = bd_json("children", story_id, "--json")
     tasks = [task_from_bead(b) for b in children]
-
-    review_rounds = sum(
-        1 for t in tasks
-        if t.get("step") == "review" and t.get("outcome") == "rejected"
-    )
-
-    conflict = any(
-        t.get("step") == "open-pr" and "conflict" in (t.get("outcome") or "")
-        for t in tasks
-    )
-
-    blocks = 0
-    for t in tasks:
-        if t.get("step") != "build":
-            continue
-        history = bd_json("history", t["id"], "--json")
-        statuses = [h["Issue"]["status"] for h in reversed(history)]
-        for i in range(len(statuses) - 1):
-            if statuses[i] == "in_progress" and statuses[i + 1] == "open":
-                blocks += 1
-
-    return {"blocks": blocks, "review_rounds": review_rounds, "conflict": conflict}
+    task_histories = {
+        t["id"]: bd_json("history", t["id"], "--json")
+        for t in tasks if t.get("step") == "build"
+    }
+    return cretro.derive_signals(tasks, task_histories)
 
 
 def cmd_reflect(argv):
@@ -876,25 +851,8 @@ def cmd_reflect(argv):
 
     t = get_task(a.id)
     story = t.get("parent") or a.id
-
-    def _split(s):
-        return [x.strip() for x in s.split(",") if x.strip()]
-
-    sections = {}
-    for name in _split(a.used):
-        sections[name] = "used"
-    for name in _split(a.skipped):
-        sections[name] = "skipped"
-    for name in _split(a.guess):
-        sections[name] = "guess"
-
-    reflection = {
-        "task": a.id,
-        "sections": sections,
-        "missing": a.missing,
-        "noise": a.noise,
-        "spec_hash": _spec_hash(t),
-    }
+    reflection = creflect.build_reflection(
+        a.id, a.used, a.skipped, a.guess, a.missing, a.noise, _spec_hash(t))
     add_artifact(story, "reflection", json.dumps(reflection))
     print("reflected")
     return 0
@@ -927,20 +885,10 @@ def cmd_retro(argv):
     print("== retro: %s  (N=%d) ==" % (a.epic, n))
 
     if n > 0:
-        section_counts = {}
-        for ref in all_reflections:
-            for sec, verdict in (ref.get("sections") or {}).items():
-                if sec not in section_counts:
-                    section_counts[sec] = {"used": 0, "skipped": 0, "guess": 0}
-                if verdict in section_counts[sec]:
-                    section_counts[sec][verdict] += 1
-
-        missing_counts = collections.Counter(
-            m for ref in all_reflections for m in (ref.get("missing") or [])
-        )
-        noise_counts = collections.Counter(
-            item for ref in all_reflections for item in (ref.get("noise") or [])
-        )
+        agg = cretro.aggregate_reflections(all_reflections)
+        section_counts = agg["section_counts"]
+        missing_counts = agg["missing_counts"]
+        noise_counts = agg["noise_counts"]
 
         if section_counts:
             print("\nSections:")
