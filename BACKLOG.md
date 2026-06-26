@@ -71,13 +71,41 @@ the fix landed manually (commit d3b46b5).
 
 ## Still open (next design priorities)
 
-- [ ] **Test suite is far too slow - refactor bin/tg into testable units.** The suite
-      is ~5 min because nearly every test shells out to `tg`/`bd` against a real
-      embedded-Dolt store (each `bd init` + subprocess is seconds). `bin/tg` is one
-      big script; pull the domain logic (task/flow/contract/workspace/config pure
-      functions) into units that can be unit-tested in-process with a fake/in-memory
-      bd, and keep a small set of end-to-end integration tests that actually drive
-      the CLI + store. Goal: fast unit + integration split, seconds not minutes.
+- [ ] **Hexagonal refactor - separate IO from the core (FOUNDATIONAL).** The suite is
+      ~5 min and the live pipeline is slow for the SAME reason: the domain logic has no
+      seam to exercise without standing up bd + git + the CLI. Every test (and every
+      worker's verify step) shells out to `tg`/`bd` against a real embedded-Dolt store
+      (each `bd init` + subprocess is seconds). Split `bin/tg` (one ~1000-line script)
+      into a small package: a PURE core (task model, flow, contracts, workspace/config
+      resolution) tested in-process in microseconds, behind ports for the external IO
+      boundaries - bd store, git, gh, the claude spawner, fs. Ambient capabilities
+      (time, uuid) stay EXPLICIT INPUTS, not ports. Keep a small set of integration
+      tests for the wiring. Ends the "single stdlib file" - worth it: this is the
+      enabler for fast tests, parallel agents, and clean usage-limit handling.
+- [ ] **Parallel agents up to MAX_AGENTS.** The model is N workers running ready jobs
+      in parallel, not one-per-role serialised. The atomic claim already makes this
+      safe (stress-tested: many concurrent claimers -> one winner each). Needs: the
+      loop spawns up to MAX_AGENTS across all ready tasks (count live workers, not the
+      per-role in-flight skip); logs keyed by task/spawnid not role (`tg logs <task>`,
+      a way to multiplex/pick - `tg logs coder` assumes a single coder, which is wrong);
+      and bd in SERVER mode (`bd daemon`/dolt sql-server) - embedded Dolt is
+      single-writer, so concurrent worker writes need it. (See the bd server-mode item
+      under Deferred - it is now a hard prerequisite, not optional.)
+- [ ] **Handle subscription usage limits gracefully.** Today a worker that hits the
+      Claude usage limit exits WITHOUT `tg done`; sweep reclaims the task and respawns
+      it -> it hits the limit again -> respawn loop, no detection, no reason surfaced.
+      All workers share ONE subscription quota, so one hit blocks everyone. Detect the
+      signal in the worker's stream-json log (`You've hit your ... limit . resets
+      <time>`; exit code is ~1 but undocumented - detect on the message, not the code),
+      then PAUSE THE WHOLE LOOP (not just one task), surface "blocked: usage limit,
+      resets <time>" to `tg mine`, and schedule a resume at reset. Resume is feasible -
+      workers already get a unique `--session-id`, and `claude --resume <id> -p` replays
+      context (only succeeds after reset). No built-in retry for quota limits.
+- [ ] **Feature-named branches, not tool-named.** Branches are `grid/<bead-id>` (e.g.
+      `grid/the-grid-wnv`) - leaks the tool name + an opaque id. Derive the branch from
+      the FEATURE (spec id/title slug), with a configurable prefix (default e.g.
+      `feat/`). Change `ensure_worktree`'s branch computation and the auto-linked
+      `branch` artifact.
 - [ ] **`tg file --repo <name>` should validate at file time.** A repo name that does
       not exist under `projects_root` is accepted now and only fails silently at claim
       (no workspace). Fail fast like `--step` does: check `projects_root()/<name>` is a
@@ -168,6 +196,11 @@ These were scoped out of the MVP deliberately. Each likely becomes its own spec.
       escalation, capture.
 - [ ] **Planner.** Organises what needs the human's attention in priority order so
       the human is never the bottleneck.
+- [ ] **Smart inbox triage.** An agent triggered when something lands in the human's
+      real inbox (email/Slack) that triages "what do I need to do" across everything
+      there, with helpful links and summaries. The Gmail/Slack/Calendar MCP tools make
+      it concretely buildable. Sits at the intersection of Inbox/capture (the queue)
+      and Planner (the prioritised surface), but event-driven off the actual inbox.
 - [ ] **Measurement ("Recognizer").** Read `logs/supervisor.jsonl` + beads history +
       per-task transcripts to report rework count, cycle time, throughput, and where
       things go wrong - the same analysis used to design this system.
