@@ -95,14 +95,16 @@ the fix landed manually (commit d3b46b5).
       the FEATURE (spec id/title slug), with a configurable prefix (default e.g.
       `feat/`). Change `ensure_worktree`'s branch computation and the auto-linked
       `branch` artifact.
-- [ ] **Flow v2 (design: `docs/flow-v2.md`).** Make "work off the tip of main" an
-      invariant (fetch at branch, rebase-onto-tip at a new `open-pr` step, conflict ->
-      block); split open-pr into `open-pr` (rebase + create PR) and `watch-pr`
-      (CI/comments/remediate); and close the agent -> human -> agent loop by making
-      `tg done` actor-agnostic with HUMAN-owned routable steps (`ready-merge`,
-      `needs-human`, `cleanup`). Consolidates and supersedes the "notes-forward on
-      rework", "PR-merge auto-close loop", and ad-hoc block/resume items. Implement on
-      the hexagonal core; the design names the seams (store/git/pr/spawner ports).
+- [ ] **Flow v2 (design: spec `GRID-002-flow-v2` in specs/).** Make "work off the tip
+      of main" an invariant (fetch at branch, rebase-onto-tip at a new `open-pr` step,
+      conflict -> block); split open-pr into `open-pr` (rebase + create PR) and
+      `watch-pr` (CI/comments/remediate); and close the agent -> human -> agent loop by
+      making `tg done` actor-agnostic with HUMAN-owned routable steps (`ready-merge`,
+      `needs-human`, `cleanup`). Two return-edge kinds: rework -> build; block-resolution
+      -> the recorded origin step. HARD CONSTRAINT: the whole workflow stays editable
+      from agent markdown alone - `tg` provides primitives only, NO code-level builtins;
+      the driver (CLU) fills human steps and supplies trigger signals by hand for now.
+      Consolidates the "notes-forward on rework" and ad-hoc block/resume items.
 - [ ] **Decouple the engine's data home for a deployed binary.** `agents/`, `.beads/`,
       and `logs/` still live at `grid_root` (where `bin/tg` resolves). Fine while
       dogfooding, but a deployed `tg` (not in the workspace) needs its data home set
@@ -160,9 +162,14 @@ the fix landed manually (commit d3b46b5).
 
 ## Deferred (unchanged by tg)
 
-- [ ] **PR-merge auto-close loop.** Detect a merge (poll/webhook), run cleanup
-      (worktree + branch removal), close the task. The pr-watcher stops at "ready for
-      human merge"; a human merges.
+- [ ] **External triggers (design first).** A coherent concept for anything that
+      *automatically* emits a signal or runs work OUTSIDE the agent markdown: merge
+      auto-detection (poll `gh`/webhook), filesystem watchers, cron/schedules, git/PR
+      hooks. Until designed, we resist codifying any such automation - the driver (CLU)
+      supplies these signals by hand (and flow v2 keeps the workflow purely in agent
+      files). The old "PR-merge auto-close loop" (detect merge -> cleanup -> close) is
+      the first instance: it becomes an external trigger that emits `merged`, which the
+      flow-v2 routing already handles. Think hooks vs cron vs watchers before building any.
 - [ ] **bd embedded single-writer contention.** Embedded Dolt is single-writer; the
       run-loop spawns one role per tick (serialising enough for now). For real
       parallel workers, move beads to server mode (`bd daemon` / dolt sql-server).
