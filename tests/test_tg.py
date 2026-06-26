@@ -276,6 +276,18 @@ class TestDoneBlock(unittest.TestCase):
         self.assertIn("for:human", bead["labels"])
         self.assertNotIn("for:coder", bead["labels"])
 
+    def test_block_clears_assignee_and_surfaces_in_mine(self):
+        # A claimed task (assignee set) that gets blocked must clear the assignee,
+        # else it stays "in-progress" and hides in `tg active` instead of `tg mine`.
+        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        bd_in(self.root, "ready", "--label", "for:coder", "--claim", "--json")
+        r = run_tg("block", b, "--needs", "rebase first", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        self.assertIn(bead.get("assignee"), (None, ""))
+        self.assertIn(b, run_tg("mine", root=self.root).stdout)
+
 
 class TestSweep(unittest.TestCase):
     def setUp(self):

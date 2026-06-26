@@ -831,6 +831,7 @@ def cmd_block(argv):
         bd("label", "remove", a.id, "for:%s" % role)
     bd("label", "add", a.id, "for:human")
     bd("update", a.id, "--status", "open")
+    bd("assign", a.id, "")
     print("blocked -> human")
     return 0
 
