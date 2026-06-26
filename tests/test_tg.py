@@ -1,4 +1,4 @@
-import json, os, subprocess, sys, tempfile, unittest
+import json, os, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -346,14 +346,26 @@ class TestRun(unittest.TestCase):
         return subprocess.run([sys.executable, TG, "run", "--once"], capture_output=True, text=True, env=env)
 
     def test_run_skips_role_with_inflight_worker(self):
-        # A coder is already booting (alive, has not claimed yet -> bead None).
+        # A coder is already booting (alive, claimed nothing yet -> bead None) recently.
         bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "boot", "role": "coder", "pid": os.getpid(), "log": "x", "bead": None}]))
+            [{"spawnid": "boot", "role": "coder", "pid": os.getpid(), "log": "x",
+              "bead": None, "started": time.time()}]))
         r = self._run_once()
         self.assertEqual(r.returncode, 0, r.stderr)
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
         self.assertEqual(len(workers), 1)  # no second coder spawned
+
+    def test_run_spawns_when_inflight_worker_is_stale(self):
+        # A worker stuck booting far longer than the max boot age must not block forever.
+        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
+            [{"spawnid": "stuck", "role": "coder", "pid": os.getpid(), "log": "x",
+              "bead": None, "started": time.time() - 9999}]))
+        r = self._run_once()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
+        self.assertEqual(len(workers), 2)  # stale boot no longer blocks the role
 
     def test_run_spawns_when_prior_worker_already_claimed(self):
         bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")

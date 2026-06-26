@@ -332,7 +332,7 @@ def spawn_worker(role):
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=root, env=env)
     workers = workers_state()
     workers.append({"spawnid": spawnid, "role": role, "pid": proc.pid,
-                    "log": log, "bead": None})
+                    "log": log, "bead": None, "started": time.time()})
     _write_workers(workers)
     return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
 
@@ -897,9 +897,14 @@ def _run_tick():
     # A worker that has spawned but not yet claimed (bead is None) and is still
     # alive is "in flight" - it will claim the ready task once it boots. Don't
     # spawn another for that role; claude's boot time (~10-30s) far exceeds the
-    # poll, so without this the loop spawns many redundant workers per task.
+    # poll, so without this the loop spawns many redundant workers per task. Cap
+    # the wait at GRID_MAX_BOOT_SECONDS so a worker stuck booting can't block its
+    # role forever (the atomic claim keeps a late extra spawn safe).
+    max_boot = int(os.environ.get("GRID_MAX_BOOT_SECONDS", "120"))
+    now = time.time()
     inflight = {w.get("role") for w in workers_state()
-                if w.get("bead") is None and pid_alive(w.get("pid", -1))}
+                if w.get("bead") is None and pid_alive(w.get("pid", -1))
+                and (now - w.get("started", 0)) < max_boot}
     for role in ready_roles():
         if role in inflight:
             continue

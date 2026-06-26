@@ -51,8 +51,8 @@ the fix landed manually (commit d3b46b5).
       one task). Fixed: `_run_tick` skips a role that has an "in flight" worker - one
       that is alive but has not yet claimed (registry `bead` is None). Now exactly one
       worker boots per role until it claims (or dies), then the next can spawn.
-      Caveat (follow-up): a worker that hangs forever in boot (alive, never claims)
-      blocks that role indefinitely; a max-boot-age cooldown would bound it.
+      A worker stuck booting past GRID_MAX_BOOT_SECONDS (default 120) no longer
+      blocks its role - the atomic claim keeps a late extra spawn safe.
 - [x] **Workers branch in-place instead of in an isolated worktree (FIXED).** The coder
       ran `git checkout -b` in its cwd (the repo root) rather than `git worktree add`,
       switching the main working tree to the feature branch with uncommitted edits. The
