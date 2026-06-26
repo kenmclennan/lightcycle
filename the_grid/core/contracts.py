@@ -55,9 +55,21 @@ def analyze_flow(owner, routes, role_metas):
 
     owner/routes come from flow.load_flow; role_metas maps every role -> meta
     (used for the per-step contracts and for duplicate-step-owner detection).
+    Contracts are read from the file that declares the step, not from owner: a
+    human step's owner is the literal "human", but its accepts/produces still
+    live in its own frontmatter.
     """
+    declarer, dups = {}, []
+    for role in sorted(role_metas):
+        step = (role_metas[role] or {}).get("step")
+        if not step:
+            continue
+        if step in declarer:
+            dups.append("step '%s' owned by both %s and %s" % (step, declarer[step], role))
+        else:
+            declarer[step] = role
     steps = sorted(owner)
-    step_meta = {s: (role_metas.get(owner[s]) or {}) for s in steps}
+    step_meta = {s: (role_metas.get(declarer.get(s)) or {}) for s in steps}
     req = {s: required_inputs(step_meta[s]) for s in steps}
     opt = {s: optional_inputs(step_meta[s]) for s in steps}
     prod = {s: required_outputs(step_meta[s]) for s in steps}
@@ -79,14 +91,6 @@ def analyze_flow(owner, routes, role_metas):
         targets.update(rmap.values())
     terminals = sorted(t for t in targets if t not in owner)
 
-    seen, dups = {}, []
-    for role in sorted(role_metas):
-        step = (role_metas[role] or {}).get("step")
-        if step:
-            if step in seen:
-                dups.append("step '%s' owned by both %s and %s" % (step, seen[step], role))
-            else:
-                seen[step] = role
     ok = not missing and not dups
     return {"steps": steps, "req": req, "opt": opt, "prod": prod,
             "entries": entries, "unreachable": unreachable, "missing": missing,

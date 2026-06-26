@@ -8,16 +8,20 @@ def load_flow(role_metas):
     """Assemble the flow from agent frontmatter metas.
 
     role_metas maps role -> meta. Returns (owner, routes): owner maps step -> role;
-    routes maps step -> {outcome: next_step}. An agent with no `step` (the driver)
-    owns nothing. A route target absent from owner is a human terminal.
+    routes maps step -> {outcome: next_step}. A file with `model` + `step` is an
+    automated agent and owns its step as itself. A file with `step` but NO `model`
+    is a human step: it owns its step as the literal role "human" (never spawned,
+    surfaces in tg mine). A file with no `step` (the driver) owns nothing. A route
+    target absent from owner is a human terminal.
     """
     owner, routes = {}, {}
     for role, meta in role_metas.items():
-        step = (meta or {}).get("step")
+        meta = meta or {}
+        step = meta.get("step")
         if not step:
             continue
-        owner[step] = role
-        rts = (meta or {}).get("routes")
+        owner[step] = role if meta.get("model") else "human"
+        rts = meta.get("routes")
         routes[step] = dict(rts) if isinstance(rts, dict) else {}
     return owner, routes
 

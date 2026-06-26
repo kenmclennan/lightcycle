@@ -12,6 +12,17 @@ METAS = {
     "driver": {"model": "opus"},
 }
 
+# A flow that mixes automated agents (model + step) with human steps (step, no
+# model). watch-pr is automated; ready-merge and cleanup are human steps.
+HUMAN_METAS = {
+    "watch-pr": {"model": "sonnet", "step": "watch-pr",
+                 "routes": {"done": "ready-merge", "ci-failed": "build"}},
+    "ready-merge": {"step": "ready-merge",
+                    "routes": {"merged": "cleanup", "changes": "build"}},
+    "cleanup": {"step": "cleanup"},
+    "driver": {"model": "opus"},
+}
+
 
 class TestLoadFlow(unittest.TestCase):
     def test_owner_and_routes(self):
@@ -24,6 +35,22 @@ class TestLoadFlow(unittest.TestCase):
     def test_driver_owns_nothing(self):
         owner, _ = load_flow(METAS)
         self.assertEqual(set(owner.values()), {"coder", "reviewer", "pr-watcher"})
+
+
+class TestHumanSteps(unittest.TestCase):
+    def test_agent_step_owned_by_its_basename(self):
+        owner, _ = load_flow(HUMAN_METAS)
+        self.assertEqual(owner["watch-pr"], "watch-pr")
+
+    def test_no_model_step_owned_by_human(self):
+        owner, _ = load_flow(HUMAN_METAS)
+        self.assertEqual(owner["ready-merge"], "human")
+        self.assertEqual(owner["cleanup"], "human")
+
+    def test_flow_next_routes_to_human_step(self):
+        owner, routes = load_flow(HUMAN_METAS)
+        self.assertEqual(flow_next("watch-pr", "done", owner, routes),
+                         ("ready-merge", "human"))
 
 
 class TestFlowNext(unittest.TestCase):
