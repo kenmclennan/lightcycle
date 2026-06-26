@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from grid.core.config import cfg_path, projects_root, specs_root
+from the_grid.core.config import cfg_path, projects_root, specs_root
 
 HOME = "/home/u"
 

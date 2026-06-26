@@ -1,6 +1,6 @@
 import unittest
 
-from grid.core.flow import (advance_create_args, flow_next, load_flow,
+from the_grid.core.flow import (advance_create_args, flow_next, load_flow,
                             ready_roles_from_beads)
 
 METAS = {

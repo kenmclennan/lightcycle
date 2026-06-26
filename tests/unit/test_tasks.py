@@ -1,6 +1,6 @@
 import unittest
 
-from grid.core.tasks import (bucket, filter_by_status, label_value, labels,
+from the_grid.core.tasks import (bucket, filter_by_status, label_value, labels,
                              task_from_bead)
 
 

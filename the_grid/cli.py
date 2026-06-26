@@ -5,24 +5,24 @@ import os
 import sys
 import time
 
-from grid.core import config as cconfig
-from grid.core import contracts as ccontracts
-from grid.core import flow as cflow
-from grid.core import tasks as ctasks
-from grid.core import workspace as cworkspace
-from grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
+from the_grid.core import config as cconfig
+from the_grid.core import contracts as ccontracts
+from the_grid.core import flow as cflow
+from the_grid.core import tasks as ctasks
+from the_grid.core import workspace as cworkspace
+from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
                                  required_outputs)
-from grid.core.logrender import render_log_line
-from grid.core.tasks import task_from_bead
+from the_grid.core.logrender import render_log_line
+from the_grid.core.tasks import task_from_bead
 
-from grid.adapters import gitio
-from grid.adapters.fsio import (agent_roles, config_path, ensure_config, grid_root,
+from the_grid.adapters import gitio
+from the_grid.adapters.fsio import (agent_roles, config_path, ensure_config, grid_root,
                                 load_config, parse_agent, store_ready, worktrees_dir)
-from grid.adapters.spawner import spawn_worker
-from grid.adapters.store import (add_artifact, all_tasks, bd, bd_json, ensure_beads,
+from the_grid.adapters.spawner import spawn_worker
+from the_grid.adapters.store import (add_artifact, all_tasks, bd, bd_json, ensure_beads,
                                  get_task, present_types, route_to_human,
                                  story_artifacts, task_view)
-from grid.adapters.workers import (pid_alive, prune_workers, stamp_bead, workers_state)
+from the_grid.adapters.workers import (pid_alive, prune_workers, stamp_bead, workers_state)
 
 # ---- config / roots ---------------------------------------------------------
 

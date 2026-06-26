@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from grid.core.logrender import render_log_line
+from the_grid.core.logrender import render_log_line
 
 
 class TestRenderLogLine(unittest.TestCase):

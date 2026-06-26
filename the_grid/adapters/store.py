@@ -4,8 +4,8 @@ import os
 import subprocess
 import sys
 
-from grid.adapters.fsio import grid_root
-from grid.core.tasks import task_from_bead
+from the_grid.adapters.fsio import grid_root
+from the_grid.core.tasks import task_from_bead
 
 # bd prints assorted advisory noise to stderr; filter the known-benign lines.
 _BD_NOISE = ("bd --json output format will change", "beads.role not configured",

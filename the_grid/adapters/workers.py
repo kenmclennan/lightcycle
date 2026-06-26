@@ -2,7 +2,7 @@
 import json
 import os
 
-from grid.adapters.fsio import grid_root
+from the_grid.adapters.fsio import grid_root
 
 
 def workers_path():

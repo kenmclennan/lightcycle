@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """tg - the-grid domain CLI entry point.
 
-Thin shim: resolve the package root (the dir holding grid/) onto sys.path - the
+Thin shim: resolve the package root (the dir holding the_grid/) onto sys.path - the
 same way the engine resolves its own root, so it works through the symlinked
-~/.local/bin/tg too - then delegate to grid.cli. The package is located from this
+~/.local/bin/tg too - then delegate to the_grid.cli. The package is located from this
 file's real path, NOT from GRID_ROOT_OVERRIDE (that only redirects the data store).
 Names are re-exported so tests can load this file as a module and reach the API.
 """
@@ -12,8 +12,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from grid.cli import *  # noqa: F401,F403
-from grid.cli import main
+from the_grid.cli import *  # noqa: F401,F403
+from the_grid.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

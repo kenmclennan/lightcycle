@@ -1,6 +1,6 @@
 import unittest
 
-from grid.core.workspace import branch_for, story_repo, worktree_path
+from the_grid.core.workspace import branch_for, story_repo, worktree_path
 
 
 class TestWorkspace(unittest.TestCase):

@@ -6,8 +6,8 @@ import sys
 import time
 import uuid
 
-from grid.adapters.fsio import grid_root, parse_agent
-from grid.adapters.workers import workers_state, write_workers
+from the_grid.adapters.fsio import grid_root, parse_agent
+from the_grid.adapters.workers import workers_state, write_workers
 
 
 def spawn_worker(role):

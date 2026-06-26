@@ -1,8 +1,8 @@
 import unittest
 
-from grid.core.contracts import (FILE_PROVIDES, analyze_flow, guaranteed_artifacts,
+from the_grid.core.contracts import (FILE_PROVIDES, analyze_flow, guaranteed_artifacts,
                                  optional_inputs, required_inputs, required_outputs)
-from grid.core.flow import load_flow
+from the_grid.core.flow import load_flow
 
 CONTRACT_METAS = {
     "coder": {"step": "build", "accepts": {"spec": "required", "branch": "optional"},

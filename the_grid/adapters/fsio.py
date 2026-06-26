@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-from grid.core import agents as core_agents
+from the_grid.core import agents as core_agents
 
 
 def grid_root():
