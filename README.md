@@ -29,8 +29,9 @@ any directory.
 - **The engine is workflow-agnostic.** `tg` owns tasks, stories, and the flow, but
   has no opinion on *how you work* - including your spec format. It only stores a
   spec's path as an artifact; it never parses it. The agents in `agents/` are an
-  *example* workflow (a feature pipeline: coder -> reviewer -> pr-watcher). You
-  define your own way of working by editing and creating agents - their steps,
+  *example* workflow (a feature pipeline: coder -> reviewer -> open-pr -> watch-pr,
+  then the human steps ready-merge -> cleanup). You define your own way of working
+  by editing and creating agents - their steps,
   routes, and whatever a "spec" means to them. A spec is whatever your agents
   understand; hand the Driver one you wrote and it flows in as-is.
 - **Hierarchy: epic / story / task.** An **epic** is a goal; a **story** is a
@@ -62,9 +63,10 @@ any directory.
 - **`tg` owns the domain and the processes.** It is the only caller of `bd`. It
   spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own task.** The loop spawns a role
-  (`coder`/`reviewer`/`pr-watcher`); the worker's first act is `tg claim <role>`
-  (atomic), then it works and exits. A worker that dies before claiming leaves
-  nothing stuck.
+  (`coder`/`reviewer`/`open-pr`/`watch-pr`); the worker's first act is `tg claim
+  <role>` (atomic), then it works and exits. A worker that dies before claiming
+  leaves nothing stuck. Human steps (`ready-merge`/`cleanup`) are never spawned;
+  they surface in `tg mine`.
 - **HOME config: where your work lives.** A single config file (`$GRID_CONFIG`, else
   `$XDG_CONFIG_HOME`/`~/.config`/`the-grid/config`) names two roots: `projects` (the
   dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (the
@@ -116,8 +118,12 @@ Initialise once with `tg init`, then run the parts in separate terminals.
 ## Models
 
 Each role declares its own model in the `model:` frontmatter of its agent file
-(`agents/<role>.md`): `opus` for driver+reviewer, `sonnet` for coder+pr-watcher.
+(`agents/<role>.md`): `opus` for the reviewer, `sonnet` for coder/open-pr/watch-pr.
 `tg` reads it per spawn and refuses to spawn a role whose file lacks a `model:`.
+Human steps (`ready-merge`/`cleanup`) declare a `step` but no `model` - they are
+never spawned. The Driver is the human's interactive seat, defined separately in
+`driver.md` (not under `agents/`, since it is not a flow participant); `tg driver`
+launches it.
 
 ## Telemetry / logs
 

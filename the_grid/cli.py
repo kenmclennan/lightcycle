@@ -17,7 +17,7 @@ from the_grid.core.tasks import task_from_bead
 
 from the_grid.adapters import gitio
 from the_grid.adapters.fsio import (agent_roles, config_path, ensure_config, grid_root,
-                                load_config, parse_agent, store_ready, worktrees_dir)
+                                load_config, parse_agent, read_md, store_ready, worktrees_dir)
 from the_grid.adapters.spawner import spawn_worker
 from the_grid.adapters.store import (add_artifact, all_tasks, bd, bd_json, ensure_beads,
                                  get_task, present_types, route_to_human,
@@ -697,12 +697,12 @@ def cmd_driver(argv):
     if not require_store():
         return 1
     root = grid_root()
-    agent = parse_agent("driver")
-    if agent is None or not agent["meta"].get("model"):
-        sys.stderr.write("agents/driver.md is missing or has no 'model' in frontmatter\n")
+    seat = read_md("driver.md")
+    if seat is None or not seat["meta"].get("model"):
+        sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
         return 1
-    os.execvp("claude", ["claude", "--model", agent["meta"]["model"], "--name", "driver",
-                         "--append-system-prompt", agent["body"], "--add-dir", root,
+    os.execvp("claude", ["claude", "--model", seat["meta"]["model"], "--name", "driver",
+                         "--append-system-prompt", seat["body"], "--add-dir", root,
                          "--dangerously-skip-permissions"])
 
 

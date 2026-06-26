@@ -50,15 +50,20 @@ def agent_roles():
     return sorted(f[:-3] for f in os.listdir(adir) if f.endswith(".md"))
 
 
-def parse_agent(role):
-    """Read agents/<role>.md; return {meta, body, path} or None if absent."""
-    path = os.path.join(grid_root(), "agents", "%s.md" % role)
+def read_md(relpath):
+    """Read a markdown file under the grid root; return {meta, body, path} or None."""
+    path = os.path.join(grid_root(), relpath)
     if not os.path.exists(path):
         return None
     with open(path) as f:
         text = f.read()
     meta, body = core_agents.split_frontmatter(text)
     return {"meta": meta, "body": body, "path": path}
+
+
+def parse_agent(role):
+    """Read a flow agent file agents/<role>.md; return {meta, body, path} or None."""
+    return read_md(os.path.join("agents", "%s.md" % role))
 
 
 def worktrees_dir():
