@@ -848,7 +848,8 @@ class TestWorktree(unittest.TestCase):
         self.assertTrue(os.path.isdir(ws))
         self.assertEqual(os.path.basename(ws), sid)
         self.assertEqual(os.path.dirname(ws), os.path.join(self.root, ".worktrees"))
-        self.assertEqual(self._branch_of(ws), "grid/%s" % sid)
+        self.assertEqual(self._branch_of(ws), "feat/w")
+        self.assertEqual(t["branch"], "feat/w")
 
     def test_claim_does_not_switch_root_branch(self):
         run_tg("file", "specs/W.md", "--step", "build", root=self.root)
@@ -871,7 +872,7 @@ class TestWorktree(unittest.TestCase):
         arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0]["metadata"]["artifacts"]
         branches = [a for a in arts if a["type"] == "branch"]
         self.assertEqual(len(branches), 1)
-        self.assertEqual(branches[0]["value"], "grid/%s" % sid)
+        self.assertEqual(branches[0]["value"], "feat/w")
 
     def test_worktrees_dir_gitignored(self):
         run_tg("file", "specs/W.md", "--step", "build", root=self.root)
@@ -890,7 +891,7 @@ class TestWorktree(unittest.TestCase):
         self.assertFalse(os.path.isdir(ws))
         ws2 = tg.ensure_worktree(sid)
         self.assertEqual(ws, ws2)
-        self.assertEqual(self._branch_of(ws2), "grid/%s" % sid)
+        self.assertEqual(self._branch_of(ws2), "feat/w")
         self.assertTrue(os.path.isfile(os.path.join(ws2, "f.txt")))
 
 
@@ -933,7 +934,7 @@ class TestNamedRepo(unittest.TestCase):
 
     def test_named_repo_worktree_created_engine_untouched(self):
         view = self._claim("app")
-        branch = "grid/%s" % view["parent"]
+        branch = "feat/x"
         self.assertEqual(view["workspace"],
                          os.path.join(self.engine, ".worktrees", view["parent"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
@@ -942,7 +943,7 @@ class TestNamedRepo(unittest.TestCase):
 
     def test_default_repo_targets_self(self):
         view = self._claim()  # no --repo
-        branch = "grid/%s" % view["parent"]
+        branch = "feat/x"
         self.assertTrue(os.path.isdir(view["workspace"]))
         self.assertTrue(self._has_branch(self.engine, branch))  # self repo got the branch
         self.assertFalse(self._has_branch(self.app, branch))
@@ -1025,7 +1026,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(json.loads(bd_in(self.root, "show", sid, "--json"))[0]["status"], "closed")
         self.assertEqual(json.loads(bd_in(self.root, "show", build, "--json"))[0]["status"], "closed")
         self.assertFalse(os.path.isdir(ws))
-        self.assertFalse(self._has_branch(self.root, "grid/%s" % sid))
+        self.assertFalse(self._has_branch(self.root, "feat/w"))
 
 
 class TestConfig(unittest.TestCase):

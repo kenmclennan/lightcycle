@@ -39,6 +39,10 @@ def specs_root():
     return cconfig.specs_root(load_config(), _home())
 
 
+def branch_prefix():
+    return cconfig.branch_prefix(load_config())
+
+
 # ---- flow assembly (IO gather -> pure decision) -----------------------------
 
 
@@ -120,6 +124,13 @@ def _ensure_worktrees_ignored(root):
         f.write(line + "\n")
 
 
+def _story_branch(story):
+    for a in story_artifacts(story):
+        if a.get("type") == "branch":
+            return a["value"]
+    return None
+
+
 def _ensure_branch_artifact(story, branch):
     if any(a.get("type") == "branch" for a in story_artifacts(story)):
         return
@@ -127,15 +138,17 @@ def _ensure_branch_artifact(story, branch):
 
 
 def ensure_worktree(story):
-    """Create (or reuse) the per-story git worktree on branch grid/<story> so a
-    worker never mutates the primary tree. The target repo is resolved by name from
-    the story's `repo` artifact (default: the engine itself). Idempotent: an existing
+    """Create (or reuse) the per-story git worktree on a feature-named branch so a
+    worker never mutates the primary tree. The branch is computed once from the story
+    title (its feature name) and the configured prefix, then stored as the `branch`
+    artifact and reused on later claims. The target repo is resolved by name from the
+    story's `repo` artifact (default: the engine itself). Idempotent: an existing
     worktree or branch is reused. Returns the workspace path, or None when no isolated
     tree can be made (not a git repo, or no origin/main to branch from)."""
     target = os.path.join(projects_root(), story_repo(story))
     if not gitio.is_git_repo(target):
         return None
-    branch = cworkspace.branch_for(story)
+    branch = _story_branch(story) or cworkspace.branch_for(get_task(story)["title"], branch_prefix())
     path = worktree_path(story)
     if gitio.worktree_registered(target, path) and os.path.isdir(path):
         _ensure_branch_artifact(story, branch)
@@ -270,9 +283,13 @@ def cmd_claim(argv):
     if spawnid:
         stamp_bead(spawnid, t["id"])
     view = task_view(t["id"])
-    ws = ensure_worktree(t.get("parent") or t["id"])
+    story = t.get("parent") or t["id"]
+    ws = ensure_worktree(story)
     if ws:
         view["workspace"] = ws
+    branch = _story_branch(story)
+    if branch:
+        view["branch"] = branch
     spec = next((a["value"] for a in view.get("story_artifacts", []) if a.get("type") == "spec"), None)
     if spec:
         view["spec_path"] = spec if os.path.isabs(spec) else os.path.join(specs_root(), spec)
@@ -482,7 +499,7 @@ def cmd_close(argv):
     a = ap.parse_args(argv)
     target = os.path.join(projects_root(), story_repo(a.story))
     path = worktree_path(a.story)
-    branch = cworkspace.branch_for(a.story)
+    branch = _story_branch(a.story) or cworkspace.branch_for(get_task(a.story)["title"], branch_prefix())
     for k in bd_json("children", a.story, "--json"):
         kt = task_from_bead(k)
         if kt["status"] != "done":
