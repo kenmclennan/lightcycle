@@ -65,12 +65,17 @@ any directory.
   (`coder`/`reviewer`/`pr-watcher`); the worker's first act is `tg claim <role>`
   (atomic), then it works and exits. A worker that dies before claiming leaves
   nothing stuck.
+- **Engine vs target repo.** The engine (tg, agents, store, loop) lives at the grid
+  root; the repo workers *build* is the **target repo** - `$GRID_TARGET`, defaulting
+  to the grid root for self-dogfooding. Set `GRID_TARGET` to drive a separate repo so
+  the engine never edits itself.
 - **`tg` owns worktree isolation.** On claim, `tg` creates (or reuses) a per-story
-  git worktree on branch `grid/<story>` from `origin/main`, under a gitignored
-  `.worktrees/<story>`, and hands the worker its path as the claim JSON's
-  `workspace` field (it also auto-links the `branch` artifact). Workers do all git
-  work there and never touch the primary tree - a worker can't switch the grid
-  root's branch out from under the running loop.
+  git worktree of the target repo on branch `grid/<story>` from `origin/main`, under
+  the engine's gitignored `.worktrees/<story>`, and hands the worker its path as the
+  claim JSON's `workspace` field (it also auto-links the `branch` artifact). The spec
+  lives engine-side, so the claim JSON also carries `spec_path` (absolute) - workers
+  read the spec from there and do all git work in the worktree, never touching the
+  primary tree.
 - **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow step),
   `project:`/`goal:`. `for:human` tasks never auto-run; they surface to you.
 

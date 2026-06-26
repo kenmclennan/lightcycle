@@ -345,6 +345,12 @@ def stamp_bead(spawnid, bead):
 
 # ---- worktrees --------------------------------------------------------------
 
+def target_repo():
+    """The repo workers build, distinct from the engine (grid root) that holds tg,
+    agents, the store and the worktrees. Defaults to the grid root (self-dogfood);
+    set GRID_TARGET to build a separate repo."""
+    return os.environ.get("GRID_TARGET") or grid_root()
+
 def worktrees_dir():
     return os.path.join(grid_root(), ".worktrees")
 
@@ -403,25 +409,25 @@ def ensure_worktree(story):
     worker never mutates the primary tree. Idempotent: an existing worktree or
     branch is reused. Returns the workspace path, or None when no isolated tree
     can be made (not a git repo, or no origin/main to branch from)."""
-    root = grid_root()
-    if not _is_git_repo(root):
+    target = target_repo()
+    if not _is_git_repo(target):
         return None
     branch = "grid/%s" % story
     path = worktree_path(story)
-    if _worktree_registered(root, path) and os.path.isdir(path):
+    if _worktree_registered(target, path) and os.path.isdir(path):
         _ensure_branch_artifact(story, branch)
         return path
-    if _branch_exists(root, branch):
+    if _branch_exists(target, branch):
         add_args = ["worktree", "add", path, branch]
     else:
-        base = _worktree_base(root)
+        base = _worktree_base(target)
         if base is None:
             return None
         add_args = ["worktree", "add", path, "-b", branch, base]
     os.makedirs(worktrees_dir(), exist_ok=True)
-    _ensure_worktrees_ignored(root)
-    _git(root, "worktree", "prune")
-    res = _git(root, *add_args)
+    _ensure_worktrees_ignored(grid_root())
+    _git(target, "worktree", "prune")
+    res = _git(target, *add_args)
     if res.returncode != 0:
         sys.stderr.write(res.stderr)
         return None
@@ -524,6 +530,9 @@ def cmd_claim(argv):
     ws = ensure_worktree(t.get("parent") or t["id"])
     if ws:
         view["workspace"] = ws
+    spec = next((a["value"] for a in view.get("story_artifacts", []) if a.get("type") == "spec"), None)
+    if spec:
+        view["spec_path"] = spec if os.path.isabs(spec) else os.path.join(grid_root(), spec)
     print(json.dumps(view, indent=2))
     return 0
 

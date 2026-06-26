@@ -841,5 +841,36 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         self.assertNotIn("workspace", t)
 
 
+class TestTargetRepo(unittest.TestCase):
+    def setUp(self):
+        self.engine = new_store()
+        write_agents(self.engine)
+        self.target = new_store_with_origin()
+
+    def _has_branch(self, repo, branch):
+        return subprocess.run(["git", "-C", repo, "rev-parse", "--verify", "--quiet",
+                               "refs/heads/" + branch], capture_output=True).returncode == 0
+
+    def _claim(self):
+        run_tg("file", "specs/X.md", "--step", "build", root=self.engine)
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.engine, GRID_TARGET=self.target)
+        r = subprocess.run([sys.executable, TG, "claim", "coder"], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    def test_worktree_created_in_target_engine_untouched(self):
+        view = self._claim()
+        branch = "grid/%s" % view["parent"]
+        self.assertTrue(view["workspace"].startswith(os.path.join(self.engine, ".worktrees")))
+        self.assertTrue(self._has_branch(self.target, branch))   # branch lives in the target repo
+        self.assertFalse(self._has_branch(self.engine, branch))  # engine repo untouched
+
+    def test_claim_includes_absolute_spec_path(self):
+        view = self._claim()
+        self.assertTrue(os.path.isabs(view["spec_path"]))
+        self.assertTrue(view["spec_path"].endswith("specs/X.md"))
+        self.assertTrue(view["spec_path"].startswith(self.engine))
+
+
 if __name__ == "__main__":
     unittest.main()
