@@ -420,6 +420,32 @@ class TestRun(unittest.TestCase):
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
         self.assertEqual(len(workers), 2)  # a fresh coder spawned for the ready task
 
+    def test_run_pool_fills_up_to_max_agents(self):
+        # 7 build + 3 review ready; the default pool cap of 4 spawns 4 workers in
+        # one tick, drawn across roles from the ready queue (not one per role).
+        for i in range(7):
+            bd_in(self.root, "create", "build: %d" % i, "-t", "task",
+                  "-l", "for:coder,step:build", "--json")
+        for i in range(3):
+            bd_in(self.root, "create", "review: %d" % i, "-t", "task",
+                  "-l", "for:reviewer,step:review", "--json")
+        r = self._run_once()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
+        self.assertEqual(len(workers), 4)
+
+    def test_run_pool_respects_max_agents_env(self):
+        for i in range(5):
+            bd_in(self.root, "create", "build: %d" % i, "-t", "task",
+                  "-l", "for:coder,step:build", "--json")
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root,
+                   GRID_SPAWN_CMD="echo x >> {log}", GRID_MAX_AGENTS="2")
+        r = subprocess.run([sys.executable, TG, "run", "--once"],
+                           capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
+        self.assertEqual(len(workers), 2)
+
 
 class TestAdd(unittest.TestCase):
     def setUp(self):

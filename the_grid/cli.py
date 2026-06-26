@@ -43,6 +43,10 @@ def branch_prefix():
     return cconfig.branch_prefix(load_config())
 
 
+def max_agents():
+    return int(os.environ.get("GRID_MAX_AGENTS") or cconfig.max_agents(load_config()))
+
+
 # ---- flow assembly (IO gather -> pure decision) -----------------------------
 
 
@@ -162,8 +166,18 @@ def ensure_worktree(story):
         add_args = ["worktree", "add", path, "-b", branch, base]
     os.makedirs(worktrees_dir(), exist_ok=True)
     _ensure_worktrees_ignored(grid_root())
+    # Several pool workers may add worktrees against one target repo at once and race
+    # on git's `.git/worktrees` lock; the add is idempotent, so retry the transient
+    # lock failure with a short backoff before giving up.
+    retries = int(os.environ.get("GRID_WORKTREE_RETRIES", "6"))
+    backoff = float(os.environ.get("GRID_WORKTREE_RETRY_SLEEP", "0.25"))
     gitio.git(target, "worktree", "prune")
     res = gitio.git(target, *add_args)
+    while res.returncode != 0 and retries > 0 and cworkspace.is_worktree_lock_error(res.stderr):
+        retries -= 1
+        time.sleep(backoff)
+        gitio.git(target, "worktree", "prune")
+        res = gitio.git(target, *add_args)
     if res.returncode != 0:
         sys.stderr.write(res.stderr)
         return None
@@ -191,7 +205,7 @@ COMMAND_GROUPS = [
         ("config", "[--edit]", "show or edit the grid config (projects + specs roots)"),
     ]),
     ("Start working", [
-        ("run", "[--once]", "the loop: each tick, sweep stale claims, then start a worker for each role that has work waiting"),
+        ("run", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to GRID_MAX_AGENTS (default 4) workers from the ready queue"),
         ("driver", "", "open the interactive driver - your seat to shape and file work"),
     ]),
     ("See what's happening", [
@@ -694,20 +708,27 @@ def cmd_add(argv):
 
 def _run_tick():
     cmd_sweep([])
-    # A worker that has spawned but not yet claimed (bead is None) and is still
-    # alive is "in flight" - it will claim the ready task once it boots. Don't
-    # spawn another for that role; claude's boot time (~10-30s) far exceeds the
-    # poll, so without this the loop spawns many redundant workers per task. Cap
-    # the wait at GRID_MAX_BOOT_SECONDS so a worker stuck booting can't block its
-    # role forever (the atomic claim keeps a late extra spawn safe).
+    # The agent pool: fill up to GRID_MAX_AGENTS alive workers from the ready queue,
+    # one worker per uncovered ready task, regardless of role. bd ready already hides
+    # blocked-by tasks, so declared dependencies are honoured for free.
+    alive = [w for w in workers_state() if pid_alive(w.get("pid", -1))]
+    slots = max_agents() - len(alive)
+    if slots <= 0:
+        return
+    # A worker that has spawned but not yet claimed (bead is None) and is still within
+    # the boot window will claim one ready task of its role once it boots, so it covers
+    # that task - don't double-spawn for it. claude's boot (~10-30s) far exceeds the
+    # poll; without this cover the pool would pile redundant workers onto one task.
+    # Past GRID_MAX_BOOT_SECONDS a stuck boot stops covering (the atomic claim keeps a
+    # late extra spawn safe), so it can't wedge the queue.
     max_boot = int(os.environ.get("GRID_MAX_BOOT_SECONDS", "120"))
     now = time.time()
-    inflight = {w.get("role") for w in workers_state()
-                if w.get("bead") is None and pid_alive(w.get("pid", -1))
-                and (now - w.get("started", 0)) < max_boot}
-    for role in ready_roles():
-        if role in inflight:
-            continue
+    inflight = {}
+    for w in alive:
+        if w.get("bead") is None and (now - w.get("started", 0)) < max_boot:
+            inflight[w["role"]] = inflight.get(w["role"], 0) + 1
+    ready = cflow.ready_task_roles(bd_json("ready", "--json"))
+    for role in cflow.pool_plan(ready, inflight, slots):
         spawn_worker(role)
 
 

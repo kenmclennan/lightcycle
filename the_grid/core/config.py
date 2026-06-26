@@ -28,3 +28,11 @@ def specs_root(cfg, home):
 
 def branch_prefix(cfg, default="feat"):
     return cfg.get("branch-prefix") or cfg.get("branch_prefix") or default
+
+
+def max_agents(cfg, default=4):
+    v = cfg.get("max-agents") or cfg.get("max_agents")
+    try:
+        return int(v) if v else default
+    except (TypeError, ValueError):
+        return default

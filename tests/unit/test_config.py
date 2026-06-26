@@ -1,7 +1,8 @@
 import os
 import unittest
 
-from the_grid.core.config import branch_prefix, cfg_path, projects_root, specs_root
+from the_grid.core.config import (branch_prefix, cfg_path, max_agents, projects_root,
+                              specs_root)
 
 HOME = "/home/u"
 
@@ -42,6 +43,18 @@ class TestBranchPrefix(unittest.TestCase):
 
     def test_underscore_key_override(self):
         self.assertEqual(branch_prefix({"branch_prefix": "story"}), "story")
+
+
+class TestMaxAgents(unittest.TestCase):
+    def test_default(self):
+        self.assertEqual(max_agents({}), 4)
+
+    def test_config_override_int_or_str(self):
+        self.assertEqual(max_agents({"max-agents": 8}), 8)
+        self.assertEqual(max_agents({"max_agents": "6"}), 6)
+
+    def test_bad_value_falls_back(self):
+        self.assertEqual(max_agents({"max-agents": "nope"}), 4)
 
 
 if __name__ == "__main__":

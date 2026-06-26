@@ -21,3 +21,12 @@ def story_repo(artifacts, default):
         if a.get("type") == "repo":
             return a["value"]
     return default
+
+
+def is_worktree_lock_error(text):
+    """True when a `git worktree add` failure is transient lock contention from a
+    concurrent peer (worth retrying), not a real error. Several agents creating
+    worktrees against one target repo at once race on git's `.git/worktrees` lock."""
+    t = (text or "").lower()
+    return ("could not lock" in t or "already locked" in t
+            or "index.lock" in t or ".lock': file exists" in t)

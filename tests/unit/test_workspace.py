@@ -1,6 +1,7 @@
 import unittest
 
-from the_grid.core.workspace import branch_for, slugify, story_repo, worktree_path
+from the_grid.core.workspace import (branch_for, is_worktree_lock_error, slugify,
+                                story_repo, worktree_path)
 
 
 class TestWorkspace(unittest.TestCase):
@@ -24,6 +25,19 @@ class TestWorkspace(unittest.TestCase):
 
     def test_story_repo_defaults(self):
         self.assertEqual(story_repo([{"type": "spec", "value": "x.md"}], "engine"), "engine")
+
+
+class TestWorktreeLockError(unittest.TestCase):
+    def test_transient_lock_errors_retried(self):
+        self.assertTrue(is_worktree_lock_error("fatal: could not lock working tree"))
+        self.assertTrue(is_worktree_lock_error(
+            "Unable to create '/r/.git/worktrees/x/index.lock': File exists"))
+        self.assertTrue(is_worktree_lock_error("fatal: 'x' is already locked"))
+
+    def test_real_errors_not_retried(self):
+        self.assertFalse(is_worktree_lock_error("fatal: invalid reference: origin/main"))
+        self.assertFalse(is_worktree_lock_error(""))
+        self.assertFalse(is_worktree_lock_error(None))
 
 
 if __name__ == "__main__":
