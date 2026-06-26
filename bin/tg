@@ -16,6 +16,45 @@ def grid_root():
     p = Path(__file__).resolve()  # resolve() follows symlinks to the real file
     return str(p.parent.parent)
 
+def config_path():
+    override = os.environ.get("GRID_CONFIG")
+    if override:
+        return override
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "the-grid", "config")
+
+def load_config():
+    p = config_path()
+    if not os.path.exists(p):
+        return {}
+    return _parse_frontmatter(open(p).read().splitlines())
+
+def _cfg_path(key, default):
+    v = load_config().get(key)
+    if not v:
+        return default
+    v = os.path.expanduser(v)
+    return v if os.path.isabs(v) else os.path.join(os.path.expanduser("~"), v)
+
+def projects_root():
+    return _cfg_path("projects", os.path.expanduser("~/workspace/projects"))
+
+def specs_root():
+    return _cfg_path("specs", os.path.expanduser("~/workspace/specs"))
+
+def _default_config_text():
+    return "projects: ~/workspace/projects\nspecs: ~/workspace/specs\n"
+
+def ensure_config():
+    """Seed the default config file if absent. Returns True if it was created."""
+    p = config_path()
+    if os.path.exists(p):
+        return False
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w") as f:
+        f.write(_default_config_text())
+    return True
+
 # ---- bd adapter -------------------------------------------------------------
 
 # bd prints assorted advisory noise to stderr; filter the known-benign lines.
@@ -345,17 +384,20 @@ def stamp_bead(spawnid, bead):
 
 # ---- worktrees --------------------------------------------------------------
 
-def target_repo():
-    """The repo workers build, distinct from the engine (grid root) that holds tg,
-    agents, the store and the worktrees. Defaults to the grid root (self-dogfood);
-    set GRID_TARGET to build a separate repo."""
-    return os.environ.get("GRID_TARGET") or grid_root()
-
 def worktrees_dir():
     return os.path.join(grid_root(), ".worktrees")
 
 def worktree_path(story):
     return os.path.join(worktrees_dir(), story)
+
+def story_repo(story):
+    """The single repo name the story builds (its `repo` artifact). Defaults to the
+    engine's own basename, which resolves under projects_root when the engine lives
+    there (the self-dogfood case)."""
+    for a in story_artifacts(story):
+        if a.get("type") == "repo":
+            return a["value"]
+    return os.path.basename(grid_root())
 
 def _git(root, *args):
     return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
@@ -406,10 +448,11 @@ def _ensure_branch_artifact(story, branch):
 
 def ensure_worktree(story):
     """Create (or reuse) the per-story git worktree on branch grid/<story> so a
-    worker never mutates the primary tree. Idempotent: an existing worktree or
-    branch is reused. Returns the workspace path, or None when no isolated tree
-    can be made (not a git repo, or no origin/main to branch from)."""
-    target = target_repo()
+    worker never mutates the primary tree. The target repo is resolved by name from
+    the story's `repo` artifact (default: the engine itself). Idempotent: an existing
+    worktree or branch is reused. Returns the workspace path, or None when no isolated
+    tree can be made (not a git repo, or no origin/main to branch from)."""
+    target = os.path.join(projects_root(), story_repo(story))
     if not _is_git_repo(target):
         return None
     branch = "grid/%s" % story
@@ -440,7 +483,8 @@ def ensure_worktree(story):
 # the help order; VERBS is derived from it, so adding a command here registers it.
 COMMAND_GROUPS = [
     ("Setup", [
-        ("init", "", "create the grid store for this project (run once)"),
+        ("init", "", "create the grid store and seed the HOME config (run once)"),
+        ("config", "[--edit]", "show or edit the grid config (projects + specs roots)"),
     ]),
     ("Start working", [
         ("run", "[--once]", "the loop: each tick, sweep stale claims, then start a worker for each role that has work waiting"),
@@ -458,8 +502,8 @@ COMMAND_GROUPS = [
         ("flow", "[--json]", "print and check the assembled flow (steps, routes, contracts, composition)"),
     ]),
     ("Drive work in", [
-        ("file", "<spec> --step <step> [--epic/--project/--goal]",
-         "create a story from a spec + its first task at <step>"),
+        ("file", "<spec> --step <step> [--repo/--epic/--project/--goal]",
+         "create a story (for one repo) from a spec + its first task at <step>"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
         ("add", '"<title>" [--goal/--project]', "create a standalone human task (no spec/flow)"),
     ]),
@@ -532,7 +576,7 @@ def cmd_claim(argv):
         view["workspace"] = ws
     spec = next((a["value"] for a in view.get("story_artifacts", []) if a.get("type") == "spec"), None)
     if spec:
-        view["spec_path"] = spec if os.path.isabs(spec) else os.path.join(grid_root(), spec)
+        view["spec_path"] = spec if os.path.isabs(spec) else os.path.join(specs_root(), spec)
     print(json.dumps(view, indent=2))
     return 0
 
@@ -842,6 +886,7 @@ def cmd_file(argv):
     ap.add_argument("--epic")
     ap.add_argument("--project")
     ap.add_argument("--goal")
+    ap.add_argument("--repo")
     a = ap.parse_args(argv)
     owner, _ = load_flow()
     role = owner.get(a.step)
@@ -868,6 +913,8 @@ def cmd_file(argv):
         create += ["-l", ",".join(labels)]
     story = bd_json(*create)["id"]
     add_artifact(story, "spec", a.spec)
+    if a.repo:
+        add_artifact(story, "repo", a.repo)
     bd("create", "%s: %s" % (a.step, base), "-t", "task",
        "-l", "for:%s,step:%s" % (role, a.step), "--parent", story)
     print(story)
@@ -959,6 +1006,23 @@ def cmd_init(argv):
     ensure_beads()
     os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
     print("grid store already initialised" if existed else "grid store initialised")
+    created = ensure_config()
+    print("config %s at %s" % ("created" if created else "already exists", config_path()))
+    return 0
+
+def cmd_config(argv):
+    ap = argparse.ArgumentParser(prog="tg config")
+    ap.add_argument("--edit", action="store_true")
+    a = ap.parse_args(argv)
+    if a.edit:
+        ensure_config()
+        editor = os.environ.get("EDITOR") or "vi"
+        os.execvp(editor, [editor, config_path()])
+    p = config_path()
+    print("config: %s" % p)
+    print("exists" if os.path.exists(p) else "(using defaults)")
+    print("projects: %s" % projects_root())
+    print("specs: %s" % specs_root())
     return 0
 
 def _bucket(tasks):

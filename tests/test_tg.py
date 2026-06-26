@@ -4,12 +4,33 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TG = str(ROOT / "bin" / "tg")
 
+# Point every subprocess at a config that does NOT exist, so the suite reads
+# config-absent DEFAULTS and never touches the real ~/.config/the-grid/config.
+# Config-specific tests override GRID_CONFIG (per-test temp file, or by setting
+# os.environ["GRID_CONFIG"] in setUp and restoring _ABSENT_CONFIG in tearDown).
+_ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
+os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
 
-def run_tg(*args, root=None):
+
+def run_tg(*args, root=None, config=None):
     env = dict(os.environ)
     if root:
         env["GRID_ROOT_OVERRIDE"] = root
+    if config:
+        env["GRID_CONFIG"] = config
     return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
+
+
+def write_config(projects=None, specs=None):
+    """Write a temp grid config (the parts given) and return its path."""
+    p = os.path.join(tempfile.mkdtemp(), "config")
+    lines = []
+    if projects is not None:
+        lines.append("projects: %s" % projects)
+    if specs is not None:
+        lines.append("specs: %s" % specs)
+    Path(p).write_text("".join(l + "\n" for l in lines))
+    return p
 
 
 def new_store():
@@ -30,12 +51,13 @@ def git_in(root, *a):
     return subprocess.run(["git", "-C", root, *a], capture_output=True, text=True, check=True)
 
 
-def new_store_with_origin():
-    """A grid store that is a git repo with an `origin` whose `main` branch exists,
-    so `git worktree add ... origin/main` resolves."""
+def make_repo(parent, name):
+    """A git repo `name` under `parent` with an `origin` whose `main` branch exists,
+    so `git worktree add ... origin/main` resolves. Returns its path."""
     remote = tempfile.mkdtemp()
     subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
-    d = tempfile.mkdtemp()
+    d = os.path.join(parent, name)
+    os.makedirs(d, exist_ok=True)
     subprocess.run(["git", "init", "-q", d], check=True)
     git_in(d, "config", "user.email", "t@t")
     git_in(d, "config", "user.name", "t")
@@ -46,6 +68,15 @@ def new_store_with_origin():
     git_in(d, "remote", "add", "origin", remote)
     git_in(d, "push", "-q", "origin", "main")
     git_in(d, "fetch", "-q", "origin")
+    return d
+
+
+def new_store_with_origin():
+    """A grid store (the engine) that is a git repo with an `origin`/`main`, sitting
+    under a parent dir so a test can point `projects` at that parent and have the
+    engine's own basename resolve back to the store (the self-repo worktree)."""
+    parent = tempfile.mkdtemp()
+    d = make_repo(parent, "engine")
     subprocess.run(
         ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
         cwd=d, check=True,
@@ -734,16 +765,20 @@ class TestInitAndStoreGuard(unittest.TestCase):
         subprocess.run(["git", "init", "-q"], cwd=d, check=True)
         return d
 
+    def _cfg(self, d):
+        # init now seeds a config; keep it inside d so it can't pollute the suite.
+        return os.path.join(d, "grid-config")
+
     def test_init_creates_store(self):
         d = self._bare()
-        r = run_tg("init", root=d)
+        r = run_tg("init", root=d, config=self._cfg(d))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.isdir(os.path.join(d, ".beads")))
 
     def test_init_idempotent(self):
         d = self._bare()
-        run_tg("init", root=d)
-        r = run_tg("init", root=d)
+        run_tg("init", root=d, config=self._cfg(d))
+        r = run_tg("init", root=d, config=self._cfg(d))
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_run_without_store_errors(self):
@@ -773,6 +808,13 @@ class TestWorktree(unittest.TestCase):
     def setUp(self):
         self.root = new_store_with_origin()
         write_agents(self.root)
+        # projects -> the engine's parent so basename(root) resolves to the store;
+        # specs -> the store so file's relative spec path resolves under it.
+        os.environ["GRID_CONFIG"] = write_config(
+            projects=os.path.dirname(self.root), specs=self.root)
+
+    def tearDown(self):
+        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
 
     def _branch_of(self, path):
         return git_in(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
@@ -853,35 +895,101 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         self.assertNotIn("workspace", t)
 
 
-class TestTargetRepo(unittest.TestCase):
+class TestNamedRepo(unittest.TestCase):
     def setUp(self):
-        self.engine = new_store()
+        self.engine = new_store_with_origin()  # engine repo under a projects parent
         write_agents(self.engine)
-        self.target = new_store_with_origin()
+        self.projects = os.path.dirname(self.engine)
+        self.app = make_repo(self.projects, "app")  # a sibling repo, referenced by name
+        os.environ["GRID_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
+
+    def tearDown(self):
+        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
 
     def _has_branch(self, repo, branch):
         return subprocess.run(["git", "-C", repo, "rev-parse", "--verify", "--quiet",
                                "refs/heads/" + branch], capture_output=True).returncode == 0
 
-    def _claim(self):
-        run_tg("file", "specs/X.md", "--step", "build", root=self.engine)
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.engine, GRID_TARGET=self.target)
-        r = subprocess.run([sys.executable, TG, "claim", "coder"], capture_output=True, text=True, env=env)
+    def _claim(self, repo=None):
+        args = ["file", "specs/X.md", "--step", "build"]
+        if repo:
+            args += ["--repo", repo]
+        run_tg(*args, root=self.engine)
+        r = run_tg("claim", "coder", root=self.engine)
         self.assertEqual(r.returncode, 0, r.stderr)
         return json.loads(r.stdout)
 
-    def test_worktree_created_in_target_engine_untouched(self):
-        view = self._claim()
+    def test_named_repo_worktree_created_engine_untouched(self):
+        view = self._claim("app")
         branch = "grid/%s" % view["parent"]
-        self.assertTrue(view["workspace"].startswith(os.path.join(self.engine, ".worktrees")))
-        self.assertTrue(self._has_branch(self.target, branch))   # branch lives in the target repo
+        self.assertEqual(view["workspace"],
+                         os.path.join(self.engine, ".worktrees", view["parent"]))
+        self.assertTrue(os.path.isdir(view["workspace"]))
+        self.assertTrue(self._has_branch(self.app, branch))      # branch lives in the named repo
         self.assertFalse(self._has_branch(self.engine, branch))  # engine repo untouched
 
+    def test_default_repo_targets_self(self):
+        view = self._claim()  # no --repo
+        branch = "grid/%s" % view["parent"]
+        self.assertTrue(os.path.isdir(view["workspace"]))
+        self.assertTrue(self._has_branch(self.engine, branch))  # self repo got the branch
+        self.assertFalse(self._has_branch(self.app, branch))
+
     def test_claim_includes_absolute_spec_path(self):
-        view = self._claim()
+        view = self._claim("app")
         self.assertTrue(os.path.isabs(view["spec_path"]))
         self.assertTrue(view["spec_path"].endswith("specs/X.md"))
-        self.assertTrue(view["spec_path"].startswith(self.engine))
+        self.assertTrue(view["spec_path"].startswith(self.engine))  # default specs_root = engine
+
+    def test_file_stores_single_repo_artifact(self):
+        sid = run_tg("file", "specs/X.md", "--step", "build", "--repo", "app",
+                     root=self.engine).stdout.strip()
+        arts = json.loads(bd_in(self.engine, "show", sid, "--json"))[0]["metadata"]["artifacts"]
+        repos = [a["value"] for a in arts if a["type"] == "repo"]
+        self.assertEqual(repos, ["app"])
+
+
+class TestConfig(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        self.dir = tempfile.mkdtemp()
+        self.cfg = os.path.join(self.dir, "config")
+
+    def test_config_prints_path_and_defaults(self):
+        r = run_tg("config", root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(self.cfg, r.stdout)
+        self.assertIn("(using defaults)", r.stdout)
+        self.assertIn("projects: %s" % os.path.expanduser("~/workspace/projects"), r.stdout)
+        self.assertIn("specs: %s" % os.path.expanduser("~/workspace/specs"), r.stdout)
+
+    def test_init_seeds_config_when_absent_and_is_idempotent(self):
+        self.assertFalse(os.path.exists(self.cfg))
+        r = run_tg("init", root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("created", r.stdout)
+        self.assertTrue(os.path.exists(self.cfg))
+        self.assertIn("~/workspace/projects", Path(self.cfg).read_text())
+        r2 = run_tg("init", root=self.root, config=self.cfg)
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        self.assertIn("already exists", r2.stdout)
+
+    def test_written_config_overrides_roots(self):
+        proj = tempfile.mkdtemp()
+        specs = tempfile.mkdtemp()
+        Path(self.cfg).write_text("projects: %s\nspecs: %s\n" % (proj, specs))
+        r = run_tg("config", root=self.root, config=self.cfg)
+        self.assertIn("projects: %s" % proj, r.stdout)
+        self.assertIn("specs: %s" % specs, r.stdout)
+
+    def test_spec_path_resolves_against_configured_specs_root(self):
+        root = new_store_with_origin()
+        write_agents(root)
+        specs = tempfile.mkdtemp()
+        Path(self.cfg).write_text("specs: %s\n" % specs)
+        run_tg("file", "specs/X.md", "--step", "build", root=root, config=self.cfg)
+        view = json.loads(run_tg("claim", "coder", root=root, config=self.cfg).stdout)
+        self.assertEqual(view["spec_path"], os.path.join(specs, "specs/X.md"))
 
 
 if __name__ == "__main__":

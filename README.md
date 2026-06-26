@@ -65,15 +65,22 @@ any directory.
   (`coder`/`reviewer`/`pr-watcher`); the worker's first act is `tg claim <role>`
   (atomic), then it works and exits. A worker that dies before claiming leaves
   nothing stuck.
-- **Engine vs target repo.** The engine (tg, agents, store, loop) lives at the grid
-  root; the repo workers *build* is the **target repo** - `$GRID_TARGET`, defaulting
-  to the grid root for self-dogfooding. Set `GRID_TARGET` to drive a separate repo so
-  the engine never edits itself.
+- **HOME config: where your work lives.** A single config file (`$GRID_CONFIG`, else
+  `$XDG_CONFIG_HOME`/`~/.config`/`the-grid/config`) names two roots: `projects` (the
+  dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (the
+  base for relative spec paths; default `~/workspace/specs`). `tg init` seeds it;
+  `tg config [--edit]` shows or edits it. The engine's own data (tg, agents, store,
+  logs) stays at the grid root - the config is only about *your* work's location.
+- **One repo per story, by name.** A story targets exactly one repo, named by a
+  `repo` artifact (`tg file <spec> --repo <name>`); the name resolves to
+  `projects/<name>`. With no `--repo`, the story targets the engine itself
+  (self-dogfood). Cross-repo work is handled by splitting the spec into one story per
+  repo, never by a multi-repo workspace.
 - **`tg` owns worktree isolation.** On claim, `tg` creates (or reuses) a per-story
-  git worktree of the target repo on branch `grid/<story>` from `origin/main`, under
+  git worktree of the story's repo on branch `grid/<story>` from `origin/main`, under
   the engine's gitignored `.worktrees/<story>`, and hands the worker its path as the
   claim JSON's `workspace` field (it also auto-links the `branch` artifact). The spec
-  lives engine-side, so the claim JSON also carries `spec_path` (absolute) - workers
+  lives under `specs`, so the claim JSON also carries `spec_path` (absolute) - workers
   read the spec from there and do all git work in the worktree, never touching the
   primary tree.
 - **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow step),
@@ -85,7 +92,8 @@ Initialise once with `tg init`, then run the parts in separate terminals.
 
 | Command                                    | What it does                                                    |
 | ------------------------------------------ | --------------------------------------------------------------- |
-| `tg init`                                  | one-time: create the grid store for this project                |
+| `tg init`                                  | one-time: create the grid store and seed the HOME config        |
+| `tg config [--edit]`                       | show (or `--edit`) the grid config: projects + specs roots      |
 | `tg run [--once]`                          | the loop: sweep, then start a worker for each role with work waiting |
 | `tg driver`                                | open the interactive driver `claude` (your seat)                |
 | `tg status`                                | all buckets: mine / active / queue / blocked                    |
@@ -97,7 +105,7 @@ Initialise once with `tg init`, then run the parts in separate terminals.
 | `tg show <id>`                             | a story (artifacts + child tasks) or a task (+ story artifacts) |
 | `tg trace <story>`                         | story + its artifacts + child tasks + logs                      |
 | `tg flow [--json]`                         | print + check the assembled flow (steps, routes, contracts, composition) |
-| `tg file <spec> --step <step> [--epic/--project/--goal]` | create a story (spec attached) + first task at `<step>` |
+| `tg file <spec> --step <step> [--repo/--epic/--project/--goal]` | create a story (spec + one repo) + first task at `<step>` |
 | `tg link <story> <type> <value> [--label]` | attach an artifact to a story                                   |
 | `tg add "<title>"`                         | create a standalone human task (no story/flow)                  |
 | `tg sweep`                                 | release orphaned claims (dead worker -> task reclaimable)       |
