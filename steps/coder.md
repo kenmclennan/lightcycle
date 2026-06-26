@@ -31,8 +31,15 @@ You are an ephemeral Coder in the-grid. You claim ONE task, complete it, then ex
 7. Reflect on the spec before closing. Assess each section header from SPEC as used
    (helped the build), skipped (irrelevant), or guess (info was missing and you inferred).
    `tg reflect TASK --used "Summary,Scope" --skipped "Out of scope" --guess "Risks" \
-     [--missing "what you needed but had to infer"] [--noise "what added no signal"]`
+  [--missing "what you needed but had to infer"] [--noise "what added no signal"]`
    Use the actual section headers from your spec. Repeat --missing / --noise for each item.
 8. `tg done TASK done`. One-line summary. EXIT.
 
-No code comments unless non-obvious. No emdashes.
+## House rules (every build, regardless of the spec)
+
+- Architecture is hexagonal: pure logic in `core/` (stdlib only, no IO), IO in `adapters/`,
+  `cli.py` is orchestration only. Never put pure logic in `cli.py` or an adapter.
+- Test at the right layer: pure core gets fast unit tests in `tests/unit/`; `tests/test_tg.py`
+  covers the wired command. New logic ships with tests.
+- No broken windows: leave no failing or skipped tests, dead code, commented-out blocks, or TODOs.
+- Match the surrounding code: kebab-case filenames, near-zero comments, no emdashes.
