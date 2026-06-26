@@ -18,10 +18,14 @@ Pure logic stranded in `cli.py` or an adapter is the most common defect here; mo
 
 ## Tests
 
+**Run the tests with `bash tests/run.sh`** - it runs the unit suite then the integration suite. This
+project uses the Python stdlib `unittest`; there is no pytest and no pip test deps, so do not invoke
+`pytest`. Run a subset directly with `python3 -m unittest discover -s tests/unit`.
+
 - `tests/unit/` - fast, isolated tests of `core/` pure functions (no subprocess).
 - `tests/test_tg.py` - integration tests exercising the wired `tg` commands via subprocess.
-- New pure logic ships with unit tests; a new command ships with an integration test. Run
-  `bash tests/run.sh` (unit then integration) and get it green before `tg done`.
+- New pure logic ships with unit tests; a new command ships with an integration test. Get it green
+  before `tg done`.
 
 ## Style
 
