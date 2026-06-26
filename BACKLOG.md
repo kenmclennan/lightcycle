@@ -71,17 +71,6 @@ the fix landed manually (commit d3b46b5).
 
 ## Still open (next design priorities)
 
-- [ ] **Hexagonal refactor - separate IO from the core (FOUNDATIONAL).** The suite is
-      ~5 min and the live pipeline is slow for the SAME reason: the domain logic has no
-      seam to exercise without standing up bd + git + the CLI. Every test (and every
-      worker's verify step) shells out to `tg`/`bd` against a real embedded-Dolt store
-      (each `bd init` + subprocess is seconds). Split `bin/tg` (one ~1000-line script)
-      into a small package: a PURE core (task model, flow, contracts, workspace/config
-      resolution) tested in-process in microseconds, behind ports for the external IO
-      boundaries - bd store, git, gh, the claude spawner, fs. Ambient capabilities
-      (time, uuid) stay EXPLICIT INPUTS, not ports. Keep a small set of integration
-      tests for the wiring. Ends the "single stdlib file" - worth it: this is the
-      enabler for fast tests, parallel agents, and clean usage-limit handling.
 - [ ] **Parallel agents up to MAX_AGENTS.** The model is N workers running ready jobs
       in parallel, not one-per-role serialised. The atomic claim already makes this
       safe (stress-tested: many concurrent claimers -> one winner each). Needs: the
