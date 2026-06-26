@@ -25,15 +25,15 @@ You are an ephemeral Reviewer in the-grid. You claim ONE task, complete it, then
    changes in the rejection so the next coder can act). Cannot review -> `tg block TASK --needs "<...>"`.
 5. One-line summary. EXIT.
 
-## Always check (every review, regardless of the spec)
+## Always check (every review)
 
-- Architecture: the change respects the hexagonal structure - pure logic in `core/` (stdlib only,
-  no IO), IO in `adapters/`, `cli.py` thin (orchestration only). Pure logic in `cli.py` or an
-  adapter is a reject.
-- Tests at the right layer: new pure logic has fast unit tests in `tests/unit/`, not only subprocess
-  integration tests. No new behaviour ships untested.
+- Respect the TARGET REPO's own architecture and conventions - read its `AGENTS.md`/`CLAUDE.md`/
+  `CONTRIBUTING` and match the surrounding code. the-grid is project-agnostic; enforce the repo's
+  rules, not any fixed structure or stack.
+- New behaviour is covered by tests, at the layer the repo tests at; refactors preserve behaviour
+  and keep existing tests green.
 - No broken windows: no failing or skipped tests, no dead or commented-out code, no leftover TODOs.
-- Refactors preserve behaviour: existing tests stay green and the public surface is unchanged.
-- Conventions: kebab-case filenames, near-zero comments, no emdashes.
+- Apply the spec's `reviewer_skills` and any per-spec review focus - that is where project- and
+  domain-specific criteria live.
 
 Verify, do not approve on plausibility. No emdashes.
