@@ -106,6 +106,14 @@ the fix landed manually (commit d3b46b5).
       the FEATURE (spec id/title slug), with a configurable prefix (default e.g.
       `feat/`). Change `ensure_worktree`'s branch computation and the auto-linked
       `branch` artifact.
+- [ ] **Flow v2 (design: `docs/flow-v2.md`).** Make "work off the tip of main" an
+      invariant (fetch at branch, rebase-onto-tip at a new `open-pr` step, conflict ->
+      block); split open-pr into `open-pr` (rebase + create PR) and `watch-pr`
+      (CI/comments/remediate); and close the agent -> human -> agent loop by making
+      `tg done` actor-agnostic with HUMAN-owned routable steps (`ready-merge`,
+      `needs-human`, `cleanup`). Consolidates and supersedes the "notes-forward on
+      rework", "PR-merge auto-close loop", and ad-hoc block/resume items. Implement on
+      the hexagonal core; the design names the seams (store/git/pr/spawner ports).
 - [ ] **`tg file --repo <name>` should validate at file time.** A repo name that does
       not exist under `projects_root` is accepted now and only fails silently at claim
       (no workspace). Fail fast like `--step` does: check `projects_root()/<name>` is a
