@@ -26,6 +26,16 @@ def worktree_base(root):
     return None
 
 
+def remove_worktree(root, path):
+    git(root, "worktree", "remove", "--force", path)
+    git(root, "worktree", "prune")
+
+
+def delete_branch(root, branch):
+    if branch_exists(root, branch):
+        git(root, "branch", "-D", branch)
+
+
 def worktree_registered(root, path):
     proc = git(root, "worktree", "list", "--porcelain")
     if proc.returncode != 0:

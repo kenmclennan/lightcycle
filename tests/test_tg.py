@@ -970,6 +970,64 @@ class TestNamedRepo(unittest.TestCase):
         self.assertEqual(len(before), len(after))
 
 
+class TestUnblock(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_agents(self.root)
+
+    def test_unblock_returns_blocked_task_to_agent_role(self):
+        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        bd_in(self.root, "ready", "--label", "for:coder", "--claim", "--json")  # claim it
+        run_tg("block", b, "--needs", "rebase first", root=self.root)
+        r = run_tg("unblock", b, root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        self.assertIn("for:coder", bead["labels"])
+        self.assertNotIn("for:human", bead["labels"])
+        self.assertEqual(bead["status"], "open")
+        self.assertIn(bead.get("assignee"), (None, ""))
+        t = json.loads(run_tg("show", b, root=self.root).stdout)
+        self.assertEqual(t["status"], "ready")
+        self.assertEqual(t["role"], "coder")
+
+    def test_unblock_refuses_human_step(self):
+        (Path(self.root) / "agents" / "ready-merge.md").write_text(
+            "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n")
+        b = json.loads(bd_in(self.root, "create", "ready-merge: t", "-t", "task",
+                             "-l", "for:human,step:ready-merge", "--json"))["id"]
+        r = run_tg("unblock", b, root=self.root)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("ready-merge", r.stderr)
+
+
+class TestClose(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store_with_origin()
+        write_agents(self.root)
+        os.environ["GRID_CONFIG"] = write_config(
+            projects=os.path.dirname(self.root), specs=self.root)
+
+    def tearDown(self):
+        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+
+    def _has_branch(self, repo, branch):
+        return subprocess.run(["git", "-C", repo, "rev-parse", "--verify", "--quiet",
+                               "refs/heads/" + branch], capture_output=True).returncode == 0
+
+    def test_close_closes_story_and_tasks_and_removes_worktree(self):
+        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
+        ws = json.loads(run_tg("claim", "coder", root=self.root).stdout)["workspace"]
+        self.assertTrue(os.path.isdir(ws))
+        build = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
+        r = run_tg("close", sid, "merged", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(bd_in(self.root, "show", sid, "--json"))[0]["status"], "closed")
+        self.assertEqual(json.loads(bd_in(self.root, "show", build, "--json"))[0]["status"], "closed")
+        self.assertFalse(os.path.isdir(ws))
+        self.assertFalse(self._has_branch(self.root, "grid/%s" % sid))
+
+
 class TestConfig(unittest.TestCase):
     def setUp(self):
         self.root = new_store()

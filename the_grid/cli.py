@@ -197,12 +197,15 @@ COMMAND_GROUPS = [
          "create a story (for one repo) from a spec + its first task at <step>"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
         ("add", '"<title>" [--goal/--project]', "create a standalone human task (no spec/flow)"),
+        ("close", "<story> <reason>",
+         "close a story + its tasks, remove the worktree, delete the merged branch"),
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready task for a role"),
         ("done", "<id> <outcome>", "close a task with a flow outcome and advance the chain"),
         ("block", "<id> --needs ... [--branch/--pr/--reason/--tried]",
          "escalate to a human with resume-state"),
+        ("unblock", "<id>", "flip a blocked task back to its agent role so it re-claims and retries"),
     ]),
     ("Maintenance", [
         ("sweep", "", "reclaim orphaned task claims and prune dead worker entries (kept: GRID_WORKER_HISTORY, default 20)"),
@@ -448,6 +451,47 @@ def cmd_block(argv):
     bd("update", a.id, "--status", "open")
     bd("assign", a.id, "")
     print("blocked -> human")
+    return 0
+
+
+def cmd_unblock(argv):
+    ap = argparse.ArgumentParser(prog="tg unblock")
+    ap.add_argument("id")
+    a = ap.parse_args(argv)
+    t = get_task(a.id)
+    owner, _ = load_flow()
+    role = owner.get(t["step"])
+    if not role or role == "human":
+        sys.stderr.write(
+            "nothing to unblock: step '%s' has no agent owner\n" % (t["step"] or "(none)"))
+        return 1
+    cur = t["role"]
+    if cur and cur != role:
+        bd("label", "remove", a.id, "for:%s" % cur)
+    bd("label", "add", a.id, "for:%s" % role)
+    bd("update", a.id, "--status", "open")
+    bd("assign", a.id, "")
+    print("unblocked -> %s" % role)
+    return 0
+
+
+def cmd_close(argv):
+    ap = argparse.ArgumentParser(prog="tg close")
+    ap.add_argument("story")
+    ap.add_argument("reason")
+    a = ap.parse_args(argv)
+    target = os.path.join(projects_root(), story_repo(a.story))
+    path = worktree_path(a.story)
+    branch = cworkspace.branch_for(a.story)
+    for k in bd_json("children", a.story, "--json"):
+        kt = task_from_bead(k)
+        if kt["status"] != "done":
+            bd("close", kt["id"], "--reason", a.reason)
+    bd("close", a.story, "--reason", a.reason)
+    if gitio.is_git_repo(target):
+        gitio.remove_worktree(target, path)
+        gitio.delete_branch(target, branch)
+    print("closed %s (%s)" % (a.story, a.reason))
     return 0
 
 
