@@ -21,6 +21,16 @@ class TestRenderLogLine(unittest.TestCase):
             {"type": "tool_use", "name": "Bash", "input": {"command": "tg claim coder"}}]}})
         self.assertEqual(render_log_line(line), "$ tg claim coder")
 
+    def test_assistant_non_bash_tool_with_arg(self):
+        line = json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Read", "input": {"file_path": "/x/y.py"}}]}})
+        self.assertEqual(render_log_line(line), "[Read /x/y.py]")
+
+    def test_assistant_non_bash_tool_without_arg(self):
+        line = json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "TodoWrite", "input": {}}]}})
+        self.assertEqual(render_log_line(line), "[TodoWrite]")
+
     def test_tool_result(self):
         line = json.dumps({"type": "user", "message": {"content": [
             {"type": "tool_result", "content": "first line\nsecond"}]}})

@@ -25,7 +25,8 @@ def render_log_line(line):
                     out.append("$ " + (inp.get("command") or "").strip())
                 else:
                     arg = inp.get("file_path") or inp.get("path") or inp.get("pattern") or ""
-                    out.append("[%s %s]" % (c.get("name", "tool"), arg).rstrip())
+                    label = ("%s %s" % (c.get("name", "tool"), arg)).rstrip()
+                    out.append("[%s]" % label)
         return "\n".join(out) if out else None
     if t == "user":
         for c in (e.get("message", {}).get("content") or []):
