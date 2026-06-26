@@ -90,11 +90,6 @@ the fix landed manually (commit d3b46b5).
       resets <time>" to `tg mine`, and schedule a resume at reset. Resume is feasible -
       workers already get a unique `--session-id`, and `claude --resume <id> -p` replays
       context (only succeeds after reset). No built-in retry for quota limits.
-- [ ] **Feature-named branches, not tool-named.** Branches are `grid/<bead-id>` (e.g.
-      `grid/the-grid-wnv`) - leaks the tool name + an opaque id. Derive the branch from
-      the FEATURE (spec id/title slug), with a configurable prefix (default e.g.
-      `feat/`). Change `ensure_worktree`'s branch computation and the auto-linked
-      `branch` artifact.
 - [ ] **Flow v2 (design: spec `GRID-002-flow-v2` in specs/).** Make "work off the tip
       of main" an invariant (fetch at branch, rebase-onto-tip at a new `open-pr` step,
       conflict -> block); split open-pr into `open-pr` (rebase + create PR) and
