@@ -1098,5 +1098,36 @@ class TestLogRender(unittest.TestCase):
         self.assertNotIn('"type"', r.stdout)  # raw JSON is not shown
 
 
+class TestMine(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        adir = Path(self.root) / "agents"
+        adir.mkdir(exist_ok=True)
+        (adir / "coder.md").write_text(
+            "---\nmodel: sonnet\nstep: build\nroutes:\n  done: review\n---\nstub")
+        (adir / "ready-merge.md").write_text(
+            "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n  changes: build\n---\nstub")
+
+    def test_mine_tags_orders_and_shows_context(self):
+        run_tg("add", "look at X", root=self.root)                                  # todo
+        sid = json.loads(bd_in(self.root, "create", "feat", "-t", "story", "--json"))["id"]
+        bd_in(self.root, "update", sid, "--metadata",
+              json.dumps({"artifacts": [{"type": "pr", "value": "http://pr/1"}]}))
+        bd_in(self.root, "create", "merge: y", "-t", "task", "-l",
+              "for:human,step:ready-merge", "--parent", sid, "--json")             # action
+        b = json.loads(bd_in(self.root, "create", "build: z", "-t", "task",
+                             "-l", "for:human,step:build", "--json"))["id"]
+        bd_in(self.root, "update", b, "--metadata", json.dumps({"needs": "rebase first"}))  # blocked
+        out = run_tg("mine", root=self.root).stdout
+        for tag in ("[blocked]", "[action]", "[todo]"):
+            self.assertIn(tag, out)
+        self.assertIn("needs: rebase first", out)
+        self.assertIn("unblock", out)            # blocked offers unblock
+        self.assertIn("merged", out)             # action shows route outcomes
+        self.assertIn("pr: http://pr/1", out)    # action shows the PR
+        self.assertLess(out.index("[blocked]"), out.index("[action]"))
+        self.assertLess(out.index("[action]"), out.index("[todo]"))
+
+
 if __name__ == "__main__":
     unittest.main()

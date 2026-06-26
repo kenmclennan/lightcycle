@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.core.tasks import (bucket, filter_by_status, label_value, labels,
-                             task_from_bead)
+from the_grid.core.tasks import (bucket, classify_mine, filter_by_status, label_value,
+                             labels, task_from_bead)
 
 
 def bead(**kw):
@@ -67,6 +67,22 @@ class TestBucketAndFilter(unittest.TestCase):
 
     def test_filter_by_status(self):
         self.assertEqual(len(filter_by_status(self._tasks(), "ready")), 1)
+
+
+class TestClassifyMine(unittest.TestCase):
+    OWNER = {"build": "coder", "ready-merge": "human"}
+    ROUTES = {"build": {"done": "review"}, "ready-merge": {"merged": "cleanup", "changes": "build"}}
+
+    def test_todo_no_step(self):
+        self.assertEqual(classify_mine({"step": None}, self.OWNER, self.ROUTES), ("todo", []))
+
+    def test_action_is_a_human_step(self):
+        self.assertEqual(classify_mine({"step": "ready-merge"}, self.OWNER, self.ROUTES),
+                         ("action", ["changes", "merged"]))
+
+    def test_blocked_is_an_agent_step_plus_unblock(self):
+        self.assertEqual(classify_mine({"step": "build"}, self.OWNER, self.ROUTES),
+                         ("blocked", ["done", "unblock"]))
 
 
 if __name__ == "__main__":

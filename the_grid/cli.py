@@ -582,9 +582,26 @@ def _filter(status):
     return ctasks.filter_by_status(all_tasks(), status)
 
 
+_MINE_ORDER = {"blocked": 0, "action": 1, "todo": 2}
+
+
+def _mine_desc(kind, t):
+    if kind == "blocked":
+        return "%s  needs: %s" % (t["step"], t["needs"]) if t.get("needs") else t["step"]
+    if kind == "action":
+        pr = next((a["value"] for a in story_artifacts(t["parent"])
+                   if a.get("type") == "pr"), None) if t.get("parent") else None
+        return "%s  pr: %s" % (t["step"], pr) if pr else t["step"]
+    return t["title"]
+
+
 def cmd_mine(argv):
-    for t in _filter("needs-human"):
-        print("  %s  %s" % (t["id"], t["title"]))
+    owner, routes = load_flow()
+    rows = [(ctasks.classify_mine(t, owner, routes), t) for t in _filter("needs-human")]
+    rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1]["id"]))
+    for (kind, outcomes), t in rows:
+        tail = "  -> " + " | ".join(outcomes) if outcomes else ""
+        print("%-9s %s  %s%s" % ("[%s]" % kind, t["id"], _mine_desc(kind, t), tail))
     return 0
 
 

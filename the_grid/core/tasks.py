@@ -31,6 +31,7 @@ def task_from_bead(bead):
         "status": status,
         "project": label_value(bead, "project:"), "goal": label_value(bead, "goal:"),
         "artifacts": (bead.get("metadata") or {}).get("artifacts") or [],
+        "needs": (bead.get("metadata") or {}).get("needs"),
         "outcome": bead.get("close_reason"),
         "deps": bead.get("dependency_count") or 0,
     }
@@ -38,6 +39,20 @@ def task_from_bead(bead):
 
 def filter_by_status(tasks, status):
     return [t for t in tasks if t["status"] == status]
+
+
+def classify_mine(task, owner, routes):
+    """Classify a for:human task for `tg mine`. Returns (kind, outcomes):
+    no step -> "todo"; a human-owned step -> "action"; an agent-owned step that has
+    landed on the human (a block) -> "blocked". Outcomes are the step's routes, plus
+    `unblock` for a block (the way to hand it back to the agent)."""
+    step = task.get("step")
+    if not step:
+        return "todo", []
+    outs = sorted((routes.get(step) or {}).keys())
+    if owner.get(step) == "human":
+        return "action", outs
+    return "blocked", outs + ["unblock"]
 
 
 def bucket(tasks):
