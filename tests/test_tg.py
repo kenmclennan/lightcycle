@@ -1153,5 +1153,161 @@ class TestMine(unittest.TestCase):
         self.assertLess(out.index("[action]"), out.index("[todo]"))
 
 
+class TestReflect(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_steps(self.root)
+        self.cfg = write_config()
+
+    def _file_story(self, spec_path=None):
+        sid = json.loads(bd_in(self.root, "create", "feat", "-t", "story", "--json"))["id"]
+        arts = [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]
+        bd_in(self.root, "update", sid, "--metadata", json.dumps({"artifacts": arts}))
+        tid = json.loads(bd_in(self.root, "create", "build: feat", "-t", "task",
+                               "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
+        return sid, tid
+
+    def test_reflect_stores_artifact_on_story(self):
+        sid, tid = self._file_story()
+        r = run_tg("reflect", tid, "--used", "Summary,Scope", "--skipped", "Risks",
+                   root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("reflected", r.stdout)
+        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        refs = [a for a in arts if a["type"] == "reflection"]
+        self.assertEqual(len(refs), 1)
+        data = json.loads(refs[0]["value"])
+        self.assertEqual(data["sections"]["Summary"], "used")
+        self.assertEqual(data["sections"]["Scope"], "used")
+        self.assertEqual(data["sections"]["Risks"], "skipped")
+        self.assertEqual(data["task"], tid)
+
+    def test_reflect_records_guess_missing_noise(self):
+        sid, tid = self._file_story()
+        r = run_tg("reflect", tid,
+                   "--guess", "Decisions",
+                   "--missing", "acceptance criteria",
+                   "--missing", "error cases",
+                   "--noise", "Out of scope",
+                   root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
+        self.assertEqual(data["sections"]["Decisions"], "guess")
+        self.assertIn("acceptance criteria", data["missing"])
+        self.assertIn("error cases", data["missing"])
+        self.assertIn("Out of scope", data["noise"])
+
+    def test_reflect_multiple_calls_append(self):
+        sid, tid = self._file_story()
+        run_tg("reflect", tid, "--used", "Summary", root=self.root, config=self.cfg)
+        run_tg("reflect", tid, "--used", "Scope", root=self.root, config=self.cfg)
+        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        refs = [a for a in arts if a["type"] == "reflection"]
+        self.assertEqual(len(refs), 2)
+
+    def test_reflect_stamps_spec_hash(self):
+        import tempfile
+        spec = tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w")
+        spec.write("# spec\ncontent")
+        spec.close()
+        sid, tid = self._file_story(spec_path=spec.name)
+        bd_in(self.root, "update", sid, "--metadata",
+              json.dumps({"artifacts": [{"type": "spec", "value": spec.name}]}))
+        run_tg("reflect", tid, "--used", "spec", root=self.root, config=self.cfg)
+        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
+        self.assertNotEqual(data["spec_hash"], "unknown")
+        self.assertEqual(len(data["spec_hash"]), 8)
+
+    def test_reflect_no_sections_still_valid(self):
+        sid, tid = self._file_story()
+        r = run_tg("reflect", tid, root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
+        self.assertEqual(data["sections"], {})
+        self.assertEqual(data["missing"], [])
+        self.assertEqual(data["noise"], [])
+
+
+class TestRetro(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_steps(self.root)
+        self.cfg = write_config()
+
+    def _make_epic_with_story(self, sid=None):
+        epic = json.loads(bd_in(self.root, "create", "epic-1", "-t", "story", "--json"))["id"]
+        if sid is None:
+            sid = json.loads(bd_in(
+                self.root, "create", "story-1", "-t", "story",
+                "--parent", epic, "--json"))["id"]
+        return epic, sid
+
+    def test_retro_no_reflections(self):
+        epic, _ = self._make_epic_with_story()
+        r = run_tg("retro", epic, root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("N=0", r.stdout)
+        self.assertIn("no reflections yet", r.stdout)
+        self.assertIn("Per-story signals", r.stdout)
+
+    def test_retro_aggregates_section_counts(self):
+        epic, sid = self._make_epic_with_story()
+        tid = json.loads(bd_in(self.root, "create", "build: s", "-t", "task",
+                               "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
+        run_tg("reflect", tid, "--used", "Summary,Scope", "--skipped", "Risks",
+               root=self.root, config=self.cfg)
+        r = run_tg("retro", epic, root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("N=1", r.stdout)
+        self.assertIn("Summary", r.stdout)
+        self.assertIn("used=1", r.stdout)
+        self.assertIn("Risks", r.stdout)
+        self.assertIn("skipped=1", r.stdout)
+
+    def test_retro_aggregates_missing_and_noise(self):
+        epic, sid = self._make_epic_with_story()
+        tid = json.loads(bd_in(self.root, "create", "build: s", "-t", "task",
+                               "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
+        run_tg("reflect", tid, "--missing", "edge case coverage",
+               "--noise", "Out of scope", root=self.root, config=self.cfg)
+        r = run_tg("retro", epic, root=self.root, config=self.cfg)
+        self.assertIn("edge case coverage", r.stdout)
+        self.assertIn("Out of scope", r.stdout)
+
+    def test_retro_signals_review_rounds(self):
+        epic, sid = self._make_epic_with_story()
+        bd_in(self.root, "create", "review: s", "-t", "task",
+              "-l", "for:reviewer,step:review", "--parent", sid, "--json")
+        rtid = json.loads(bd_in(self.root, "create", "review: s2", "-t", "task",
+                                "-l", "for:reviewer,step:review", "--parent", sid, "--json"))["id"]
+        bd_in(self.root, "close", rtid, "--reason", "rejected")
+        r = run_tg("retro", epic, root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("rounds=1", r.stdout)
+
+    def test_retro_signals_conflict(self):
+        epic, sid = self._make_epic_with_story()
+        pr_tid = json.loads(bd_in(self.root, "create", "open-pr: s", "-t", "task",
+                                  "-l", "for:pr-watcher,step:open-pr",
+                                  "--parent", sid, "--json"))["id"]
+        bd_in(self.root, "close", pr_tid, "--reason", "conflict-rebase")
+        r = run_tg("retro", epic, root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("conflict", r.stdout)
+
+    def test_retro_signals_blocks(self):
+        epic, sid = self._make_epic_with_story()
+        btid = json.loads(bd_in(self.root, "create", "build: s", "-t", "task",
+                                "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
+        bd_in(self.root, "update", btid, "--status", "in_progress")
+        bd_in(self.root, "update", btid, "--status", "open")
+        r = run_tg("retro", epic, root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("blocks=1", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
