@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from the_grid.core.config import cfg_path, projects_root, specs_root
+from the_grid.core.config import branch_prefix, cfg_path, projects_root, specs_root
 
 HOME = "/home/u"
 
@@ -31,6 +31,17 @@ class TestRoots(unittest.TestCase):
         cfg = {"projects": "/p", "specs": "/s"}
         self.assertEqual(projects_root(cfg, HOME), "/p")
         self.assertEqual(specs_root(cfg, HOME), "/s")
+
+
+class TestBranchPrefix(unittest.TestCase):
+    def test_default(self):
+        self.assertEqual(branch_prefix({}), "feat")
+
+    def test_hyphen_key_override(self):
+        self.assertEqual(branch_prefix({"branch-prefix": "wip"}), "wip")
+
+    def test_underscore_key_override(self):
+        self.assertEqual(branch_prefix({"branch_prefix": "story"}), "story")
 
 
 if __name__ == "__main__":
