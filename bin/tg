@@ -954,6 +954,16 @@ def cmd_file(argv):
             "step '%s' requires %s; a filed story only carries a spec. "
             "File at an entry step.\n" % (a.step, ", ".join(sorted(unmet))))
         return 1
+    if a.repo:
+        repo_path = os.path.join(projects_root(), a.repo)
+        if not _is_git_repo(repo_path):
+            pr = projects_root()
+            available = sorted(
+                e.name for e in os.scandir(pr) if e.is_dir() and _is_git_repo(e.path)
+            ) if os.path.isdir(pr) else []
+            avail_str = ", ".join(available) if available else "(none)"
+            sys.stderr.write("unknown repo '%s'; available repos: %s\n" % (a.repo, avail_str))
+            return 1
     base = os.path.splitext(os.path.basename(a.spec))[0]
     labels = []
     if a.project:
