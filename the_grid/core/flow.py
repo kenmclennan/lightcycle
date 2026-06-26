@@ -26,6 +26,21 @@ def load_flow(role_metas):
     return owner, routes
 
 
+def compose_driver(base_body, skills):
+    """The Driver's system prompt: its base persona (driver.md) plus a skill per
+    human-performed step. The Driver is the performer of human-facing steps, so it
+    carries their procedures. skills is a list of (step, body), already ordered."""
+    if not skills:
+        return base_body
+    parts = [base_body,
+             "\n\n# Skills for human-facing steps\n",
+             "These steps surface in `tg mine`. When the human picks one, run the skill "
+             "for its step: assist them, and record the outcome (`tg done` / `tg close`).\n"]
+    for step, body in skills:
+        parts.append("\n## %s\n\n%s" % (step, body.strip()))
+    return "\n".join(parts)
+
+
 def flow_next(step, outcome, owner, routes):
     next_step = (routes.get(step) or {}).get(outcome)
     if not next_step:

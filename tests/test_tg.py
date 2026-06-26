@@ -92,9 +92,9 @@ _AGENT_SPECS = {
 }
 
 
-def write_agents(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
+def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
     """Write the standard pipeline agents (routing only, no artifact contracts)."""
-    adir = Path(root) / "agents"
+    adir = Path(root) / "steps"
     adir.mkdir(exist_ok=True)
     for r in roles:
         model, step, routes = _AGENT_SPECS[r]
@@ -121,10 +121,10 @@ _CONTRACT_SPECS = {
 }
 
 
-def write_contract_agents(root, specs=None):
+def write_contract_steps(root, specs=None):
     """Write agents that declare accepts/produces artifact contracts."""
     specs = specs or _CONTRACT_SPECS
-    adir = Path(root) / "agents"
+    adir = Path(root) / "steps"
     adir.mkdir(exist_ok=True)
     for r, s in specs.items():
         fm = ["---", "model: %s" % s["model"], "step: %s" % s["step"]]
@@ -222,7 +222,7 @@ class TestClaim(unittest.TestCase):
 class TestFlow(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_advance_creates_next_step(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
@@ -245,7 +245,7 @@ class TestFlow(unittest.TestCase):
 class TestDoneBlock(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_done_closes_and_advances(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
@@ -338,10 +338,10 @@ class TestSweep(unittest.TestCase):
 class TestSpawn(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        for d in ("agents", "logs"):
+        for d in ("steps", "logs"):
             (Path(self.root) / d).mkdir(exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
-            (Path(self.root) / "agents" / ("%s.md" % r)).write_text(
+            (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r)
 
     def test_spawn_records_worker_and_log(self):
@@ -364,10 +364,10 @@ class TestSpawn(unittest.TestCase):
 class TestRun(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        for d in ("agents", "logs", "flows"):
+        for d in ("steps", "logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
-            (Path(self.root) / "agents" / ("%s.md" % r)).write_text(
+            (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r)
 
     def test_run_once_spawns_for_ready_role(self):
@@ -533,7 +533,7 @@ class TestModelV2(unittest.TestCase):
 class TestFileStory(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_file_creates_story_with_spec_and_build_task(self):
         sid = run_tg("file", "specs/HSS-435.md", "--step", "build", root=self.root).stdout.strip()
@@ -560,7 +560,7 @@ class TestFileStory(unittest.TestCase):
 class TestClaimArtifacts(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_claim_surfaces_story_artifacts(self):
         run_tg("file", "specs/Y.md", "--step", "build", root=self.root)
@@ -576,7 +576,7 @@ class TestClaimArtifacts(unittest.TestCase):
 class TestTrace(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_trace_shows_story_artifacts_and_tasks(self):
         sid = run_tg("file", "specs/Z.md", "--step", "build", root=self.root).stdout.strip()
@@ -592,8 +592,8 @@ class TestTrace(unittest.TestCase):
 class TestAgentFrontmatter(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        (Path(self.root) / "agents").mkdir(exist_ok=True)
-        (Path(self.root) / "agents" / "coder.md").write_text(
+        (Path(self.root) / "steps").mkdir(exist_ok=True)
+        (Path(self.root) / "steps" / "coder.md").write_text(
             "---\nmodel: sonnet\n---\n# Coder\n\nDo the thing.\n")
         (Path(self.root) / "logs").mkdir(exist_ok=True)
 
@@ -607,19 +607,19 @@ class TestAgentFrontmatter(unittest.TestCase):
         loader.exec_module(mod)
         return mod
 
-    def test_parse_agent_extracts_model_and_strips_frontmatter(self):
+    def test_parse_step_extracts_model_and_strips_frontmatter(self):
         tg = self._tg()
-        a = tg.parse_agent("coder")
+        a = tg.parse_step("coder")
         self.assertEqual(a["meta"]["model"], "sonnet")
         self.assertTrue(a["body"].startswith("# Coder"))
         self.assertNotIn("model:", a["body"])
 
-    def test_parse_agent_reads_nested_routes(self):
-        (Path(self.root) / "agents" / "reviewer.md").write_text(
+    def test_parse_step_reads_nested_routes(self):
+        (Path(self.root) / "steps" / "reviewer.md").write_text(
             "---\nmodel: opus\nstep: review\nroutes:\n  done: open-pr\n"
             "  rejected: build\n---\n# Reviewer\n")
         tg = self._tg()
-        a = tg.parse_agent("reviewer")
+        a = tg.parse_step("reviewer")
         self.assertEqual(a["meta"]["step"], "review")
         self.assertEqual(a["meta"]["routes"], {"done": "open-pr", "rejected": "build"})
         self.assertTrue(a["body"].startswith("# Reviewer"))
@@ -628,7 +628,7 @@ class TestAgentFrontmatter(unittest.TestCase):
 class TestFlowFromAgents(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def _tg(self):
         import importlib.util
@@ -664,7 +664,7 @@ class TestFlowFromAgents(unittest.TestCase):
 class TestFileStep(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_file_requires_step(self):
         r = run_tg("file", "specs/X.md", root=self.root)
@@ -688,7 +688,7 @@ class TestFileStep(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_spawn_refuses_when_model_missing(self):
-        (Path(self.root) / "agents" / "reviewer.md").write_text("no frontmatter here")
+        (Path(self.root) / "steps" / "reviewer.md").write_text("no frontmatter here")
         env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
         r = subprocess.run([sys.executable, TG, "spawn", "reviewer"], capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 1)
@@ -698,7 +698,7 @@ class TestFileStep(unittest.TestCase):
 class TestArtifactContracts(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_contract_agents(self.root)
+        write_contract_steps(self.root)
 
     def _bead(self, bid):
         return json.loads(bd_in(self.root, "show", bid, "--json"))[0]
@@ -751,7 +751,7 @@ class TestArtifactContracts(unittest.TestCase):
         specs = {k: dict(v) for k, v in _CONTRACT_SPECS.items()}
         specs["reviewer"] = dict(specs["reviewer"],
                                  accepts={"spec": "required", "design": "required"})
-        write_contract_agents(self.root, specs)
+        write_contract_steps(self.root, specs)
         r = run_tg("flow", root=self.root)
         self.assertEqual(r.returncode, 1)
         self.assertIn("design", r.stderr)
@@ -833,7 +833,7 @@ class TestInitAndStoreGuard(unittest.TestCase):
 class TestContractsOptional(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)  # no requires/produces
+        write_steps(self.root)  # no requires/produces
 
     def test_done_without_contract_needs_no_artifacts(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
@@ -845,7 +845,7 @@ class TestContractsOptional(unittest.TestCase):
 class TestWorktree(unittest.TestCase):
     def setUp(self):
         self.root = new_store_with_origin()
-        write_agents(self.root)
+        write_steps(self.root)
         # projects -> the engine's parent so basename(root) resolves to the store;
         # specs -> the store so file's relative spec path resolves under it.
         os.environ["GRID_CONFIG"] = write_config(
@@ -924,7 +924,7 @@ class TestWorktree(unittest.TestCase):
 class TestWorktreeNoOrigin(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_claim_omits_workspace_without_origin(self):
         bd_in(self.root, "create", "build: t", "-t", "task",
@@ -937,7 +937,7 @@ class TestWorktreeNoOrigin(unittest.TestCase):
 class TestNamedRepo(unittest.TestCase):
     def setUp(self):
         self.engine = new_store_with_origin()  # engine repo under a projects parent
-        write_agents(self.engine)
+        write_steps(self.engine)
         self.projects = os.path.dirname(self.engine)
         self.app = make_repo(self.projects, "app")  # a sibling repo, referenced by name
         os.environ["GRID_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
@@ -1000,7 +1000,7 @@ class TestNamedRepo(unittest.TestCase):
 class TestUnblock(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        write_agents(self.root)
+        write_steps(self.root)
 
     def test_unblock_returns_blocked_task_to_agent_role(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
@@ -1019,7 +1019,7 @@ class TestUnblock(unittest.TestCase):
         self.assertEqual(t["role"], "coder")
 
     def test_unblock_refuses_human_step(self):
-        (Path(self.root) / "agents" / "ready-merge.md").write_text(
+        (Path(self.root) / "steps" / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n")
         b = json.loads(bd_in(self.root, "create", "ready-merge: t", "-t", "task",
                              "-l", "for:human,step:ready-merge", "--json"))["id"]
@@ -1031,7 +1031,7 @@ class TestUnblock(unittest.TestCase):
 class TestClose(unittest.TestCase):
     def setUp(self):
         self.root = new_store_with_origin()
-        write_agents(self.root)
+        write_steps(self.root)
         os.environ["GRID_CONFIG"] = write_config(
             projects=os.path.dirname(self.root), specs=self.root)
 
@@ -1090,7 +1090,7 @@ class TestConfig(unittest.TestCase):
 
     def test_spec_path_resolves_against_configured_specs_root(self):
         root = new_store_with_origin()
-        write_agents(root)
+        write_steps(root)
         specs = tempfile.mkdtemp()
         Path(self.cfg).write_text("specs: %s\n" % specs)
         run_tg("file", "specs/X.md", "--step", "build", root=root, config=self.cfg)
@@ -1127,7 +1127,7 @@ class TestLogRender(unittest.TestCase):
 class TestMine(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        adir = Path(self.root) / "agents"
+        adir = Path(self.root) / "steps"
         adir.mkdir(exist_ok=True)
         (adir / "coder.md").write_text(
             "---\nmodel: sonnet\nstep: build\nroutes:\n  done: review\n---\nstub")
@@ -1147,10 +1147,8 @@ class TestMine(unittest.TestCase):
         out = run_tg("mine", root=self.root).stdout
         for tag in ("[blocked]", "[action]", "[todo]"):
             self.assertIn(tag, out)
-        self.assertIn("needs: rebase first", out)
-        self.assertIn("unblock", out)            # blocked offers unblock
-        self.assertIn("merged", out)             # action shows route outcomes
-        self.assertIn("pr: http://pr/1", out)    # action shows the PR
+        self.assertIn("merge: y", out)           # leads with the title
+        self.assertIn("look at X", out)
         self.assertLess(out.index("[blocked]"), out.index("[action]"))
         self.assertLess(out.index("[action]"), out.index("[todo]"))
 

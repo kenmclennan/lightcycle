@@ -85,7 +85,7 @@ the fix landed manually (commit d3b46b5).
       it -> it hits the limit again -> respawn loop, no detection, no reason surfaced.
       All workers share ONE subscription quota, so one hit blocks everyone. Detect the
       signal in the worker's stream-json log (`You've hit your ... limit . resets
-      <time>`; exit code is ~1 but undocumented - detect on the message, not the code),
+    <time>`; exit code is ~1 but undocumented - detect on the message, not the code),
       then PAUSE THE WHOLE LOOP (not just one task), surface "blocked: usage limit,
       resets <time>" to `tg mine`, and schedule a resume at reset. Resume is feasible -
       workers already get a unique `--session-id`, and `claude --resume <id> -p` replays
@@ -100,7 +100,7 @@ the fix landed manually (commit d3b46b5).
       from agent markdown alone - `tg` provides primitives only, NO code-level builtins;
       the driver (CLU) fills human steps and supplies trigger signals by hand for now.
       Consolidates the "notes-forward on rework" and ad-hoc block/resume items.
-- [ ] **Decouple the engine's data home for a deployed binary.** `agents/`, `.beads/`,
+- [ ] **Decouple the engine's data home for a deployed binary.** `steps/`, `.beads/`,
       and `logs/` still live at `grid_root` (where `bin/tg` resolves). Fine while
       dogfooding, but a deployed `tg` (not in the workspace) needs its data home set
       independently - a config key or `~/.local/share/the-grid` - distinct from the
@@ -158,7 +158,7 @@ the fix landed manually (commit d3b46b5).
 ## Deferred (unchanged by tg)
 
 - [ ] **External triggers (design first).** A coherent concept for anything that
-      *automatically* emits a signal or runs work OUTSIDE the agent markdown: merge
+      _automatically_ emits a signal or runs work OUTSIDE the agent markdown: merge
       auto-detection (poll `gh`/webhook), filesystem watchers, cron/schedules, git/PR
       hooks. Until designed, we resist codifying any such automation - the driver (CLU)
       supplies these signals by hand (and flow v2 keeps the workflow purely in agent

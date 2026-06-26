@@ -2,10 +2,10 @@
 step: cleanup
 ---
 
-# Cleanup (human step, terminal)
+# Cleanup (you + driver, terminal)
 
-A human step: never spawned, no routes (the flow ends here). Its task surfaces in `tg mine`. The PR
-is merged; tidy up.
+The PR is merged; tidy up. No routes - the flow ends here. The task surfaces in `tg mine`; the
+driver runs this skill to do the close-out with you.
 
 1. `tg close STORY merged` - closes the story + its child tasks (status closed, reason merged),
    removes the worktree (`.worktrees/STORY`), and deletes the merged feature branch. Beads are

@@ -1,8 +1,8 @@
-"""Filesystem + config IO: grid root, config file, agent files, well-known dirs."""
+"""Filesystem + config IO: grid root, config file, step files, well-known dirs."""
 import os
 from pathlib import Path
 
-from the_grid.core import agents as core_agents
+from the_grid.core import steps as core_steps
 
 
 def grid_root():
@@ -25,7 +25,7 @@ def load_config():
     if not os.path.exists(p):
         return {}
     with open(p) as f:
-        return core_agents.parse_frontmatter(f.read())
+        return core_steps.parse_frontmatter(f.read())
 
 
 def _default_config_text():
@@ -43,8 +43,8 @@ def ensure_config():
     return True
 
 
-def agent_roles():
-    adir = os.path.join(grid_root(), "agents")
+def step_roles():
+    adir = os.path.join(grid_root(), "steps")
     if not os.path.isdir(adir):
         return []
     return sorted(f[:-3] for f in os.listdir(adir) if f.endswith(".md"))
@@ -57,13 +57,13 @@ def read_md(relpath):
         return None
     with open(path) as f:
         text = f.read()
-    meta, body = core_agents.split_frontmatter(text)
+    meta, body = core_steps.split_frontmatter(text)
     return {"meta": meta, "body": body, "path": path}
 
 
-def parse_agent(role):
-    """Read a flow agent file agents/<role>.md; return {meta, body, path} or None."""
-    return read_md(os.path.join("agents", "%s.md" % role))
+def parse_step(role):
+    """Read a step file steps/<role>.md; return {meta, body, path} or None."""
+    return read_md(os.path.join("steps", "%s.md" % role))
 
 
 def worktrees_dir():

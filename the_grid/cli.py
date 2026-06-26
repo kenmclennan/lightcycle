@@ -16,8 +16,8 @@ from the_grid.core.logrender import render_log_line
 from the_grid.core.tasks import task_from_bead
 
 from the_grid.adapters import gitio
-from the_grid.adapters.fsio import (agent_roles, config_path, ensure_config, grid_root,
-                                load_config, parse_agent, read_md, store_ready, worktrees_dir)
+from the_grid.adapters.fsio import (step_roles, config_path, ensure_config, grid_root,
+                                load_config, parse_step, read_md, store_ready, worktrees_dir)
 from the_grid.adapters.spawner import spawn_worker
 from the_grid.adapters.store import (add_artifact, all_tasks, bd, bd_json, ensure_beads,
                                  get_task, present_types, route_to_human,
@@ -51,7 +51,7 @@ def max_agents():
 
 
 def _role_metas():
-    return {role: (parse_agent(role) or {"meta": {}})["meta"] for role in agent_roles()}
+    return {role: (parse_step(role) or {"meta": {}})["meta"] for role in step_roles()}
 
 
 def load_flow():
@@ -68,7 +68,7 @@ def meta_for_step(step):
     role = owner.get(step)
     if not role:
         return {}
-    a = parse_agent(role)
+    a = parse_step(role)
     return a["meta"] if a else {}
 
 
@@ -599,23 +599,12 @@ def _filter(status):
 _MINE_ORDER = {"blocked": 0, "action": 1, "todo": 2}
 
 
-def _mine_desc(kind, t):
-    if kind == "blocked":
-        return "%s  needs: %s" % (t["step"], t["needs"]) if t.get("needs") else t["step"]
-    if kind == "action":
-        pr = next((a["value"] for a in story_artifacts(t["parent"])
-                   if a.get("type") == "pr"), None) if t.get("parent") else None
-        return "%s  pr: %s" % (t["step"], pr) if pr else t["step"]
-    return t["title"]
-
-
 def cmd_mine(argv):
     owner, routes = load_flow()
     rows = [(ctasks.classify_mine(t, owner, routes), t) for t in _filter("needs-human")]
     rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1]["id"]))
-    for (kind, outcomes), t in rows:
-        tail = "  -> " + " | ".join(outcomes) if outcomes else ""
-        print("%-9s %s  %s%s" % ("[%s]" % kind, t["id"], _mine_desc(kind, t), tail))
+    for (kind, _outcomes), t in rows:
+        print("%-9s %s  %s" % ("[%s]" % kind, t["id"], t["title"] or t["step"]))
     return 0
 
 
@@ -748,6 +737,17 @@ def cmd_run(argv):
         time.sleep(interval)
 
 
+def _human_step_skills():
+    """The skill bodies of human-performed steps (a `step` but no `model:`), each as
+    (step, body), ordered by step. The Driver loads all of these - it is their performer."""
+    skills = []
+    for role in step_roles():
+        a = parse_step(role)
+        if a and a["meta"].get("step") and not a["meta"].get("model"):
+            skills.append((a["meta"]["step"], a["body"]))
+    return sorted(skills)
+
+
 def cmd_driver(argv):
     if not require_store():
         return 1
@@ -756,8 +756,9 @@ def cmd_driver(argv):
     if seat is None or not seat["meta"].get("model"):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
         return 1
+    body = cflow.compose_driver(seat["body"], _human_step_skills())
     os.execvp("claude", ["claude", "--model", seat["meta"]["model"], "--name", "driver",
-                         "--append-system-prompt", seat["body"], "--add-dir", root,
+                         "--append-system-prompt", body, "--add-dir", root,
                          "--dangerously-skip-permissions"])
 
 

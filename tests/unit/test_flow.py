@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.core.flow import (advance_create_args, flow_next, load_flow, pool_plan,
-                            ready_roles_from_beads, ready_task_roles)
+from the_grid.core.flow import (advance_create_args, compose_driver, flow_next, load_flow,
+                            pool_plan, ready_roles_from_beads, ready_task_roles)
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -120,6 +120,18 @@ class TestPoolPlan(unittest.TestCase):
     def test_inflight_does_not_consume_a_slot(self):
         # 1 free slot, 1 booting coder covers the lone coder task -> nothing to spawn
         self.assertEqual(pool_plan(["coder"], {"coder": 1}, 1), [])
+
+
+class TestComposeDriver(unittest.TestCase):
+    def test_no_skills_returns_base_unchanged(self):
+        self.assertEqual(compose_driver("BASE", []), "BASE")
+
+    def test_appends_each_skill_labelled_by_step(self):
+        out = compose_driver("BASE", [("review-plan", "REVIEW BODY"), ("cleanup", "CLEAN BODY")])
+        self.assertIn("BASE", out)
+        for marker in ("## review-plan", "REVIEW BODY", "## cleanup", "CLEAN BODY"):
+            self.assertIn(marker, out)
+        self.assertLess(out.index("BASE"), out.index("review-plan"))  # base persona leads
 
 
 if __name__ == "__main__":
