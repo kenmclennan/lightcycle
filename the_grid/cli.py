@@ -1,5 +1,7 @@
 """tg - the-grid domain CLI. Wires the pure core to the IO adapters; all cmd_*."""
 import argparse
+import collections
+import hashlib
 import json
 import os
 import sys
@@ -233,6 +235,11 @@ COMMAND_GROUPS = [
         ("block", "<id> --needs ... [--branch/--pr/--reason/--tried]",
          "escalate to a human with resume-state"),
         ("unblock", "<id>", "flip a blocked task back to its agent role so it re-claims and retries"),
+        ("reflect", '<task> [--used/--skipped/--guess "<sections>"] [--missing/--noise "text"]',
+         "record a structured spec-section reflection on the story (call before tg done)"),
+    ]),
+    ("Feedback loop", [
+        ("retro", "<epic>", "aggregate child reflections + objective signals into a read digest"),
     ]),
     ("Maintenance", [
         ("sweep", "", "reclaim orphaned task claims and prune dead worker entries (kept: GRID_WORKER_HISTORY, default 20)"),
@@ -801,4 +808,162 @@ def cmd_status(argv):
             print("== %s (%d) ==" % (name, len(buckets[name])))
             for t in buckets[name]:
                 print("  %s  %s" % (t["id"], t["title"]))
+    return 0
+
+
+# ---- spec feedback loop (R1, R3, R4) ----------------------------------------
+
+
+def _spec_hash(task):
+    """First 8 hex chars of SHA-256 of the story's spec file; 'unknown' if absent."""
+    story = task.get("parent") or task["id"]
+    arts = story_artifacts(story)
+    spec = next((a["value"] for a in arts if a["type"] == "spec"), None)
+    if not spec or not os.path.exists(spec):
+        return "unknown"
+    with open(spec, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()[:8]
+
+
+def _story_signals(story_id):
+    """Derive objective signals for a story from its child tasks' bd history.
+
+    Returns {"blocks": int, "review_rounds": int, "conflict": bool}.
+    - blocks: in_progress->open transitions across all build tasks (proxy for tg block calls).
+    - review_rounds: review tasks closed with outcome "rejected".
+    - conflict: any open-pr task closed with "conflict" in its outcome.
+    """
+    children = bd_json("children", story_id, "--json")
+    tasks = [task_from_bead(b) for b in children]
+
+    review_rounds = sum(
+        1 for t in tasks
+        if t.get("step") == "review" and t.get("outcome") == "rejected"
+    )
+
+    conflict = any(
+        t.get("step") == "open-pr" and "conflict" in (t.get("outcome") or "")
+        for t in tasks
+    )
+
+    blocks = 0
+    for t in tasks:
+        if t.get("step") != "build":
+            continue
+        history = bd_json("history", t["id"], "--json")
+        statuses = [h["Issue"]["status"] for h in reversed(history)]
+        for i in range(len(statuses) - 1):
+            if statuses[i] == "in_progress" and statuses[i + 1] == "open":
+                blocks += 1
+
+    return {"blocks": blocks, "review_rounds": review_rounds, "conflict": conflict}
+
+
+def cmd_reflect(argv):
+    ap = argparse.ArgumentParser(prog="tg reflect")
+    ap.add_argument("id")
+    ap.add_argument("--used", default="",
+                    help="comma-separated spec section names you actively used")
+    ap.add_argument("--skipped", default="",
+                    help="comma-separated spec section names that were irrelevant")
+    ap.add_argument("--guess", default="",
+                    help="comma-separated spec section names where info was missing")
+    ap.add_argument("--missing", action="append", default=[],
+                    help="information you needed but had to infer (repeatable)")
+    ap.add_argument("--noise", action="append", default=[],
+                    help="content that added no signal (repeatable)")
+    a = ap.parse_args(argv)
+
+    t = get_task(a.id)
+    story = t.get("parent") or a.id
+
+    def _split(s):
+        return [x.strip() for x in s.split(",") if x.strip()]
+
+    sections = {}
+    for name in _split(a.used):
+        sections[name] = "used"
+    for name in _split(a.skipped):
+        sections[name] = "skipped"
+    for name in _split(a.guess):
+        sections[name] = "guess"
+
+    reflection = {
+        "task": a.id,
+        "sections": sections,
+        "missing": a.missing,
+        "noise": a.noise,
+        "spec_hash": _spec_hash(t),
+    }
+    add_artifact(story, "reflection", json.dumps(reflection))
+    print("reflected")
+    return 0
+
+
+def cmd_retro(argv):
+    ap = argparse.ArgumentParser(prog="tg retro")
+    ap.add_argument("epic")
+    a = ap.parse_args(argv)
+
+    children = bd_json("children", a.epic, "--json")
+    stories = [task_from_bead(b) for b in children if b.get("issue_type") == "story"]
+
+    all_reflections = []
+    story_rows = []
+    for story in stories:
+        arts = story_artifacts(story["id"])
+        refs = [art for art in arts if art["type"] == "reflection"]
+        parsed = []
+        for r in refs:
+            try:
+                parsed.append(json.loads(r["value"]))
+            except (ValueError, KeyError):
+                pass
+        all_reflections.extend(parsed)
+        sigs = _story_signals(story["id"])
+        story_rows.append((story, sigs, len(parsed)))
+
+    n = len(all_reflections)
+    print("== retro: %s  (N=%d) ==" % (a.epic, n))
+
+    if n > 0:
+        section_counts = {}
+        for ref in all_reflections:
+            for sec, verdict in (ref.get("sections") or {}).items():
+                if sec not in section_counts:
+                    section_counts[sec] = {"used": 0, "skipped": 0, "guess": 0}
+                if verdict in section_counts[sec]:
+                    section_counts[sec][verdict] += 1
+
+        missing_counts = collections.Counter(
+            m for ref in all_reflections for m in (ref.get("missing") or [])
+        )
+        noise_counts = collections.Counter(
+            item for ref in all_reflections for item in (ref.get("noise") or [])
+        )
+
+        if section_counts:
+            print("\nSections:")
+            for sec, counts in sorted(section_counts.items()):
+                parts = ["%s=%d" % (v, counts[v]) for v in ("used", "skipped", "guess") if counts[v]]
+                print("  %-22s  %s" % (sec, "  ".join(parts)))
+
+        if missing_counts:
+            print("\nMissing (most frequent):")
+            for text, count in missing_counts.most_common():
+                print("  x%d  %s" % (count, text))
+
+        if noise_counts:
+            print("\nNoise (most frequent):")
+            for text, count in noise_counts.most_common():
+                print("  x%d  %s" % (count, text))
+    else:
+        print("no reflections yet - coders call `tg reflect` before `tg done`")
+
+    print("\nPer-story signals:")
+    for story, sigs, nrefs in story_rows:
+        conflict_str = "conflict" if sigs["conflict"] else "-"
+        print("  %-20s  blocks=%-2d  rounds=%-2d  conflict=%-5s  (N=%d)" % (
+            story["id"], sigs["blocks"], sigs["review_rounds"], conflict_str, nrefs))
+
     return 0
