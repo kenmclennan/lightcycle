@@ -992,5 +992,31 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(view["spec_path"], os.path.join(specs, "specs/X.md"))
 
 
+class TestLogRender(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        self.log = Path(self.root) / "logs" / "worker-coder-x.log"
+        self.log.write_text("\n".join([
+            json.dumps({"type": "system", "subtype": "init"}),
+            json.dumps({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "Claiming the task."}]}}),
+            json.dumps({"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "name": "Bash", "input": {"command": "tg claim coder"}}]}}),
+            json.dumps({"type": "result", "result": "done; banner fixed"}),
+        ]) + "\n")
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
+            [{"spawnid": "x", "role": "coder", "pid": os.getpid(),
+              "log": str(self.log), "bead": None, "started": time.time()}]))
+
+    def test_logs_renders_stream_json(self):
+        r = run_tg("logs", "coder", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Claiming the task.", r.stdout)
+        self.assertIn("$ tg claim coder", r.stdout)
+        self.assertIn("done; banner fixed", r.stdout)
+        self.assertNotIn('"type"', r.stdout)  # raw JSON is not shown
+
+
 if __name__ == "__main__":
     unittest.main()
