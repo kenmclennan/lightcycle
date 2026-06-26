@@ -237,6 +237,8 @@ COMMAND_GROUPS = [
         ("unblock", "<id>", "flip a blocked task back to its agent role so it re-claims and retries"),
         ("reflect", '<task> [--used/--skipped/--guess "<sections>"] [--missing/--noise "text"]',
          "record a structured spec-section reflection on the story (call before tg done)"),
+        ("plan-add", '<epic> "<title>" --spec <path> [--blocked-by <id>]',
+         "create a child story under an epic with a build task, optionally gated by a dep"),
     ]),
     ("Feedback loop", [
         ("retro", "<epic>", "aggregate child reflections + objective signals into a read digest"),
@@ -447,7 +449,8 @@ def cmd_done(argv):
     ap.add_argument("outcome")
     a = ap.parse_args(argv)
     t = get_task(a.id)
-    if flow_next(t["step"], a.outcome) is None:
+    meta = meta_for_step(t["step"])
+    if flow_next(t["step"], a.outcome) is None and not meta.get("terminal"):
         sys.stderr.write(
             "no transition for step=%s outcome=%s; not closing. "
             "Fix the flow or use a defined outcome.\n" % (t["step"], a.outcome))
@@ -612,6 +615,10 @@ def cmd_mine(argv):
     rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1]["id"]))
     for (kind, _outcomes), t in rows:
         print("%-9s %s  %s" % ("[%s]" % kind, t["id"], t["title"] or t["step"]))
+        story = t.get("parent") or t["id"]
+        for art in story_artifacts(story):
+            if art.get("type") == "plan-doc":
+                print("          plan: %s" % art["value"])
     return 0
 
 
@@ -696,6 +703,30 @@ def cmd_add(argv):
         labels.append("project:%s" % a.project)
     new = bd_json("create", a.title, "-t", "task", "-l", ",".join(labels), "--json")["id"]
     print(new)
+    return 0
+
+
+def cmd_plan_add(argv):
+    ap = argparse.ArgumentParser(prog="tg plan-add")
+    ap.add_argument("epic")
+    ap.add_argument("title")
+    ap.add_argument("--spec", required=True)
+    ap.add_argument("--blocked-by", action="append", default=[], dest="blocked_by",
+                    metavar="id")
+    a = ap.parse_args(argv)
+    owner, _ = load_flow()
+    role = owner.get("build")
+    if not role:
+        sys.stderr.write("no 'build' step in flow; cannot create child story\n")
+        return 1
+    story = bd_json("create", a.title, "-t", "story", "--parent", a.epic, "--json")["id"]
+    add_artifact(story, "spec", a.spec)
+    task_args = ["create", "build: %s" % a.title, "-t", "task",
+                 "-l", "for:%s,step:build" % role, "--parent", story, "--json"]
+    for dep in a.blocked_by:
+        task_args += ["--deps", dep]
+    bd_json(*task_args)
+    print(story)
     return 0
 
 

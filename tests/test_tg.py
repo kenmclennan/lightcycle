@@ -1309,5 +1309,143 @@ class TestRetro(unittest.TestCase):
         self.assertIn("blocks=1", r.stdout)
 
 
+def write_planner_step(root):
+    """Write a planner step file with terminal:true for tests."""
+    adir = Path(root) / "steps"
+    adir.mkdir(exist_ok=True)
+    (adir / "planner.md").write_text(
+        "---\nmodel: sonnet\nstep: plan\nterminal: true\n"
+        "accepts:\n  spec: required\nproduces:\n  plan-doc: required\n---\n# planner\nstub\n"
+    )
+
+
+class TestPlanAdd(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_steps(self.root)
+
+    def test_plan_add_creates_child_story_and_build_task(self):
+        epic = json.loads(bd_in(self.root, "create", "epic: thing", "-t", "story", "--json"))["id"]
+        r = run_tg("plan-add", epic, "feature-a", "--spec", "/tmp/feat-a.md", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        story_id = r.stdout.strip()
+        self.assertTrue(story_id)
+        story = json.loads(bd_in(self.root, "show", story_id, "--json"))[0]
+        self.assertEqual(story.get("parent"), epic)
+        arts = (story.get("metadata") or {}).get("artifacts") or []
+        self.assertTrue(any(a["type"] == "spec" and a["value"] == "/tmp/feat-a.md" for a in arts))
+        children = json.loads(bd_in(self.root, "children", story_id, "--json"))
+        self.assertEqual(len(children), 1)
+        task = children[0]
+        self.assertIn("build", task.get("title", ""))
+        self.assertIn("for:coder", task.get("labels") or [])
+
+    def test_plan_add_returns_story_id(self):
+        epic = json.loads(bd_in(self.root, "create", "epic: e", "-t", "story", "--json"))["id"]
+        r = run_tg("plan-add", epic, "child-story", "--spec", "/tmp/s.md", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        sid = r.stdout.strip()
+        shown = json.loads(run_tg("show", sid, root=self.root).stdout)
+        self.assertEqual(shown["type"], "story")
+        self.assertEqual(shown["parent"], epic)
+
+    def test_plan_add_blocked_by_gates_build_task(self):
+        epic = json.loads(bd_in(self.root, "create", "epic: e", "-t", "story", "--json"))["id"]
+        gate = json.loads(bd_in(self.root, "create", "review-plan: e", "-t", "task",
+                                "-l", "for:human,step:review-plan",
+                                "--parent", epic, "--json"))["id"]
+        r = run_tg("plan-add", epic, "child-a", "--spec", "/tmp/a.md",
+                   "--blocked-by", gate, root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        sid = r.stdout.strip()
+        children = json.loads(bd_in(self.root, "children", sid, "--json"))
+        task = children[0]
+        self.assertGreater(task.get("dependency_count", 0), 0)
+
+    def test_plan_add_no_build_step_fails(self):
+        root = new_store()
+        epic = json.loads(bd_in(root, "create", "epic: e", "-t", "story", "--json"))["id"]
+        r = run_tg("plan-add", epic, "title", "--spec", "/tmp/s.md", root=root)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("build", r.stderr)
+
+    def test_plan_add_multiple_blocked_by(self):
+        epic = json.loads(bd_in(self.root, "create", "epic: e", "-t", "story", "--json"))["id"]
+        gate = json.loads(bd_in(self.root, "create", "gate", "-t", "task",
+                                "-l", "for:human", "--json"))["id"]
+        sib = json.loads(bd_in(self.root, "create", "sibling", "-t", "task",
+                               "-l", "for:coder,step:build", "--json"))["id"]
+        r = run_tg("plan-add", epic, "child-b", "--spec", "/tmp/b.md",
+                   "--blocked-by", gate, "--blocked-by", sib, root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        sid = r.stdout.strip()
+        children = json.loads(bd_in(self.root, "children", sid, "--json"))
+        self.assertGreater(children[0].get("dependency_count", 0), 0)
+
+
+class TestDoneTerminal(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_steps(self.root)
+        write_planner_step(self.root)
+
+    def _make_plan_story_and_task(self):
+        epic = json.loads(bd_in(self.root, "create", "epic: x", "-t", "story", "--json"))["id"]
+        bd_in(self.root, "update", epic, "--metadata",
+              json.dumps({"artifacts": [{"type": "plan-doc", "value": "/tmp/plan.md"}]}))
+        tid = json.loads(bd_in(
+            self.root, "create", "plan: x", "-t", "task",
+            "-l", "for:planner,step:plan", "--parent", epic, "--json"))["id"]
+        return epic, tid
+
+    def test_done_on_terminal_step_closes_without_error(self):
+        _epic, tid = self._make_plan_story_and_task()
+        bd_in(self.root, "update", tid, "--status", "in_progress")
+        r = run_tg("done", tid, "done", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        shown = json.loads(bd_in(self.root, "show", tid, "--json"))[0]
+        self.assertEqual(shown["status"], "closed")
+
+    def test_done_on_terminal_step_creates_no_next_task(self):
+        epic, tid = self._make_plan_story_and_task()
+        bd_in(self.root, "update", tid, "--status", "in_progress")
+        run_tg("done", tid, "done", root=self.root)
+        children = json.loads(bd_in(self.root, "children", epic, "--json"))
+        open_tasks = [c for c in children if c.get("status") != "closed"]
+        self.assertEqual(len(open_tasks), 0)
+
+    def test_done_non_terminal_step_still_requires_route(self):
+        bid = json.loads(bd_in(self.root, "create", "build: y", "-t", "task",
+                               "-l", "for:coder,step:build", "--json"))["id"]
+        bd_in(self.root, "update", bid, "--status", "in_progress")
+        r = run_tg("done", bid, "no-such-outcome", root=self.root)
+        self.assertEqual(r.returncode, 1)
+
+
+class TestMinePlanDoc(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_steps(self.root)
+        adir = Path(self.root) / "steps"
+        (adir / "review-plan.md").write_text(
+            "---\nstep: review-plan\nroutes:\n  changes: develop\n---\nstub\n")
+
+    def test_mine_shows_plan_doc_for_gate_task(self):
+        epic = json.loads(bd_in(self.root, "create", "epic: z", "-t", "story", "--json"))["id"]
+        bd_in(self.root, "update", epic, "--metadata",
+              json.dumps({"artifacts": [{"type": "plan-doc", "value": "/tmp/plan-epic.md"}]}))
+        bd_in(self.root, "create", "review-plan: z", "-t", "task",
+              "-l", "for:human,step:review-plan", "--parent", epic, "--json")
+        out = run_tg("mine", root=self.root).stdout
+        self.assertIn("[action]", out)
+        self.assertIn("plan: /tmp/plan-epic.md", out)
+
+    def test_mine_no_plan_doc_shows_nothing_extra(self):
+        bd_in(self.root, "create", "look at this", "-t", "task", "-l", "for:human", "--json")
+        out = run_tg("mine", root=self.root).stdout
+        self.assertIn("[todo]", out)
+        self.assertNotIn("plan:", out)
+
+
 if __name__ == "__main__":
     unittest.main()
