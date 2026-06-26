@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 logs/
 specs/*.md
+.worktrees/
 
 # Beads / Dolt files (added by bd init)
 .dolt/

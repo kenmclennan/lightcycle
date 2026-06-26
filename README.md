@@ -65,6 +65,12 @@ any directory.
   (`coder`/`reviewer`/`pr-watcher`); the worker's first act is `tg claim <role>`
   (atomic), then it works and exits. A worker that dies before claiming leaves
   nothing stuck.
+- **`tg` owns worktree isolation.** On claim, `tg` creates (or reuses) a per-story
+  git worktree on branch `grid/<story>` from `origin/main`, under a gitignored
+  `.worktrees/<story>`, and hands the worker its path as the claim JSON's
+  `workspace` field (it also auto-links the `branch` artifact). Workers do all git
+  work there and never touch the primary tree - a worker can't switch the grid
+  root's branch out from under the running loop.
 - **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow step),
   `project:`/`goal:`. `for:human` tasks never auto-run; they surface to you.
 

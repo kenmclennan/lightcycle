@@ -53,15 +53,21 @@ the fix landed manually (commit d3b46b5).
       worker boots per role until it claims (or dies), then the next can spawn.
       Caveat (follow-up): a worker that hangs forever in boot (alive, never claims)
       blocks that role indefinitely; a max-boot-age cooldown would bound it.
-- [ ] **Workers branch in-place instead of in an isolated worktree.** The coder ran
-      `git checkout -b` in its cwd (the repo root) rather than `git worktree add`,
-      switching the main working tree to the feature branch with uncommitted edits.
-      The coder prompt says "worktree" but it is guidance, not enforced. Have `tg`
-      create the worktree and hand the worker its path (spawn cwd = worktree), so a
-      worker can never mutate the primary tree. Especially hazardous when dogfooding:
-      target repo == engine repo == the running loop's source, so a worker edits the
-      live engine. Consider running the engine from a separate checkout than the
-      target repo.
+- [x] **Workers branch in-place instead of in an isolated worktree (FIXED).** The coder
+      ran `git checkout -b` in its cwd (the repo root) rather than `git worktree add`,
+      switching the main working tree to the feature branch with uncommitted edits. The
+      prompt said "worktree" but it was unenforced guidance. Fixed: `tg` now owns
+      worktree creation. `tg claim` calls `ensure_worktree(story)` - fresh story ->
+      `git worktree add .worktrees/STORY -b grid/STORY origin/main`; rework (worktree or
+      branch already exists) -> reuse it (idempotent) - and returns the path as a
+      `workspace` field in the claim JSON. It also auto-links the `branch` artifact, so
+      the coder no longer links it by hand. `.worktrees/` is gitignored. The agent
+      prompts now `cd` into `.workspace` and forbid any `git checkout`/`branch`/`worktree`
+      in the grid root, so a worker can never mutate the primary tree. Falls back (no
+      `workspace`, no mutation) when there is no `origin/main`.
+      Follow-ups: tg does not yet remove a worktree on story completion (finalize/cleanup
+      step); and running the engine from a separate checkout than the target repo (a true
+      separate TARGET_REPO) is still worth doing for dogfood safety.
 
 ## Still open (next design priorities)
 

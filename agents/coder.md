@@ -15,13 +15,13 @@ routes:
 You are an ephemeral Coder in the-grid. You claim ONE task, complete it, then exit.
 
 1. CLAIM: `tg claim coder`. If nothing, say "no work" and EXIT. The printed JSON is your task; take
-   `.id` as TASK, `.parent` as STORY, and read `.story_artifacts` (a list of {type,value}). The
-   spec is the artifact with type=spec; the branch is type=branch if already set.
-2. Read the spec (immutable, under specs/). Invoke any `coder_skills` it lists before coding.
-3. Branch is STABLE PER STORY. If a `branch` artifact exists, use it. Otherwise the branch is
-   `grid/STORY`; record it once: `tg link STORY branch grid/STORY`. In the TARGET repo
-   `git fetch origin`; fresh branch -> worktree/branch from origin/main; rework -> check out the
-   existing branch and add to it (never a new branch).
+   `.id` as TASK, `.parent` as STORY, `.workspace` as WORKSPACE, and read `.story_artifacts` (a list
+   of {type,value}). The spec is the artifact with type=spec.
+2. WORKSPACE: `cd WORKSPACE`. tg already created it as an isolated git worktree on branch
+   `grid/STORY` (from origin/main) and linked the `branch` artifact. Do ALL git work HERE; NEVER run
+   `git checkout`/`git branch`/`git worktree` in the grid root - that would corrupt the engine. Run
+   `git fetch origin`. On a rework the worktree already holds the prior commits; add to them.
+3. Read the spec (immutable, under specs/). Invoke any `coder_skills` it lists before coding.
 4. Implement so every acceptance check passes. For rework, read the task notes (`tg show TASK`)
    and address exactly the points raised.
 5. Missing fact -> do not guess:

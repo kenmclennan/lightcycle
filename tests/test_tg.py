@@ -26,6 +26,33 @@ def bd_in(root, *a):
     return subprocess.run(["bd", "-C", root, *a], capture_output=True, text=True, check=True).stdout
 
 
+def git_in(root, *a):
+    return subprocess.run(["git", "-C", root, *a], capture_output=True, text=True, check=True)
+
+
+def new_store_with_origin():
+    """A grid store that is a git repo with an `origin` whose `main` branch exists,
+    so `git worktree add ... origin/main` resolves."""
+    remote = tempfile.mkdtemp()
+    subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
+    d = tempfile.mkdtemp()
+    subprocess.run(["git", "init", "-q", d], check=True)
+    git_in(d, "config", "user.email", "t@t")
+    git_in(d, "config", "user.name", "t")
+    git_in(d, "checkout", "-q", "-b", "main")
+    (Path(d) / "README").write_text("x")
+    git_in(d, "add", ".")
+    git_in(d, "commit", "-q", "-m", "init")
+    git_in(d, "remote", "add", "origin", remote)
+    git_in(d, "push", "-q", "origin", "main")
+    git_in(d, "fetch", "-q", "origin")
+    subprocess.run(
+        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
+        cwd=d, check=True,
+    )
+    return d
+
+
 _AGENT_SPECS = {
     "coder": ("sonnet", "build", {"done": "review"}),
     "reviewer": ("opus", "review", {"done": "open-pr", "rejected": "build"}),
@@ -728,6 +755,90 @@ class TestContractsOptional(unittest.TestCase):
                              "-l", "for:coder,step:build", "--json"))["id"]
         r = run_tg("done", b, "done", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+
+class TestWorktree(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store_with_origin()
+        write_agents(self.root)
+
+    def _branch_of(self, path):
+        return git_in(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+
+    def _tg(self):
+        import importlib.util
+        from importlib.machinery import SourceFileLoader
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        loader = SourceFileLoader("tgmod_wt", TG)
+        spec = importlib.util.spec_from_loader("tgmod_wt", loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        return mod
+
+    def test_claim_returns_isolated_workspace(self):
+        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
+        t = json.loads(run_tg("claim", "coder", root=self.root).stdout)
+        ws = t["workspace"]
+        self.assertTrue(os.path.isdir(ws))
+        self.assertEqual(os.path.basename(ws), sid)
+        self.assertEqual(os.path.dirname(ws), os.path.join(self.root, ".worktrees"))
+        self.assertEqual(self._branch_of(ws), "grid/%s" % sid)
+
+    def test_claim_does_not_switch_root_branch(self):
+        run_tg("file", "specs/W.md", "--step", "build", root=self.root)
+        before = self._branch_of(self.root)
+        run_tg("claim", "coder", root=self.root)
+        self.assertEqual(self._branch_of(self.root), before)
+        self.assertEqual(self._branch_of(self.root), "main")
+
+    def test_worktree_reused_across_roles(self):
+        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
+        ws1 = json.loads(run_tg("claim", "coder", root=self.root).stdout)["workspace"]
+        build = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
+        run_tg("done", build, "done", root=self.root)
+        ws2 = json.loads(run_tg("claim", "reviewer", root=self.root).stdout)["workspace"]
+        self.assertEqual(ws1, ws2)
+
+    def test_branch_artifact_autolinked_on_claim(self):
+        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
+        run_tg("claim", "coder", root=self.root)
+        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0]["metadata"]["artifacts"]
+        branches = [a for a in arts if a["type"] == "branch"]
+        self.assertEqual(len(branches), 1)
+        self.assertEqual(branches[0]["value"], "grid/%s" % sid)
+
+    def test_worktrees_dir_gitignored(self):
+        run_tg("file", "specs/W.md", "--step", "build", root=self.root)
+        run_tg("claim", "coder", root=self.root)
+        gi = (Path(self.root) / ".gitignore").read_text().splitlines()
+        self.assertIn(".worktrees/", [l.strip() for l in gi])
+
+    def test_reclaim_reuses_existing_branch(self):
+        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
+        tg = self._tg()
+        ws = tg.ensure_worktree(sid)
+        (Path(ws) / "f.txt").write_text("x")
+        git_in(ws, "add", ".")
+        git_in(ws, "commit", "-q", "-m", "w")
+        git_in(self.root, "worktree", "remove", "--force", ws)
+        self.assertFalse(os.path.isdir(ws))
+        ws2 = tg.ensure_worktree(sid)
+        self.assertEqual(ws, ws2)
+        self.assertEqual(self._branch_of(ws2), "grid/%s" % sid)
+        self.assertTrue(os.path.isfile(os.path.join(ws2, "f.txt")))
+
+
+class TestWorktreeNoOrigin(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_agents(self.root)
+
+    def test_claim_omits_workspace_without_origin(self):
+        bd_in(self.root, "create", "build: t", "-t", "task",
+              "-l", "for:coder,step:build", "--json")
+        t = json.loads(run_tg("claim", "coder", root=self.root).stdout)
+        self.assertEqual(t["status"], "in-progress")
+        self.assertNotIn("workspace", t)
 
 
 if __name__ == "__main__":
