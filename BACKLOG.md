@@ -114,10 +114,6 @@ the fix landed manually (commit d3b46b5).
       `needs-human`, `cleanup`). Consolidates and supersedes the "notes-forward on
       rework", "PR-merge auto-close loop", and ad-hoc block/resume items. Implement on
       the hexagonal core; the design names the seams (store/git/pr/spawner ports).
-- [ ] **`tg file --repo <name>` should validate at file time.** A repo name that does
-      not exist under `projects_root` is accepted now and only fails silently at claim
-      (no workspace). Fail fast like `--step` does: check `projects_root()/<name>` is a
-      git repo and error with the list of available repos.
 - [ ] **Decouple the engine's data home for a deployed binary.** `agents/`, `.beads/`,
       and `logs/` still live at `grid_root` (where `bin/tg` resolves). Fine while
       dogfooding, but a deployed `tg` (not in the workspace) needs its data home set
