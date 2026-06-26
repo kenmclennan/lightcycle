@@ -4,7 +4,7 @@ A workflow-agnostic agent engine fronted by **`tg`**, a single Python CLI that o
 all work and its lifecycle. Work lives in **beads** (`bd`, hidden behind `tg`) as
 tasks chained by dependencies. A run-loop spawns headless `claude -p` workers that
 each claim one task, do it, and exit. tmux is optional - every part runs as a
-standalone command. You define how you work by editing the agents in `agents/`; the
+standalone command. You define how you work by editing the steps in `steps/`; the
 engine imposes no spec format or fixed pipeline.
 
 See `BACKLOG.md` for the roadmap and known gaps.
@@ -27,12 +27,12 @@ any directory.
 ## Model
 
 - **The engine is workflow-agnostic.** `tg` owns tasks, stories, and the flow, but
-  has no opinion on *how you work* - including your spec format. It only stores a
-  spec's path as an artifact; it never parses it. The agents in `agents/` are an
-  *example* workflow (a feature pipeline: coder -> reviewer -> open-pr -> watch-pr,
+  has no opinion on _how you work_ - including your spec format. It only stores a
+  spec's path as an artifact; it never parses it. The steps in `steps/` are an
+  _example_ workflow (a feature pipeline: coder -> reviewer -> open-pr -> watch-pr,
   then the human steps ready-merge -> cleanup). You define your own way of working
-  by editing and creating agents - their steps,
-  routes, and whatever a "spec" means to them. A spec is whatever your agents
+  by editing and creating steps - their routes,
+  and whatever a "spec" means to them. A spec is whatever your steps
   understand; hand the Driver one you wrote and it flows in as-is.
 - **Hierarchy: epic / story / task.** An **epic** is a goal; a **story** is a
   deliverable outcome (one spec -> one branch -> one PR) and **holds the
@@ -41,7 +41,7 @@ any directory.
 - **Artifacts live on the story** as a `{type, value, label?}` list (spec, branch,
   pr, ticket, doc, ...). Tasks read their parent story's artifacts - nothing is
   copied between tasks.
-- **Agents can declare an artifact contract** (optional) in frontmatter:
+- **Steps can declare an artifact contract** (optional) in frontmatter:
   `accepts:` (inputs) and `produces:` (outputs), keyed by artifact type
   (`<type>: required|optional`). A required input gates the work; an optional input
   is read if present but never gates (e.g. the coder accepts `branch: optional`,
@@ -55,24 +55,24 @@ any directory.
   git/GitHub reality. Agents with no contract are unconstrained.
 - **Everything is a task.** "build", "review", "open-pr" are tasks chained by
   dependencies; closing one makes its dependents ready. Which task is ready IS the
-  stage. The chain is defined by the agents themselves: each agent declares its
-  `step` and `routes:` (`outcome -> next-step`) in frontmatter, and `tg` assembles
-  the flow from them - the next role is derived from whichever agent owns the next
-  step (an unowned target is a `for:human` terminal). `tg flow` prints the
-  assembled graph.
+  stage. The chain is defined by the steps themselves: each step declares its
+  `step` name and `routes:` (`outcome -> next-step`) in frontmatter, and `tg`
+  assembles the flow from them - the next performer is derived from whichever step
+  file owns the next step (an unowned target is a `for:human` terminal). `tg flow`
+  prints the assembled graph.
 - **`tg` owns the domain and the processes.** It is the only caller of `bd`. It
   spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own task.** The loop spawns a role
   (`coder`/`reviewer`/`open-pr`/`watch-pr`); the worker's first act is `tg claim
-  <role>` (atomic), then it works and exits. A worker that dies before claiming
+<role>` (atomic), then it works and exits. A worker that dies before claiming
   leaves nothing stuck. Human steps (`ready-merge`/`cleanup`) are never spawned;
   they surface in `tg mine`.
 - **HOME config: where your work lives.** A single config file (`$GRID_CONFIG`, else
   `$XDG_CONFIG_HOME`/`~/.config`/`the-grid/config`) names two roots: `projects` (the
   dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (the
   base for relative spec paths; default `~/workspace/specs`). `tg init` seeds it;
-  `tg config [--edit]` shows or edits it. The engine's own data (tg, agents, store,
-  logs) stays at the grid root - the config is only about *your* work's location.
+  `tg config [--edit]` shows or edits it. The engine's own data (tg, steps, store,
+  logs) stays at the grid root - the config is only about _your_ work's location.
 - **One repo per story, by name.** A story targets exactly one repo, named by a
   `repo` artifact (`tg file <spec> --repo <name>`); the name resolves to
   `projects/<name>`. With no `--repo`, the story targets the engine itself
@@ -92,38 +92,45 @@ any directory.
 
 Initialise once with `tg init`, then run the parts in separate terminals.
 
-| Command                                    | What it does                                                    |
-| ------------------------------------------ | --------------------------------------------------------------- |
-| `tg init`                                  | one-time: create the grid store and seed the HOME config        |
-| `tg config [--edit]`                       | show (or `--edit`) the grid config: projects + specs roots      |
-| `tg run [--once]`                          | the loop: sweep, then start a worker for each role with work waiting |
-| `tg driver`                                | open the interactive driver `claude` (your seat)                |
-| `tg status`                                | all buckets: mine / active / queue / blocked                    |
-| `tg mine`                                  | tasks that need you (`for:human`)                               |
-| `tg active`                                | tasks being worked now                                          |
-| `tg queue [N]`                             | next N upcoming agent tasks                                     |
-| `tg ps [--json]`                           | running workers (role, bead, pid, alive)                        |
-| `tg logs <task\|role\|run> [-f]`           | tail a worker's or the loop's log                               |
-| `tg show <id>`                             | a story (artifacts + child tasks) or a task (+ story artifacts) |
-| `tg trace <story>`                         | story + its artifacts + child tasks + logs                      |
-| `tg flow [--json]`                         | print + check the assembled flow (steps, routes, contracts, composition) |
-| `tg file <spec> --step <step> [--repo/--epic/--project/--goal]` | create a story (spec + one repo) + first task at `<step>` |
-| `tg link <story> <type> <value> [--label]` | attach an artifact to a story                                   |
-| `tg add "<title>"`                         | create a standalone human task (no story/flow)                  |
-| `tg sweep`                                 | release orphaned claims (dead worker -> task reclaimable)       |
-| `tg claim <role>`                          | (agents) atomically claim the next task for a role              |
-| `tg done <id> <outcome>`                   | (agents) close with a flow outcome; advances the chain          |
-| `tg block <id> --needs ...`                | (agents) escalate with resume-state -> `for:human`              |
+| Command                                                         | What it does                                                                        |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `tg init`                                                       | one-time: create the grid store and seed the HOME config                            |
+| `tg config [--edit]`                                            | show (or `--edit`) the grid config: projects + specs roots                          |
+| `tg run [--once]`                                               | the agent pool: sweep, then fill up to GRID_MAX_AGENTS workers from the ready queue |
+| `tg driver`                                                     | open the interactive driver `claude` (your seat)                                    |
+| `tg status`                                                     | all buckets: mine / active / queue / blocked                                        |
+| `tg mine`                                                       | tasks that need you (`for:human`)                                                   |
+| `tg active`                                                     | tasks being worked now                                                              |
+| `tg queue [N]`                                                  | next N upcoming agent tasks                                                         |
+| `tg ps [--json]`                                                | running workers (role, bead, pid, alive)                                            |
+| `tg logs <task\|role\|run> [-f]`                                | tail a worker's or the loop's log                                                   |
+| `tg show <id>`                                                  | a story (artifacts + child tasks) or a task (+ story artifacts)                     |
+| `tg trace <story>`                                              | story + its artifacts + child tasks + logs                                          |
+| `tg flow [--json]`                                              | print + check the assembled flow (steps, routes, contracts, composition)            |
+| `tg file <spec> --step <step> [--repo/--epic/--project/--goal]` | create a story (spec + one repo) + first task at `<step>`                           |
+| `tg link <story> <type> <value> [--label]`                      | attach an artifact to a story                                                       |
+| `tg add "<title>"`                                              | create a standalone human task (no story/flow)                                      |
+| `tg sweep`                                                      | release orphaned claims (dead worker -> task reclaimable)                           |
+| `tg claim <role>`                                               | (agents) atomically claim the next task for a role                                  |
+| `tg done <id> <outcome>`                                        | (agents) close with a flow outcome; advances the chain                              |
+| `tg block <id> --needs ...`                                     | (agents) escalate with resume-state -> `for:human`                                  |
 
-## Models
+## Steps and performers
 
-Each role declares its own model in the `model:` frontmatter of its agent file
-(`agents/<role>.md`): `opus` for the reviewer, `sonnet` for coder/open-pr/watch-pr.
-`tg` reads it per spawn and refuses to spawn a role whose file lacks a `model:`.
-Human steps (`ready-merge`/`cleanup`) declare a `step` but no `model` - they are
-never spawned. The Driver is the human's interactive seat, defined separately in
-`driver.md` (not under `agents/`, since it is not a flow participant); `tg driver`
-launches it.
+Every file in `steps/` defines one workflow step, and its `model:` frontmatter
+selects who _performs_ it:
+
+- **`model:` present** - an **ephemeral agent**. `tg` spawns a fresh `claude -p`
+  (the file body is its system prompt), it does the step and exits. The example
+  pipeline uses `opus` for the reviewer, `sonnet` for coder/open-pr/watch-pr.
+- **no `model:`** - **you + the Driver**. The step surfaces in `tg mine`; the file
+  body is a Driver skill for helping you do it (`review-plan`, `ready-merge`,
+  `cleanup`). These are never spawned.
+
+The Driver is the human's interactive seat and the performer of the human steps -
+it composes its instructions from `driver.md` plus those step skills. It is defined
+separately in `driver.md` (not under `steps/`, since it is not a single step);
+`tg driver` launches it.
 
 ## Telemetry / logs
 

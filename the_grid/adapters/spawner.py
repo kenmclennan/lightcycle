@@ -6,13 +6,13 @@ import sys
 import time
 import uuid
 
-from the_grid.adapters.fsio import grid_root, parse_agent
+from the_grid.adapters.fsio import grid_root, parse_step
 from the_grid.adapters.workers import workers_state, write_workers
 
 
 def spawn_worker(role):
     root = grid_root()
-    agent = parse_agent(role)
+    agent = parse_step(role)
     if agent is None:
         sys.stderr.write("no agent definition for role %s\n" % role)
         return None

@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.core.agents import parse_frontmatter, split_frontmatter
+from the_grid.core.steps import parse_frontmatter, split_frontmatter
 
 
 class TestParseFrontmatter(unittest.TestCase):
