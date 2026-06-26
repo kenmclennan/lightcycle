@@ -960,6 +960,15 @@ class TestNamedRepo(unittest.TestCase):
         repos = [a["value"] for a in arts if a["type"] == "repo"]
         self.assertEqual(repos, ["app"])
 
+    def test_file_rejects_unknown_repo(self):
+        before = json.loads(bd_in(self.engine, "list", "--json"))
+        r = run_tg("file", "specs/X.md", "--step", "build", "--repo", "does-not-exist",
+                   root=self.engine)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("does-not-exist", r.stderr)
+        after = json.loads(bd_in(self.engine, "list", "--json"))
+        self.assertEqual(len(before), len(after))
+
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
