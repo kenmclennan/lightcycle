@@ -1,9 +1,9 @@
 # the-grid backlog
 
-Future work, roughly in priority order. The engine is now beads-backed: a
-persistent Driver + a non-AI supervisor that spawns ephemeral single-task agents
-(coder/reviewer/pr-watcher), all work tracked as chained beads. See
-`docs/superpowers/specs/` for the designs.
+The live backlog now lives in **bd** - run `tg backlog` for the open items and
+`tg inbox` for what needs you (capture new ideas with `tg add`). Specs live in the
+`specs` root (`GRID-NNN-*.md`). This file is now the **resolved-history archive**:
+a record of what each major reframe settled, kept for context.
 
 ## Resolved by the beads + supervisor engine
 
@@ -65,71 +65,6 @@ the fix landed manually (commit d3b46b5).
       prompts now `cd` into `.workspace` and forbid any `git checkout`/`branch`/`worktree`
       in the grid root, so a worker can never mutate the primary tree. Falls back (no
       `workspace`, no mutation) when there is no `origin/main`.
-      Follow-ups: tg does not yet remove a worktree on story completion (finalize/cleanup
-      step); and running the engine from a separate checkout than the target repo (a true
-      separate TARGET_REPO) is still worth doing for dogfood safety.
-
-## Still open (next design priorities)
-
-- [ ] **Parallel agents up to MAX_AGENTS.** The model is N workers running ready jobs
-      in parallel, not one-per-role serialised. The atomic claim already makes this
-      safe (stress-tested: many concurrent claimers -> one winner each). Needs: the
-      loop spawns up to MAX_AGENTS across all ready tasks (count live workers, not the
-      per-role in-flight skip); logs keyed by task/spawnid not role (`tg logs <task>`,
-      a way to multiplex/pick - `tg logs coder` assumes a single coder, which is wrong);
-      and bd in SERVER mode (`bd daemon`/dolt sql-server) - embedded Dolt is
-      single-writer, so concurrent worker writes need it. (See the bd server-mode item
-      under Deferred - it is now a hard prerequisite, not optional.)
-- [ ] **Handle subscription usage limits gracefully.** Today a worker that hits the
-      Claude usage limit exits WITHOUT `tg done`; sweep reclaims the task and respawns
-      it -> it hits the limit again -> respawn loop, no detection, no reason surfaced.
-      All workers share ONE subscription quota, so one hit blocks everyone. Detect the
-      signal in the worker's stream-json log (`You've hit your ... limit . resets
-    <time>`; exit code is ~1 but undocumented - detect on the message, not the code),
-      then PAUSE THE WHOLE LOOP (not just one task), surface "blocked: usage limit,
-      resets <time>" to `tg mine`, and schedule a resume at reset. Resume is feasible -
-      workers already get a unique `--session-id`, and `claude --resume <id> -p` replays
-      context (only succeeds after reset). No built-in retry for quota limits.
-- [ ] **Flow v2 (design: spec `GRID-002-flow-v2` in specs/).** Make "work off the tip
-      of main" an invariant (fetch at branch, rebase-onto-tip at a new `open-pr` step,
-      conflict -> block); split open-pr into `open-pr` (rebase + create PR) and
-      `watch-pr` (CI/comments/remediate); and close the agent -> human -> agent loop by
-      making `tg done` actor-agnostic with HUMAN-owned routable steps (`ready-merge`,
-      `needs-human`, `cleanup`). Two return-edge kinds: rework -> build; block-resolution
-      -> the recorded origin step. HARD CONSTRAINT: the whole workflow stays editable
-      from agent markdown alone - `tg` provides primitives only, NO code-level builtins;
-      the driver (CLU) fills human steps and supplies trigger signals by hand for now.
-      Consolidates the "notes-forward on rework" and ad-hoc block/resume items.
-- [ ] **Decouple the engine's data home for a deployed binary.** `steps/`, `.beads/`,
-      and `logs/` still live at `grid_root` (where `bin/tg` resolves). Fine while
-      dogfooding, but a deployed `tg` (not in the workspace) needs its data home set
-      independently - a config key or `~/.local/share/the-grid` - distinct from the
-      `projects`/`specs` roots (which are now HOME-configured).
-- [ ] **Hide bd's id namespace from external ids.** Every bead id carries bd's
-      per-store prefix (`the-grid-idz`, `the-grid-idz.1`); it is constant noise the
-      `tg` surface should not expose - same "hide bd internals" line as bead->task.
-      Doable: the prefix is discoverable (`bd config get issue_prefix` -> `the-grid`),
-      so never hardcode it. Translate at the CLI boundary only - keep bd's canonical
-      ids in the data layer, workers.json, and all bd calls; strip the prefix on
-      every output (incl. the id/parent/deps fields inside `--json`), add it back on
-      every id arg. Be lenient internalising (if an arg already has the prefix, use
-      as-is - idempotent) and strict externalising. Keep the `.N` child suffix.
-      Encapsulate the rule in one small value object/helper so there is a single
-      place that knows the prefix; agents will round-trip the short ids, so the
-      boundary must be airtight (a missed spot = "bead not found"). Needs thorough
-      tests across every command that prints or accepts an id.
-- [ ] **Visibility TUI.** `tg status`/`ps`/`logs` give the data; a live TUI that
-      renders them (and tails a chosen worker) is the next ergonomic step. The
-      `tg` layer was built precisely so the TUI is a thin renderer over it.
-- [ ] **Notes-forward on rework (rejection detail).** Branch/PR now persist on the
-      story, but the reviewer's rejection DETAIL (what to change) still only reaches
-      the next coder via the bead title/notes, not as structured data. Watch whether
-      the rework coder reliably gets it; consider `tg done --note` or a rejection
-      artifact on the task.
-- [ ] **pr-watcher / reviewer must read CI accurately.** Live, the pr-watcher
-      misdiagnosed a CI failure (blamed Docker/network; it was a unit-test failure).
-      Prompts now say "fetch the actual failing job/logs before concluding" - this
-      is guidance, not enforced; verify it holds in a live run.
 
 ## Resolved by the stories & artifacts reframe
 
@@ -154,54 +89,3 @@ the fix landed manually (commit d3b46b5).
       model makes it structural.)
 - [x] **`open-pr -> build` rework path.** Added `open-pr ci-failed build coder`;
       pr-watcher emits `tg done <id> ci-failed` to rework on the same branch/PR.
-
-## Deferred (unchanged by tg)
-
-- [ ] **External triggers (design first).** A coherent concept for anything that
-      _automatically_ emits a signal or runs work OUTSIDE the agent markdown: merge
-      auto-detection (poll `gh`/webhook), filesystem watchers, cron/schedules, git/PR
-      hooks. Until designed, we resist codifying any such automation - the driver (CLU)
-      supplies these signals by hand (and flow v2 keeps the workflow purely in agent
-      files). The old "PR-merge auto-close loop" (detect merge -> cleanup -> close) is
-      the first instance: it becomes an external trigger that emits `merged`, which the
-      flow-v2 routing already handles. Think hooks vs cron vs watchers before building any.
-- [ ] **bd embedded single-writer contention.** Embedded Dolt is single-writer; the
-      run-loop spawns one role per tick (serialising enough for now). For real
-      parallel workers, move beads to server mode (`bd daemon` / dolt sql-server).
-- [ ] **Validate per-role model split with data.** opus driver+reviewer, sonnet
-      coder+watcher. Use beads history (rework = build tasks per spec) to confirm the
-      sonnet roles do not produce more rework.
-- [ ] **Multiple branches/PRs per task.** Current model assumes one branch per task.
-
-## Deferred subsystems (the bigger vision)
-
-These were scoped out of the MVP deliberately. Each likely becomes its own spec.
-
-- [ ] **WHAT/WHY refinement ("Quorra").** Interactive break-down of an
-      untrustworthy PRD/ticket into provenance-tracked units the human can
-      question, correct, and lock. This addresses the #1 pain (hallucination into
-      durable artifacts) and feeds locked specs into the pipeline.
-- [ ] **Provenance ledger / settled-facts store.** A durable record of claims with
-      status (proposed -> under-review -> locked -> superseded) and source. The
-      spec's Provenance table is the seed of this. (Reference: Open Knowledge
-      Format.)
-- [ ] **Inbox / capture ("remember this later").** First-class deferred items
-      (todo/question/flag) that any actor - human or agent - can emit to a
-      persistent queue, surfaced when relevant. Three entry paths: pull, refinement
-      escalation, capture.
-- [ ] **Planner.** Organises what needs the human's attention in priority order so
-      the human is never the bottleneck.
-- [ ] **Smart inbox triage.** An agent triggered when something lands in the human's
-      real inbox (email/Slack) that triages "what do I need to do" across everything
-      there, with helpful links and summaries. The Gmail/Slack/Calendar MCP tools make
-      it concretely buildable. Sits at the intersection of Inbox/capture (the queue)
-      and Planner (the prioritised surface), but event-driven off the actual inbox.
-- [ ] **Measurement ("Recognizer").** Read `logs/supervisor.jsonl` + beads history +
-      per-task transcripts to report rework count, cycle time, throughput, and where
-      things go wrong - the same analysis used to design this system.
-
-## Quality / known gaps
-
-- [ ] **Reviewer vs Copilot gap.** The IL review skill historically misses things
-      Copilot catches. Track `copilot_caught_missed` in done records and use it to
-      strengthen the Reviewer prompt.
