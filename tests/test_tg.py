@@ -299,6 +299,9 @@ class TestDoneBlock(unittest.TestCase):
         notes = bead.get("notes", "")
         self.assertIn("from build (done):", notes)
         self.assertIn("fix the coverage", notes)
+        # the reader the next agent actually uses must surface the note, not just bd
+        shown = json.loads(run_tg("show", new, root=self.root).stdout)
+        self.assertIn("fix the coverage", shown.get("notes") or "")
 
     def test_done_without_note_unchanged(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
