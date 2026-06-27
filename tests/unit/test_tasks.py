@@ -49,6 +49,13 @@ class TestStatusMapping(unittest.TestCase):
         t = task_from_bead(bead(metadata={"artifacts": [{"type": "spec", "value": "s.md"}]}))
         self.assertEqual(t["artifacts"][0]["value"], "s.md")
 
+    def test_notes_surfaced(self):
+        t = task_from_bead(bead(notes="from review (rejected): fix #6"))
+        self.assertEqual(t["notes"], "from review (rejected): fix #6")
+
+    def test_notes_absent_is_none(self):
+        self.assertIsNone(task_from_bead(bead())["notes"])
+
 
 class TestBucketAndFilter(unittest.TestCase):
     def _tasks(self):
