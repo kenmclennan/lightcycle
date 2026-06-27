@@ -68,6 +68,17 @@ driver) touches the human-facing stages - shaping ideas, deciding scope, gating 
 the pool runs the autonomous middle (build, review, open-pr, watch-pr). The human's scarce time is
 spent at the _edges_ (define and gate), never the mechanical middle.
 
+### Dependencies are story-level, not step-level
+
+When one piece of work needs another, the dependency is between **stories**, and it clears when the
+predecessor story **closes** - not when any step inside it finishes. A story is the unit of
+completion; how it closes (built, reviewed, merged, abandoned) is opaque to the graph. This keeps the
+planner workflow-agnostic - it wires story to story and never names build, review, or merge - and it
+means "merge" is not a first-class event the system must define: merging is just one way a story
+closes. _Discovered when the planner's first run blocked dependents on predecessor build tasks, which
+close at build-done; a dependent would have started before the predecessor merged, building from a
+main that did not yet contain its work._
+
 ### Epics are coherent outcomes; refinement consolidates
 
 An **epic** is a coherent _outcome_, not a promoted todo and not a matter of size: some epics are one

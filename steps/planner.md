@@ -59,9 +59,31 @@ c. For each child: `tg file specs/<slug>.md --step build --epic EPIC \
 Use this simpler order unless the brief has more than ~10 children (risk: if
 you die after the gate but before filing children, the gate is orphaned).
 
+## Cross-story dependencies (block at the STORY level)
+
+When the brief says child B depends on child A (B needs A's work), block B on
+A's **story**, never on A's build task or any internal step:
+
+    bd -C <grid_root> dep add <B_first_task> --blocked-by <A_STORY_id>
+
+The blocker is A's STORY id (the `tg file` output), not the task under it.
+
+Why the story, not the task: a story is the unit of completion, and it is "done"
+only when it **closes** - however it closes (built, reviewed, merged, or
+abandoned). Its build task closes when the _build step_ finishes, long before the
+work is merged into main; a dependent blocked on that task would start while A is
+still in review and build from a main that does not yet contain A's work. Blocking
+on the story releases B only when A is truly resolved.
+
+This is also why you never need to know the workflow: you depend on stories
+closing, not on "review" or "merge" or any step. There is no merge event to
+model - "merged" is just one way a story closes. Keep the dependency graph at the
+story level and the lifecycle stays the step definitions' business, not yours.
+
 ## Constraints
 
 - The brief is the shape; you mechanize it, not invent it.
+- Cross-story deps block on the predecessor STORY, never its task or a step (above).
 - List every assumption where the brief was silent (in the plan doc). A long
   assumptions list tells the reviewer the brief was thin.
 - Keep child specs short - one contract per child, no narrative.
