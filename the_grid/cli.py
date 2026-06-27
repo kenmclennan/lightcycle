@@ -22,9 +22,19 @@ from the_grid.adapters import gitio
 from the_grid.adapters.fsio import (step_roles, config_path, ensure_config, grid_root,
                                 load_config, parse_step, read_md, store_ready, worktrees_dir)
 from the_grid.adapters.spawner import spawn_worker
-from the_grid.adapters.store import (add_artifact, all_tasks, bd, bd_json, closed_stories,
-                                 ensure_beads, get_task, present_types, route_to_human,
-                                 story_artifacts, task_view)
+from the_grid.adapters.store import BdStore
+
+_store = BdStore()
+
+
+def add_artifact(story_id, atype, value, label=None):
+    return _store.add_artifact(story_id, atype, value, label)
+
+
+def story_artifacts(story_id):
+    return _store.story_artifacts(story_id)
+
+
 from the_grid.adapters.workers import (pid_alive, prune_workers, stamp_bead, workers_state)
 
 # ---- config / roots ---------------------------------------------------------
@@ -76,40 +86,40 @@ def meta_for_step(step):
 
 
 def ready_roles():
-    return cflow.ready_roles_from_beads(bd_json("ready", "--json"))
+    return cflow.ready_roles_from_beads(_store.ready_beads())
 
 
 # ---- claim / advance (pure decision + bd effect) ----------------------------
 
 
 def claim_next(role):
-    arr = bd_json("ready", "--label", "for:%s" % role, "--claim", "--json")
+    arr = _store.claim_ready(role)
     if not arr:
         return None
     t = task_from_bead(arr[0])
-    missing = required_inputs(meta_for_step(t["step"])) - present_types(t)
+    missing = required_inputs(meta_for_step(t["step"])) - _store.present_types(t)
     if missing:
-        route_to_human(t["id"],
-                       "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)),
-                       role)
+        _store.route_to_human(t["id"],
+                              "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)),
+                              role)
         return None
     return t
 
 
 def advance(tid, outcome):
-    t = get_task(tid)
+    t = _store.get_task(tid)
     nxt = flow_next(t["step"], outcome)
     if nxt is None:
         return None
     ns, no = nxt
-    return bd_json(*cflow.advance_create_args(t, ns, no))["id"]
+    return _store.create_task(**cflow.advance_create_kwargs(t, ns, no))
 
 
 # ---- worktrees (core decision + gitio effect) -------------------------------
 
 
 def story_repo(story):
-    return cworkspace.story_repo(story_artifacts(story), os.path.basename(grid_root()))
+    return cworkspace.story_repo(_store.story_artifacts(story), os.path.basename(grid_root()))
 
 
 def worktree_path(story):
@@ -132,16 +142,16 @@ def _ensure_worktrees_ignored(root):
 
 
 def _story_branch(story):
-    for a in story_artifacts(story):
+    for a in _store.story_artifacts(story):
         if a.get("type") == "branch":
             return a["value"]
     return None
 
 
 def _ensure_branch_artifact(story, branch):
-    if any(a.get("type") == "branch" for a in story_artifacts(story)):
+    if any(a.get("type") == "branch" for a in _store.story_artifacts(story)):
         return
-    add_artifact(story, "branch", branch)
+    _store.add_artifact(story, "branch", branch)
 
 
 def ensure_worktree(story):
@@ -155,7 +165,7 @@ def ensure_worktree(story):
     target = os.path.join(projects_root(), story_repo(story))
     if not gitio.is_git_repo(target):
         return None
-    branch = _story_branch(story) or cworkspace.branch_for(get_task(story)["title"], branch_prefix())
+    branch = _story_branch(story) or cworkspace.branch_for(_store.get_task(story)["title"], branch_prefix())
     path = worktree_path(story)
     if gitio.worktree_registered(target, path) and os.path.isdir(path):
         _ensure_branch_artifact(story, branch)
@@ -293,7 +303,7 @@ def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="tg show")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    print(json.dumps(task_view(a.id), indent=2))
+    print(json.dumps(_store.task_view(a.id), indent=2))
     return 0
 
 
@@ -307,7 +317,7 @@ def cmd_claim(argv):
     spawnid = os.environ.get("GRID_SPAWNID")
     if spawnid:
         stamp_bead(spawnid, t["id"])
-    view = task_view(t["id"])
+    view = _store.task_view(t["id"])
     story = t.get("parent") or t["id"]
     ws = ensure_worktree(story)
     if ws:
@@ -451,25 +461,25 @@ def cmd_done(argv):
     ap.add_argument("outcome")
     ap.add_argument("--note")
     a = ap.parse_args(argv)
-    t = get_task(a.id)
+    t = _store.get_task(a.id)
     if flow_next(t["step"], a.outcome) is None:
         sys.stderr.write(
             "no transition for step=%s outcome=%s; not closing. "
             "Fix the flow or use a defined outcome.\n" % (t["step"], a.outcome))
         return 1
-    missing = required_outputs(meta_for_step(t["step"])) - present_types(t)
+    missing = required_outputs(meta_for_step(t["step"])) - _store.present_types(t)
     if missing:
         sys.stderr.write(
             "cannot close %s: step '%s' must produce %s; none on the story. "
             "tg link the artifact first.\n" % (a.id, t["step"], ", ".join(sorted(missing))))
         return 1
     step = t["step"]
-    bd("note", a.id, "outcome: %s" % a.outcome)
-    bd("close", a.id, "--reason", a.outcome)
+    _store.note(a.id, "outcome: %s" % a.outcome)
+    _store.close(a.id, a.outcome)
     new = advance(a.id, a.outcome)
     if a.note:
         target = new if new else a.id
-        bd("note", target, cflow.forward_note(step, a.outcome, a.note))
+        _store.note(target, cflow.forward_note(step, a.outcome, a.note))
     if new:
         print(new)
     return 0
@@ -489,14 +499,14 @@ def cmd_block(argv):
         v = getattr(a, k, None)
         if v:
             resume[k] = v
-    bd("update", a.id, "--metadata", json.dumps(resume))
-    bd("note", a.id, "BLOCKED: %s" % a.needs)
-    role = get_task(a.id)["role"]
+    _store.update_metadata(a.id, resume)
+    _store.note(a.id, "BLOCKED: %s" % a.needs)
+    role = _store.get_task(a.id)["role"]
     if role and role != "human":
-        bd("label", "remove", a.id, "for:%s" % role)
-    bd("label", "add", a.id, "for:human")
-    bd("update", a.id, "--status", "open")
-    bd("assign", a.id, "")
+        _store.label_remove(a.id, "for:%s" % role)
+    _store.label_add(a.id, "for:human")
+    _store.update_status(a.id, "open")
+    _store.assign(a.id, "")
     print("blocked -> human")
     return 0
 
@@ -505,7 +515,7 @@ def cmd_unblock(argv):
     ap = argparse.ArgumentParser(prog="tg unblock")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    t = get_task(a.id)
+    t = _store.get_task(a.id)
     owner, _ = load_flow()
     role = owner.get(t["step"])
     if not role or role == "human":
@@ -514,10 +524,10 @@ def cmd_unblock(argv):
         return 1
     cur = t["role"]
     if cur and cur != role:
-        bd("label", "remove", a.id, "for:%s" % cur)
-    bd("label", "add", a.id, "for:%s" % role)
-    bd("update", a.id, "--status", "open")
-    bd("assign", a.id, "")
+        _store.label_remove(a.id, "for:%s" % cur)
+    _store.label_add(a.id, "for:%s" % role)
+    _store.update_status(a.id, "open")
+    _store.assign(a.id, "")
     print("unblocked -> %s" % role)
     return 0
 
@@ -529,12 +539,12 @@ def cmd_close(argv):
     a = ap.parse_args(argv)
     target = os.path.join(projects_root(), story_repo(a.story))
     path = worktree_path(a.story)
-    branch = _story_branch(a.story) or cworkspace.branch_for(get_task(a.story)["title"], branch_prefix())
-    for k in bd_json("children", a.story, "--json"):
+    branch = _story_branch(a.story) or cworkspace.branch_for(_store.get_task(a.story)["title"], branch_prefix())
+    for k in _store.children(a.story):
         kt = task_from_bead(k)
         if kt["status"] != "done":
-            bd("close", kt["id"], "--reason", a.reason)
-    bd("close", a.story, "--reason", a.reason)
+            _store.close(kt["id"], a.reason)
+    _store.close(a.story, a.reason)
     if gitio.is_git_repo(target):
         gitio.remove_worktree(target, path)
         gitio.delete_branch(target, branch)
@@ -549,7 +559,7 @@ def cmd_link(argv):
     ap.add_argument("value")
     ap.add_argument("--label")
     a = ap.parse_args(argv)
-    add_artifact(a.story, a.type, a.value, a.label)
+    _store.add_artifact(a.story, a.type, a.value, a.label)
     return 0
 
 
@@ -565,10 +575,10 @@ def cmd_trace(argv):
     ap.add_argument("story")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    story = get_task(a.story)
-    arts = story_artifacts(a.story)
+    story = _store.get_task(a.story)
+    arts = _store.story_artifacts(a.story)
     tasks = []
-    for k in bd_json("children", a.story, "--json"):
+    for k in _store.children(a.story):
         kt = task_from_bead(k)
         tasks.append({"id": kt["id"], "step": kt["step"], "status": kt["status"],
                       "log": _log_for_bead(kt["id"])})
@@ -592,12 +602,12 @@ def cmd_sweep(argv):
     # claim), so it never lags - a just-claimed task is protected immediately.
     live = {w.get("spawnid") for w in workers_state()
             if w.get("spawnid") and pid_alive(w.get("pid", -1))}
-    for bead in bd_json("list", "--status", "in_progress", "--json"):
+    for bead in _store.list_beads_by_status("in_progress"):
         if bead.get("assignee") in live:
             continue
         bid = bead["id"]
-        bd("update", bid, "--status", "open")
-        bd("assign", bid, "")
+        _store.update_status(bid, "open")
+        _store.assign(bid, "")
         print("swept %s" % bid)
     pruned = prune_workers()
     if pruned:
@@ -609,7 +619,7 @@ def cmd_sweep(argv):
 
 
 def _filter(status):
-    return ctasks.filter_by_status(all_tasks(), status)
+    return ctasks.filter_by_status(_store.all_tasks(), status)
 
 
 _MINE_ORDER = {"blocked": 0, "action": 1, "todo": 2}
@@ -707,19 +717,13 @@ def cmd_file(argv):
         labels.append("project:%s" % a.project)
     if a.goal:
         labels.append("goal:%s" % a.goal)
-    create = ["create", base, "-t", "story", "--json"]
-    if a.epic:
-        create += ["--parent", a.epic]
-    if labels:
-        create += ["-l", ",".join(labels)]
-    story = bd_json(*create)["id"]
-    add_artifact(story, "spec", a.spec)
+    story = _store.create_story(base, epic=a.epic, labels=labels or None)
+    _store.add_artifact(story, "spec", a.spec)
     if a.repo:
-        add_artifact(story, "repo", a.repo)
-    task = bd_json("create", "%s: %s" % (a.step, base), "-t", "task",
-                   "-l", "for:%s,step:%s" % (role, a.step), "--parent", story, "--json")["id"]
+        _store.add_artifact(story, "repo", a.repo)
+    task = _store.create_task("%s: %s" % (a.step, base), step=a.step, role=role, parent=story)
     for blocker in (a.blocked_by or []):
-        bd("dep", "add", task, "--blocked-by", blocker)
+        _store.dep_add(task, blocker)
     print(story)
     return 0
 
@@ -735,7 +739,7 @@ def cmd_add(argv):
         labels.append("goal:%s" % a.goal)
     if a.project:
         labels.append("project:%s" % a.project)
-    new = bd_json("create", a.title, "-t", "task", "-l", ",".join(labels), "--json")["id"]
+    new = _store.create_task(a.title, labels=labels)
     print(new)
     return 0
 
@@ -764,7 +768,7 @@ def _run_tick():
     for w in alive:
         if w.get("bead") is None and (now - w.get("started", 0)) < max_boot:
             inflight[w["role"]] = inflight.get(w["role"], 0) + 1
-    ready = cflow.ready_task_roles(bd_json("ready", "--json"))
+    ready = cflow.ready_task_roles(_store.ready_beads())
     for role in cflow.pool_plan(ready, inflight, slots):
         spawn_worker(role)
 
@@ -813,7 +817,7 @@ def cmd_driver(argv):
 def cmd_init(argv):
     argparse.ArgumentParser(prog="tg init").parse_args(argv)
     existed = store_ready()
-    ensure_beads()
+    _store.ensure_beads()
     os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
     print("grid store already initialised" if existed else "grid store initialised")
     created = ensure_config()
@@ -841,7 +845,7 @@ def cmd_status(argv):
     ap = argparse.ArgumentParser(prog="tg status")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    buckets = ctasks.bucket(all_tasks())
+    buckets = ctasks.bucket(_store.all_tasks())
     if a.json:
         print(json.dumps(buckets, indent=2))
     else:
@@ -858,7 +862,7 @@ def cmd_status(argv):
 
 def _spec_hash(task):
     story = task.get("parent") or task["id"]
-    arts = story_artifacts(story)
+    arts = _store.story_artifacts(story)
     spec = next((a["value"] for a in arts if a["type"] == "spec"), None)
     if not spec or not os.path.exists(spec):
         return "unknown"
@@ -867,10 +871,10 @@ def _spec_hash(task):
 
 
 def _story_signals(story_id):
-    children = bd_json("children", story_id, "--json")
+    children = _store.children(story_id)
     tasks = [task_from_bead(b) for b in children]
     task_histories = {
-        t["id"]: bd_json("history", t["id"], "--json")
+        t["id"]: _store.history(t["id"])
         for t in tasks if t.get("step") == "build"
     }
     return cretro.derive_signals(tasks, task_histories)
@@ -891,11 +895,11 @@ def cmd_reflect(argv):
                     help="content that added no signal (repeatable)")
     a = ap.parse_args(argv)
 
-    t = get_task(a.id)
+    t = _store.get_task(a.id)
     story = t.get("parent") or a.id
     reflection = creflect.build_reflection(
         a.id, a.used, a.skipped, a.guess, a.missing, a.noise, _spec_hash(t))
-    add_artifact(story, "reflection", json.dumps(reflection))
+    _store.add_artifact(story, "reflection", json.dumps(reflection))
     print("reflected")
     return 0
 
@@ -909,7 +913,7 @@ def cmd_worklog(argv):
     today = _dt.date.today()
     args = [x for x in (a.start, a.end) if x is not None]
     start, end = cworklog.resolve_period(args, today)
-    entries = cworklog.worklog(closed_stories(), start, end)
+    entries = cworklog.worklog(_store.closed_stories(), start, end)
     if not entries:
         print("no stories shipped in that period")
         return 0
@@ -924,13 +928,13 @@ def cmd_retro(argv):
     ap.add_argument("epic")
     a = ap.parse_args(argv)
 
-    children = bd_json("children", a.epic, "--json")
+    children = _store.children(a.epic)
     stories = [task_from_bead(b) for b in children if b.get("issue_type") == "story"]
 
     all_reflections = []
     story_rows = []
     for story in stories:
-        arts = story_artifacts(story["id"])
+        arts = _store.story_artifacts(story["id"])
         refs = [art for art in arts if art["type"] == "reflection"]
         parsed = []
         for r in refs:
