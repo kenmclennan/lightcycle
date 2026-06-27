@@ -231,7 +231,7 @@ COMMAND_GROUPS = [
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready task for a role"),
-        ("done", "<id> <outcome>", "close a task with a flow outcome and advance the chain"),
+        ("done", "<id> <outcome> [--note \"<text>\"]", "close a task with a flow outcome and advance the chain"),
         ("block", "<id> --needs ... [--branch/--pr/--reason/--tried]",
          "escalate to a human with resume-state"),
         ("unblock", "<id>", "flip a blocked task back to its agent role so it re-claims and retries"),
@@ -445,6 +445,7 @@ def cmd_done(argv):
     ap = argparse.ArgumentParser(prog="tg done")
     ap.add_argument("id")
     ap.add_argument("outcome")
+    ap.add_argument("--note")
     a = ap.parse_args(argv)
     t = get_task(a.id)
     if flow_next(t["step"], a.outcome) is None:
@@ -458,9 +459,13 @@ def cmd_done(argv):
             "cannot close %s: step '%s' must produce %s; none on the story. "
             "tg link the artifact first.\n" % (a.id, t["step"], ", ".join(sorted(missing))))
         return 1
+    step = t["step"]
     bd("note", a.id, "outcome: %s" % a.outcome)
     bd("close", a.id, "--reason", a.outcome)
     new = advance(a.id, a.outcome)
+    if a.note:
+        target = new if new else a.id
+        bd("note", target, cflow.forward_note(step, a.outcome, a.note))
     if new:
         print(new)
     return 0

@@ -288,6 +288,28 @@ class TestDoneBlock(unittest.TestCase):
         self.assertIn(bead.get("assignee"), (None, ""))
         self.assertIn(b, run_tg("mine", root=self.root).stdout)
 
+    def test_done_note_forwards_to_next_task(self):
+        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        r = run_tg("done", b, "done", "--note", "fix the coverage", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        new = r.stdout.strip()
+        self.assertTrue(new)
+        bead = json.loads(bd_in(self.root, "show", new, "--json"))[0]
+        notes = bead.get("notes", "")
+        self.assertIn("from build (done):", notes)
+        self.assertIn("fix the coverage", notes)
+
+    def test_done_without_note_unchanged(self):
+        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                             "-l", "for:coder,step:build", "--json"))["id"]
+        r = run_tg("done", b, "done", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        new = r.stdout.strip()
+        self.assertTrue(new)
+        bead = json.loads(bd_in(self.root, "show", new, "--json"))[0]
+        self.assertNotIn("from build", bead.get("notes", ""))
+
 
 class TestSweep(unittest.TestCase):
     def setUp(self):
