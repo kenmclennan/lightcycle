@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.core.flow import (advance_create_args, compose_driver, flow_next, forward_note,
+from the_grid.core.flow import (advance_create_kwargs, compose_driver, flow_next, forward_note,
                             load_flow, pool_plan, ready_roles_from_beads, ready_task_roles)
 
 METAS = {
@@ -71,21 +71,20 @@ class TestFlowNext(unittest.TestCase):
         self.assertIsNone(flow_next("build", "banana", self.owner, self.routes))
 
 
-class TestAdvanceCreateArgs(unittest.TestCase):
+class TestAdvanceCreateKwargs(unittest.TestCase):
     def test_strips_step_prefix_and_keeps_deps(self):
         task = {"id": "t-1", "title": "build: make the thing"}
-        args = advance_create_args(task, "review", "reviewer")
-        self.assertEqual(args[1], "review: make the thing")
-        self.assertIn("for:reviewer,step:review", args)
-        self.assertIn("--deps", args)
-        self.assertIn("t-1", args)
-        self.assertNotIn("--parent", args)
+        kwargs = advance_create_kwargs(task, "review", "reviewer")
+        self.assertEqual(kwargs["title"], "review: make the thing")
+        self.assertEqual(kwargs["step"], "review")
+        self.assertEqual(kwargs["role"], "reviewer")
+        self.assertIsNone(kwargs["parent"])
+        self.assertEqual(kwargs["deps"], ["t-1"])
 
     def test_includes_parent_when_present(self):
         task = {"id": "t-1", "title": "build: x", "parent": "s-9"}
-        args = advance_create_args(task, "review", "reviewer")
-        self.assertIn("--parent", args)
-        self.assertIn("s-9", args)
+        kwargs = advance_create_kwargs(task, "review", "reviewer")
+        self.assertEqual(kwargs["parent"], "s-9")
 
 
 class TestReadyRoles(unittest.TestCase):

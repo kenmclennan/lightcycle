@@ -48,14 +48,16 @@ def flow_next(step, outcome, owner, routes):
     return (next_step, owner.get(next_step, "human"))
 
 
-def advance_create_args(task, next_step, next_role):
-    """The bd `create` args for the next task in the chain. Pure string building."""
+def advance_create_kwargs(task, next_step, next_role):
+    """The create_task kwargs for the next task in the chain. Pure data building."""
     title = re.sub(r"^[a-z-]+:\s*", "", task["title"])
-    args = ["create", "%s: %s" % (next_step, title), "-t", "task",
-            "-l", "for:%s,step:%s" % (next_role, next_step), "--deps", task["id"], "--json"]
-    if task.get("parent"):
-        args += ["--parent", task["parent"]]
-    return args
+    return {
+        "title": "%s: %s" % (next_step, title),
+        "step": next_step,
+        "role": next_role,
+        "parent": task.get("parent"),
+        "deps": [task["id"]],
+    }
 
 
 def ready_task_roles(beads):
