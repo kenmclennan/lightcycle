@@ -75,6 +75,7 @@ class TestBuildReflection(unittest.TestCase):
         self.assertEqual(r["sections"], {})
         self.assertEqual(r["missing"], [])
         self.assertEqual(r["noise"], [])
+        self.assertEqual(r["friction"], [])
         self.assertEqual(r["spec_hash"], "unknown")
 
     def test_json_shape_stable(self):
@@ -83,7 +84,27 @@ class TestBuildReflection(unittest.TestCase):
         self.assertIn("sections", r)
         self.assertIn("missing", r)
         self.assertIn("noise", r)
+        self.assertIn("friction", r)
         self.assertIn("spec_hash", r)
+
+    def test_friction_single_entry(self):
+        r = build_reflection("task-1", friction=["pytest not found"])
+        self.assertEqual(r["friction"], ["pytest not found"])
+
+    def test_friction_multiple_entries(self):
+        r = build_reflection("task-1", friction=["pytest not found", "missing env var"])
+        self.assertEqual(r["friction"], ["pytest not found", "missing env var"])
+
+    def test_friction_independent_of_missing_and_noise(self):
+        r = build_reflection(
+            "task-1",
+            missing=["needed context"],
+            noise=["boilerplate"],
+            friction=["tool crashed"],
+        )
+        self.assertEqual(r["missing"], ["needed context"])
+        self.assertEqual(r["noise"], ["boilerplate"])
+        self.assertEqual(r["friction"], ["tool crashed"])
 
 
 if __name__ == "__main__":

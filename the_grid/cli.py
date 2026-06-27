@@ -891,12 +891,14 @@ def cmd_reflect(argv):
                     help="information you needed but had to infer (repeatable)")
     ap.add_argument("--noise", action="append", default=[],
                     help="content that added no signal (repeatable)")
+    ap.add_argument("--friction", action="append", default=[],
+                    help="tool or process friction encountered (repeatable)")
     a = ap.parse_args(argv)
 
     t = _store.get_task(a.id)
     story = t.get("parent") or a.id
     reflection = creflect.build_reflection(
-        a.id, a.used, a.skipped, a.guess, a.missing, a.noise, _spec_hash(t))
+        a.id, a.used, a.skipped, a.guess, a.missing, a.noise, a.friction, _spec_hash(t))
     _store.add_artifact(story, "reflection", json.dumps(reflection))
     print("reflected")
     return 0
@@ -952,6 +954,7 @@ def cmd_retro(argv):
         section_counts = agg["section_counts"]
         missing_counts = agg["missing_counts"]
         noise_counts = agg["noise_counts"]
+        friction_counts = agg["friction_counts"]
 
         if section_counts:
             print("\nSections:")
@@ -967,6 +970,11 @@ def cmd_retro(argv):
         if noise_counts:
             print("\nNoise (most frequent):")
             for text, count in noise_counts.most_common():
+                print("  x%d  %s" % (count, text))
+
+        if friction_counts:
+            print("\nFriction (most frequent):")
+            for text, count in friction_counts.most_common():
                 print("  x%d  %s" % (count, text))
     else:
         print("no reflections yet - coders call `tg reflect` before `tg done`")

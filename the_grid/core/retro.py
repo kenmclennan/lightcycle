@@ -53,8 +53,12 @@ def aggregate_reflections(reflections):
     noise_counts = collections.Counter(
         item for ref in reflections for item in (ref.get("noise") or [])
     )
+    friction_counts = collections.Counter(
+        item for ref in reflections for item in (ref.get("friction") or [])
+    )
     return {
         "section_counts": section_counts,
         "missing_counts": missing_counts,
         "noise_counts": noise_counts,
+        "friction_counts": friction_counts,
     }

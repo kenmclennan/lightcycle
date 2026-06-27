@@ -89,18 +89,54 @@ class TestAggregateReflections(unittest.TestCase):
         self.assertEqual(agg["section_counts"], {})
         self.assertEqual(len(agg["missing_counts"]), 0)
         self.assertEqual(len(agg["noise_counts"]), 0)
+        self.assertEqual(len(agg["friction_counts"]), 0)
 
     def test_missing_and_noise_keys_absent_are_tolerated(self):
         refs = [{"sections": {"X": "used"}}]
         agg = aggregate_reflections(refs)
         self.assertEqual(len(agg["missing_counts"]), 0)
         self.assertEqual(len(agg["noise_counts"]), 0)
+        self.assertEqual(len(agg["friction_counts"]), 0)
 
     def test_unknown_verdict_ignored(self):
         refs = [{"sections": {"X": "invalid"}}]
         agg = aggregate_reflections(refs)
         sc = agg["section_counts"]["X"]
         self.assertEqual(sc["used"] + sc["skipped"] + sc["guess"], 0)
+
+    def test_friction_counts(self):
+        refs = [
+            {"friction": ["pytest not found", "missing env var"]},
+            {"friction": ["pytest not found"]},
+        ]
+        agg = aggregate_reflections(refs)
+        self.assertEqual(agg["friction_counts"]["pytest not found"], 2)
+        self.assertEqual(agg["friction_counts"]["missing env var"], 1)
+
+    def test_friction_most_frequent_order(self):
+        refs = [
+            {"friction": ["slow CI", "slow CI", "flaky test"]},
+            {"friction": ["slow CI"]},
+        ]
+        agg = aggregate_reflections(refs)
+        ordered = agg["friction_counts"].most_common()
+        self.assertEqual(ordered[0], ("slow CI", 3))
+        self.assertEqual(ordered[1], ("flaky test", 1))
+
+    def test_friction_absent_key_tolerated(self):
+        refs = [{"missing": ["something"]}, {"noise": ["other"]}]
+        agg = aggregate_reflections(refs)
+        self.assertEqual(len(agg["friction_counts"]), 0)
+
+    def test_friction_does_not_bleed_into_missing_or_noise(self):
+        refs = [
+            {"friction": ["tool X"], "missing": ["info Y"], "noise": ["boilerplate Z"]}
+        ]
+        agg = aggregate_reflections(refs)
+        self.assertNotIn("tool X", agg["missing_counts"])
+        self.assertNotIn("tool X", agg["noise_counts"])
+        self.assertNotIn("info Y", agg["friction_counts"])
+        self.assertNotIn("boilerplate Z", agg["friction_counts"])
 
 
 if __name__ == "__main__":

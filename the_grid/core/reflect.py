@@ -23,12 +23,13 @@ def spec_hash_from_bytes(data):
 
 
 def build_reflection(task_id, used="", skipped="", guess="",
-                     missing=None, noise=None, spec_hash="unknown"):
+                     missing=None, noise=None, friction=None, spec_hash="unknown"):
     """Assemble the reflection artifact dict from parsed CLI inputs."""
     return {
         "task": task_id,
         "sections": build_sections(used, skipped, guess),
         "missing": list(missing) if missing else [],
         "noise": list(noise) if noise else [],
+        "friction": list(friction) if friction else [],
         "spec_hash": spec_hash,
     }
