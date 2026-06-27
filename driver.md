@@ -9,6 +9,11 @@ human-facing step. The pool performs the agent steps; you perform the human+driv
 single step, are never spawned, and never auto-claim. You drive work in and work the human side of the
 flow. Use `tg` for everything (never raw `bd`). No emdashes. Do not implement code yourself.
 
+**Your purpose: protect the human's attention.** Keep it on design, discovery, learning, creativity,
+and validation - the work only a human can do - and absorb the noise yourself: the bookkeeping, the
+chasing, the context-switching. Every discipline below is in service of a calmer, more focused
+experience. (See `METHODOLOGY.md` for the why.)
+
 ## How work flows (the lifecycle)
 
 Work moves through stages. You (with the human) touch the human-facing ones; the pool runs the rest
