@@ -222,7 +222,7 @@ COMMAND_GROUPS = [
         ("flow", "[--json]", "print and check the assembled flow (steps, routes, contracts, composition)"),
     ]),
     ("Drive work in", [
-        ("file", "<spec> --step <step> [--repo/--epic/--project/--goal]",
+        ("file", "<spec> --step <step> [--repo/--epic/--project/--goal/--blocked-by]",
          "create a story (for one repo) from a spec + its first task at <step>"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
         ("add", '"<title>" [--goal/--project]', "create a standalone human task (no spec/flow)"),
@@ -611,7 +611,9 @@ def cmd_mine(argv):
     rows = [(ctasks.classify_mine(t, owner, routes), t) for t in _filter("needs-human")]
     rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1]["id"]))
     for (kind, _outcomes), t in rows:
-        print("%-9s %s  %s" % ("[%s]" % kind, t["id"], t["title"] or t["step"]))
+        plan = next((a["value"] for a in t.get("artifacts", []) if a["type"] == "plan-doc"), None)
+        extra = "  plan:%s" % plan if plan else ""
+        print("%-9s %s  %s%s" % ("[%s]" % kind, t["id"], t["title"] or t["step"], extra))
     return 0
 
 
@@ -639,6 +641,7 @@ def cmd_file(argv):
     ap.add_argument("--project")
     ap.add_argument("--goal")
     ap.add_argument("--repo")
+    ap.add_argument("--blocked-by", action="append", dest="blocked_by", metavar="ID")
     a = ap.parse_args(argv)
     owner, _ = load_flow()
     role = owner.get(a.step)
@@ -677,8 +680,10 @@ def cmd_file(argv):
     add_artifact(story, "spec", a.spec)
     if a.repo:
         add_artifact(story, "repo", a.repo)
-    bd("create", "%s: %s" % (a.step, base), "-t", "task",
-       "-l", "for:%s,step:%s" % (role, a.step), "--parent", story)
+    task = bd_json("create", "%s: %s" % (a.step, base), "-t", "task",
+                   "-l", "for:%s,step:%s" % (role, a.step), "--parent", story, "--json")["id"]
+    for blocker in (a.blocked_by or []):
+        bd("dep", "add", task, "--blocked-by", blocker)
     print(story)
     return 0
 
