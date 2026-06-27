@@ -72,6 +72,11 @@ def ready_roles_from_beads(beads):
     return out
 
 
+def forward_note(step, outcome, text):
+    """Provenance-prefixed note for forwarding onto the next task."""
+    return "from %s (%s): %s" % (step, outcome, text)
+
+
 def pool_plan(ready_roles, inflight, slots):
     """Decide which roles to spawn this tick for the agent pool.
 

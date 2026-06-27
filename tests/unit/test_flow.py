@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.core.flow import (advance_create_args, compose_driver, flow_next, load_flow,
-                            pool_plan, ready_roles_from_beads, ready_task_roles)
+from the_grid.core.flow import (advance_create_args, compose_driver, flow_next, forward_note,
+                            load_flow, pool_plan, ready_roles_from_beads, ready_task_roles)
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -132,6 +132,22 @@ class TestComposeDriver(unittest.TestCase):
         for marker in ("## review-plan", "REVIEW BODY", "## cleanup", "CLEAN BODY"):
             self.assertIn(marker, out)
         self.assertLess(out.index("BASE"), out.index("review-plan"))  # base persona leads
+
+
+class TestForwardNote(unittest.TestCase):
+    def test_basic_provenance_format(self):
+        self.assertEqual(forward_note("build", "done", "fix the tests"),
+                         "from build (done): fix the tests")
+
+    def test_rejection_format(self):
+        self.assertEqual(forward_note("review", "rejected", "add missing coverage"),
+                         "from review (rejected): add missing coverage")
+
+    def test_preserves_text_verbatim(self):
+        text = "remove the hardcoded path and add a unit test"
+        result = forward_note("build", "ci-failed", text)
+        self.assertTrue(result.endswith(text))
+        self.assertIn("from build (ci-failed):", result)
 
 
 if __name__ == "__main__":
