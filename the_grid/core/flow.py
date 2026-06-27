@@ -75,7 +75,7 @@ def ready_roles_from_beads(beads):
 
 
 def forward_note(step, outcome, text):
-    """Provenance-prefixed note for forwarding onto the next task."""
+    """Stamp a forwarded note with its source step and outcome (single-hop attribution)."""
     return "from %s (%s): %s" % (step, outcome, text)
 
 
