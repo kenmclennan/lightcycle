@@ -40,3 +40,11 @@ the-grid is a workflow- and project-agnostic engine. Do not bake project-specifi
 stack, a file layout, a spec format - into the engine, the steps (`steps/*.md`), or `tg`. Those
 specifics belong in each target project's own `AGENTS.md` (like this one), which the agnostic steps
 read. `tg` provides primitives; the workflow is defined by editable step markdown, not code builtins.
+
+Concretely, `tg` and `core/` must NOT: hardcode a workflow step or role name (e.g. `build`), require
+a specific named artifact (e.g. a `spec`), or add a command for one workflow action (e.g. a
+`plan-add`). Those are conventions - they live in the step markdown (the agent's prompt), composed
+from generic primitives (`tg file`, `tg link`, `tg done`, `--blocked-by`). The test: would this still
+make sense for a totally different workflow - a frontend repo, a data pipeline? If not, it does not
+belong in the engine. (This rule was learned the hard way: a `tg plan-add` command baked a `build`
+step and a required `spec` into `tg`; it was reverted in favour of the planner composing primitives.)
