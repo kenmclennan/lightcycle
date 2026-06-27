@@ -42,10 +42,10 @@ def filter_by_status(tasks, status):
 
 
 def classify_mine(task, owner, routes):
-    """Classify a for:human task for `tg mine`. Returns (kind, outcomes):
-    no step -> "todo"; a human-owned step -> "action"; an agent-owned step that has
-    landed on the human (a block) -> "blocked". Outcomes are the step's routes, plus
-    `unblock` for a block (the way to hand it back to the agent)."""
+    """Classify a for:human task for `tg inbox` / `tg backlog`. Returns (kind, outcomes):
+    no step -> "todo" (backlog); a human-owned step -> "action" (inbox); an agent-owned
+    step that has landed on the human (a block) -> "blocked" (inbox). Outcomes are the
+    step's routes, plus `unblock` for a block (the way to hand it back to the agent)."""
     step = task.get("step")
     if not step:
         return "todo", []
@@ -53,6 +53,14 @@ def classify_mine(task, owner, routes):
     if owner.get(step) == "human":
         return "action", outs
     return "blocked", outs + ["unblock"]
+
+
+def partition_mine(tasks, owner, routes, kinds, n=None):
+    """Classify for:human tasks, keep those whose kind is in `kinds`, sort by id, limit to n."""
+    classified = [(classify_mine(t, owner, routes), t) for t in tasks]
+    filtered = [(cls, t) for cls, t in classified if cls[0] in kinds]
+    filtered.sort(key=lambda r: r[1]["id"])
+    return filtered[:n] if n is not None else filtered
 
 
 def bucket(tasks):

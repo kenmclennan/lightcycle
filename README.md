@@ -66,7 +66,7 @@ any directory.
   (`coder`/`reviewer`/`open-pr`/`watch-pr`); the worker's first act is `tg claim
 <role>` (atomic), then it works and exits. A worker that dies before claiming
   leaves nothing stuck. Human steps (`ready-merge`/`cleanup`) are never spawned;
-  they surface in `tg mine`.
+  they surface in `tg inbox`.
 - **HOME config: where your work lives.** A single config file (`$GRID_CONFIG`, else
   `$XDG_CONFIG_HOME`/`~/.config`/`the-grid/config`) names two roots: `projects` (the
   dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (the
@@ -98,8 +98,9 @@ Initialise once with `tg init`, then run the parts in separate terminals.
 | `tg config [--edit]`                                            | show (or `--edit`) the grid config: projects + specs roots                          |
 | `tg run [--once]`                                               | the agent pool: sweep, then fill up to GRID_MAX_AGENTS workers from the ready queue |
 | `tg driver`                                                     | open the interactive driver `claude` (your seat)                                    |
-| `tg status`                                                     | all buckets: mine / active / queue / blocked                                        |
-| `tg mine`                                                       | tasks that need you (`for:human`)                                                   |
+| `tg status`                                                     | all buckets: inbox / active / queue / blocked                                       |
+| `tg inbox [N]`                                                  | what needs you now: gates to clear and agents waiting on you                        |
+| `tg backlog [N]`                                                | backlog items to develop later                                                      |
 | `tg active`                                                     | tasks being worked now                                                              |
 | `tg queue [N]`                                                  | next N upcoming agent tasks                                                         |
 | `tg ps [--json]`                                                | running workers (role, bead, pid, alive)                                            |
@@ -123,7 +124,7 @@ selects who _performs_ it:
 - **`model:` present** - an **ephemeral agent**. `tg` spawns a fresh `claude -p`
   (the file body is its system prompt), it does the step and exits. The example
   pipeline uses `opus` for the reviewer, `sonnet` for coder/open-pr/watch-pr.
-- **no `model:`** - **you + the Driver**. The step surfaces in `tg mine`; the file
+- **no `model:`** - **you + the Driver**. The step surfaces in `tg inbox`; the file
   body is a Driver skill for helping you do it (`review-plan`, `ready-merge`,
   `cleanup`). These are never spawned.
 

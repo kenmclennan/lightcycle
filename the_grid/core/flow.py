@@ -11,7 +11,7 @@ def load_flow(role_metas):
     routes maps step -> {outcome: next_step}. A file with `model` + `step` is an
     automated agent and owns its step as itself. A file with `step` but NO `model`
     is a human step: it owns its step as the literal role "human" (never spawned,
-    surfaces in tg mine). A file with no `step` (the driver) owns nothing. A route
+    surfaces in tg inbox). A file with no `step` (the driver) owns nothing. A route
     target absent from owner is a human terminal.
     """
     owner, routes = {}, {}
@@ -34,7 +34,7 @@ def compose_driver(base_body, skills):
         return base_body
     parts = [base_body,
              "\n\n# Skills for human-facing steps\n",
-             "These steps surface in `tg mine`. When the human picks one, run the skill "
+             "These steps surface in `tg inbox`. When the human picks one, run the skill "
              "for its step: assist them, and record the outcome (`tg done` / `tg close`).\n"]
     for step, body in skills:
         parts.append("\n## %s\n\n%s" % (step, body.strip()))

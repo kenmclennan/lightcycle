@@ -19,7 +19,7 @@ One-line caption below the diagram.
 ### Decisions
 
 | Chose | Over | Because |
-|-------|------|---------|
+| ----- | ---- | ------- |
 
 One row per non-obvious choice. "Chose" is the thing you picked; "Over" is what
 you rejected; "Because" is the falsifiable reason.
@@ -27,7 +27,7 @@ you rejected; "Because" is the falsifiable reason.
 ### Out of scope
 
 | Deferred | Why |
-|----------|-----|
+| -------- | --- |
 
 Explicit deferrals only - things that could be confused for in-scope.
 
@@ -35,15 +35,15 @@ Explicit deferrals only - things that could be confused for in-scope.
 
 Dependency diagram (mermaid graph LR) showing which child stories block which.
 
-| # | Task | Blocked by | Spec | Size |
-|---|------|-----------|------|------|
+| #   | Task | Blocked by | Spec | Size |
+| --- | ---- | ---------- | ---- | ---- |
 
 Size: XS / S / M / L. Spec is the absolute path to the child's spec file.
 
 ### Assumptions
 
 | Assumption | Source |
-|------------|--------|
+| ---------- | ------ |
 
 Every assumption you made where the brief was silent. A long assumptions list
 is a signal to the reviewer that the brief was thin - catch it here before work

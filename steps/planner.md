@@ -26,16 +26,16 @@ driver already decided with the human; you do not invent intent.
    short - the build agent reads this, not the full plan doc.
 7. BUILD THE GRAPH - order matters to avoid gate-without-children orphans:
    a. Create children first: for each child spec,
-      `tg file specs/<slug>.md --step build --epic EPIC --blocked-by PLACEHOLDER`
-      (collect the story IDs - you will wire them to the gate after it exists).
+   `tg file specs/<slug>.md --step build --epic EPIC --blocked-by PLACEHOLDER`
+   (collect the story IDs - you will wire them to the gate after it exists).
    b. Create the gate: `bd -C <grid_root> create "review-plan: <epic title>" \
-      -t task -l "for:human,step:review-plan" --parent EPIC --json` and take
-      its `id` as GATE.
+-t task -l "for:human,step:review-plan" --parent EPIC --json` and take
+   its `id` as GATE.
    c. Add gate dependency to each child task:
-      For each child story ID, get its first task:
-      `bd -C <grid_root> children <story_id> --json | jq -r '.[0].id'`
-      Then: `bd -C <grid_root> dep add <task_id> --blocked-by GATE`
-      (this replaces the PLACEHOLDER approach - see note below)
+   For each child story ID, get its first task:
+   `bd -C <grid_root> children <story_id> --json | jq -r '.[0].id'`
+   Then: `bd -C <grid_root> dep add <task_id> --blocked-by GATE`
+   (this replaces the PLACEHOLDER approach - see note below)
    d. Link the plan doc: `tg link GATE plan-doc <path>`
 8. CLOSE the plan task: `bd -C <grid_root> close TASK --reason done`
 
@@ -50,10 +50,10 @@ driver already decided with the human; you do not invent intent.
 If you create the gate FIRST (accepting the orphan risk is tiny in practice),
 you can use `tg file --blocked-by GATE` directly:
 
-   a. Create gate: `bd -C <grid_root> create "review-plan: <title>" \
+a. Create gate: `bd -C <grid_root> create "review-plan: <title>" \
       -t task -l "for:human,step:review-plan" --parent EPIC --json` -> GATE
-   b. Link plan doc: `tg link GATE plan-doc <path>`
-   c. For each child: `tg file specs/<slug>.md --step build --epic EPIC \
+b. Link plan doc: `tg link GATE plan-doc <path>`
+c. For each child: `tg file specs/<slug>.md --step build --epic EPIC \
       --blocked-by GATE`
 
 Use this simpler order unless the brief has more than ~10 children (risk: if
