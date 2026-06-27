@@ -276,9 +276,9 @@ class TestDoneBlock(unittest.TestCase):
         self.assertIn("for:human", bead["labels"])
         self.assertNotIn("for:coder", bead["labels"])
 
-    def test_block_clears_assignee_and_surfaces_in_mine(self):
+    def test_block_clears_assignee_and_surfaces_in_inbox(self):
         # A claimed task (assignee set) that gets blocked must clear the assignee,
-        # else it stays "in-progress" and hides in `tg active` instead of `tg mine`.
+        # else it stays "in-progress" and hides in `tg active` instead of `tg inbox`.
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
                              "-l", "for:coder,step:build", "--json"))["id"]
         bd_in(self.root, "ready", "--label", "for:coder", "--claim", "--json")
@@ -286,7 +286,7 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
         self.assertIn(bead.get("assignee"), (None, ""))
-        self.assertIn(b, run_tg("mine", root=self.root).stdout)
+        self.assertIn(b, run_tg("inbox", root=self.root).stdout)
 
     def test_done_note_forwards_to_next_task(self):
         b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
@@ -1223,6 +1223,51 @@ class TestMine(unittest.TestCase):
               json.dumps({"artifacts": [{"type": "plan-doc", "value": "/tmp/plan.md"}]}))
         out = run_tg("mine", root=self.root).stdout
         self.assertIn("plan:/tmp/plan.md", out)
+
+    def test_mine_emits_deprecation_warning(self):
+        run_tg("add", "remind me", root=self.root)
+        r = run_tg("mine", root=self.root)
+        self.assertIn("deprecated", r.stderr)
+        self.assertIn("tg inbox", r.stderr)
+        self.assertIn("tg backlog", r.stderr)
+
+    def test_inbox_shows_action_and_blocked_only(self):
+        run_tg("add", "a seed", root=self.root)                             # todo
+        bd_in(self.root, "create", "merge: z", "-t", "task",
+              "-l", "for:human,step:ready-merge", "--json")                  # action
+        b = json.loads(bd_in(self.root, "create", "build: q", "-t", "task",
+                             "-l", "for:human,step:build", "--json"))["id"]  # blocked
+        out = run_tg("inbox", root=self.root).stdout
+        self.assertIn("[action]", out)
+        self.assertIn("[blocked]", out)
+        self.assertNotIn("[todo]", out)
+        self.assertNotIn("a seed", out)
+
+    def test_backlog_shows_todo_only(self):
+        run_tg("add", "a seed", root=self.root)                             # todo
+        bd_in(self.root, "create", "merge: z", "-t", "task",
+              "-l", "for:human,step:ready-merge", "--json")                  # action
+        out = run_tg("backlog", root=self.root).stdout
+        self.assertIn("[todo]", out)
+        self.assertIn("a seed", out)
+        self.assertNotIn("[action]", out)
+
+    def test_inbox_limit_n(self):
+        bd_in(self.root, "create", "merge: p", "-t", "task",
+              "-l", "for:human,step:ready-merge", "--json")
+        bd_in(self.root, "create", "merge: q", "-t", "task",
+              "-l", "for:human,step:ready-merge", "--json")
+        bd_in(self.root, "create", "merge: r", "-t", "task",
+              "-l", "for:human,step:ready-merge", "--json")
+        out = run_tg("inbox", "1", root=self.root).stdout
+        self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 1)
+
+    def test_backlog_limit_n(self):
+        run_tg("add", "seed one", root=self.root)
+        run_tg("add", "seed two", root=self.root)
+        run_tg("add", "seed three", root=self.root)
+        out = run_tg("backlog", "2", root=self.root).stdout
+        self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
 
 
 class TestReflect(unittest.TestCase):

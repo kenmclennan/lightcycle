@@ -19,8 +19,9 @@ tg driver        # your interactive seat
 ## See what's happening
 
 ```bash
-tg status              # mine / active / queue / blocked
-tg mine                # what needs YOU (for:human)
+tg status              # inbox / active / queue / blocked
+tg inbox               # what needs YOU now (gates + blocks)
+tg backlog             # backlog items to develop later
 tg active              # what agents are working now
 tg queue 10            # next 10 upcoming agent tasks
 tg ps                  # running workers: role, bead, pid, alive/dead
@@ -40,7 +41,7 @@ tg file specs/<id>.md --step build  # enters it into the pipeline at the build s
 
 The run-loop spawns a coder within a tick; it claims, builds, and exits, then the
 flow advances to review, then open-pr. `for:human` items (escalations, PRs ready to
-merge) show up in `tg mine`.
+merge) show up in `tg inbox`.
 
 ## Recover after a kill
 

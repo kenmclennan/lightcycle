@@ -212,8 +212,10 @@ COMMAND_GROUPS = [
         ("driver", "", "open the interactive driver - your seat to shape and file work"),
     ]),
     ("See what's happening", [
-        ("status", "[--json]", "all buckets at once: mine / active / queue / blocked"),
-        ("mine", "", "tasks waiting on you (for:human)"),
+        ("status", "[--json]", "all buckets at once: inbox / active / queue / blocked"),
+        ("inbox", "[N]", "what needs you now: gates to clear and agents waiting on you"),
+        ("backlog", "[N]", "backlog items to develop later (todo)"),
+        ("mine", "", "(deprecated) use tg inbox and tg backlog"),
         ("active", "", "tasks a worker is running right now"),
         ("queue", "[N]", "the next N ready/blocked agent tasks"),
         ("ps", "[--json]", "running workers: role, task, pid, alive/dead"),
@@ -613,14 +615,41 @@ def _filter(status):
 _MINE_ORDER = {"blocked": 0, "action": 1, "todo": 2}
 
 
+def _print_mine_row(kind, t):
+    plan = next((art["value"] for art in t.get("artifacts", []) if art["type"] == "plan-doc"), None)
+    extra = "  plan:%s" % plan if plan else ""
+    print("%-9s %s  %s%s" % ("[%s]" % kind, t["id"], t["title"] or t["step"], extra))
+
+
+def cmd_inbox(argv):
+    ap = argparse.ArgumentParser(prog="tg inbox")
+    ap.add_argument("n", nargs="?", type=int)
+    a = ap.parse_args(argv)
+    owner, routes = load_flow()
+    rows = ctasks.partition_mine(_filter("needs-human"), owner, routes, {"action", "blocked"}, a.n)
+    for (kind, _outcomes), t in rows:
+        _print_mine_row(kind, t)
+    return 0
+
+
+def cmd_backlog(argv):
+    ap = argparse.ArgumentParser(prog="tg backlog")
+    ap.add_argument("n", nargs="?", type=int)
+    a = ap.parse_args(argv)
+    owner, routes = load_flow()
+    rows = ctasks.partition_mine(_filter("needs-human"), owner, routes, {"todo"}, a.n)
+    for (kind, _outcomes), t in rows:
+        _print_mine_row(kind, t)
+    return 0
+
+
 def cmd_mine(argv):
+    sys.stderr.write("warning: 'tg mine' is deprecated; use 'tg inbox' and 'tg backlog'\n")
     owner, routes = load_flow()
     rows = [(ctasks.classify_mine(t, owner, routes), t) for t in _filter("needs-human")]
     rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1]["id"]))
     for (kind, _outcomes), t in rows:
-        plan = next((a["value"] for a in t.get("artifacts", []) if a["type"] == "plan-doc"), None)
-        extra = "  plan:%s" % plan if plan else ""
-        print("%-9s %s  %s%s" % ("[%s]" % kind, t["id"], t["title"] or t["step"], extra))
+        _print_mine_row(kind, t)
     return 0
 
 
@@ -816,9 +845,10 @@ def cmd_status(argv):
     if a.json:
         print(json.dumps(buckets, indent=2))
     else:
-        for name in ("mine", "active", "queue", "blocked"):
-            print("== %s (%d) ==" % (name, len(buckets[name])))
-            for t in buckets[name]:
+        for display, key in (("inbox", "mine"), ("active", "active"),
+                              ("queue", "queue"), ("blocked", "blocked")):
+            print("== %s (%d) ==" % (display, len(buckets[key])))
+            for t in buckets[key]:
                 print("  %s  %s" % (t["id"], t["title"]))
     return 0
 

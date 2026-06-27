@@ -1,7 +1,7 @@
 import unittest
 
 from the_grid.core.tasks import (bucket, classify_mine, filter_by_status, label_value,
-                             labels, task_from_bead)
+                             labels, partition_mine, task_from_bead)
 
 
 def bead(**kw):
@@ -83,6 +83,52 @@ class TestClassifyMine(unittest.TestCase):
     def test_blocked_is_an_agent_step_plus_unblock(self):
         self.assertEqual(classify_mine({"step": "build"}, self.OWNER, self.ROUTES),
                          ("blocked", ["done", "unblock"]))
+
+
+class TestPartitionMine(unittest.TestCase):
+    OWNER = {"build": "coder", "ready-merge": "human"}
+    ROUTES = {"build": {"done": "review"}, "ready-merge": {"merged": "cleanup", "changes": "build"}}
+
+    def _tasks(self):
+        return [
+            {"id": "a-1", "step": None, "artifacts": []},
+            {"id": "a-2", "step": "ready-merge", "artifacts": []},
+            {"id": "a-3", "step": "build", "artifacts": []},
+        ]
+
+    def test_inbox_returns_action_and_blocked(self):
+        rows = partition_mine(self._tasks(), self.OWNER, self.ROUTES, {"action", "blocked"})
+        kinds = [cls[0] for cls, _ in rows]
+        self.assertIn("action", kinds)
+        self.assertIn("blocked", kinds)
+        self.assertNotIn("todo", kinds)
+
+    def test_backlog_returns_todo_only(self):
+        rows = partition_mine(self._tasks(), self.OWNER, self.ROUTES, {"todo"})
+        kinds = [cls[0] for cls, _ in rows]
+        self.assertEqual(kinds, ["todo"])
+
+    def test_sorted_by_id(self):
+        tasks = [
+            {"id": "b-3", "step": None, "artifacts": []},
+            {"id": "b-1", "step": None, "artifacts": []},
+            {"id": "b-2", "step": None, "artifacts": []},
+        ]
+        rows = partition_mine(tasks, self.OWNER, self.ROUTES, {"todo"})
+        ids = [t["id"] for _, t in rows]
+        self.assertEqual(ids, ["b-1", "b-2", "b-3"])
+
+    def test_limit_n(self):
+        tasks = [
+            {"id": "c-%d" % i, "step": None, "artifacts": []}
+            for i in range(5)
+        ]
+        rows = partition_mine(tasks, self.OWNER, self.ROUTES, {"todo"}, n=2)
+        self.assertEqual(len(rows), 2)
+
+    def test_no_limit_returns_all(self):
+        rows = partition_mine(self._tasks(), self.OWNER, self.ROUTES, {"action", "blocked", "todo"})
+        self.assertEqual(len(rows), 3)
 
 
 if __name__ == "__main__":
