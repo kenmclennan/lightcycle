@@ -23,19 +23,16 @@ from the_grid.adapters.fsio import (step_roles, config_path, ensure_config, grid
                                 load_config, parse_step, read_md, store_ready, worktrees_dir)
 from the_grid.adapters.spawner import spawn_worker
 from the_grid.adapters.store import BdStore
-
-_store = BdStore()
-
-
-def add_artifact(story_id, atype, value, label=None):
-    return _store.add_artifact(story_id, atype, value, label)
-
-
-def story_artifacts(story_id):
-    return _store.story_artifacts(story_id)
-
-
 from the_grid.adapters.workers import (pid_alive, prune_workers, stamp_bead, workers_state)
+
+# ---- composition root -------------------------------------------------------
+
+_store = None
+
+
+def set_store(impl):
+    global _store
+    _store = impl
 
 # ---- config / roots ---------------------------------------------------------
 
@@ -282,6 +279,7 @@ def print_help():
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    set_store(BdStore())
     if not argv or argv[0] in ("-h", "--help"):
         print_help()
         return 0

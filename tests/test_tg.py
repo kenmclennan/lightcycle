@@ -1,8 +1,13 @@
-import json, os, subprocess, sys, tempfile, time, unittest
+import io, json, os, subprocess, sys, tempfile, time, unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TG = str(ROOT / "bin" / "tg")
+
+sys.path.insert(0, str(ROOT))
+import the_grid.cli as _cli_mod
+from tests.fake_store import FakeStore
 
 # Point every subprocess at a config that does NOT exist, so the suite reads
 # config-absent DEFAULTS and never touches the real ~/.config/the-grid/config.
@@ -498,28 +503,42 @@ class TestAdd(unittest.TestCase):
 
 class TestArtifacts(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-
-    def _tg_module(self):
-        import importlib.util
-        from importlib.machinery import SourceFileLoader
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        loader = SourceFileLoader("tgmod", TG)
-        spec = importlib.util.spec_from_loader("tgmod", loader)
-        mod = importlib.util.module_from_spec(spec)
-        loader.exec_module(mod)
-        return mod
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
 
     def test_add_and_read_artifacts_append(self):
-        sid = json.loads(bd_in(self.root, "create", "story s", "-t", "story", "--json"))["id"]
-        tg = self._tg_module()
-        tg.add_artifact(sid, "spec", "specs/X.md")
-        tg.add_artifact(sid, "pr", "https://gh/9", "PR 9")
-        arts = tg.story_artifacts(sid)
+        sid = self.store.create_story("story s")
+        self.store.add_artifact(sid, "spec", "specs/X.md")
+        self.store.add_artifact(sid, "pr", "https://gh/9", "PR 9")
+        arts = self.store.story_artifacts(sid)
         self.assertEqual(len(arts), 2)
         self.assertEqual(arts[0]["type"], "spec")
         self.assertEqual(arts[1]["type"], "pr")
         self.assertEqual(arts[1]["label"], "PR 9")
+
+
+class TestCompositionRoot(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+
+    def test_cmd_status_in_process_with_injected_store(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            ret = _cli_mod.cmd_status(["--json"])
+        self.assertEqual(ret, 0)
+        s = json.loads(buf.getvalue())
+        self.assertIn("mine", s)
+
+    def test_store_is_replaced_and_restored(self):
+        self.assertIs(_cli_mod._store, self.store)
+        _cli_mod.set_store(self._orig)
+        self.assertIs(_cli_mod._store, self._orig)
+        _cli_mod.set_store(self.store)
 
 
 class TestLink(unittest.TestCase):
@@ -932,6 +951,7 @@ class TestWorktree(unittest.TestCase):
         spec = importlib.util.spec_from_loader("tgmod_wt", loader)
         mod = importlib.util.module_from_spec(spec)
         loader.exec_module(mod)
+        mod.set_store(mod.BdStore())
         return mod
 
     def test_claim_returns_isolated_workspace(self):
