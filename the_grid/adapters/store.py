@@ -101,3 +101,20 @@ def route_to_human(tid, note, role):
     bd("label", "add", tid, "for:human")
     bd("update", tid, "--status", "open")
     bd("assign", tid, "")
+
+
+def closed_stories():
+    """Closed stories with close timestamp and artifacts, shaped for core.worklog."""
+    beads = bd_json("list", "--status", "closed", "--json")
+    result = []
+    for b in beads:
+        if b.get("issue_type") != "story":
+            continue
+        result.append({
+            "id": b["id"],
+            "title": b.get("title", ""),
+            "closed_at": b.get("closed_at"),
+            "outcome": b.get("close_reason"),
+            "artifacts": (b.get("metadata") or {}).get("artifacts") or [],
+        })
+    return result

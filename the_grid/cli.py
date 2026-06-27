@@ -12,6 +12,7 @@ from the_grid.core import reflect as creflect
 from the_grid.core import retro as cretro
 from the_grid.core import tasks as ctasks
 from the_grid.core import workspace as cworkspace
+from the_grid.core import worklog as cworklog
 from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
                                  required_outputs)
 from the_grid.core.logrender import render_log_line
@@ -21,8 +22,8 @@ from the_grid.adapters import gitio
 from the_grid.adapters.fsio import (step_roles, config_path, ensure_config, grid_root,
                                 load_config, parse_step, read_md, store_ready, worktrees_dir)
 from the_grid.adapters.spawner import spawn_worker
-from the_grid.adapters.store import (add_artifact, all_tasks, bd, bd_json, ensure_beads,
-                                 get_task, present_types, route_to_human,
+from the_grid.adapters.store import (add_artifact, all_tasks, bd, bd_json, closed_stories,
+                                 ensure_beads, get_task, present_types, route_to_human,
                                  story_artifacts, task_view)
 from the_grid.adapters.workers import (pid_alive, prune_workers, stamp_bead, workers_state)
 
@@ -220,6 +221,7 @@ COMMAND_GROUPS = [
         ("show", "<id>", "one task or story as JSON (artifacts, resume-state)"),
         ("trace", "<story> [--json]", "a story end to end: artifacts + child tasks + logs"),
         ("flow", "[--json]", "print and check the assembled flow (steps, routes, contracts, composition)"),
+        ("worklog", "[start] [end]", "stories shipped in a period (today, yesterday, YYYY-MM-DD)"),
     ]),
     ("Drive work in", [
         ("file", "<spec> --step <step> [--repo/--epic/--project/--goal/--blocked-by]",
@@ -860,6 +862,25 @@ def cmd_reflect(argv):
         a.id, a.used, a.skipped, a.guess, a.missing, a.noise, _spec_hash(t))
     add_artifact(story, "reflection", json.dumps(reflection))
     print("reflected")
+    return 0
+
+
+def cmd_worklog(argv):
+    ap = argparse.ArgumentParser(prog="tg worklog")
+    ap.add_argument("start", nargs="?")
+    ap.add_argument("end", nargs="?")
+    a = ap.parse_args(argv)
+    import datetime as _dt
+    today = _dt.date.today()
+    args = [x for x in (a.start, a.end) if x is not None]
+    start, end = cworklog.resolve_period(args, today)
+    entries = cworklog.worklog(closed_stories(), start, end)
+    if not entries:
+        print("no stories shipped in that period")
+        return 0
+    for e in entries:
+        pr = "  %s" % e["pr"] if e["pr"] else ""
+        print("%s  %s  [%s]%s" % (e["id"], e["title"], e["outcome"] or "-", pr))
     return 0
 
 

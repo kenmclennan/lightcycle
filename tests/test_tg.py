@@ -1359,5 +1359,81 @@ class TestRetro(unittest.TestCase):
         self.assertIn("blocks=1", r.stdout)
 
 
+class TestWorklog(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+
+    def _close_story(self, title="feat: shipped-thing", reason="merged"):
+        sid = json.loads(bd_in(self.root, "create", title, "-t", "story", "--json"))["id"]
+        bd_in(self.root, "close", sid, "--reason", reason)
+        return sid
+
+    def test_worklog_no_args_shows_stories_closed_today(self):
+        sid = self._close_story()
+        r = run_tg("worklog", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(sid, r.stdout)
+        self.assertIn("merged", r.stdout)
+
+    def test_worklog_today_keyword_shows_story(self):
+        sid = self._close_story()
+        r = run_tg("worklog", "today", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(sid, r.stdout)
+
+    def test_worklog_yesterday_shows_nothing_for_todays_story(self):
+        self._close_story()
+        r = run_tg("worklog", "yesterday", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("no stories", r.stdout)
+
+    def test_worklog_two_arg_range_includes_today(self):
+        import datetime
+        yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        today = datetime.date.today().isoformat()
+        sid = self._close_story()
+        r = run_tg("worklog", yesterday, today, root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(sid, r.stdout)
+
+    def test_worklog_empty_period_prints_no_stories_message(self):
+        r = run_tg("worklog", "2020-01-01", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("no stories", r.stdout)
+
+    def test_worklog_shows_pr_link_when_present(self):
+        sid = self._close_story()
+        bd_in(self.root, "update", sid, "--metadata",
+              json.dumps({"artifacts": [{"type": "pr", "value": "https://github.com/x/y/pull/9"}]}))
+        r = run_tg("worklog", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("https://github.com/x/y/pull/9", r.stdout)
+
+    def test_worklog_no_pr_artifact_still_lists_story(self):
+        sid = self._close_story()
+        r = run_tg("worklog", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(sid, r.stdout)
+        self.assertNotIn("https://", r.stdout)
+
+    def test_worklog_excludes_tasks(self):
+        json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
+                         "-l", "for:coder,step:build", "--json"))["id"]
+        r = run_tg("worklog", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("no stories", r.stdout)
+
+    def test_worklog_shows_title_and_outcome(self):
+        self._close_story(title="shipped-thing", reason="done")
+        r = run_tg("worklog", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("shipped-thing", r.stdout)
+        self.assertIn("done", r.stdout)
+
+    def test_worklog_appears_in_help(self):
+        r = run_tg("--help")
+        self.assertIn("worklog", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
