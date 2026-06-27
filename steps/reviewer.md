@@ -36,6 +36,10 @@ You are an ephemeral Reviewer in the-grid. You claim ONE task, complete it, then
 - New behaviour is covered by tests, at the layer the repo tests at; refactors preserve behaviour
   and keep existing tests green.
 - No broken windows: no failing or skipped tests, no dead or commented-out code, no leftover TODOs.
+- Names age well: a durable concept must not be named after a transient or deprecated thing. If a
+  change deprecates a command, mode, or flag yet bakes its name into lasting identifiers (functions,
+  types, tests), reject it - once the deprecated thing is removed the name misleads every future
+  reader. Durable code names for what endures, not for what is going away.
 - Apply the spec's `reviewer_skills` and any per-spec review focus - that is where project- and
   domain-specific criteria live.
 
