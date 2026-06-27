@@ -557,6 +557,48 @@ class TestFileStory(unittest.TestCase):
         self.assertEqual(nt["story_artifacts"][0]["value"], "specs/X.md")
 
 
+class TestFileBlockedBy(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        write_steps(self.root)
+
+    def test_blocked_by_creates_dependency_on_first_task(self):
+        gate = json.loads(bd_in(self.root, "create", "review-plan: foo", "-t", "task",
+                                "-l", "for:human,step:review-plan", "--json"))["id"]
+        sid = run_tg("file", "specs/X.md", "--step", "build",
+                     "--blocked-by", gate, root=self.root).stdout.strip()
+        self.assertTrue(sid)
+        task_id = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
+        deps = json.loads(bd_in(self.root, "dep", "list", task_id, "--json"))
+        blocker_ids = [d["id"] for d in deps]
+        self.assertIn(gate, blocker_ids)
+
+    def test_blocked_task_not_claimable_until_gate_closes(self):
+        gate = json.loads(bd_in(self.root, "create", "review-plan: foo", "-t", "task",
+                                "-l", "for:human,step:review-plan", "--json"))["id"]
+        run_tg("file", "specs/X.md", "--step", "build",
+               "--blocked-by", gate, root=self.root)
+        r = run_tg("claim", "coder", root=self.root)
+        self.assertEqual(r.stdout.strip(), "")  # not claimable while gate is open
+        bd_in(self.root, "close", gate, "--reason", "approved")
+        r2 = run_tg("claim", "coder", root=self.root)
+        self.assertTrue(r2.stdout.strip())  # now claimable
+
+    def test_multiple_blocked_by_ids(self):
+        gate1 = json.loads(bd_in(self.root, "create", "gate1", "-t", "task",
+                                 "-l", "for:human", "--json"))["id"]
+        gate2 = json.loads(bd_in(self.root, "create", "gate2", "-t", "task",
+                                 "-l", "for:human", "--json"))["id"]
+        sid = run_tg("file", "specs/X.md", "--step", "build",
+                     "--blocked-by", gate1, "--blocked-by", gate2,
+                     root=self.root).stdout.strip()
+        task_id = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
+        deps = json.loads(bd_in(self.root, "dep", "list", task_id, "--json"))
+        blocker_ids = {d["id"] for d in deps}
+        self.assertIn(gate1, blocker_ids)
+        self.assertIn(gate2, blocker_ids)
+
+
 class TestClaimArtifacts(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
@@ -1151,6 +1193,14 @@ class TestMine(unittest.TestCase):
         self.assertIn("look at X", out)
         self.assertLess(out.index("[blocked]"), out.index("[action]"))
         self.assertLess(out.index("[action]"), out.index("[todo]"))
+
+    def test_mine_shows_plan_doc_for_gate_task(self):
+        gate = json.loads(bd_in(self.root, "create", "review-plan: foo", "-t", "task",
+                                "-l", "for:human,step:ready-merge", "--json"))["id"]
+        bd_in(self.root, "update", gate, "--metadata",
+              json.dumps({"artifacts": [{"type": "plan-doc", "value": "/tmp/plan.md"}]}))
+        out = run_tg("mine", root=self.root).stdout
+        self.assertIn("plan:/tmp/plan.md", out)
 
 
 class TestReflect(unittest.TestCase):
