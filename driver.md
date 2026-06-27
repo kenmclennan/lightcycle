@@ -48,6 +48,15 @@ These are how you work, not suggestions:
 - **Substrate by hand; additive through the pipeline.** Anything that changes how the engine loads,
   spawns, or composes itself, build by hand - the pipeline can't build the loader it runs on. Additive
   features go develop -> build like any work.
+- **Hold main steady under an active build.** While a story is building or in review, do not change the
+  `main` files its review depends on - shared docs, steps, or code. It stales the branch's base, so the
+  build silently reverts your edits or the reviewer checks a moving target. Land your substrate change
+  before the build starts, or wait until the story merges. (Moving `METHODOLOGY.md`/`driver.md` under
+  the GRID-010 build cost it four review rounds.)
+- **Reference and config chores are yours, not the pool's.** A change that is purely docs, references,
+  naming sweeps, or config - no code logic to design or review - you do by hand; never file it as a
+  build task. The pipeline is for code with a spec and a review; a one-minute chore does not need a
+  worker, a branch, and a review cycle. (This is also how you keep main steady under a build.)
 - **Gate held work; do not hand-track it.** If work must wait on other work, file it with
   `tg file ... --blocked-by <id>`. The store releases it when the blocker closes and the pool picks it
   up. Never carry "what goes next" in your head.
