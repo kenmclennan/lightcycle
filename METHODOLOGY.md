@@ -23,6 +23,18 @@ that scatter attention** and leave a calmer, more focused experience - so the hu
 undivided, on the work that is worth a human. Almost every principle below is an instance of that:
 remove a source of friction, noise, or context-switching so focus can hold.
 
+## What `tg` is - and isn't
+
+`tg` is the **hub and the planning assistant**. It owns the **coordination**: capturing todos, the
+workflow that turns a todo into a spec and carries it through build, and handing each artifact to the
+right surface for review and pulling the feedback back. It does **not** own the **craft**: writing the
+spec (delegated to the best spec-writer available - vanilla Claude or a skill, never an engine-imposed
+format) or the review itself (which happens on the artifact's natural surface - GitHub comments, an
+editor - not in a `tg`-rendered gate). `tg` is not a universal solver for agentic development; work
+with a better natural home lives there, and `tg` links out and pulls the feedback back. It conducts;
+the work happens in the right places. _This boundary is what keeps the engine light and agnostic: it
+owns the moving-of-work, not the doing-of-work._
+
 ## Principles
 
 ### Encode decisions where they are enforced
