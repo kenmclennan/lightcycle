@@ -2,7 +2,7 @@
 
 the-grid is two things at once: an agent-pipeline **engine**, and a **methodology** for building
 software with such a pipeline. This document is the methodology - the principles and the reasoning
-behind `driver.md` (the playbook) and `AGENTS.md` (the conventions). It is a living document: update
+behind `driver.md` (the playbook) and `CLAUDE.md` (the conventions). It is a living document: update
 it as the method is discovered. The method is the product; the features only prove it.
 
 ## The core insight: human attention is the scarce resource
@@ -30,7 +30,7 @@ remove a source of friction, noise, or context-switching so focus can hold.
 A way-of-working decision is not real until it is written somewhere it is _enforced_ - otherwise it
 rots in conversation, and you re-derive it, drift from it, or revert a working fix because nobody
 recorded why it was there. Place each decision by **scope**: generic agent competence in the step
-file; this project's conventions in its `AGENTS.md`; cross-project style in the global config; the
+file; this project's conventions in its `CLAUDE.md`; cross-project style in the global config; the
 driver's way-of-working in `driver.md`; the reasoning here. _Discovered the hard way: we kept making
 decisions in chat and nearly acted on a model (epics) we had never written down._
 
@@ -39,7 +39,7 @@ decisions in chat and nearly acted on a model (epics) we had never written down.
 The engine builds _any_ repo. So `tg` and `core` must hold only generic task/process primitives - no
 hardcoded step names, required named artifacts, or per-workflow commands. The workflow is the user's,
 and it lives in editable step markdown composed from primitives; a project's specifics live in that
-project's `AGENTS.md`, which the agnostic agents read. _Discovered via the `tg plan-add` trap: a
+project's `CLAUDE.md`, which the agnostic agents read. _Discovered via the `tg plan-add` trap: a
 command that baked a `build` step and a required `spec` into the engine; reverted in favour of the
 planner composing `tg file --blocked-by`._
 
@@ -92,7 +92,7 @@ The system improves itself: reflections, objective signals, and logs feed a retr
 sharpenings of the steps and conventions; the human gates those changes. The recurring pattern is that
 the human catches what the agent reviewer misses, and that catch becomes a sharpened, durable
 convention - so feedback compounds into competence. _Discovered when off-pattern code merged, the
-gap led to enriching `AGENTS.md` and the reviewer, and the next builds came back clean - the system
+gap led to enriching `CLAUDE.md` and the reviewer, and the next builds came back clean - the system
 correcting its own mistake through its own pipeline._
 
 ### Falsifiable specs; prime every review

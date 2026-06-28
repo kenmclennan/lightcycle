@@ -1,7 +1,8 @@
-# AGENTS.md - conventions for the-grid
+# CLAUDE.md - conventions for the-grid
 
-Rules for anyone (human or agent) writing code in this repo. the-grid's generic coder/reviewer steps
-are project-agnostic and defer to this file - it is where the-grid's own specifics live.
+Rules for anyone (human or agent) writing code in this repo. `claude -p` loads this file, so the
+pool's coder/reviewer agents read it automatically - the generic step files stay lightweight (flow
+and decisions) and the craft lives here.
 
 ## Architecture: hexagonal
 
@@ -27,6 +28,23 @@ project uses the Python stdlib `unittest`; there is no pytest and no pip test de
 - New pure logic ships with unit tests; a new command ships with an integration test. Get it green
   before `tg done`.
 
+## Preferred skills (invoke before the work)
+
+The craft is carried by skills, not by fattening the step files. Invoke them:
+
+- **Designing a spec**: `brainstorming`, then `writing-plans`. Question the approach and find the
+  minimal solution before committing mechanism. Do NOT add structure (flags, counts, categories,
+  parsers) by analogy to an existing pattern - justify each piece against the actual need, or leave
+  it out. The feedback/data is usually the value; an LLM can read freeform text without codified
+  scaffolding.
+- **Building**: `test-driven-development` - new behaviour ships with a failing test first.
+- **Reviewing**: `requesting-code-review` / `receiving-code-review`, and verify the work meets its
+  spec's acceptance criteria (run it, do not infer).
+
+Two craft checks that belong here, not in the step prompts: **no broken windows** (no failing or
+skipped tests, dead code, or leftover TODOs) and **names that age well** (never bake a deprecated
+concept into a durable identifier).
+
 ## Style
 
 - Near-zero comments: the "why" goes in commit messages and test names, not inline comments.
@@ -38,8 +56,9 @@ project uses the Python stdlib `unittest`; there is no pytest and no pip test de
 
 the-grid is a workflow- and project-agnostic engine. Do not bake project-specific assumptions - a
 stack, a file layout, a spec format - into the engine, the steps (`steps/*.md`), or `tg`. Those
-specifics belong in each target project's own `AGENTS.md` (like this one), which the agnostic steps
-read. `tg` provides primitives; the workflow is defined by editable step markdown, not code builtins.
+specifics belong in each target project's own `CLAUDE.md` (like this one), which `claude -p` loads
+for the agnostic steps. `tg` provides primitives; the workflow is defined by editable step markdown,
+not code builtins.
 
 Concretely, `tg` and `core/` must NOT: hardcode a workflow step or role name (e.g. `build`), require
 a specific named artifact (e.g. a `spec`), or add a command for one workflow action (e.g. a

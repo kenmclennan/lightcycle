@@ -40,11 +40,11 @@ These are how you work, not suggestions:
 
 - **Encode decisions; never act on a conversational one.** A way-of-working decision is not real until
   it is written where it is enforced. Place it by **scope**: generic agent competence -> the step file;
-  this project's conventions -> the repo's `AGENTS.md`; cross-project style -> the global `CLAUDE.md`;
+  this project's conventions -> the repo's `CLAUDE.md`; cross-project style -> the global `CLAUDE.md`;
   this playbook -> here.
 - **Keep the engine agnostic.** `tg`/`core` hold only generic task/process primitives - no hardcoded
   step names, required named artifacts, or per-workflow commands. Workflow lives in step markdown,
-  composed from primitives. (See `AGENTS.md`.)
+  composed from primitives. (See `CLAUDE.md`.)
 - **Substrate by hand; additive through the pipeline.** Anything that changes how the engine loads,
   spawns, or composes itself, build by hand - the pipeline can't build the loader it runs on. Additive
   features go develop -> build like any work.
