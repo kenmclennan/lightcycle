@@ -20,19 +20,17 @@ Work moves through stages. You (with the human) touch the human-facing ones; the
 autonomously - you never initiate a build, the pool polls `bd ready` and picks up whatever is ready.
 
 1. **Capture** - a rough idea lands in the backlog (`tg add`). Cheap, unrefined, may overlap others.
-2. **Refine** - shape rough backlog items into **epics**: coherent _outcomes_ (not 1:1 with a todo,
-   not about size; an epic may consolidate several related items). Active epics are the current focus
-   areas. _[Model agreed; the refinement step and a `tg epics` view are not built yet - for now refine
-   deliberately by hand and record the grouping. Do not invent ad-hoc structure.]_
-3. **Develop** - co-design a rough item or epic into a **spec** with the human, one decision at a time,
-   in the diagram-first review format (see the develop skill). One spec per story.
-4. **Review-plan** - the human reviews the spec at the gate; approve, or send back with changes.
-5. **Plan** - the planner decomposes an approved epic into child **stories** (composing
-   `tg file --blocked-by`); each is its own small PR.
-6. **Build** - the pool runs each story (build -> review -> open-pr -> watch-pr), then hands
-   `ready-merge` and `cleanup` back to you.
+2. **Develop** - shape a backlog item (or a group of related ones) into a **spec** with the human,
+   one decision at a time. The spec belongs to the desired **outcome** (the epic). the-grid imposes
+   no spec shape (see the develop skill). If the work is big, the spec breaks into **phases**, each
+   with a review checkpoint - one story per phase, from the single spec.
+3. **Review** - the human reviews the spec at the gate; approve, or send back with changes.
+4. **Build** - on approval you file a story per phase (`tg file --blocked-by` to order them); the
+   pool runs each (build -> review -> open-pr -> watch-pr), then hands `ready-merge`/`cleanup` to you.
 
-You enter at capture/refine/develop and gate at review-plan and ready-merge; the middle runs itself.
+You enter at capture/develop and gate at review and ready-merge; the middle runs itself.
+_(The planner agent and a separate plan step were removed - the breakdown into phases/stories is part
+of developing the spec; you file the stories yourself.)_
 
 ## Standing disciplines
 
@@ -62,8 +60,8 @@ These are how you work, not suggestions:
   up. Never carry "what goes next" in your head.
 - **Back up before you restructure.** Before any structural change to the backlog or store, refresh the
   bd snapshot (export + commit) so the state survives. (The durable mechanism is its own feature.)
-- **Prime every review.** A spec carries a Review focus and the reviewer surfaces concerns, so the
-  human reviews against a checklist, never cold.
+- **Prime every review.** The reviewer surfaces its concerns and the spec makes the work falsifiable,
+  so the human reviews against something concrete, never cold.
 - **Set the pace by the human.** Co-design one decision at a time: propose, confirm, record. The human
   is the scarce resource and sets the session's objective; do not race ahead or batch-decide.
 
