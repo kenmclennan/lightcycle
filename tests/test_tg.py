@@ -679,7 +679,7 @@ class TestTrace(unittest.TestCase):
 
 class TestAgentFrontmatter(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        self.root = tempfile.mkdtemp()  # parse_step reads step files - no bd needed
         (Path(self.root) / "steps").mkdir(exist_ok=True)
         (Path(self.root) / "steps" / "coder.md").write_text(
             "---\nmodel: sonnet\n---\n# Coder\n\nDo the thing.\n")
@@ -715,7 +715,7 @@ class TestAgentFrontmatter(unittest.TestCase):
 
 class TestFlowFromAgents(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        self.root = tempfile.mkdtemp()  # tests pure flow_next over step files - no bd needed
         write_steps(self.root)
 
     def _tg(self):
@@ -1140,7 +1140,7 @@ class TestClose(unittest.TestCase):
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        self.root = tempfile.mkdtemp()  # config is filesystem; spec_path test makes its own store
         self.dir = tempfile.mkdtemp()
         self.cfg = os.path.join(self.dir, "config")
 
@@ -1183,7 +1183,7 @@ class TestConfig(unittest.TestCase):
 
 class TestLogRender(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        self.root = tempfile.mkdtemp()  # cmd_logs reads log files only - no bd needed
         (Path(self.root) / "logs").mkdir(exist_ok=True)
         self.log = Path(self.root) / "logs" / "worker-coder-x.log"
         self.log.write_text("\n".join([
