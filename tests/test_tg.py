@@ -1328,12 +1328,13 @@ class TestReflect(unittest.TestCase):
         tid = self.store.create_task("build: feat", step="build", role="coder", parent=sid)
         return sid, tid
 
-    def test_reflect_stores_feedback_on_story(self):
+    def test_reflect_stores_feedback_on_task(self):
         sid, tid = self._file_story()
         rc, out, err = call(_cli_mod.cmd_reflect, tid, "--feedback", "pytest not found; spec thin on errors")
         self.assertEqual(rc, 0, err)
         self.assertIn("reflected", out)
-        refs = [a for a in self.store.story_artifacts(sid) if a["type"] == "reflection"]
+        self.assertEqual(self.store.story_artifacts(sid), [{"type": "spec", "value": "/tmp/no-spec.md"}])
+        refs = [a for a in self.store.story_artifacts(tid) if a["type"] == "reflection"]
         self.assertEqual(len(refs), 1)
         data = json.loads(refs[0]["value"])
         self.assertEqual(data["feedback"], "pytest not found; spec thin on errors")
@@ -1343,7 +1344,7 @@ class TestReflect(unittest.TestCase):
         sid, tid = self._file_story()
         call(_cli_mod.cmd_reflect, tid, "--feedback", "first")
         call(_cli_mod.cmd_reflect, tid, "--feedback", "second")
-        refs = [a for a in self.store.story_artifacts(sid) if a["type"] == "reflection"]
+        refs = [a for a in self.store.story_artifacts(tid) if a["type"] == "reflection"]
         self.assertEqual(len(refs), 2)
 
     def test_reflect_stamps_spec_hash(self):
@@ -1354,7 +1355,7 @@ class TestReflect(unittest.TestCase):
         sid, tid = self._file_story(spec_path=spec.name)
         self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
         call(_cli_mod.cmd_reflect, tid, "--feedback", "ok")
-        data = json.loads(next(a for a in self.store.story_artifacts(sid) if a["type"] == "reflection")["value"])
+        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a["type"] == "reflection")["value"])
         self.assertNotEqual(data["spec_hash"], "unknown")
         self.assertEqual(len(data["spec_hash"]), 8)
 
@@ -1362,7 +1363,7 @@ class TestReflect(unittest.TestCase):
         sid, tid = self._file_story()
         rc, out, err = call(_cli_mod.cmd_reflect, tid)
         self.assertEqual(rc, 0, err)
-        data = json.loads(next(a for a in self.store.story_artifacts(sid) if a["type"] == "reflection")["value"])
+        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a["type"] == "reflection")["value"])
         self.assertEqual(data["feedback"], "")
 
 

@@ -888,9 +888,8 @@ def cmd_reflect(argv):
     a = ap.parse_args(argv)
 
     t = _store.get_task(a.id)
-    story = t.get("parent") or a.id
     reflection = creflect.build_reflection(a.id, a.feedback, _spec_hash(t))
-    _store.add_artifact(story, "reflection", json.dumps(reflection))
+    _store.add_artifact(a.id, "reflection", json.dumps(reflection))  # on the task that gave it
     print("reflected")
     return 0
 
@@ -922,28 +921,31 @@ def cmd_retro(argv):
     children = _store.children(a.epic)
     stories = [task_from_bead(b) for b in children if b.get("issue_type") == "story"]
 
+    def _reflections_of(bead_id):
+        out = []
+        for art in _store.story_artifacts(bead_id):
+            if art.get("type") == "reflection":
+                try:
+                    out.append(json.loads(art["value"]))
+                except (ValueError, KeyError):
+                    pass
+        return out
+
     all_reflections = []
     story_rows = []
     for story in stories:
-        arts = _store.story_artifacts(story["id"])
-        refs = [art for art in arts if art["type"] == "reflection"]
-        parsed = []
-        for r in refs:
-            try:
-                parsed.append(json.loads(r["value"]))
-            except (ValueError, KeyError):
-                pass
-        all_reflections.extend(parsed)
+        nrefs = 0
+        for task in _store.children(story["id"]):  # feedback sits on the task that gave it
+            refs = _reflections_of(task["id"])
+            all_reflections.extend(refs)
+            nrefs += len(refs)
         sigs = _story_signals(story["id"])
-        story_rows.append((story, sigs, len(parsed)))
+        story_rows.append((story, sigs, nrefs))
 
-    # plan/decompose feedback attaches to the epic itself, not a child story
-    for art in _store.story_artifacts(a.epic):
-        if art.get("type") == "reflection":
-            try:
-                all_reflections.append(json.loads(art["value"]))
-            except (ValueError, KeyError):
-                pass
+    # non-story epic children (e.g. the planner's plan task) reflect on themselves
+    for child in children:
+        if child.get("issue_type") != "story":
+            all_reflections.extend(_reflections_of(child["id"]))
 
     n = len(all_reflections)
     print("== retro: %s  (N=%d) ==" % (a.epic, n))
