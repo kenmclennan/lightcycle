@@ -1328,41 +1328,22 @@ class TestReflect(unittest.TestCase):
         tid = self.store.create_task("build: feat", step="build", role="coder", parent=sid)
         return sid, tid
 
-    def test_reflect_stores_artifact_on_story(self):
+    def test_reflect_stores_feedback_on_story(self):
         sid, tid = self._file_story()
-        rc, out, err = call(_cli_mod.cmd_reflect, tid, "--used", "Summary,Scope", "--skipped", "Risks")
+        rc, out, err = call(_cli_mod.cmd_reflect, tid, "--feedback", "pytest not found; spec thin on errors")
         self.assertEqual(rc, 0, err)
         self.assertIn("reflected", out)
-        arts = self.store.story_artifacts(sid)
-        refs = [a for a in arts if a["type"] == "reflection"]
+        refs = [a for a in self.store.story_artifacts(sid) if a["type"] == "reflection"]
         self.assertEqual(len(refs), 1)
         data = json.loads(refs[0]["value"])
-        self.assertEqual(data["sections"]["Summary"], "used")
-        self.assertEqual(data["sections"]["Scope"], "used")
-        self.assertEqual(data["sections"]["Risks"], "skipped")
+        self.assertEqual(data["feedback"], "pytest not found; spec thin on errors")
         self.assertEqual(data["task"], tid)
-
-    def test_reflect_records_guess_missing_noise(self):
-        sid, tid = self._file_story()
-        rc, out, err = call(_cli_mod.cmd_reflect, tid,
-                            "--guess", "Decisions",
-                            "--missing", "acceptance criteria",
-                            "--missing", "error cases",
-                            "--noise", "Out of scope")
-        self.assertEqual(rc, 0, err)
-        arts = self.store.story_artifacts(sid)
-        data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
-        self.assertEqual(data["sections"]["Decisions"], "guess")
-        self.assertIn("acceptance criteria", data["missing"])
-        self.assertIn("error cases", data["missing"])
-        self.assertIn("Out of scope", data["noise"])
 
     def test_reflect_multiple_calls_append(self):
         sid, tid = self._file_story()
-        call(_cli_mod.cmd_reflect, tid, "--used", "Summary")
-        call(_cli_mod.cmd_reflect, tid, "--used", "Scope")
-        arts = self.store.story_artifacts(sid)
-        refs = [a for a in arts if a["type"] == "reflection"]
+        call(_cli_mod.cmd_reflect, tid, "--feedback", "first")
+        call(_cli_mod.cmd_reflect, tid, "--feedback", "second")
+        refs = [a for a in self.store.story_artifacts(sid) if a["type"] == "reflection"]
         self.assertEqual(len(refs), 2)
 
     def test_reflect_stamps_spec_hash(self):
@@ -1372,21 +1353,17 @@ class TestReflect(unittest.TestCase):
         spec.close()
         sid, tid = self._file_story(spec_path=spec.name)
         self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
-        call(_cli_mod.cmd_reflect, tid, "--used", "spec")
-        arts = self.store.story_artifacts(sid)
-        data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
+        call(_cli_mod.cmd_reflect, tid, "--feedback", "ok")
+        data = json.loads(next(a for a in self.store.story_artifacts(sid) if a["type"] == "reflection")["value"])
         self.assertNotEqual(data["spec_hash"], "unknown")
         self.assertEqual(len(data["spec_hash"]), 8)
 
-    def test_reflect_no_sections_still_valid(self):
+    def test_reflect_no_feedback_still_valid(self):
         sid, tid = self._file_story()
         rc, out, err = call(_cli_mod.cmd_reflect, tid)
         self.assertEqual(rc, 0, err)
-        arts = self.store.story_artifacts(sid)
-        data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
-        self.assertEqual(data["sections"], {})
-        self.assertEqual(data["missing"], [])
-        self.assertEqual(data["noise"], [])
+        data = json.loads(next(a for a in self.store.story_artifacts(sid) if a["type"] == "reflection")["value"])
+        self.assertEqual(data["feedback"], "")
 
 
 class TestRetro(unittest.TestCase):
@@ -1407,25 +1384,15 @@ class TestRetro(unittest.TestCase):
         self.assertIn("no reflections yet", out)
         self.assertIn("Per-story signals", out)
 
-    def test_retro_aggregates_section_counts(self):
+    def test_retro_shows_feedback(self):
         epic, sid = self._make_epic_with_story()
         tid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
-        call(_cli_mod.cmd_reflect, tid, "--used", "Summary,Scope", "--skipped", "Risks")
+        call(_cli_mod.cmd_reflect, tid, "--feedback", "edge case coverage was thin")
         rc, out, err = call(_cli_mod.cmd_retro, epic)
         self.assertEqual(rc, 0, err)
         self.assertIn("N=1", out)
-        self.assertIn("Summary", out)
-        self.assertIn("used=1", out)
-        self.assertIn("Risks", out)
-        self.assertIn("skipped=1", out)
-
-    def test_retro_aggregates_missing_and_noise(self):
-        epic, sid = self._make_epic_with_story()
-        tid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
-        call(_cli_mod.cmd_reflect, tid, "--missing", "edge case coverage", "--noise", "Out of scope")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
-        self.assertIn("edge case coverage", out)
-        self.assertIn("Out of scope", out)
+        self.assertIn("Feedback", out)
+        self.assertIn("edge case coverage was thin", out)
 
     def test_retro_signals_review_rounds(self):
         epic, sid = self._make_epic_with_story()

@@ -1,6 +1,3 @@
-import collections
-
-
 def derive_signals(tasks, task_histories):
     """Compute objective signals from plain task records and their bd history sequences.
 
@@ -30,31 +27,11 @@ def derive_signals(tasks, task_histories):
     return {"blocks": blocks, "review_rounds": review_rounds, "conflict": conflict}
 
 
-def aggregate_reflections(reflections):
-    """Aggregate a list of parsed reflection dicts into section counts and frequency maps.
-
-    Returns:
-        {
-            "section_counts": {section: {"used": int, "skipped": int, "guess": int}},
-            "missing_counts": Counter,
-            "noise_counts": Counter,
-        }
-    """
-    section_counts = {}
-    for ref in reflections:
-        for sec, verdict in (ref.get("sections") or {}).items():
-            if sec not in section_counts:
-                section_counts[sec] = {"used": 0, "skipped": 0, "guess": 0}
-            if verdict in section_counts[sec]:
-                section_counts[sec][verdict] += 1
-    missing_counts = collections.Counter(
-        m for ref in reflections for m in (ref.get("missing") or [])
-    )
-    noise_counts = collections.Counter(
-        item for ref in reflections for item in (ref.get("noise") or [])
-    )
-    return {
-        "section_counts": section_counts,
-        "missing_counts": missing_counts,
-        "noise_counts": noise_counts,
-    }
+def gather_feedback(reflections):
+    """Collect the freeform feedback texts (with their task ids) for reading or LLM
+    analysis. No counting or categorising - the raw text is the signal."""
+    return [
+        {"task": ref.get("task"), "feedback": ref.get("feedback", "")}
+        for ref in reflections
+        if (ref.get("feedback") or "").strip()
+    ]

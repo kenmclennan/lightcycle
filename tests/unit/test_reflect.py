@@ -1,39 +1,6 @@
 import unittest
 
-from the_grid.core.reflect import build_reflection, build_sections, spec_hash_from_bytes
-
-
-class TestBuildSections(unittest.TestCase):
-    def test_used(self):
-        s = build_sections(used="Summary,Scope")
-        self.assertEqual(s["Summary"], "used")
-        self.assertEqual(s["Scope"], "used")
-
-    def test_skipped(self):
-        s = build_sections(skipped="Risks")
-        self.assertEqual(s["Risks"], "skipped")
-
-    def test_guess(self):
-        s = build_sections(guess="Decisions")
-        self.assertEqual(s["Decisions"], "guess")
-
-    def test_last_wins_on_collision(self):
-        s = build_sections(used="X", skipped="X")
-        self.assertEqual(s["X"], "skipped")
-
-    def test_strips_whitespace(self):
-        s = build_sections(used=" Summary , Scope ")
-        self.assertIn("Summary", s)
-        self.assertIn("Scope", s)
-
-    def test_empty_strings_produce_empty_dict(self):
-        self.assertEqual(build_sections(), {})
-
-    def test_empty_csv_entry_skipped(self):
-        s = build_sections(used="A,,B")
-        self.assertNotIn("", s)
-        self.assertIn("A", s)
-        self.assertIn("B", s)
+from the_grid.core.reflect import build_reflection, spec_hash_from_bytes
 
 
 class TestSpecHashFromBytes(unittest.TestCase):
@@ -51,39 +18,21 @@ class TestSpecHashFromBytes(unittest.TestCase):
 
 
 class TestBuildReflection(unittest.TestCase):
-    def test_full_reflection(self):
-        r = build_reflection(
-            "task-1",
-            used="Summary,Scope",
-            skipped="Risks",
-            guess="Decisions",
-            missing=["acceptance criteria"],
-            noise=["Out of scope"],
-            spec_hash="abc12345",
-        )
+    def test_carries_feedback(self):
+        r = build_reflection("task-1", feedback="pytest not found; used bash tests/run.sh",
+                             spec_hash="abc12345")
         self.assertEqual(r["task"], "task-1")
-        self.assertEqual(r["sections"]["Summary"], "used")
-        self.assertEqual(r["sections"]["Scope"], "used")
-        self.assertEqual(r["sections"]["Risks"], "skipped")
-        self.assertEqual(r["sections"]["Decisions"], "guess")
-        self.assertEqual(r["missing"], ["acceptance criteria"])
-        self.assertEqual(r["noise"], ["Out of scope"])
+        self.assertEqual(r["feedback"], "pytest not found; used bash tests/run.sh")
         self.assertEqual(r["spec_hash"], "abc12345")
 
     def test_defaults(self):
         r = build_reflection("task-1")
-        self.assertEqual(r["sections"], {})
-        self.assertEqual(r["missing"], [])
-        self.assertEqual(r["noise"], [])
+        self.assertEqual(r["feedback"], "")
         self.assertEqual(r["spec_hash"], "unknown")
 
     def test_json_shape_stable(self):
-        r = build_reflection("t", used="Summary", missing=["x"], noise=["y"], spec_hash="aabbccdd")
-        self.assertIn("task", r)
-        self.assertIn("sections", r)
-        self.assertIn("missing", r)
-        self.assertIn("noise", r)
-        self.assertIn("spec_hash", r)
+        r = build_reflection("t", feedback="x", spec_hash="aabbccdd")
+        self.assertEqual(set(r), {"task", "feedback", "spec_hash"})
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.core.retro import aggregate_reflections, derive_signals
+from the_grid.core.retro import derive_signals, gather_feedback
 
 
 def _hist(*statuses):
@@ -58,49 +58,32 @@ class TestDeriveSignals(unittest.TestCase):
         self.assertEqual(sigs["blocks"], 0)
 
 
-class TestAggregateReflections(unittest.TestCase):
-    def test_section_counts(self):
+class TestGatherFeedback(unittest.TestCase):
+    def test_collects_feedback_with_task_ids(self):
         refs = [
-            {"sections": {"Summary": "used", "Risks": "skipped"}},
-            {"sections": {"Summary": "used", "Risks": "guess"}},
+            {"task": "t1", "feedback": "pytest not found"},
+            {"task": "t2", "feedback": "spec was thin on error cases"},
         ]
-        agg = aggregate_reflections(refs)
-        sc = agg["section_counts"]
-        self.assertEqual(sc["Summary"]["used"], 2)
-        self.assertEqual(sc["Risks"]["skipped"], 1)
-        self.assertEqual(sc["Risks"]["guess"], 1)
+        got = gather_feedback(refs)
+        self.assertEqual(got, [
+            {"task": "t1", "feedback": "pytest not found"},
+            {"task": "t2", "feedback": "spec was thin on error cases"},
+        ])
 
-    def test_missing_counts(self):
+    def test_skips_empty_and_whitespace_feedback(self):
         refs = [
-            {"missing": ["acceptance criteria", "error cases"]},
-            {"missing": ["acceptance criteria"]},
+            {"task": "t1", "feedback": ""},
+            {"task": "t2", "feedback": "   "},
+            {"task": "t3", "feedback": "real feedback"},
         ]
-        agg = aggregate_reflections(refs)
-        self.assertEqual(agg["missing_counts"]["acceptance criteria"], 2)
-        self.assertEqual(agg["missing_counts"]["error cases"], 1)
+        got = gather_feedback(refs)
+        self.assertEqual([g["task"] for g in got], ["t3"])
 
-    def test_noise_counts(self):
-        refs = [{"noise": ["Out of scope"]}, {"noise": ["Out of scope"]}]
-        agg = aggregate_reflections(refs)
-        self.assertEqual(agg["noise_counts"]["Out of scope"], 2)
+    def test_missing_feedback_key_tolerated(self):
+        self.assertEqual(gather_feedback([{"task": "t1"}]), [])
 
     def test_empty_reflections(self):
-        agg = aggregate_reflections([])
-        self.assertEqual(agg["section_counts"], {})
-        self.assertEqual(len(agg["missing_counts"]), 0)
-        self.assertEqual(len(agg["noise_counts"]), 0)
-
-    def test_missing_and_noise_keys_absent_are_tolerated(self):
-        refs = [{"sections": {"X": "used"}}]
-        agg = aggregate_reflections(refs)
-        self.assertEqual(len(agg["missing_counts"]), 0)
-        self.assertEqual(len(agg["noise_counts"]), 0)
-
-    def test_unknown_verdict_ignored(self):
-        refs = [{"sections": {"X": "invalid"}}]
-        agg = aggregate_reflections(refs)
-        sc = agg["section_counts"]["X"]
-        self.assertEqual(sc["used"] + sc["skipped"] + sc["guess"], 0)
+        self.assertEqual(gather_feedback([]), [])
 
 
 if __name__ == "__main__":

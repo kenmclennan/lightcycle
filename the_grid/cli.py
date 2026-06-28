@@ -246,11 +246,11 @@ COMMAND_GROUPS = [
         ("block", "<id> --needs ... [--branch/--pr/--reason/--tried]",
          "escalate to a human with resume-state"),
         ("unblock", "<id>", "flip a blocked task back to its agent role so it re-claims and retries"),
-        ("reflect", '<task> [--used/--skipped/--guess "<sections>"] [--missing/--noise "text"]',
-         "record a structured spec-section reflection on the story (call before tg done)"),
+        ("reflect", '<task> [--feedback "text"]',
+         "record freeform feedback on the story for the retro (call before tg done)"),
     ]),
     ("Feedback loop", [
-        ("retro", "<epic>", "aggregate child reflections + objective signals into a read digest"),
+        ("retro", "<epic>", "gather child feedback + objective signals into a read digest"),
     ]),
     ("Maintenance", [
         ("sweep", "", "reclaim orphaned task claims and prune dead worker entries (kept: GRID_WORKER_HISTORY, default 20)"),
@@ -881,22 +881,15 @@ def _story_signals(story_id):
 def cmd_reflect(argv):
     ap = argparse.ArgumentParser(prog="tg reflect")
     ap.add_argument("id")
-    ap.add_argument("--used", default="",
-                    help="comma-separated spec section names you actively used")
-    ap.add_argument("--skipped", default="",
-                    help="comma-separated spec section names that were irrelevant")
-    ap.add_argument("--guess", default="",
-                    help="comma-separated spec section names where info was missing")
-    ap.add_argument("--missing", action="append", default=[],
-                    help="information you needed but had to infer (repeatable)")
-    ap.add_argument("--noise", action="append", default=[],
-                    help="content that added no signal (repeatable)")
+    ap.add_argument("--feedback", default="",
+                    help="freeform feedback for the retro: what went well, what got in the way, "
+                         "tooling friction, spec gaps - whatever is worth surfacing (your step "
+                         "file says what to look for)")
     a = ap.parse_args(argv)
 
     t = _store.get_task(a.id)
     story = t.get("parent") or a.id
-    reflection = creflect.build_reflection(
-        a.id, a.used, a.skipped, a.guess, a.missing, a.noise, _spec_hash(t))
+    reflection = creflect.build_reflection(a.id, a.feedback, _spec_hash(t))
     _store.add_artifact(story, "reflection", json.dumps(reflection))
     print("reflected")
     return 0
@@ -947,29 +940,13 @@ def cmd_retro(argv):
     n = len(all_reflections)
     print("== retro: %s  (N=%d) ==" % (a.epic, n))
 
-    if n > 0:
-        agg = cretro.aggregate_reflections(all_reflections)
-        section_counts = agg["section_counts"]
-        missing_counts = agg["missing_counts"]
-        noise_counts = agg["noise_counts"]
-
-        if section_counts:
-            print("\nSections:")
-            for sec, counts in sorted(section_counts.items()):
-                parts = ["%s=%d" % (v, counts[v]) for v in ("used", "skipped", "guess") if counts[v]]
-                print("  %-22s  %s" % (sec, "  ".join(parts)))
-
-        if missing_counts:
-            print("\nMissing (most frequent):")
-            for text, count in missing_counts.most_common():
-                print("  x%d  %s" % (count, text))
-
-        if noise_counts:
-            print("\nNoise (most frequent):")
-            for text, count in noise_counts.most_common():
-                print("  x%d  %s" % (count, text))
-    else:
-        print("no reflections yet - coders call `tg reflect` before `tg done`")
+    feedback = cretro.gather_feedback(all_reflections)
+    if feedback:
+        print("\nFeedback (read it; an analyser agent can later):")
+        for item in feedback:
+            print("  [%s] %s" % (item["task"], item["feedback"]))
+    elif n == 0:
+        print("no reflections yet - agents call `tg reflect --feedback` before `tg done`")
 
     print("\nPer-story signals:")
     for story, sigs, nrefs in story_rows:
