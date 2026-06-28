@@ -1,4 +1,4 @@
-import io, json, os, subprocess, sys, tempfile, time, unittest
+import io, json, os, shutil, subprocess, sys, tempfile, time, unittest
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
@@ -38,13 +38,27 @@ def write_config(projects=None, specs=None):
     return p
 
 
+_STORE_TEMPLATE = None
+
+
+def _store_template():
+    """A bd store inited once per run (git + bd init). new_store copies it - a
+    filesystem copy is far cheaper than re-running bd/Dolt init for every test."""
+    global _STORE_TEMPLATE
+    if _STORE_TEMPLATE is None:
+        d = tempfile.mkdtemp()
+        subprocess.run(["git", "init", "-q"], cwd=d, check=True)
+        subprocess.run(
+            ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
+            cwd=d, check=True,
+        )
+        _STORE_TEMPLATE = d
+    return _STORE_TEMPLATE
+
+
 def new_store():
     d = tempfile.mkdtemp()
-    subprocess.run(["git", "init", "-q"], cwd=d, check=True)
-    subprocess.run(
-        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-        cwd=d, check=True,
-    )
+    shutil.copytree(_store_template(), d, dirs_exist_ok=True)
     return d
 
 
@@ -82,10 +96,8 @@ def new_store_with_origin():
     engine's own basename resolve back to the store (the self-repo worktree)."""
     parent = tempfile.mkdtemp()
     d = make_repo(parent, "engine")
-    subprocess.run(
-        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-        cwd=d, check=True,
-    )
+    shutil.copytree(os.path.join(_store_template(), ".beads"),
+                    os.path.join(d, ".beads"), dirs_exist_ok=True)
     return d
 
 
