@@ -7,7 +7,8 @@ each claim one task, do it, and exit. tmux is optional - every part runs as a
 standalone command. You define how you work by editing the steps in `steps/`; the
 engine imposes no spec format or fixed pipeline.
 
-See `BACKLOG.md` for the roadmap and known gaps.
+The live backlog and roadmap are in beads - run `tg backlog` for open items, `tg status` for the
+whole picture.
 
 ## Prerequisites
 
