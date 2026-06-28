@@ -1,5 +1,6 @@
 """BdStore port-contract subset: verifies real bd wiring for covered operations."""
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -7,14 +8,27 @@ import unittest
 from the_grid.adapters.store import BdStore
 from tests.store_contract import StoreContractBase
 
+_TEMPLATE = None
+
+
+def _template():
+    """One real bd store inited per run; copied per test (full real-bd fidelity,
+    without paying bd/Dolt init 14 times)."""
+    global _TEMPLATE
+    if _TEMPLATE is None:
+        d = tempfile.mkdtemp()
+        subprocess.run(["git", "init", "-q"], cwd=d, check=True)
+        subprocess.run(
+            ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
+            cwd=d, check=True,
+        )
+        _TEMPLATE = d
+    return _TEMPLATE
+
 
 def _new_bd_root():
     d = tempfile.mkdtemp()
-    subprocess.run(["git", "init", "-q"], cwd=d, check=True)
-    subprocess.run(
-        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-        cwd=d, check=True,
-    )
+    shutil.copytree(_template(), d, dirs_exist_ok=True)
     return d
 
 

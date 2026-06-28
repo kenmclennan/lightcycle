@@ -412,88 +412,86 @@ class TestSpawn(unittest.TestCase):
 
 class TestRun(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        for d in ("steps", "logs", "flows"):
+        self.root = tempfile.mkdtemp()
+        for d in ("steps", "logs", "flows", ".beads"):  # .beads satisfies the store guard
             (Path(self.root) / d).mkdir(exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r)
-
-    def test_run_once_spawns_for_ready_role(self):
-        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
-        r = subprocess.run([sys.executable, TG, "run", "--once"], capture_output=True, text=True, env=env)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
-        self.assertTrue(any(w["role"] == "coder" for w in workers))
-
-    def test_queue_lists_ready(self):
-        c = json.loads(bd_in(self.root, "create", "build: y", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("queue", "5", root=self.root)
-        self.assertIn(c, r.stdout)
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
 
     def _run_once(self):
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
-        return subprocess.run([sys.executable, TG, "run", "--once"], capture_output=True, text=True, env=env)
+        return call(_cli_mod.cmd_run, "--once")
+
+    def _workers(self):
+        return json.loads((Path(self.root) / "logs" / "workers.json").read_text())
+
+    def _preset_worker(self, **w):
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps([w]))
+
+    def test_run_once_spawns_for_ready_role(self):
+        self.store.create_task("build: t", step="build", role="coder")
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(any(w["role"] == "coder" for w in self._workers()))
+
+    def test_queue_lists_ready(self):
+        c = self.store.create_task("build: y", step="build", role="coder")
+        rc, out, _ = call(_cli_mod.cmd_queue, "5")
+        self.assertIn(c, out)
 
     def test_run_skips_role_with_inflight_worker(self):
         # A coder is already booting (alive, claimed nothing yet -> bead None) recently.
-        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
-        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "boot", "role": "coder", "pid": os.getpid(), "log": "x",
-              "bead": None, "started": time.time()}]))
-        r = self._run_once()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
-        self.assertEqual(len(workers), 1)  # no second coder spawned
+        self.store.create_task("build: t", step="build", role="coder")
+        self._preset_worker(spawnid="boot", role="coder", pid=os.getpid(), log="x",
+                            bead=None, started=time.time())
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(self._workers()), 1)  # no second coder spawned
 
     def test_run_spawns_when_inflight_worker_is_stale(self):
         # A worker stuck booting far longer than the max boot age must not block forever.
-        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
-        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "stuck", "role": "coder", "pid": os.getpid(), "log": "x",
-              "bead": None, "started": time.time() - 9999}]))
-        r = self._run_once()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
-        self.assertEqual(len(workers), 2)  # stale boot no longer blocks the role
+        self.store.create_task("build: t", step="build", role="coder")
+        self._preset_worker(spawnid="stuck", role="coder", pid=os.getpid(), log="x",
+                            bead=None, started=time.time() - 9999)
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(self._workers()), 2)  # stale boot no longer blocks the role
 
     def test_run_spawns_when_prior_worker_already_claimed(self):
-        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
+        self.store.create_task("build: t", step="build", role="coder")
         # prior coder already claimed something (bead set) -> not inflight
-        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "old", "role": "coder", "pid": os.getpid(), "log": "x", "bead": "other-1"}]))
-        r = self._run_once()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
-        self.assertEqual(len(workers), 2)  # a fresh coder spawned for the ready task
+        self._preset_worker(spawnid="old", role="coder", pid=os.getpid(), log="x", bead="other-1")
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(self._workers()), 2)  # a fresh coder spawned for the ready task
 
     def test_run_pool_fills_up_to_max_agents(self):
         # 7 build + 3 review ready; the default pool cap of 4 spawns 4 workers in
         # one tick, drawn across roles from the ready queue (not one per role).
         for i in range(7):
-            bd_in(self.root, "create", "build: %d" % i, "-t", "task",
-                  "-l", "for:coder,step:build", "--json")
+            self.store.create_task("build: %d" % i, step="build", role="coder")
         for i in range(3):
-            bd_in(self.root, "create", "review: %d" % i, "-t", "task",
-                  "-l", "for:reviewer,step:review", "--json")
-        r = self._run_once()
-        self.assertEqual(r.returncode, 0, r.stderr)
-        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
-        self.assertEqual(len(workers), 4)
+            self.store.create_task("review: %d" % i, step="review", role="reviewer")
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(self._workers()), 4)
 
     def test_run_pool_respects_max_agents_env(self):
         for i in range(5):
-            bd_in(self.root, "create", "build: %d" % i, "-t", "task",
-                  "-l", "for:coder,step:build", "--json")
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root,
-                   GRID_SPAWN_CMD="echo x >> {log}", GRID_MAX_AGENTS="2")
-        r = subprocess.run([sys.executable, TG, "run", "--once"],
-                           capture_output=True, text=True, env=env)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
-        self.assertEqual(len(workers), 2)
+            self.store.create_task("build: %d" % i, step="build", role="coder")
+        os.environ["GRID_MAX_AGENTS"] = "2"
+        self.addCleanup(lambda: os.environ.pop("GRID_MAX_AGENTS", None))
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(self._workers()), 2)
 
 
 class TestAdd(unittest.TestCase):
@@ -763,36 +761,36 @@ class TestFlowFromAgents(unittest.TestCase):
 
 class TestFileStep(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_file_requires_step(self):
-        r = run_tg("file", "specs/X.md", root=self.root)
-        self.assertEqual(r.returncode, 2)
+        rc, _, _ = call(_cli_mod.cmd_file, "specs/X.md")
+        self.assertEqual(rc, 2)
 
     def test_file_rejects_unknown_step(self):
-        r = run_tg("file", "specs/X.md", "--step", "bogus", root=self.root)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("bogus", r.stderr)
+        rc, _, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "bogus")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("bogus", err)
 
     def test_file_starts_at_given_step(self):
-        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
-        kids = json.loads(bd_in(self.root, "children", sid, "--json"))
-        kid = json.loads(run_tg("show", kids[0]["id"], root=self.root).stdout)
+        _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        kid = self.store.get_task(self.store.children(out.strip())[0]["id"])
         self.assertEqual(kid["step"], "build")
         self.assertEqual(kid["role"], "coder")
 
     def test_spawn_uses_frontmatter_model(self):
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
-        r = subprocess.run([sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env)
-        self.assertEqual(r.returncode, 0, r.stderr)
+        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
+        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
+        rc, _, err = call(_cli_mod.cmd_spawn, "coder")
+        self.assertEqual(rc, 0, err)
 
     def test_spawn_refuses_when_model_missing(self):
         (Path(self.root) / "steps" / "reviewer.md").write_text("no frontmatter here")
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo x >> {log}")
-        r = subprocess.run([sys.executable, TG, "spawn", "reviewer"], capture_output=True, text=True, env=env)
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("model", r.stderr)
+        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
+        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
+        rc, _, err = call(_cli_mod.cmd_spawn, "reviewer")
+        self.assertEqual(rc, 1)
+        self.assertIn("model", err)
 
 
 class TestArtifactContracts(unittest.TestCase):
@@ -941,12 +939,17 @@ class TestContractsOptional(unittest.TestCase):
 
 class TestWorktree(unittest.TestCase):
     def setUp(self):
-        self.root = new_store_with_origin()
+        # Real git engine repo (for the worktree assertions); FakeStore for bd (fast).
+        parent = tempfile.mkdtemp()
+        self.root = make_repo(parent, "engine")
         write_steps(self.root)
-        # projects -> the engine's parent so basename(root) resolves to the store;
-        # specs -> the store so file's relative spec path resolves under it.
-        os.environ["GRID_CONFIG"] = write_config(
-            projects=os.path.dirname(self.root), specs=self.root)
+        os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def tearDown(self):
         os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
@@ -954,20 +957,14 @@ class TestWorktree(unittest.TestCase):
     def _branch_of(self, path):
         return git_in(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
 
-    def _tg(self):
-        import importlib.util
-        from importlib.machinery import SourceFileLoader
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        loader = SourceFileLoader("tgmod_wt", TG)
-        spec = importlib.util.spec_from_loader("tgmod_wt", loader)
-        mod = importlib.util.module_from_spec(spec)
-        loader.exec_module(mod)
-        mod.set_store(mod.BdStore())
-        return mod
+    def _file(self):
+        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build")
+        return out.strip()
 
     def test_claim_returns_isolated_workspace(self):
-        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
-        t = json.loads(run_tg("claim", "coder", root=self.root).stdout)
+        sid = self._file()
+        _, out, err = call(_cli_mod.cmd_claim, "coder")
+        t = json.loads(out)
         ws = t["workspace"]
         self.assertTrue(os.path.isdir(ws))
         self.assertEqual(os.path.basename(ws), sid)
@@ -976,44 +973,45 @@ class TestWorktree(unittest.TestCase):
         self.assertEqual(t["branch"], "feat/w")
 
     def test_claim_does_not_switch_root_branch(self):
-        run_tg("file", "specs/W.md", "--step", "build", root=self.root)
+        self._file()
         before = self._branch_of(self.root)
-        run_tg("claim", "coder", root=self.root)
+        call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(self._branch_of(self.root), before)
         self.assertEqual(self._branch_of(self.root), "main")
 
     def test_worktree_reused_across_roles(self):
-        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
-        ws1 = json.loads(run_tg("claim", "coder", root=self.root).stdout)["workspace"]
-        build = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
-        run_tg("done", build, "done", root=self.root)
-        ws2 = json.loads(run_tg("claim", "reviewer", root=self.root).stdout)["workspace"]
+        sid = self._file()
+        _, out, _ = call(_cli_mod.cmd_claim, "coder")
+        ws1 = json.loads(out)["workspace"]
+        build = self.store.children(sid)[0]["id"]
+        call(_cli_mod.cmd_done, build, "done")
+        _, out2, _ = call(_cli_mod.cmd_claim, "reviewer")
+        ws2 = json.loads(out2)["workspace"]
         self.assertEqual(ws1, ws2)
 
     def test_branch_artifact_autolinked_on_claim(self):
-        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
-        run_tg("claim", "coder", root=self.root)
-        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0]["metadata"]["artifacts"]
+        sid = self._file()
+        call(_cli_mod.cmd_claim, "coder")
+        arts = self.store.story_artifacts(sid)
         branches = [a for a in arts if a["type"] == "branch"]
         self.assertEqual(len(branches), 1)
         self.assertEqual(branches[0]["value"], "feat/w")
 
     def test_worktrees_dir_gitignored(self):
-        run_tg("file", "specs/W.md", "--step", "build", root=self.root)
-        run_tg("claim", "coder", root=self.root)
+        self._file()
+        call(_cli_mod.cmd_claim, "coder")
         gi = (Path(self.root) / ".gitignore").read_text().splitlines()
         self.assertIn(".worktrees/", [l.strip() for l in gi])
 
     def test_reclaim_reuses_existing_branch(self):
-        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
-        tg = self._tg()
-        ws = tg.ensure_worktree(sid)
+        sid = self._file()
+        ws = _cli_mod.ensure_worktree(sid)
         (Path(ws) / "f.txt").write_text("x")
         git_in(ws, "add", ".")
         git_in(ws, "commit", "-q", "-m", "w")
         git_in(self.root, "worktree", "remove", "--force", ws)
         self.assertFalse(os.path.isdir(ws))
-        ws2 = tg.ensure_worktree(sid)
+        ws2 = _cli_mod.ensure_worktree(sid)
         self.assertEqual(ws, ws2)
         self.assertEqual(self._branch_of(ws2), "feat/w")
         self.assertTrue(os.path.isfile(os.path.join(ws2, "f.txt")))
@@ -1021,24 +1019,42 @@ class TestWorktree(unittest.TestCase):
 
 class TestWorktreeNoOrigin(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        parent = tempfile.mkdtemp()
+        self.root = os.path.join(parent, "engine")
+        subprocess.run(["git", "init", "-q", self.root], check=True)  # git repo, no origin
         write_steps(self.root)
+        os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+
+    def tearDown(self):
+        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
 
     def test_claim_omits_workspace_without_origin(self):
-        bd_in(self.root, "create", "build: t", "-t", "task",
-              "-l", "for:coder,step:build", "--json")
-        t = json.loads(run_tg("claim", "coder", root=self.root).stdout)
+        self.store.create_task("build: t", step="build", role="coder")
+        _, out, _ = call(_cli_mod.cmd_claim, "coder")
+        t = json.loads(out)
         self.assertEqual(t["status"], "in-progress")
         self.assertNotIn("workspace", t)
 
 
 class TestNamedRepo(unittest.TestCase):
     def setUp(self):
-        self.engine = new_store_with_origin()  # engine repo under a projects parent
+        self.projects = tempfile.mkdtemp()
+        self.engine = make_repo(self.projects, "engine")  # real git engine; FakeStore for bd
         write_steps(self.engine)
-        self.projects = os.path.dirname(self.engine)
         self.app = make_repo(self.projects, "app")  # a sibling repo, referenced by name
         os.environ["GRID_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
+        os.environ["GRID_ROOT_OVERRIDE"] = self.engine
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def tearDown(self):
         os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
@@ -1048,13 +1064,13 @@ class TestNamedRepo(unittest.TestCase):
                                "refs/heads/" + branch], capture_output=True).returncode == 0
 
     def _claim(self, repo=None):
-        args = ["file", "specs/X.md", "--step", "build"]
+        args = ["specs/X.md", "--step", "build"]
         if repo:
             args += ["--repo", repo]
-        run_tg(*args, root=self.engine)
-        r = run_tg("claim", "coder", root=self.engine)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        return json.loads(r.stdout)
+        call(_cli_mod.cmd_file, *args)
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 0, err)
+        return json.loads(out)
 
     def test_named_repo_worktree_created_engine_untouched(self):
         view = self._claim("app")
@@ -1079,20 +1095,18 @@ class TestNamedRepo(unittest.TestCase):
         self.assertTrue(view["spec_path"].startswith(self.engine))  # default specs_root = engine
 
     def test_file_stores_single_repo_artifact(self):
-        sid = run_tg("file", "specs/X.md", "--step", "build", "--repo", "app",
-                     root=self.engine).stdout.strip()
-        arts = json.loads(bd_in(self.engine, "show", sid, "--json"))[0]["metadata"]["artifacts"]
+        _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--repo", "app")
+        arts = self.store.story_artifacts(out.strip())
         repos = [a["value"] for a in arts if a["type"] == "repo"]
         self.assertEqual(repos, ["app"])
 
     def test_file_rejects_unknown_repo(self):
-        before = json.loads(bd_in(self.engine, "list", "--json"))
-        r = run_tg("file", "specs/X.md", "--step", "build", "--repo", "does-not-exist",
-                   root=self.engine)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("does-not-exist", r.stderr)
-        after = json.loads(bd_in(self.engine, "list", "--json"))
-        self.assertEqual(len(before), len(after))
+        before = len(self.store._beads)
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
+                            "--repo", "does-not-exist")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("does-not-exist", err)
+        self.assertEqual(len(self.store._beads), before)
 
 
 class TestUnblock(unittest.TestCase):
@@ -1125,10 +1139,16 @@ class TestUnblock(unittest.TestCase):
 
 class TestClose(unittest.TestCase):
     def setUp(self):
-        self.root = new_store_with_origin()
+        parent = tempfile.mkdtemp()
+        self.root = make_repo(parent, "engine")  # real git engine; FakeStore for bd
         write_steps(self.root)
-        os.environ["GRID_CONFIG"] = write_config(
-            projects=os.path.dirname(self.root), specs=self.root)
+        os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def tearDown(self):
         os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
@@ -1138,14 +1158,16 @@ class TestClose(unittest.TestCase):
                                "refs/heads/" + branch], capture_output=True).returncode == 0
 
     def test_close_closes_story_and_tasks_and_removes_worktree(self):
-        sid = run_tg("file", "specs/W.md", "--step", "build", root=self.root).stdout.strip()
-        ws = json.loads(run_tg("claim", "coder", root=self.root).stdout)["workspace"]
+        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build")
+        sid = out.strip()
+        _, cout, _ = call(_cli_mod.cmd_claim, "coder")
+        ws = json.loads(cout)["workspace"]
         self.assertTrue(os.path.isdir(ws))
-        build = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
-        r = run_tg("close", sid, "merged", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(json.loads(bd_in(self.root, "show", sid, "--json"))[0]["status"], "closed")
-        self.assertEqual(json.loads(bd_in(self.root, "show", build, "--json"))[0]["status"], "closed")
+        build = self.store.children(sid)[0]["id"]
+        rc, _, err = call(_cli_mod.cmd_close, sid, "merged")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store._beads[sid]["status"], "closed")
+        self.assertEqual(self.store._beads[build]["status"], "closed")
         self.assertFalse(os.path.isdir(ws))
         self.assertFalse(self._has_branch(self.root, "feat/w"))
 
