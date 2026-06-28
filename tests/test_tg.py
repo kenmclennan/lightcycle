@@ -1,5 +1,5 @@
 import io, json, os, subprocess, sys, tempfile, time, unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -142,6 +142,32 @@ def write_contract_steps(root, specs=None):
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
 
 
+def call(fn, *args):
+    """Run a cmd_* in-process; return (rc, stdout, stderr)."""
+    out, err = io.StringIO(), io.StringIO()
+    try:
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = fn(list(args)) or 0
+    except SystemExit as e:
+        rc = e.code if isinstance(e.code, int) else 1
+    return rc, out.getvalue(), err.getvalue()
+
+
+def _fake_setUp(test, *, steps=False, contract_steps=False):
+    """Common setUp for FakeStore-based tests: temp root, injected store, cleanup."""
+    test.root = tempfile.mkdtemp()
+    os.environ["GRID_ROOT_OVERRIDE"] = test.root
+    if steps:
+        write_steps(test.root)
+    if contract_steps:
+        write_contract_steps(test.root)
+    test.store = FakeStore()
+    test._orig = _cli_mod._store
+    _cli_mod.set_store(test.store)
+    test.addCleanup(lambda: _cli_mod.set_store(test._orig))
+    test.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+
+
 class TestSkeleton(unittest.TestCase):
     def test_help_lists_subcommands(self):
         r = run_tg("--help")
@@ -169,113 +195,105 @@ class TestSkeleton(unittest.TestCase):
 
 class TestModel(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        _fake_setUp(self)
 
     def test_task_mapping_and_status(self):
-        bid = json.loads(bd_in(self.root, "create", "build: thing", "-t", "task",
-                               "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("show", bid, root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        t = json.loads(r.stdout)
+        bid = self.store.create_task("build: thing", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_show, bid)
+        self.assertEqual(rc, 0, err)
+        t = json.loads(out)
         self.assertEqual(t["role"], "coder")
         self.assertEqual(t["step"], "build")
         self.assertEqual(t["type"], "task")
         self.assertEqual(t["status"], "ready")
 
     def test_status_buckets_json(self):
-        h = json.loads(bd_in(self.root, "create", "spec: x", "-t", "task",
-                             "-l", "for:human,step:spec", "--json"))["id"]
-        c = json.loads(bd_in(self.root, "create", "build: y", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("status", "--json", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        s = json.loads(r.stdout)
+        h = self.store.create_task("spec: x", step="spec", role="human")
+        c = self.store.create_task("build: y", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_status, "--json")
+        self.assertEqual(rc, 0, err)
+        s = json.loads(out)
         self.assertIn(h, [t["id"] for t in s["mine"]])
         self.assertIn(c, [t["id"] for t in s["queue"]])
 
 
 class TestClaim(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        _fake_setUp(self)
 
     def test_claim_returns_and_marks_in_progress(self):
-        c = json.loads(bd_in(self.root, "create", "build: y", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("claim", "coder", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        t = json.loads(r.stdout)
+        c = self.store.create_task("build: y", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 0, err)
+        t = json.loads(out)
         self.assertEqual(t["id"], c)
         self.assertEqual(t["status"], "in-progress")
-        r2 = run_tg("claim", "coder", root=self.root)
-        self.assertEqual(r2.stdout.strip(), "")
+        rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(out2.strip(), "")
 
     def test_claim_ignores_human(self):
-        bd_in(self.root, "create", "spec: x", "-t", "task", "-l", "for:human,step:spec", "--json")
-        r = run_tg("claim", "coder", root=self.root)
-        self.assertEqual(r.stdout.strip(), "")
+        self.store.create_task("spec: x", step="spec", role="human")
+        rc, out, _ = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(out.strip(), "")
 
     def test_claim_assigns_worker_spawnid(self):
-        b = json.loads(bd_in(self.root, "create", "build: y", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWNID="spawn-xyz")
-        r = subprocess.run([sys.executable, TG, "claim", "coder"], capture_output=True, text=True, env=env)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
-        self.assertEqual(bead.get("assignee"), "spawn-xyz")
+        b = self.store.create_task("build: y", step="build", role="coder")
+        old = os.environ.get("GRID_SPAWNID")
+        os.environ["GRID_SPAWNID"] = "spawn-xyz"
+        try:
+            call(_cli_mod.cmd_claim, "coder")
+        finally:
+            if old is None:
+                os.environ.pop("GRID_SPAWNID", None)
+            else:
+                os.environ["GRID_SPAWNID"] = old
+        self.assertEqual(self.store._beads[b].get("assignee"), "spawn-xyz")
 
 
 class TestFlow(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_advance_creates_next_step(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        bd_in(self.root, "close", b, "--reason", "done")
-        r = run_tg("advance", b, "done", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        new = r.stdout.strip()
+        b = self.store.create_task("build: t", step="build", role="coder")
+        self.store.close(b, "done")
+        rc, out, err = call(_cli_mod.cmd_advance, b, "done")
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
         self.assertTrue(new)
-        nt = json.loads(run_tg("show", new, root=self.root).stdout)
+        rc2, out2, _ = call(_cli_mod.cmd_show, new)
+        nt = json.loads(out2)
         self.assertEqual(nt["role"], "reviewer")
         self.assertEqual(nt["step"], "review")
 
     def test_ready_roles(self):
-        bd_in(self.root, "create", "build: t", "-t", "task", "-l", "for:coder,step:build", "--json")
-        r = run_tg("ready-roles", root=self.root)
-        self.assertIn("coder", r.stdout.split())
+        self.store.create_task("build: t", step="build", role="coder")
+        rc, out, _ = call(_cli_mod.cmd_ready_roles)
+        self.assertIn("coder", out.split())
 
 
 class TestDoneBlock(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_done_closes_and_advances(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        bd_in(self.root, "note", b, "spec: specs/T.md")
-        r = run_tg("done", b, "done", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(r.stdout.strip())
-        st = json.loads(bd_in(self.root, "show", b, "--json"))[0]["status"]
-        self.assertEqual(st, "closed")
+        b = self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_done, b, "done")
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(out.strip())
+        self.assertEqual(self.store._beads[b]["status"], "closed")
 
     def test_done_unknown_outcome_errors_without_closing(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("done", b, "banana", root=self.root)
-        self.assertEqual(r.returncode, 1)
-        st = json.loads(bd_in(self.root, "show", b, "--json"))[0]["status"]
-        self.assertEqual(st, "open")
+        b = self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_done, b, "banana")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.store._beads[b]["status"], "open")
 
     def test_block_writes_metadata_and_routes_human(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("block", b, "--branch", "grid/x", "--needs", "confirm aud", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        b = self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_block, b, "--branch", "grid/x", "--needs", "confirm aud")
+        self.assertEqual(rc, 0, err)
+        bead = self.store._beads[b]
         self.assertEqual(bead["metadata"]["branch"], "grid/x")
         self.assertEqual(bead["metadata"]["needs"], "confirm aud")
         self.assertIn("for:human", bead["labels"])
@@ -284,85 +302,74 @@ class TestDoneBlock(unittest.TestCase):
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
         # A claimed task (assignee set) that gets blocked must clear the assignee,
         # else it stays "in-progress" and hides in `tg active` instead of `tg inbox`.
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        bd_in(self.root, "ready", "--label", "for:coder", "--claim", "--json")
-        r = run_tg("block", b, "--needs", "rebase first", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        b = self.store.create_task("build: t", step="build", role="coder")
+        self.store.claim_ready("coder")
+        rc, out, err = call(_cli_mod.cmd_block, b, "--needs", "rebase first")
+        self.assertEqual(rc, 0, err)
+        bead = self.store._beads[b]
         self.assertIn(bead.get("assignee"), (None, ""))
-        self.assertIn(b, run_tg("inbox", root=self.root).stdout)
+        rc2, inbox_out, _ = call(_cli_mod.cmd_inbox)
+        self.assertIn(b, inbox_out)
 
     def test_done_note_forwards_to_next_task(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("done", b, "done", "--note", "fix the coverage", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        new = r.stdout.strip()
+        b = self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix the coverage")
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
         self.assertTrue(new)
-        bead = json.loads(bd_in(self.root, "show", new, "--json"))[0]
-        notes = bead.get("notes", "")
+        notes = self.store.get_task(new).get("notes") or ""
         self.assertIn("from build (done):", notes)
         self.assertIn("fix the coverage", notes)
-        # the reader the next agent actually uses must surface the note, not just bd
-        shown = json.loads(run_tg("show", new, root=self.root).stdout)
+        rc2, shown_out, _ = call(_cli_mod.cmd_show, new)
+        shown = json.loads(shown_out)
         self.assertIn("fix the coverage", shown.get("notes") or "")
 
     def test_done_without_note_unchanged(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("done", b, "done", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        new = r.stdout.strip()
+        b = self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_done, b, "done")
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
         self.assertTrue(new)
-        bead = json.loads(bd_in(self.root, "show", new, "--json"))[0]
-        self.assertNotIn("from build", bead.get("notes", ""))
+        self.assertNotIn("from build", self.store.get_task(new).get("notes") or "")
 
 
 class TestSweep(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        _fake_setUp(self)
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
 
     def test_sweep_releases_orphaned_claim(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        bd_in(self.root, "ready", "--label", "for:coder", "--claim", "--json")
-        r = run_tg("sweep", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
-        self.assertEqual(bead["status"], "open")
-        self.assertIn(bead.get("assignee"), (None, ""))
+        b = self.store.create_task("build: t", step="build", role="coder")
+        self.store.claim_ready("coder")  # sets status="in_progress", assignee="coder"
+        rc, out, err = call(_cli_mod.cmd_sweep)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store._beads[b]["status"], "open")
+        self.assertIn(self.store._beads[b].get("assignee"), (None, ""))
 
     def test_sweep_keeps_task_of_live_worker_before_stamp(self):
         # Reproduces the double-claim TOCTOU: a worker has claimed the task
         # (assignee = its spawnid) but has not yet stamped its registry bead.
         # Sweep must NOT reclaim it - the owning worker is alive.
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        b = self.store.create_task("build: t", step="build", role="coder")
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
             [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "bead": None}]))
-        bd_in(self.root, "assign", b, "S")
-        bd_in(self.root, "update", b, "--status", "in_progress")
-        r = run_tg("sweep", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
-        self.assertEqual(bead["status"], "in_progress")
-        self.assertEqual(bead.get("assignee"), "S")
+        self.store.assign(b, "S")
+        self.store.update_status(b, "in_progress")
+        rc, out, err = call(_cli_mod.cmd_sweep)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store._beads[b]["status"], "in_progress")
+        self.assertEqual(self.store._beads[b].get("assignee"), "S")
 
     def test_sweep_reclaims_dead_worker_claim(self):
         dead = subprocess.Popen(["true"]); dead.wait()
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        b = self.store.create_task("build: t", step="build", role="coder")
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
             [{"spawnid": "D", "role": "coder", "pid": dead.pid, "log": "x", "bead": b}]))
-        bd_in(self.root, "assign", b, "D")
-        bd_in(self.root, "update", b, "--status", "in_progress")
-        r = run_tg("sweep", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
-        self.assertEqual(bead["status"], "open")
+        self.store.assign(b, "D")
+        self.store.update_status(b, "in_progress")
+        rc, out, err = call(_cli_mod.cmd_sweep)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store._beads[b]["status"], "open")
 
 
 class TestSpawn(unittest.TestCase):
@@ -479,26 +486,27 @@ class TestRun(unittest.TestCase):
 
 class TestAdd(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        _fake_setUp(self)
 
     def test_add_creates_standalone_human_task(self):
-        r = run_tg("add", "look at X later", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        new = r.stdout.strip()
+        rc, out, err = call(_cli_mod.cmd_add, "look at X later")
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
         self.assertTrue(new)
-        t = json.loads(run_tg("show", new, root=self.root).stdout)
+        rc2, out2, _ = call(_cli_mod.cmd_show, new)
+        t = json.loads(out2)
         self.assertEqual(t["role"], "human")
         self.assertEqual(t["status"], "needs-human")
         self.assertIsNone(t["step"])
         self.assertEqual(t["title"], "look at X later")
 
     def test_add_shows_in_mine_not_queue(self):
-        run_tg("add", "remind me", root=self.root)
-        mine = run_tg("mine", root=self.root).stdout
-        self.assertIn("remind me", mine)
+        call(_cli_mod.cmd_add, "remind me")
+        rc, mine_out, _ = call(_cli_mod.cmd_mine)
+        self.assertIn("remind me", mine_out)
         # standalone human task must NOT be claimable by an agent
-        r = run_tg("claim", "coder", root=self.root)
-        self.assertEqual(r.stdout.strip(), "")
+        rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(out2.strip(), "")
 
 
 class TestArtifacts(unittest.TestCase):
@@ -543,14 +551,13 @@ class TestCompositionRoot(unittest.TestCase):
 
 class TestLink(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        _fake_setUp(self)
 
     def test_link_appends_artifact(self):
-        sid = json.loads(bd_in(self.root, "create", "story s", "-t", "story", "--json"))["id"]
-        r = run_tg("link", sid, "pr", "https://gh/9", "--label", "PR 9", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        meta = json.loads(bd_in(self.root, "show", sid, "--json"))[0]["metadata"]
-        arts = meta["artifacts"]
+        sid = self.store.create_story("story s")
+        rc, out, err = call(_cli_mod.cmd_link, sid, "pr", "https://gh/9", "--label", "PR 9")
+        self.assertEqual(rc, 0, err)
+        arts = self.store.story_artifacts(sid)
         self.assertEqual(arts[0]["type"], "pr")
         self.assertEqual(arts[0]["value"], "https://gh/9")
         self.assertEqual(arts[0]["label"], "PR 9")
@@ -558,17 +565,15 @@ class TestLink(unittest.TestCase):
 
 class TestModelV2(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        _fake_setUp(self)
 
     def test_task_exposes_type_parent_and_parent_artifacts(self):
-        epic = json.loads(bd_in(self.root, "create", "epic e", "-t", "epic", "--json"))["id"]
-        story = json.loads(bd_in(self.root, "create", "story s", "-t", "story",
-                                 "--parent", epic, "--json"))["id"]
-        bd_in(self.root, "update", story, "--metadata",
-              json.dumps({"artifacts": [{"type": "spec", "value": "specs/X.md"}]}))
-        task = json.loads(bd_in(self.root, "create", "build: b", "-t", "task",
-                                "-l", "for:coder,step:build", "--parent", story, "--json"))["id"]
-        v = json.loads(run_tg("show", task, root=self.root).stdout)
+        epic = self.store.create_story("epic e")
+        story = self.store.create_story("story s", epic=epic)
+        self.store.update_metadata(story, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
+        task = self.store.create_task("build: b", step="build", role="coder", parent=story)
+        rc, out, _ = call(_cli_mod.cmd_show, task)
+        v = json.loads(out)
         self.assertEqual(v["type"], "task")
         self.assertEqual(v["parent"], story)
         self.assertEqual(v["story_artifacts"][0]["value"], "specs/X.md")
@@ -576,26 +581,30 @@ class TestModelV2(unittest.TestCase):
 
 class TestFileStory(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_file_creates_story_with_spec_and_build_task(self):
-        sid = run_tg("file", "specs/HSS-435.md", "--step", "build", root=self.root).stdout.strip()
+        rc, out, err = call(_cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build")
+        self.assertEqual(rc, 0, err)
+        sid = out.strip()
         self.assertTrue(sid)
-        story = json.loads(bd_in(self.root, "show", sid, "--json"))[0]
-        self.assertEqual(story["issue_type"], "story")
-        self.assertEqual(story["metadata"]["artifacts"][0]["value"], "specs/HSS-435.md")
-        kids = json.loads(bd_in(self.root, "children", sid, "--json"))
+        story_bead = self.store._beads[sid]
+        self.assertEqual(story_bead["issue_type"], "story")
+        self.assertEqual(story_bead["metadata"]["artifacts"][0]["value"], "specs/HSS-435.md")
+        kids = self.store.children(sid)
         self.assertEqual(len(kids), 1)
-        kid_step = json.loads(run_tg("show", kids[0]["id"], root=self.root).stdout)["step"]
-        self.assertEqual(kid_step, "build")
+        rc2, out2, _ = call(_cli_mod.cmd_show, kids[0]["id"])
+        self.assertEqual(json.loads(out2)["step"], "build")
 
     def test_advance_parents_next_task_to_same_story(self):
-        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
-        build = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
-        bd_in(self.root, "close", build, "--reason", "done")
-        new = run_tg("advance", build, "done", root=self.root).stdout.strip()
-        nt = json.loads(run_tg("show", new, root=self.root).stdout)
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        sid = out.strip()
+        build = self.store.children(sid)[0]["id"]
+        self.store.close(build, "done")
+        rc2, out2, err2 = call(_cli_mod.cmd_advance, build, "done")
+        new = out2.strip()
+        rc3, out3, _ = call(_cli_mod.cmd_show, new)
+        nt = json.loads(out3)
         self.assertEqual(nt["parent"], sid)
         self.assertEqual(nt["step"], "review")
         self.assertEqual(nt["story_artifacts"][0]["value"], "specs/X.md")
@@ -603,72 +612,65 @@ class TestFileStory(unittest.TestCase):
 
 class TestFileBlockedBy(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_blocked_by_creates_dependency_on_first_task(self):
-        gate = json.loads(bd_in(self.root, "create", "review-plan: foo", "-t", "task",
-                                "-l", "for:human,step:review-plan", "--json"))["id"]
-        sid = run_tg("file", "specs/X.md", "--step", "build",
-                     "--blocked-by", gate, root=self.root).stdout.strip()
+        gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
+                            "--blocked-by", gate)
+        self.assertEqual(rc, 0, err)
+        sid = out.strip()
         self.assertTrue(sid)
-        task_id = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
-        deps = json.loads(bd_in(self.root, "dep", "list", task_id, "--json"))
-        blocker_ids = [d["id"] for d in deps]
-        self.assertIn(gate, blocker_ids)
+        task_id = self.store.children(sid)[0]["id"]
+        self.assertIn(gate, self.store._deps.get(task_id, set()))
 
     def test_blocked_task_not_claimable_until_gate_closes(self):
-        gate = json.loads(bd_in(self.root, "create", "review-plan: foo", "-t", "task",
-                                "-l", "for:human,step:review-plan", "--json"))["id"]
-        run_tg("file", "specs/X.md", "--step", "build",
-               "--blocked-by", gate, root=self.root)
-        r = run_tg("claim", "coder", root=self.root)
-        self.assertEqual(r.stdout.strip(), "")  # not claimable while gate is open
-        bd_in(self.root, "close", gate, "--reason", "approved")
-        r2 = run_tg("claim", "coder", root=self.root)
-        self.assertTrue(r2.stdout.strip())  # now claimable
+        gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
+        call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--blocked-by", gate)
+        rc, out, _ = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(out.strip(), "")  # not claimable while gate is open
+        self.store.close(gate, "approved")
+        rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
+        self.assertTrue(out2.strip())  # now claimable
 
     def test_multiple_blocked_by_ids(self):
-        gate1 = json.loads(bd_in(self.root, "create", "gate1", "-t", "task",
-                                 "-l", "for:human", "--json"))["id"]
-        gate2 = json.loads(bd_in(self.root, "create", "gate2", "-t", "task",
-                                 "-l", "for:human", "--json"))["id"]
-        sid = run_tg("file", "specs/X.md", "--step", "build",
-                     "--blocked-by", gate1, "--blocked-by", gate2,
-                     root=self.root).stdout.strip()
-        task_id = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
-        deps = json.loads(bd_in(self.root, "dep", "list", task_id, "--json"))
-        blocker_ids = {d["id"] for d in deps}
+        gate1 = self.store.create_task("gate1", labels=["for:human"])
+        gate2 = self.store.create_task("gate2", labels=["for:human"])
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
+                          "--blocked-by", gate1, "--blocked-by", gate2)
+        sid = out.strip()
+        task_id = self.store.children(sid)[0]["id"]
+        blocker_ids = self.store._deps.get(task_id, set())
         self.assertIn(gate1, blocker_ids)
         self.assertIn(gate2, blocker_ids)
 
 
 class TestClaimArtifacts(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_claim_surfaces_story_artifacts(self):
-        run_tg("file", "specs/Y.md", "--step", "build", root=self.root)
-        r = run_tg("claim", "coder", root=self.root)
-        t = json.loads(r.stdout)
+        call(_cli_mod.cmd_file, "specs/Y.md", "--step", "build")
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 0, err)
+        t = json.loads(out)
         self.assertEqual(t["story_artifacts"][0]["value"], "specs/Y.md")
 
     def test_set_is_gone(self):
-        r = run_tg("set", "x", "--pr", "y", root=self.root)
+        r = run_tg("set", "x", "--pr", "y")
         self.assertEqual(r.returncode, 2)
 
 
 class TestTrace(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_trace_shows_story_artifacts_and_tasks(self):
-        sid = run_tg("file", "specs/Z.md", "--step", "build", root=self.root).stdout.strip()
-        r = run_tg("trace", sid, "--json", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        tr = json.loads(r.stdout)
+        rc, out, err = call(_cli_mod.cmd_file, "specs/Z.md", "--step", "build")
+        sid = out.strip()
+        rc2, out2, err2 = call(_cli_mod.cmd_trace, sid, "--json")
+        self.assertEqual(rc2, 0, err2)
+        tr = json.loads(out2)
         self.assertEqual(tr["story"]["id"], sid)
         self.assertEqual(tr["artifacts"][0]["value"], "specs/Z.md")
         self.assertEqual(len(tr["tasks"]), 1)
@@ -783,64 +785,63 @@ class TestFileStep(unittest.TestCase):
 
 class TestArtifactContracts(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_contract_steps(self.root)
-
-    def _bead(self, bid):
-        return json.loads(bd_in(self.root, "show", bid, "--json"))[0]
+        _fake_setUp(self, contract_steps=True)
 
     def test_claim_escalates_when_required_input_missing(self):
-        b = json.loads(bd_in(self.root, "create", "build: x", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("claim", "coder", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "")  # not claimed
-        bead = self._bead(b)
+        b = self.store.create_task("build: x", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(out.strip(), "")  # not claimed
+        bead = self.store._beads[b]
         self.assertIn("for:human", bead["labels"])
         self.assertNotIn("for:coder", bead["labels"])
         self.assertEqual(bead["status"], "open")
 
     def test_claim_proceeds_when_inputs_present(self):
-        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
-        r = run_tg("claim", "coder", root=self.root)
-        t = json.loads(r.stdout)
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        sid = out.strip()
+        rc2, out2, err2 = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc2, 0, err2)
+        t = json.loads(out2)
         self.assertEqual(t["status"], "in-progress")
         self.assertEqual(t["parent"], sid)
 
     def test_done_refused_when_required_output_missing(self):
-        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
-        task = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
-        r = run_tg("done", task, "done", root=self.root)
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("branch", r.stderr)
-        self.assertEqual(self._bead(task)["status"], "open")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        sid = out.strip()
+        task = self.store.children(sid)[0]["id"]
+        rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
+        self.assertEqual(rc2, 1)
+        self.assertIn("branch", err2)
+        self.assertEqual(self.store._beads[task]["status"], "open")
 
     def test_done_succeeds_when_output_present(self):
-        sid = run_tg("file", "specs/X.md", "--step", "build", root=self.root).stdout.strip()
-        task = json.loads(bd_in(self.root, "children", sid, "--json"))[0]["id"]
-        run_tg("link", sid, "branch", "grid/x", root=self.root)
-        r = run_tg("done", task, "done", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(self._bead(task)["status"], "closed")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        sid = out.strip()
+        task = self.store.children(sid)[0]["id"]
+        call(_cli_mod.cmd_link, sid, "branch", "grid/x")
+        rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
+        self.assertEqual(rc2, 0, err2)
+        self.assertEqual(self.store._beads[task]["status"], "closed")
 
     def test_file_rejects_non_entry_step(self):
-        r = run_tg("file", "specs/X.md", "--step", "review", root=self.root)
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("branch", r.stderr)
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "review")
+        self.assertEqual(rc, 1)
+        self.assertIn("branch", err)
 
     def test_flow_reports_composition_ok(self):
-        r = run_tg("flow", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("branch", r.stdout)  # produces shown
+        rc, out, err = call(_cli_mod.cmd_flow)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("branch", out)  # produces shown
 
     def test_flow_flags_broken_composition(self):
         specs = {k: dict(v) for k, v in _CONTRACT_SPECS.items()}
         specs["reviewer"] = dict(specs["reviewer"],
                                  accepts={"spec": "required", "design": "required"})
         write_contract_steps(self.root, specs)
-        r = run_tg("flow", root=self.root)
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("design", r.stderr)
+        rc, out, err = call(_cli_mod.cmd_flow)
+        self.assertEqual(rc, 1)
+        self.assertIn("design", err)
 
 
 class TestPruneWorkers(unittest.TestCase):
@@ -918,14 +919,12 @@ class TestInitAndStoreGuard(unittest.TestCase):
 
 class TestContractsOptional(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)  # no requires/produces
+        _fake_setUp(self, steps=True)  # no requires/produces
 
     def test_done_without_contract_needs_no_artifacts(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("done", b, "done", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
+        b = self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_done, b, "done")
+        self.assertEqual(rc, 0, err)
 
 
 class TestWorktree(unittest.TestCase):
@@ -1086,33 +1085,30 @@ class TestNamedRepo(unittest.TestCase):
 
 class TestUnblock(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
     def test_unblock_returns_blocked_task_to_agent_role(self):
-        b = json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                             "-l", "for:coder,step:build", "--json"))["id"]
-        bd_in(self.root, "ready", "--label", "for:coder", "--claim", "--json")  # claim it
-        run_tg("block", b, "--needs", "rebase first", root=self.root)
-        r = run_tg("unblock", b, root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        bead = json.loads(bd_in(self.root, "show", b, "--json"))[0]
+        b = self.store.create_task("build: t", step="build", role="coder")
+        self.store.claim_ready("coder")  # claim it
+        call(_cli_mod.cmd_block, b, "--needs", "rebase first")
+        rc, out, err = call(_cli_mod.cmd_unblock, b)
+        self.assertEqual(rc, 0, err)
+        bead = self.store._beads[b]
         self.assertIn("for:coder", bead["labels"])
         self.assertNotIn("for:human", bead["labels"])
         self.assertEqual(bead["status"], "open")
         self.assertIn(bead.get("assignee"), (None, ""))
-        t = json.loads(run_tg("show", b, root=self.root).stdout)
+        t = self.store.get_task(b)
         self.assertEqual(t["status"], "ready")
         self.assertEqual(t["role"], "coder")
 
     def test_unblock_refuses_human_step(self):
         (Path(self.root) / "steps" / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n")
-        b = json.loads(bd_in(self.root, "create", "ready-merge: t", "-t", "task",
-                             "-l", "for:human,step:ready-merge", "--json"))["id"]
-        r = run_tg("unblock", b, root=self.root)
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("ready-merge", r.stderr)
+        b = self.store.create_task("ready-merge: t", step="ready-merge", role="human")
+        rc, out, err = call(_cli_mod.cmd_unblock, b)
+        self.assertEqual(rc, 1)
+        self.assertIn("ready-merge", err)
 
 
 class TestClose(unittest.TestCase):
@@ -1213,107 +1209,97 @@ class TestLogRender(unittest.TestCase):
 
 class TestMine(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        self.root = tempfile.mkdtemp()
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
         adir = Path(self.root) / "steps"
         adir.mkdir(exist_ok=True)
         (adir / "coder.md").write_text(
             "---\nmodel: sonnet\nstep: build\nroutes:\n  done: review\n---\nstub")
         (adir / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n  changes: build\n---\nstub")
+        self.store = FakeStore()
+        self._orig = _cli_mod._store
+        _cli_mod.set_store(self.store)
+        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def test_mine_tags_orders_and_shows_context(self):
-        run_tg("add", "look at X", root=self.root)                                  # todo
-        sid = json.loads(bd_in(self.root, "create", "feat", "-t", "story", "--json"))["id"]
-        bd_in(self.root, "update", sid, "--metadata",
-              json.dumps({"artifacts": [{"type": "pr", "value": "http://pr/1"}]}))
-        bd_in(self.root, "create", "merge: y", "-t", "task", "-l",
-              "for:human,step:ready-merge", "--parent", sid, "--json")             # action
-        b = json.loads(bd_in(self.root, "create", "build: z", "-t", "task",
-                             "-l", "for:human,step:build", "--json"))["id"]
-        bd_in(self.root, "update", b, "--metadata", json.dumps({"needs": "rebase first"}))  # blocked
-        out = run_tg("mine", root=self.root).stdout
+        call(_cli_mod.cmd_add, "look at X")                                        # todo
+        sid = self.store.create_story("feat")
+        self.store.update_metadata(sid, {"artifacts": [{"type": "pr", "value": "http://pr/1"}]})
+        self.store.create_task("merge: y", step="ready-merge", role="human", parent=sid)  # action
+        b = self.store.create_task("build: z", step="build", role="human")
+        self.store.update_metadata(b, {"needs": "rebase first"})                   # blocked
+        _, out, _ = call(_cli_mod.cmd_mine)
         for tag in ("[blocked]", "[action]", "[todo]"):
             self.assertIn(tag, out)
-        self.assertIn("merge: y", out)           # leads with the title
+        self.assertIn("merge: y", out)
         self.assertIn("look at X", out)
         self.assertLess(out.index("[blocked]"), out.index("[action]"))
         self.assertLess(out.index("[action]"), out.index("[todo]"))
 
     def test_mine_shows_plan_doc_for_gate_task(self):
-        gate = json.loads(bd_in(self.root, "create", "review-plan: foo", "-t", "task",
-                                "-l", "for:human,step:ready-merge", "--json"))["id"]
-        bd_in(self.root, "update", gate, "--metadata",
-              json.dumps({"artifacts": [{"type": "plan-doc", "value": "/tmp/plan.md"}]}))
-        out = run_tg("mine", root=self.root).stdout
+        gate = self.store.create_task("review-plan: foo", step="ready-merge", role="human")
+        self.store.update_metadata(gate, {"artifacts": [{"type": "plan-doc", "value": "/tmp/plan.md"}]})
+        _, out, _ = call(_cli_mod.cmd_mine)
         self.assertIn("plan:/tmp/plan.md", out)
 
     def test_mine_emits_deprecation_warning(self):
-        run_tg("add", "remind me", root=self.root)
-        r = run_tg("mine", root=self.root)
-        self.assertIn("deprecated", r.stderr)
-        self.assertIn("tg inbox", r.stderr)
-        self.assertIn("tg backlog", r.stderr)
+        call(_cli_mod.cmd_add, "remind me")
+        rc, out, err = call(_cli_mod.cmd_mine)
+        self.assertIn("deprecated", err)
+        self.assertIn("tg inbox", err)
+        self.assertIn("tg backlog", err)
 
     def test_inbox_shows_action_and_blocked_only(self):
-        run_tg("add", "a seed", root=self.root)                             # todo
-        bd_in(self.root, "create", "merge: z", "-t", "task",
-              "-l", "for:human,step:ready-merge", "--json")                  # action
-        b = json.loads(bd_in(self.root, "create", "build: q", "-t", "task",
-                             "-l", "for:human,step:build", "--json"))["id"]  # blocked
-        out = run_tg("inbox", root=self.root).stdout
+        call(_cli_mod.cmd_add, "a seed")                                           # todo
+        self.store.create_task("merge: z", step="ready-merge", role="human")       # action
+        self.store.create_task("build: q", step="build", role="human")             # blocked
+        _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("[action]", out)
         self.assertIn("[blocked]", out)
         self.assertNotIn("[todo]", out)
         self.assertNotIn("a seed", out)
 
     def test_backlog_shows_todo_only(self):
-        run_tg("add", "a seed", root=self.root)                             # todo
-        bd_in(self.root, "create", "merge: z", "-t", "task",
-              "-l", "for:human,step:ready-merge", "--json")                  # action
-        out = run_tg("backlog", root=self.root).stdout
+        call(_cli_mod.cmd_add, "a seed")                                           # todo
+        self.store.create_task("merge: z", step="ready-merge", role="human")       # action
+        _, out, _ = call(_cli_mod.cmd_backlog)
         self.assertIn("[todo]", out)
         self.assertIn("a seed", out)
         self.assertNotIn("[action]", out)
 
     def test_inbox_limit_n(self):
-        bd_in(self.root, "create", "merge: p", "-t", "task",
-              "-l", "for:human,step:ready-merge", "--json")
-        bd_in(self.root, "create", "merge: q", "-t", "task",
-              "-l", "for:human,step:ready-merge", "--json")
-        bd_in(self.root, "create", "merge: r", "-t", "task",
-              "-l", "for:human,step:ready-merge", "--json")
-        out = run_tg("inbox", "1", root=self.root).stdout
+        self.store.create_task("merge: p", step="ready-merge", role="human")
+        self.store.create_task("merge: q", step="ready-merge", role="human")
+        self.store.create_task("merge: r", step="ready-merge", role="human")
+        _, out, _ = call(_cli_mod.cmd_inbox, "1")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 1)
 
     def test_backlog_limit_n(self):
-        run_tg("add", "seed one", root=self.root)
-        run_tg("add", "seed two", root=self.root)
-        run_tg("add", "seed three", root=self.root)
-        out = run_tg("backlog", "2", root=self.root).stdout
+        call(_cli_mod.cmd_add, "seed one")
+        call(_cli_mod.cmd_add, "seed two")
+        call(_cli_mod.cmd_add, "seed three")
+        _, out, _ = call(_cli_mod.cmd_backlog, "2")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
 
 
 class TestReflect(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
-        self.cfg = write_config()
+        _fake_setUp(self)
 
     def _file_story(self, spec_path=None):
-        sid = json.loads(bd_in(self.root, "create", "feat", "-t", "story", "--json"))["id"]
-        arts = [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]
-        bd_in(self.root, "update", sid, "--metadata", json.dumps({"artifacts": arts}))
-        tid = json.loads(bd_in(self.root, "create", "build: feat", "-t", "task",
-                               "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
+        sid = self.store.create_story("feat")
+        self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]})
+        tid = self.store.create_task("build: feat", step="build", role="coder", parent=sid)
         return sid, tid
 
     def test_reflect_stores_artifact_on_story(self):
         sid, tid = self._file_story()
-        r = run_tg("reflect", tid, "--used", "Summary,Scope", "--skipped", "Risks",
-                   root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("reflected", r.stdout)
-        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        rc, out, err = call(_cli_mod.cmd_reflect, tid, "--used", "Summary,Scope", "--skipped", "Risks")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("reflected", out)
+        arts = self.store.story_artifacts(sid)
         refs = [a for a in arts if a["type"] == "reflection"]
         self.assertEqual(len(refs), 1)
         data = json.loads(refs[0]["value"])
@@ -1324,14 +1310,13 @@ class TestReflect(unittest.TestCase):
 
     def test_reflect_records_guess_missing_noise(self):
         sid, tid = self._file_story()
-        r = run_tg("reflect", tid,
-                   "--guess", "Decisions",
-                   "--missing", "acceptance criteria",
-                   "--missing", "error cases",
-                   "--noise", "Out of scope",
-                   root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        rc, out, err = call(_cli_mod.cmd_reflect, tid,
+                            "--guess", "Decisions",
+                            "--missing", "acceptance criteria",
+                            "--missing", "error cases",
+                            "--noise", "Out of scope")
+        self.assertEqual(rc, 0, err)
+        arts = self.store.story_artifacts(sid)
         data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
         self.assertEqual(data["sections"]["Decisions"], "guess")
         self.assertIn("acceptance criteria", data["missing"])
@@ -1340,31 +1325,30 @@ class TestReflect(unittest.TestCase):
 
     def test_reflect_multiple_calls_append(self):
         sid, tid = self._file_story()
-        run_tg("reflect", tid, "--used", "Summary", root=self.root, config=self.cfg)
-        run_tg("reflect", tid, "--used", "Scope", root=self.root, config=self.cfg)
-        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        call(_cli_mod.cmd_reflect, tid, "--used", "Summary")
+        call(_cli_mod.cmd_reflect, tid, "--used", "Scope")
+        arts = self.store.story_artifacts(sid)
         refs = [a for a in arts if a["type"] == "reflection"]
         self.assertEqual(len(refs), 2)
 
     def test_reflect_stamps_spec_hash(self):
-        import tempfile
-        spec = tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w")
+        import tempfile as _tmpfile
+        spec = _tmpfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w")
         spec.write("# spec\ncontent")
         spec.close()
         sid, tid = self._file_story(spec_path=spec.name)
-        bd_in(self.root, "update", sid, "--metadata",
-              json.dumps({"artifacts": [{"type": "spec", "value": spec.name}]}))
-        run_tg("reflect", tid, "--used", "spec", root=self.root, config=self.cfg)
-        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
+        call(_cli_mod.cmd_reflect, tid, "--used", "spec")
+        arts = self.store.story_artifacts(sid)
         data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
         self.assertNotEqual(data["spec_hash"], "unknown")
         self.assertEqual(len(data["spec_hash"]), 8)
 
     def test_reflect_no_sections_still_valid(self):
         sid, tid = self._file_story()
-        r = run_tg("reflect", tid, root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        arts = json.loads(bd_in(self.root, "show", sid, "--json"))[0].get("metadata", {}).get("artifacts", [])
+        rc, out, err = call(_cli_mod.cmd_reflect, tid)
+        self.assertEqual(rc, 0, err)
+        arts = self.store.story_artifacts(sid)
         data = json.loads(next(a for a in arts if a["type"] == "reflection")["value"])
         self.assertEqual(data["sections"], {})
         self.assertEqual(data["missing"], [])
@@ -1373,152 +1357,137 @@ class TestReflect(unittest.TestCase):
 
 class TestRetro(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
-        write_steps(self.root)
-        self.cfg = write_config()
+        _fake_setUp(self)
 
     def _make_epic_with_story(self, sid=None):
-        epic = json.loads(bd_in(self.root, "create", "epic-1", "-t", "story", "--json"))["id"]
+        epic = self.store.create_story("epic-1")
         if sid is None:
-            sid = json.loads(bd_in(
-                self.root, "create", "story-1", "-t", "story",
-                "--parent", epic, "--json"))["id"]
+            sid = self.store.create_story("story-1", epic=epic)
         return epic, sid
 
     def test_retro_no_reflections(self):
         epic, _ = self._make_epic_with_story()
-        r = run_tg("retro", epic, root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("N=0", r.stdout)
-        self.assertIn("no reflections yet", r.stdout)
-        self.assertIn("Per-story signals", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("N=0", out)
+        self.assertIn("no reflections yet", out)
+        self.assertIn("Per-story signals", out)
 
     def test_retro_aggregates_section_counts(self):
         epic, sid = self._make_epic_with_story()
-        tid = json.loads(bd_in(self.root, "create", "build: s", "-t", "task",
-                               "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
-        run_tg("reflect", tid, "--used", "Summary,Scope", "--skipped", "Risks",
-               root=self.root, config=self.cfg)
-        r = run_tg("retro", epic, root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("N=1", r.stdout)
-        self.assertIn("Summary", r.stdout)
-        self.assertIn("used=1", r.stdout)
-        self.assertIn("Risks", r.stdout)
-        self.assertIn("skipped=1", r.stdout)
+        tid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        call(_cli_mod.cmd_reflect, tid, "--used", "Summary,Scope", "--skipped", "Risks")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("N=1", out)
+        self.assertIn("Summary", out)
+        self.assertIn("used=1", out)
+        self.assertIn("Risks", out)
+        self.assertIn("skipped=1", out)
 
     def test_retro_aggregates_missing_and_noise(self):
         epic, sid = self._make_epic_with_story()
-        tid = json.loads(bd_in(self.root, "create", "build: s", "-t", "task",
-                               "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
-        run_tg("reflect", tid, "--missing", "edge case coverage",
-               "--noise", "Out of scope", root=self.root, config=self.cfg)
-        r = run_tg("retro", epic, root=self.root, config=self.cfg)
-        self.assertIn("edge case coverage", r.stdout)
-        self.assertIn("Out of scope", r.stdout)
+        tid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        call(_cli_mod.cmd_reflect, tid, "--missing", "edge case coverage", "--noise", "Out of scope")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertIn("edge case coverage", out)
+        self.assertIn("Out of scope", out)
 
     def test_retro_signals_review_rounds(self):
         epic, sid = self._make_epic_with_story()
-        bd_in(self.root, "create", "review: s", "-t", "task",
-              "-l", "for:reviewer,step:review", "--parent", sid, "--json")
-        rtid = json.loads(bd_in(self.root, "create", "review: s2", "-t", "task",
-                                "-l", "for:reviewer,step:review", "--parent", sid, "--json"))["id"]
-        bd_in(self.root, "close", rtid, "--reason", "rejected")
-        r = run_tg("retro", epic, root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("rounds=1", r.stdout)
+        self.store.create_task("review: s", step="review", role="reviewer", parent=sid)
+        rtid = self.store.create_task("review: s2", step="review", role="reviewer", parent=sid)
+        self.store.close(rtid, "rejected")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("rounds=1", out)
 
     def test_retro_signals_conflict(self):
         epic, sid = self._make_epic_with_story()
-        pr_tid = json.loads(bd_in(self.root, "create", "open-pr: s", "-t", "task",
-                                  "-l", "for:pr-watcher,step:open-pr",
-                                  "--parent", sid, "--json"))["id"]
-        bd_in(self.root, "close", pr_tid, "--reason", "conflict-rebase")
-        r = run_tg("retro", epic, root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("conflict", r.stdout)
+        pr_tid = self.store.create_task("open-pr: s", step="open-pr", role="pr-watcher", parent=sid)
+        self.store.close(pr_tid, "conflict-rebase")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("conflict", out)
 
     def test_retro_signals_blocks(self):
         epic, sid = self._make_epic_with_story()
-        btid = json.loads(bd_in(self.root, "create", "build: s", "-t", "task",
-                                "-l", "for:coder,step:build", "--parent", sid, "--json"))["id"]
-        bd_in(self.root, "update", btid, "--status", "in_progress")
-        bd_in(self.root, "update", btid, "--status", "open")
-        r = run_tg("retro", epic, root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("blocks=1", r.stdout)
+        btid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        self.store.update_status(btid, "in_progress")
+        self.store.update_status(btid, "open")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("blocks=1", out)
 
 
 class TestWorklog(unittest.TestCase):
     def setUp(self):
-        self.root = new_store()
+        _fake_setUp(self)
 
     def _close_story(self, title="feat: shipped-thing", reason="merged"):
-        sid = json.loads(bd_in(self.root, "create", title, "-t", "story", "--json"))["id"]
-        bd_in(self.root, "close", sid, "--reason", reason)
+        sid = self.store.create_story(title)
+        self.store.close(sid, reason)
         return sid
 
     def test_worklog_no_args_shows_stories_closed_today(self):
         sid = self._close_story()
-        r = run_tg("worklog", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn(sid, r.stdout)
-        self.assertIn("merged", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_worklog)
+        self.assertEqual(rc, 0, err)
+        self.assertIn(sid, out)
+        self.assertIn("merged", out)
 
     def test_worklog_today_keyword_shows_story(self):
         sid = self._close_story()
-        r = run_tg("worklog", "today", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn(sid, r.stdout)
+        rc, out, err = call(_cli_mod.cmd_worklog, "today")
+        self.assertEqual(rc, 0, err)
+        self.assertIn(sid, out)
 
     def test_worklog_yesterday_shows_nothing_for_todays_story(self):
         self._close_story()
-        r = run_tg("worklog", "yesterday", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("no stories", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_worklog, "yesterday")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("no stories", out)
 
     def test_worklog_two_arg_range_includes_today(self):
         import datetime
         yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
         today = datetime.date.today().isoformat()
         sid = self._close_story()
-        r = run_tg("worklog", yesterday, today, root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn(sid, r.stdout)
+        rc, out, err = call(_cli_mod.cmd_worklog, yesterday, today)
+        self.assertEqual(rc, 0, err)
+        self.assertIn(sid, out)
 
     def test_worklog_empty_period_prints_no_stories_message(self):
-        r = run_tg("worklog", "2020-01-01", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("no stories", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_worklog, "2020-01-01")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("no stories", out)
 
     def test_worklog_shows_pr_link_when_present(self):
         sid = self._close_story()
-        bd_in(self.root, "update", sid, "--metadata",
-              json.dumps({"artifacts": [{"type": "pr", "value": "https://github.com/x/y/pull/9"}]}))
-        r = run_tg("worklog", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("https://github.com/x/y/pull/9", r.stdout)
+        self.store.update_metadata(sid, {"artifacts": [{"type": "pr", "value": "https://github.com/x/y/pull/9"}]})
+        rc, out, err = call(_cli_mod.cmd_worklog)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("https://github.com/x/y/pull/9", out)
 
     def test_worklog_no_pr_artifact_still_lists_story(self):
         sid = self._close_story()
-        r = run_tg("worklog", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn(sid, r.stdout)
-        self.assertNotIn("https://", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_worklog)
+        self.assertEqual(rc, 0, err)
+        self.assertIn(sid, out)
+        self.assertNotIn("https://", out)
 
     def test_worklog_excludes_tasks(self):
-        json.loads(bd_in(self.root, "create", "build: t", "-t", "task",
-                         "-l", "for:coder,step:build", "--json"))["id"]
-        r = run_tg("worklog", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("no stories", r.stdout)
+        self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_worklog)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("no stories", out)
 
     def test_worklog_shows_title_and_outcome(self):
         self._close_story(title="shipped-thing", reason="done")
-        r = run_tg("worklog", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("shipped-thing", r.stdout)
-        self.assertIn("done", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_worklog)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("shipped-thing", out)
+        self.assertIn("done", out)
 
     def test_worklog_appears_in_help(self):
         r = run_tg("--help")

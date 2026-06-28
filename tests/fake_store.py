@@ -1,4 +1,6 @@
 """FakeStore: in-memory StorePort for tests. No subprocess, no bd."""
+import datetime
+import os
 import uuid
 
 from the_grid.adapters.store import StorePort
@@ -25,6 +27,7 @@ class FakeStore(StorePort):
     def __init__(self):
         self._beads = {}   # id -> raw bead dict
         self._deps = {}    # task_id -> set of blocking dep ids
+        self._history = {} # id -> list of {"Issue": {"status": ...}} (newest first)
 
     def _new_bead(self, **fields):
         b = {
@@ -109,6 +112,7 @@ class FakeStore(StorePort):
         b = self._get(tid)
         b["status"] = "closed"
         b["close_reason"] = reason
+        b["closed_at"] = datetime.datetime.now().isoformat()
         for other_id, blockers in self._deps.items():
             if tid in blockers:
                 other = self._beads.get(other_id)
@@ -129,6 +133,7 @@ class FakeStore(StorePort):
 
     def update_status(self, tid, status):
         self._get(tid)["status"] = status
+        self._history.setdefault(tid, []).insert(0, {"Issue": {"status": status}})
 
     def assign(self, tid, assignee):
         self._get(tid)["assignee"] = assignee or None
@@ -156,8 +161,12 @@ class FakeStore(StorePort):
         if not candidates:
             return []
         b = candidates[0]
-        b["assignee"] = role
+        b["assignee"] = os.environ.get("GRID_SPAWNID") or role
+        b["status"] = "in_progress"
         return [b]
+
+    def history(self, tid):
+        return self._history.get(tid, [])
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None, labels=None):
         all_labels = list(labels or [])
@@ -197,6 +206,3 @@ class FakeStore(StorePort):
 
     def list_beads_by_status(self, status):
         return [b for b in self._beads.values() if b.get("status") == status]
-
-    def history(self, tid):
-        return []
