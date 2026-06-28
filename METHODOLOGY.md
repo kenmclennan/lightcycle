@@ -97,10 +97,11 @@ correcting its own mistake through its own pipeline._
 
 ### Falsifiable specs; prime every review
 
-Review _decisions_, not prose. A spec leads with what was chosen and what was rejected and why, plus a
-diagram and a Review focus, so the human reviews against a falsifiable skeleton and a checklist -
-never a wall of plausible text, cold. The narrative (problem/solution) is demoted: it is redundant
-right after the design conversation and is the part least worth the reviewer's scarce attention.
+A spec exists to be reviewed and built against, so it must be **falsifiable** - concrete enough that
+a human can check it and an agent can verify the work, not a wall of plausible prose. _How_ a spec
+achieves that (its shape, sections, whether it uses diagrams) is deliberately not fixed here: the
+engine stays agnostic about spec form, and we lean on the best spec-writing tools rather than baking a
+house format into the system. The goal is the property (falsifiable, reviewable), not a template.
 _Discovered after merging a PR un-primed and having to dig for the issue by hand._
 
 ### Pace by the human
