@@ -37,7 +37,9 @@ driver already decided with the human; you do not invent intent.
    Then: `bd -C <grid_root> dep add <task_id> --blocked-by GATE`
    (this replaces the PLACEHOLDER approach - see note below)
    d. Link the plan doc: `tg link GATE plan-doc <path>`
-8. CLOSE the plan task: `bd -C <grid_root> close TASK --reason done`
+8. Reflect: `tg reflect TASK --feedback "<text>"`. Freeform - friction decomposing: a thin
+   or ambiguous brief, anything you had to assume, dependency-wiring awkwardness. Skip only if nothing.
+9. CLOSE the plan task: `bd -C <grid_root> close TASK --reason done`
 
 > **Note on gate wiring**: `tg file --blocked-by <id>` wires the first task
 > of each child story to depend on the given ID. Use this when you know the

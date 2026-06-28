@@ -1394,6 +1394,15 @@ class TestRetro(unittest.TestCase):
         self.assertIn("Feedback", out)
         self.assertIn("edge case coverage was thin", out)
 
+    def test_retro_surfaces_epic_level_feedback(self):
+        # the planner reflects on its plan task, whose parent is the epic (not a story)
+        epic, _ = self._make_epic_with_story()
+        ptid = self.store.create_task("plan: e", step="plan", role="planner", parent=epic)
+        call(_cli_mod.cmd_reflect, ptid, "--feedback", "brief was thin on dep ordering")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("brief was thin on dep ordering", out)
+
     def test_retro_signals_review_rounds(self):
         epic, sid = self._make_epic_with_story()
         self.store.create_task("review: s", step="review", role="reviewer", parent=sid)

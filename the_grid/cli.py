@@ -937,6 +937,14 @@ def cmd_retro(argv):
         sigs = _story_signals(story["id"])
         story_rows.append((story, sigs, len(parsed)))
 
+    # plan/decompose feedback attaches to the epic itself, not a child story
+    for art in _store.story_artifacts(a.epic):
+        if art.get("type") == "reflection":
+            try:
+                all_reflections.append(json.loads(art["value"]))
+            except (ValueError, KeyError):
+                pass
+
     n = len(all_reflections)
     print("== retro: %s  (N=%d) ==" % (a.epic, n))
 
