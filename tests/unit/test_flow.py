@@ -2,6 +2,7 @@ import unittest
 
 from the_grid.core.flow import (advance_create_kwargs, compose_driver, flow_next, forward_note,
                             load_flow, pool_plan, ready_roles_from_beads, ready_task_roles)
+from the_grid.domain.task import Task
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -73,7 +74,7 @@ class TestFlowNext(unittest.TestCase):
 
 class TestAdvanceCreateKwargs(unittest.TestCase):
     def test_strips_step_prefix_and_keeps_deps(self):
-        task = {"id": "t-1", "title": "build: make the thing"}
+        task = Task(id="t-1", title="build: make the thing")
         kwargs = advance_create_kwargs(task, "review", "reviewer")
         self.assertEqual(kwargs["title"], "review: make the thing")
         self.assertEqual(kwargs["step"], "review")
@@ -82,7 +83,7 @@ class TestAdvanceCreateKwargs(unittest.TestCase):
         self.assertEqual(kwargs["deps"], ["t-1"])
 
     def test_includes_parent_when_present(self):
-        task = {"id": "t-1", "title": "build: x", "parent": "s-9"}
+        task = Task(id="t-1", title="build: x", parent="s-9")
         kwargs = advance_create_kwargs(task, "review", "reviewer")
         self.assertEqual(kwargs["parent"], "s-9")
 

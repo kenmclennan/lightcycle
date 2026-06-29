@@ -563,7 +563,7 @@ def cmd_status(argv):
     a = ap.parse_args(argv)
     buckets = Status(_container.store).execute()
     if a.json:
-        print(json.dumps(buckets, indent=2))
+        print(json.dumps({k: [t.as_dict() for t in v] for k, v in buckets.items()}, indent=2))
     else:
         for display, key in (("inbox", "mine"), ("active", "active"),
                               ("queue", "queue"), ("blocked", "blocked")):
@@ -627,6 +627,6 @@ def cmd_retro(argv):
         story, sigs, nrefs = row["story"], row["signals"], row["nrefs"]
         conflict_str = "conflict" if sigs["conflict"] else "-"
         print("  %-20s  blocks=%-2d  rounds=%-2d  conflict=%-5s  (N=%d)" % (
-            story["id"], sigs["blocks"], sigs["review_rounds"], conflict_str, nrefs))
+            story.id, sigs["blocks"], sigs["review_rounds"], conflict_str, nrefs))
 
     return 0
