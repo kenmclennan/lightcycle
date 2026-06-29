@@ -8,7 +8,6 @@ import time
 from the_grid.core import flow as cflow
 from the_grid.core import reflect as creflect
 from the_grid.core import retro as cretro
-from the_grid.core import workspace as cworkspace
 from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
                                  required_outputs)
 from the_grid.core.logrender import render_log_line
@@ -16,7 +15,9 @@ from the_grid.core.tasks import task_from_bead
 
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, Mine,
                                           Queue, ShowTask, Status, Worklog)
+from the_grid.application.intake import AddTask, CloseStory, LinkArtifact
 from the_grid.application.services.flow import FlowService
+from the_grid.application.services.worktree import WorktreeService
 from the_grid.config import ConfigError
 from the_grid.container import Container
 
@@ -104,84 +105,16 @@ def advance(tid, outcome):
 # ---- worktrees (core decision + gitio effect) -------------------------------
 
 
-def story_repo(story):
-    return cworkspace.story_repo(_container.store.story_artifacts(story), os.path.basename(_container.config.grid_root()))
-
-
-def worktree_path(story):
-    return cworkspace.worktree_path(_container.fs.worktrees_dir(), story)
-
-
-def _ensure_worktrees_ignored(root):
-    gi = os.path.join(root, ".gitignore")
-    line = ".worktrees/"
-    existing = ""
-    if os.path.exists(gi):
-        with open(gi) as f:
-            existing = f.read()
-    if line in (l.strip() for l in existing.splitlines()):
-        return
-    with open(gi, "a") as f:
-        if existing and not existing.endswith("\n"):
-            f.write("\n")
-        f.write(line + "\n")
-
-
-def _story_branch(story):
-    for a in _container.store.story_artifacts(story):
-        if a.get("type") == "branch":
-            return a["value"]
-    return None
-
-
-def _ensure_branch_artifact(story, branch):
-    if any(a.get("type") == "branch" for a in _container.store.story_artifacts(story)):
-        return
-    _container.store.add_artifact(story, "branch", branch)
+def _worktrees():
+    return WorktreeService(_container.store, _container.git, _container.fs, _container.config)
 
 
 def ensure_worktree(story):
-    """Create (or reuse) the per-story git worktree on a feature-named branch so a
-    worker never mutates the primary tree. The branch is computed once from the story
-    title (its feature name) and the configured prefix, then stored as the `branch`
-    artifact and reused on later claims. The target repo is resolved by name from the
-    story's `repo` artifact (default: the engine itself). Idempotent: an existing
-    worktree or branch is reused. Returns the workspace path, or None when no isolated
-    tree can be made (not a git repo, or no origin/main to branch from)."""
-    target = os.path.join(projects_root(), story_repo(story))
-    if not _container.git.is_git_repo(target):
-        return None
-    branch = _story_branch(story) or cworkspace.branch_for(_container.store.get_task(story)["title"], branch_prefix())
-    path = worktree_path(story)
-    if _container.git.worktree_registered(target, path) and os.path.isdir(path):
-        _ensure_branch_artifact(story, branch)
-        return path
-    if _container.git.branch_exists(target, branch):
-        add_args = ["worktree", "add", path, branch]
-    else:
-        base = _container.git.worktree_base(target)
-        if base is None:
-            return None
-        add_args = ["worktree", "add", path, "-b", branch, base]
-    os.makedirs(_container.fs.worktrees_dir(), exist_ok=True)
-    _ensure_worktrees_ignored(_container.config.grid_root())
-    # Several pool workers may add worktrees against one target repo at once and race
-    # on git's `.git/worktrees` lock; the add is idempotent, so retry the transient
-    # lock failure with a short backoff before giving up.
-    retries = _container.config.worktree_retries()
-    backoff = _container.config.worktree_retry_sleep()
-    _container.git.git(target, "worktree", "prune")
-    res = _container.git.git(target, *add_args)
-    while res.returncode != 0 and retries > 0 and cworkspace.is_worktree_lock_error(res.stderr):
-        retries -= 1
-        time.sleep(backoff)
-        _container.git.git(target, "worktree", "prune")
-        res = _container.git.git(target, *add_args)
-    if res.returncode != 0:
-        sys.stderr.write(res.stderr)
-        return None
-    _ensure_branch_artifact(story, branch)
-    return path
+    return _worktrees().ensure(story)
+
+
+def _story_branch(story):
+    return _worktrees().story_branch(story)
 
 
 # ---- store guard ------------------------------------------------------------
@@ -523,17 +456,7 @@ def cmd_close(argv):
     ap.add_argument("story")
     ap.add_argument("reason")
     a = ap.parse_args(argv)
-    target = os.path.join(projects_root(), story_repo(a.story))
-    path = worktree_path(a.story)
-    branch = _story_branch(a.story) or cworkspace.branch_for(_container.store.get_task(a.story)["title"], branch_prefix())
-    for k in _container.store.children(a.story):
-        kt = task_from_bead(k)
-        if kt["status"] != "done":
-            _container.store.close(kt["id"], a.reason)
-    _container.store.close(a.story, a.reason)
-    if _container.git.is_git_repo(target):
-        _container.git.remove_worktree(target, path)
-        _container.git.delete_branch(target, branch)
+    CloseStory(_container.store, _worktrees()).execute(a.story, a.reason)
     print("closed %s (%s)" % (a.story, a.reason))
     return 0
 
@@ -545,7 +468,7 @@ def cmd_link(argv):
     ap.add_argument("value")
     ap.add_argument("--label")
     a = ap.parse_args(argv)
-    _container.store.add_artifact(a.story, a.type, a.value, a.label)
+    LinkArtifact(_container.store).execute(a.story, a.type, a.value, a.label)
     return 0
 
 
@@ -705,12 +628,7 @@ def cmd_add(argv):
     ap.add_argument("--goal")
     ap.add_argument("--project")
     a = ap.parse_args(argv)
-    labels = ["for:human"]
-    if a.goal:
-        labels.append("goal:%s" % a.goal)
-    if a.project:
-        labels.append("project:%s" % a.project)
-    new = _container.store.create_task(a.title, labels=labels)
+    new = AddTask(_container.store).execute(a.title, goal=a.goal, project=a.project)
     print(new)
     return 0
 
