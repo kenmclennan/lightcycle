@@ -56,8 +56,8 @@ class TestAdvanceTask(unittest.TestCase):
         bid = s.create_task("build: x", step="build", role="coder")
         new = AdvanceTask(s, flow_for(METAS, s)).execute(bid, "done")
         nt = s.get_task(new)
-        self.assertEqual(nt["step"], "review")
-        self.assertEqual(nt["role"], "reviewer")
+        self.assertEqual(nt.step, "review")
+        self.assertEqual(nt.role, "reviewer")
 
     def test_unknown_outcome_returns_none(self):
         s = FakeStore()
@@ -70,8 +70,8 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
         new = CompleteTask(s, flow_for(METAS, s)).execute(bid, "done")
-        self.assertEqual(s.get_task(bid)["status"], "done")
-        self.assertEqual(s.get_task(new)["step"], "review")
+        self.assertEqual(s.get_task(bid).status, "done")
+        self.assertEqual(s.get_task(new).step, "review")
 
     def test_invalid_outcome_raises(self):
         s = FakeStore()
@@ -115,7 +115,7 @@ class TestClaimTask(unittest.TestCase):
         view = ClaimTask(s, flow_for(SPEC_METAS, s), FakeWorktrees(),
                          FakeWorkers(), FakeConfig()).execute("coder")
         self.assertIsNone(view)
-        self.assertEqual(s.get_task(bid)["role"], "human")
+        self.assertEqual(s.get_task(bid).role, "human")
 
 
 class TestBlockTask(unittest.TestCase):
@@ -124,8 +124,8 @@ class TestBlockTask(unittest.TestCase):
         bid = s.create_task("build: x", step="build", role="coder")
         BlockTask(s).execute(bid, "decide X", branch="feat/y")
         t = s.get_task(bid)
-        self.assertEqual(t["role"], "human")
-        self.assertEqual(t["needs"], "decide X")
+        self.assertEqual(t.role, "human")
+        self.assertEqual(t.needs, "decide X")
 
 
 class TestUnblockTask(unittest.TestCase):
@@ -134,7 +134,7 @@ class TestUnblockTask(unittest.TestCase):
         bid = s.create_task("build: x", step="build", role="human")
         role = UnblockTask(s, flow_for(METAS, s)).execute(bid)
         self.assertEqual(role, "coder")
-        self.assertEqual(s.get_task(bid)["role"], "coder")
+        self.assertEqual(s.get_task(bid).role, "coder")
 
     def test_no_agent_owner_raises(self):
         s = FakeStore()

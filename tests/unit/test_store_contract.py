@@ -22,7 +22,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         tid = s.create_task("t", role="coder")
         s.assign(tid, "worker-1")
         s.assign(tid, "")
-        self.assertEqual(s.get_task(tid)["status"], "ready")
+        self.assertEqual(s.get_task(tid).status, "ready")
 
     def test_two_deps_require_both_closed(self):
         s = self.make_store()
@@ -61,7 +61,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         tid = s.create_task("task: t", parent=sid)
         kids = s.children(sid)
         self.assertEqual(len(kids), 1)
-        self.assertEqual(kids[0]["id"], tid)
+        self.assertEqual(kids[0].id, tid)
 
     def test_task_view_inherits_story_artifacts(self):
         s = self.make_store()
@@ -98,8 +98,8 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         tid = s.create_task("t", step="build", role="coder")
         s.route_to_human(tid, "needs review", "coder")
         task = s.get_task(tid)
-        self.assertEqual(task["role"], "human")
-        self.assertIn("needs review", task["notes"])
+        self.assertEqual(task.role, "human")
+        self.assertIn("needs review", task.notes)
 
 
 if __name__ == "__main__":

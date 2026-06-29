@@ -331,7 +331,7 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         new = out.strip()
         self.assertTrue(new)
-        notes = self.store.get_task(new).get("notes") or ""
+        notes = self.store.get_task(new).notes or ""
         self.assertIn("from build (done):", notes)
         self.assertIn("fix the coverage", notes)
         rc2, shown_out, _ = call(_cli_mod.cmd_show, new)
@@ -344,7 +344,7 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         new = out.strip()
         self.assertTrue(new)
-        self.assertNotIn("from build", self.store.get_task(new).get("notes") or "")
+        self.assertNotIn("from build", self.store.get_task(new).notes or "")
 
 
 class TestSweep(unittest.TestCase):
@@ -605,13 +605,13 @@ class TestFileStory(unittest.TestCase):
         self.assertEqual(story_bead["metadata"]["artifacts"][0]["value"], "specs/HSS-435.md")
         kids = self.store.children(sid)
         self.assertEqual(len(kids), 1)
-        rc2, out2, _ = call(_cli_mod.cmd_show, kids[0]["id"])
+        rc2, out2, _ = call(_cli_mod.cmd_show, kids[0].id)
         self.assertEqual(json.loads(out2)["step"], "build")
 
     def test_advance_parents_next_task_to_same_story(self):
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
         sid = out.strip()
-        build = self.store.children(sid)[0]["id"]
+        build = self.store.children(sid)[0].id
         self.store.close(build, "done")
         rc2, out2, err2 = call(_cli_mod.cmd_advance, build, "done")
         new = out2.strip()
@@ -633,7 +633,7 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         self.assertTrue(sid)
-        task_id = self.store.children(sid)[0]["id"]
+        task_id = self.store.children(sid)[0].id
         self.assertIn(gate, self.store._deps.get(task_id, set()))
 
     def test_blocked_task_not_claimable_until_gate_closes(self):
@@ -651,7 +651,7 @@ class TestFileBlockedBy(unittest.TestCase):
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
                           "--blocked-by", gate1, "--blocked-by", gate2)
         sid = out.strip()
-        task_id = self.store.children(sid)[0]["id"]
+        task_id = self.store.children(sid)[0].id
         blocker_ids = self.store._deps.get(task_id, set())
         self.assertIn(gate1, blocker_ids)
         self.assertIn(gate2, blocker_ids)
@@ -781,9 +781,9 @@ class TestFileStep(unittest.TestCase):
 
     def test_file_starts_at_given_step(self):
         _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
-        kid = self.store.get_task(self.store.children(out.strip())[0]["id"])
-        self.assertEqual(kid["step"], "build")
-        self.assertEqual(kid["role"], "coder")
+        kid = self.store.get_task(self.store.children(out.strip())[0].id)
+        self.assertEqual(kid.step, "build")
+        self.assertEqual(kid.role, "coder")
 
     def test_spawn_uses_frontmatter_model(self):
         os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
@@ -826,7 +826,7 @@ class TestArtifactContracts(unittest.TestCase):
     def test_done_refused_when_required_output_missing(self):
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
         sid = out.strip()
-        task = self.store.children(sid)[0]["id"]
+        task = self.store.children(sid)[0].id
         rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
         self.assertEqual(rc2, 1)
         self.assertIn("branch", err2)
@@ -835,7 +835,7 @@ class TestArtifactContracts(unittest.TestCase):
     def test_done_succeeds_when_output_present(self):
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
         sid = out.strip()
-        task = self.store.children(sid)[0]["id"]
+        task = self.store.children(sid)[0].id
         call(_cli_mod.cmd_link, sid, "branch", "grid/x")
         rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
         self.assertEqual(rc2, 0, err2)
@@ -990,7 +990,7 @@ class TestWorktree(unittest.TestCase):
         sid = self._file()
         _, out, _ = call(_cli_mod.cmd_claim, "coder")
         ws1 = json.loads(out)["workspace"]
-        build = self.store.children(sid)[0]["id"]
+        build = self.store.children(sid)[0].id
         call(_cli_mod.cmd_done, build, "done")
         _, out2, _ = call(_cli_mod.cmd_claim, "reviewer")
         ws2 = json.loads(out2)["workspace"]
@@ -1132,8 +1132,8 @@ class TestUnblock(unittest.TestCase):
         self.assertEqual(bead["status"], "open")
         self.assertIn(bead.get("assignee"), (None, ""))
         t = self.store.get_task(b)
-        self.assertEqual(t["status"], "ready")
-        self.assertEqual(t["role"], "coder")
+        self.assertEqual(t.status, "ready")
+        self.assertEqual(t.role, "coder")
 
     def test_unblock_refuses_human_step(self):
         (Path(self.root) / "steps" / "ready-merge.md").write_text(
@@ -1170,7 +1170,7 @@ class TestClose(unittest.TestCase):
         _, cout, _ = call(_cli_mod.cmd_claim, "coder")
         ws = json.loads(cout)["workspace"]
         self.assertTrue(os.path.isdir(ws))
-        build = self.store.children(sid)[0]["id"]
+        build = self.store.children(sid)[0].id
         rc, _, err = call(_cli_mod.cmd_close, sid, "merged")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store._beads[sid]["status"], "closed")

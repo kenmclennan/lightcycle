@@ -5,7 +5,7 @@ from the_grid.domain.task import Task
 
 
 def tk(**kw):
-    return Task(kw)
+    return Task(**kw)
 
 
 def _hist(*statuses):

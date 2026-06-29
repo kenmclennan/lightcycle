@@ -12,7 +12,8 @@ def bead(**kw):
 
 
 def tk(**kw):
-    return Task(kw)
+    kw.setdefault("id", "t")
+    return Task(**kw)
 
 
 class TestLabels(unittest.TestCase):
@@ -59,7 +60,7 @@ class TestStatusMapping(unittest.TestCase):
         self.assertEqual(t.notes, "from review (rejected): fix #6")
 
     def test_notes_absent_is_none(self):
-        self.assertIsNone(task_from_bead(bead())["notes"])
+        self.assertIsNone(task_from_bead(bead()).notes)
 
 
 class TestBucketAndFilter(unittest.TestCase):

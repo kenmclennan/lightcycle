@@ -101,7 +101,7 @@ class TestParentChildren(unittest.TestCase):
     def test_children_returns_child_bead(self):
         kids = self.s.children(self.story)
         self.assertEqual(len(kids), 1)
-        self.assertEqual(kids[0]["id"], self.task)
+        self.assertEqual(kids[0].id, self.task)
 
     def test_children_excludes_other_beads(self):
         other_story = self.s.create_story("story: bar")
