@@ -10,7 +10,7 @@ class AdvanceTask:
 
     def execute(self, tid, outcome):
         t = self._store.get_task(tid)
-        nxt = self._flow.flow_next(t["step"], outcome)
+        nxt = self._flow.flow_next(t.step, outcome)
         if nxt is None:
             return None
         next_step, next_role = nxt

@@ -23,8 +23,8 @@ class Retro:
     def _story_signals(self, story_id):
         children = self._store.children(story_id)
         tasks = [task_from_bead(b) for b in children]
-        task_histories = {t["id"]: self._store.history(t["id"])
-                          for t in tasks if t.get("step") == "build"}
+        task_histories = {t.id: self._store.history(t.id)
+                          for t in tasks if t.step == "build"}
         return cretro.derive_signals(tasks, task_histories)
 
     def execute(self, epic):
@@ -34,11 +34,11 @@ class Retro:
         story_rows = []
         for story in stories:
             nrefs = 0
-            for task in self._store.children(story["id"]):  # feedback sits on the task that gave it
+            for task in self._store.children(story.id):  # feedback sits on the task that gave it
                 refs = self._reflections_of(task["id"])
                 all_reflections.extend(refs)
                 nrefs += len(refs)
-            story_rows.append({"story": story, "signals": self._story_signals(story["id"]),
+            story_rows.append({"story": story, "signals": self._story_signals(story.id),
                                "nrefs": nrefs})
         # non-story epic children (e.g. a plan task) reflect on themselves
         for child in children:
