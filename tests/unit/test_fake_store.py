@@ -11,8 +11,8 @@ class TestLabels(unittest.TestCase):
 
     def test_step_and_role_split_into_separate_labels(self):
         task = self.s.get_task(self.tid)
-        self.assertEqual(task["role"], "coder")
-        self.assertEqual(task["step"], "build")
+        self.assertEqual(task.role, "coder")
+        self.assertEqual(task.step, "build")
 
     def test_label_add_roundtrip(self):
         self.s.label_add(self.tid, "priority:high")
@@ -32,7 +32,7 @@ class TestLabels(unittest.TestCase):
     def test_extra_labels_passed_to_create_task(self):
         tid = self.s.create_task("build: y", role="reviewer", labels=["project:foo"])
         task = self.s.get_task(tid)
-        self.assertEqual(task["project"], "foo")
+        self.assertEqual(task.project, "foo")
 
 
 class TestAssignee(unittest.TestCase):
@@ -42,12 +42,12 @@ class TestAssignee(unittest.TestCase):
 
     def test_assign_sets_in_progress(self):
         self.s.assign(self.tid, "worker-1")
-        self.assertEqual(self.s.get_task(self.tid)["status"], "in-progress")
+        self.assertEqual(self.s.get_task(self.tid).status, "in-progress")
 
     def test_assign_empty_string_clears(self):
         self.s.assign(self.tid, "worker-1")
         self.s.assign(self.tid, "")
-        self.assertEqual(self.s.get_task(self.tid)["status"], "ready")
+        self.assertEqual(self.s.get_task(self.tid).status, "ready")
 
     def test_assign_none_clears(self):
         self.s.assign(self.tid, "worker-1")
@@ -62,11 +62,11 @@ class TestClose(unittest.TestCase):
 
     def test_close_sets_done_status(self):
         self.s.close(self.tid, "done")
-        self.assertEqual(self.s.get_task(self.tid)["status"], "done")
+        self.assertEqual(self.s.get_task(self.tid).status, "done")
 
     def test_close_reason_roundtrip(self):
         self.s.close(self.tid, "rejected")
-        self.assertEqual(self.s.get_task(self.tid)["outcome"], "rejected")
+        self.assertEqual(self.s.get_task(self.tid).outcome, "rejected")
 
 
 class TestNotes(unittest.TestCase):
@@ -75,16 +75,16 @@ class TestNotes(unittest.TestCase):
         self.tid = self.s.create_task("build: thing")
 
     def test_note_absent_initially(self):
-        self.assertIsNone(self.s.get_task(self.tid)["notes"])
+        self.assertIsNone(self.s.get_task(self.tid).notes)
 
     def test_note_roundtrip(self):
         self.s.note(self.tid, "from review (done): lgtm")
-        self.assertEqual(self.s.get_task(self.tid)["notes"], "from review (done): lgtm")
+        self.assertEqual(self.s.get_task(self.tid).notes, "from review (done): lgtm")
 
     def test_multiple_notes_appended(self):
         self.s.note(self.tid, "first")
         self.s.note(self.tid, "second")
-        notes = self.s.get_task(self.tid)["notes"]
+        notes = self.s.get_task(self.tid).notes
         self.assertIn("first", notes)
         self.assertIn("second", notes)
 
@@ -96,7 +96,7 @@ class TestParentChildren(unittest.TestCase):
         self.task = self.s.create_task("build: foo", parent=self.story)
 
     def test_child_has_parent(self):
-        self.assertEqual(self.s.get_task(self.task)["parent"], self.story)
+        self.assertEqual(self.s.get_task(self.task).parent, self.story)
 
     def test_children_returns_child_bead(self):
         kids = self.s.children(self.story)
@@ -212,14 +212,14 @@ class TestMetadata(unittest.TestCase):
     def test_update_metadata_roundtrip(self):
         self.s.update_metadata(self.tid, {"needs": "a spec"})
         task = self.s.get_task(self.tid)
-        self.assertEqual(task["needs"], "a spec")
+        self.assertEqual(task.needs, "a spec")
 
     def test_update_metadata_replaces(self):
         self.s.update_metadata(self.tid, {"needs": "old"})
         self.s.update_metadata(self.tid, {"artifacts": [{"type": "spec", "value": "s.md"}]})
         task = self.s.get_task(self.tid)
-        self.assertIsNone(task["needs"])
-        self.assertEqual(len(task["artifacts"]), 1)
+        self.assertIsNone(task.needs)
+        self.assertEqual(len(task.artifacts), 1)
 
 
 class TestListBeads(unittest.TestCase):
@@ -270,13 +270,13 @@ class TestRouteToHuman(unittest.TestCase):
     def test_routes_to_human(self):
         self.s.route_to_human(self.tid, "needs review", "coder")
         task = self.s.get_task(self.tid)
-        self.assertEqual(task["role"], "human")
-        self.assertEqual(task["status"], "needs-human")
+        self.assertEqual(task.role, "human")
+        self.assertEqual(task.status, "needs-human")
         self.assertIsNone(self.s._beads[self.tid]["assignee"])
 
     def test_route_adds_note(self):
         self.s.route_to_human(self.tid, "needs review", "coder")
-        self.assertIn("needs review", self.s.get_task(self.tid)["notes"])
+        self.assertIn("needs review", self.s.get_task(self.tid).notes)
 
     def test_route_removes_old_for_label(self):
         self.s.route_to_human(self.tid, "blocked", "coder")

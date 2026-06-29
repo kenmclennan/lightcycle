@@ -14,51 +14,51 @@ class StoreContractBase:
         s = self.make_store()
         tid = s.create_task("t")
         s.label_add(tid, "for:reviewer")
-        self.assertEqual(s.get_task(tid)["role"], "reviewer")
+        self.assertEqual(s.get_task(tid).role, "reviewer")
 
     def test_label_remove_clears_role(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")
         s.label_remove(tid, "for:coder")
-        self.assertIsNone(s.get_task(tid)["role"])
+        self.assertIsNone(s.get_task(tid).role)
 
     def test_assign_shows_in_progress(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")
         s.assign(tid, "worker-1")
-        self.assertEqual(s.get_task(tid)["status"], "in-progress")
+        self.assertEqual(s.get_task(tid).status, "in-progress")
 
     def test_close_status_is_done(self):
         s = self.make_store()
         tid = s.create_task("t")
         s.close(tid, "done")
-        self.assertEqual(s.get_task(tid)["status"], "done")
+        self.assertEqual(s.get_task(tid).status, "done")
 
     def test_close_reason_preserved(self):
         s = self.make_store()
         tid = s.create_task("t")
         s.close(tid, "rejected")
-        self.assertEqual(s.get_task(tid)["outcome"], "rejected")
+        self.assertEqual(s.get_task(tid).outcome, "rejected")
 
     def test_close_overrides_in_progress(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")
         s.assign(tid, "worker-1")
         s.close(tid, "done")
-        self.assertEqual(s.get_task(tid)["status"], "done")
+        self.assertEqual(s.get_task(tid).status, "done")
 
     def test_note_roundtrip(self):
         s = self.make_store()
         tid = s.create_task("t")
         s.note(tid, "from review: lgtm")
-        self.assertIn("from review: lgtm", s.get_task(tid)["notes"])
+        self.assertIn("from review: lgtm", s.get_task(tid).notes)
 
     def test_notes_append(self):
         s = self.make_store()
         tid = s.create_task("t")
         s.note(tid, "alpha")
         s.note(tid, "beta")
-        notes = s.get_task(tid)["notes"]
+        notes = s.get_task(tid).notes
         self.assertIn("alpha", notes)
         self.assertIn("beta", notes)
 

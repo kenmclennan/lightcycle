@@ -9,17 +9,17 @@ def derive_signals(tasks, task_histories):
     """
     review_rounds = sum(
         1 for t in tasks
-        if t.get("step") == "review" and t.get("outcome") == "rejected"
+        if t.step == "review" and t.outcome == "rejected"
     )
     conflict = any(
-        t.get("step") == "open-pr" and "conflict" in (t.get("outcome") or "")
+        t.step == "open-pr" and "conflict" in (t.outcome or "")
         for t in tasks
     )
     blocks = 0
     for t in tasks:
-        if t.get("step") != "build":
+        if t.step != "build":
             continue
-        history = task_histories.get(t["id"], [])
+        history = task_histories.get(t.id, [])
         statuses = [h["Issue"]["status"] for h in reversed(history)]
         for i in range(len(statuses) - 1):
             if statuses[i] == "in_progress" and statuses[i + 1] == "open":
