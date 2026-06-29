@@ -99,7 +99,7 @@ class StorePort(ABC):
 
     @abstractmethod
     def children(self, story_id):
-        """Return child beads of a story as raw dicts."""
+        """Return the child tasks of a story as Task entities."""
 
     @abstractmethod
     def list_beads_by_status(self, status):

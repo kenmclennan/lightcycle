@@ -71,14 +71,11 @@ class BdStore(StorePort):
 
     def task_view(self, tid):
         t = self.get_task(tid)
-        if t.get("parent"):
-            t["story_artifacts"] = self.story_artifacts(t["parent"])
-        else:
-            t["story_artifacts"] = t.get("artifacts") or []
+        t["story_artifacts"] = self.story_artifacts(t.parent) if t.parent else t.artifacts
         return t
 
     def present_types(self, task):
-        story = task.get("parent") or task["id"]
+        story = task.parent or task.id
         return {a["type"] for a in self.story_artifacts(story)}
 
     def route_to_human(self, tid, note, role):
@@ -170,7 +167,7 @@ class BdStore(StorePort):
         return self._json(*args)["id"]
 
     def children(self, story_id):
-        return self._json("children", story_id, "--json")
+        return [task_from_bead(b) for b in self._json("children", story_id, "--json")]
 
     def list_beads_by_status(self, status):
         return self._json("list", "--status", status, "--json")

@@ -68,14 +68,11 @@ class FakeStore(StorePort):
 
     def task_view(self, tid):
         t = self.get_task(tid)
-        if t.get("parent"):
-            t["story_artifacts"] = self.story_artifacts(t["parent"])
-        else:
-            t["story_artifacts"] = t.get("artifacts") or []
+        t["story_artifacts"] = self.story_artifacts(t.parent) if t.parent else t.artifacts
         return t
 
     def present_types(self, task):
-        story = task.get("parent") or task["id"]
+        story = task.parent or task.id
         return {a["type"] for a in self.story_artifacts(story)}
 
     def route_to_human(self, tid, note, role):
@@ -202,7 +199,7 @@ class FakeStore(StorePort):
         return tid
 
     def children(self, story_id):
-        return [b for b in self._beads.values() if b.get("parent") == story_id]
+        return [task_from_bead(b) for b in self._beads.values() if b.get("parent") == story_id]
 
     def list_beads_by_status(self, status):
         return [b for b in self._beads.values() if b.get("status") == status]
