@@ -6,19 +6,18 @@ import sys
 import time
 
 from the_grid.core import flow as cflow
-from the_grid.core import reflect as creflect
-from the_grid.core import retro as cretro
-from the_grid.core.contracts import FILE_PROVIDES, required_inputs
+from the_grid.core.contracts import FILE_PROVIDES
 from the_grid.core.logrender import render_log_line
-from the_grid.core.tasks import task_from_bead
 
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, ListWorkers,
                                           Mine, Queue, ResolveLog, ShowTask, Status, Trace,
                                           Worklog)
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import AdvanceTask, BlockTask, ClaimTask, CompleteTask, UnblockTask
-from the_grid.application.intake import AddTask, CloseStory, LinkArtifact
+from the_grid.application.feedback import Reflect, Retro
+from the_grid.application.intake import AddTask, CloseStory, FileStory, LinkArtifact
 from the_grid.application.pool import Sweep, Tick
+from the_grid.application.setup import InitGrid
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
 from the_grid.config import ConfigError
@@ -55,14 +54,6 @@ def _flow():
     return FlowService(_container.fs, _container.store)
 
 
-def load_flow():
-    return _flow().load_flow()
-
-
-def meta_for_step(step):
-    return _flow().meta_for_step(step)
-
-
 def ready_roles():
     return _flow().ready_roles()
 
@@ -75,14 +66,6 @@ def ready_roles():
 
 def _worktrees():
     return WorktreeService(_container.store, _container.git, _container.fs, _container.config)
-
-
-def ensure_worktree(story):
-    return _worktrees().ensure(story)
-
-
-def _story_branch(story):
-    return _worktrees().story_branch(story)
 
 
 # ---- store guard ------------------------------------------------------------
@@ -472,41 +455,14 @@ def cmd_file(argv):
     ap.add_argument("--repo")
     ap.add_argument("--blocked-by", action="append", dest="blocked_by", metavar="ID")
     a = ap.parse_args(argv)
-    owner, _ = load_flow()
-    role = owner.get(a.step)
-    if not role:
-        sys.stderr.write("unknown step '%s'; owned steps: %s\n"
-                         % (a.step, ", ".join(sorted(owner)) or "(none)"))
+    try:
+        story = FileStory(_container.store, _flow(), _container.git, _container.fs,
+                          _container.config).execute(
+            a.spec, a.step, epic=a.epic, project=a.project, goal=a.goal,
+            repo=a.repo, blocked_by=a.blocked_by)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
         return 1
-    unmet = required_inputs(meta_for_step(a.step)) - FILE_PROVIDES
-    if unmet:
-        sys.stderr.write(
-            "step '%s' requires %s; a filed story only carries a spec. "
-            "File at an entry step.\n" % (a.step, ", ".join(sorted(unmet))))
-        return 1
-    if a.repo:
-        repo_path = os.path.join(projects_root(), a.repo)
-        if not _container.git.is_git_repo(repo_path):
-            pr = projects_root()
-            available = sorted(
-                e.name for e in os.scandir(pr) if e.is_dir() and _container.git.is_git_repo(e.path)
-            ) if os.path.isdir(pr) else []
-            avail_str = ", ".join(available) if available else "(none)"
-            sys.stderr.write("unknown repo '%s'; available repos: %s\n" % (a.repo, avail_str))
-            return 1
-    base = os.path.splitext(os.path.basename(a.spec))[0]
-    labels = []
-    if a.project:
-        labels.append("project:%s" % a.project)
-    if a.goal:
-        labels.append("goal:%s" % a.goal)
-    story = _container.store.create_story(base, epic=a.epic, labels=labels or None)
-    _container.store.add_artifact(story, "spec", a.spec)
-    if a.repo:
-        _container.store.add_artifact(story, "repo", a.repo)
-    task = _container.store.create_task("%s: %s" % (a.step, base), step=a.step, role=role, parent=story)
-    for blocker in (a.blocked_by or []):
-        _container.store.dep_add(task, blocker)
     print(story)
     return 0
 
@@ -576,12 +532,9 @@ def cmd_driver(argv):
 
 def cmd_init(argv):
     argparse.ArgumentParser(prog="tg init").parse_args(argv)
-    existed = _container.fs.store_ready()
-    _container.store.ensure_beads()
-    os.makedirs(os.path.join(_container.config.grid_root(), "logs"), exist_ok=True)
-    print("grid store already initialised" if existed else "grid store initialised")
-    created = _container.config.ensure_config()
-    print("config %s at %s" % ("created" if created else "already exists", _container.config.config_path()))
+    r = InitGrid(_container.store, _container.fs, _container.config).execute()
+    print("grid store already initialised" if r["existed"] else "grid store initialised")
+    print("config %s at %s" % ("created" if r["created"] else "already exists", r["config_path"]))
     return 0
 
 
@@ -620,27 +573,7 @@ def cmd_status(argv):
     return 0
 
 
-# ---- spec feedback loop (R1, R3, R4) ----------------------------------------
-
-
-def _spec_hash(task):
-    story = task.get("parent") or task["id"]
-    arts = _container.store.story_artifacts(story)
-    spec = next((a["value"] for a in arts if a["type"] == "spec"), None)
-    if not spec or not os.path.exists(spec):
-        return "unknown"
-    with open(spec, "rb") as f:
-        return creflect.spec_hash_from_bytes(f.read())
-
-
-def _story_signals(story_id):
-    children = _container.store.children(story_id)
-    tasks = [task_from_bead(b) for b in children]
-    task_histories = {
-        t["id"]: _container.store.history(t["id"])
-        for t in tasks if t.get("step") == "build"
-    }
-    return cretro.derive_signals(tasks, task_histories)
+# ---- spec feedback loop ------------------------------------------------------
 
 
 def cmd_reflect(argv):
@@ -651,10 +584,7 @@ def cmd_reflect(argv):
                          "tooling friction, spec gaps - whatever is worth surfacing (your step "
                          "file says what to look for)")
     a = ap.parse_args(argv)
-
-    t = _container.store.get_task(a.id)
-    reflection = creflect.build_reflection(a.id, a.feedback, _spec_hash(t))
-    _container.store.add_artifact(a.id, "reflection", json.dumps(reflection))  # on the task that gave it
+    Reflect(_container.store, _container.fs).execute(a.id, a.feedback)
     print("reflected")
     return 0
 
@@ -682,48 +612,19 @@ def cmd_retro(argv):
     ap.add_argument("epic")
     a = ap.parse_args(argv)
 
-    children = _container.store.children(a.epic)
-    stories = [task_from_bead(b) for b in children if b.get("issue_type") == "story"]
+    digest = Retro(_container.store).execute(a.epic)
+    print("== retro: %s  (N=%d) ==" % (digest["epic"], digest["n"]))
 
-    def _reflections_of(bead_id):
-        out = []
-        for art in _container.store.story_artifacts(bead_id):
-            if art.get("type") == "reflection":
-                try:
-                    out.append(json.loads(art["value"]))
-                except (ValueError, KeyError):
-                    pass
-        return out
-
-    all_reflections = []
-    story_rows = []
-    for story in stories:
-        nrefs = 0
-        for task in _container.store.children(story["id"]):  # feedback sits on the task that gave it
-            refs = _reflections_of(task["id"])
-            all_reflections.extend(refs)
-            nrefs += len(refs)
-        sigs = _story_signals(story["id"])
-        story_rows.append((story, sigs, nrefs))
-
-    # non-story epic children (e.g. the planner's plan task) reflect on themselves
-    for child in children:
-        if child.get("issue_type") != "story":
-            all_reflections.extend(_reflections_of(child["id"]))
-
-    n = len(all_reflections)
-    print("== retro: %s  (N=%d) ==" % (a.epic, n))
-
-    feedback = cretro.gather_feedback(all_reflections)
-    if feedback:
+    if digest["feedback"]:
         print("\nFeedback (read it; an analyser agent can later):")
-        for item in feedback:
+        for item in digest["feedback"]:
             print("  [%s] %s" % (item["task"], item["feedback"]))
-    elif n == 0:
+    elif digest["n"] == 0:
         print("no reflections yet - agents call `tg reflect --feedback` before `tg done`")
 
     print("\nPer-story signals:")
-    for story, sigs, nrefs in story_rows:
+    for row in digest["story_signals"]:
+        story, sigs, nrefs = row["story"], row["signals"], row["nrefs"]
         conflict_str = "conflict" if sigs["conflict"] else "-"
         print("  %-20s  blocks=%-2d  rounds=%-2d  conflict=%-5s  (N=%d)" % (
             story["id"], sigs["blocks"], sigs["review_rounds"], conflict_str, nrefs))

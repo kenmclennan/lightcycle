@@ -1,8 +1,29 @@
 import unittest
 
-from the_grid.application.intake import AddTask, CloseStory, LinkArtifact
+from the_grid.application.errors import UseCaseError
+from the_grid.application.intake import AddTask, CloseStory, FileStory, LinkArtifact
+from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
+from tests.fake_fs import FakeFs
 from tests.fake_store import FakeStore
+
+METAS = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
+
+
+class FakeGit:
+    def __init__(self, repos=()):
+        self._repos = set(repos)
+
+    def is_git_repo(self, path):
+        return path in self._repos
+
+
+class FakeConfig:
+    def __init__(self, projects="/projects"):
+        self._projects = projects
+
+    def projects_root(self):
+        return self._projects
 
 
 class FakeWorktrees:
@@ -54,6 +75,41 @@ class TestWorktreeServiceStoryBranch(unittest.TestCase):
         self.assertIsNone(svc.story_branch(sid))
         s.add_artifact(sid, "branch", "feat/x")
         self.assertEqual(svc.story_branch(sid), "feat/x")
+
+
+class TestFileStory(unittest.TestCase):
+    def _file(self, store, repo=None):
+        fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
+        flow = FlowService(fs, store)
+        git = FakeGit(repos={"/projects/app"})
+        return FileStory(store, flow, git, fs, FakeConfig("/projects")).execute(
+            "specs/x.md", "build", repo=repo)
+
+    def test_creates_story_with_spec_and_task(self):
+        s = FakeStore()
+        story = self._file(s)
+        types = [a["type"] for a in s.story_artifacts(story)]
+        self.assertIn("spec", types)
+        kids = s.children(story)
+        self.assertEqual(len(kids), 1)
+
+    def test_records_repo_artifact_for_known_repo(self):
+        s = FakeStore()
+        story = self._file(s, repo="app")
+        self.assertIn("repo", [a["type"] for a in s.story_artifacts(story)])
+
+    def test_unknown_step_raises(self):
+        s = FakeStore()
+        fs = FakeFs(metas=METAS)
+        with self.assertRaises(UseCaseError):
+            FileStory(s, FlowService(fs, s), FakeGit(), fs, FakeConfig()).execute(
+                "specs/x.md", "nonexistent")
+
+    def test_unknown_repo_raises_with_available(self):
+        s = FakeStore()
+        with self.assertRaises(UseCaseError) as ctx:
+            self._file(s, repo="missing")
+        self.assertIn("app", str(ctx.exception))
 
 
 if __name__ == "__main__":

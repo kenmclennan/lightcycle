@@ -3,8 +3,10 @@
 
 class FakeFs:
 
-    def __init__(self, metas=None):
+    def __init__(self, metas=None, files=None, dirs=None):
         self._metas = metas or {}  # {role: meta dict}
+        self._files = files or {}  # {abs path: bytes}
+        self._dirs = dirs or {}    # {abs path: [subdir names]}
 
     def step_roles(self):
         return sorted(self._metas)
@@ -22,3 +24,12 @@ class FakeFs:
 
     def store_ready(self):
         return True
+
+    def read_bytes(self, path):
+        return self._files.get(path)
+
+    def list_dir(self, path):
+        return sorted(self._dirs.get(path, []))
+
+    def ensure_logs_dir(self):
+        return "/tmp/fake-logs"
