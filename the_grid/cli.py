@@ -5,7 +5,6 @@ import os
 import sys
 import time
 
-from the_grid.core import config as cconfig
 from the_grid.core import contracts as ccontracts
 from the_grid.core import flow as cflow
 from the_grid.core import reflect as creflect
@@ -18,6 +17,7 @@ from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_in
 from the_grid.core.logrender import render_log_line
 from the_grid.core.tasks import task_from_bead
 
+from the_grid.config import ConfigError
 from the_grid.container import Container
 
 # ---- composition root -------------------------------------------------------
@@ -36,24 +36,20 @@ def container():
 # ---- config / roots ---------------------------------------------------------
 
 
-def _home():
-    return os.path.expanduser("~")
-
-
 def projects_root():
-    return cconfig.projects_root(_container.fs.load_config(), _home())
+    return _container.config.projects_root()
 
 
 def specs_root():
-    return cconfig.specs_root(_container.fs.load_config(), _home())
+    return _container.config.specs_root()
 
 
 def branch_prefix():
-    return cconfig.branch_prefix(_container.fs.load_config())
+    return _container.config.branch_prefix()
 
 
 def max_agents():
-    return int(os.environ.get("GRID_MAX_AGENTS") or cconfig.max_agents(_container.fs.load_config()))
+    return _container.config.max_agents()
 
 
 # ---- flow assembly (IO gather -> pure decision) -----------------------------
@@ -115,7 +111,7 @@ def advance(tid, outcome):
 
 
 def story_repo(story):
-    return cworkspace.story_repo(_container.store.story_artifacts(story), os.path.basename(_container.fs.grid_root()))
+    return cworkspace.story_repo(_container.store.story_artifacts(story), os.path.basename(_container.config.grid_root()))
 
 
 def worktree_path(story):
@@ -174,12 +170,12 @@ def ensure_worktree(story):
             return None
         add_args = ["worktree", "add", path, "-b", branch, base]
     os.makedirs(_container.fs.worktrees_dir(), exist_ok=True)
-    _ensure_worktrees_ignored(_container.fs.grid_root())
+    _ensure_worktrees_ignored(_container.config.grid_root())
     # Several pool workers may add worktrees against one target repo at once and race
     # on git's `.git/worktrees` lock; the add is idempotent, so retry the transient
     # lock failure with a short backoff before giving up.
-    retries = int(os.environ.get("GRID_WORKTREE_RETRIES", "6"))
-    backoff = float(os.environ.get("GRID_WORKTREE_RETRY_SLEEP", "0.25"))
+    retries = _container.config.worktree_retries()
+    backoff = _container.config.worktree_retry_sleep()
     _container.git.git(target, "worktree", "prune")
     res = _container.git.git(target, *add_args)
     while res.returncode != 0 and retries > 0 and cworkspace.is_worktree_lock_error(res.stderr):
@@ -311,7 +307,7 @@ def cmd_claim(argv):
     t = claim_next(a.role)
     if t is None:
         return 0
-    spawnid = os.environ.get("GRID_SPAWNID")
+    spawnid = _container.config.spawn_id()
     if spawnid:
         _container.workers.stamp_bead(spawnid, t["id"])
     view = _container.store.task_view(t["id"])
@@ -356,7 +352,7 @@ def cmd_logs(argv):
     ap.add_argument("-f", action="store_true")
     a = ap.parse_args(argv)
     if a.target == "run":
-        path = os.path.join(_container.fs.grid_root(), "logs", "run.log")
+        path = os.path.join(_container.config.grid_root(), "logs", "run.log")
     else:
         path = None
         for w in reversed(_container.workers.workers_state()):
@@ -759,7 +755,7 @@ def _run_tick():
     # poll; without this cover the pool would pile redundant workers onto one task.
     # Past GRID_MAX_BOOT_SECONDS a stuck boot stops covering (the atomic claim keeps a
     # late extra spawn safe), so it can't wedge the queue.
-    max_boot = int(os.environ.get("GRID_MAX_BOOT_SECONDS", "120"))
+    max_boot = _container.config.max_boot_seconds()
     now = time.time()
     inflight = {}
     for w in alive:
@@ -779,7 +775,7 @@ def cmd_run(argv):
     if a.once:
         _run_tick()
         return 0
-    interval = int(os.environ.get("GRID_POLL_SECONDS", "5"))
+    interval = _container.config.poll_seconds()
     print("tg run (poll %ds)" % interval)
     while True:
         _run_tick()
@@ -800,7 +796,7 @@ def _human_step_skills():
 def cmd_driver(argv):
     if not require_store():
         return 1
-    root = _container.fs.grid_root()
+    root = _container.config.grid_root()
     seat = _container.fs.read_md("driver.md")
     if seat is None or not seat["meta"].get("model"):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
@@ -815,10 +811,10 @@ def cmd_init(argv):
     argparse.ArgumentParser(prog="tg init").parse_args(argv)
     existed = _container.fs.store_ready()
     _container.store.ensure_beads()
-    os.makedirs(os.path.join(_container.fs.grid_root(), "logs"), exist_ok=True)
+    os.makedirs(os.path.join(_container.config.grid_root(), "logs"), exist_ok=True)
     print("grid store already initialised" if existed else "grid store initialised")
-    created = _container.fs.ensure_config()
-    print("config %s at %s" % ("created" if created else "already exists", _container.fs.config_path()))
+    created = _container.config.ensure_config()
+    print("config %s at %s" % ("created" if created else "already exists", _container.config.config_path()))
     return 0
 
 
@@ -827,14 +823,17 @@ def cmd_config(argv):
     ap.add_argument("--edit", action="store_true")
     a = ap.parse_args(argv)
     if a.edit:
-        _container.fs.ensure_config()
-        editor = os.environ.get("EDITOR") or "vi"
-        os.execvp(editor, [editor, _container.fs.config_path()])
-    p = _container.fs.config_path()
+        _container.config.ensure_config()
+        editor = _container.config.editor()
+        os.execvp(editor, [editor, _container.config.config_path()])
+    p = _container.config.config_path()
     print("config: %s" % p)
-    print("exists" if os.path.exists(p) else "(using defaults)")
-    print("projects: %s" % projects_root())
-    print("specs: %s" % specs_root())
+    print("exists" if os.path.exists(p) else "not found - run `tg init` to seed it")
+    for key, getter in (("projects", projects_root), ("specs", specs_root)):
+        try:
+            print("%s: %s" % (key, getter()))
+        except ConfigError:
+            print("%s: (not set - run `tg init`)" % key)
     return 0
 
 

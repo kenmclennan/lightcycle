@@ -1,28 +1,12 @@
-"""FsPort: the abstract filesystem/config interface the application depends on.
+"""FsPort: reading step files and well-known dirs under the engine root.
 
-Phase 2 splits the config concerns out into a dedicated Config object; for now
-they ride along here as the single filesystem-facing port.
+The engine root and the config file are owned by Config (the environment
+boundary); this port is only the filesystem reads rooted at it.
 """
 from abc import ABC, abstractmethod
 
 
 class FsPort(ABC):
-
-    @abstractmethod
-    def grid_root(self):
-        """Return the engine's root directory."""
-
-    @abstractmethod
-    def config_path(self):
-        """Return the path to the config file."""
-
-    @abstractmethod
-    def load_config(self):
-        """Load and return the config dict."""
-
-    @abstractmethod
-    def ensure_config(self):
-        """Create the config file if missing; return the config dict."""
 
     @abstractmethod
     def step_roles(self):

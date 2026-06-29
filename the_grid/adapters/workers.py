@@ -2,16 +2,15 @@
 import json
 import os
 
-from the_grid.adapters.fsio import grid_root
 from the_grid.ports.workers import WorkersPort
 
 
-def workers_path():
-    return os.path.join(grid_root(), "logs", "workers.json")
+def workers_path(root):
+    return os.path.join(root, "logs", "workers.json")
 
 
-def workers_state():
-    p = workers_path()
+def workers_state(root):
+    p = workers_path(root)
     if not os.path.exists(p):
         return []
     try:
@@ -20,9 +19,9 @@ def workers_state():
         return []
 
 
-def write_workers(workers):
-    os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
-    with open(workers_path(), "w") as f:
+def write_workers(root, workers):
+    os.makedirs(os.path.join(root, "logs"), exist_ok=True)
+    with open(workers_path(root), "w") as f:
         f.write(json.dumps(workers, indent=2))
 
 
@@ -34,44 +33,46 @@ def pid_alive(pid):
         return False
 
 
-def prune_workers(keep_dead=None):
+def prune_workers(root, keep_dead):
     """Drop dead worker entries from the registry, keeping all live workers plus
     the most recent `keep_dead` dead ones (so tg logs can still find recently
     finished workers). Returns the number pruned."""
-    if keep_dead is None:
-        keep_dead = int(os.environ.get("GRID_WORKER_HISTORY", "20"))
-    workers = workers_state()
+    workers = workers_state(root)
     dead_idx = [i for i, w in enumerate(workers) if not pid_alive(w.get("pid", -1))]
     n_drop = max(0, len(dead_idx) - keep_dead)
     if not n_drop:
         return 0
     drop = set(dead_idx[:n_drop])
-    write_workers([w for i, w in enumerate(workers) if i not in drop])
+    write_workers(root, [w for i, w in enumerate(workers) if i not in drop])
     return n_drop
 
 
-def stamp_bead(spawnid, bead):
-    workers = workers_state()
+def stamp_bead(root, spawnid, bead):
+    workers = workers_state(root)
     for w in workers:
         if w.get("spawnid") == spawnid:
             w["bead"] = bead
-    write_workers(workers)
+    write_workers(root, workers)
 
 
 class WorkersAdapter(WorkersPort):
-    """Thin WorkersPort over the module functions."""
+    """WorkersPort rooted at Config.grid_root()."""
+
+    def __init__(self, config):
+        self._config = config
 
     def workers_state(self):
-        return workers_state()
+        return workers_state(self._config.grid_root())
 
     def write_workers(self, workers):
-        return write_workers(workers)
+        return write_workers(self._config.grid_root(), workers)
 
     def pid_alive(self, pid):
         return pid_alive(pid)
 
     def prune_workers(self, keep_dead=None):
-        return prune_workers(keep_dead)
+        kd = self._config.worker_history() if keep_dead is None else keep_dead
+        return prune_workers(self._config.grid_root(), kd)
 
     def stamp_bead(self, spawnid, bead):
-        return stamp_bead(spawnid, bead)
+        return stamp_bead(self._config.grid_root(), spawnid, bead)

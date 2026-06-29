@@ -14,8 +14,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TG = str(ROOT / "bin" / "tg")
 
-_ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
-
 _CODER_STEP = """\
 ---
 model: sonnet
@@ -40,7 +38,7 @@ stub
 def _tg(*args, root):
     env = dict(os.environ)
     env["GRID_ROOT_OVERRIDE"] = root
-    env["GRID_CONFIG"] = _ABSENT_CONFIG
+    env["GRID_CONFIG"] = os.path.join(root, "grid.config")
     return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
 
 
@@ -63,6 +61,8 @@ class SmokeTest(unittest.TestCase):
         steps.mkdir()
         (steps / "coder.md").write_text(_CODER_STEP)
         (steps / "reviewer.md").write_text(_REVIEWER_STEP)
+        ws = tempfile.mkdtemp()
+        Path(self.root, "grid.config").write_text("projects: %s\nspecs: %s\n" % (ws, ws))
 
     def test_create_claim_done_advance_show(self):
         r = _tg("file", "specs/smoke.md", "--step", "build", root=self.root)

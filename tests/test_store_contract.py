@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from the_grid.adapters.store import BdStore
+from the_grid.config import Config
 from tests.store_contract import StoreContractBase
 
 _TEMPLATE = None
@@ -46,7 +47,7 @@ class TestBdStoreContract(StoreContractBase, unittest.TestCase):
             os.environ["GRID_ROOT_OVERRIDE"] = self._prior_root
 
     def make_store(self):
-        return BdStore()
+        return BdStore(Config())
 
 
 if __name__ == "__main__":

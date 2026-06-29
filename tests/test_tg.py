@@ -169,6 +169,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     """Common setUp for FakeStore-based tests: temp root, injected store, cleanup."""
     test.root = tempfile.mkdtemp()
     os.environ["GRID_ROOT_OVERRIDE"] = test.root
+    os.environ["GRID_CONFIG"] = write_config(projects=test.root, specs=test.root)
     if steps:
         write_steps(test.root)
     if contract_steps:
@@ -178,6 +179,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     _cli_mod.set_container(_cli_mod.Container(store=test.store))
     test.addCleanup(lambda: _cli_mod.set_container(test._orig))
     test.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+    test.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
 
 
 class TestSkeleton(unittest.TestCase):
@@ -1180,13 +1182,13 @@ class TestConfig(unittest.TestCase):
         self.dir = tempfile.mkdtemp()
         self.cfg = os.path.join(self.dir, "config")
 
-    def test_config_prints_path_and_defaults(self):
+    def test_config_prints_path_and_unset_roots(self):
         r = run_tg("config", root=self.root, config=self.cfg)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn(self.cfg, r.stdout)
-        self.assertIn("(using defaults)", r.stdout)
-        self.assertIn("projects: %s" % os.path.expanduser("~/workspace/projects"), r.stdout)
-        self.assertIn("specs: %s" % os.path.expanduser("~/workspace/specs"), r.stdout)
+        self.assertIn("not found", r.stdout)
+        self.assertIn("projects: (not set", r.stdout)
+        self.assertIn("specs: (not set", r.stdout)
 
     def test_init_seeds_config_when_absent_and_is_idempotent(self):
         self.assertFalse(os.path.exists(self.cfg))
@@ -1211,7 +1213,7 @@ class TestConfig(unittest.TestCase):
         root = new_store_with_origin()
         write_steps(root)
         specs = tempfile.mkdtemp()
-        Path(self.cfg).write_text("specs: %s\n" % specs)
+        Path(self.cfg).write_text("projects: %s\nspecs: %s\n" % (os.path.dirname(root), specs))
         run_tg("file", "specs/X.md", "--step", "build", root=root, config=self.cfg)
         view = json.loads(run_tg("claim", "coder", root=root, config=self.cfg).stdout)
         self.assertEqual(view["spec_path"], os.path.join(specs, "specs/X.md"))
