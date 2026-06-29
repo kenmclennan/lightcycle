@@ -2,12 +2,17 @@ import unittest
 
 from the_grid.core.tasks import (bucket, classify_mine, filter_by_status, label_value,
                              labels, partition_mine, task_from_bead)
+from the_grid.domain.task import Task
 
 
 def bead(**kw):
     base = {"id": "b-1", "title": "build: thing", "issue_type": "task"}
     base.update(kw)
     return base
+
+
+def tk(**kw):
+    return Task(kw)
 
 
 class TestLabels(unittest.TestCase):
@@ -60,8 +65,8 @@ class TestStatusMapping(unittest.TestCase):
 class TestBucketAndFilter(unittest.TestCase):
     def _tasks(self):
         return [
-            {"status": "done"}, {"status": "in-progress"}, {"status": "needs-human"},
-            {"status": "ready"}, {"status": "blocked"},
+            tk(status="done"), tk(status="in-progress"), tk(status="needs-human"),
+            tk(status="ready"), tk(status="blocked"),
         ]
 
     def test_bucket_partitions_by_status(self):
@@ -81,14 +86,14 @@ class TestClassifyMine(unittest.TestCase):
     ROUTES = {"build": {"done": "review"}, "ready-merge": {"merged": "cleanup", "changes": "build"}}
 
     def test_todo_no_step(self):
-        self.assertEqual(classify_mine({"step": None}, self.OWNER, self.ROUTES), ("todo", []))
+        self.assertEqual(classify_mine(tk(step=None), self.OWNER, self.ROUTES), ("todo", []))
 
     def test_action_is_a_human_step(self):
-        self.assertEqual(classify_mine({"step": "ready-merge"}, self.OWNER, self.ROUTES),
+        self.assertEqual(classify_mine(tk(step="ready-merge"), self.OWNER, self.ROUTES),
                          ("action", ["changes", "merged"]))
 
     def test_blocked_is_an_agent_step_plus_unblock(self):
-        self.assertEqual(classify_mine({"step": "build"}, self.OWNER, self.ROUTES),
+        self.assertEqual(classify_mine(tk(step="build"), self.OWNER, self.ROUTES),
                          ("blocked", ["done", "unblock"]))
 
 
@@ -98,9 +103,9 @@ class TestPartitionMine(unittest.TestCase):
 
     def _tasks(self):
         return [
-            {"id": "a-1", "step": None, "artifacts": []},
-            {"id": "a-2", "step": "ready-merge", "artifacts": []},
-            {"id": "a-3", "step": "build", "artifacts": []},
+            tk(id="a-1", step=None, artifacts=[]),
+            tk(id="a-2", step="ready-merge", artifacts=[]),
+            tk(id="a-3", step="build", artifacts=[]),
         ]
 
     def test_inbox_returns_action_and_blocked(self):
@@ -117,19 +122,16 @@ class TestPartitionMine(unittest.TestCase):
 
     def test_sorted_by_id(self):
         tasks = [
-            {"id": "b-3", "step": None, "artifacts": []},
-            {"id": "b-1", "step": None, "artifacts": []},
-            {"id": "b-2", "step": None, "artifacts": []},
+            tk(id="b-3", step=None, artifacts=[]),
+            tk(id="b-1", step=None, artifacts=[]),
+            tk(id="b-2", step=None, artifacts=[]),
         ]
         rows = partition_mine(tasks, self.OWNER, self.ROUTES, {"todo"})
-        ids = [t["id"] for _, t in rows]
+        ids = [t.id for _, t in rows]
         self.assertEqual(ids, ["b-1", "b-2", "b-3"])
 
     def test_limit_n(self):
-        tasks = [
-            {"id": "c-%d" % i, "step": None, "artifacts": []}
-            for i in range(5)
-        ]
+        tasks = [tk(id="c-%d" % i, step=None, artifacts=[]) for i in range(5)]
         rows = partition_mine(tasks, self.OWNER, self.ROUTES, {"todo"}, n=2)
         self.assertEqual(len(rows), 2)
 

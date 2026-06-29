@@ -20,7 +20,7 @@ class Trace:
         tasks = []
         for k in self._store.children(story_id):
             kt = task_from_bead(k)
-            tasks.append({"id": kt["id"], "step": kt["step"], "status": kt["status"],
-                          "log": self._log_for_bead(kt["id"])})
-        return {"story": {"id": story["id"], "title": story["title"], "status": story["status"]},
+            tasks.append({"id": kt.id, "step": kt.step, "status": kt.status,
+                          "log": self._log_for_bead(kt.id)})
+        return {"story": {"id": story.id, "title": story.title, "status": story.status},
                 "artifacts": arts, "tasks": tasks}
