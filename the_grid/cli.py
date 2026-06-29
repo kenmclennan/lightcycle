@@ -12,8 +12,9 @@ from the_grid.core.contracts import FILE_PROVIDES, required_inputs
 from the_grid.core.logrender import render_log_line
 from the_grid.core.tasks import task_from_bead
 
-from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, Mine,
-                                          Queue, ShowTask, Status, Worklog)
+from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, ListWorkers,
+                                          Mine, Queue, ResolveLog, ShowTask, Status, Trace,
+                                          Worklog)
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import AdvanceTask, BlockTask, ClaimTask, CompleteTask, UnblockTask
 from the_grid.application.intake import AddTask, CloseStory, LinkArtifact
@@ -217,7 +218,7 @@ def cmd_ps(argv):
     ap = argparse.ArgumentParser(prog="tg ps")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    rows = [dict(w, alive=_container.workers.pid_alive(w.get("pid", -1))) for w in _container.workers.workers_state()]
+    rows = ListWorkers(_container.workers).execute()
     if a.json:
         print(json.dumps(rows, indent=2))
     else:
@@ -232,14 +233,7 @@ def cmd_logs(argv):
     ap.add_argument("target")
     ap.add_argument("-f", action="store_true")
     a = ap.parse_args(argv)
-    if a.target == "run":
-        path = os.path.join(_container.config.grid_root(), "logs", "run.log")
-    else:
-        path = None
-        for w in reversed(_container.workers.workers_state()):
-            if w.get("bead") == a.target or w.get("role") == a.target:
-                path = w["log"]
-                break
+    path = ResolveLog(_container.workers, _container.config).execute(a.target)
     if not path or not os.path.exists(path):
         sys.stderr.write("no log for %s\n" % a.target)
         return 1
@@ -393,27 +387,15 @@ def cmd_link(argv):
     return 0
 
 
-def _log_for_bead(bid):
-    for w in reversed(_container.workers.workers_state()):
-        if w.get("bead") == bid:
-            return w.get("log")
-    return None
-
-
 def cmd_trace(argv):
     ap = argparse.ArgumentParser(prog="tg trace")
     ap.add_argument("story")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    story = _container.store.get_task(a.story)
-    arts = _container.store.story_artifacts(a.story)
-    tasks = []
-    for k in _container.store.children(a.story):
-        kt = task_from_bead(k)
-        tasks.append({"id": kt["id"], "step": kt["step"], "status": kt["status"],
-                      "log": _log_for_bead(kt["id"])})
-    out = {"story": {"id": story["id"], "title": story["title"], "status": story["status"]},
-           "artifacts": arts, "tasks": tasks}
+    out = Trace(_container.store, _container.workers).execute(a.story)
+    story = out["story"]
+    arts = out["artifacts"]
+    tasks = out["tasks"]
     if a.json:
         print(json.dumps(out, indent=2))
     else:
