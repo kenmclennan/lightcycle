@@ -17,6 +17,7 @@ from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import AdvanceTask, BlockTask, ClaimTask, CompleteTask, UnblockTask
 from the_grid.application.intake import AddTask, CloseStory, LinkArtifact
+from the_grid.application.pool import Sweep, Tick
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
 from the_grid.config import ConfigError
@@ -44,14 +45,6 @@ def projects_root():
 
 def specs_root():
     return _container.config.specs_root()
-
-
-def branch_prefix():
-    return _container.config.branch_prefix()
-
-
-def max_agents():
-    return _container.config.max_agents()
 
 
 # ---- flow assembly (IO gather -> pure decision) -----------------------------
@@ -434,21 +427,7 @@ def cmd_trace(argv):
 
 
 def cmd_sweep(argv):
-    # A task is owned by a live worker iff its assignee is the spawnid of a worker
-    # whose pid is alive. The spawnid->pid mapping is written at spawn (before the
-    # claim), so it never lags - a just-claimed task is protected immediately.
-    live = {w.get("spawnid") for w in _container.workers.workers_state()
-            if w.get("spawnid") and _container.workers.pid_alive(w.get("pid", -1))}
-    for bead in _container.store.list_beads_by_status("in_progress"):
-        if bead.get("assignee") in live:
-            continue
-        bid = bead["id"]
-        _container.store.update_status(bid, "open")
-        _container.store.assign(bid, "")
-        print("swept %s" % bid)
-    pruned = _container.workers.prune_workers()
-    if pruned:
-        print("pruned %d dead worker entr%s" % (pruned, "y" if pruned == 1 else "ies"))
+    _render_tick(Sweep(_container.store, _container.workers).execute())
     return 0
 
 
@@ -564,30 +543,11 @@ def cmd_add(argv):
 # ---- run loop / launch ------------------------------------------------------
 
 
-def _run_tick():
-    cmd_sweep([])
-    # The agent pool: fill up to GRID_MAX_AGENTS alive workers from the ready queue,
-    # one worker per uncovered ready task, regardless of role. bd ready already hides
-    # blocked-by tasks, so declared dependencies are honoured for free.
-    alive = [w for w in _container.workers.workers_state() if _container.workers.pid_alive(w.get("pid", -1))]
-    slots = max_agents() - len(alive)
-    if slots <= 0:
-        return
-    # A worker that has spawned but not yet claimed (bead is None) and is still within
-    # the boot window will claim one ready task of its role once it boots, so it covers
-    # that task - don't double-spawn for it. claude's boot (~10-30s) far exceeds the
-    # poll; without this cover the pool would pile redundant workers onto one task.
-    # Past GRID_MAX_BOOT_SECONDS a stuck boot stops covering (the atomic claim keeps a
-    # late extra spawn safe), so it can't wedge the queue.
-    max_boot = _container.config.max_boot_seconds()
-    now = time.time()
-    inflight = {}
-    for w in alive:
-        if w.get("bead") is None and (now - w.get("started", 0)) < max_boot:
-            inflight[w["role"]] = inflight.get(w["role"], 0) + 1
-    ready = cflow.ready_task_roles(_container.store.ready_beads())
-    for role in cflow.pool_plan(ready, inflight, slots):
-        _container.spawner.spawn_worker(role)
+def _render_tick(result):
+    for bid in result["swept"]:
+        print("swept %s" % bid)
+    if result["pruned"]:
+        print("pruned %d dead worker entr%s" % (result["pruned"], "y" if result["pruned"] == 1 else "ies"))
 
 
 def cmd_run(argv):
@@ -596,13 +556,14 @@ def cmd_run(argv):
     a = ap.parse_args(argv)
     if not require_store():
         return 1
+    tick = Tick(_container.store, _container.workers, _container.spawner, _container.config)
     if a.once:
-        _run_tick()
+        _render_tick(tick.execute(time.time()))
         return 0
     interval = _container.config.poll_seconds()
     print("tg run (poll %ds)" % interval)
     while True:
-        _run_tick()
+        _render_tick(tick.execute(time.time()))
         time.sleep(interval)
 
 
