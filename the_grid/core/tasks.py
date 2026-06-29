@@ -1,41 +1,12 @@
-"""Pure task model: bead -> task projection, status mapping, bucketing, filters."""
+"""Task buckets and filters over the Task entity.
 
+The Task entity and the bead -> Task projection now live in
+`the_grid.domain.task`; this module keeps the status-based grouping helpers and
+re-exports the projection + label helpers for existing importers.
+"""
+from the_grid.domain.task import Task, label_value, labels  # noqa: F401
 
-def labels(bead):
-    return bead.get("labels") or []
-
-
-def label_value(bead, prefix):
-    for l in labels(bead):
-        if l.startswith(prefix):
-            return l[len(prefix):]
-    return None
-
-
-def task_from_bead(bead):
-    role = label_value(bead, "for:")
-    bd_status = bead.get("status")
-    assignee = bead.get("assignee")
-    if bd_status == "closed":
-        status = "done"
-    elif assignee or bd_status == "in_progress":
-        status = "in-progress"
-    elif role == "human":
-        status = "needs-human"
-    else:
-        status = "ready"
-    return {
-        "id": bead["id"], "title": bead.get("title", ""),
-        "type": bead.get("issue_type"), "parent": bead.get("parent"),
-        "role": role, "step": label_value(bead, "step:"),
-        "status": status,
-        "project": label_value(bead, "project:"), "goal": label_value(bead, "goal:"),
-        "artifacts": (bead.get("metadata") or {}).get("artifacts") or [],
-        "needs": (bead.get("metadata") or {}).get("needs"),
-        "outcome": bead.get("close_reason"),
-        "deps": bead.get("dependency_count") or 0,
-        "notes": bead.get("notes"),
-    }
+task_from_bead = Task.from_bead
 
 
 def filter_by_status(tasks, status):
