@@ -71,8 +71,9 @@ class BdStore(StorePort):
 
     def task_view(self, tid):
         t = self.get_task(tid)
-        t["story_artifacts"] = self.story_artifacts(t.parent) if t.parent else t.artifacts
-        return t
+        view = t.as_dict()
+        view["story_artifacts"] = self.story_artifacts(t.parent) if t.parent else t.artifacts
+        return view
 
     def present_types(self, task):
         story = task.parent or task.id

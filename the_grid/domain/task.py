@@ -54,6 +54,18 @@ class Task(dict):
             "notes": bead.get("notes"),
         })
 
+    def as_dict(self) -> dict:
+        """A plain serializable dict of the entity's fields (for JSON views and
+        DTO enrichment). Built from the typed attributes so it survives the eventual
+        removal of the dict base."""
+        return {
+            "id": self.id, "title": self.title, "type": self.type, "parent": self.parent,
+            "role": self.role, "step": self.step, "status": self.status,
+            "project": self.project, "goal": self.goal, "artifacts": self.artifacts,
+            "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
+            "notes": self.notes,
+        }
+
     @property
     def id(self) -> str:
         return self["id"]
