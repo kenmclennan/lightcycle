@@ -8,13 +8,14 @@ import time
 from the_grid.core import flow as cflow
 from the_grid.core import reflect as creflect
 from the_grid.core import retro as cretro
-from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
-                                 required_outputs)
+from the_grid.core.contracts import FILE_PROVIDES, required_inputs
 from the_grid.core.logrender import render_log_line
 from the_grid.core.tasks import task_from_bead
 
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, Mine,
                                           Queue, ShowTask, Status, Worklog)
+from the_grid.application.errors import UseCaseError
+from the_grid.application.flow import AdvanceTask, BlockTask, ClaimTask, CompleteTask, UnblockTask
 from the_grid.application.intake import AddTask, CloseStory, LinkArtifact
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
@@ -64,10 +65,6 @@ def load_flow():
     return _flow().load_flow()
 
 
-def flow_next(step, outcome):
-    return _flow().flow_next(step, outcome)
-
-
 def meta_for_step(step):
     return _flow().meta_for_step(step)
 
@@ -77,29 +74,6 @@ def ready_roles():
 
 
 # ---- claim / advance (pure decision + bd effect) ----------------------------
-
-
-def claim_next(role):
-    arr = _container.store.claim_ready(role)
-    if not arr:
-        return None
-    t = task_from_bead(arr[0])
-    missing = required_inputs(meta_for_step(t["step"])) - _container.store.present_types(t)
-    if missing:
-        _container.store.route_to_human(t["id"],
-                              "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)),
-                              role)
-        return None
-    return t
-
-
-def advance(tid, outcome):
-    t = _container.store.get_task(tid)
-    nxt = flow_next(t["step"], outcome)
-    if nxt is None:
-        return None
-    ns, no = nxt
-    return _container.store.create_task(**cflow.advance_create_kwargs(t, ns, no))
 
 
 # ---- worktrees (core decision + gitio effect) -------------------------------
@@ -231,23 +205,10 @@ def cmd_claim(argv):
     ap = argparse.ArgumentParser(prog="tg claim")
     ap.add_argument("role")
     a = ap.parse_args(argv)
-    t = claim_next(a.role)
-    if t is None:
+    view = ClaimTask(_container.store, _flow(), _worktrees(),
+                     _container.workers, _container.config).execute(a.role)
+    if view is None:
         return 0
-    spawnid = _container.config.spawn_id()
-    if spawnid:
-        _container.workers.stamp_bead(spawnid, t["id"])
-    view = _container.store.task_view(t["id"])
-    story = t.get("parent") or t["id"]
-    ws = ensure_worktree(story)
-    if ws:
-        view["workspace"] = ws
-    branch = _story_branch(story)
-    if branch:
-        view["branch"] = branch
-    spec = next((a["value"] for a in view.get("story_artifacts", []) if a.get("type") == "spec"), None)
-    if spec:
-        view["spec_path"] = spec if os.path.isabs(spec) else os.path.join(specs_root(), spec)
     print(json.dumps(view, indent=2))
     return 0
 
@@ -316,7 +277,7 @@ def cmd_advance(argv):
     ap.add_argument("id")
     ap.add_argument("outcome")
     a = ap.parse_args(argv)
-    new = advance(a.id, a.outcome)
+    new = AdvanceTask(_container.store, _flow()).execute(a.id, a.outcome)
     if new:
         print(new)
     return 0
@@ -380,25 +341,11 @@ def cmd_done(argv):
     ap.add_argument("outcome")
     ap.add_argument("--note")
     a = ap.parse_args(argv)
-    t = _container.store.get_task(a.id)
-    if flow_next(t["step"], a.outcome) is None:
-        sys.stderr.write(
-            "no transition for step=%s outcome=%s; not closing. "
-            "Fix the flow or use a defined outcome.\n" % (t["step"], a.outcome))
+    try:
+        new = CompleteTask(_container.store, _flow()).execute(a.id, a.outcome, a.note)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
         return 1
-    missing = required_outputs(meta_for_step(t["step"])) - _container.store.present_types(t)
-    if missing:
-        sys.stderr.write(
-            "cannot close %s: step '%s' must produce %s; none on the story. "
-            "tg link the artifact first.\n" % (a.id, t["step"], ", ".join(sorted(missing))))
-        return 1
-    step = t["step"]
-    _container.store.note(a.id, "outcome: %s" % a.outcome)
-    _container.store.close(a.id, a.outcome)
-    new = advance(a.id, a.outcome)
-    if a.note:
-        target = new if new else a.id
-        _container.store.note(target, cflow.forward_note(step, a.outcome, a.note))
     if new:
         print(new)
     return 0
@@ -413,19 +360,8 @@ def cmd_block(argv):
     if not a.needs:
         sys.stderr.write("tg block requires --needs (what the human must decide/provide)\n")
         return 2
-    resume = {}
-    for k in ("branch", "pr", "reason", "tried", "needs"):
-        v = getattr(a, k, None)
-        if v:
-            resume[k] = v
-    _container.store.update_metadata(a.id, resume)
-    _container.store.note(a.id, "BLOCKED: %s" % a.needs)
-    role = _container.store.get_task(a.id)["role"]
-    if role and role != "human":
-        _container.store.label_remove(a.id, "for:%s" % role)
-    _container.store.label_add(a.id, "for:human")
-    _container.store.update_status(a.id, "open")
-    _container.store.assign(a.id, "")
+    BlockTask(_container.store).execute(a.id, a.needs, branch=a.branch, pr=a.pr,
+                                        reason=a.reason, tried=a.tried)
     print("blocked -> human")
     return 0
 
@@ -434,19 +370,11 @@ def cmd_unblock(argv):
     ap = argparse.ArgumentParser(prog="tg unblock")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    t = _container.store.get_task(a.id)
-    owner, _ = load_flow()
-    role = owner.get(t["step"])
-    if not role or role == "human":
-        sys.stderr.write(
-            "nothing to unblock: step '%s' has no agent owner\n" % (t["step"] or "(none)"))
+    try:
+        role = UnblockTask(_container.store, _flow()).execute(a.id)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
         return 1
-    cur = t["role"]
-    if cur and cur != role:
-        _container.store.label_remove(a.id, "for:%s" % cur)
-    _container.store.label_add(a.id, "for:%s" % role)
-    _container.store.update_status(a.id, "open")
-    _container.store.assign(a.id, "")
     print("unblocked -> %s" % role)
     return 0
 

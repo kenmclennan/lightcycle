@@ -742,18 +742,21 @@ class TestFlowFromAgents(unittest.TestCase):
         mod.set_container(mod.Container())
         return mod
 
+    def _flow(self, tg):
+        return tg.FlowService(tg.container().fs, tg.container().store)
+
     def test_flow_next_derives_role_from_owner(self):
         tg = self._tg()
-        self.assertEqual(tg.flow_next("build", "done"), ("review", "reviewer"))
-        self.assertEqual(tg.flow_next("review", "rejected"), ("build", "coder"))
+        self.assertEqual(self._flow(tg).flow_next("build", "done"), ("review", "reviewer"))
+        self.assertEqual(self._flow(tg).flow_next("review", "rejected"), ("build", "coder"))
 
     def test_flow_next_unowned_target_routes_to_human(self):
         tg = self._tg()
-        self.assertEqual(tg.flow_next("open-pr", "done"), ("ready-merge", "human"))
+        self.assertEqual(self._flow(tg).flow_next("open-pr", "done"), ("ready-merge", "human"))
 
     def test_flow_next_unknown_outcome_is_none(self):
         tg = self._tg()
-        self.assertIsNone(tg.flow_next("build", "banana"))
+        self.assertIsNone(self._flow(tg).flow_next("build", "banana"))
 
     def test_flow_command_lists_steps_and_human_terminal(self):
         r = run_tg("flow", root=self.root)
