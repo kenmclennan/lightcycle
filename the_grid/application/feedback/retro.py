@@ -2,7 +2,6 @@
 import json
 
 from the_grid.core import retro as cretro
-from the_grid.core.tasks import task_from_bead
 
 
 class Retro:
@@ -21,29 +20,28 @@ class Retro:
         return out
 
     def _story_signals(self, story_id):
-        children = self._store.children(story_id)
-        tasks = [task_from_bead(b) for b in children]
+        tasks = self._store.children(story_id)
         task_histories = {t.id: self._store.history(t.id)
                           for t in tasks if t.step == "build"}
         return cretro.derive_signals(tasks, task_histories)
 
     def execute(self, epic):
         children = self._store.children(epic)
-        stories = [task_from_bead(b) for b in children if b.get("issue_type") == "story"]
+        stories = [c for c in children if c.type == "story"]
         all_reflections = []
         story_rows = []
         for story in stories:
             nrefs = 0
             for task in self._store.children(story.id):  # feedback sits on the task that gave it
-                refs = self._reflections_of(task["id"])
+                refs = self._reflections_of(task.id)
                 all_reflections.extend(refs)
                 nrefs += len(refs)
             story_rows.append({"story": story, "signals": self._story_signals(story.id),
                                "nrefs": nrefs})
         # non-story epic children (e.g. a plan task) reflect on themselves
         for child in children:
-            if child.get("issue_type") != "story":
-                all_reflections.extend(self._reflections_of(child["id"]))
+            if child.type != "story":
+                all_reflections.extend(self._reflections_of(child.id))
         return {"epic": epic, "n": len(all_reflections),
                 "feedback": cretro.gather_feedback(all_reflections),
                 "story_signals": story_rows}

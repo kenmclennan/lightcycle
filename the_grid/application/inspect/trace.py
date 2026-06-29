@@ -1,5 +1,4 @@
 """Trace: a story end to end - its artifacts, child tasks, and each task's log."""
-from the_grid.core.tasks import task_from_bead
 
 
 class Trace:
@@ -18,8 +17,7 @@ class Trace:
         story = self._store.get_task(story_id)
         arts = self._store.story_artifacts(story_id)
         tasks = []
-        for k in self._store.children(story_id):
-            kt = task_from_bead(k)
+        for kt in self._store.children(story_id):
             tasks.append({"id": kt.id, "step": kt.step, "status": kt.status,
                           "log": self._log_for_bead(kt.id)})
         return {"story": {"id": story.id, "title": story.title, "status": story.status},
