@@ -11,12 +11,12 @@ from the_grid.core import reflect as creflect
 from the_grid.core import retro as cretro
 from the_grid.core import tasks as ctasks
 from the_grid.core import workspace as cworkspace
-from the_grid.core import worklog as cworklog
 from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
                                  required_outputs)
 from the_grid.core.logrender import render_log_line
 from the_grid.core.tasks import task_from_bead
 
+from the_grid.application.inspect import ActiveTasks, Queue, ShowTask, Status, Worklog
 from the_grid.config import ConfigError
 from the_grid.container import Container
 
@@ -296,7 +296,7 @@ def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="tg show")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    print(json.dumps(_container.store.task_view(a.id), indent=2))
+    print(json.dumps(ShowTask(_container.store).execute(a.id), indent=2))
     return 0
 
 
@@ -657,7 +657,7 @@ def cmd_mine(argv):
 
 
 def cmd_active(argv):
-    for t in _filter("in-progress"):
+    for t in ActiveTasks(_container.store).execute():
         print("  %s  %s" % (t["id"], t["title"]))
     return 0
 
@@ -666,8 +666,7 @@ def cmd_queue(argv):
     ap = argparse.ArgumentParser(prog="tg queue")
     ap.add_argument("n", nargs="?", type=int, default=10)
     a = ap.parse_args(argv)
-    tasks = _filter("ready") + _filter("blocked")
-    for t in tasks[:a.n]:
+    for t in Queue(_container.store).execute(a.n):
         print("  %-8s %s  %s" % (t["status"], t["id"], t["title"]))
     return 0
 
@@ -841,7 +840,7 @@ def cmd_status(argv):
     ap = argparse.ArgumentParser(prog="tg status")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    buckets = ctasks.bucket(_container.store.all_tasks())
+    buckets = Status(_container.store).execute()
     if a.json:
         print(json.dumps(buckets, indent=2))
     else:
@@ -900,8 +899,7 @@ def cmd_worklog(argv):
     import datetime as _dt
     today = _dt.date.today()
     args = [x for x in (a.start, a.end) if x is not None]
-    start, end = cworklog.resolve_period(args, today)
-    entries = cworklog.worklog(_container.store.closed_stories(), start, end)
+    entries = Worklog(_container.store).execute(args, today)
     if not entries:
         print("no stories shipped in that period")
         return 0
