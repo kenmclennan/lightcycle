@@ -27,3 +27,15 @@ class FsPort(ABC):
     @abstractmethod
     def store_ready(self):
         """Return True if the task store is initialised."""
+
+    @abstractmethod
+    def read_bytes(self, path):
+        """Read a file's bytes at an absolute path, or None if it does not exist."""
+
+    @abstractmethod
+    def list_dir(self, path):
+        """Return the sorted names of the subdirectories of path."""
+
+    @abstractmethod
+    def ensure_logs_dir(self):
+        """Create the engine's logs dir if absent; return its path."""

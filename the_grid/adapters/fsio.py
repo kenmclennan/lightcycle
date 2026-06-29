@@ -40,6 +40,27 @@ def store_ready(root):
     return os.path.isdir(os.path.join(root, ".beads"))
 
 
+def read_bytes(path):
+    """Read a file's bytes at an absolute path, or None if it does not exist."""
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def list_dir(path):
+    """Sorted names of the subdirectories of path (empty if path is not a dir)."""
+    if not os.path.isdir(path):
+        return []
+    return sorted(e.name for e in os.scandir(path) if e.is_dir())
+
+
+def ensure_logs_dir(root):
+    d = os.path.join(root, "logs")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 class FsAdapter(FsPort):
     """FsPort rooted at Config.grid_root()."""
 
@@ -60,3 +81,12 @@ class FsAdapter(FsPort):
 
     def store_ready(self):
         return store_ready(self._config.grid_root())
+
+    def read_bytes(self, path):
+        return read_bytes(path)
+
+    def list_dir(self, path):
+        return list_dir(path)
+
+    def ensure_logs_dir(self):
+        return ensure_logs_dir(self._config.grid_root())

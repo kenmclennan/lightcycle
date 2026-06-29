@@ -1012,13 +1012,13 @@ class TestWorktree(unittest.TestCase):
 
     def test_reclaim_reuses_existing_branch(self):
         sid = self._file()
-        ws = _cli_mod.ensure_worktree(sid)
+        ws = _cli_mod._worktrees().ensure(sid)
         (Path(ws) / "f.txt").write_text("x")
         git_in(ws, "add", ".")
         git_in(ws, "commit", "-q", "-m", "w")
         git_in(self.root, "worktree", "remove", "--force", ws)
         self.assertFalse(os.path.isdir(ws))
-        ws2 = _cli_mod.ensure_worktree(sid)
+        ws2 = _cli_mod._worktrees().ensure(sid)
         self.assertEqual(ws, ws2)
         self.assertEqual(self._branch_of(ws2), "feat/w")
         self.assertTrue(os.path.isfile(os.path.join(ws2, "f.txt")))
