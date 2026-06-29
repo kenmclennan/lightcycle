@@ -400,9 +400,9 @@ def cmd_sweep(argv):
 
 
 def _print_mine_row(kind, t):
-    plan = next((art["value"] for art in t.get("artifacts", []) if art["type"] == "plan-doc"), None)
+    plan = next((art["value"] for art in t.artifacts if art["type"] == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
-    print("%-9s %s  %s%s" % ("[%s]" % kind, t["id"], t["title"] or t["step"], extra))
+    print("%-9s %s  %s%s" % ("[%s]" % kind, t.id, t.title or t.step, extra))
 
 
 def cmd_inbox(argv):
@@ -432,7 +432,7 @@ def cmd_mine(argv):
 
 def cmd_active(argv):
     for t in ActiveTasks(_container.store).execute():
-        print("  %s  %s" % (t["id"], t["title"]))
+        print("  %s  %s" % (t.id, t.title))
     return 0
 
 
@@ -441,7 +441,7 @@ def cmd_queue(argv):
     ap.add_argument("n", nargs="?", type=int, default=10)
     a = ap.parse_args(argv)
     for t in Queue(_container.store).execute(a.n):
-        print("  %-8s %s  %s" % (t["status"], t["id"], t["title"]))
+        print("  %-8s %s  %s" % (t.status, t.id, t.title))
     return 0
 
 
@@ -569,7 +569,7 @@ def cmd_status(argv):
                               ("queue", "queue"), ("blocked", "blocked")):
             print("== %s (%d) ==" % (display, len(buckets[key])))
             for t in buckets[key]:
-                print("  %s  %s" % (t["id"], t["title"]))
+                print("  %s  %s" % (t.id, t.title))
     return 0
 
 
