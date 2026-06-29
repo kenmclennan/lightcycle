@@ -4,7 +4,6 @@ import os
 import subprocess
 import sys
 
-from the_grid.adapters.fsio import grid_root
 from the_grid.core.tasks import task_from_bead
 from the_grid.ports.store import StorePort
 
@@ -16,45 +15,45 @@ def _is_noise(line):
     return any(n in line for n in _BD_NOISE)
 
 
-def _bd_env():
-    """Env for bd calls. Inside a worker (GRID_SPAWNID set), make bd record the
-    worker's UNIQUE spawnid as the claim assignee (via git's env-config override)
-    so a claim's ownership is atomic - exactly one worker holds a task, and sweep
-    can key liveness off assignee -> spawnid -> pid with no registry lag."""
-    env = dict(os.environ)
-    spawnid = env.get("GRID_SPAWNID")
-    if spawnid:
-        env["GIT_CONFIG_COUNT"] = "1"
-        env["GIT_CONFIG_KEY_0"] = "user.name"
-        env["GIT_CONFIG_VALUE_0"] = spawnid
-    return env
-
-
-def _bd_run(*args):
-    root = grid_root()
-    proc = subprocess.run(["bd", "-C", root, *args], capture_output=True, text=True, env=_bd_env())
-    if proc.returncode != 0:
-        sys.stderr.write(proc.stderr)
-        raise SystemExit("bd failed: " + " ".join(args))
-    err = "\n".join(l for l in proc.stderr.splitlines() if not _is_noise(l))
-    if err.strip():
-        sys.stderr.write(err + "\n")
-    return proc.stdout
-
-
-def _bd_json_run(*args):
-    return json.loads(_bd_run(*args))
-
-
 class BdStore(StorePort):
 
+    def __init__(self, config):
+        self._config = config
+
+    def _env(self):
+        """Env for bd calls. Inside a worker (spawn id set), make bd record the
+        worker's UNIQUE spawnid as the claim assignee (via git's env-config override)
+        so a claim's ownership is atomic - exactly one worker holds a task, and sweep
+        can key liveness off assignee -> spawnid -> pid with no registry lag."""
+        env = self._config.base_env()
+        spawnid = self._config.spawn_id()
+        if spawnid:
+            env["GIT_CONFIG_COUNT"] = "1"
+            env["GIT_CONFIG_KEY_0"] = "user.name"
+            env["GIT_CONFIG_VALUE_0"] = spawnid
+        return env
+
+    def _run(self, *args):
+        root = self._config.grid_root()
+        proc = subprocess.run(["bd", "-C", root, *args], capture_output=True, text=True, env=self._env())
+        if proc.returncode != 0:
+            sys.stderr.write(proc.stderr)
+            raise SystemExit("bd failed: " + " ".join(args))
+        err = "\n".join(l for l in proc.stderr.splitlines() if not _is_noise(l))
+        if err.strip():
+            sys.stderr.write(err + "\n")
+        return proc.stdout
+
+    def _json(self, *args):
+        return json.loads(self._run(*args))
+
     def story_artifacts(self, story_id):
-        arr = _bd_json_run("show", story_id, "--json")
+        arr = self._json("show", story_id, "--json")
         meta = arr[0].get("metadata") or {}
         return meta.get("artifacts") or []
 
     def add_artifact(self, story_id, atype, value, label=None):
-        arr = _bd_json_run("show", story_id, "--json")
+        arr = self._json("show", story_id, "--json")
         meta = arr[0].get("metadata") or {}
         artifacts = meta.get("artifacts") or []
         entry = {"type": atype, "value": value}
@@ -62,13 +61,13 @@ class BdStore(StorePort):
             entry["label"] = label
         artifacts.append(entry)
         meta["artifacts"] = artifacts
-        _bd_run("update", story_id, "--metadata", json.dumps(meta))
+        self._run("update", story_id, "--metadata", json.dumps(meta))
 
     def all_tasks(self):
-        return [task_from_bead(b) for b in _bd_json_run("list", "--json")]
+        return [task_from_bead(b) for b in self._json("list", "--json")]
 
     def get_task(self, tid):
-        return task_from_bead(_bd_json_run("show", tid, "--json")[0])
+        return task_from_bead(self._json("show", tid, "--json")[0])
 
     def task_view(self, tid):
         t = self.get_task(tid)
@@ -91,7 +90,7 @@ class BdStore(StorePort):
         self.assign(tid, "")
 
     def closed_stories(self):
-        beads = _bd_json_run("list", "--status", "closed", "--json")
+        beads = self._json("list", "--status", "closed", "--json")
         result = []
         for b in beads:
             if b.get("issue_type") != "story":
@@ -106,41 +105,41 @@ class BdStore(StorePort):
         return result
 
     def ensure_beads(self):
-        root = grid_root()
+        root = self._config.grid_root()
         if os.path.isdir(os.path.join(root, ".beads", "embeddeddolt")):
             return
         subprocess.run(["bd", "init", "--skip-agents", "--skip-hooks",
                         "--non-interactive", "--quiet"], cwd=root, check=True)
 
     def note(self, tid, text):
-        _bd_run("note", tid, text)
+        self._run("note", tid, text)
 
     def close(self, tid, reason):
-        _bd_run("close", tid, "--reason", reason)
+        self._run("close", tid, "--reason", reason)
 
     def update_metadata(self, tid, meta):
-        _bd_run("update", tid, "--metadata", json.dumps(meta))
+        self._run("update", tid, "--metadata", json.dumps(meta))
 
     def label_add(self, tid, label):
-        _bd_run("label", "add", tid, label)
+        self._run("label", "add", tid, label)
 
     def label_remove(self, tid, label):
-        _bd_run("label", "remove", tid, label)
+        self._run("label", "remove", tid, label)
 
     def update_status(self, tid, status):
-        _bd_run("update", tid, "--status", status)
+        self._run("update", tid, "--status", status)
 
     def assign(self, tid, assignee):
-        _bd_run("assign", tid, assignee)
+        self._run("assign", tid, assignee)
 
     def dep_add(self, task_id, blocked_by):
-        _bd_run("dep", "add", task_id, "--blocked-by", blocked_by)
+        self._run("dep", "add", task_id, "--blocked-by", blocked_by)
 
     def ready_beads(self):
-        return _bd_json_run("ready", "--json")
+        return self._json("ready", "--json")
 
     def claim_ready(self, role):
-        return _bd_json_run("ready", "--label", "for:%s" % role, "--claim", "--json")
+        return self._json("ready", "--label", "for:%s" % role, "--claim", "--json")
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None, labels=None):
         args = ["create", title, "-t", "task"]
@@ -159,7 +158,7 @@ class BdStore(StorePort):
             for dep in deps:
                 args += ["--deps", dep]
         args += ["--json"]
-        return _bd_json_run(*args)["id"]
+        return self._json(*args)["id"]
 
     def create_story(self, title, *, epic=None, labels=None):
         args = ["create", title, "-t", "story"]
@@ -168,13 +167,13 @@ class BdStore(StorePort):
         if labels:
             args += ["-l", ",".join(labels)]
         args += ["--json"]
-        return _bd_json_run(*args)["id"]
+        return self._json(*args)["id"]
 
     def children(self, story_id):
-        return _bd_json_run("children", story_id, "--json")
+        return self._json("children", story_id, "--json")
 
     def list_beads_by_status(self, status):
-        return _bd_json_run("list", "--status", status, "--json")
+        return self._json("list", "--status", status, "--json")
 
     def history(self, tid):
-        return _bd_json_run("history", tid, "--json")
+        return self._json("history", tid, "--json")

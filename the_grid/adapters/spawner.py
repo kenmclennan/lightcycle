@@ -4,17 +4,16 @@ import shlex
 import subprocess
 import sys
 import time
-
-from the_grid.ports.spawner import SpawnerPort
 import uuid
 
-from the_grid.adapters.fsio import grid_root, parse_step
+from the_grid.adapters import fsio
 from the_grid.adapters.workers import workers_state, write_workers
+from the_grid.ports.spawner import SpawnerPort
 
 
-def spawn_worker(role):
-    root = grid_root()
-    agent = parse_step(role)
+def spawn_worker(config, role):
+    root = config.grid_root()
+    agent = fsio.parse_step(root, role)
     if agent is None:
         sys.stderr.write("no agent definition for role %s\n" % role)
         return None
@@ -28,8 +27,8 @@ def spawn_worker(role):
     kickoff = ("You are the %s. Claim your next task and complete it per your role "
                "instructions, then exit." % role)
     logf = open(log, "a")
-    env = dict(os.environ, GRID_ROOT_OVERRIDE=root, GRID_SPAWNID=spawnid, GRID_ROLE=role)
-    override = os.environ.get("GRID_SPAWN_CMD")
+    env = dict(config.base_env(), GRID_ROOT_OVERRIDE=root, GRID_SPAWNID=spawnid, GRID_ROLE=role)
+    override = config.spawn_cmd()
     if override:
         cmd = ["bash", "-c", override.format(log=shlex.quote(log), role=role)]
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env)
@@ -41,15 +40,18 @@ def spawn_worker(role):
                "--append-system-prompt", sysprompt, "--add-dir", root,
                "--dangerously-skip-permissions"]
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=root, env=env)
-    workers = workers_state()
+    workers = workers_state(root)
     workers.append({"spawnid": spawnid, "role": role, "pid": proc.pid,
                     "log": log, "bead": None, "started": time.time()})
-    write_workers(workers)
+    write_workers(root, workers)
     return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
 
 
 class SpawnerAdapter(SpawnerPort):
-    """Thin SpawnerPort over the module function."""
+    """SpawnerPort using Config for root, spawn command, and child env."""
+
+    def __init__(self, config):
+        self._config = config
 
     def spawn_worker(self, role):
-        return spawn_worker(role)
+        return spawn_worker(self._config, role)
