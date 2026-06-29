@@ -5,18 +5,18 @@ import os
 import sys
 import time
 
-from the_grid.core import contracts as ccontracts
 from the_grid.core import flow as cflow
 from the_grid.core import reflect as creflect
 from the_grid.core import retro as cretro
-from the_grid.core import tasks as ctasks
 from the_grid.core import workspace as cworkspace
 from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_inputs,
                                  required_outputs)
 from the_grid.core.logrender import render_log_line
 from the_grid.core.tasks import task_from_bead
 
-from the_grid.application.inspect import ActiveTasks, Queue, ShowTask, Status, Worklog
+from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, Mine,
+                                          Queue, ShowTask, Status, Worklog)
+from the_grid.application.services.flow import FlowService
 from the_grid.config import ConfigError
 from the_grid.container import Container
 
@@ -55,30 +55,24 @@ def max_agents():
 # ---- flow assembly (IO gather -> pure decision) -----------------------------
 
 
-def _role_metas():
-    return {role: (_container.fs.parse_step(role) or {"meta": {}})["meta"] for role in _container.fs.step_roles()}
+def _flow():
+    return FlowService(_container.fs, _container.store)
 
 
 def load_flow():
-    return cflow.load_flow(_role_metas())
+    return _flow().load_flow()
 
 
 def flow_next(step, outcome):
-    owner, routes = load_flow()
-    return cflow.flow_next(step, outcome, owner, routes)
+    return _flow().flow_next(step, outcome)
 
 
 def meta_for_step(step):
-    owner, _ = load_flow()
-    role = owner.get(step)
-    if not role:
-        return {}
-    a = _container.fs.parse_step(role)
-    return a["meta"] if a else {}
+    return _flow().meta_for_step(step)
 
 
 def ready_roles():
-    return cflow.ready_roles_from_beads(_container.store.ready_beads())
+    return _flow().ready_roles()
 
 
 # ---- claim / advance (pure decision + bd effect) ----------------------------
@@ -404,9 +398,8 @@ def cmd_flow(argv):
     ap = argparse.ArgumentParser(prog="tg flow")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    role_metas = _role_metas()
-    owner, routes = cflow.load_flow(role_metas)
-    an = ccontracts.analyze_flow(owner, routes, role_metas)
+    result = FlowCheck(_flow()).execute()
+    owner, routes, an = result["owner"], result["routes"], result["analysis"]
     steps, req, opt, prod = an["steps"], an["req"], an["opt"], an["prod"]
     entries, terminals = an["entries"], an["terminals"]
     unreachable, missing, dups, ok = an["unreachable"], an["missing"], an["dups"], an["ok"]
@@ -611,13 +604,6 @@ def cmd_sweep(argv):
 # ---- read views -------------------------------------------------------------
 
 
-def _filter(status):
-    return ctasks.filter_by_status(_container.store.all_tasks(), status)
-
-
-_MINE_ORDER = {"blocked": 0, "action": 1, "todo": 2}
-
-
 def _print_mine_row(kind, t):
     plan = next((art["value"] for art in t.get("artifacts", []) if art["type"] == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
@@ -628,9 +614,7 @@ def cmd_inbox(argv):
     ap = argparse.ArgumentParser(prog="tg inbox")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    owner, routes = load_flow()
-    rows = ctasks.partition_mine(_filter("needs-human"), owner, routes, {"action", "blocked"}, a.n)
-    for (kind, _outcomes), t in rows:
+    for (kind, _outcomes), t in Inbox(_container.store, _flow()).execute(a.n):
         _print_mine_row(kind, t)
     return 0
 
@@ -639,19 +623,14 @@ def cmd_backlog(argv):
     ap = argparse.ArgumentParser(prog="tg backlog")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    owner, routes = load_flow()
-    rows = ctasks.partition_mine(_filter("needs-human"), owner, routes, {"todo"}, a.n)
-    for (kind, _outcomes), t in rows:
+    for (kind, _outcomes), t in Backlog(_container.store, _flow()).execute(a.n):
         _print_mine_row(kind, t)
     return 0
 
 
 def cmd_mine(argv):
     sys.stderr.write("warning: 'tg mine' is deprecated; use 'tg inbox' and 'tg backlog'\n")
-    owner, routes = load_flow()
-    rows = [(ctasks.classify_mine(t, owner, routes), t) for t in _filter("needs-human")]
-    rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1]["id"]))
-    for (kind, _outcomes), t in rows:
+    for (kind, _outcomes), t in Mine(_container.store, _flow()).execute():
         _print_mine_row(kind, t)
     return 0
 
