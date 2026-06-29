@@ -18,21 +18,20 @@ from the_grid.core.contracts import (FILE_PROVIDES, optional_inputs, required_in
 from the_grid.core.logrender import render_log_line
 from the_grid.core.tasks import task_from_bead
 
-from the_grid.adapters import gitio
-from the_grid.adapters.fsio import (step_roles, config_path, ensure_config, grid_root,
-                                load_config, parse_step, read_md, store_ready, worktrees_dir)
-from the_grid.adapters.spawner import spawn_worker
-from the_grid.adapters.store import BdStore
-from the_grid.adapters.workers import (pid_alive, prune_workers, stamp_bead, workers_state)
+from the_grid.container import Container
 
 # ---- composition root -------------------------------------------------------
 
-_store = None
+_container = None
 
 
-def set_store(impl):
-    global _store
-    _store = impl
+def set_container(impl):
+    global _container
+    _container = impl
+
+
+def container():
+    return _container
 
 # ---- config / roots ---------------------------------------------------------
 
@@ -42,26 +41,26 @@ def _home():
 
 
 def projects_root():
-    return cconfig.projects_root(load_config(), _home())
+    return cconfig.projects_root(_container.fs.load_config(), _home())
 
 
 def specs_root():
-    return cconfig.specs_root(load_config(), _home())
+    return cconfig.specs_root(_container.fs.load_config(), _home())
 
 
 def branch_prefix():
-    return cconfig.branch_prefix(load_config())
+    return cconfig.branch_prefix(_container.fs.load_config())
 
 
 def max_agents():
-    return int(os.environ.get("GRID_MAX_AGENTS") or cconfig.max_agents(load_config()))
+    return int(os.environ.get("GRID_MAX_AGENTS") or cconfig.max_agents(_container.fs.load_config()))
 
 
 # ---- flow assembly (IO gather -> pure decision) -----------------------------
 
 
 def _role_metas():
-    return {role: (parse_step(role) or {"meta": {}})["meta"] for role in step_roles()}
+    return {role: (_container.fs.parse_step(role) or {"meta": {}})["meta"] for role in _container.fs.step_roles()}
 
 
 def load_flow():
@@ -78,25 +77,25 @@ def meta_for_step(step):
     role = owner.get(step)
     if not role:
         return {}
-    a = parse_step(role)
+    a = _container.fs.parse_step(role)
     return a["meta"] if a else {}
 
 
 def ready_roles():
-    return cflow.ready_roles_from_beads(_store.ready_beads())
+    return cflow.ready_roles_from_beads(_container.store.ready_beads())
 
 
 # ---- claim / advance (pure decision + bd effect) ----------------------------
 
 
 def claim_next(role):
-    arr = _store.claim_ready(role)
+    arr = _container.store.claim_ready(role)
     if not arr:
         return None
     t = task_from_bead(arr[0])
-    missing = required_inputs(meta_for_step(t["step"])) - _store.present_types(t)
+    missing = required_inputs(meta_for_step(t["step"])) - _container.store.present_types(t)
     if missing:
-        _store.route_to_human(t["id"],
+        _container.store.route_to_human(t["id"],
                               "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)),
                               role)
         return None
@@ -104,23 +103,23 @@ def claim_next(role):
 
 
 def advance(tid, outcome):
-    t = _store.get_task(tid)
+    t = _container.store.get_task(tid)
     nxt = flow_next(t["step"], outcome)
     if nxt is None:
         return None
     ns, no = nxt
-    return _store.create_task(**cflow.advance_create_kwargs(t, ns, no))
+    return _container.store.create_task(**cflow.advance_create_kwargs(t, ns, no))
 
 
 # ---- worktrees (core decision + gitio effect) -------------------------------
 
 
 def story_repo(story):
-    return cworkspace.story_repo(_store.story_artifacts(story), os.path.basename(grid_root()))
+    return cworkspace.story_repo(_container.store.story_artifacts(story), os.path.basename(_container.fs.grid_root()))
 
 
 def worktree_path(story):
-    return cworkspace.worktree_path(worktrees_dir(), story)
+    return cworkspace.worktree_path(_container.fs.worktrees_dir(), story)
 
 
 def _ensure_worktrees_ignored(root):
@@ -139,16 +138,16 @@ def _ensure_worktrees_ignored(root):
 
 
 def _story_branch(story):
-    for a in _store.story_artifacts(story):
+    for a in _container.store.story_artifacts(story):
         if a.get("type") == "branch":
             return a["value"]
     return None
 
 
 def _ensure_branch_artifact(story, branch):
-    if any(a.get("type") == "branch" for a in _store.story_artifacts(story)):
+    if any(a.get("type") == "branch" for a in _container.store.story_artifacts(story)):
         return
-    _store.add_artifact(story, "branch", branch)
+    _container.store.add_artifact(story, "branch", branch)
 
 
 def ensure_worktree(story):
@@ -160,34 +159,34 @@ def ensure_worktree(story):
     worktree or branch is reused. Returns the workspace path, or None when no isolated
     tree can be made (not a git repo, or no origin/main to branch from)."""
     target = os.path.join(projects_root(), story_repo(story))
-    if not gitio.is_git_repo(target):
+    if not _container.git.is_git_repo(target):
         return None
-    branch = _story_branch(story) or cworkspace.branch_for(_store.get_task(story)["title"], branch_prefix())
+    branch = _story_branch(story) or cworkspace.branch_for(_container.store.get_task(story)["title"], branch_prefix())
     path = worktree_path(story)
-    if gitio.worktree_registered(target, path) and os.path.isdir(path):
+    if _container.git.worktree_registered(target, path) and os.path.isdir(path):
         _ensure_branch_artifact(story, branch)
         return path
-    if gitio.branch_exists(target, branch):
+    if _container.git.branch_exists(target, branch):
         add_args = ["worktree", "add", path, branch]
     else:
-        base = gitio.worktree_base(target)
+        base = _container.git.worktree_base(target)
         if base is None:
             return None
         add_args = ["worktree", "add", path, "-b", branch, base]
-    os.makedirs(worktrees_dir(), exist_ok=True)
-    _ensure_worktrees_ignored(grid_root())
+    os.makedirs(_container.fs.worktrees_dir(), exist_ok=True)
+    _ensure_worktrees_ignored(_container.fs.grid_root())
     # Several pool workers may add worktrees against one target repo at once and race
     # on git's `.git/worktrees` lock; the add is idempotent, so retry the transient
     # lock failure with a short backoff before giving up.
     retries = int(os.environ.get("GRID_WORKTREE_RETRIES", "6"))
     backoff = float(os.environ.get("GRID_WORKTREE_RETRY_SLEEP", "0.25"))
-    gitio.git(target, "worktree", "prune")
-    res = gitio.git(target, *add_args)
+    _container.git.git(target, "worktree", "prune")
+    res = _container.git.git(target, *add_args)
     while res.returncode != 0 and retries > 0 and cworkspace.is_worktree_lock_error(res.stderr):
         retries -= 1
         time.sleep(backoff)
-        gitio.git(target, "worktree", "prune")
-        res = gitio.git(target, *add_args)
+        _container.git.git(target, "worktree", "prune")
+        res = _container.git.git(target, *add_args)
     if res.returncode != 0:
         sys.stderr.write(res.stderr)
         return None
@@ -199,7 +198,7 @@ def ensure_worktree(story):
 
 
 def require_store():
-    if store_ready():
+    if _container.fs.store_ready():
         return True
     sys.stderr.write("no grid store here - run `tg init` first.\n")
     return False
@@ -279,7 +278,7 @@ def print_help():
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    set_store(BdStore())
+    set_container(Container())
     if not argv or argv[0] in ("-h", "--help"):
         print_help()
         return 0
@@ -301,7 +300,7 @@ def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="tg show")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    print(json.dumps(_store.task_view(a.id), indent=2))
+    print(json.dumps(_container.store.task_view(a.id), indent=2))
     return 0
 
 
@@ -314,8 +313,8 @@ def cmd_claim(argv):
         return 0
     spawnid = os.environ.get("GRID_SPAWNID")
     if spawnid:
-        stamp_bead(spawnid, t["id"])
-    view = _store.task_view(t["id"])
+        _container.workers.stamp_bead(spawnid, t["id"])
+    view = _container.store.task_view(t["id"])
     story = t.get("parent") or t["id"]
     ws = ensure_worktree(story)
     if ws:
@@ -334,14 +333,14 @@ def cmd_spawn(argv):
     ap = argparse.ArgumentParser(prog="tg spawn")
     ap.add_argument("role")
     a = ap.parse_args(argv)
-    return 0 if spawn_worker(a.role) else 1
+    return 0 if _container.spawner.spawn_worker(a.role) else 1
 
 
 def cmd_ps(argv):
     ap = argparse.ArgumentParser(prog="tg ps")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    rows = [dict(w, alive=pid_alive(w.get("pid", -1))) for w in workers_state()]
+    rows = [dict(w, alive=_container.workers.pid_alive(w.get("pid", -1))) for w in _container.workers.workers_state()]
     if a.json:
         print(json.dumps(rows, indent=2))
     else:
@@ -357,10 +356,10 @@ def cmd_logs(argv):
     ap.add_argument("-f", action="store_true")
     a = ap.parse_args(argv)
     if a.target == "run":
-        path = os.path.join(grid_root(), "logs", "run.log")
+        path = os.path.join(_container.fs.grid_root(), "logs", "run.log")
     else:
         path = None
-        for w in reversed(workers_state()):
+        for w in reversed(_container.workers.workers_state()):
             if w.get("bead") == a.target or w.get("role") == a.target:
                 path = w["log"]
                 break
@@ -459,25 +458,25 @@ def cmd_done(argv):
     ap.add_argument("outcome")
     ap.add_argument("--note")
     a = ap.parse_args(argv)
-    t = _store.get_task(a.id)
+    t = _container.store.get_task(a.id)
     if flow_next(t["step"], a.outcome) is None:
         sys.stderr.write(
             "no transition for step=%s outcome=%s; not closing. "
             "Fix the flow or use a defined outcome.\n" % (t["step"], a.outcome))
         return 1
-    missing = required_outputs(meta_for_step(t["step"])) - _store.present_types(t)
+    missing = required_outputs(meta_for_step(t["step"])) - _container.store.present_types(t)
     if missing:
         sys.stderr.write(
             "cannot close %s: step '%s' must produce %s; none on the story. "
             "tg link the artifact first.\n" % (a.id, t["step"], ", ".join(sorted(missing))))
         return 1
     step = t["step"]
-    _store.note(a.id, "outcome: %s" % a.outcome)
-    _store.close(a.id, a.outcome)
+    _container.store.note(a.id, "outcome: %s" % a.outcome)
+    _container.store.close(a.id, a.outcome)
     new = advance(a.id, a.outcome)
     if a.note:
         target = new if new else a.id
-        _store.note(target, cflow.forward_note(step, a.outcome, a.note))
+        _container.store.note(target, cflow.forward_note(step, a.outcome, a.note))
     if new:
         print(new)
     return 0
@@ -497,14 +496,14 @@ def cmd_block(argv):
         v = getattr(a, k, None)
         if v:
             resume[k] = v
-    _store.update_metadata(a.id, resume)
-    _store.note(a.id, "BLOCKED: %s" % a.needs)
-    role = _store.get_task(a.id)["role"]
+    _container.store.update_metadata(a.id, resume)
+    _container.store.note(a.id, "BLOCKED: %s" % a.needs)
+    role = _container.store.get_task(a.id)["role"]
     if role and role != "human":
-        _store.label_remove(a.id, "for:%s" % role)
-    _store.label_add(a.id, "for:human")
-    _store.update_status(a.id, "open")
-    _store.assign(a.id, "")
+        _container.store.label_remove(a.id, "for:%s" % role)
+    _container.store.label_add(a.id, "for:human")
+    _container.store.update_status(a.id, "open")
+    _container.store.assign(a.id, "")
     print("blocked -> human")
     return 0
 
@@ -513,7 +512,7 @@ def cmd_unblock(argv):
     ap = argparse.ArgumentParser(prog="tg unblock")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    t = _store.get_task(a.id)
+    t = _container.store.get_task(a.id)
     owner, _ = load_flow()
     role = owner.get(t["step"])
     if not role or role == "human":
@@ -522,10 +521,10 @@ def cmd_unblock(argv):
         return 1
     cur = t["role"]
     if cur and cur != role:
-        _store.label_remove(a.id, "for:%s" % cur)
-    _store.label_add(a.id, "for:%s" % role)
-    _store.update_status(a.id, "open")
-    _store.assign(a.id, "")
+        _container.store.label_remove(a.id, "for:%s" % cur)
+    _container.store.label_add(a.id, "for:%s" % role)
+    _container.store.update_status(a.id, "open")
+    _container.store.assign(a.id, "")
     print("unblocked -> %s" % role)
     return 0
 
@@ -537,15 +536,15 @@ def cmd_close(argv):
     a = ap.parse_args(argv)
     target = os.path.join(projects_root(), story_repo(a.story))
     path = worktree_path(a.story)
-    branch = _story_branch(a.story) or cworkspace.branch_for(_store.get_task(a.story)["title"], branch_prefix())
-    for k in _store.children(a.story):
+    branch = _story_branch(a.story) or cworkspace.branch_for(_container.store.get_task(a.story)["title"], branch_prefix())
+    for k in _container.store.children(a.story):
         kt = task_from_bead(k)
         if kt["status"] != "done":
-            _store.close(kt["id"], a.reason)
-    _store.close(a.story, a.reason)
-    if gitio.is_git_repo(target):
-        gitio.remove_worktree(target, path)
-        gitio.delete_branch(target, branch)
+            _container.store.close(kt["id"], a.reason)
+    _container.store.close(a.story, a.reason)
+    if _container.git.is_git_repo(target):
+        _container.git.remove_worktree(target, path)
+        _container.git.delete_branch(target, branch)
     print("closed %s (%s)" % (a.story, a.reason))
     return 0
 
@@ -557,12 +556,12 @@ def cmd_link(argv):
     ap.add_argument("value")
     ap.add_argument("--label")
     a = ap.parse_args(argv)
-    _store.add_artifact(a.story, a.type, a.value, a.label)
+    _container.store.add_artifact(a.story, a.type, a.value, a.label)
     return 0
 
 
 def _log_for_bead(bid):
-    for w in reversed(workers_state()):
+    for w in reversed(_container.workers.workers_state()):
         if w.get("bead") == bid:
             return w.get("log")
     return None
@@ -573,10 +572,10 @@ def cmd_trace(argv):
     ap.add_argument("story")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    story = _store.get_task(a.story)
-    arts = _store.story_artifacts(a.story)
+    story = _container.store.get_task(a.story)
+    arts = _container.store.story_artifacts(a.story)
     tasks = []
-    for k in _store.children(a.story):
+    for k in _container.store.children(a.story):
         kt = task_from_bead(k)
         tasks.append({"id": kt["id"], "step": kt["step"], "status": kt["status"],
                       "log": _log_for_bead(kt["id"])})
@@ -598,16 +597,16 @@ def cmd_sweep(argv):
     # A task is owned by a live worker iff its assignee is the spawnid of a worker
     # whose pid is alive. The spawnid->pid mapping is written at spawn (before the
     # claim), so it never lags - a just-claimed task is protected immediately.
-    live = {w.get("spawnid") for w in workers_state()
-            if w.get("spawnid") and pid_alive(w.get("pid", -1))}
-    for bead in _store.list_beads_by_status("in_progress"):
+    live = {w.get("spawnid") for w in _container.workers.workers_state()
+            if w.get("spawnid") and _container.workers.pid_alive(w.get("pid", -1))}
+    for bead in _container.store.list_beads_by_status("in_progress"):
         if bead.get("assignee") in live:
             continue
         bid = bead["id"]
-        _store.update_status(bid, "open")
-        _store.assign(bid, "")
+        _container.store.update_status(bid, "open")
+        _container.store.assign(bid, "")
         print("swept %s" % bid)
-    pruned = prune_workers()
+    pruned = _container.workers.prune_workers()
     if pruned:
         print("pruned %d dead worker entr%s" % (pruned, "y" if pruned == 1 else "ies"))
     return 0
@@ -617,7 +616,7 @@ def cmd_sweep(argv):
 
 
 def _filter(status):
-    return ctasks.filter_by_status(_store.all_tasks(), status)
+    return ctasks.filter_by_status(_container.store.all_tasks(), status)
 
 
 _MINE_ORDER = {"blocked": 0, "action": 1, "todo": 2}
@@ -701,10 +700,10 @@ def cmd_file(argv):
         return 1
     if a.repo:
         repo_path = os.path.join(projects_root(), a.repo)
-        if not gitio.is_git_repo(repo_path):
+        if not _container.git.is_git_repo(repo_path):
             pr = projects_root()
             available = sorted(
-                e.name for e in os.scandir(pr) if e.is_dir() and gitio.is_git_repo(e.path)
+                e.name for e in os.scandir(pr) if e.is_dir() and _container.git.is_git_repo(e.path)
             ) if os.path.isdir(pr) else []
             avail_str = ", ".join(available) if available else "(none)"
             sys.stderr.write("unknown repo '%s'; available repos: %s\n" % (a.repo, avail_str))
@@ -715,13 +714,13 @@ def cmd_file(argv):
         labels.append("project:%s" % a.project)
     if a.goal:
         labels.append("goal:%s" % a.goal)
-    story = _store.create_story(base, epic=a.epic, labels=labels or None)
-    _store.add_artifact(story, "spec", a.spec)
+    story = _container.store.create_story(base, epic=a.epic, labels=labels or None)
+    _container.store.add_artifact(story, "spec", a.spec)
     if a.repo:
-        _store.add_artifact(story, "repo", a.repo)
-    task = _store.create_task("%s: %s" % (a.step, base), step=a.step, role=role, parent=story)
+        _container.store.add_artifact(story, "repo", a.repo)
+    task = _container.store.create_task("%s: %s" % (a.step, base), step=a.step, role=role, parent=story)
     for blocker in (a.blocked_by or []):
-        _store.dep_add(task, blocker)
+        _container.store.dep_add(task, blocker)
     print(story)
     return 0
 
@@ -737,7 +736,7 @@ def cmd_add(argv):
         labels.append("goal:%s" % a.goal)
     if a.project:
         labels.append("project:%s" % a.project)
-    new = _store.create_task(a.title, labels=labels)
+    new = _container.store.create_task(a.title, labels=labels)
     print(new)
     return 0
 
@@ -750,7 +749,7 @@ def _run_tick():
     # The agent pool: fill up to GRID_MAX_AGENTS alive workers from the ready queue,
     # one worker per uncovered ready task, regardless of role. bd ready already hides
     # blocked-by tasks, so declared dependencies are honoured for free.
-    alive = [w for w in workers_state() if pid_alive(w.get("pid", -1))]
+    alive = [w for w in _container.workers.workers_state() if _container.workers.pid_alive(w.get("pid", -1))]
     slots = max_agents() - len(alive)
     if slots <= 0:
         return
@@ -766,9 +765,9 @@ def _run_tick():
     for w in alive:
         if w.get("bead") is None and (now - w.get("started", 0)) < max_boot:
             inflight[w["role"]] = inflight.get(w["role"], 0) + 1
-    ready = cflow.ready_task_roles(_store.ready_beads())
+    ready = cflow.ready_task_roles(_container.store.ready_beads())
     for role in cflow.pool_plan(ready, inflight, slots):
-        spawn_worker(role)
+        _container.spawner.spawn_worker(role)
 
 
 def cmd_run(argv):
@@ -791,8 +790,8 @@ def _human_step_skills():
     """The skill bodies of human-performed steps (a `step` but no `model:`), each as
     (step, body), ordered by step. The Driver loads all of these - it is their performer."""
     skills = []
-    for role in step_roles():
-        a = parse_step(role)
+    for role in _container.fs.step_roles():
+        a = _container.fs.parse_step(role)
         if a and a["meta"].get("step") and not a["meta"].get("model"):
             skills.append((a["meta"]["step"], a["body"]))
     return sorted(skills)
@@ -801,8 +800,8 @@ def _human_step_skills():
 def cmd_driver(argv):
     if not require_store():
         return 1
-    root = grid_root()
-    seat = read_md("driver.md")
+    root = _container.fs.grid_root()
+    seat = _container.fs.read_md("driver.md")
     if seat is None or not seat["meta"].get("model"):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
         return 1
@@ -814,12 +813,12 @@ def cmd_driver(argv):
 
 def cmd_init(argv):
     argparse.ArgumentParser(prog="tg init").parse_args(argv)
-    existed = store_ready()
-    _store.ensure_beads()
-    os.makedirs(os.path.join(grid_root(), "logs"), exist_ok=True)
+    existed = _container.fs.store_ready()
+    _container.store.ensure_beads()
+    os.makedirs(os.path.join(_container.fs.grid_root(), "logs"), exist_ok=True)
     print("grid store already initialised" if existed else "grid store initialised")
-    created = ensure_config()
-    print("config %s at %s" % ("created" if created else "already exists", config_path()))
+    created = _container.fs.ensure_config()
+    print("config %s at %s" % ("created" if created else "already exists", _container.fs.config_path()))
     return 0
 
 
@@ -828,10 +827,10 @@ def cmd_config(argv):
     ap.add_argument("--edit", action="store_true")
     a = ap.parse_args(argv)
     if a.edit:
-        ensure_config()
+        _container.fs.ensure_config()
         editor = os.environ.get("EDITOR") or "vi"
-        os.execvp(editor, [editor, config_path()])
-    p = config_path()
+        os.execvp(editor, [editor, _container.fs.config_path()])
+    p = _container.fs.config_path()
     print("config: %s" % p)
     print("exists" if os.path.exists(p) else "(using defaults)")
     print("projects: %s" % projects_root())
@@ -843,7 +842,7 @@ def cmd_status(argv):
     ap = argparse.ArgumentParser(prog="tg status")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    buckets = ctasks.bucket(_store.all_tasks())
+    buckets = ctasks.bucket(_container.store.all_tasks())
     if a.json:
         print(json.dumps(buckets, indent=2))
     else:
@@ -860,7 +859,7 @@ def cmd_status(argv):
 
 def _spec_hash(task):
     story = task.get("parent") or task["id"]
-    arts = _store.story_artifacts(story)
+    arts = _container.store.story_artifacts(story)
     spec = next((a["value"] for a in arts if a["type"] == "spec"), None)
     if not spec or not os.path.exists(spec):
         return "unknown"
@@ -869,10 +868,10 @@ def _spec_hash(task):
 
 
 def _story_signals(story_id):
-    children = _store.children(story_id)
+    children = _container.store.children(story_id)
     tasks = [task_from_bead(b) for b in children]
     task_histories = {
-        t["id"]: _store.history(t["id"])
+        t["id"]: _container.store.history(t["id"])
         for t in tasks if t.get("step") == "build"
     }
     return cretro.derive_signals(tasks, task_histories)
@@ -887,9 +886,9 @@ def cmd_reflect(argv):
                          "file says what to look for)")
     a = ap.parse_args(argv)
 
-    t = _store.get_task(a.id)
+    t = _container.store.get_task(a.id)
     reflection = creflect.build_reflection(a.id, a.feedback, _spec_hash(t))
-    _store.add_artifact(a.id, "reflection", json.dumps(reflection))  # on the task that gave it
+    _container.store.add_artifact(a.id, "reflection", json.dumps(reflection))  # on the task that gave it
     print("reflected")
     return 0
 
@@ -903,7 +902,7 @@ def cmd_worklog(argv):
     today = _dt.date.today()
     args = [x for x in (a.start, a.end) if x is not None]
     start, end = cworklog.resolve_period(args, today)
-    entries = cworklog.worklog(_store.closed_stories(), start, end)
+    entries = cworklog.worklog(_container.store.closed_stories(), start, end)
     if not entries:
         print("no stories shipped in that period")
         return 0
@@ -918,12 +917,12 @@ def cmd_retro(argv):
     ap.add_argument("epic")
     a = ap.parse_args(argv)
 
-    children = _store.children(a.epic)
+    children = _container.store.children(a.epic)
     stories = [task_from_bead(b) for b in children if b.get("issue_type") == "story"]
 
     def _reflections_of(bead_id):
         out = []
-        for art in _store.story_artifacts(bead_id):
+        for art in _container.store.story_artifacts(bead_id):
             if art.get("type") == "reflection":
                 try:
                     out.append(json.loads(art["value"]))
@@ -935,7 +934,7 @@ def cmd_retro(argv):
     story_rows = []
     for story in stories:
         nrefs = 0
-        for task in _store.children(story["id"]):  # feedback sits on the task that gave it
+        for task in _container.store.children(story["id"]):  # feedback sits on the task that gave it
             refs = _reflections_of(task["id"])
             all_reflections.extend(refs)
             nrefs += len(refs)

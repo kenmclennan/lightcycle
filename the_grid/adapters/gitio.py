@@ -2,6 +2,8 @@
 import os
 import subprocess
 
+from the_grid.ports.git import GitPort
+
 
 def git(root, *args):
     return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
@@ -45,3 +47,31 @@ def worktree_registered(root, path):
         if line.startswith("worktree ") and os.path.realpath(line[len("worktree "):]) == want:
             return True
     return False
+
+
+class GitAdapter(GitPort):
+    """Thin GitPort over the module functions."""
+
+    def git(self, root, *args):
+        return git(root, *args)
+
+    def git_ok(self, root, *args):
+        return git_ok(root, *args)
+
+    def is_git_repo(self, root):
+        return is_git_repo(root)
+
+    def branch_exists(self, root, branch):
+        return branch_exists(root, branch)
+
+    def worktree_base(self, root):
+        return worktree_base(root)
+
+    def remove_worktree(self, root, path):
+        return remove_worktree(root, path)
+
+    def delete_branch(self, root, branch):
+        return delete_branch(root, branch)
+
+    def worktree_registered(self, root, path):
+        return worktree_registered(root, path)

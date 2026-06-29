@@ -174,9 +174,9 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     if contract_steps:
         write_contract_steps(test.root)
     test.store = FakeStore()
-    test._orig = _cli_mod._store
-    _cli_mod.set_store(test.store)
-    test.addCleanup(lambda: _cli_mod.set_store(test._orig))
+    test._orig = _cli_mod._container
+    _cli_mod.set_container(_cli_mod.Container(store=test.store))
+    test.addCleanup(lambda: _cli_mod.set_container(test._orig))
     test.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
 
@@ -421,9 +421,9 @@ class TestRun(unittest.TestCase):
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
         self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
 
@@ -522,9 +522,9 @@ class TestAdd(unittest.TestCase):
 class TestArtifacts(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
 
     def test_add_and_read_artifacts_append(self):
         sid = self.store.create_story("story s")
@@ -540,9 +540,9 @@ class TestArtifacts(unittest.TestCase):
 class TestCompositionRoot(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
 
     def test_cmd_status_in_process_with_injected_store(self):
         buf = io.StringIO()
@@ -553,10 +553,10 @@ class TestCompositionRoot(unittest.TestCase):
         self.assertIn("mine", s)
 
     def test_store_is_replaced_and_restored(self):
-        self.assertIs(_cli_mod._store, self.store)
-        _cli_mod.set_store(self._orig)
-        self.assertIs(_cli_mod._store, self._orig)
-        _cli_mod.set_store(self.store)
+        self.assertIs(_cli_mod._container.store, self.store)
+        _cli_mod.set_container(self._orig)
+        self.assertIs(_cli_mod._container, self._orig)
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
 
 
 class TestLink(unittest.TestCase):
@@ -703,11 +703,12 @@ class TestAgentFrontmatter(unittest.TestCase):
         spec = importlib.util.spec_from_loader("tgmod_fm", loader)
         mod = importlib.util.module_from_spec(spec)
         loader.exec_module(mod)
+        mod.set_container(mod.Container())
         return mod
 
     def test_parse_step_extracts_model_and_strips_frontmatter(self):
         tg = self._tg()
-        a = tg.parse_step("coder")
+        a = tg.container().fs.parse_step("coder")
         self.assertEqual(a["meta"]["model"], "sonnet")
         self.assertTrue(a["body"].startswith("# Coder"))
         self.assertNotIn("model:", a["body"])
@@ -717,7 +718,7 @@ class TestAgentFrontmatter(unittest.TestCase):
             "---\nmodel: opus\nstep: review\nroutes:\n  done: open-pr\n"
             "  rejected: build\n---\n# Reviewer\n")
         tg = self._tg()
-        a = tg.parse_step("reviewer")
+        a = tg.container().fs.parse_step("reviewer")
         self.assertEqual(a["meta"]["step"], "review")
         self.assertEqual(a["meta"]["routes"], {"done": "open-pr", "rejected": "build"})
         self.assertTrue(a["body"].startswith("# Reviewer"))
@@ -736,6 +737,7 @@ class TestFlowFromAgents(unittest.TestCase):
         spec = importlib.util.spec_from_loader("tgmod_flow", loader)
         mod = importlib.util.module_from_spec(spec)
         loader.exec_module(mod)
+        mod.set_container(mod.Container())
         return mod
 
     def test_flow_next_derives_role_from_owner(self):
@@ -946,9 +948,9 @@ class TestWorktree(unittest.TestCase):
         os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def tearDown(self):
@@ -1026,9 +1028,9 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def tearDown(self):
@@ -1051,9 +1053,9 @@ class TestNamedRepo(unittest.TestCase):
         os.environ["GRID_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
         os.environ["GRID_ROOT_OVERRIDE"] = self.engine
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def tearDown(self):
@@ -1145,9 +1147,9 @@ class TestClose(unittest.TestCase):
         os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def tearDown(self):
@@ -1252,9 +1254,9 @@ class TestMine(unittest.TestCase):
         (adir / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n  changes: build\n---\nstub")
         self.store = FakeStore()
-        self._orig = _cli_mod._store
-        _cli_mod.set_store(self.store)
-        self.addCleanup(lambda: _cli_mod.set_store(self._orig))
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def test_mine_tags_orders_and_shows_context(self):
