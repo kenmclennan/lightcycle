@@ -14,16 +14,16 @@ class CompleteTask:
 
     def execute(self, tid, outcome, note=None):
         t = self._store.get_task(tid)
-        if self._flow.flow_next(t["step"], outcome) is None:
+        if self._flow.flow_next(t.step, outcome) is None:
             raise UseCaseError(
                 "no transition for step=%s outcome=%s; not closing. "
-                "Fix the flow or use a defined outcome." % (t["step"], outcome))
-        missing = required_outputs(self._flow.meta_for_step(t["step"])) - self._store.present_types(t)
+                "Fix the flow or use a defined outcome." % (t.step, outcome))
+        missing = required_outputs(self._flow.meta_for_step(t.step)) - self._store.present_types(t)
         if missing:
             raise UseCaseError(
                 "cannot close %s: step '%s' must produce %s; none on the story. "
-                "tg link the artifact first." % (tid, t["step"], ", ".join(sorted(missing))))
-        step = t["step"]
+                "tg link the artifact first." % (tid, t.step, ", ".join(sorted(missing))))
+        step = t.step
         self._store.note(tid, "outcome: %s" % outcome)
         self._store.close(tid, outcome)
         new = self._advance.execute(tid, outcome)

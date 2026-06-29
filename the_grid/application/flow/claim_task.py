@@ -24,18 +24,18 @@ class ClaimTask:
         if not arr:
             return None
         t = task_from_bead(arr[0])
-        missing = required_inputs(self._flow.meta_for_step(t["step"])) - self._store.present_types(t)
+        missing = required_inputs(self._flow.meta_for_step(t.step)) - self._store.present_types(t)
         if missing:
             self._store.route_to_human(
-                t["id"],
+                t.id,
                 "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)),
                 role)
             return None
         spawnid = self._config.spawn_id()
         if spawnid:
-            self._workers.stamp_bead(spawnid, t["id"])
-        view = self._store.task_view(t["id"])
-        story = t.get("parent") or t["id"]
+            self._workers.stamp_bead(spawnid, t.id)
+        view = self._store.task_view(t.id)
+        story = t.parent or t.id
         ws = self._worktrees.ensure(story)
         if ws:
             view["workspace"] = ws

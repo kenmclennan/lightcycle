@@ -11,7 +11,7 @@ class CloseStory:
     def execute(self, story, reason):
         for k in self._store.children(story):
             kt = task_from_bead(k)
-            if kt["status"] != "done":
-                self._store.close(kt["id"], reason)
+            if kt.status != "done":
+                self._store.close(kt.id, reason)
         self._store.close(story, reason)
         self._worktrees.remove(story)
