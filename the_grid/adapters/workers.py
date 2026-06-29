@@ -3,6 +3,7 @@ import json
 import os
 
 from the_grid.adapters.fsio import grid_root
+from the_grid.ports.workers import WorkersPort
 
 
 def workers_path():
@@ -55,3 +56,22 @@ def stamp_bead(spawnid, bead):
         if w.get("spawnid") == spawnid:
             w["bead"] = bead
     write_workers(workers)
+
+
+class WorkersAdapter(WorkersPort):
+    """Thin WorkersPort over the module functions."""
+
+    def workers_state(self):
+        return workers_state()
+
+    def write_workers(self, workers):
+        return write_workers(workers)
+
+    def pid_alive(self, pid):
+        return pid_alive(pid)
+
+    def prune_workers(self, keep_dead=None):
+        return prune_workers(keep_dead)
+
+    def stamp_bead(self, spawnid, bead):
+        return stamp_bead(spawnid, bead)

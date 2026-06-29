@@ -4,6 +4,8 @@ import shlex
 import subprocess
 import sys
 import time
+
+from the_grid.ports.spawner import SpawnerPort
 import uuid
 
 from the_grid.adapters.fsio import grid_root, parse_step
@@ -44,3 +46,10 @@ def spawn_worker(role):
                     "log": log, "bead": None, "started": time.time()})
     write_workers(workers)
     return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
+
+
+class SpawnerAdapter(SpawnerPort):
+    """Thin SpawnerPort over the module function."""
+
+    def spawn_worker(self, role):
+        return spawn_worker(role)

@@ -3,7 +3,7 @@ import datetime
 import os
 import uuid
 
-from the_grid.adapters.store import StorePort
+from the_grid.ports.store import StorePort
 from the_grid.core.tasks import task_from_bead
 
 

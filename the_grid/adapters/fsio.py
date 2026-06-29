@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from the_grid.core import steps as core_steps
+from the_grid.ports.fs import FsPort
 
 
 def grid_root():
@@ -72,3 +73,34 @@ def worktrees_dir():
 
 def store_ready():
     return os.path.isdir(os.path.join(grid_root(), ".beads"))
+
+
+class FsAdapter(FsPort):
+    """Thin FsPort over the module functions."""
+
+    def grid_root(self):
+        return grid_root()
+
+    def config_path(self):
+        return config_path()
+
+    def load_config(self):
+        return load_config()
+
+    def ensure_config(self):
+        return ensure_config()
+
+    def step_roles(self):
+        return step_roles()
+
+    def read_md(self, relpath):
+        return read_md(relpath)
+
+    def parse_step(self, role):
+        return parse_step(role)
+
+    def worktrees_dir(self):
+        return worktrees_dir()
+
+    def store_ready(self):
+        return store_ready()
