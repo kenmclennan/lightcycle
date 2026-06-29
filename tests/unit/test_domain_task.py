@@ -40,6 +40,15 @@ class TestTaskFromBead(unittest.TestCase):
         self.assertEqual(Task.from_bead(_bead(labels=["for:human"])).status, "needs-human")
         self.assertEqual(Task.from_bead(_bead()).status, "ready")
 
+    def test_as_dict_is_a_plain_field_dict(self):
+        t = Task.from_bead(_bead())
+        d = t.as_dict()
+        self.assertEqual(type(d), dict)
+        self.assertEqual(d["id"], "t-1")
+        self.assertEqual(d["step"], "build")
+        self.assertEqual(d["status"], "ready")
+        self.assertNotIn("workspace", d)  # no enrichments
+
     def test_dict_compatible_during_migration(self):
         t = Task.from_bead(_bead())
         self.assertEqual(t["id"], t.id)
