@@ -14,5 +14,5 @@ class Mine:
         owner, routes = self._flow.load_flow()
         tasks = ctasks.filter_by_status(self._store.all_tasks(), "needs-human")
         rows = [(ctasks.classify_mine(t, owner, routes), t) for t in tasks]
-        rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1]["id"]))
+        rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1].id))
         return rows

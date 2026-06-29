@@ -30,9 +30,9 @@ class TestStatus(unittest.TestCase):
         running = s.create_task("running", step="build", role="coder")
         s.assign(running, "worker-1")
         buckets = Status(s).execute()
-        self.assertEqual([t["id"] for t in buckets["queue"]], [ready])
-        self.assertEqual([t["id"] for t in buckets["mine"]], [human])
-        self.assertEqual([t["id"] for t in buckets["active"]], [running])
+        self.assertEqual([t.id for t in buckets["queue"]], [ready])
+        self.assertEqual([t.id for t in buckets["mine"]], [human])
+        self.assertEqual([t.id for t in buckets["active"]], [running])
 
 
 class TestActiveTasks(unittest.TestCase):
@@ -42,7 +42,7 @@ class TestActiveTasks(unittest.TestCase):
         running = s.create_task("running", step="build", role="coder")
         s.assign(running, "worker-1")
         active = ActiveTasks(s).execute()
-        self.assertEqual([t["id"] for t in active], [running])
+        self.assertEqual([t.id for t in active], [running])
 
 
 class TestQueue(unittest.TestCase):
@@ -51,7 +51,7 @@ class TestQueue(unittest.TestCase):
         ids = [s.create_task("t%d" % i, step="build", role="coder") for i in range(3)]
         out = Queue(s).execute(2)
         self.assertEqual(len(out), 2)
-        self.assertTrue(set(t["id"] for t in out).issubset(set(ids)))
+        self.assertTrue(set(t.id for t in out).issubset(set(ids)))
 
     def test_default_n_is_ten(self):
         s = FakeStore()
@@ -84,13 +84,13 @@ class TestInboxBacklogMine(unittest.TestCase):
 
     def test_inbox_has_stepped_human_tasks_not_todos(self):
         s = self._store()
-        ids = [t["id"] for _cls, t in Inbox(s, _empty_flow(s)).execute()]
+        ids = [t.id for _cls, t in Inbox(s, _empty_flow(s)).execute()]
         self.assertIn(self.gate, ids)
         self.assertNotIn(self.todo, ids)
 
     def test_backlog_has_todos_not_stepped(self):
         s = self._store()
-        ids = [t["id"] for _cls, t in Backlog(s, _empty_flow(s)).execute()]
+        ids = [t.id for _cls, t in Backlog(s, _empty_flow(s)).execute()]
         self.assertIn(self.todo, ids)
         self.assertNotIn(self.gate, ids)
 
@@ -98,7 +98,7 @@ class TestInboxBacklogMine(unittest.TestCase):
         s = self._store()
         rows = Mine(s, _empty_flow(s)).execute()
         kinds = [cls[0] for cls, _t in rows]
-        self.assertEqual(set(t["id"] for _c, t in rows), {self.todo, self.gate})
+        self.assertEqual(set(t.id for _c, t in rows), {self.todo, self.gate})
         self.assertLess(kinds.index("blocked"), kinds.index("todo"))
 
 

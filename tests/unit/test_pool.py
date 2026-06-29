@@ -55,8 +55,8 @@ class TestSweep(unittest.TestCase):
         result = Sweep(s, workers).execute()
         self.assertEqual(result["swept"], [orphan])
         self.assertEqual(result["pruned"], 2)
-        self.assertEqual(s.get_task(orphan)["status"], "ready")
-        self.assertEqual(s.get_task(held)["status"], "in-progress")
+        self.assertEqual(s.get_task(orphan).status, "ready")
+        self.assertEqual(s.get_task(held).status, "in-progress")
 
 
 class TestTick(unittest.TestCase):

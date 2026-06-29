@@ -38,7 +38,7 @@ class WorktreeService:
 
     def _branch_for(self, story):
         return self.story_branch(story) or cworkspace.branch_for(
-            self._store.get_task(story)["title"], self._config.branch_prefix())
+            self._store.get_task(story).title, self._config.branch_prefix())
 
     def _ensure_branch_artifact(self, story, branch):
         if any(a.get("type") == "branch" for a in self._store.story_artifacts(story)):

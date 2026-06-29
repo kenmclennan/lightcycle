@@ -49,15 +49,6 @@ class TestTaskFromBead(unittest.TestCase):
         self.assertEqual(d["status"], "ready")
         self.assertNotIn("workspace", d)  # no enrichments
 
-    def test_dict_compatible_during_migration(self):
-        t = Task.from_bead(_bead())
-        self.assertEqual(t["id"], t.id)
-        self.assertEqual(t.get("step"), "build")
-        self.assertIn("status", t)
-        t["workspace"] = "/w"  # enrichment by use cases still works
-        self.assertEqual(t["workspace"], "/w")
-        self.assertEqual(t, dict(t))  # value-equal to a plain dict
-
 
 if __name__ == "__main__":
     unittest.main()

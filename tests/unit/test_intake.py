@@ -39,9 +39,9 @@ class TestAddTask(unittest.TestCase):
         s = FakeStore()
         tid = AddTask(s).execute("do a thing", goal="g1", project="p1")
         t = s.get_task(tid)
-        self.assertEqual(t["status"], "needs-human")
-        self.assertEqual(t["goal"], "g1")
-        self.assertEqual(t["project"], "p1")
+        self.assertEqual(t.status, "needs-human")
+        self.assertEqual(t.goal, "g1")
+        self.assertEqual(t.project, "p1")
 
 
 class TestLinkArtifact(unittest.TestCase):
@@ -62,8 +62,8 @@ class TestCloseStory(unittest.TestCase):
         k = s.create_task("build: x", step="build", role="coder", parent=sid)
         wt = FakeWorktrees()
         CloseStory(s, wt).execute(sid, "merged")
-        self.assertEqual(s.get_task(sid)["status"], "done")
-        self.assertEqual(s.get_task(k)["status"], "done")
+        self.assertEqual(s.get_task(sid).status, "done")
+        self.assertEqual(s.get_task(k).status, "done")
         self.assertEqual(wt.removed, [sid])
 
 

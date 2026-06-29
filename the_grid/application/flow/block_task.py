@@ -14,7 +14,7 @@ class BlockTask:
                 resume[k] = v
         self._store.update_metadata(tid, resume)
         self._store.note(tid, "BLOCKED: %s" % needs)
-        role = self._store.get_task(tid)["role"]
+        role = self._store.get_task(tid).role
         if role and role != "human":
             self._store.label_remove(tid, "for:%s" % role)
         self._store.label_add(tid, "for:human")
