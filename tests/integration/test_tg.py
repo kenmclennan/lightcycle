@@ -748,12 +748,15 @@ class TestFlowFromAgents(unittest.TestCase):
 
     def test_flow_next_derives_role_from_owner(self):
         tg = self._tg()
-        self.assertEqual(self._flow(tg).flow_next("build", "done"), ("review", "reviewer"))
-        self.assertEqual(self._flow(tg).flow_next("review", "rejected"), ("build", "coder"))
+        t = self._flow(tg).flow_next("build", "done")
+        self.assertEqual((t.to_step, t.to_role), ("review", "reviewer"))
+        t2 = self._flow(tg).flow_next("review", "rejected")
+        self.assertEqual((t2.to_step, t2.to_role), ("build", "coder"))
 
     def test_flow_next_unowned_target_routes_to_human(self):
         tg = self._tg()
-        self.assertEqual(self._flow(tg).flow_next("open-pr", "done"), ("ready-merge", "human"))
+        t = self._flow(tg).flow_next("open-pr", "done")
+        self.assertEqual((t.to_step, t.to_role), ("ready-merge", "human"))
 
     def test_flow_next_unknown_outcome_is_none(self):
         tg = self._tg()

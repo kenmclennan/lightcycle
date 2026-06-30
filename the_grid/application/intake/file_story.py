@@ -23,11 +23,11 @@ class FileStory:
                 if self._git.is_git_repo(os.path.join(pr, name))]
 
     def execute(self, spec, step, *, epic=None, project=None, goal=None, repo=None, blocked_by=None):
-        owner, _ = self._flow.load_flow()
-        role = owner.get(step)
+        flow = self._flow.load_flow()
+        role = flow.owner_of(step)
         if not role:
             raise UseCaseError("unknown step '%s'; owned steps: %s"
-                               % (step, ", ".join(sorted(owner)) or "(none)"))
+                               % (step, ", ".join(flow.steps()) or "(none)"))
         unmet = required_inputs(self._flow.meta_for_step(step)) - FILE_PROVIDES
         if unmet:
             raise UseCaseError(

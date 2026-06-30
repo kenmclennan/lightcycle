@@ -2,7 +2,13 @@ import unittest
 
 from the_grid.domain.contracts import (FILE_PROVIDES, analyze_flow, guaranteed_artifacts,
                                  optional_inputs, required_inputs, required_outputs)
-from the_grid.domain.flow import load_flow
+from the_grid.domain.flow import Flow
+
+
+def load_flow(metas):
+    f = Flow.assemble(metas)
+    return f.owner_map(), f.routes_map()
+
 
 CONTRACT_METAS = {
     "coder": {"step": "build", "accepts": {"spec": "required", "branch": "optional"},

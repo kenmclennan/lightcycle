@@ -1,5 +1,4 @@
 """AdvanceTask: create the next task in the flow for an outcome (no closing)."""
-from the_grid.domain import flow as cflow
 
 
 class AdvanceTask:
@@ -10,8 +9,7 @@ class AdvanceTask:
 
     def execute(self, tid, outcome):
         t = self._store.get_task(tid)
-        nxt = self._flow.flow_next(t.step, outcome)
-        if nxt is None:
+        transition = self._flow.flow_next(t.step, outcome)
+        if transition is None:
             return None
-        next_step, next_role = nxt
-        return self._store.create_task(**cflow.advance_create_kwargs(t, next_step, next_role))
+        return self._store.create_task(**transition.next_task_spec(t))

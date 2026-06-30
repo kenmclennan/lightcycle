@@ -9,6 +9,7 @@ class Inbox:
         self._flow = flow
 
     def execute(self, n=None):
-        owner, routes = self._flow.load_flow()
+        flow = self._flow.load_flow()
+        owner, routes = flow.owner_map(), flow.routes_map()
         tasks = ctasks.filter_by_status(self._store.all_tasks(), "needs-human")
         return ctasks.partition_mine(tasks, owner, routes, {"action", "blocked"}, n)

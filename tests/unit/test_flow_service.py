@@ -19,15 +19,17 @@ class TestFlowService(unittest.TestCase):
     def test_role_metas(self):
         self.assertEqual(svc().role_metas(), METAS)
 
-    def test_load_flow_owner_and_routes(self):
-        owner, routes = svc().load_flow()
-        self.assertEqual(owner["build"], "coder")
-        self.assertEqual(owner["review"], "reviewer")
-        self.assertEqual(routes["build"], {"done": "review"})
+    def test_load_flow_returns_assembled_flow(self):
+        flow = svc().load_flow()
+        self.assertEqual(flow.owner_of("build"), "coder")
+        self.assertEqual(flow.owner_of("review"), "reviewer")
+        self.assertEqual(flow.routes_map()["build"], {"done": "review"})
 
     def test_flow_next_derives_owner_of_target(self):
-        self.assertEqual(svc().flow_next("build", "done"), ("review", "reviewer"))
-        self.assertEqual(svc().flow_next("review", "rejected"), ("build", "coder"))
+        t = svc().flow_next("build", "done")
+        self.assertEqual((t.to_step, t.to_role), ("review", "reviewer"))
+        t2 = svc().flow_next("review", "rejected")
+        self.assertEqual((t2.to_step, t2.to_role), ("build", "coder"))
 
     def test_flow_next_unknown_outcome_is_none(self):
         self.assertIsNone(svc().flow_next("build", "nope"))

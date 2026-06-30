@@ -5,7 +5,6 @@ import os
 import sys
 import time
 
-from the_grid.domain import flow as cflow
 from the_grid.domain.contracts import FILE_PROVIDES
 from the_grid.domain.logrender import render_log_line
 
@@ -516,6 +515,21 @@ def _human_step_skills():
     return sorted(skills)
 
 
+def _compose_driver(base_body, skills):
+    """The Driver's system prompt: its base persona (driver.md) plus a skill per
+    human-performed step. The Driver is the performer of human-facing steps, so it
+    carries their procedures. skills is a list of (step, body), already ordered."""
+    if not skills:
+        return base_body
+    parts = [base_body,
+             "\n\n# Skills for human-facing steps\n",
+             "These steps surface in `tg inbox`. When the human picks one, run the skill "
+             "for its step: assist them, and record the outcome (`tg done` / `tg close`).\n"]
+    for step, body in skills:
+        parts.append("\n## %s\n\n%s" % (step, body.strip()))
+    return "\n".join(parts)
+
+
 def cmd_driver(argv):
     if not require_store():
         return 1
@@ -524,7 +538,7 @@ def cmd_driver(argv):
     if seat is None or not seat["meta"].get("model"):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
         return 1
-    body = cflow.compose_driver(seat["body"], _human_step_skills())
+    body = _compose_driver(seat["body"], _human_step_skills())
     os.execvp("claude", ["claude", "--model", seat["meta"]["model"], "--name", "driver",
                          "--append-system-prompt", body, "--add-dir", root,
                          "--dangerously-skip-permissions"])
