@@ -1,5 +1,6 @@
 import unittest
 
+from the_grid.domain.status import Status
 from the_grid.domain.task import Task, label_value
 
 
@@ -32,6 +33,12 @@ class TestTaskFromBead(unittest.TestCase):
         self.assertEqual(t.artifacts[0]["type"], "spec")
         self.assertEqual(t.needs, "a branch")
         self.assertEqual(t.deps, 2)
+
+    def test_status_is_the_typed_value_object(self):
+        st = Task.from_bead(_bead()).status
+        self.assertIsInstance(st, Status)
+        self.assertEqual(st, Status.READY)
+        self.assertEqual(st, "ready")  # still string-equal for legacy comparisons
 
     def test_status_mapping(self):
         self.assertEqual(Task.from_bead(_bead(status="closed")).status, "done")

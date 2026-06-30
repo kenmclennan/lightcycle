@@ -2,10 +2,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-STATUS_DONE = "done"
-STATUS_IN_PROGRESS = "in-progress"
-STATUS_NEEDS_HUMAN = "needs-human"
-STATUS_READY = "ready"
+from the_grid.domain.status import Status
 
 
 def labels(bead: dict) -> List[str]:
@@ -19,15 +16,15 @@ def label_value(bead: dict, prefix: str) -> Optional[str]:
     return None
 
 
-def _status_of(bead: dict, role: Optional[str]) -> str:
+def _status_of(bead: dict, role: Optional[str]) -> Status:
     bd_status = bead.get("status")
     if bd_status == "closed":
-        return STATUS_DONE
+        return Status.DONE
     if bead.get("assignee") or bd_status == "in_progress":
-        return STATUS_IN_PROGRESS
+        return Status.IN_PROGRESS
     if role == "human":
-        return STATUS_NEEDS_HUMAN
-    return STATUS_READY
+        return Status.NEEDS_HUMAN
+    return Status.READY
 
 
 @dataclass
@@ -38,7 +35,7 @@ class Task:
     parent: Optional[str] = None
     role: Optional[str] = None
     step: Optional[str] = None
-    status: str = STATUS_READY
+    status: Status = Status.READY
     project: Optional[str] = None
     goal: Optional[str] = None
     artifacts: List[dict] = field(default_factory=list)
