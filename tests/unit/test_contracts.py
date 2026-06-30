@@ -1,14 +1,7 @@
 import unittest
 
-from the_grid.domain.contracts import (FILE_PROVIDES, analyze_flow, guaranteed_artifacts,
-                                 optional_inputs, required_inputs, required_outputs)
+from the_grid.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
 from the_grid.domain.flow import Flow
-
-
-def load_flow(metas):
-    f = Flow.assemble(metas)
-    return f.owner_map(), f.routes_map()
-
 
 CONTRACT_METAS = {
     "coder": {"step": "build", "accepts": {"spec": "required", "branch": "optional"},
@@ -21,54 +14,73 @@ CONTRACT_METAS = {
 }
 
 
-class TestArtifactTypes(unittest.TestCase):
+def contracts(metas):
+    return FlowContracts(Flow.assemble(metas), metas)
+
+
+class TestArtifactRequirement(unittest.TestCase):
+    def test_from_block_required_is_the_default(self):
+        reqs = ArtifactRequirement.from_block({"spec": "required", "branch": "optional"})
+        self.assertEqual({(r.type, r.required) for r in reqs}, {("spec", True), ("branch", False)})
+
+    def test_non_dict_block_is_empty(self):
+        self.assertEqual(ArtifactRequirement.from_block(None), [])
+
+
+class TestStepContract(unittest.TestCase):
     def test_required_optional_split(self):
-        meta = {"accepts": {"spec": "required", "branch": "optional"}}
-        self.assertEqual(required_inputs(meta), {"spec"})
-        self.assertEqual(optional_inputs(meta), {"branch"})
+        c = StepContract.from_meta({"accepts": {"spec": "required", "branch": "optional"}})
+        self.assertEqual(c.required_inputs(), {"spec"})
+        self.assertEqual(c.optional_inputs(), {"branch"})
 
     def test_produces(self):
-        self.assertEqual(required_outputs({"produces": {"branch": "required"}}), {"branch"})
+        c = StepContract.from_meta({"produces": {"branch": "required"}})
+        self.assertEqual(c.required_outputs(), {"branch"})
 
     def test_no_block_is_empty(self):
-        self.assertEqual(required_inputs({}), set())
+        self.assertEqual(StepContract.from_meta({}).required_inputs(), set())
+
+    def test_missing_inputs(self):
+        c = StepContract.from_meta({"accepts": {"spec": "required", "branch": "required"}})
+        self.assertEqual(c.missing_inputs({"spec"}), {"branch"})
+
+    def test_missing_outputs(self):
+        c = StepContract.from_meta({"produces": {"pr": "required"}})
+        self.assertEqual(c.missing_outputs(set()), {"pr"})
+        self.assertEqual(c.missing_outputs({"pr"}), set())
 
 
-class TestGuaranteed(unittest.TestCase):
-    def test_entry_step_guarantees_file_provides(self):
-        owner, routes = load_flow(CONTRACT_METAS)
-        prod = {"build": {"branch"}, "review": set(), "open-pr": {"pr"}}
-        ga = guaranteed_artifacts(["build", "review", "open-pr"], routes, prod, ["build"])
-        self.assertIn("spec", ga["build"])
-        self.assertIn("branch", ga["review"])  # build produces branch on the only path
-
-
-class TestAnalyzeFlow(unittest.TestCase):
+class TestFlowContracts(unittest.TestCase):
     def test_well_formed_flow_is_ok(self):
-        owner, routes = load_flow(CONTRACT_METAS)
-        a = analyze_flow(owner, routes, CONTRACT_METAS)
-        self.assertTrue(a["ok"])
-        self.assertEqual(a["entries"], ["build"])
-        self.assertIn("ready-merge", a["terminals"])
-        self.assertEqual(a["missing"], {})
-        self.assertEqual(a["dups"], [])
+        a = contracts(CONTRACT_METAS)
+        self.assertTrue(a.ok())
+        self.assertEqual(a.entries(), ["build"])
+        self.assertIn("ready-merge", a.terminals())
+        self.assertEqual(a.missing(), {})
+        self.assertEqual(a.duplicates(), [])
+
+    def test_entry_guarantee_satisfies_downstream_required_input(self):
+        # build (entry) guarantees spec; build produces branch on the only path to review,
+        # so review's required branch is never missing.
+        a = contracts(CONTRACT_METAS)
+        d = a.as_dict()
+        self.assertIn("spec", d["req"]["build"])
+        self.assertEqual(d["missing"], {})
 
     def test_broken_composition_flagged(self):
         metas = {k: dict(v) for k, v in CONTRACT_METAS.items()}
         metas["reviewer"] = dict(metas["reviewer"],
                                  accepts={"spec": "required", "design": "required"})
-        owner, routes = load_flow(metas)
-        a = analyze_flow(owner, routes, metas)
-        self.assertFalse(a["ok"])
-        self.assertIn("design", a["missing"].get("review", []))
+        a = contracts(metas)
+        self.assertFalse(a.ok())
+        self.assertIn("design", a.missing().get("review", []))
 
     def test_duplicate_step_owner_flagged(self):
         metas = dict(CONTRACT_METAS)
         metas["coder2"] = {"step": "build"}
-        owner, routes = load_flow(metas)
-        a = analyze_flow(owner, routes, metas)
-        self.assertFalse(a["ok"])
-        self.assertTrue(any("build" in d for d in a["dups"]))
+        a = contracts(metas)
+        self.assertFalse(a.ok())
+        self.assertTrue(any("build" in d for d in a.duplicates()))
 
 
 if __name__ == "__main__":

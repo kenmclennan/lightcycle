@@ -1,5 +1,5 @@
 """FlowCheck: assemble and analyze the flow (steps, routes, contracts, composition)."""
-from the_grid.domain import contracts as ccontracts
+from the_grid.domain.contracts import FlowContracts
 from the_grid.domain.flow import Flow
 
 
@@ -11,6 +11,5 @@ class FlowCheck:
     def execute(self):
         role_metas = self._flow.role_metas()
         flow = Flow.assemble(role_metas)
-        owner, routes = flow.owner_map(), flow.routes_map()
-        analysis = ccontracts.analyze_flow(owner, routes, role_metas)
-        return {"owner": owner, "routes": routes, "analysis": analysis}
+        analysis = FlowContracts(flow, role_metas).as_dict()
+        return {"owner": flow.owner_map(), "routes": flow.routes_map(), "analysis": analysis}
