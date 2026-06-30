@@ -39,6 +39,9 @@ fast suite) or `bash tests/run.sh -k <name>`.
   collected as tests.
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
 - `tests/integration/` - the wired `tg` commands and the `BdStore` contract, via subprocess (slow).
+- `tests/feature/` - gherkin `.feature` files (the language-agnostic behaviour spec) with pytest-bdd
+  step definitions driving the wired cli in-process. The `.feature` files are meant to outlive the
+  runner - a future Go/godog port runs them unchanged.
 - New pure logic ships with unit tests; a new command ships with an integration test. Get it green
   before `tg done`.
 
