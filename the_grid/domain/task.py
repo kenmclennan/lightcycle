@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from the_grid.domain.artifact import Artifact
 from the_grid.domain.status import Status
 
 
@@ -38,7 +39,7 @@ class Task:
     status: Status = Status.READY
     project: Optional[str] = None
     goal: Optional[str] = None
-    artifacts: List[dict] = field(default_factory=list)
+    artifacts: List[Artifact] = field(default_factory=list)
     needs: Optional[str] = None
     outcome: Optional[str] = None
     deps: int = 0
@@ -54,7 +55,7 @@ class Task:
             role=role, step=label_value(bead, "step:"),
             status=_status_of(bead, role),
             project=label_value(bead, "project:"), goal=label_value(bead, "goal:"),
-            artifacts=meta.get("artifacts") or [],
+            artifacts=[Artifact.from_dict(a) for a in (meta.get("artifacts") or [])],
             needs=meta.get("needs"),
             outcome=bead.get("close_reason"),
             deps=bead.get("dependency_count") or 0,
@@ -66,7 +67,8 @@ class Task:
         return {
             "id": self.id, "title": self.title, "type": self.type, "parent": self.parent,
             "role": self.role, "step": self.step, "status": self.status,
-            "project": self.project, "goal": self.goal, "artifacts": self.artifacts,
+            "project": self.project, "goal": self.goal,
+            "artifacts": [a.as_dict() for a in self.artifacts],
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "notes": self.notes,
         }

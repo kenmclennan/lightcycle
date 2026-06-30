@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 
+from the_grid.domain.artifact import Artifact
 from the_grid.domain.tasks import task_from_bead
 from the_grid.ports.store import StorePort
 
@@ -50,7 +51,7 @@ class BdStore(StorePort):
     def story_artifacts(self, story_id):
         arr = self._json("show", story_id, "--json")
         meta = arr[0].get("metadata") or {}
-        return meta.get("artifacts") or []
+        return [Artifact.from_dict(a) for a in (meta.get("artifacts") or [])]
 
     def add_artifact(self, story_id, atype, value, label=None):
         arr = self._json("show", story_id, "--json")
@@ -72,12 +73,13 @@ class BdStore(StorePort):
     def task_view(self, tid):
         t = self.get_task(tid)
         view = t.as_dict()
-        view["story_artifacts"] = self.story_artifacts(t.parent) if t.parent else t.artifacts
+        arts = self.story_artifacts(t.parent) if t.parent else t.artifacts
+        view["story_artifacts"] = [a.as_dict() for a in arts]
         return view
 
     def present_types(self, task):
         story = task.parent or task.id
-        return {a["type"] for a in self.story_artifacts(story)}
+        return {a.type for a in self.story_artifacts(story)}
 
     def route_to_human(self, tid, note, role):
         self.note(tid, note)
@@ -98,7 +100,8 @@ class BdStore(StorePort):
                 "title": b.get("title", ""),
                 "closed_at": b.get("closed_at"),
                 "outcome": b.get("close_reason"),
-                "artifacts": (b.get("metadata") or {}).get("artifacts") or [],
+                "artifacts": [Artifact.from_dict(a)
+                              for a in ((b.get("metadata") or {}).get("artifacts") or [])],
             })
         return result
 

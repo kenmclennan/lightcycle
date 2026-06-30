@@ -50,9 +50,9 @@ class TestLinkArtifact(unittest.TestCase):
         sid = s.create_story("st")
         LinkArtifact(s).execute(sid, "pr", "http://x/1", "PR 1")
         arts = s.story_artifacts(sid)
-        self.assertEqual(arts[0]["type"], "pr")
-        self.assertEqual(arts[0]["value"], "http://x/1")
-        self.assertEqual(arts[0]["label"], "PR 1")
+        self.assertEqual(arts[0].type, "pr")
+        self.assertEqual(arts[0].value, "http://x/1")
+        self.assertEqual(arts[0].label, "PR 1")
 
 
 class TestCloseStory(unittest.TestCase):
@@ -88,7 +88,7 @@ class TestFileStory(unittest.TestCase):
     def test_creates_story_with_spec_and_task(self):
         s = FakeStore()
         story = self._file(s)
-        types = [a["type"] for a in s.story_artifacts(story)]
+        types = [a.type for a in s.story_artifacts(story)]
         self.assertIn("spec", types)
         kids = s.children(story)
         self.assertEqual(len(kids), 1)
@@ -96,7 +96,7 @@ class TestFileStory(unittest.TestCase):
     def test_records_repo_artifact_for_known_repo(self):
         s = FakeStore()
         story = self._file(s, repo="app")
-        self.assertIn("repo", [a["type"] for a in s.story_artifacts(story)])
+        self.assertIn("repo", [a.type for a in s.story_artifacts(story)])
 
     def test_unknown_step_raises(self):
         s = FakeStore()

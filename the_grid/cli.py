@@ -400,7 +400,7 @@ def cmd_sweep(argv):
 
 
 def _print_mine_row(kind, t):
-    plan = next((art["value"] for art in t.artifacts if art["type"] == "plan-doc"), None)
+    plan = next((art.value for art in t.artifacts if art.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
     print("%-9s %s  %s%s" % ("[%s]" % kind, t.id, t.title or t.step, extra))
 

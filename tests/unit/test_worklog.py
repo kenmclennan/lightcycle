@@ -1,6 +1,7 @@
 import datetime
 import unittest
 
+from the_grid.domain.artifact import Artifact
 from the_grid.domain.worklog import resolve_period, worklog
 
 TODAY = datetime.date(2026, 6, 27)
@@ -82,12 +83,12 @@ class TestWorklog(unittest.TestCase):
         self.assertNotIn("e", ids)
 
     def test_pr_artifact_surfaced(self):
-        s = story(artifacts=[{"type": "pr", "value": "https://github.com/x/y/pull/1"}])
+        s = story(artifacts=[Artifact(type="pr", value="https://github.com/x/y/pull/1")])
         result = worklog([s], TODAY, TODAY)
         self.assertEqual(result[0]["pr"], "https://github.com/x/y/pull/1")
 
     def test_no_pr_artifact_gives_none(self):
-        s = story(artifacts=[{"type": "spec", "value": "specs/x.md"}])
+        s = story(artifacts=[Artifact(type="spec", value="specs/x.md")])
         result = worklog([s], TODAY, TODAY)
         self.assertIsNone(result[0]["pr"])
 

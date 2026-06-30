@@ -112,13 +112,13 @@ class TestParentChildren(unittest.TestCase):
         self.s.add_artifact(self.story, "spec", "specs/foo.md")
         artifacts = self.s.story_artifacts(self.story)
         self.assertEqual(len(artifacts), 1)
-        self.assertEqual(artifacts[0]["type"], "spec")
-        self.assertEqual(artifacts[0]["value"], "specs/foo.md")
+        self.assertEqual(artifacts[0].type, "spec")
+        self.assertEqual(artifacts[0].value, "specs/foo.md")
 
     def test_add_artifact_with_label(self):
         self.s.add_artifact(self.story, "branch", "feat/foo", label="main branch")
         artifacts = self.s.story_artifacts(self.story)
-        self.assertEqual(artifacts[0]["label"], "main branch")
+        self.assertEqual(artifacts[0].label, "main branch")
 
     def test_task_view_inherits_story_artifacts(self):
         self.s.add_artifact(self.story, "branch", "feat/foo")

@@ -4,6 +4,7 @@ import os
 import uuid
 
 from the_grid.ports.store import StorePort
+from the_grid.domain.artifact import Artifact
 from the_grid.domain.tasks import task_from_bead
 
 
@@ -47,7 +48,7 @@ class FakeStore(StorePort):
 
     def story_artifacts(self, story_id):
         b = self._get(story_id)
-        return (b.get("metadata") or {}).get("artifacts") or []
+        return [Artifact.from_dict(a) for a in ((b.get("metadata") or {}).get("artifacts") or [])]
 
     def add_artifact(self, story_id, atype, value, label=None):
         b = self._get(story_id)
@@ -69,12 +70,13 @@ class FakeStore(StorePort):
     def task_view(self, tid):
         t = self.get_task(tid)
         view = t.as_dict()
-        view["story_artifacts"] = self.story_artifacts(t.parent) if t.parent else t.artifacts
+        arts = self.story_artifacts(t.parent) if t.parent else t.artifacts
+        view["story_artifacts"] = [a.as_dict() for a in arts]
         return view
 
     def present_types(self, task):
         story = task.parent or task.id
-        return {a["type"] for a in self.story_artifacts(story)}
+        return {a.type for a in self.story_artifacts(story)}
 
     def route_to_human(self, tid, note, role):
         self.note(tid, note)
@@ -94,7 +96,8 @@ class FakeStore(StorePort):
                 "title": b.get("title", ""),
                 "closed_at": b.get("closed_at"),
                 "outcome": b.get("close_reason"),
-                "artifacts": (b.get("metadata") or {}).get("artifacts") or [],
+                "artifacts": [Artifact.from_dict(a)
+                              for a in ((b.get("metadata") or {}).get("artifacts") or [])],
             })
         return result
 

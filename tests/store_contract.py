@@ -103,5 +103,5 @@ class StoreContractBase:
         s.add_artifact(sid, "spec", "specs/foo.md")
         arts = s.story_artifacts(sid)
         self.assertEqual(len(arts), 1)
-        self.assertEqual(arts[0]["type"], "spec")
-        self.assertEqual(arts[0]["value"], "specs/foo.md")
+        self.assertEqual(arts[0].type, "spec")
+        self.assertEqual(arts[0].value, "specs/foo.md")

@@ -15,7 +15,7 @@ class Trace:
 
     def execute(self, story_id):
         story = self._store.get_task(story_id)
-        arts = self._store.story_artifacts(story_id)
+        arts = [a.as_dict() for a in self._store.story_artifacts(story_id)]
         tasks = []
         for kt in self._store.children(story_id):
             tasks.append({"id": kt.id, "step": kt.step, "status": kt.status,
