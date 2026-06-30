@@ -8,7 +8,7 @@ so the pool does not pile redundant workers onto one task. `now` is passed in
 (the caller owns the clock).
 """
 from the_grid.application.pool.sweep import Sweep
-from the_grid.domain import flow as cflow
+from the_grid.domain import pool as cpool
 
 
 class Tick:
@@ -33,8 +33,8 @@ class Tick:
         for w in alive:
             if w.get("bead") is None and (now - w.get("started", 0)) < max_boot:
                 inflight[w["role"]] = inflight.get(w["role"], 0) + 1
-        ready = cflow.ready_task_roles(self._store.ready_beads())
-        for role in cflow.pool_plan(ready, inflight, slots):
+        ready = cpool.ready_task_roles(self._store.ready_beads())
+        for role in cpool.pool_plan(ready, inflight, slots):
             self._spawner.spawn_worker(role)
             result["spawned"].append(role)
         return result

@@ -11,7 +11,8 @@ class Mine:
         self._flow = flow
 
     def execute(self):
-        owner, routes = self._flow.load_flow()
+        flow = self._flow.load_flow()
+        owner, routes = flow.owner_map(), flow.routes_map()
         tasks = ctasks.filter_by_status(self._store.all_tasks(), "needs-human")
         rows = [(ctasks.classify_mine(t, owner, routes), t) for t in tasks]
         rows.sort(key=lambda r: (_MINE_ORDER.get(r[0][0], 9), r[1].id))

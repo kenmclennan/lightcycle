@@ -10,8 +10,7 @@ class UnblockTask:
 
     def execute(self, tid):
         t = self._store.get_task(tid)
-        owner, _ = self._flow.load_flow()
-        role = owner.get(t.step)
+        role = self._flow.load_flow().owner_of(t.step)
         if not role or role == "human":
             raise UseCaseError(
                 "nothing to unblock: step '%s' has no agent owner" % (t.step or "(none)"))
