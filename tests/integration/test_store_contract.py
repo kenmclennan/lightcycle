@@ -7,7 +7,7 @@ import unittest
 
 from the_grid.adapters.store import BdStore
 from the_grid.config import Config
-from tests.store_contract import StoreContractBase
+from tests.support.store_contract import StoreContractBase
 
 _TEMPLATE = None
 

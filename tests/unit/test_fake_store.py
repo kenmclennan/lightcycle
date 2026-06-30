@@ -1,7 +1,7 @@
 """Unit tests for FakeStore: bd semantic fidelity in isolation."""
 import unittest
 
-from tests.fake_store import FakeStore
+from tests.support.fake_store import FakeStore
 
 
 class TestLabels(unittest.TestCase):
@@ -287,7 +287,7 @@ class TestRouteToHuman(unittest.TestCase):
 
 class TestNoSubprocess(unittest.TestCase):
     def test_importable_without_spawning_bd(self):
-        from tests.fake_store import FakeStore as FS
+        from tests.support.fake_store import FakeStore as FS
         s = FS()
         tid = s.create_task("build: thing", role="coder")
         s.note(tid, "hello")

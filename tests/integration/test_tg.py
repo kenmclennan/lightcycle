@@ -2,12 +2,12 @@ import io, json, os, shutil, subprocess, sys, tempfile, time, unittest
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 TG = str(ROOT / "bin" / "tg")
 
 sys.path.insert(0, str(ROOT))
 import the_grid.cli as _cli_mod
-from tests.fake_store import FakeStore
+from tests.support.fake_store import FakeStore
 from the_grid.domain.artifact import Artifact
 
 # Point every subprocess at a config that does NOT exist, so the suite reads

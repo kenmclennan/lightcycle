@@ -1,7 +1,7 @@
 import unittest
 
 from the_grid.application.pool import Sweep, Tick
-from tests.fake_store import FakeStore
+from tests.support.fake_store import FakeStore
 
 
 class FakeWorkers:

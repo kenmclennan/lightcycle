@@ -4,8 +4,8 @@ from the_grid.application.errors import UseCaseError
 from the_grid.application.intake import AddTask, CloseStory, FileStory, LinkArtifact
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
-from tests.fake_fs import FakeFs
-from tests.fake_store import FakeStore
+from tests.support.fake_fs import FakeFs
+from tests.support.fake_store import FakeStore
 
 METAS = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
 

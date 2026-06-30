@@ -2,8 +2,8 @@ import json
 import unittest
 
 from the_grid.application.feedback import Reflect, Retro
-from tests.fake_fs import FakeFs
-from tests.fake_store import FakeStore
+from tests.support.fake_fs import FakeFs
+from tests.support.fake_store import FakeStore
 
 
 class TestReflect(unittest.TestCase):

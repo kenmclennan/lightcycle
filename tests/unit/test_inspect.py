@@ -4,8 +4,8 @@ import unittest
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, Mine,
                                           Queue, ShowTask, Status, Worklog)
 from the_grid.application.services.flow import FlowService
-from tests.fake_fs import FakeFs
-from tests.fake_store import FakeStore
+from tests.support.fake_fs import FakeFs
+from tests.support.fake_store import FakeStore
 
 
 def _empty_flow(store):

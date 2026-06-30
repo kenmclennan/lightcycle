@@ -35,8 +35,10 @@ tests are stdlib `unittest.TestCase` classes, which pytest runs as-is; new tests
 `unittest` style or plain pytest functions. Run a subset with `bash tests/run.sh tests/unit` (the
 fast suite) or `bash tests/run.sh -k <name>`.
 
+- `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not
+  collected as tests.
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
-- `tests/test_tg.py` - integration tests exercising the wired `tg` commands via subprocess.
+- `tests/integration/` - the wired `tg` commands and the `BdStore` contract, via subprocess (slow).
 - New pure logic ships with unit tests; a new command ships with an integration test. Get it green
   before `tg done`.
 
