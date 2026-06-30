@@ -29,9 +29,11 @@ use case (`application/`), and any pure rule belongs in `domain/`.
 
 ## Tests
 
-**Run the tests with `bash tests/run.sh`** - it runs the unit suite then the integration suite. This
-project uses the Python stdlib `unittest`; there is no pytest and no pip test deps, so do not invoke
-`pytest`. Run a subset directly with `python3 -m unittest discover -s tests/unit`.
+**Run the tests with `bash tests/run.sh`** (which is `uv run pytest`). Tests run under **pytest**,
+managed by **uv** - this is dev/test tooling, not a runtime dependency (see Style). The existing
+tests are stdlib `unittest.TestCase` classes, which pytest runs as-is; new tests may use either
+`unittest` style or plain pytest functions. Run a subset with `bash tests/run.sh tests/unit` (the
+fast suite) or `bash tests/run.sh -k <name>`.
 
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
 - `tests/test_tg.py` - integration tests exercising the wired `tg` commands via subprocess.
@@ -60,7 +62,11 @@ concept into a durable identifier).
 - Near-zero comments: the "why" goes in commit messages and test names, not inline comments.
 - No emdashes anywhere - use hyphens.
 - Python modules are `snake_case.py`; step files are `kebab-case.md`.
-- Stdlib only - no pip dependencies.
+- **The engine ships zero runtime dependencies.** Code under `the_grid/` imports the stdlib only -
+  no third-party `import` ever reaches the shipped engine (it keeps the fork portable, the trust
+  surface small, and "clone and run" true). **Dev/test tooling is separate and pragmatic**: it lives
+  in `pyproject.toml`'s dev group, managed by `uv`, and never imported by `the_grid/` (currently
+  `pytest` + `pytest-bdd`). The hard line is _runtime_, not _tooling_.
 
 ## The agnostic rule (do not break it)
 
