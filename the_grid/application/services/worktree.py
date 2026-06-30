@@ -9,6 +9,7 @@ import os
 import sys
 import time
 
+from the_grid.domain.work import Story
 from the_grid.domain.workspace import Branch, Worktree
 
 
@@ -20,11 +21,11 @@ class WorktreeService:
         self._fs = fs
         self._config = config
 
+    def _story(self, story):
+        return Story(story, tuple(self._store.story_artifacts(story)))
+
     def story_repo(self, story):
-        for a in self._store.story_artifacts(story):
-            if a.type == "repo":
-                return a.value
-        return os.path.basename(self._config.grid_root())
+        return self._story(story).repo(os.path.basename(self._config.grid_root()))
 
     def target_repo(self, story):
         return os.path.join(self._config.projects_root(), self.story_repo(story))
@@ -33,10 +34,7 @@ class WorktreeService:
         return Worktree(story).path_in(self._fs.worktrees_dir())
 
     def story_branch(self, story):
-        for a in self._store.story_artifacts(story):
-            if a.type == "branch":
-                return a.value
-        return None
+        return self._story(story).branch()
 
     def _branch_for(self, story):
         return self.story_branch(story) or Branch.for_feature(

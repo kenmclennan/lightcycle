@@ -1,9 +1,14 @@
-"""Task: the work-item entity, plus the bead -> Task projection."""
+"""Task: the work-item entity, plus the bead -> Task projection.
+
+The bead projection (from_bead, label_value, labels, _status_of) is provisional: it
+is the bd wire-format mapping and moves into BdStore (anti-corruption) in a later
+batch, leaving the entity free of any store knowledge.
+"""
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from the_grid.domain.artifact import Artifact
-from the_grid.domain.status import Status
+from the_grid.domain.work.artifact import Artifact
+from the_grid.domain.work.status import Status
 
 
 def labels(bead: dict) -> List[str]:
@@ -61,6 +66,18 @@ class Task:
             deps=bead.get("dependency_count") or 0,
             notes=bead.get("notes"),
         )
+
+    def classify_for_human(self, flow):
+        """Classify this for:human task for tg inbox / tg backlog as (kind, outcomes):
+        no step -> "todo" (backlog); a human-owned step -> "action" (inbox); an
+        agent-owned step that has landed on the human (a block) -> "blocked" (inbox).
+        Outcomes are the step's routes, plus "unblock" for a block."""
+        if not self.step:
+            return ("todo", [])
+        outs = flow.outcomes_for(self.step)
+        if flow.owner_of(self.step) == "human":
+            return ("action", outs)
+        return ("blocked", outs + ["unblock"])
 
     def as_dict(self) -> dict:
         """A plain serializable dict of the entity's fields (for JSON views and DTOs)."""

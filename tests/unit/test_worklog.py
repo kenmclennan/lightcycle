@@ -1,7 +1,7 @@
 import datetime
 import unittest
 
-from the_grid.domain.artifact import Artifact
+from the_grid.domain.work import Artifact
 from the_grid.domain.worklog import resolve_period, worklog
 
 TODAY = datetime.date(2026, 6, 27)

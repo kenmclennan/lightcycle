@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.domain.status import Status
-from the_grid.domain.task import Task, label_value
+from the_grid.domain.work import Status, Task
+from the_grid.domain.work.task import label_value
 
 
 def _bead(**over):

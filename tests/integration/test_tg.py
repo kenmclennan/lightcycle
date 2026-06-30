@@ -8,7 +8,7 @@ TG = str(ROOT / "bin" / "tg")
 sys.path.insert(0, str(ROOT))
 import the_grid.cli as _cli_mod
 from tests.support.fake_store import FakeStore
-from the_grid.domain.artifact import Artifact
+from the_grid.domain.work import Artifact
 
 # Point every subprocess at a config that does NOT exist, so the suite reads
 # config-absent DEFAULTS and never touches the real ~/.config/the-grid/config.

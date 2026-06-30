@@ -1,5 +1,5 @@
 """List tasks a worker is running right now (in-progress)."""
-from the_grid.domain import tasks as ctasks
+from the_grid.domain.work import TaskQueue
 
 
 class ActiveTasks:
@@ -8,4 +8,4 @@ class ActiveTasks:
         self._store = store
 
     def execute(self):
-        return ctasks.filter_by_status(self._store.all_tasks(), "in-progress")
+        return TaskQueue(self._store.all_tasks()).by_status("in-progress")
