@@ -1,5 +1,5 @@
 """Pool planning: the role per ready task and the spawn decision for one tick."""
-from the_grid.domain.task import label_value
+from the_grid.domain.work.task import label_value
 
 
 def ready_task_roles(beads):

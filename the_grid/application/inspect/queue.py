@@ -1,5 +1,5 @@
 """List the next N ready or blocked agent tasks."""
-from the_grid.domain import tasks as ctasks
+from the_grid.domain.work import TaskQueue
 
 
 class Queue:
@@ -8,7 +8,5 @@ class Queue:
         self._store = store
 
     def execute(self, n=10):
-        tasks = self._store.all_tasks()
-        ready = ctasks.filter_by_status(tasks, "ready")
-        blocked = ctasks.filter_by_status(tasks, "blocked")
-        return (ready + blocked)[:n]
+        queue = TaskQueue(self._store.all_tasks())
+        return (queue.by_status("ready") + queue.by_status("blocked"))[:n]

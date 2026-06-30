@@ -1,7 +1,7 @@
 import unittest
 
 from the_grid.domain.flow import Flow, Transition
-from the_grid.domain.task import Task
+from the_grid.domain.work import Task
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},

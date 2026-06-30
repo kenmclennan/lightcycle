@@ -1,5 +1,5 @@
 """Inbox: what needs a human now - human-owned steps and agent blocks."""
-from the_grid.domain import tasks as ctasks
+from the_grid.domain.work import TaskQueue
 
 
 class Inbox:
@@ -9,7 +9,5 @@ class Inbox:
         self._flow = flow
 
     def execute(self, n=None):
-        flow = self._flow.load_flow()
-        owner, routes = flow.owner_map(), flow.routes_map()
-        tasks = ctasks.filter_by_status(self._store.all_tasks(), "needs-human")
-        return ctasks.partition_mine(tasks, owner, routes, {"action", "blocked"}, n)
+        queue = TaskQueue(self._store.all_tasks())
+        return queue.for_human(self._flow.load_flow(), {"action", "blocked"}, n)

@@ -1,5 +1,5 @@
 """Bucket all tasks into inbox / active / queue / blocked."""
-from the_grid.domain import tasks as ctasks
+from the_grid.domain.work import TaskQueue
 
 
 class Status:
@@ -8,4 +8,4 @@ class Status:
         self._store = store
 
     def execute(self):
-        return ctasks.bucket(self._store.all_tasks())
+        return TaskQueue(self._store.all_tasks()).bucket()

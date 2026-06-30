@@ -4,8 +4,7 @@ import os
 import subprocess
 import sys
 
-from the_grid.domain.artifact import Artifact
-from the_grid.domain.tasks import task_from_bead
+from the_grid.domain.work import Artifact, Task
 from the_grid.ports.store import StorePort
 
 _BD_NOISE = ("bd --json output format will change", "beads.role not configured",
@@ -65,10 +64,10 @@ class BdStore(StorePort):
         self._run("update", story_id, "--metadata", json.dumps(meta))
 
     def all_tasks(self):
-        return [task_from_bead(b) for b in self._json("list", "--json")]
+        return [Task.from_bead(b) for b in self._json("list", "--json")]
 
     def get_task(self, tid):
-        return task_from_bead(self._json("show", tid, "--json")[0])
+        return Task.from_bead(self._json("show", tid, "--json")[0])
 
     def task_view(self, tid):
         t = self.get_task(tid)
@@ -171,7 +170,7 @@ class BdStore(StorePort):
         return self._json(*args)["id"]
 
     def children(self, story_id):
-        return [task_from_bead(b) for b in self._json("children", story_id, "--json")]
+        return [Task.from_bead(b) for b in self._json("children", story_id, "--json")]
 
     def list_beads_by_status(self, status):
         return self._json("list", "--status", status, "--json")

@@ -4,8 +4,7 @@ import os
 import uuid
 
 from the_grid.ports.store import StorePort
-from the_grid.domain.artifact import Artifact
-from the_grid.domain.tasks import task_from_bead
+from the_grid.domain.work import Artifact, Task
 
 
 def _new_id():
@@ -62,10 +61,10 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_tasks(self):
-        return [task_from_bead(b) for b in self._beads.values()]
+        return [Task.from_bead(b) for b in self._beads.values()]
 
     def get_task(self, tid):
-        return task_from_bead(self._get(tid))
+        return Task.from_bead(self._get(tid))
 
     def task_view(self, tid):
         t = self.get_task(tid)
@@ -203,7 +202,7 @@ class FakeStore(StorePort):
         return tid
 
     def children(self, story_id):
-        return [task_from_bead(b) for b in self._beads.values() if b.get("parent") == story_id]
+        return [Task.from_bead(b) for b in self._beads.values() if b.get("parent") == story_id]
 
     def list_beads_by_status(self, status):
         return [b for b in self._beads.values() if b.get("status") == status]
