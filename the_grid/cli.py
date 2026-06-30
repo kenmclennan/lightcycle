@@ -609,9 +609,10 @@ def cmd_worklog(argv):
     ap.add_argument("end", nargs="?")
     a = ap.parse_args(argv)
     import datetime as _dt
-    today = _dt.date.today()
+    now = _dt.datetime.now().astimezone()
+    today, tz = now.date(), now.tzinfo
     args = [x for x in (a.start, a.end) if x is not None]
-    entries = Worklog(_container.store).execute(args, today)
+    entries = Worklog(_container.store).execute(args, today, tz)
     if not entries:
         print("no stories shipped in that period")
         return 0

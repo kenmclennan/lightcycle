@@ -1,7 +1,7 @@
 import unittest
 
 from the_grid.domain.retro import derive_signals, gather_feedback
-from the_grid.domain.reflection import Reflection
+from the_grid.domain.feedback import Reflection
 from the_grid.domain.work import Task
 
 
