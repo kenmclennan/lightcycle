@@ -37,6 +37,9 @@ class Flow:
     def outcomes_for(self, step):
         return sorted((self._routes.get(step) or {}).keys())
 
+    def targets_from(self, step):
+        return list((self._routes.get(step) or {}).values())
+
     def next(self, step, outcome):
         target = (self._routes.get(step) or {}).get(outcome)
         if not target:

@@ -6,7 +6,7 @@ absolute spec path), or None when nothing is ready or a required input is missin
 """
 import os
 
-from the_grid.domain.contracts import required_inputs
+from the_grid.domain.contracts import StepContract
 from the_grid.domain.tasks import task_from_bead
 
 
@@ -24,7 +24,8 @@ class ClaimTask:
         if not arr:
             return None
         t = task_from_bead(arr[0])
-        missing = required_inputs(self._flow.meta_for_step(t.step)) - self._store.present_types(t)
+        missing = StepContract.from_meta(self._flow.meta_for_step(t.step)).missing_inputs(
+            self._store.present_types(t))
         if missing:
             self._store.route_to_human(
                 t.id,

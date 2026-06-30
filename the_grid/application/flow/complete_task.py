@@ -1,7 +1,7 @@
 """CompleteTask: close a task with a flow outcome and advance the chain."""
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow.advance_task import AdvanceTask
-from the_grid.domain.contracts import required_outputs
+from the_grid.domain.contracts import StepContract
 
 
 class CompleteTask:
@@ -18,7 +18,8 @@ class CompleteTask:
             raise UseCaseError(
                 "no transition for step=%s outcome=%s; not closing. "
                 "Fix the flow or use a defined outcome." % (t.step, outcome))
-        missing = required_outputs(self._flow.meta_for_step(t.step)) - self._store.present_types(t)
+        missing = StepContract.from_meta(self._flow.meta_for_step(t.step)).missing_outputs(
+            self._store.present_types(t))
         if missing:
             raise UseCaseError(
                 "cannot close %s: step '%s' must produce %s; none on the story. "

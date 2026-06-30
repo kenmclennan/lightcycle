@@ -2,7 +2,7 @@
 import os
 
 from the_grid.application.errors import UseCaseError
-from the_grid.domain.contracts import FILE_PROVIDES, required_inputs
+from the_grid.domain.contracts import FILE_PROVIDES, StepContract
 
 
 class FileStory:
@@ -28,7 +28,7 @@ class FileStory:
         if not role:
             raise UseCaseError("unknown step '%s'; owned steps: %s"
                                % (step, ", ".join(flow.steps()) or "(none)"))
-        unmet = required_inputs(self._flow.meta_for_step(step)) - FILE_PROVIDES
+        unmet = StepContract.from_meta(self._flow.meta_for_step(step)).missing_inputs(FILE_PROVIDES)
         if unmet:
             raise UseCaseError(
                 "step '%s' requires %s; a filed story only carries a spec. "
