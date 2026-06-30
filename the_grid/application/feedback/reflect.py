@@ -1,7 +1,7 @@
 """Reflect: record freeform feedback on the task that produced it (for the retro)."""
 import json
 
-from the_grid.core import reflect as creflect
+from the_grid.domain import reflect as creflect
 
 
 class Reflect:

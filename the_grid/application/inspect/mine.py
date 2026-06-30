@@ -1,5 +1,5 @@
 """Mine (deprecated): all human tasks combined, ordered blocked > action > todo."""
-from the_grid.core import tasks as ctasks
+from the_grid.domain import tasks as ctasks
 
 _MINE_ORDER = {"blocked": 0, "action": 1, "todo": 2}
 

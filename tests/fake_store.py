@@ -4,7 +4,7 @@ import os
 import uuid
 
 from the_grid.ports.store import StorePort
-from the_grid.core.tasks import task_from_bead
+from the_grid.domain.tasks import task_from_bead
 
 
 def _new_id():

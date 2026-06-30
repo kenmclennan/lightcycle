@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-from the_grid.core.tasks import task_from_bead
+from the_grid.domain.tasks import task_from_bead
 from the_grid.ports.store import StorePort
 
 _BD_NOISE = ("bd --json output format will change", "beads.role not configured",

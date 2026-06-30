@@ -1,5 +1,5 @@
 """Backlog: todo items to develop later (human tasks with no step)."""
-from the_grid.core import tasks as ctasks
+from the_grid.domain import tasks as ctasks
 
 
 class Backlog:

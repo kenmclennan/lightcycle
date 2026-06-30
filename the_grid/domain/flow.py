@@ -1,7 +1,7 @@
 """Pure flow engine: assemble owner/routes from agent metas; routing decisions."""
 import re
 
-from the_grid.core import tasks
+from the_grid.domain import tasks
 
 
 def load_flow(role_metas):

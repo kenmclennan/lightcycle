@@ -2,7 +2,7 @@
 import os
 
 from the_grid.application.errors import UseCaseError
-from the_grid.core.contracts import FILE_PROVIDES, required_inputs
+from the_grid.domain.contracts import FILE_PROVIDES, required_inputs
 
 
 class FileStory:

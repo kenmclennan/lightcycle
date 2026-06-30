@@ -5,7 +5,7 @@ explicit `root` (Config.grid_root()) and do no environment reads.
 """
 import os
 
-from the_grid.core import steps as core_steps
+from the_grid.domain import steps as core_steps
 from the_grid.ports.fs import FsPort
 
 

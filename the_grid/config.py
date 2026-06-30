@@ -15,7 +15,7 @@ Policy:
 import os
 from pathlib import Path
 
-from the_grid.core import steps as core_steps
+from the_grid.domain import steps as core_steps
 
 
 class ConfigError(Exception):

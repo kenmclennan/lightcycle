@@ -1,5 +1,5 @@
 """List stories shipped in a period (today, yesterday, a date, a range)."""
-from the_grid.core import worklog as cworklog
+from the_grid.domain import worklog as cworklog
 
 
 class Worklog:

@@ -1,5 +1,5 @@
 """AdvanceTask: create the next task in the flow for an outcome (no closing)."""
-from the_grid.core import flow as cflow
+from the_grid.domain import flow as cflow
 
 
 class AdvanceTask:

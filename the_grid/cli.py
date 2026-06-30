@@ -5,9 +5,9 @@ import os
 import sys
 import time
 
-from the_grid.core import flow as cflow
-from the_grid.core.contracts import FILE_PROVIDES
-from the_grid.core.logrender import render_log_line
+from the_grid.domain import flow as cflow
+from the_grid.domain.contracts import FILE_PROVIDES
+from the_grid.domain.logrender import render_log_line
 
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, ListWorkers,
                                           Mine, Queue, ResolveLog, ShowTask, Status, Trace,

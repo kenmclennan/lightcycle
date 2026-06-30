@@ -1,7 +1,7 @@
 """Retro: gather an epic's child feedback + objective signals into a digest."""
 import json
 
-from the_grid.core import retro as cretro
+from the_grid.domain import retro as cretro
 
 
 class Retro:
