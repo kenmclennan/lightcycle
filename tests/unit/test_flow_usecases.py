@@ -4,8 +4,8 @@ from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import (AdvanceTask, BlockTask, ClaimTask, CompleteTask,
                                        UnblockTask)
 from the_grid.application.services.flow import FlowService
-from tests.fake_fs import FakeFs
-from tests.fake_store import FakeStore
+from tests.support.fake_fs import FakeFs
+from tests.support.fake_store import FakeStore
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},

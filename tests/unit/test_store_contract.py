@@ -1,8 +1,8 @@
 """Full port-contract suite against FakeStore (no subprocess)."""
 import unittest
 
-from tests.fake_store import FakeStore
-from tests.store_contract import StoreContractBase
+from tests.support.fake_store import FakeStore
+from tests.support.store_contract import StoreContractBase
 
 
 class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
