@@ -32,28 +32,28 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
         s.close(dep1, "done")
-        ready_ids = [b["id"] for b in s.ready_beads()]
+        ready_ids = [t.id for t in s.ready_tasks()]
         self.assertNotIn(blocked, ready_ids)
         s.close(dep2, "done")
-        ready_ids = [b["id"] for b in s.ready_beads()]
+        ready_ids = [t.id for t in s.ready_tasks()]
         self.assertIn(blocked, ready_ids)
 
     def test_closed_task_not_in_ready(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")
         s.close(tid, "done")
-        self.assertEqual(s.ready_beads(), [])
+        self.assertEqual(s.ready_tasks(), [])
 
     def test_claimed_task_not_in_ready(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")
         s.assign(tid, "worker-1")
-        self.assertEqual(s.ready_beads(), [])
+        self.assertEqual(s.ready_tasks(), [])
 
     def test_stories_excluded_from_ready(self):
         s = self.make_store()
         s.create_story("story: foo")
-        self.assertEqual(s.ready_beads(), [])
+        self.assertEqual(s.ready_tasks(), [])
 
     def test_children_returns_child_beads(self):
         s = self.make_store()

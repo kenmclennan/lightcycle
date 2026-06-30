@@ -3,8 +3,9 @@ import datetime
 import os
 import uuid
 
+from the_grid.adapters.bead import bead_to_task
 from the_grid.ports.store import StorePort
-from the_grid.domain.work import Artifact, Task
+from the_grid.domain.work import Artifact
 
 
 def _new_id():
@@ -61,10 +62,10 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_tasks(self):
-        return [Task.from_bead(b) for b in self._beads.values()]
+        return [bead_to_task(b) for b in self._beads.values()]
 
     def get_task(self, tid):
-        return Task.from_bead(self._get(tid))
+        return bead_to_task(self._get(tid))
 
     def task_view(self, tid):
         t = self.get_task(tid)
@@ -147,7 +148,7 @@ class FakeStore(StorePort):
             b = self._get(task_id)
             b["dependency_count"] = (b.get("dependency_count") or 0) + 1
 
-    def ready_beads(self):
+    def _ready_bead_dicts(self):
         return [
             b for b in self._beads.values()
             if b.get("status") == "open"
@@ -156,14 +157,17 @@ class FakeStore(StorePort):
             and b.get("issue_type") == "task"
         ]
 
+    def ready_tasks(self):
+        return [bead_to_task(b) for b in self._ready_bead_dicts()]
+
     def claim_ready(self, role):
-        candidates = [b for b in self.ready_beads() if "for:%s" % role in (b.get("labels") or [])]
+        candidates = [b for b in self._ready_bead_dicts() if "for:%s" % role in (b.get("labels") or [])]
         if not candidates:
-            return []
+            return None
         b = candidates[0]
         b["assignee"] = os.environ.get("GRID_SPAWNID") or role
         b["status"] = "in_progress"
-        return [b]
+        return bead_to_task(b)
 
     def history(self, tid):
         return self._history.get(tid, [])
@@ -202,7 +206,7 @@ class FakeStore(StorePort):
         return tid
 
     def children(self, story_id):
-        return [Task.from_bead(b) for b in self._beads.values() if b.get("parent") == story_id]
+        return [bead_to_task(b) for b in self._beads.values() if b.get("parent") == story_id]
 
     def list_beads_by_status(self, status):
         return [b for b in self._beads.values() if b.get("status") == status]

@@ -33,7 +33,7 @@ class Tick:
         for w in alive:
             if w.get("bead") is None and (now - w.get("started", 0)) < max_boot:
                 inflight[w["role"]] = inflight.get(w["role"], 0) + 1
-        ready = cpool.ready_task_roles(self._store.ready_beads())
+        ready = cpool.ready_task_roles(self._store.ready_tasks())
         for role in cpool.pool_plan(ready, inflight, slots):
             self._spawner.spawn_worker(role)
             result["spawned"].append(role)

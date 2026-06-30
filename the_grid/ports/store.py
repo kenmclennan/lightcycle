@@ -73,12 +73,12 @@ class StorePort(ABC):
         """Record that task_id is blocked by blocked_by."""
 
     @abstractmethod
-    def ready_beads(self):
-        """Return all ready tasks as raw bead dicts."""
+    def ready_tasks(self):
+        """Return all ready tasks as Task entities."""
 
     @abstractmethod
     def claim_ready(self, role):
-        """Atomically claim the next ready task for role. Returns a list (0 or 1 bead)."""
+        """Atomically claim the next ready task for role. Returns a Task, or None."""
 
     @abstractmethod
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None, labels=None):

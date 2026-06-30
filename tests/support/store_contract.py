@@ -65,7 +65,7 @@ class StoreContractBase:
     def test_task_without_deps_is_ready(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")
-        ready_ids = [b["id"] for b in s.ready_beads()]
+        ready_ids = [t.id for t in s.ready_tasks()]
         self.assertIn(tid, ready_ids)
 
     def test_task_with_unresolved_dep_not_ready(self):
@@ -73,7 +73,7 @@ class StoreContractBase:
         blocker = s.create_task("blocker", role="coder")
         blocked = s.create_task("blocked", role="coder")
         s.dep_add(blocked, blocker)
-        ready_ids = [b["id"] for b in s.ready_beads()]
+        ready_ids = [t.id for t in s.ready_tasks()]
         self.assertNotIn(blocked, ready_ids)
 
     def test_all_deps_closed_makes_task_ready(self):
@@ -82,20 +82,19 @@ class StoreContractBase:
         blocked = s.create_task("blocked", role="coder")
         s.dep_add(blocked, blocker)
         s.close(blocker, "done")
-        ready_ids = [b["id"] for b in s.ready_beads()]
+        ready_ids = [t.id for t in s.ready_tasks()]
         self.assertIn(blocked, ready_ids)
 
     def test_claim_ready_matches_role_label(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")
         result = s.claim_ready("coder")
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["id"], tid)
+        self.assertEqual(result.id, tid)
 
-    def test_claim_ready_wrong_role_returns_empty(self):
+    def test_claim_ready_wrong_role_returns_none(self):
         s = self.make_store()
         s.create_task("t", role="coder")
-        self.assertEqual(s.claim_ready("reviewer"), [])
+        self.assertIsNone(s.claim_ready("reviewer"))
 
     def test_story_artifacts_roundtrip(self):
         s = self.make_store()

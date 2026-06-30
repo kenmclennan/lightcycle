@@ -1,36 +1,9 @@
-"""Task: the work-item entity, plus the bead -> Task projection.
-
-The bead projection (from_bead, label_value, labels, _status_of) is provisional: it
-is the bd wire-format mapping and moves into BdStore (anti-corruption) in a later
-batch, leaving the entity free of any store knowledge.
-"""
+"""Task: the work-item entity."""
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 from the_grid.domain.work.artifact import Artifact
 from the_grid.domain.work.status import Status
-
-
-def labels(bead: dict) -> List[str]:
-    return bead.get("labels") or []
-
-
-def label_value(bead: dict, prefix: str) -> Optional[str]:
-    for l in labels(bead):
-        if l.startswith(prefix):
-            return l[len(prefix):]
-    return None
-
-
-def _status_of(bead: dict, role: Optional[str]) -> Status:
-    bd_status = bead.get("status")
-    if bd_status == "closed":
-        return Status.DONE
-    if bead.get("assignee") or bd_status == "in_progress":
-        return Status.IN_PROGRESS
-    if role == "human":
-        return Status.NEEDS_HUMAN
-    return Status.READY
 
 
 @dataclass
@@ -49,23 +22,6 @@ class Task:
     outcome: Optional[str] = None
     deps: int = 0
     notes: Optional[str] = None
-
-    @classmethod
-    def from_bead(cls, bead: dict) -> "Task":
-        role = label_value(bead, "for:")
-        meta = bead.get("metadata") or {}
-        return cls(
-            id=bead["id"], title=bead.get("title", ""),
-            type=bead.get("issue_type"), parent=bead.get("parent"),
-            role=role, step=label_value(bead, "step:"),
-            status=_status_of(bead, role),
-            project=label_value(bead, "project:"), goal=label_value(bead, "goal:"),
-            artifacts=[Artifact.from_dict(a) for a in (meta.get("artifacts") or [])],
-            needs=meta.get("needs"),
-            outcome=bead.get("close_reason"),
-            deps=bead.get("dependency_count") or 0,
-            notes=bead.get("notes"),
-        )
 
     def classify_for_human(self, flow):
         """Classify this for:human task for tg inbox / tg backlog as (kind, outcomes):

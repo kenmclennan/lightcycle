@@ -137,15 +137,15 @@ class TestReady(unittest.TestCase):
 
     def test_task_without_deps_is_ready(self):
         tid = self.s.create_task("build: thing", role="coder")
-        ready = self.s.ready_beads()
+        ready = self.s.ready_tasks()
         self.assertEqual(len(ready), 1)
-        self.assertEqual(ready[0]["id"], tid)
+        self.assertEqual(ready[0].id, tid)
 
     def test_task_with_open_dep_is_not_ready(self):
         blocker = self.s.create_task("build: dep", role="coder")
         blocked = self.s.create_task("build: thing", role="coder")
         self.s.dep_add(blocked, blocker)
-        ready_ids = [b["id"] for b in self.s.ready_beads()]
+        ready_ids = [t.id for t in self.s.ready_tasks()]
         self.assertIn(blocker, ready_ids)
         self.assertNotIn(blocked, ready_ids)
 
@@ -154,7 +154,7 @@ class TestReady(unittest.TestCase):
         blocked = self.s.create_task("build: thing", role="coder")
         self.s.dep_add(blocked, blocker)
         self.s.close(blocker, "done")
-        ready_ids = [b["id"] for b in self.s.ready_beads()]
+        ready_ids = [t.id for t in self.s.ready_tasks()]
         self.assertIn(blocked, ready_ids)
 
     def test_task_with_two_deps_needs_both_closed(self):
@@ -164,44 +164,43 @@ class TestReady(unittest.TestCase):
         self.s.dep_add(blocked, dep1)
         self.s.dep_add(blocked, dep2)
         self.s.close(dep1, "done")
-        ready_ids = [b["id"] for b in self.s.ready_beads()]
+        ready_ids = [t.id for t in self.s.ready_tasks()]
         self.assertNotIn(blocked, ready_ids)
         self.s.close(dep2, "done")
-        ready_ids = [b["id"] for b in self.s.ready_beads()]
+        ready_ids = [t.id for t in self.s.ready_tasks()]
         self.assertIn(blocked, ready_ids)
 
     def test_claimed_task_not_in_ready(self):
         tid = self.s.create_task("build: thing", role="coder")
         self.s.assign(tid, "worker-1")
-        self.assertEqual(self.s.ready_beads(), [])
+        self.assertEqual(self.s.ready_tasks(), [])
 
     def test_closed_task_not_in_ready(self):
         tid = self.s.create_task("build: thing", role="coder")
         self.s.close(tid, "done")
-        self.assertEqual(self.s.ready_beads(), [])
+        self.assertEqual(self.s.ready_tasks(), [])
 
     def test_stories_excluded_from_ready(self):
         self.s.create_story("story: foo")
-        self.assertEqual(self.s.ready_beads(), [])
+        self.assertEqual(self.s.ready_tasks(), [])
 
     def test_claim_ready_assigns_and_returns(self):
         tid = self.s.create_task("build: thing", role="coder")
         result = self.s.claim_ready("coder")
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["id"], tid)
-        self.assertTrue(result[0]["assignee"])
+        self.assertEqual(result.id, tid)
+        self.assertEqual(result.status, "in-progress")
 
     def test_claim_ready_task_no_longer_in_ready(self):
         self.s.create_task("build: thing", role="coder")
         self.s.claim_ready("coder")
-        self.assertEqual(self.s.ready_beads(), [])
+        self.assertEqual(self.s.ready_tasks(), [])
 
-    def test_claim_ready_wrong_role_returns_empty(self):
+    def test_claim_ready_wrong_role_returns_none(self):
         self.s.create_task("build: thing", role="reviewer")
-        self.assertEqual(self.s.claim_ready("coder"), [])
+        self.assertIsNone(self.s.claim_ready("coder"))
 
-    def test_claim_ready_no_tasks_returns_empty(self):
-        self.assertEqual(self.s.claim_ready("coder"), [])
+    def test_claim_ready_no_tasks_returns_none(self):
+        self.assertIsNone(self.s.claim_ready("coder"))
 
 
 class TestMetadata(unittest.TestCase):
