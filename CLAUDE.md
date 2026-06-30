@@ -29,6 +29,11 @@ use case (`application/`), and any pure rule belongs in `domain/`.
 
 ## Tests
 
+**First-time setup: `bin/setup`** - it checks prerequisites (python3, uv, bd, git), installs the dev
+environment (`uv sync`), initialises the grid store (`tg init`), and verifies. Idempotent. (The
+engine runs on system `python3` with zero runtime deps, so `bin/tg` works without the venv; the venv
+is only for the tests.)
+
 **Run the tests with `bash tests/run.sh`** (which is `uv run pytest`). Tests run under **pytest**,
 managed by **uv** - this is dev/test tooling, not a runtime dependency (see Style). The existing
 tests are stdlib `unittest.TestCase` classes, which pytest runs as-is; new tests may use either
