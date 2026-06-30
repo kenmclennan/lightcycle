@@ -6,7 +6,7 @@ metas and exposes the assembled flow; use cases depend on it rather than re-read
 step files.
 """
 from the_grid.domain.flow import Flow
-from the_grid.domain.pool import ready_roles_from_beads
+from the_grid.domain.pool import ready_roles
 
 
 class FlowService:
@@ -33,4 +33,4 @@ class FlowService:
         return a["meta"] if a else {}
 
     def ready_roles(self):
-        return ready_roles_from_beads(self._store.ready_beads())
+        return ready_roles(self._store.ready_tasks())

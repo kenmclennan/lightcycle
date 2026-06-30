@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.domain.work import Status, Task
-from the_grid.domain.work.task import label_value
+from the_grid.adapters.bead import bead_to_task
+from the_grid.domain.work import Status
 
 
 def _bead(**over):
@@ -13,16 +13,9 @@ def _bead(**over):
     return b
 
 
-class TestLabelValue(unittest.TestCase):
-    def test_matches_prefix(self):
-        b = _bead()
-        self.assertEqual(label_value(b, "for:"), "coder")
-        self.assertIsNone(label_value(b, "missing:"))
-
-
-class TestTaskFromBead(unittest.TestCase):
+class TestBeadToTask(unittest.TestCase):
     def test_typed_attribute_access(self):
-        t = Task.from_bead(_bead())
+        t = bead_to_task(_bead())
         self.assertEqual(t.id, "t-1")
         self.assertEqual(t.title, "build it")
         self.assertEqual(t.role, "coder")
@@ -35,21 +28,20 @@ class TestTaskFromBead(unittest.TestCase):
         self.assertEqual(t.deps, 2)
 
     def test_status_is_the_typed_value_object(self):
-        st = Task.from_bead(_bead()).status
+        st = bead_to_task(_bead()).status
         self.assertIsInstance(st, Status)
         self.assertEqual(st, Status.READY)
         self.assertEqual(st, "ready")  # still string-equal for legacy comparisons
 
     def test_status_mapping(self):
-        self.assertEqual(Task.from_bead(_bead(status="closed")).status, "done")
-        self.assertEqual(Task.from_bead(_bead(assignee="w1")).status, "in-progress")
-        self.assertEqual(Task.from_bead(_bead(status="in_progress")).status, "in-progress")
-        self.assertEqual(Task.from_bead(_bead(labels=["for:human"])).status, "needs-human")
-        self.assertEqual(Task.from_bead(_bead()).status, "ready")
+        self.assertEqual(bead_to_task(_bead(status="closed")).status, "done")
+        self.assertEqual(bead_to_task(_bead(assignee="w1")).status, "in-progress")
+        self.assertEqual(bead_to_task(_bead(status="in_progress")).status, "in-progress")
+        self.assertEqual(bead_to_task(_bead(labels=["for:human"])).status, "needs-human")
+        self.assertEqual(bead_to_task(_bead()).status, "ready")
 
     def test_as_dict_is_a_plain_field_dict(self):
-        t = Task.from_bead(_bead())
-        d = t.as_dict()
+        d = bead_to_task(_bead()).as_dict()
         self.assertEqual(type(d), dict)
         self.assertEqual(d["id"], "t-1")
         self.assertEqual(d["step"], "build")

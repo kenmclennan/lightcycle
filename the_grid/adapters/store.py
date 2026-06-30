@@ -4,7 +4,8 @@ import os
 import subprocess
 import sys
 
-from the_grid.domain.work import Artifact, Task
+from the_grid.adapters.bead import bead_to_task
+from the_grid.domain.work import Artifact
 from the_grid.ports.store import StorePort
 
 _BD_NOISE = ("bd --json output format will change", "beads.role not configured",
@@ -64,10 +65,10 @@ class BdStore(StorePort):
         self._run("update", story_id, "--metadata", json.dumps(meta))
 
     def all_tasks(self):
-        return [Task.from_bead(b) for b in self._json("list", "--json")]
+        return [bead_to_task(b) for b in self._json("list", "--json")]
 
     def get_task(self, tid):
-        return Task.from_bead(self._json("show", tid, "--json")[0])
+        return bead_to_task(self._json("show", tid, "--json")[0])
 
     def task_view(self, tid):
         t = self.get_task(tid)
@@ -135,11 +136,12 @@ class BdStore(StorePort):
     def dep_add(self, task_id, blocked_by):
         self._run("dep", "add", task_id, "--blocked-by", blocked_by)
 
-    def ready_beads(self):
-        return self._json("ready", "--json")
+    def ready_tasks(self):
+        return [bead_to_task(b) for b in self._json("ready", "--json")]
 
     def claim_ready(self, role):
-        return self._json("ready", "--label", "for:%s" % role, "--claim", "--json")
+        arr = self._json("ready", "--label", "for:%s" % role, "--claim", "--json")
+        return bead_to_task(arr[0]) if arr else None
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None, labels=None):
         args = ["create", title, "-t", "task"]
@@ -170,7 +172,7 @@ class BdStore(StorePort):
         return self._json(*args)["id"]
 
     def children(self, story_id):
-        return [Task.from_bead(b) for b in self._json("children", story_id, "--json")]
+        return [bead_to_task(b) for b in self._json("children", story_id, "--json")]
 
     def list_beads_by_status(self, status):
         return self._json("list", "--status", status, "--json")
