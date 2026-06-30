@@ -1,44 +1,37 @@
 import unittest
 
-from the_grid.domain.artifact import Artifact
-from the_grid.domain.workspace import (branch_for, is_worktree_lock_error, slugify,
-                                story_repo, worktree_path)
+from the_grid.domain.workspace import Branch, Worktree
 
 
-class TestWorkspace(unittest.TestCase):
-    def test_slugify(self):
-        self.assertEqual(slugify("GRID-001-repo-validation"), "grid-001-repo-validation")
-        self.assertEqual(slugify("  Hello, World!  "), "hello-world")
-        self.assertEqual(slugify("a__b--c"), "a-b-c")
+class TestBranch(unittest.TestCase):
+    def test_for_feature_default_prefix(self):
+        self.assertEqual(Branch.for_feature("GRID-001 Repo Validation").name,
+                         "feat/grid-001-repo-validation")
 
-    def test_branch_for_default_prefix(self):
-        self.assertEqual(branch_for("GRID-001 Repo Validation"), "feat/grid-001-repo-validation")
+    def test_for_feature_custom_prefix(self):
+        self.assertEqual(Branch.for_feature("My Feature", "wip").name, "wip/my-feature")
 
-    def test_branch_for_custom_prefix(self):
-        self.assertEqual(branch_for("My Feature", "wip"), "wip/my-feature")
-
-    def test_worktree_path(self):
-        self.assertEqual(worktree_path("/root/.worktrees", "s-9"), "/root/.worktrees/s-9")
-
-    def test_story_repo_from_artifact(self):
-        arts = [Artifact(type="spec", value="x.md"), Artifact(type="repo", value="app")]
-        self.assertEqual(story_repo(arts, "engine"), "app")
-
-    def test_story_repo_defaults(self):
-        self.assertEqual(story_repo([Artifact(type="spec", value="x.md")], "engine"), "engine")
+    def test_for_feature_slugifies(self):
+        self.assertEqual(Branch.for_feature("  Hello, World!  ").name, "feat/hello-world")
+        self.assertEqual(Branch.for_feature("a__b--c").name, "feat/a-b-c")
+        self.assertEqual(Branch.for_feature("GRID-001-repo-validation").name,
+                         "feat/grid-001-repo-validation")
 
 
-class TestWorktreeLockError(unittest.TestCase):
-    def test_transient_lock_errors_retried(self):
-        self.assertTrue(is_worktree_lock_error("fatal: could not lock working tree"))
-        self.assertTrue(is_worktree_lock_error(
+class TestWorktree(unittest.TestCase):
+    def test_path_in(self):
+        self.assertEqual(Worktree("s-9").path_in("/root/.worktrees"), "/root/.worktrees/s-9")
+
+    def test_transient_lock_errors_are_contention(self):
+        self.assertTrue(Worktree.is_lock_contention("fatal: could not lock working tree"))
+        self.assertTrue(Worktree.is_lock_contention(
             "Unable to create '/r/.git/worktrees/x/index.lock': File exists"))
-        self.assertTrue(is_worktree_lock_error("fatal: 'x' is already locked"))
+        self.assertTrue(Worktree.is_lock_contention("fatal: 'x' is already locked"))
 
-    def test_real_errors_not_retried(self):
-        self.assertFalse(is_worktree_lock_error("fatal: invalid reference: origin/main"))
-        self.assertFalse(is_worktree_lock_error(""))
-        self.assertFalse(is_worktree_lock_error(None))
+    def test_real_errors_are_not_contention(self):
+        self.assertFalse(Worktree.is_lock_contention("fatal: invalid reference: origin/main"))
+        self.assertFalse(Worktree.is_lock_contention(""))
+        self.assertFalse(Worktree.is_lock_contention(None))
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import os
 import sys
 import time
 
-from the_grid.domain import workspace as cworkspace
+from the_grid.domain.workspace import Branch, Worktree
 
 
 class WorktreeService:
@@ -21,14 +21,16 @@ class WorktreeService:
         self._config = config
 
     def story_repo(self, story):
-        return cworkspace.story_repo(self._store.story_artifacts(story),
-                                     os.path.basename(self._config.grid_root()))
+        for a in self._store.story_artifacts(story):
+            if a.type == "repo":
+                return a.value
+        return os.path.basename(self._config.grid_root())
 
     def target_repo(self, story):
         return os.path.join(self._config.projects_root(), self.story_repo(story))
 
     def worktree_path(self, story):
-        return cworkspace.worktree_path(self._fs.worktrees_dir(), story)
+        return Worktree(story).path_in(self._fs.worktrees_dir())
 
     def story_branch(self, story):
         for a in self._store.story_artifacts(story):
@@ -37,8 +39,8 @@ class WorktreeService:
         return None
 
     def _branch_for(self, story):
-        return self.story_branch(story) or cworkspace.branch_for(
-            self._store.get_task(story).title, self._config.branch_prefix())
+        return self.story_branch(story) or Branch.for_feature(
+            self._store.get_task(story).title, self._config.branch_prefix()).name
 
     def _ensure_branch_artifact(self, story, branch):
         if any(a.type == "branch" for a in self._store.story_artifacts(story)):
@@ -87,7 +89,7 @@ class WorktreeService:
         backoff = self._config.worktree_retry_sleep()
         self._git.git(target, "worktree", "prune")
         res = self._git.git(target, *add_args)
-        while res.returncode != 0 and retries > 0 and cworkspace.is_worktree_lock_error(res.stderr):
+        while res.returncode != 0 and retries > 0 and Worktree.is_lock_contention(res.stderr):
             retries -= 1
             time.sleep(backoff)
             self._git.git(target, "worktree", "prune")
