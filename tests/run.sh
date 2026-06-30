@@ -2,10 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Fast in-process unit suite over the pure core (no bd, no subprocess) - seconds.
-echo "== unit (the_grid.core) =="
-python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
-
-# CLI + store integration suites (shell out to tg/bd against a real embedded store) - slow.
-echo "== integration (tg CLI + BdStore contract) =="
-python3 -m unittest discover -s tests -p 'test_*.py' -v
+# pytest, via uv (the dev venv). The engine itself ships zero runtime deps; pytest
+# and pytest-bdd are dev/test tooling only. Pass args through, e.g.
+#   bash tests/run.sh tests/unit     # the fast unit suite (no subprocess)
+#   bash tests/run.sh -k claim       # a subset by name
+uv run pytest "$@"

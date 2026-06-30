@@ -3,6 +3,8 @@ node_modules/
 *.log
 __pycache__/
 *.pyc
+.venv/
+.pytest_cache/
 logs/
 specs/*.md
 .worktrees/
