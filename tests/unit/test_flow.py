@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.core.flow import (advance_create_kwargs, compose_driver, flow_next, forward_note,
+from the_grid.domain.flow import (advance_create_kwargs, compose_driver, flow_next, forward_note,
                             load_flow, pool_plan, ready_roles_from_beads, ready_task_roles)
 from the_grid.domain.task import Task
 

@@ -1,8 +1,8 @@
 """CompleteTask: close a task with a flow outcome and advance the chain."""
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow.advance_task import AdvanceTask
-from the_grid.core import flow as cflow
-from the_grid.core.contracts import required_outputs
+from the_grid.domain import flow as cflow
+from the_grid.domain.contracts import required_outputs
 
 
 class CompleteTask:

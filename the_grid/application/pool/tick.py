@@ -8,7 +8,7 @@ so the pool does not pile redundant workers onto one task. `now` is passed in
 (the caller owns the clock).
 """
 from the_grid.application.pool.sweep import Sweep
-from the_grid.core import flow as cflow
+from the_grid.domain import flow as cflow
 
 
 class Tick:

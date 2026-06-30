@@ -1,5 +1,5 @@
 """Inbox: what needs a human now - human-owned steps and agent blocks."""
-from the_grid.core import tasks as ctasks
+from the_grid.domain import tasks as ctasks
 
 
 class Inbox:

@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.core.reflect import build_reflection, spec_hash_from_bytes
+from the_grid.domain.reflect import build_reflection, spec_hash_from_bytes
 
 
 class TestSpecHashFromBytes(unittest.TestCase):

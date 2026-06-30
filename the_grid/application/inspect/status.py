@@ -1,5 +1,5 @@
 """Bucket all tasks into inbox / active / queue / blocked."""
-from the_grid.core import tasks as ctasks
+from the_grid.domain import tasks as ctasks
 
 
 class Status:

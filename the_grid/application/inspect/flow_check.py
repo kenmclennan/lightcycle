@@ -1,6 +1,6 @@
 """FlowCheck: assemble and analyze the flow (steps, routes, contracts, composition)."""
-from the_grid.core import contracts as ccontracts
-from the_grid.core import flow as cflow
+from the_grid.domain import contracts as ccontracts
+from the_grid.domain import flow as cflow
 
 
 class FlowCheck:

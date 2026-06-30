@@ -4,18 +4,28 @@ Rules for anyone (human or agent) writing code in this repo. `claude -p` loads t
 pool's coder/reviewer agents read it automatically - the generic step files stay lightweight (flow
 and decisions) and the craft lives here.
 
-## Architecture: hexagonal
+## Architecture: hexagonal (DDD)
 
-- `the_grid/core/` - pure domain logic. **Stdlib only, no IO**: no subprocess, filesystem, network,
-  env, and no ambient `time`/`uuid`/`random` (pass those in as explicit inputs). Functions take plain
-  data and return plain data, so they unit-test in isolation in milliseconds.
-- `the_grid/adapters/` - all IO: the bd store, git, the worker spawner, the workers registry, the
-  filesystem. The only callers of `bd` / `git` / `subprocess`.
-- `the_grid/cli.py` - orchestration only: parse args, gather via adapters, call `core` for the
-  decision, apply the effect. **No pure logic lives here** - if it can be a pure function over plain
-  data, it belongs in `core/`.
+Dependencies point inward; the domain depends on nothing.
 
-Pure logic stranded in `cli.py` or an adapter is the most common defect here; move it to `core/`.
+- `the_grid/domain/` - the typed, IO-free model: entities (`Task`) and value objects (`Status`),
+  plus the pure logic (flow assembly, artifact contracts, task projections/buckets, retro signals,
+  worklog, workspace). **Stdlib only, no IO**: no subprocess, filesystem, network, env, and no
+  ambient `time`/`uuid`/`random` (pass those in as explicit inputs). Unit-tests in milliseconds.
+- `the_grid/ports/` - the abstract interfaces (`StorePort`, `GitPort`, `FsPort`, `WorkersPort`,
+  `SpawnerPort`) the application depends on; adapters implement them.
+- `the_grid/application/` - use cases (one action each, grouped by activity: `inspect`, `intake`,
+  `flow`, `pool`, `feedback`, `setup`) + cross-cutting services (`FlowService`, `WorktreeService`).
+  Depend on ports, not concrete adapters. This is the home for business logic.
+- `the_grid/adapters/` - all IO: the bd store (`BdStore`), git, the worker spawner, the workers
+  registry, the filesystem. The only callers of `bd` / `git` / `subprocess`.
+- `the_grid/config.py` - the single boundary to the environment and the config file (the only reader
+  of `os.environ`); required values fail fast. `the_grid/container.py` - the composition root that
+  builds Config + the adapters and injects them.
+- `the_grid/cli.py` - thin: parse args, pick a use case, render the result. **No business logic.**
+
+Business logic stranded in `cli.py` or an adapter is the most common defect here; it belongs in a
+use case (`application/`), and any pure rule belongs in `domain/`.
 
 ## Tests
 
@@ -23,7 +33,7 @@ Pure logic stranded in `cli.py` or an adapter is the most common defect here; mo
 project uses the Python stdlib `unittest`; there is no pytest and no pip test deps, so do not invoke
 `pytest`. Run a subset directly with `python3 -m unittest discover -s tests/unit`.
 
-- `tests/unit/` - fast, isolated tests of `core/` pure functions (no subprocess).
+- `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
 - `tests/test_tg.py` - integration tests exercising the wired `tg` commands via subprocess.
 - New pure logic ships with unit tests; a new command ships with an integration test. Get it green
   before `tg done`.
@@ -60,7 +70,7 @@ specifics belong in each target project's own `CLAUDE.md` (like this one), which
 for the agnostic steps. `tg` provides primitives; the workflow is defined by editable step markdown,
 not code builtins.
 
-Concretely, `tg` and `core/` must NOT: hardcode a workflow step or role name (e.g. `build`), require
+Concretely, `tg` and `domain/` must NOT: hardcode a workflow step or role name (e.g. `build`), require
 a specific named artifact (e.g. a `spec`), or add a command for one workflow action (e.g. a
 `plan-add`). Those are conventions - they live in the step markdown (the agent's prompt), composed
 from generic primitives (`tg file`, `tg link`, `tg done`, `--blocked-by`). The test: would this still

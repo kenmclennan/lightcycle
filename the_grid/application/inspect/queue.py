@@ -1,5 +1,5 @@
 """List the next N ready or blocked agent tasks."""
-from the_grid.core import tasks as ctasks
+from the_grid.domain import tasks as ctasks
 
 
 class Queue:

@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.core.workspace import (branch_for, is_worktree_lock_error, slugify,
+from the_grid.domain.workspace import (branch_for, is_worktree_lock_error, slugify,
                                 story_repo, worktree_path)
 
 

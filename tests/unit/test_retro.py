@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.core.retro import derive_signals, gather_feedback
+from the_grid.domain.retro import derive_signals, gather_feedback
 from the_grid.domain.task import Task
 
 

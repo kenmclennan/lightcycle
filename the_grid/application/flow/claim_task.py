@@ -6,8 +6,8 @@ absolute spec path), or None when nothing is ready or a required input is missin
 """
 import os
 
-from the_grid.core.contracts import required_inputs
-from the_grid.core.tasks import task_from_bead
+from the_grid.domain.contracts import required_inputs
+from the_grid.domain.tasks import task_from_bead
 
 
 class ClaimTask:

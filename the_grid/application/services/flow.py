@@ -5,7 +5,7 @@ by core.flow into an owner map (step -> owning role) and a routes map. This
 service is the one place that gathers the step metas and exposes the assembled
 flow; use cases depend on it rather than re-reading step files.
 """
-from the_grid.core import flow as cflow
+from the_grid.domain import flow as cflow
 
 
 class FlowService:

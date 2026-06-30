@@ -1,5 +1,5 @@
 """List tasks a worker is running right now (in-progress)."""
-from the_grid.core import tasks as ctasks
+from the_grid.domain import tasks as ctasks
 
 
 class ActiveTasks:

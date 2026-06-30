@@ -1,7 +1,7 @@
 import datetime
 import unittest
 
-from the_grid.core.worklog import resolve_period, worklog
+from the_grid.domain.worklog import resolve_period, worklog
 
 TODAY = datetime.date(2026, 6, 27)
 YESTERDAY = datetime.date(2026, 6, 26)

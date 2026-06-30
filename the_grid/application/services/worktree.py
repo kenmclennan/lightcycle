@@ -9,7 +9,7 @@ import os
 import sys
 import time
 
-from the_grid.core import workspace as cworkspace
+from the_grid.domain import workspace as cworkspace
 
 
 class WorktreeService:
