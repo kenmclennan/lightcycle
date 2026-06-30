@@ -2,6 +2,7 @@
 import json
 
 from the_grid.domain import retro as cretro
+from the_grid.domain.reflection import Reflection
 
 
 class Retro:
@@ -14,7 +15,7 @@ class Retro:
         for art in self._store.story_artifacts(bead_id):
             if art.get("type") == "reflection":
                 try:
-                    out.append(json.loads(art["value"]))
+                    out.append(Reflection.from_dict(json.loads(art["value"])))
                 except (ValueError, KeyError):
                     pass
         return out

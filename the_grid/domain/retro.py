@@ -31,7 +31,7 @@ def gather_feedback(reflections):
     """Collect the freeform feedback texts (with their task ids) for reading or LLM
     analysis. No counting or categorising - the raw text is the signal."""
     return [
-        {"task": ref.get("task"), "feedback": ref.get("feedback", "")}
+        {"task": ref.task, "feedback": ref.feedback}
         for ref in reflections
-        if (ref.get("feedback") or "").strip()
+        if (ref.feedback or "").strip()
     ]

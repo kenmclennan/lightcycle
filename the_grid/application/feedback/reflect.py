@@ -20,5 +20,5 @@ class Reflect:
 
     def execute(self, tid, feedback=""):
         reflection = creflect.build_reflection(tid, feedback, self._spec_hash(tid))
-        self._store.add_artifact(tid, "reflection", json.dumps(reflection))
+        self._store.add_artifact(tid, "reflection", json.dumps(reflection.as_dict()))
         return reflection

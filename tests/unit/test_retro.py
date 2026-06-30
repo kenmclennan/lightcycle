@@ -1,6 +1,7 @@
 import unittest
 
 from the_grid.domain.retro import derive_signals, gather_feedback
+from the_grid.domain.reflection import Reflection
 from the_grid.domain.task import Task
 
 
@@ -66,8 +67,8 @@ class TestDeriveSignals(unittest.TestCase):
 class TestGatherFeedback(unittest.TestCase):
     def test_collects_feedback_with_task_ids(self):
         refs = [
-            {"task": "t1", "feedback": "pytest not found"},
-            {"task": "t2", "feedback": "spec was thin on error cases"},
+            Reflection(task="t1", feedback="pytest not found"),
+            Reflection(task="t2", feedback="spec was thin on error cases"),
         ]
         got = gather_feedback(refs)
         self.assertEqual(got, [
@@ -77,15 +78,15 @@ class TestGatherFeedback(unittest.TestCase):
 
     def test_skips_empty_and_whitespace_feedback(self):
         refs = [
-            {"task": "t1", "feedback": ""},
-            {"task": "t2", "feedback": "   "},
-            {"task": "t3", "feedback": "real feedback"},
+            Reflection(task="t1", feedback=""),
+            Reflection(task="t2", feedback="   "),
+            Reflection(task="t3", feedback="real feedback"),
         ]
         got = gather_feedback(refs)
         self.assertEqual([g["task"] for g in got], ["t3"])
 
     def test_missing_feedback_key_tolerated(self):
-        self.assertEqual(gather_feedback([{"task": "t1"}]), [])
+        self.assertEqual(gather_feedback([Reflection(task="t1")]), [])
 
     def test_empty_reflections(self):
         self.assertEqual(gather_feedback([]), [])
