@@ -32,8 +32,8 @@ class WorktreeService:
 
     def story_branch(self, story):
         for a in self._store.story_artifacts(story):
-            if a.get("type") == "branch":
-                return a["value"]
+            if a.type == "branch":
+                return a.value
         return None
 
     def _branch_for(self, story):
@@ -41,7 +41,7 @@ class WorktreeService:
             self._store.get_task(story).title, self._config.branch_prefix())
 
     def _ensure_branch_artifact(self, story, branch):
-        if any(a.get("type") == "branch" for a in self._store.story_artifacts(story)):
+        if any(a.type == "branch" for a in self._store.story_artifacts(story)):
             return
         self._store.add_artifact(story, "branch", branch)
 

@@ -30,7 +30,7 @@ class TestTaskFromBead(unittest.TestCase):
         self.assertEqual(t.status, "ready")
         self.assertEqual(t.project, "grid")
         self.assertEqual(t.goal, "ship")
-        self.assertEqual(t.artifacts[0]["type"], "spec")
+        self.assertEqual(t.artifacts[0].type, "spec")
         self.assertEqual(t.needs, "a branch")
         self.assertEqual(t.deps, 2)
 

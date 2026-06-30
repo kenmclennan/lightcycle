@@ -8,6 +8,7 @@ TG = str(ROOT / "bin" / "tg")
 sys.path.insert(0, str(ROOT))
 import the_grid.cli as _cli_mod
 from tests.fake_store import FakeStore
+from the_grid.domain.artifact import Artifact
 
 # Point every subprocess at a config that does NOT exist, so the suite reads
 # config-absent DEFAULTS and never touches the real ~/.config/the-grid/config.
@@ -534,9 +535,9 @@ class TestArtifacts(unittest.TestCase):
         self.store.add_artifact(sid, "pr", "https://gh/9", "PR 9")
         arts = self.store.story_artifacts(sid)
         self.assertEqual(len(arts), 2)
-        self.assertEqual(arts[0]["type"], "spec")
-        self.assertEqual(arts[1]["type"], "pr")
-        self.assertEqual(arts[1]["label"], "PR 9")
+        self.assertEqual(arts[0].type, "spec")
+        self.assertEqual(arts[1].type, "pr")
+        self.assertEqual(arts[1].label, "PR 9")
 
 
 class TestCompositionRoot(unittest.TestCase):
@@ -570,9 +571,9 @@ class TestLink(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_link, sid, "pr", "https://gh/9", "--label", "PR 9")
         self.assertEqual(rc, 0, err)
         arts = self.store.story_artifacts(sid)
-        self.assertEqual(arts[0]["type"], "pr")
-        self.assertEqual(arts[0]["value"], "https://gh/9")
-        self.assertEqual(arts[0]["label"], "PR 9")
+        self.assertEqual(arts[0].type, "pr")
+        self.assertEqual(arts[0].value, "https://gh/9")
+        self.assertEqual(arts[0].label, "PR 9")
 
 
 class TestModelV2(unittest.TestCase):
@@ -1000,9 +1001,9 @@ class TestWorktree(unittest.TestCase):
         sid = self._file()
         call(_cli_mod.cmd_claim, "coder")
         arts = self.store.story_artifacts(sid)
-        branches = [a for a in arts if a["type"] == "branch"]
+        branches = [a for a in arts if a.type == "branch"]
         self.assertEqual(len(branches), 1)
-        self.assertEqual(branches[0]["value"], "feat/w")
+        self.assertEqual(branches[0].value, "feat/w")
 
     def test_worktrees_dir_gitignored(self):
         self._file()
@@ -1104,7 +1105,7 @@ class TestNamedRepo(unittest.TestCase):
     def test_file_stores_single_repo_artifact(self):
         _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--repo", "app")
         arts = self.store.story_artifacts(out.strip())
-        repos = [a["value"] for a in arts if a["type"] == "repo"]
+        repos = [a.value for a in arts if a.type == "repo"]
         self.assertEqual(repos, ["app"])
 
     def test_file_rejects_unknown_repo(self):
@@ -1340,10 +1341,10 @@ class TestReflect(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_reflect, tid, "--feedback", "pytest not found; spec thin on errors")
         self.assertEqual(rc, 0, err)
         self.assertIn("reflected", out)
-        self.assertEqual(self.store.story_artifacts(sid), [{"type": "spec", "value": "/tmp/no-spec.md"}])
-        refs = [a for a in self.store.story_artifacts(tid) if a["type"] == "reflection"]
+        self.assertEqual(self.store.story_artifacts(sid), [Artifact(type="spec", value="/tmp/no-spec.md")])
+        refs = [a for a in self.store.story_artifacts(tid) if a.type == "reflection"]
         self.assertEqual(len(refs), 1)
-        data = json.loads(refs[0]["value"])
+        data = json.loads(refs[0].value)
         self.assertEqual(data["feedback"], "pytest not found; spec thin on errors")
         self.assertEqual(data["task"], tid)
 
@@ -1351,7 +1352,7 @@ class TestReflect(unittest.TestCase):
         sid, tid = self._file_story()
         call(_cli_mod.cmd_reflect, tid, "--feedback", "first")
         call(_cli_mod.cmd_reflect, tid, "--feedback", "second")
-        refs = [a for a in self.store.story_artifacts(tid) if a["type"] == "reflection"]
+        refs = [a for a in self.store.story_artifacts(tid) if a.type == "reflection"]
         self.assertEqual(len(refs), 2)
 
     def test_reflect_stamps_spec_hash(self):
@@ -1362,7 +1363,7 @@ class TestReflect(unittest.TestCase):
         sid, tid = self._file_story(spec_path=spec.name)
         self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
         call(_cli_mod.cmd_reflect, tid, "--feedback", "ok")
-        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a["type"] == "reflection")["value"])
+        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value)
         self.assertNotEqual(data["spec_hash"], "unknown")
         self.assertEqual(len(data["spec_hash"]), 8)
 
@@ -1370,7 +1371,7 @@ class TestReflect(unittest.TestCase):
         sid, tid = self._file_story()
         rc, out, err = call(_cli_mod.cmd_reflect, tid)
         self.assertEqual(rc, 0, err)
-        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a["type"] == "reflection")["value"])
+        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value)
         self.assertEqual(data["feedback"], "")
 
 

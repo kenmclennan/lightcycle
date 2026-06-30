@@ -13,9 +13,9 @@ class Retro:
     def _reflections_of(self, bead_id):
         out = []
         for art in self._store.story_artifacts(bead_id):
-            if art.get("type") == "reflection":
+            if art.type == "reflection":
                 try:
-                    out.append(Reflection.from_dict(json.loads(art["value"])))
+                    out.append(Reflection.from_dict(json.loads(art.value)))
                 except (ValueError, KeyError):
                     pass
         return out

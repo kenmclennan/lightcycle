@@ -40,8 +40,8 @@ def worklog(stories, start, end):
             continue
         if not (start <= _closed_date(closed_at) <= end):
             continue
-        pr = next((a["value"] for a in (s.get("artifacts") or [])
-                   if a.get("type") == "pr"), None)
+        pr = next((a.value for a in (s.get("artifacts") or [])
+                   if a.type == "pr"), None)
         result.append({
             "id": s["id"],
             "title": s.get("title", ""),

@@ -14,7 +14,7 @@ class TestReflect(unittest.TestCase):
         k = s.create_task("build: x", step="build", role="coder", parent=story)
         fs = FakeFs(files={"/specs/x.md": b"spec body"})
         Reflect(s, fs).execute(k, "went well")
-        refl = json.loads(s.story_artifacts(k)[0]["value"])
+        refl = json.loads(s.story_artifacts(k)[0].value)
         self.assertEqual(refl["task"], k)
         self.assertEqual(refl["feedback"], "went well")
         self.assertNotEqual(refl["spec_hash"], "unknown")
@@ -23,7 +23,7 @@ class TestReflect(unittest.TestCase):
         s = FakeStore()
         k = s.create_task("loose task", role="human")
         Reflect(s, FakeFs()).execute(k, "fb")
-        refl = json.loads(s.story_artifacts(k)[0]["value"])
+        refl = json.loads(s.story_artifacts(k)[0].value)
         self.assertEqual(refl["spec_hash"], "unknown")
 
 

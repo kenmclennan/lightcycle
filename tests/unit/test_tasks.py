@@ -53,7 +53,7 @@ class TestStatusMapping(unittest.TestCase):
 
     def test_artifacts_from_metadata(self):
         t = task_from_bead(bead(metadata={"artifacts": [{"type": "spec", "value": "s.md"}]}))
-        self.assertEqual(t.artifacts[0]["value"], "s.md")
+        self.assertEqual(t.artifacts[0].value, "s.md")
 
     def test_notes_surfaced(self):
         t = task_from_bead(bead(notes="from review (rejected): fix #6"))

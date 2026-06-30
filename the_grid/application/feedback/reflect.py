@@ -13,8 +13,8 @@ class Reflect:
     def _spec_hash(self, tid):
         t = self._store.get_task(tid)
         story = t.parent or tid
-        spec = next((a["value"] for a in self._store.story_artifacts(story)
-                     if a["type"] == "spec"), None)
+        spec = next((a.value for a in self._store.story_artifacts(story)
+                     if a.type == "spec"), None)
         data = self._fs.read_bytes(spec)
         return creflect.spec_hash_from_bytes(data) if data is not None else "unknown"
 

@@ -1,5 +1,6 @@
 import unittest
 
+from the_grid.domain.artifact import Artifact
 from the_grid.domain.workspace import (branch_for, is_worktree_lock_error, slugify,
                                 story_repo, worktree_path)
 
@@ -20,11 +21,11 @@ class TestWorkspace(unittest.TestCase):
         self.assertEqual(worktree_path("/root/.worktrees", "s-9"), "/root/.worktrees/s-9")
 
     def test_story_repo_from_artifact(self):
-        arts = [{"type": "spec", "value": "x.md"}, {"type": "repo", "value": "app"}]
+        arts = [Artifact(type="spec", value="x.md"), Artifact(type="repo", value="app")]
         self.assertEqual(story_repo(arts, "engine"), "app")
 
     def test_story_repo_defaults(self):
-        self.assertEqual(story_repo([{"type": "spec", "value": "x.md"}], "engine"), "engine")
+        self.assertEqual(story_repo([Artifact(type="spec", value="x.md")], "engine"), "engine")
 
 
 class TestWorktreeLockError(unittest.TestCase):
