@@ -65,14 +65,15 @@ class TestWorklog(unittest.TestCase):
         s = FakeStore()
         sid = s.create_story("shipped story")
         s.close(sid, "merged")
-        today = datetime.date.today()
-        entries = Worklog(s).execute([], today)
+        now = datetime.datetime.now().astimezone()
+        entries = Worklog(s).execute([], now.date(), now.tzinfo)
         self.assertIn(sid, [e["id"] for e in entries])
 
     def test_empty_when_nothing_closed(self):
         s = FakeStore()
         s.create_story("still open")
-        self.assertEqual(Worklog(s).execute([], datetime.date.today()), [])
+        now = datetime.datetime.now().astimezone()
+        self.assertEqual(Worklog(s).execute([], now.date(), now.tzinfo), [])
 
 
 class TestInboxBacklogMine(unittest.TestCase):

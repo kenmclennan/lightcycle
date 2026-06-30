@@ -2,7 +2,7 @@
 import json
 
 from the_grid.domain import retro as cretro
-from the_grid.domain.reflection import Reflection
+from the_grid.domain.feedback import Reflection
 
 
 class Retro:
