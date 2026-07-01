@@ -1,4 +1,5 @@
-"""Pure frontmatter parsing for agent and config files. Operates on text only."""
+"""Frontmatter parsing for the step and config files (a file-format detail of the
+fs/config adapters, not a domain concern). Operates on text only."""
 
 
 def parse_frontmatter(text):

@@ -1,4 +1,5 @@
-"""Pure rendering of a single worker-log line (claude stream-json or plain text)."""
+"""Presentation: rendering of a single worker-log line (claude stream-json or plain
+text) for `tg tail`. Not a domain concern - it formats for the terminal."""
 import json
 
 

@@ -6,7 +6,7 @@ import sys
 import time
 
 from the_grid.domain.contracts import FILE_PROVIDES
-from the_grid.domain.logrender import render_log_line
+from the_grid.logrender import render_log_line
 
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, ListWorkers,
                                           Mine, Queue, ResolveLog, ShowTask, Status, Trace,

@@ -5,7 +5,7 @@ explicit `root` (Config.grid_root()) and do no environment reads.
 """
 import os
 
-from the_grid.domain import steps as core_steps
+from the_grid.adapters import frontmatter
 from the_grid.ports.fs import FsPort
 
 
@@ -23,7 +23,7 @@ def read_md(root, relpath):
         return None
     with open(path) as f:
         text = f.read()
-    meta, body = core_steps.split_frontmatter(text)
+    meta, body = frontmatter.split_frontmatter(text)
     return {"meta": meta, "body": body, "path": path}
 
 
