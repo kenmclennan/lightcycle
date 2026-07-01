@@ -2,6 +2,8 @@
 step: review-plan
 routes:
   changes: develop
+signals:
+  resets: changes
 ---
 
 # Review-plan (you + driver)

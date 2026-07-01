@@ -55,6 +55,21 @@ class TestSignals(unittest.TestCase):
     def test_no_declarations_gives_empty_tally(self):
         self.assertEqual(Signals.from_metas({"coder": {"step": "build"}}).tally([tk(step="build")]), {})
 
+    def test_same_named_signal_across_steps_aggregates(self):
+        metas = {
+            "reviewer": {"step": "review", "signals": {"resets": "rejected"}},
+            "watcher": {"step": "watch-pr", "signals": {"resets": "ci-failed"}},
+            "merger": {"step": "ready-merge", "signals": {"resets": "changes"}},
+        }
+        tasks = [
+            tk(id="a", step="review", outcome="rejected"),
+            tk(id="b", step="watch-pr", outcome="ci-failed"),
+            tk(id="c", step="ready-merge", outcome="changes"),
+            tk(id="d", step="ready-merge", outcome="changes"),
+            tk(id="e", step="review", outcome="done"),  # forward, not a reset
+        ]
+        self.assertEqual(Signals.from_metas(metas).tally(tasks), {"resets": 4})
+
 
 class TestRetro(unittest.TestCase):
     def test_collects_feedback_with_task_ids(self):

@@ -3,6 +3,8 @@ step: ready-merge
 routes:
   merged: cleanup
   changes: build
+signals:
+  resets: changes
 ---
 
 # Ready-merge (you + driver)

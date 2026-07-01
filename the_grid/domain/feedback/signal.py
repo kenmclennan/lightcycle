@@ -50,5 +50,10 @@ class Signals:
         return cls(specs)
 
     def tally(self, tasks):
-        """{signal name: count of matching tasks} for every declared signal."""
-        return {spec.name: sum(1 for t in tasks if spec.matches(t)) for spec in self._specs}
+        """{signal name: count of matching tasks} for every declared signal. A name
+        declared on more than one step aggregates (sums) across them, so a workflow
+        can roll several edges up into one metric (e.g. resets)."""
+        totals = {spec.name: 0 for spec in self._specs}
+        for spec in self._specs:
+            totals[spec.name] += sum(1 for t in tasks if spec.matches(t))
+        return totals

@@ -7,6 +7,8 @@ produces:
 routes:
   done: ready-merge
   ci-failed: build
+signals:
+  resets: ci-failed
 ---
 
 # Watch-PR
