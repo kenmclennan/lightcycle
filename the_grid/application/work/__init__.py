@@ -6,7 +6,6 @@ from the_grid.application.work.close_story import CloseStoryInput, CloseStoryUse
 from the_grid.application.work.file_story import FileStoryInput, FileStoryUseCase
 from the_grid.application.work.inbox import InboxInput, InboxUseCase
 from the_grid.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
-from the_grid.application.work.mine import MineUseCase
 from the_grid.application.work.queue import QueueInput, QueueUseCase
 from the_grid.application.work.show_task import ShowTaskInput, ShowTaskUseCase
 from the_grid.application.work.status import StatusUseCase
@@ -14,6 +13,6 @@ from the_grid.application.work.trace import TraceInput, TraceUseCase
 
 __all__ = ["ActiveTasksUseCase", "AddTaskInput", "AddTaskUseCase", "BacklogInput", "BacklogUseCase",
            "CloseStoryInput", "CloseStoryUseCase", "FileStoryInput", "FileStoryUseCase",
-           "InboxInput", "InboxUseCase", "LinkArtifactInput", "LinkArtifactUseCase", "MineUseCase",
+           "InboxInput", "InboxUseCase", "LinkArtifactInput", "LinkArtifactUseCase",
            "QueueInput", "QueueUseCase", "ShowTaskInput", "ShowTaskUseCase", "StatusUseCase",
            "TraceInput", "TraceUseCase"]
