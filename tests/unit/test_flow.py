@@ -80,15 +80,20 @@ class TestTransition(unittest.TestCase):
 
     def test_next_task_spec_strips_step_prefix_and_keeps_deps(self):
         spec = self._t().next_task_spec(Task(id="t-1", title="build: make the thing"))
-        self.assertEqual(spec["title"], "review: make the thing")
-        self.assertEqual(spec["step"], "review")
-        self.assertEqual(spec["role"], "reviewer")
-        self.assertIsNone(spec["parent"])
-        self.assertEqual(spec["deps"], ["t-1"])
+        self.assertEqual(spec.title, "review: make the thing")
+        self.assertEqual(spec.step, "review")
+        self.assertEqual(spec.role, "reviewer")
+        self.assertIsNone(spec.parent)
+        self.assertEqual(spec.deps, ("t-1",))
 
     def test_next_task_spec_includes_parent_when_present(self):
         spec = self._t().next_task_spec(Task(id="t-1", title="build: x", parent="s-9"))
-        self.assertEqual(spec["parent"], "s-9")
+        self.assertEqual(spec.parent, "s-9")
+
+    def test_next_task_spec_as_kwargs_matches_create_task(self):
+        kw = self._t().next_task_spec(Task(id="t-1", title="build: x", parent="s-9")).as_kwargs()
+        self.assertEqual(kw, {"title": "review: x", "step": "review", "role": "reviewer",
+                              "parent": "s-9", "deps": ["t-1"], "project": None, "goal": None})
 
     def test_forward_note_provenance_format(self):
         self.assertEqual(self._t().forward_note("fix the tests"),

@@ -25,4 +25,4 @@ class AdvanceTaskUseCase:
         transition = self._flow.flow_next(t.step, input.outcome)
         if transition is None:
             return AdvanceResponse(next_task=None)
-        return AdvanceResponse(next_task=self._store.create_task(**transition.next_task_spec(t)))
+        return AdvanceResponse(next_task=self._store.create_task(**transition.next_task_spec(t).as_kwargs()))
