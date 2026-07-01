@@ -109,6 +109,9 @@ _AGENT_SPECS = {
     "driver": ("opus", None, None),
 }
 
+# The-grid's own workflow signals, declared per step (matches steps/*.md).
+_STEP_SIGNALS = {"review": {"review_rounds": "rejected"}, "open-pr": {"conflicts": "~conflict"}}
+
 
 def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
     """Write the standard pipeline agents (routing only, no artifact contracts)."""
@@ -122,6 +125,9 @@ def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
         if routes:
             fm.append("routes:")
             fm += ["  %s: %s" % (o, n) for o, n in routes.items()]
+        if _STEP_SIGNALS.get(step):
+            fm.append("signals:")
+            fm += ["  %s: %s" % (k, v) for k, v in _STEP_SIGNALS[step].items()]
         fm += ["---", "# %s" % r, "stub"]
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
 
@@ -1380,7 +1386,7 @@ class TestReflect(unittest.TestCase):
 
 class TestRetro(unittest.TestCase):
     def setUp(self):
-        _fake_setUp(self)
+        _fake_setUp(self, steps=True)
 
     def _make_epic_with_story(self, sid=None):
         epic = self.store.create_story("epic-1")
@@ -1422,7 +1428,7 @@ class TestRetro(unittest.TestCase):
         self.store.close(rtid, "rejected")
         rc, out, err = call(_cli_mod.cmd_retro, epic)
         self.assertEqual(rc, 0, err)
-        self.assertIn("rounds=1", out)
+        self.assertIn("review_rounds=1", out)
 
     def test_retro_signals_conflict(self):
         epic, sid = self._make_epic_with_story()
@@ -1430,16 +1436,7 @@ class TestRetro(unittest.TestCase):
         self.store.close(pr_tid, "conflict-rebase")
         rc, out, err = call(_cli_mod.cmd_retro, epic)
         self.assertEqual(rc, 0, err)
-        self.assertIn("conflict", out)
-
-    def test_retro_signals_blocks(self):
-        epic, sid = self._make_epic_with_story()
-        btid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
-        self.store.update_status(btid, "in_progress")
-        self.store.update_status(btid, "open")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
-        self.assertEqual(rc, 0, err)
-        self.assertIn("blocks=1", out)
+        self.assertIn("conflicts=1", out)
 
 
 class TestWorklog(unittest.TestCase):

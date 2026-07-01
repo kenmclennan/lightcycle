@@ -627,7 +627,7 @@ def cmd_retro(argv):
     ap.add_argument("epic")
     a = ap.parse_args(argv)
 
-    digest = Retro(_container.store).execute(a.epic)
+    digest = Retro(_container.store, _flow()).execute(a.epic)
     print("== retro: %s  (N=%d) ==" % (digest["epic"], digest["n"]))
 
     if digest["feedback"]:
@@ -640,8 +640,7 @@ def cmd_retro(argv):
     print("\nPer-story signals:")
     for row in digest["story_signals"]:
         story, sigs, nrefs = row["story"], row["signals"], row["nrefs"]
-        conflict_str = "conflict" if sigs["conflict"] else "-"
-        print("  %-20s  blocks=%-2d  rounds=%-2d  conflict=%-5s  (N=%d)" % (
-            story.id, sigs["blocks"], sigs["review_rounds"], conflict_str, nrefs))
+        sig_str = "  ".join("%s=%s" % (k, sigs[k]) for k in sorted(sigs))
+        print("  %-20s  %s  (N=%d)" % (story.id, sig_str, nrefs))
 
     return 0

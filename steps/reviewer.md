@@ -7,6 +7,8 @@ accepts:
 routes:
   done: open-pr
   rejected: build
+signals:
+  review_rounds: rejected
 ---
 
 # Reviewer
