@@ -45,20 +45,6 @@ class WorktreeService:
             return
         self._store.add_artifact(story, "branch", branch)
 
-    def _ensure_worktrees_ignored(self, root):
-        gi = os.path.join(root, ".gitignore")
-        line = ".worktrees/"
-        existing = ""
-        if os.path.exists(gi):
-            with open(gi) as f:
-                existing = f.read()
-        if line in (l.strip() for l in existing.splitlines()):
-            return
-        with open(gi, "a") as f:
-            if existing and not existing.endswith("\n"):
-                f.write("\n")
-            f.write(line + "\n")
-
     def ensure(self, story):
         """Create (or reuse) the per-story worktree. Returns the workspace path, or
         None when no isolated tree can be made (not a git repo, or no origin/main to
@@ -79,7 +65,7 @@ class WorktreeService:
                 return None
             add_args = ["worktree", "add", path, "-b", branch, base]
         os.makedirs(self._fs.worktrees_dir(), exist_ok=True)
-        self._ensure_worktrees_ignored(self._config.grid_root())
+        self._fs.ensure_worktrees_ignored()
         # Several pool workers may add worktrees against one target repo at once and
         # race on git's `.git/worktrees` lock; the add is idempotent, so retry the
         # transient lock failure with a short backoff before giving up.

@@ -1,5 +1,8 @@
 """Trace: a story end to end - its artifacts, child tasks, and each task's log."""
 from dataclasses import dataclass
+from typing import List, Optional
+
+from the_grid.domain.work import Artifact, Task
 
 
 @dataclass(frozen=True)
@@ -8,8 +11,28 @@ class TraceInput:
 
 
 @dataclass(frozen=True)
+class TraceTask:
+    id: str
+    step: Optional[str]
+    status: str
+    log: Optional[str]
+
+    def as_dict(self):
+        return {"id": self.id, "step": self.step, "status": self.status, "log": self.log}
+
+
+@dataclass(frozen=True)
 class TraceResponse:
-    view: dict
+    story: Task
+    artifacts: List[Artifact]
+    tasks: List[TraceTask]
+
+    def as_dict(self):
+        return {
+            "story": {"id": self.story.id, "title": self.story.title, "status": self.story.status},
+            "artifacts": [a.as_dict() for a in self.artifacts],
+            "tasks": [t.as_dict() for t in self.tasks],
+        }
 
 
 class TraceUseCase:
@@ -26,11 +49,7 @@ class TraceUseCase:
 
     def execute(self, input: TraceInput) -> TraceResponse:
         story = self._store.get_task(input.story)
-        arts = [a.as_dict() for a in self._store.story_artifacts(input.story)]
-        tasks = []
-        for kt in self._store.children(input.story):
-            tasks.append({"id": kt.id, "step": kt.step, "status": kt.status,
-                          "log": self._log_for_bead(kt.id)})
-        return TraceResponse(view={
-            "story": {"id": story.id, "title": story.title, "status": story.status},
-            "artifacts": arts, "tasks": tasks})
+        artifacts = self._store.story_artifacts(input.story)
+        tasks = [TraceTask(id=kt.id, step=kt.step, status=kt.status, log=self._log_for_bead(kt.id))
+                 for kt in self._store.children(input.story)]
+        return TraceResponse(story=story, artifacts=artifacts, tasks=tasks)
