@@ -12,7 +12,8 @@ from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroIn
                                            WorklogInput, WorklogUseCase)
 from the_grid.application.work import (ActiveTasksUseCase, AddTaskInput, AddTaskUseCase,
                                        BacklogInput, BacklogUseCase, CloseStoryInput,
-                                       CloseStoryUseCase, FileStoryInput, FileStoryUseCase,
+                                       CloseStoryUseCase, EditTaskInput, EditTaskUseCase,
+                                       FileStoryInput, FileStoryUseCase,
                                        InboxInput, InboxUseCase, LinkArtifactInput,
                                        LinkArtifactUseCase, QueueInput, QueueUseCase,
                                        ShowTaskInput, ShowTaskUseCase, StatusUseCase, TraceInput,
@@ -115,7 +116,8 @@ COMMAND_GROUPS = [
         ("file", "<spec> --step <step> [--repo/--epic/--project/--goal/--blocked-by]",
          "create a story (for one repo) from a spec + its first task at <step>"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
-        ("add", '"<title>" [--goal/--project]', "create a standalone human task (no spec/flow)"),
+        ("add", '"<title>" [--description/--goal/--project]', "create a standalone human task (no spec/flow)"),
+        ("edit", "<id> [--title/--description/--goal/--project]", "update a task's fields"),
         ("close", "<story> <reason>",
          "close a story + its tasks, remove the worktree, delete the merged branch"),
     ]),
@@ -420,9 +422,12 @@ def cmd_sweep(argv):
 # ---- read views -------------------------------------------------------------
 
 
-def _print_human_row(kind, t):
+def _print_human_row(kind, t, show_description=False):
     plan = next((art.value for art in t.artifacts if art.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
+    if show_description and t.description:
+        snippet = t.description[:60] + ("..." if len(t.description) > 60 else "")
+        extra += "  desc:%s" % snippet
     print("%-9s %s  %s%s" % ("[%s]" % kind, t.id, t.title or t.step, extra))
 
 
@@ -440,7 +445,7 @@ def cmd_backlog(argv):
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
     for row in BacklogUseCase(_container.store, _flow()).execute(BacklogInput(n=a.n)).rows:
-        _print_human_row(row.kind, row.task)
+        _print_human_row(row.kind, row.task, show_description=True)
     return 0
 
 
@@ -486,10 +491,25 @@ def cmd_add(argv):
     ap.add_argument("title")
     ap.add_argument("--goal")
     ap.add_argument("--project")
+    ap.add_argument("--description")
     a = ap.parse_args(argv)
     resp = AddTaskUseCase(_container.store).execute(
-        AddTaskInput(title=a.title, goal=a.goal, project=a.project))
+        AddTaskInput(title=a.title, goal=a.goal, project=a.project, description=a.description))
     print(resp.task)
+    return 0
+
+
+def cmd_edit(argv):
+    ap = argparse.ArgumentParser(prog="tg edit")
+    ap.add_argument("id")
+    ap.add_argument("--title")
+    ap.add_argument("--description")
+    ap.add_argument("--goal")
+    ap.add_argument("--project")
+    a = ap.parse_args(argv)
+    EditTaskUseCase(_container.store).execute(
+        EditTaskInput(task=a.id, title=a.title, description=a.description,
+                      goal=a.goal, project=a.project))
     return 0
 
 

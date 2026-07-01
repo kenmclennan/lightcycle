@@ -2,7 +2,8 @@ import unittest
 
 from the_grid.application.errors import UseCaseError
 from the_grid.application.work import (AddTaskInput, AddTaskUseCase, CloseStoryInput,
-                                       CloseStoryUseCase, FileStoryInput, FileStoryUseCase,
+                                       CloseStoryUseCase, EditTaskInput, EditTaskUseCase,
+                                       FileStoryInput, FileStoryUseCase,
                                        LinkArtifactInput, LinkArtifactUseCase)
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
@@ -42,6 +43,47 @@ class TestAddTask(unittest.TestCase):
         resp = AddTaskUseCase(s).execute(AddTaskInput(title="do a thing", goal="g1", project="p1"))
         t = s.get_task(resp.task)
         self.assertEqual(t.status, "needs-human")
+        self.assertEqual(t.goal, "g1")
+        self.assertEqual(t.project, "p1")
+
+    def test_creates_task_with_description(self):
+        s = FakeStore()
+        resp = AddTaskUseCase(s).execute(
+            AddTaskInput(title="my task", description="detailed notes"))
+        t = s.get_task(resp.task)
+        self.assertEqual(t.description, "detailed notes")
+
+    def test_creates_task_without_description(self):
+        s = FakeStore()
+        resp = AddTaskUseCase(s).execute(AddTaskInput(title="plain task"))
+        t = s.get_task(resp.task)
+        self.assertIsNone(t.description)
+
+
+class TestEditTask(unittest.TestCase):
+    def test_edits_title_and_description(self):
+        s = FakeStore()
+        tid = s.create_task("old title", role="human", description="old")
+        EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="new title", description="new"))
+        t = s.get_task(tid)
+        self.assertEqual(t.title, "new title")
+        self.assertEqual(t.description, "new")
+
+    def test_edits_goal_and_project(self):
+        s = FakeStore()
+        tid = s.create_task("t", role="human", goal="g1", project="p1")
+        EditTaskUseCase(s).execute(EditTaskInput(task=tid, goal="g2", project="p2"))
+        t = s.get_task(tid)
+        self.assertEqual(t.goal, "g2")
+        self.assertEqual(t.project, "p2")
+
+    def test_unspecified_fields_unchanged(self):
+        s = FakeStore()
+        tid = s.create_task("keep title", role="human", description="keep desc", goal="g1")
+        EditTaskUseCase(s).execute(EditTaskInput(task=tid, project="p1"))
+        t = s.get_task(tid)
+        self.assertEqual(t.title, "keep title")
+        self.assertEqual(t.description, "keep desc")
         self.assertEqual(t.goal, "g1")
         self.assertEqual(t.project, "p1")
 

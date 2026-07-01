@@ -64,6 +64,26 @@ class SmokeTest(unittest.TestCase):
         ws = tempfile.mkdtemp()
         Path(self.root, "grid.config").write_text("projects: %s\nspecs: %s\n" % (ws, ws))
 
+    def test_add_with_description_and_edit(self):
+        r = _tg("add", "my task", "--description", "detail here", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        tid = r.stdout.strip()
+
+        r = _tg("show", tid, root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        shown = json.loads(r.stdout)
+        self.assertEqual(shown["description"], "detail here")
+
+        r = _tg("edit", tid, "--title", "updated title", "--description", "updated desc",
+                root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+        r = _tg("show", tid, root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        shown = json.loads(r.stdout)
+        self.assertEqual(shown["title"], "updated title")
+        self.assertEqual(shown["description"], "updated desc")
+
     def test_create_claim_done_advance_show(self):
         r = _tg("file", "specs/smoke.md", "--step", "build", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)

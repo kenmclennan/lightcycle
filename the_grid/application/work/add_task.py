@@ -8,6 +8,7 @@ class AddTaskInput:
     title: str
     goal: Optional[str] = None
     project: Optional[str] = None
+    description: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -22,4 +23,5 @@ class AddTaskUseCase:
 
     def execute(self, input: AddTaskInput) -> AddTaskResponse:
         return AddTaskResponse(task=self._store.create_task(
-            input.title, role="human", project=input.project, goal=input.goal))
+            input.title, role="human", project=input.project, goal=input.goal,
+            description=input.description))

@@ -53,6 +53,7 @@ def bead_to_task(bead):
         status=_status_of(bead, role),
         project=_label_value(bead, "project:"), goal=_label_value(bead, "goal:"),
         artifacts=[Artifact.from_dict(a) for a in (meta.get("artifacts") or [])],
+        description=bead.get("description"),
         needs=meta.get("needs"),
         outcome=bead.get("close_reason"),
         deps=bead.get("dependency_count") or 0,

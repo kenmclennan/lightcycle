@@ -25,6 +25,7 @@ class FakeStore(StorePort):
             "labels": [], "status": "open", "assignee": None,
             "metadata": {}, "parent": None, "dependency_count": 0,
             "close_reason": None, "notes": None, "closed_at": None,
+            "description": None,
         }
         b.update(fields)
         return b
@@ -168,12 +169,13 @@ class FakeStore(StorePort):
         return self._history.get(tid, [])
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None):
+                    project=None, goal=None, description=None):
         b = self._new_record(
             title=title,
             issue_type="task",
             parent=parent,
             labels=labels_for(role=role, step=step, project=project, goal=goal),
+            description=description,
         )
         tid = b["id"]
         self._records[tid] = b
@@ -182,6 +184,25 @@ class FakeStore(StorePort):
             for dep in deps:
                 self.dep_add(tid, dep)
         return tid
+
+    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None):
+        b = self._get(tid)
+        if title is not None:
+            b["title"] = title
+        if description is not None:
+            b["description"] = description
+        if goal is not None:
+            cur = self.get_task(tid).goal
+            if cur:
+                self.label_remove(tid, "goal:%s" % cur)
+            if goal:
+                self.label_add(tid, "goal:%s" % goal)
+        if project is not None:
+            cur = self.get_task(tid).project
+            if cur:
+                self.label_remove(tid, "project:%s" % cur)
+            if project:
+                self.label_add(tid, "project:%s" % project)
 
     def create_story(self, title, *, epic=None, project=None, goal=None):
         b = self._new_record(

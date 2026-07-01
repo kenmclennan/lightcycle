@@ -158,6 +158,24 @@ class TestBdStoreSmoke(unittest.TestCase):
         self.assertIn(epic, result_ids)
         self.assertNotIn(child, result_ids)
 
+    def test_create_with_description_and_edit(self):
+        s = self._store()
+        tid = s.create_task("my task", description="initial desc")
+        t = s.get_task(tid)
+        self.assertEqual(t.description, "initial desc")
+        s.edit_task(tid, title="updated title", description="updated desc")
+        t2 = s.get_task(tid)
+        self.assertEqual(t2.title, "updated title")
+        self.assertEqual(t2.description, "updated desc")
+
+    def test_edit_task_goal_and_project(self):
+        s = self._store()
+        tid = s.create_task("t", goal="g1", project="p1")
+        s.edit_task(tid, goal="g2", project="p2")
+        t = s.get_task(tid)
+        self.assertEqual(t.goal, "g2")
+        self.assertEqual(t.project, "p2")
+
 
     def test_all_tasks_returns_beyond_default_bd_limit(self):
         s = self._store()

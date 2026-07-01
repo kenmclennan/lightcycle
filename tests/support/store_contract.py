@@ -104,3 +104,35 @@ class StoreContractBase:
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].type, "spec")
         self.assertEqual(arts[0].value, "specs/foo.md")
+
+    def test_create_task_with_description(self):
+        s = self.make_store()
+        tid = s.create_task("my task", description="detailed info")
+        t = s.get_task(tid)
+        self.assertEqual(t.description, "detailed info")
+
+    def test_edit_task_title_and_description(self):
+        s = self.make_store()
+        tid = s.create_task("old title", description="old desc")
+        s.edit_task(tid, title="new title", description="new desc")
+        t = s.get_task(tid)
+        self.assertEqual(t.title, "new title")
+        self.assertEqual(t.description, "new desc")
+
+    def test_edit_task_goal_and_project(self):
+        s = self.make_store()
+        tid = s.create_task("t", goal="g1", project="p1")
+        s.edit_task(tid, goal="g2", project="p2")
+        t = s.get_task(tid)
+        self.assertEqual(t.goal, "g2")
+        self.assertEqual(t.project, "p2")
+
+    def test_edit_task_leaves_unspecified_fields_intact(self):
+        s = self.make_store()
+        tid = s.create_task("title stays", description="desc stays", goal="g1")
+        s.edit_task(tid, project="p1")
+        t = s.get_task(tid)
+        self.assertEqual(t.title, "title stays")
+        self.assertEqual(t.description, "desc stays")
+        self.assertEqual(t.goal, "g1")
+        self.assertEqual(t.project, "p1")
