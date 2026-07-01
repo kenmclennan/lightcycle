@@ -11,12 +11,20 @@ dependencies = []
 dev = [
     "pytest>=8",
     "pytest-bdd>=7",
+    "ruff>=0.9",
 ]
 
 [tool.uv]
 # Virtual project: uv manages the dev venv but does not build/install the engine
 # itself (it is found via pythonpath below), so there is no build backend to own.
 package = false
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501", "E741", "E702", "E402"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
