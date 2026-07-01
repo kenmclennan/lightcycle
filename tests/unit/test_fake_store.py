@@ -125,12 +125,12 @@ class TestParentChildren(unittest.TestCase):
     def test_task_view_inherits_story_artifacts(self):
         self.s.add_artifact(self.story, "branch", "feat/foo")
         view = self.s.task_view(self.task)
-        self.assertTrue(any(a["type"] == "branch" for a in view["story_artifacts"]))
+        self.assertTrue(any(a.type == "branch" for a in view.story_artifacts))
 
     def test_task_view_without_parent_uses_own_artifacts(self):
         orphan = self.s.create_task("build: orphan")
         view = self.s.task_view(orphan)
-        self.assertEqual(view["story_artifacts"], [])
+        self.assertEqual(view.story_artifacts, [])
 
 
 class TestReady(unittest.TestCase):

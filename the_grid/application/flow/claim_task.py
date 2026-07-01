@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from the_grid.domain.contracts import StepContract
+from the_grid.domain.work import TaskView
 
 
 @dataclass(frozen=True)
@@ -18,7 +19,10 @@ class ClaimInput:
 
 @dataclass(frozen=True)
 class ClaimResponse:
-    view: dict
+    view: TaskView
+    workspace: Optional[str] = None
+    branch: Optional[str] = None
+    spec_path: Optional[str] = None
 
 
 class ClaimTaskUseCase:
@@ -47,12 +51,9 @@ class ClaimTaskUseCase:
         view = self._store.task_view(t.id)
         story = t.parent or t.id
         ws = self._worktrees.ensure(story)
-        if ws:
-            view["workspace"] = ws
         branch = self._worktrees.story_branch(story)
-        if branch:
-            view["branch"] = branch
-        spec = next((a["value"] for a in view.get("story_artifacts", []) if a.get("type") == "spec"), None)
+        spec = next((a.value for a in view.story_artifacts if a.type == "spec"), None)
+        spec_path = None
         if spec:
-            view["spec_path"] = spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
-        return ClaimResponse(view=view)
+            spec_path = spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
+        return ClaimResponse(view=view, workspace=ws, branch=branch, spec_path=spec_path)

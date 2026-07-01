@@ -1,5 +1,7 @@
-"""ShowTask: one task or story as a view dict (artifacts + resume-state)."""
+"""ShowTask: one task or story as a TaskView (artifacts + resume-state)."""
 from dataclasses import dataclass
+
+from the_grid.domain.work import TaskView
 
 
 @dataclass(frozen=True)
@@ -9,7 +11,7 @@ class ShowTaskInput:
 
 @dataclass(frozen=True)
 class ShowTaskResponse:
-    view: dict
+    view: TaskView
 
 
 class ShowTaskUseCase:

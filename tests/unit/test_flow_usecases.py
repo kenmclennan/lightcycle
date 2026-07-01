@@ -99,7 +99,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
         resp = self._uc(s).execute(ClaimInput(role="coder"))
-        self.assertEqual(resp.view["id"], bid)
+        self.assertEqual(resp.view.task.id, bid)
 
     def test_nothing_ready_returns_none(self):
         self.assertIsNone(self._uc(FakeStore()).execute(ClaimInput(role="coder")))

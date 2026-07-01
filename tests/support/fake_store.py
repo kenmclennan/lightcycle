@@ -5,7 +5,7 @@ import uuid
 
 from the_grid.adapters.bead import bead_to_task, labels_for
 from the_grid.ports.store import StorePort
-from the_grid.domain.work import Artifact
+from the_grid.domain.work import Artifact, TaskView
 
 
 def _new_id():
@@ -58,10 +58,8 @@ class FakeStore(StorePort):
 
     def task_view(self, tid):
         t = self.get_task(tid)
-        view = t.as_dict()
         arts = self.story_artifacts(t.parent) if t.parent else t.artifacts
-        view["story_artifacts"] = [a.as_dict() for a in arts]
-        return view
+        return TaskView(task=t, story_artifacts=list(arts))
 
     def present_types(self, task):
         story = task.parent or task.id
