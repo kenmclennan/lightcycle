@@ -69,7 +69,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         tid = s.create_task("task: t", parent=sid)
         s.add_artifact(sid, "branch", "feat/foo")
         view = s.task_view(tid)
-        self.assertTrue(any(a["type"] == "branch" for a in view["story_artifacts"]))
+        self.assertTrue(any(a.type == "branch" for a in view.story_artifacts))
 
     def test_list_beads_by_status(self):
         s = self.make_store()

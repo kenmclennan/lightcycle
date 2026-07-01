@@ -181,7 +181,8 @@ def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="tg show")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    print(json.dumps(ShowTaskUseCase(_container.store).execute(ShowTaskInput(task=a.id)).view, indent=2))
+    view = ShowTaskUseCase(_container.store).execute(ShowTaskInput(task=a.id)).view
+    print(json.dumps(view.as_dict(), indent=2))
     return 0
 
 
@@ -193,7 +194,14 @@ def cmd_claim(argv):
                             _container.workers, _container.config).execute(ClaimInput(role=a.role))
     if resp is None:
         return 0
-    print(json.dumps(resp.view, indent=2))
+    out = resp.view.as_dict()
+    if resp.workspace:
+        out["workspace"] = resp.workspace
+    if resp.branch:
+        out["branch"] = resp.branch
+    if resp.spec_path:
+        out["spec_path"] = resp.spec_path
+    print(json.dumps(out, indent=2))
     return 0
 
 

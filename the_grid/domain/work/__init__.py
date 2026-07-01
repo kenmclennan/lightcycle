@@ -4,5 +4,6 @@ from the_grid.domain.work.status import Status
 from the_grid.domain.work.story import Story
 from the_grid.domain.work.task import Task
 from the_grid.domain.work.task_queue import TaskQueue
+from the_grid.domain.work.task_view import TaskView
 
-__all__ = ["Artifact", "Status", "Story", "Task", "TaskQueue"]
+__all__ = ["Artifact", "Status", "Story", "Task", "TaskQueue", "TaskView"]

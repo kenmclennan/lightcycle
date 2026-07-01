@@ -26,9 +26,9 @@ class TestShowTask(unittest.TestCase):
         s = FakeStore()
         tid = s.create_task("build: x", step="build", role="coder")
         view = ShowTaskUseCase(s).execute(ShowTaskInput(task=tid)).view
-        self.assertEqual(view["id"], tid)
-        self.assertEqual(view["title"], "build: x")
-        self.assertIn("story_artifacts", view)
+        self.assertEqual(view.task.id, tid)
+        self.assertEqual(view.task.title, "build: x")
+        self.assertIn("story_artifacts", view.as_dict())
 
 
 class TestTrace(unittest.TestCase):

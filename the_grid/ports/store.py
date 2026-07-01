@@ -22,7 +22,7 @@ class StorePort(ABC):
 
     @abstractmethod
     def task_view(self, tid):
-        """Return a task dict enriched with its story's artifacts."""
+        """Return a TaskView - the task plus its story's artifacts."""
 
     @abstractmethod
     def present_types(self, task):
