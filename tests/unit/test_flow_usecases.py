@@ -3,8 +3,8 @@ import unittest
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockInput,
                                        BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
-                                       CompleteInput, CompleteTaskUseCase, UnblockInput,
-                                       UnblockTaskUseCase)
+                                       CompleteInput, CompleteTaskUseCase, FlowCheckInput,
+                                       FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
 from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -129,6 +129,15 @@ class TestBlockTask(unittest.TestCase):
         t = s.get_task(bid)
         self.assertEqual(t.role, "human")
         self.assertEqual(t.needs, "decide X")
+
+
+class TestFlowCheck(unittest.TestCase):
+    def test_returns_owner_routes_and_analysis(self):
+        s = FakeStore()
+        resp = FlowCheckUseCase(flow_for(METAS, s)).execute(FlowCheckInput())
+        self.assertEqual(resp.owner["build"], "coder")
+        self.assertEqual(resp.routes["build"], {"done": "review"})
+        self.assertIn("ok", resp.analysis)
 
 
 class TestUnblockTask(unittest.TestCase):

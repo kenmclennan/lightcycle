@@ -46,9 +46,3 @@ class Flow:
             return None
         return Transition(from_step=step, outcome=outcome, to_step=target,
                           to_role=self._owner.get(target, "human"))
-
-    def owner_map(self):
-        return dict(self._owner)
-
-    def routes_map(self):
-        return {step: dict(rts) for step, rts in self._routes.items()}

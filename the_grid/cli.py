@@ -10,13 +10,13 @@ from the_grid.logrender import render_log_line
 
 from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
                                            WorklogInput, WorklogUseCase)
-from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, ListWorkers,
+from the_grid.application.inspect import (ActiveTasks, Backlog, Inbox, ListWorkers,
                                           Mine, Queue, ResolveLog, ShowTask, Status, Trace)
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockInput,
                                        BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
-                                       CompleteInput, CompleteTaskUseCase, UnblockInput,
-                                       UnblockTaskUseCase)
+                                       CompleteInput, CompleteTaskUseCase, FlowCheckInput,
+                                       FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
 from the_grid.application.intake import AddTask, CloseStory, FileStory, LinkArtifact
 from the_grid.application.pool import Sweep, Tick
 from the_grid.application.setup import InitGrid
@@ -265,8 +265,8 @@ def cmd_flow(argv):
     ap = argparse.ArgumentParser(prog="tg flow")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    result = FlowCheck(_flow()).execute()
-    owner, routes, an = result["owner"], result["routes"], result["analysis"]
+    resp = FlowCheckUseCase(_flow()).execute(FlowCheckInput())
+    owner, routes, an = resp.owner, resp.routes, resp.analysis
     steps, req, opt, prod = an["steps"], an["req"], an["opt"], an["prod"]
     entries, terminals = an["entries"], an["terminals"]
     unreachable, missing, dups, ok = an["unreachable"], an["missing"], an["dups"], an["ok"]
