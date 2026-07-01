@@ -641,11 +641,18 @@ def cmd_worklog(argv):
 
 def cmd_retro(argv):
     ap = argparse.ArgumentParser(prog="tg retro")
-    ap.add_argument("epic")
+    ap.add_argument("id", nargs="?", default=None, help="story or epic id")
+    ap.add_argument("--since", metavar="YYYY-MM-DD", help="aggregate tasks closed on/after date")
+    ap.add_argument("--last", type=int, metavar="N", help="aggregate last N closed epics")
     a = ap.parse_args(argv)
 
-    resp = RetroUseCase(_container.store, _flow()).execute(RetroInput(epic=a.epic))
-    print("== retro: %s  (N=%d) ==" % (resp.epic, resp.reflection_count))
+    flags = [a.id is not None, a.since is not None, a.last is not None]
+    if sum(flags) != 1:
+        ap.error("provide exactly one of: <id>, --since, --last")
+
+    inp = RetroInput(subject=a.id, since=a.since, last=a.last)
+    resp = RetroUseCase(_container.store, _flow()).execute(inp)
+    print("== retro: %s  (N=%d) ==" % (resp.subject, resp.reflection_count))
 
     if resp.feedback:
         print("\nFeedback (read it; an analyser agent can later):")

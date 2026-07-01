@@ -117,3 +117,11 @@ class StorePort(ABC):
     @abstractmethod
     def history(self, tid):
         """Return the raw history list for a task."""
+
+    @abstractmethod
+    def tasks_closed_since(self, since_date):
+        """Return all tasks (not stories) closed on/after since_date (YYYY-MM-DD string)."""
+
+    @abstractmethod
+    def last_n_closed_epics(self, n):
+        """Return the last N closed top-level stories (epics), ordered by closed_at descending."""

@@ -111,6 +111,53 @@ class TestBdStoreSmoke(unittest.TestCase):
         self.assertEqual(t.status, "needs-human")
         self.assertIn("needs a human", t.notes or "")
 
+    def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
+        s = self._store()
+        tid = s.create_task("build: x", step="build", role="coder")
+        s.close(tid, "done")
+        results = s.tasks_closed_since("2000-01-01")
+        self.assertIn(tid, [t.id for t in results])
+
+    def test_tasks_closed_since_excludes_open_tasks(self):
+        s = self._store()
+        s.create_task("open task", role="coder")
+        results = s.tasks_closed_since("2000-01-01")
+        self.assertEqual(results, [])
+
+    def test_tasks_closed_since_excludes_stories(self):
+        s = self._store()
+        sid = s.create_story("closed story")
+        s.close(sid, "merged")
+        results = s.tasks_closed_since("2000-01-01")
+        story_ids = [t.id for t in results]
+        self.assertNotIn(sid, story_ids)
+
+    def test_last_n_closed_epics_returns_top_level_closed_stories(self):
+        s = self._store()
+        epic1 = s.create_story("epic1")
+        s.close(epic1, "merged")
+        epic2 = s.create_story("epic2")
+        s.close(epic2, "merged")
+        results = s.last_n_closed_epics(1)
+        self.assertEqual(len(results), 1)
+
+    def test_last_n_closed_epics_excludes_open_stories(self):
+        s = self._store()
+        s.create_story("open epic")
+        results = s.last_n_closed_epics(10)
+        self.assertEqual(results, [])
+
+    def test_last_n_closed_epics_excludes_nested_stories(self):
+        s = self._store()
+        epic = s.create_story("epic")
+        child = s.create_story("child story", epic=epic)
+        s.close(epic, "merged")
+        s.close(child, "merged")
+        results = s.last_n_closed_epics(10)
+        result_ids = [t.id for t in results]
+        self.assertIn(epic, result_ids)
+        self.assertNotIn(child, result_ids)
+
 
 if __name__ == "__main__":
     unittest.main()
