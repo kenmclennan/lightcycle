@@ -159,5 +159,13 @@ class TestBdStoreSmoke(unittest.TestCase):
         self.assertNotIn(child, result_ids)
 
 
+    def test_all_tasks_returns_beyond_default_bd_limit(self):
+        s = self._store()
+        created = [s.create_task(f"task {i}", role="coder") for i in range(51)]
+        result_ids = {t.id for t in s.all_tasks()}
+        for tid in created:
+            self.assertIn(tid, result_ids)
+
+
 if __name__ == "__main__":
     unittest.main()
