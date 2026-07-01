@@ -26,10 +26,5 @@ class UnblockTaskUseCase:
         if not role or role == "human":
             raise UseCaseError(
                 "nothing to unblock: step '%s' has no agent owner" % (t.step or "(none)"))
-        cur = t.role
-        if cur and cur != role:
-            self._store.label_remove(input.task, "for:%s" % cur)
-        self._store.label_add(input.task, "for:%s" % role)
-        self._store.update_status(input.task, "open")
-        self._store.assign(input.task, "")
+        self._store.reassign(input.task, role)
         return UnblockResponse(role=role)

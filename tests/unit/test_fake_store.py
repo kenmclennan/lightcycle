@@ -269,18 +269,18 @@ class TestRouteToHuman(unittest.TestCase):
         self.tid = self.s.create_task("build: thing", step="build", role="coder")
 
     def test_routes_to_human(self):
-        self.s.route_to_human(self.tid, "needs review", "coder")
+        self.s.route_to_human(self.tid, "needs review")
         task = self.s.get_task(self.tid)
         self.assertEqual(task.role, "human")
         self.assertEqual(task.status, "needs-human")
         self.assertIsNone(self.s._beads[self.tid]["assignee"])
 
     def test_route_adds_note(self):
-        self.s.route_to_human(self.tid, "needs review", "coder")
+        self.s.route_to_human(self.tid, "needs review")
         self.assertIn("needs review", self.s.get_task(self.tid).notes)
 
     def test_route_removes_old_for_label(self):
-        self.s.route_to_human(self.tid, "blocked", "coder")
+        self.s.route_to_human(self.tid, "blocked")
         labels = self.s._beads[self.tid]["labels"]
         self.assertNotIn("for:coder", labels)
         self.assertIn("for:human", labels)
