@@ -11,6 +11,8 @@ from the_grid.ports.store import StorePort
 _BD_NOISE = ("bd --json output format will change", "beads.role not configured",
              "Fix: git config", "Or:  git config")
 
+_UNLIMITED = ("--limit", "0")
+
 
 def _is_noise(line):
     return any(n in line for n in _BD_NOISE)
@@ -65,7 +67,7 @@ class BdStore(StorePort):
         self._run("update", story_id, "--metadata", json.dumps(meta))
 
     def all_tasks(self):
-        return [bead_to_task(b) for b in self._json("list", "--json")]
+        return [bead_to_task(b) for b in self._json("list", *_UNLIMITED, "--json")]
 
     def get_task(self, tid):
         return bead_to_task(self._json("show", tid, "--json")[0])
@@ -92,7 +94,7 @@ class BdStore(StorePort):
         self.reassign(tid, "human")
 
     def closed_stories(self):
-        beads = self._json("list", "--status", "closed", "--json")
+        beads = self._json("list", "--status", "closed", *_UNLIMITED, "--json")
         result = []
         for b in beads:
             if b.get("issue_type") != "story":
@@ -177,13 +179,13 @@ class BdStore(StorePort):
         return [bead_to_task(b) for b in self._json("children", story_id, "--json")]
 
     def claimed_tasks(self):
-        return [bead_to_task(b) for b in self._json("list", "--status", "in_progress", "--json")]
+        return [bead_to_task(b) for b in self._json("list", "--status", "in_progress", *_UNLIMITED, "--json")]
 
     def history(self, tid):
         return self._json("history", tid, "--json")
 
     def tasks_closed_since(self, since_date):
-        beads = self._json("list", "--status", "closed", "--json")
+        beads = self._json("list", "--status", "closed", *_UNLIMITED, "--json")
         result = []
         for b in beads:
             if b.get("issue_type") != "task":
@@ -194,7 +196,7 @@ class BdStore(StorePort):
         return result
 
     def last_n_closed_epics(self, n):
-        beads = self._json("list", "--status", "closed", "--json")
+        beads = self._json("list", "--status", "closed", *_UNLIMITED, "--json")
         epics = [
             b for b in beads
             if b.get("issue_type") == "story"
