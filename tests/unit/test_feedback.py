@@ -2,8 +2,15 @@ import json
 import unittest
 
 from the_grid.application.feedback import Reflect, Retro
+from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+
+_METAS = {"reviewer": {"model": "opus", "step": "review", "signals": {"review_rounds": "rejected"}}}
+
+
+def _flow(store):
+    return FlowService(FakeFs(_METAS), store)
 
 
 class TestReflect(unittest.TestCase):
@@ -34,7 +41,7 @@ class TestRetro(unittest.TestCase):
         story = s.create_story("st", epic=epic)
         k = s.create_task("build: x", step="build", role="coder", parent=story)
         s.add_artifact(k, "reflection", json.dumps({"task": k, "feedback": "fb1", "spec_hash": "h"}))
-        digest = Retro(s).execute(epic)
+        digest = Retro(s, _flow(s)).execute(epic)
         self.assertEqual(digest["n"], 1)
         self.assertEqual(digest["feedback"][0]["feedback"], "fb1")
         self.assertEqual(len(digest["story_signals"]), 1)
@@ -44,7 +51,7 @@ class TestRetro(unittest.TestCase):
         s = FakeStore()
         epic = s.create_story("epic")
         s.create_story("st", epic=epic)
-        digest = Retro(s).execute(epic)
+        digest = Retro(s, _flow(s)).execute(epic)
         self.assertEqual(digest["n"], 0)
         self.assertEqual(digest["feedback"], [])
 

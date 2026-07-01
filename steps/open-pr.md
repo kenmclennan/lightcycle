@@ -7,6 +7,8 @@ produces:
   pr: required
 routes:
   done: watch-pr
+signals:
+  conflicts: ~conflict
 ---
 
 # Open-PR
