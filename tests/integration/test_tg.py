@@ -402,7 +402,7 @@ class TestSpawn(unittest.TestCase):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r)
 
-    def test_spawn_records_worker_and_log(self):
+    def test_spawn_records_worker_log_and_lists_in_ps(self):
         env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo started >> {log}")
         r = subprocess.run([sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -410,13 +410,8 @@ class TestSpawn(unittest.TestCase):
         self.assertEqual(len(workers), 1)
         self.assertEqual(workers[0]["role"], "coder")
         self.assertTrue(os.path.exists(workers[0]["log"]))
-
-    def test_ps_lists_worker(self):
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="sleep 0")
-        subprocess.run([sys.executable, TG, "spawn", "coder"], env=env, capture_output=True)
         r = subprocess.run([sys.executable, TG, "ps", "--json"], capture_output=True, text=True, env=env)
-        ps = json.loads(r.stdout)
-        self.assertEqual(ps[0]["role"], "coder")
+        self.assertEqual(json.loads(r.stdout)[0]["role"], "coder")
 
 
 class TestRun(unittest.TestCase):
@@ -921,17 +916,14 @@ class TestInitAndStoreGuard(unittest.TestCase):
         # init now seeds a config; keep it inside d so it can't pollute the suite.
         return os.path.join(d, "grid-config")
 
-    def test_init_creates_store(self):
+    def test_init_creates_store_and_is_idempotent(self):
         d = self._bare()
-        r = run_tg("init", root=d, config=self._cfg(d))
+        cfg = self._cfg(d)
+        r = run_tg("init", root=d, config=cfg)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.isdir(os.path.join(d, ".beads")))
-
-    def test_init_idempotent(self):
-        d = self._bare()
-        run_tg("init", root=d, config=self._cfg(d))
-        r = run_tg("init", root=d, config=self._cfg(d))
-        self.assertEqual(r.returncode, 0, r.stderr)
+        r2 = run_tg("init", root=d, config=cfg)
+        self.assertEqual(r2.returncode, 0, r2.stderr)
 
     def test_run_without_store_errors(self):
         d = self._bare()
