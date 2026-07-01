@@ -14,7 +14,7 @@ from the_grid.application.work import (ActiveTasksUseCase, AddTaskInput, AddTask
                                        BacklogInput, BacklogUseCase, CloseStoryInput,
                                        CloseStoryUseCase, FileStoryInput, FileStoryUseCase,
                                        InboxInput, InboxUseCase, LinkArtifactInput,
-                                       LinkArtifactUseCase, MineUseCase, QueueInput, QueueUseCase,
+                                       LinkArtifactUseCase, QueueInput, QueueUseCase,
                                        ShowTaskInput, ShowTaskUseCase, StatusUseCase, TraceInput,
                                        TraceUseCase)
 from the_grid.application.errors import UseCaseError
@@ -102,7 +102,6 @@ COMMAND_GROUPS = [
         ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),
         ("inbox", "[N]", "what needs you now: gates to clear and agents waiting on you"),
         ("backlog", "[N]", "backlog items to develop later (todo)"),
-        ("mine", "", "(deprecated) use tg inbox and tg backlog"),
         ("active", "", "tasks a worker is running right now"),
         ("queue", "[N]", "the next N ready/blocked agent tasks"),
         ("ps", "[--all] [--json]", "running workers (alive only; --all includes dead)"),
@@ -421,7 +420,7 @@ def cmd_sweep(argv):
 # ---- read views -------------------------------------------------------------
 
 
-def _print_mine_row(kind, t):
+def _print_human_row(kind, t):
     plan = next((art.value for art in t.artifacts if art.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
     print("%-9s %s  %s%s" % ("[%s]" % kind, t.id, t.title or t.step, extra))
@@ -432,7 +431,7 @@ def cmd_inbox(argv):
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
     for row in InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n)).rows:
-        _print_mine_row(row.kind, row.task)
+        _print_human_row(row.kind, row.task)
     return 0
 
 
@@ -441,14 +440,7 @@ def cmd_backlog(argv):
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
     for row in BacklogUseCase(_container.store, _flow()).execute(BacklogInput(n=a.n)).rows:
-        _print_mine_row(row.kind, row.task)
-    return 0
-
-
-def cmd_mine(argv):
-    sys.stderr.write("warning: 'tg mine' is deprecated; use 'tg inbox' and 'tg backlog'\n")
-    for row in MineUseCase(_container.store, _flow()).execute().rows:
-        _print_mine_row(row.kind, row.task)
+        _print_human_row(row.kind, row.task)
     return 0
 
 

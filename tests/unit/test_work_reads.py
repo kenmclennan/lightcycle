@@ -1,7 +1,7 @@
 import unittest
 
 from the_grid.application.work import (ActiveTasksUseCase, BacklogInput, BacklogUseCase,
-                                       InboxInput, InboxUseCase, MineUseCase, QueueInput,
+                                       InboxInput, InboxUseCase, QueueInput,
                                        QueueUseCase, ShowTaskInput, ShowTaskUseCase, StatusUseCase,
                                        TraceInput, TraceUseCase)
 from the_grid.application.services.flow import FlowService
@@ -90,7 +90,7 @@ class TestQueue(unittest.TestCase):
         self.assertEqual(len(QueueUseCase(s).execute(QueueInput()).tasks), 10)
 
 
-class TestInboxBacklogMine(unittest.TestCase):
+class TestInboxBacklog(unittest.TestCase):
     def _store(self):
         s = FakeStore()
         self.todo = s.create_task("todo item", role="human")          # no step -> backlog
@@ -108,14 +108,6 @@ class TestInboxBacklogMine(unittest.TestCase):
         ids = [row.task.id for row in BacklogUseCase(s, _empty_flow(s)).execute(BacklogInput()).rows]
         self.assertIn(self.todo, ids)
         self.assertNotIn(self.gate, ids)
-
-    def test_mine_combines_both_blocked_before_todo(self):
-        s = self._store()
-        rows = MineUseCase(s, _empty_flow(s)).execute().rows
-        kinds = [row.kind for row in rows]
-        self.assertEqual({row.task.id for row in rows}, {self.todo, self.gate})
-        self.assertLess(kinds.index("blocked"), kinds.index("todo"))
-
 
 if __name__ == "__main__":
     unittest.main()

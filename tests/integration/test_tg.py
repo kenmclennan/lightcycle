@@ -559,15 +559,6 @@ class TestAdd(unittest.TestCase):
         self.assertIsNone(t["step"])
         self.assertEqual(t["title"], "look at X later")
 
-    def test_add_shows_in_mine_not_queue(self):
-        call(_cli_mod.cmd_add, "remind me")
-        rc, mine_out, _ = call(_cli_mod.cmd_mine)
-        self.assertIn("remind me", mine_out)
-        # standalone human task must NOT be claimable by an agent
-        rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
-        self.assertEqual(out2.strip(), "")
-
-
 class TestArtifacts(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
@@ -1289,7 +1280,7 @@ class TestLogRender(unittest.TestCase):
         self.assertNotIn('"type"', r.stdout)  # raw JSON is not shown
 
 
-class TestMine(unittest.TestCase):
+class TestInboxBacklog(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
@@ -1304,34 +1295,6 @@ class TestMine(unittest.TestCase):
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
-
-    def test_mine_tags_orders_and_shows_context(self):
-        call(_cli_mod.cmd_add, "look at X")                                        # todo
-        sid = self.store.create_story("feat")
-        self.store.update_metadata(sid, {"artifacts": [{"type": "pr", "value": "http://pr/1"}]})
-        self.store.create_task("merge: y", step="ready-merge", role="human", parent=sid)  # action
-        b = self.store.create_task("build: z", step="build", role="human")
-        self.store.update_metadata(b, {"needs": "rebase first"})                   # blocked
-        _, out, _ = call(_cli_mod.cmd_mine)
-        for tag in ("[blocked]", "[action]", "[todo]"):
-            self.assertIn(tag, out)
-        self.assertIn("merge: y", out)
-        self.assertIn("look at X", out)
-        self.assertLess(out.index("[blocked]"), out.index("[action]"))
-        self.assertLess(out.index("[action]"), out.index("[todo]"))
-
-    def test_mine_shows_plan_doc_for_gate_task(self):
-        gate = self.store.create_task("review-plan: foo", step="ready-merge", role="human")
-        self.store.update_metadata(gate, {"artifacts": [{"type": "plan-doc", "value": "/tmp/plan.md"}]})
-        _, out, _ = call(_cli_mod.cmd_mine)
-        self.assertIn("plan:/tmp/plan.md", out)
-
-    def test_mine_emits_deprecation_warning(self):
-        call(_cli_mod.cmd_add, "remind me")
-        rc, out, err = call(_cli_mod.cmd_mine)
-        self.assertIn("deprecated", err)
-        self.assertIn("tg inbox", err)
-        self.assertIn("tg backlog", err)
 
     def test_inbox_shows_action_and_blocked_only(self):
         call(_cli_mod.cmd_add, "a seed")                                           # todo
@@ -1364,6 +1327,12 @@ class TestMine(unittest.TestCase):
         call(_cli_mod.cmd_add, "seed three")
         _, out, _ = call(_cli_mod.cmd_backlog, "2")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
+
+    def test_inbox_shows_plan_doc_for_gate_task(self):
+        tid = self.store.create_task("merge: gate", step="ready-merge", role="human")
+        self.store.add_artifact(tid, "plan-doc", "/docs/plan.md")
+        _, out, _ = call(_cli_mod.cmd_inbox)
+        self.assertIn("plan:/docs/plan.md", out)
 
 
 class TestReflect(unittest.TestCase):
