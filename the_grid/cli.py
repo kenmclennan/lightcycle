@@ -8,12 +8,12 @@ import time
 from the_grid.domain.contracts import FILE_PROVIDES
 from the_grid.logrender import render_log_line
 
+from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
+                                           WorklogInput, WorklogUseCase)
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, ListWorkers,
-                                          Mine, Queue, ResolveLog, ShowTask, Status, Trace,
-                                          Worklog)
+                                          Mine, Queue, ResolveLog, ShowTask, Status, Trace)
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import AdvanceTask, BlockTask, ClaimTask, CompleteTask, UnblockTask
-from the_grid.application.feedback import Reflect, Retro
 from the_grid.application.intake import AddTask, CloseStory, FileStory, LinkArtifact
 from the_grid.application.pool import Sweep, Tick
 from the_grid.application.setup import InitGrid
@@ -598,7 +598,8 @@ def cmd_reflect(argv):
                          "tooling friction, spec gaps - whatever is worth surfacing (your step "
                          "file says what to look for)")
     a = ap.parse_args(argv)
-    Reflect(_container.store, _container.fs).execute(a.id, a.feedback)
+    ReflectUseCase(_container.store, _container.fs).execute(
+        ReflectInput(task=a.id, feedback=a.feedback))
     print("reflected")
     return 0
 
@@ -612,13 +613,14 @@ def cmd_worklog(argv):
     now = _dt.datetime.now().astimezone()
     today, tz = now.date(), now.tzinfo
     args = [x for x in (a.start, a.end) if x is not None]
-    entries = Worklog(_container.store).execute(args, today, tz)
-    if not entries:
+    resp = WorklogUseCase(_container.store).execute(
+        WorklogInput(period_args=args, today=today, tz=tz))
+    if not resp.entries:
         print("no stories shipped in that period")
         return 0
-    for e in entries:
-        pr = "  %s" % e["pr"] if e["pr"] else ""
-        print("%s  %s  [%s]%s" % (e["id"], e["title"], e["outcome"] or "-", pr))
+    for e in resp.entries:
+        pr = "  %s" % e.pr if e.pr else ""
+        print("%s  %s  [%s]%s" % (e.id, e.title, e.outcome or "-", pr))
     return 0
 
 
@@ -627,20 +629,19 @@ def cmd_retro(argv):
     ap.add_argument("epic")
     a = ap.parse_args(argv)
 
-    digest = Retro(_container.store, _flow()).execute(a.epic)
-    print("== retro: %s  (N=%d) ==" % (digest["epic"], digest["n"]))
+    resp = RetroUseCase(_container.store, _flow()).execute(RetroInput(epic=a.epic))
+    print("== retro: %s  (N=%d) ==" % (resp.epic, resp.reflection_count))
 
-    if digest["feedback"]:
+    if resp.feedback:
         print("\nFeedback (read it; an analyser agent can later):")
-        for item in digest["feedback"]:
-            print("  [%s] %s" % (item["task"], item["feedback"]))
-    elif digest["n"] == 0:
+        for item in resp.feedback:
+            print("  [%s] %s" % (item.task, item.text))
+    elif resp.reflection_count == 0:
         print("no reflections yet - agents call `tg reflect --feedback` before `tg done`")
 
     print("\nPer-story signals:")
-    for row in digest["story_signals"]:
-        story, sigs, nrefs = row["story"], row["signals"], row["nrefs"]
-        sig_str = "  ".join("%s=%s" % (k, sigs[k]) for k in sorted(sigs))
-        print("  %-20s  %s  (N=%d)" % (story.id, sig_str, nrefs))
+    for row in resp.story_signals:
+        sig_str = "  ".join("%s=%s" % (k, row.signals[k]) for k in sorted(row.signals))
+        print("  %-20s  %s  (N=%d)" % (row.story.id, sig_str, row.reflections))
 
     return 0

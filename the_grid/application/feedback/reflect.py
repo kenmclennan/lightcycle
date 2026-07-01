@@ -1,10 +1,22 @@
 """Reflect: record freeform feedback on the task that produced it (for the retro)."""
 import json
+from dataclasses import dataclass
 
 from the_grid.domain.feedback import Reflection
 
 
-class Reflect:
+@dataclass(frozen=True)
+class ReflectInput:
+    task: str
+    feedback: str = ""
+
+
+@dataclass(frozen=True)
+class ReflectResponse:
+    reflection: Reflection
+
+
+class ReflectUseCase:
 
     def __init__(self, store, fs):
         self._store = store
@@ -18,7 +30,7 @@ class Reflect:
         data = self._fs.read_bytes(spec)
         return Reflection.spec_hash_of(data) if data is not None else "unknown"
 
-    def execute(self, tid, feedback=""):
-        reflection = Reflection.create(tid, feedback, self._spec_hash(tid))
-        self._store.add_artifact(tid, "reflection", json.dumps(reflection.as_dict()))
-        return reflection
+    def execute(self, input: ReflectInput) -> ReflectResponse:
+        reflection = Reflection.create(input.task, input.feedback, self._spec_hash(input.task))
+        self._store.add_artifact(input.task, "reflection", json.dumps(reflection.as_dict()))
+        return ReflectResponse(reflection=reflection)
