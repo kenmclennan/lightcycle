@@ -1,7 +1,6 @@
 import unittest
 
-from the_grid.application.inspect import ListWorkers, ResolveLog, Trace
-from tests.support.fake_store import FakeStore
+from the_grid.application.inspect import ListWorkers, ResolveLog
 
 
 class FakeWorkers:
@@ -47,20 +46,6 @@ class TestResolveLog(unittest.TestCase):
 
     def test_unknown_target_is_none(self):
         self.assertIsNone(ResolveLog(FakeWorkers(), FakeConfig()).execute("nope"))
-
-
-class TestTrace(unittest.TestCase):
-    def test_assembles_story_artifacts_tasks_and_logs(self):
-        s = FakeStore()
-        sid = s.create_story("st")
-        s.add_artifact(sid, "spec", "specs/x.md")
-        k = s.create_task("build: x", step="build", role="coder", parent=sid)
-        workers = FakeWorkers(workers=[{"role": "coder", "bead": k, "log": "/l/k.log"}])
-        out = Trace(s, workers).execute(sid)
-        self.assertEqual(out["story"]["id"], sid)
-        self.assertEqual(out["artifacts"][0]["type"], "spec")
-        self.assertEqual(out["tasks"][0]["id"], k)
-        self.assertEqual(out["tasks"][0]["log"], "/l/k.log")
 
 
 if __name__ == "__main__":

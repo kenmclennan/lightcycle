@@ -10,16 +10,19 @@ from the_grid.logrender import render_log_line
 
 from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
                                            WorklogInput, WorklogUseCase)
-from the_grid.application.inspect import ListWorkers, ResolveLog, ShowTask, Trace
-from the_grid.application.work import (ActiveTasksUseCase, BacklogInput, BacklogUseCase,
-                                       InboxInput, InboxUseCase, MineUseCase, QueueInput,
-                                       QueueUseCase, StatusUseCase)
+from the_grid.application.inspect import ListWorkers, ResolveLog
+from the_grid.application.work import (ActiveTasksUseCase, AddTaskInput, AddTaskUseCase,
+                                       BacklogInput, BacklogUseCase, CloseStoryInput,
+                                       CloseStoryUseCase, FileStoryInput, FileStoryUseCase,
+                                       InboxInput, InboxUseCase, LinkArtifactInput,
+                                       LinkArtifactUseCase, MineUseCase, QueueInput, QueueUseCase,
+                                       ShowTaskInput, ShowTaskUseCase, StatusUseCase, TraceInput,
+                                       TraceUseCase)
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockInput,
                                        BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
                                        CompleteInput, CompleteTaskUseCase, FlowCheckInput,
                                        FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
-from the_grid.application.intake import AddTask, CloseStory, FileStory, LinkArtifact
 from the_grid.application.pool import Sweep, Tick
 from the_grid.application.setup import InitGrid
 from the_grid.application.services.flow import FlowService
@@ -178,7 +181,7 @@ def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="tg show")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    print(json.dumps(ShowTask(_container.store).execute(a.id), indent=2))
+    print(json.dumps(ShowTaskUseCase(_container.store).execute(ShowTaskInput(task=a.id)).view, indent=2))
     return 0
 
 
@@ -360,7 +363,8 @@ def cmd_close(argv):
     ap.add_argument("story")
     ap.add_argument("reason")
     a = ap.parse_args(argv)
-    CloseStory(_container.store, _worktrees()).execute(a.story, a.reason)
+    CloseStoryUseCase(_container.store, _worktrees()).execute(
+        CloseStoryInput(story=a.story, reason=a.reason))
     print("closed %s (%s)" % (a.story, a.reason))
     return 0
 
@@ -372,7 +376,8 @@ def cmd_link(argv):
     ap.add_argument("value")
     ap.add_argument("--label")
     a = ap.parse_args(argv)
-    LinkArtifact(_container.store).execute(a.story, a.type, a.value, a.label)
+    LinkArtifactUseCase(_container.store).execute(
+        LinkArtifactInput(story=a.story, atype=a.type, value=a.value, label=a.label))
     return 0
 
 
@@ -381,7 +386,7 @@ def cmd_trace(argv):
     ap.add_argument("story")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    out = Trace(_container.store, _container.workers).execute(a.story)
+    out = TraceUseCase(_container.store, _container.workers).execute(TraceInput(story=a.story)).view
     story = out["story"]
     arts = out["artifacts"]
     tasks = out["tasks"]
@@ -462,14 +467,14 @@ def cmd_file(argv):
     ap.add_argument("--blocked-by", action="append", dest="blocked_by", metavar="ID")
     a = ap.parse_args(argv)
     try:
-        story = FileStory(_container.store, _flow(), _container.git, _container.fs,
-                          _container.config).execute(
-            a.spec, a.step, epic=a.epic, project=a.project, goal=a.goal,
-            repo=a.repo, blocked_by=a.blocked_by)
+        resp = FileStoryUseCase(_container.store, _flow(), _container.git, _container.fs,
+                                _container.config).execute(FileStoryInput(
+            spec=a.spec, step=a.step, epic=a.epic, project=a.project, goal=a.goal,
+            repo=a.repo, blocked_by=a.blocked_by))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    print(story)
+    print(resp.story)
     return 0
 
 
@@ -479,8 +484,9 @@ def cmd_add(argv):
     ap.add_argument("--goal")
     ap.add_argument("--project")
     a = ap.parse_args(argv)
-    new = AddTask(_container.store).execute(a.title, goal=a.goal, project=a.project)
-    print(new)
+    resp = AddTaskUseCase(_container.store).execute(
+        AddTaskInput(title=a.title, goal=a.goal, project=a.project))
+    print(resp.task)
     return 0
 
 

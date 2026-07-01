@@ -2,7 +2,8 @@ import unittest
 
 from the_grid.application.work import (ActiveTasksUseCase, BacklogInput, BacklogUseCase,
                                        InboxInput, InboxUseCase, MineUseCase, QueueInput,
-                                       QueueUseCase, StatusUseCase)
+                                       QueueUseCase, ShowTaskInput, ShowTaskUseCase, StatusUseCase,
+                                       TraceInput, TraceUseCase)
 from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -10,6 +11,38 @@ from tests.support.fake_store import FakeStore
 
 def _empty_flow(store):
     return FlowService(FakeFs({}), store)
+
+
+class _Workers:
+    def __init__(self, workers=None):
+        self._workers = workers or []
+
+    def workers_state(self):
+        return self._workers
+
+
+class TestShowTask(unittest.TestCase):
+    def test_returns_task_view(self):
+        s = FakeStore()
+        tid = s.create_task("build: x", step="build", role="coder")
+        view = ShowTaskUseCase(s).execute(ShowTaskInput(task=tid)).view
+        self.assertEqual(view["id"], tid)
+        self.assertEqual(view["title"], "build: x")
+        self.assertIn("story_artifacts", view)
+
+
+class TestTrace(unittest.TestCase):
+    def test_assembles_story_artifacts_tasks_and_logs(self):
+        s = FakeStore()
+        sid = s.create_story("st")
+        s.add_artifact(sid, "spec", "specs/x.md")
+        k = s.create_task("build: x", step="build", role="coder", parent=sid)
+        workers = _Workers([{"role": "coder", "bead": k, "log": "/l/k.log"}])
+        out = TraceUseCase(s, workers).execute(TraceInput(story=sid)).view
+        self.assertEqual(out["story"]["id"], sid)
+        self.assertEqual(out["artifacts"][0]["type"], "spec")
+        self.assertEqual(out["tasks"][0]["id"], k)
+        self.assertEqual(out["tasks"][0]["log"], "/l/k.log")
 
 
 class TestStatus(unittest.TestCase):
