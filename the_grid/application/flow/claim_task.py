@@ -5,11 +5,23 @@ absolute spec path), or None when nothing is ready or a required input is missin
 (in which case the task is routed to a human).
 """
 import os
+from dataclasses import dataclass
+from typing import Optional
 
 from the_grid.domain.contracts import StepContract
 
 
-class ClaimTask:
+@dataclass(frozen=True)
+class ClaimInput:
+    role: str
+
+
+@dataclass(frozen=True)
+class ClaimResponse:
+    view: dict
+
+
+class ClaimTaskUseCase:
 
     def __init__(self, store, flow, worktrees, workers, config):
         self._store = store
@@ -18,7 +30,8 @@ class ClaimTask:
         self._workers = workers
         self._config = config
 
-    def execute(self, role):
+    def execute(self, input: ClaimInput) -> Optional[ClaimResponse]:
+        role = input.role
         t = self._store.claim_ready(role)
         if t is None:
             return None
@@ -44,4 +57,4 @@ class ClaimTask:
         spec = next((a["value"] for a in view.get("story_artifacts", []) if a.get("type") == "spec"), None)
         if spec:
             view["spec_path"] = spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
-        return view
+        return ClaimResponse(view=view)
