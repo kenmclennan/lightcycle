@@ -3,7 +3,7 @@
 Fill up to GRID_MAX_AGENTS alive workers from the ready queue, one worker per
 uncovered ready task regardless of role (bd ready already hides blocked-by tasks,
 so declared dependencies are honoured for free). A worker that has spawned but
-not yet claimed (bead is None) within the boot window covers a task of its role,
+not yet claimed (task is None) within the boot window covers a task of its role,
 so the pool does not pile redundant workers onto one task. `now` is passed in
 (the caller owns the clock).
 """

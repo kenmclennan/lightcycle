@@ -10,8 +10,8 @@ def probe(alive_pids):
 class TestWorker(unittest.TestCase):
     def test_from_state_reads_the_registry_dict(self):
         w = Worker.from_state({"spawnid": "sp-1", "pid": 42, "role": "coder",
-                               "bead": "b-1", "started": 100})
-        self.assertEqual((w.spawnid, w.pid, w.role, w.bead, w.started), ("sp-1", 42, "coder", "b-1", 100))
+                               "task": "b-1", "started": 100})
+        self.assertEqual((w.spawnid, w.pid, w.role, w.task, w.started), ("sp-1", 42, "coder", "b-1", 100))
 
     def test_is_alive_delegates_to_probe(self):
         w = Worker(pid=42)
@@ -19,21 +19,21 @@ class TestWorker(unittest.TestCase):
         self.assertFalse(w.is_alive(probe(set())))
 
     def test_is_booting_when_unclaimed_within_window(self):
-        self.assertTrue(Worker(bead=None, started=100).is_booting(now=150, max_boot=120))
+        self.assertTrue(Worker(task=None, started=100).is_booting(now=150, max_boot=120))
 
     def test_not_booting_once_claimed(self):
-        self.assertFalse(Worker(bead="b-1", started=100).is_booting(now=150, max_boot=120))
+        self.assertFalse(Worker(task="b-1", started=100).is_booting(now=150, max_boot=120))
 
     def test_not_booting_past_the_window(self):
-        self.assertFalse(Worker(bead=None, started=100).is_booting(now=300, max_boot=120))
+        self.assertFalse(Worker(task=None, started=100).is_booting(now=300, max_boot=120))
 
 
 class TestWorkerPool(unittest.TestCase):
     def _pool(self):
         return WorkerPool.from_state([
-            {"spawnid": "live", "pid": 1, "role": "coder", "bead": None, "started": 100},
-            {"spawnid": "dead", "pid": 2, "role": "coder", "bead": None, "started": 100},
-            {"spawnid": "busy", "pid": 3, "role": "reviewer", "bead": "b-9", "started": 100},
+            {"spawnid": "live", "pid": 1, "role": "coder", "task": None, "started": 100},
+            {"spawnid": "dead", "pid": 2, "role": "coder", "task": None, "started": 100},
+            {"spawnid": "busy", "pid": 3, "role": "reviewer", "task": "b-9", "started": 100},
         ])
 
     def test_live_spawnids_only_counts_alive(self):
@@ -43,7 +43,7 @@ class TestWorkerPool(unittest.TestCase):
         self.assertEqual(self._pool().free_slots(4, probe({1, 3})), 2)
 
     def test_inflight_counts_alive_booting_by_role(self):
-        # live coder is booting; busy reviewer has a bead; dead (pid 2) is not alive
+        # live coder is booting; busy reviewer has a task; dead (pid 2) is not alive
         self.assertEqual(self._pool().inflight(probe({1, 3}), now=150, max_boot=120), {"coder": 1})
 
 

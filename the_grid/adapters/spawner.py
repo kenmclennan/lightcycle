@@ -42,7 +42,7 @@ def spawn_worker(config, role):
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=root, env=env)
     workers = workers_state(root)
     workers.append({"spawnid": spawnid, "role": role, "pid": proc.pid,
-                    "log": log, "bead": None, "started": time.time()})
+                    "log": log, "task": None, "started": time.time()})
     write_workers(root, workers)
     return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
 

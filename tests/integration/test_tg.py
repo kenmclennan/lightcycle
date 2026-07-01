@@ -369,11 +369,11 @@ class TestSweep(unittest.TestCase):
 
     def test_sweep_keeps_task_of_live_worker_before_stamp(self):
         # Reproduces the double-claim TOCTOU: a worker has claimed the task
-        # (assignee = its spawnid) but has not yet stamped its registry bead.
+        # (assignee = its spawnid) but has not yet stamped its registry task.
         # Sweep must NOT reclaim it - the owning worker is alive.
         b = self.store.create_task("build: t", step="build", role="coder")
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "bead": None}]))
+            [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "task": None}]))
         self.store.assign(b, "S")
         self.store.update_status(b, "in_progress")
         rc, out, err = call(_cli_mod.cmd_sweep)
@@ -385,7 +385,7 @@ class TestSweep(unittest.TestCase):
         dead = subprocess.Popen(["true"]); dead.wait()
         b = self.store.create_task("build: t", step="build", role="coder")
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "D", "role": "coder", "pid": dead.pid, "log": "x", "bead": b}]))
+            [{"spawnid": "D", "role": "coder", "pid": dead.pid, "log": "x", "task": b}]))
         self.store.assign(b, "D")
         self.store.update_status(b, "in_progress")
         rc, out, err = call(_cli_mod.cmd_sweep)
@@ -452,10 +452,10 @@ class TestRun(unittest.TestCase):
         self.assertIn(c, out)
 
     def test_run_skips_role_with_inflight_worker(self):
-        # A coder is already booting (alive, claimed nothing yet -> bead None) recently.
+        # A coder is already booting (alive, claimed nothing yet -> task None) recently.
         self.store.create_task("build: t", step="build", role="coder")
         self._preset_worker(spawnid="boot", role="coder", pid=os.getpid(), log="x",
-                            bead=None, started=time.time())
+                            task=None, started=time.time())
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 1)  # no second coder spawned
@@ -464,15 +464,15 @@ class TestRun(unittest.TestCase):
         # A worker stuck booting far longer than the max boot age must not block forever.
         self.store.create_task("build: t", step="build", role="coder")
         self._preset_worker(spawnid="stuck", role="coder", pid=os.getpid(), log="x",
-                            bead=None, started=time.time() - 9999)
+                            task=None, started=time.time() - 9999)
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 2)  # stale boot no longer blocks the role
 
     def test_run_spawns_when_prior_worker_already_claimed(self):
         self.store.create_task("build: t", step="build", role="coder")
-        # prior coder already claimed something (bead set) -> not inflight
-        self._preset_worker(spawnid="old", role="coder", pid=os.getpid(), log="x", bead="other-1")
+        # prior coder already claimed something (task set) -> not inflight
+        self._preset_worker(spawnid="old", role="coder", pid=os.getpid(), log="x", task="other-1")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 2)  # a fresh coder spawned for the ready task
@@ -889,8 +889,8 @@ class TestPruneWorkers(unittest.TestCase):
     def test_sweep_prunes_dead_keeps_live(self):
         dead = self._dead_pid()
         self._write([
-            {"spawnid": "a", "role": "coder", "pid": os.getpid(), "log": "x", "bead": None},
-            {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "bead": None},
+            {"spawnid": "a", "role": "coder", "pid": os.getpid(), "log": "x", "task": None},
+            {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "task": None},
         ])
         r = self._sweep(history=0)
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -899,7 +899,7 @@ class TestPruneWorkers(unittest.TestCase):
 
     def test_sweep_keeps_recent_dead_for_log_lookup(self):
         dead = self._dead_pid()
-        self._write([{"spawnid": "d%d" % i, "role": "coder", "pid": dead, "log": "l", "bead": None}
+        self._write([{"spawnid": "d%d" % i, "role": "coder", "pid": dead, "log": "l", "task": None}
                      for i in range(3)])
         self._sweep(history=2)
         ids = [w["spawnid"] for w in json.loads(self.wfile.read_text())]
@@ -1233,7 +1233,7 @@ class TestLogRender(unittest.TestCase):
         ]) + "\n")
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
             [{"spawnid": "x", "role": "coder", "pid": os.getpid(),
-              "log": str(self.log), "bead": None, "started": time.time()}]))
+              "log": str(self.log), "task": None, "started": time.time()}]))
 
     def test_logs_renders_stream_json(self):
         r = run_tg("logs", "coder", root=self.root)
