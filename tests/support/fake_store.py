@@ -15,11 +15,11 @@ def _new_id():
 class FakeStore(StorePort):
 
     def __init__(self):
-        self._beads = {}   # id -> raw bead dict
+        self._records = {}   # id -> raw bead dict
         self._deps = {}    # task_id -> set of blocking dep ids
         self._history = {} # id -> list of {"Issue": {"status": ...}} (newest first)
 
-    def _new_bead(self, **fields):
+    def _new_record(self, **fields):
         b = {
             "id": _new_id(), "title": "", "issue_type": "task",
             "labels": [], "status": "open", "assignee": None,
@@ -31,7 +31,7 @@ class FakeStore(StorePort):
 
     def _get(self, tid):
         try:
-            return self._beads[tid]
+            return self._records[tid]
         except KeyError:
             raise KeyError("bead not found: %s" % tid)
 
@@ -51,7 +51,7 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_tasks(self):
-        return [bead_to_task(b) for b in self._beads.values()]
+        return [bead_to_task(b) for b in self._records.values()]
 
     def get_task(self, tid):
         return bead_to_task(self._get(tid))
@@ -79,7 +79,7 @@ class FakeStore(StorePort):
 
     def closed_stories(self):
         result = []
-        for b in self._beads.values():
+        for b in self._records.values():
             if b.get("issue_type") != "story" or b.get("status") != "closed":
                 continue
             result.append({
@@ -92,8 +92,12 @@ class FakeStore(StorePort):
             })
         return result
 
-    def ensure_beads(self):
+    def ensure_store(self):
         pass
+
+    def reclaim(self, tid):
+        self.update_status(tid, "open")
+        self.assign(tid, "")
 
     def note(self, tid, text):
         b = self._get(tid)
@@ -107,7 +111,7 @@ class FakeStore(StorePort):
         b["closed_at"] = datetime.datetime.now().isoformat()
         for other_id, blockers in self._deps.items():
             if tid in blockers:
-                other = self._beads.get(other_id)
+                other = self._records.get(other_id)
                 if other and other.get("status") != "closed":
                     other["dependency_count"] = max(0, (other.get("dependency_count") or 0) - 1)
 
@@ -134,14 +138,14 @@ class FakeStore(StorePort):
         if task_id not in self._deps:
             self._deps[task_id] = set()
         self._deps[task_id].add(blocked_by)
-        blocker = self._beads.get(blocked_by)
+        blocker = self._records.get(blocked_by)
         if blocker and blocker.get("status") != "closed":
             b = self._get(task_id)
             b["dependency_count"] = (b.get("dependency_count") or 0) + 1
 
     def _ready_bead_dicts(self):
         return [
-            b for b in self._beads.values()
+            b for b in self._records.values()
             if b.get("status") == "open"
             and not b.get("assignee")
             and not (b.get("dependency_count") or 0)
@@ -165,14 +169,14 @@ class FakeStore(StorePort):
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None):
-        b = self._new_bead(
+        b = self._new_record(
             title=title,
             issue_type="task",
             parent=parent,
             labels=labels_for(role=role, step=step, project=project, goal=goal),
         )
         tid = b["id"]
-        self._beads[tid] = b
+        self._records[tid] = b
         self._deps[tid] = set()
         if deps:
             for dep in deps:
@@ -180,18 +184,18 @@ class FakeStore(StorePort):
         return tid
 
     def create_story(self, title, *, epic=None, project=None, goal=None):
-        b = self._new_bead(
+        b = self._new_record(
             title=title,
             issue_type="story",
             parent=epic,
             labels=labels_for(project=project, goal=goal),
         )
         tid = b["id"]
-        self._beads[tid] = b
+        self._records[tid] = b
         return tid
 
     def children(self, story_id):
-        return [bead_to_task(b) for b in self._beads.values() if b.get("parent") == story_id]
+        return [bead_to_task(b) for b in self._records.values() if b.get("parent") == story_id]
 
-    def list_beads_by_status(self, status):
-        return [b for b in self._beads.values() if b.get("status") == status]
+    def claimed_tasks(self):
+        return [bead_to_task(b) for b in self._records.values() if b.get("status") == "in_progress"]

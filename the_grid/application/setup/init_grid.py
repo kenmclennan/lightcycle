@@ -18,7 +18,7 @@ class InitGridUseCase:
 
     def execute(self) -> InitGridResponse:
         existed = self._fs.store_ready()
-        self._store.ensure_beads()
+        self._store.ensure_store()
         self._fs.ensure_logs_dir()
         created = self._config.ensure_config()
         return InitGridResponse(existed=existed, created=created,

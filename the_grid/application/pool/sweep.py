@@ -26,11 +26,9 @@ class SweepUseCase:
         live = WorkerPool.from_state(self._workers.workers_state()).live_spawnids(
             self._workers.pid_alive)
         swept = []
-        for bead in self._store.list_beads_by_status("in_progress"):
-            if bead.get("assignee") in live:
+        for t in self._store.claimed_tasks():
+            if t.claimed_by in live:
                 continue
-            bid = bead["id"]
-            self._store.update_status(bid, "open")
-            self._store.assign(bid, "")
-            swept.append(bid)
+            self._store.reclaim(t.id)
+            swept.append(t.id)
         return SweepResponse(swept=swept, pruned=self._workers.prune_workers())

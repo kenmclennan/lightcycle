@@ -57,4 +57,5 @@ def bead_to_task(bead):
         outcome=bead.get("close_reason"),
         deps=bead.get("dependency_count") or 0,
         notes=bead.get("notes"),
+        claimed_by=bead.get("assignee"),
     )

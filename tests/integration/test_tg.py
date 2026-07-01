@@ -268,7 +268,7 @@ class TestClaim(unittest.TestCase):
                 os.environ.pop("GRID_SPAWNID", None)
             else:
                 os.environ["GRID_SPAWNID"] = old
-        self.assertEqual(self.store._beads[b].get("assignee"), "spawn-xyz")
+        self.assertEqual(self.store._records[b].get("assignee"), "spawn-xyz")
 
 
 class TestFlow(unittest.TestCase):
@@ -302,19 +302,19 @@ class TestDoneBlock(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
-        self.assertEqual(self.store._beads[b]["status"], "closed")
+        self.assertEqual(self.store._records[b]["status"], "closed")
 
     def test_done_unknown_outcome_errors_without_closing(self):
         b = self.store.create_task("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "banana")
         self.assertEqual(rc, 1)
-        self.assertEqual(self.store._beads[b]["status"], "open")
+        self.assertEqual(self.store._records[b]["status"], "open")
 
     def test_block_writes_metadata_and_routes_human(self):
         b = self.store.create_task("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_block, b, "--branch", "grid/x", "--needs", "confirm aud")
         self.assertEqual(rc, 0, err)
-        bead = self.store._beads[b]
+        bead = self.store._records[b]
         self.assertEqual(bead["metadata"]["branch"], "grid/x")
         self.assertEqual(bead["metadata"]["needs"], "confirm aud")
         self.assertIn("for:human", bead["labels"])
@@ -327,7 +327,7 @@ class TestDoneBlock(unittest.TestCase):
         self.store.claim_ready("coder")
         rc, out, err = call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         self.assertEqual(rc, 0, err)
-        bead = self.store._beads[b]
+        bead = self.store._records[b]
         self.assertIn(bead.get("assignee"), (None, ""))
         rc2, inbox_out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn(b, inbox_out)
@@ -364,8 +364,8 @@ class TestSweep(unittest.TestCase):
         self.store.claim_ready("coder")  # sets status="in_progress", assignee="coder"
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._beads[b]["status"], "open")
-        self.assertIn(self.store._beads[b].get("assignee"), (None, ""))
+        self.assertEqual(self.store._records[b]["status"], "open")
+        self.assertIn(self.store._records[b].get("assignee"), (None, ""))
 
     def test_sweep_keeps_task_of_live_worker_before_stamp(self):
         # Reproduces the double-claim TOCTOU: a worker has claimed the task
@@ -378,8 +378,8 @@ class TestSweep(unittest.TestCase):
         self.store.update_status(b, "in_progress")
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._beads[b]["status"], "in_progress")
-        self.assertEqual(self.store._beads[b].get("assignee"), "S")
+        self.assertEqual(self.store._records[b]["status"], "in_progress")
+        self.assertEqual(self.store._records[b].get("assignee"), "S")
 
     def test_sweep_reclaims_dead_worker_claim(self):
         dead = subprocess.Popen(["true"]); dead.wait()
@@ -390,7 +390,7 @@ class TestSweep(unittest.TestCase):
         self.store.update_status(b, "in_progress")
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._beads[b]["status"], "open")
+        self.assertEqual(self.store._records[b]["status"], "open")
 
 
 class TestSpawn(unittest.TestCase):
@@ -602,7 +602,7 @@ class TestFileStory(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         self.assertTrue(sid)
-        story_bead = self.store._beads[sid]
+        story_bead = self.store._records[sid]
         self.assertEqual(story_bead["issue_type"], "story")
         self.assertEqual(story_bead["metadata"]["artifacts"][0]["value"], "specs/HSS-435.md")
         kids = self.store.children(sid)
@@ -814,7 +814,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.strip(), "")  # not claimed
-        bead = self.store._beads[b]
+        bead = self.store._records[b]
         self.assertIn("for:human", bead["labels"])
         self.assertNotIn("for:coder", bead["labels"])
         self.assertEqual(bead["status"], "open")
@@ -835,7 +835,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
         self.assertEqual(rc2, 1)
         self.assertIn("branch", err2)
-        self.assertEqual(self.store._beads[task]["status"], "open")
+        self.assertEqual(self.store._records[task]["status"], "open")
 
     def test_done_succeeds_when_output_present(self):
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
@@ -844,7 +844,7 @@ class TestArtifactContracts(unittest.TestCase):
         call(_cli_mod.cmd_link, sid, "branch", "grid/x")
         rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
         self.assertEqual(rc2, 0, err2)
-        self.assertEqual(self.store._beads[task]["status"], "closed")
+        self.assertEqual(self.store._records[task]["status"], "closed")
 
     def test_file_rejects_non_entry_step(self):
         rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "review")
@@ -1110,12 +1110,12 @@ class TestNamedRepo(unittest.TestCase):
         self.assertEqual(repos, ["app"])
 
     def test_file_rejects_unknown_repo(self):
-        before = len(self.store._beads)
+        before = len(self.store._records)
         rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
                             "--repo", "does-not-exist")
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
-        self.assertEqual(len(self.store._beads), before)
+        self.assertEqual(len(self.store._records), before)
 
 
 class TestUnblock(unittest.TestCase):
@@ -1128,7 +1128,7 @@ class TestUnblock(unittest.TestCase):
         call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         rc, out, err = call(_cli_mod.cmd_unblock, b)
         self.assertEqual(rc, 0, err)
-        bead = self.store._beads[b]
+        bead = self.store._records[b]
         self.assertIn("for:coder", bead["labels"])
         self.assertNotIn("for:human", bead["labels"])
         self.assertEqual(bead["status"], "open")
@@ -1175,8 +1175,8 @@ class TestClose(unittest.TestCase):
         build = self.store.children(sid)[0].id
         rc, _, err = call(_cli_mod.cmd_close, sid, "merged")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._beads[sid]["status"], "closed")
-        self.assertEqual(self.store._beads[build]["status"], "closed")
+        self.assertEqual(self.store._records[sid]["status"], "closed")
+        self.assertEqual(self.store._records[build]["status"], "closed")
         self.assertFalse(os.path.isdir(ws))
         self.assertFalse(self._has_branch(self.root, "feat/w"))
 
