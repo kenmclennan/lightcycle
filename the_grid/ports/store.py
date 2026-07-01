@@ -81,20 +81,21 @@ class StorePort(ABC):
         """Atomically claim the next ready task for role. Returns a Task, or None."""
 
     @abstractmethod
-    def create_task(self, title, *, step=None, role=None, parent=None, deps=None, labels=None):
-        """Create a task bead and return its id.
+    def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
+                    project=None, goal=None):
+        """Create a task and return its id.
 
-        step and role, if given, are encoded as for:role and step:step labels.
-        deps is a list of task ids this task depends on.
-        labels is a list of extra label strings.
+        role/step/project/goal are structured attributes; the adapter encodes them
+        (the application does not build label strings). deps is a list of task ids
+        this task depends on.
         """
 
     @abstractmethod
-    def create_story(self, title, *, epic=None, labels=None):
-        """Create a story bead and return its id.
+    def create_story(self, title, *, epic=None, project=None, goal=None):
+        """Create a story and return its id.
 
-        epic, if given, is the parent story id.
-        labels is a list of label strings.
+        epic, if given, is the parent story id. project/goal are structured
+        attributes the adapter encodes.
         """
 
     @abstractmethod

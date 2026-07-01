@@ -29,10 +29,12 @@ class TestLabels(unittest.TestCase):
         self.s.label_add(self.tid, "tag:x")
         self.assertEqual(self.s._beads[self.tid]["labels"].count("tag:x"), 1)
 
-    def test_extra_labels_passed_to_create_task(self):
-        tid = self.s.create_task("build: y", role="reviewer", labels=["project:foo"])
+    def test_structured_attrs_encoded_on_create_task(self):
+        tid = self.s.create_task("build: y", role="reviewer", project="foo", goal="ship")
         task = self.s.get_task(tid)
         self.assertEqual(task.project, "foo")
+        self.assertEqual(task.goal, "ship")
+        self.assertEqual(task.role, "reviewer")
 
 
 class TestAssignee(unittest.TestCase):

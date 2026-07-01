@@ -29,6 +29,20 @@ def _status_of(bead, role):
     return Status.READY
 
 
+def labels_for(*, role=None, step=None, project=None, goal=None):
+    """Encode structured task/story attributes as bd labels (the write-side mapping)."""
+    parts = []
+    if role:
+        parts.append("for:%s" % role)
+    if step:
+        parts.append("step:%s" % step)
+    if project:
+        parts.append("project:%s" % project)
+    if goal:
+        parts.append("goal:%s" % goal)
+    return parts
+
+
 def bead_to_task(bead):
     role = _label_value(bead, "for:")
     meta = bead.get("metadata") or {}
