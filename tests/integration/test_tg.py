@@ -228,13 +228,13 @@ class TestModel(unittest.TestCase):
         self.assertEqual(t["type"], "task")
         self.assertEqual(t["status"], "ready")
 
-    def test_status_buckets_json(self):
+    def test_status_lanes_json(self):
         h = self.store.create_task("spec: x", step="spec", role="human")
         c = self.store.create_task("build: y", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_status, "--json")
         self.assertEqual(rc, 0, err)
         s = json.loads(out)
-        self.assertIn(h, [t["id"] for t in s["mine"]])
+        self.assertIn(h, [t["id"] for t in s["inbox"]])
         self.assertIn(c, [t["id"] for t in s["queue"]])
 
 
@@ -554,7 +554,7 @@ class TestCompositionRoot(unittest.TestCase):
             ret = _cli_mod.cmd_status(["--json"])
         self.assertEqual(ret, 0)
         s = json.loads(buf.getvalue())
-        self.assertIn("mine", s)
+        self.assertIn("inbox", s)
 
     def test_store_is_replaced_and_restored(self):
         self.assertIs(_cli_mod._container.store, self.store)

@@ -21,5 +21,6 @@ class QueueUseCase:
         self._store = store
 
     def execute(self, input: QueueInput) -> QueueResponse:
-        queue = TaskQueue(self._store.all_tasks())
-        return QueueResponse(tasks=(queue.by_status("ready") + queue.by_status("blocked"))[:input.n])
+        ready_ids = {t.id for t in self._store.ready_tasks()}
+        lanes = TaskQueue(self._store.all_tasks()).by_lane(ready_ids)
+        return QueueResponse(tasks=(lanes["queue"] + lanes["blocked"])[:input.n])

@@ -99,7 +99,7 @@ COMMAND_GROUPS = [
         ("driver", "", "open the interactive driver - your seat to shape and file work"),
     ]),
     ("See what's happening", [
-        ("status", "[--json]", "all buckets at once: inbox / active / queue / blocked"),
+        ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),
         ("inbox", "[N]", "what needs you now: gates to clear and agents waiting on you"),
         ("backlog", "[N]", "backlog items to develop later (todo)"),
         ("mine", "", "(deprecated) use tg inbox and tg backlog"),
@@ -594,14 +594,13 @@ def cmd_status(argv):
     ap = argparse.ArgumentParser(prog="tg status")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    buckets = StatusUseCase(_container.store).execute().buckets
+    lanes = StatusUseCase(_container.store).execute().lanes
     if a.json:
-        print(json.dumps({k: [t.as_dict() for t in v] for k, v in buckets.items()}, indent=2))
+        print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
     else:
-        for display, key in (("inbox", "mine"), ("active", "active"),
-                              ("queue", "queue"), ("blocked", "blocked")):
-            print("== %s (%d) ==" % (display, len(buckets[key])))
-            for t in buckets[key]:
+        for key in ("inbox", "active", "queue", "blocked"):
+            print("== %s (%d) ==" % (key, len(lanes[key])))
+            for t in lanes[key]:
                 print("  %s  %s" % (t.id, t.title))
     return 0
 
