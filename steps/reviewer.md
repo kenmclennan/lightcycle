@@ -9,6 +9,7 @@ routes:
   rejected: build
 signals:
   review_rounds: rejected
+  resets: rejected
 ---
 
 # Reviewer
