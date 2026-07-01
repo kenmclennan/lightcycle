@@ -16,18 +16,18 @@ class TestLabels(unittest.TestCase):
 
     def test_label_add_roundtrip(self):
         self.s.label_add(self.tid, "priority:high")
-        raw = self.s._beads[self.tid]
+        raw = self.s._records[self.tid]
         self.assertIn("priority:high", raw["labels"])
 
     def test_label_remove(self):
         self.s.label_add(self.tid, "tag:x")
         self.s.label_remove(self.tid, "tag:x")
-        self.assertNotIn("tag:x", self.s._beads[self.tid]["labels"])
+        self.assertNotIn("tag:x", self.s._records[self.tid]["labels"])
 
     def test_label_add_idempotent(self):
         self.s.label_add(self.tid, "tag:x")
         self.s.label_add(self.tid, "tag:x")
-        self.assertEqual(self.s._beads[self.tid]["labels"].count("tag:x"), 1)
+        self.assertEqual(self.s._records[self.tid]["labels"].count("tag:x"), 1)
 
     def test_structured_attrs_encoded_on_create_task(self):
         tid = self.s.create_task("build: y", role="reviewer", project="foo", goal="ship")
@@ -54,7 +54,7 @@ class TestAssignee(unittest.TestCase):
     def test_assign_none_clears(self):
         self.s.assign(self.tid, "worker-1")
         self.s.assign(self.tid, None)
-        self.assertIsNone(self.s._beads[self.tid]["assignee"])
+        self.assertIsNone(self.s._records[self.tid]["assignee"])
 
 
 class TestClose(unittest.TestCase):
@@ -105,7 +105,7 @@ class TestParentChildren(unittest.TestCase):
         self.assertEqual(len(kids), 1)
         self.assertEqual(kids[0].id, self.task)
 
-    def test_children_excludes_other_beads(self):
+    def test_children_excludes_other_records(self):
         other_story = self.s.create_story("story: bar")
         self.s.create_task("build: bar", parent=other_story)
         self.assertEqual(len(self.s.children(self.story)), 1)
@@ -227,21 +227,14 @@ class TestListBeads(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
 
-    def test_list_by_status_open(self):
-        t1 = self.s.create_task("build: a")
-        t2 = self.s.create_task("build: b")
-        self.s.close(t2, "done")
-        open_ids = [b["id"] for b in self.s.list_beads_by_status("open")]
-        self.assertIn(t1, open_ids)
-        self.assertNotIn(t2, open_ids)
-
-    def test_list_by_status_closed(self):
-        t1 = self.s.create_task("build: a")
-        t2 = self.s.create_task("build: b")
-        self.s.close(t2, "done")
-        closed_ids = [b["id"] for b in self.s.list_beads_by_status("closed")]
-        self.assertIn(t2, closed_ids)
-        self.assertNotIn(t1, closed_ids)
+    def test_claimed_tasks_are_in_progress_with_claimer(self):
+        claimed = self.s.create_task("build: a", role="coder")
+        self.s.create_task("build: b", role="coder")  # ready, not claimed
+        self.s.update_status(claimed, "in_progress")
+        self.s.assign(claimed, "sp-1")
+        got = self.s.claimed_tasks()
+        self.assertEqual([t.id for t in got], [claimed])
+        self.assertEqual(got[0].claimed_by, "sp-1")
 
     def test_closed_stories_roundtrip(self):
         sid = self.s.create_story("story: foo")
@@ -273,7 +266,7 @@ class TestRouteToHuman(unittest.TestCase):
         task = self.s.get_task(self.tid)
         self.assertEqual(task.role, "human")
         self.assertEqual(task.status, "needs-human")
-        self.assertIsNone(self.s._beads[self.tid]["assignee"])
+        self.assertIsNone(self.s._records[self.tid]["assignee"])
 
     def test_route_adds_note(self):
         self.s.route_to_human(self.tid, "needs review")
@@ -281,7 +274,7 @@ class TestRouteToHuman(unittest.TestCase):
 
     def test_route_removes_old_for_label(self):
         self.s.route_to_human(self.tid, "blocked")
-        labels = self.s._beads[self.tid]["labels"]
+        labels = self.s._records[self.tid]["labels"]
         self.assertNotIn("for:coder", labels)
         self.assertIn("for:human", labels)
 

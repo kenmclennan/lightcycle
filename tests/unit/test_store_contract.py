@@ -15,7 +15,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         tid = s.create_task("t", role="coder")
         s.label_add(tid, "for:coder")
         s.label_add(tid, "for:coder")
-        self.assertEqual(s._beads[tid]["labels"].count("for:coder"), 1)
+        self.assertEqual(s._records[tid]["labels"].count("for:coder"), 1)
 
     def test_assign_clear_returns_to_ready(self):
         s = self.make_store()
@@ -55,7 +55,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         s.create_story("story: foo")
         self.assertEqual(s.ready_tasks(), [])
 
-    def test_children_returns_child_beads(self):
+    def test_children_returns_child_records(self):
         s = self.make_store()
         sid = s.create_story("story: foo")
         tid = s.create_task("task: t", parent=sid)
@@ -71,16 +71,16 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         view = s.task_view(tid)
         self.assertTrue(any(a.type == "branch" for a in view.story_artifacts))
 
-    def test_list_beads_by_status(self):
+    def test_claimed_tasks(self):
         s = self.make_store()
-        open_tid = s.create_task("open")
-        closed_tid = s.create_task("closed")
-        s.close(closed_tid, "done")
-        open_ids = [b["id"] for b in s.list_beads_by_status("open")]
-        closed_ids = [b["id"] for b in s.list_beads_by_status("closed")]
-        self.assertIn(open_tid, open_ids)
-        self.assertNotIn(closed_tid, open_ids)
-        self.assertIn(closed_tid, closed_ids)
+        claimed = s.create_task("t", role="coder")
+        s.update_status(claimed, "in_progress")
+        s.assign(claimed, "sp-x")
+        ready = s.create_task("ready", role="coder")
+        got = s.claimed_tasks()
+        self.assertEqual([t.id for t in got], [claimed])
+        self.assertEqual(got[0].claimed_by, "sp-x")
+        self.assertNotIn(ready, [t.id for t in got])
 
     def test_closed_stories_roundtrip(self):
         s = self.make_store()

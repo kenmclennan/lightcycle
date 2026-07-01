@@ -107,12 +107,16 @@ class BdStore(StorePort):
             })
         return result
 
-    def ensure_beads(self):
+    def ensure_store(self):
         root = self._config.grid_root()
         if os.path.isdir(os.path.join(root, ".beads", "embeddeddolt")):
             return
         subprocess.run(["bd", "init", "--skip-agents", "--skip-hooks",
                         "--non-interactive", "--quiet"], cwd=root, check=True)
+
+    def reclaim(self, tid):
+        self.update_status(tid, "open")
+        self.assign(tid, "")
 
     def note(self, tid, text):
         self._run("note", tid, text)
@@ -172,8 +176,8 @@ class BdStore(StorePort):
     def children(self, story_id):
         return [bead_to_task(b) for b in self._json("children", story_id, "--json")]
 
-    def list_beads_by_status(self, status):
-        return self._json("list", "--status", status, "--json")
+    def claimed_tasks(self):
+        return [bead_to_task(b) for b in self._json("list", "--status", "in_progress", "--json")]
 
     def history(self, tid):
         return self._json("history", tid, "--json")

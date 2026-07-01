@@ -39,9 +39,9 @@ class RetroUseCase:
         self._store = store
         self._flow = flow
 
-    def _reflections_of(self, bead_id):
+    def _reflections_of(self, subject_id):
         out = []
-        for art in self._store.story_artifacts(bead_id):
+        for art in self._store.story_artifacts(subject_id):
             if art.type == "reflection":
                 try:
                     out.append(cfeedback.Reflection.from_dict(json.loads(art.value)))

@@ -41,8 +41,12 @@ class StorePort(ABC):
         """Return closed stories shaped for core.worklog."""
 
     @abstractmethod
-    def ensure_beads(self):
-        """Initialise the bd store if not already present."""
+    def ensure_store(self):
+        """Initialise the task store if not already present."""
+
+    @abstractmethod
+    def reclaim(self, tid):
+        """Release a task's claim - reset it to ready (open, unclaimed)."""
 
     @abstractmethod
     def note(self, tid, text):
@@ -107,8 +111,8 @@ class StorePort(ABC):
         """Return the child tasks of a story as Task entities."""
 
     @abstractmethod
-    def list_beads_by_status(self, status):
-        """Return all beads with the given status as raw dicts."""
+    def claimed_tasks(self):
+        """Return the tasks currently claimed by a worker (each carries claimed_by)."""
 
     @abstractmethod
     def history(self, tid):

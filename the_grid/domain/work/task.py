@@ -22,6 +22,7 @@ class Task:
     outcome: Optional[str] = None
     deps: int = 0
     notes: Optional[str] = None
+    claimed_by: Optional[str] = None
 
     def classify_for_human(self, flow):
         """Classify this for:human task for tg inbox / tg backlog as (kind, outcomes):
