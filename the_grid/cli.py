@@ -10,8 +10,10 @@ from the_grid.logrender import render_log_line
 
 from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
                                            WorklogInput, WorklogUseCase)
-from the_grid.application.inspect import (ActiveTasks, Backlog, Inbox, ListWorkers,
-                                          Mine, Queue, ResolveLog, ShowTask, Status, Trace)
+from the_grid.application.inspect import ListWorkers, ResolveLog, ShowTask, Trace
+from the_grid.application.work import (ActiveTasksUseCase, BacklogInput, BacklogUseCase,
+                                       InboxInput, InboxUseCase, MineUseCase, QueueInput,
+                                       QueueUseCase, StatusUseCase)
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockInput,
                                        BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
@@ -413,8 +415,8 @@ def cmd_inbox(argv):
     ap = argparse.ArgumentParser(prog="tg inbox")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    for (kind, _outcomes), t in Inbox(_container.store, _flow()).execute(a.n):
-        _print_mine_row(kind, t)
+    for row in InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n)).rows:
+        _print_mine_row(row.kind, row.task)
     return 0
 
 
@@ -422,20 +424,20 @@ def cmd_backlog(argv):
     ap = argparse.ArgumentParser(prog="tg backlog")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    for (kind, _outcomes), t in Backlog(_container.store, _flow()).execute(a.n):
-        _print_mine_row(kind, t)
+    for row in BacklogUseCase(_container.store, _flow()).execute(BacklogInput(n=a.n)).rows:
+        _print_mine_row(row.kind, row.task)
     return 0
 
 
 def cmd_mine(argv):
     sys.stderr.write("warning: 'tg mine' is deprecated; use 'tg inbox' and 'tg backlog'\n")
-    for (kind, _outcomes), t in Mine(_container.store, _flow()).execute():
-        _print_mine_row(kind, t)
+    for row in MineUseCase(_container.store, _flow()).execute().rows:
+        _print_mine_row(row.kind, row.task)
     return 0
 
 
 def cmd_active(argv):
-    for t in ActiveTasks(_container.store).execute():
+    for t in ActiveTasksUseCase(_container.store).execute().tasks:
         print("  %s  %s" % (t.id, t.title))
     return 0
 
@@ -444,7 +446,7 @@ def cmd_queue(argv):
     ap = argparse.ArgumentParser(prog="tg queue")
     ap.add_argument("n", nargs="?", type=int, default=10)
     a = ap.parse_args(argv)
-    for t in Queue(_container.store).execute(a.n):
+    for t in QueueUseCase(_container.store).execute(QueueInput(n=a.n)).tasks:
         print("  %-8s %s  %s" % (t.status, t.id, t.title))
     return 0
 
@@ -580,7 +582,7 @@ def cmd_status(argv):
     ap = argparse.ArgumentParser(prog="tg status")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    buckets = Status(_container.store).execute()
+    buckets = StatusUseCase(_container.store).execute().buckets
     if a.json:
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in buckets.items()}, indent=2))
     else:
