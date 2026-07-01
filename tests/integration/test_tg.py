@@ -653,8 +653,8 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertTrue(out2.strip())  # now claimable
 
     def test_multiple_blocked_by_ids(self):
-        gate1 = self.store.create_task("gate1", labels=["for:human"])
-        gate2 = self.store.create_task("gate2", labels=["for:human"])
+        gate1 = self.store.create_task("gate1", role="human")
+        gate2 = self.store.create_task("gate2", role="human")
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
                           "--blocked-by", gate1, "--blocked-by", gate2)
         sid = out.strip()

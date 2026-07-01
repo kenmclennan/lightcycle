@@ -55,12 +55,8 @@ class FileStoryUseCase:
             avail = ", ".join(self._available_repos()) or "(none)"
             raise UseCaseError("unknown repo '%s'; available repos: %s" % (input.repo, avail))
         base = os.path.splitext(os.path.basename(input.spec))[0]
-        labels = []
-        if input.project:
-            labels.append("project:%s" % input.project)
-        if input.goal:
-            labels.append("goal:%s" % input.goal)
-        story = self._store.create_story(base, epic=input.epic, labels=labels or None)
+        story = self._store.create_story(base, epic=input.epic,
+                                         project=input.project, goal=input.goal)
         self._store.add_artifact(story, "spec", input.spec)
         if input.repo:
             self._store.add_artifact(story, "repo", input.repo)

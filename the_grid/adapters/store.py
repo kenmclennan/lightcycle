@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-from the_grid.adapters.bead import bead_to_task
+from the_grid.adapters.bead import bead_to_task, labels_for
 from the_grid.domain.work import Artifact
 from the_grid.ports.store import StorePort
 
@@ -143,17 +143,12 @@ class BdStore(StorePort):
         arr = self._json("ready", "--label", "for:%s" % role, "--claim", "--json")
         return bead_to_task(arr[0]) if arr else None
 
-    def create_task(self, title, *, step=None, role=None, parent=None, deps=None, labels=None):
+    def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
+                    project=None, goal=None):
         args = ["create", title, "-t", "task"]
-        all_labels = list(labels or [])
-        if step and role:
-            all_labels = ["for:%s,step:%s" % (role, step)] + all_labels
-        elif role:
-            all_labels = ["for:%s" % role] + all_labels
-        elif step:
-            all_labels = ["step:%s" % step] + all_labels
-        if all_labels:
-            args += ["-l", ",".join(all_labels)]
+        labels = labels_for(role=role, step=step, project=project, goal=goal)
+        if labels:
+            args += ["-l", ",".join(labels)]
         if parent:
             args += ["--parent", parent]
         if deps:
@@ -162,10 +157,11 @@ class BdStore(StorePort):
         args += ["--json"]
         return self._json(*args)["id"]
 
-    def create_story(self, title, *, epic=None, labels=None):
+    def create_story(self, title, *, epic=None, project=None, goal=None):
         args = ["create", title, "-t", "story"]
         if epic:
             args += ["--parent", epic]
+        labels = labels_for(project=project, goal=goal)
         if labels:
             args += ["-l", ",".join(labels)]
         args += ["--json"]

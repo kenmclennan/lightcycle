@@ -3,24 +3,13 @@ import datetime
 import os
 import uuid
 
-from the_grid.adapters.bead import bead_to_task
+from the_grid.adapters.bead import bead_to_task, labels_for
 from the_grid.ports.store import StorePort
 from the_grid.domain.work import Artifact
 
 
 def _new_id():
     return "fake-" + uuid.uuid4().hex[:8]
-
-
-def _split_labels(label_list):
-    """Split comma-joined label strings into individual labels, matching bd's -l behaviour."""
-    result = []
-    for label in label_list:
-        for part in label.split(","):
-            part = part.strip()
-            if part:
-                result.append(part)
-    return result
 
 
 class FakeStore(StorePort):
@@ -172,19 +161,13 @@ class FakeStore(StorePort):
     def history(self, tid):
         return self._history.get(tid, [])
 
-    def create_task(self, title, *, step=None, role=None, parent=None, deps=None, labels=None):
-        all_labels = list(labels or [])
-        if step and role:
-            all_labels = ["for:%s,step:%s" % (role, step)] + all_labels
-        elif role:
-            all_labels = ["for:%s" % role] + all_labels
-        elif step:
-            all_labels = ["step:%s" % step] + all_labels
+    def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
+                    project=None, goal=None):
         b = self._new_bead(
             title=title,
             issue_type="task",
             parent=parent,
-            labels=_split_labels(all_labels),
+            labels=labels_for(role=role, step=step, project=project, goal=goal),
         )
         tid = b["id"]
         self._beads[tid] = b
@@ -194,12 +177,12 @@ class FakeStore(StorePort):
                 self.dep_add(tid, dep)
         return tid
 
-    def create_story(self, title, *, epic=None, labels=None):
+    def create_story(self, title, *, epic=None, project=None, goal=None):
         b = self._new_bead(
             title=title,
             issue_type="story",
             parent=epic,
-            labels=list(labels or []),
+            labels=labels_for(project=project, goal=goal),
         )
         tid = b["id"]
         self._beads[tid] = b

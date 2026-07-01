@@ -21,9 +21,5 @@ class AddTaskUseCase:
         self._store = store
 
     def execute(self, input: AddTaskInput) -> AddTaskResponse:
-        labels = ["for:human"]
-        if input.goal:
-            labels.append("goal:%s" % input.goal)
-        if input.project:
-            labels.append("project:%s" % input.project)
-        return AddTaskResponse(task=self._store.create_task(input.title, labels=labels))
+        return AddTaskResponse(task=self._store.create_task(
+            input.title, role="human", project=input.project, goal=input.goal))
