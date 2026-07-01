@@ -10,7 +10,6 @@ from the_grid.application.inspect.resolve_log import ResolveLog
 from the_grid.application.inspect.show_task import ShowTask
 from the_grid.application.inspect.status import Status
 from the_grid.application.inspect.trace import Trace
-from the_grid.application.inspect.worklog import Worklog
 
 __all__ = ["ActiveTasks", "Backlog", "FlowCheck", "Inbox", "ListWorkers", "Mine",
-           "Queue", "ResolveLog", "ShowTask", "Status", "Trace", "Worklog"]
+           "Queue", "ResolveLog", "ShowTask", "Status", "Trace"]

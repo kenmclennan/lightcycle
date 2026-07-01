@@ -1,8 +1,7 @@
-import datetime
 import unittest
 
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, Mine,
-                                          Queue, ShowTask, Status, Worklog)
+                                          Queue, ShowTask, Status)
 from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -58,22 +57,6 @@ class TestQueue(unittest.TestCase):
         for i in range(12):
             s.create_task("t%d" % i, step="build", role="coder")
         self.assertEqual(len(Queue(s).execute()), 10)
-
-
-class TestWorklog(unittest.TestCase):
-    def test_lists_stories_closed_in_period(self):
-        s = FakeStore()
-        sid = s.create_story("shipped story")
-        s.close(sid, "merged")
-        now = datetime.datetime.now().astimezone()
-        entries = Worklog(s).execute([], now.date(), now.tzinfo)
-        self.assertIn(sid, [e["id"] for e in entries])
-
-    def test_empty_when_nothing_closed(self):
-        s = FakeStore()
-        s.create_story("still open")
-        now = datetime.datetime.now().astimezone()
-        self.assertEqual(Worklog(s).execute([], now.date(), now.tzinfo), [])
 
 
 class TestInboxBacklogMine(unittest.TestCase):
