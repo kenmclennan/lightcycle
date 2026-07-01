@@ -15,7 +15,7 @@ Policy:
 import os
 from pathlib import Path
 
-from the_grid.domain import steps as core_steps
+from the_grid.adapters import frontmatter
 
 
 class ConfigError(Exception):
@@ -87,7 +87,7 @@ class Config:
         if not os.path.exists(p):
             return {}
         with open(p) as f:
-            return core_steps.parse_frontmatter(f.read())
+            return frontmatter.parse_frontmatter(f.read())
 
     def _default_config_text(self):
         return "projects: ~/workspace/projects\nspecs: ~/workspace/specs\n"
