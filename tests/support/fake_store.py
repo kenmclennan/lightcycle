@@ -199,3 +199,23 @@ class FakeStore(StorePort):
 
     def claimed_tasks(self):
         return [bead_to_task(b) for b in self._records.values() if b.get("status") == "in_progress"]
+
+    def tasks_closed_since(self, since_date):
+        result = []
+        for b in self._records.values():
+            if b.get("issue_type") != "task" or b.get("status") != "closed":
+                continue
+            closed_at = (b.get("closed_at") or "")[:10]
+            if closed_at >= since_date:
+                result.append(bead_to_task(b))
+        return result
+
+    def last_n_closed_epics(self, n):
+        epics = [
+            b for b in self._records.values()
+            if b.get("issue_type") == "story"
+            and b.get("status") == "closed"
+            and b.get("parent") is None
+        ]
+        epics.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
+        return [bead_to_task(b) for b in epics[:n]]

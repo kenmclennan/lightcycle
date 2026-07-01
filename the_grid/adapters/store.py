@@ -181,3 +181,24 @@ class BdStore(StorePort):
 
     def history(self, tid):
         return self._json("history", tid, "--json")
+
+    def tasks_closed_since(self, since_date):
+        beads = self._json("list", "--status", "closed", "--json")
+        result = []
+        for b in beads:
+            if b.get("issue_type") != "task":
+                continue
+            closed_at = (b.get("closed_at") or "")[:10]
+            if closed_at >= since_date:
+                result.append(bead_to_task(b))
+        return result
+
+    def last_n_closed_epics(self, n):
+        beads = self._json("list", "--status", "closed", "--json")
+        epics = [
+            b for b in beads
+            if b.get("issue_type") == "story"
+            and not b.get("parent")
+        ]
+        epics.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
+        return [bead_to_task(b) for b in epics[:n]]
