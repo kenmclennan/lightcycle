@@ -90,13 +90,17 @@ class StorePort(ABC):
 
     @abstractmethod
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None):
+                    project=None, goal=None, description=None):
         """Create a task and return its id.
 
         role/step/project/goal are structured attributes; the adapter encodes them
         (the application does not build label strings). deps is a list of task ids
         this task depends on.
         """
+
+    @abstractmethod
+    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None):
+        """Update an existing task's fields. Only the given (non-None) fields change."""
 
     @abstractmethod
     def create_story(self, title, *, epic=None, project=None, goal=None):

@@ -150,7 +150,7 @@ class BdStore(StorePort):
         return bead_to_task(arr[0]) if arr else None
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None):
+                    project=None, goal=None, description=None):
         args = ["create", title, "-t", "task"]
         labels = labels_for(role=role, step=step, project=project, goal=goal)
         if labels:
@@ -160,8 +160,31 @@ class BdStore(StorePort):
         if deps:
             for dep in deps:
                 args += ["--deps", dep]
+        if description:
+            args += ["-d", description]
         args += ["--json"]
         return self._json(*args)["id"]
+
+    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None):
+        update_args = ["update", tid]
+        if title is not None:
+            update_args += ["--title", title]
+        if description is not None:
+            update_args += ["-d", description]
+        if title is not None or description is not None:
+            self._run(*update_args)
+        if goal is not None:
+            cur = self.get_task(tid).goal
+            if cur:
+                self.label_remove(tid, "goal:%s" % cur)
+            if goal:
+                self.label_add(tid, "goal:%s" % goal)
+        if project is not None:
+            cur = self.get_task(tid).project
+            if cur:
+                self.label_remove(tid, "project:%s" % cur)
+            if project:
+                self.label_add(tid, "project:%s" % project)
 
     def create_story(self, title, *, epic=None, project=None, goal=None):
         args = ["create", title, "-t", "story"]

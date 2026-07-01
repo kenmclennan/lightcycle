@@ -18,6 +18,7 @@ class Task:
     project: Optional[str] = None
     goal: Optional[str] = None
     artifacts: List[Artifact] = field(default_factory=list)
+    description: Optional[str] = None
     needs: Optional[str] = None
     outcome: Optional[str] = None
     deps: int = 0
@@ -43,6 +44,7 @@ class Task:
             "role": self.role, "step": self.step, "status": self.status,
             "project": self.project, "goal": self.goal,
             "artifacts": [a.as_dict() for a in self.artifacts],
+            "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "notes": self.notes,
         }
