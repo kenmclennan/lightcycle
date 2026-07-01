@@ -24,7 +24,7 @@ from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockIn
                                        FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
 from the_grid.application.pool import (ListWorkersUseCase, ResolveLogInput, ResolveLogUseCase,
                                        SweepUseCase, TickInput, TickUseCase)
-from the_grid.application.setup import InitGrid
+from the_grid.application.setup import InitGridUseCase
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
 from the_grid.config import ConfigError
@@ -560,9 +560,9 @@ def cmd_driver(argv):
 
 def cmd_init(argv):
     argparse.ArgumentParser(prog="tg init").parse_args(argv)
-    r = InitGrid(_container.store, _container.fs, _container.config).execute()
-    print("grid store already initialised" if r["existed"] else "grid store initialised")
-    print("config %s at %s" % ("created" if r["created"] else "already exists", r["config_path"]))
+    r = InitGridUseCase(_container.store, _container.fs, _container.config).execute()
+    print("grid store already initialised" if r.existed else "grid store initialised")
+    print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
     return 0
 
 

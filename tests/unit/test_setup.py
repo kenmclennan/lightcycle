@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.application.setup import InitGrid
+from the_grid.application.setup import InitGridUseCase
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -18,14 +18,14 @@ class FakeConfig:
 
 class TestInitGrid(unittest.TestCase):
     def test_reports_existed_created_and_path(self):
-        r = InitGrid(FakeStore(), FakeFs(), FakeConfig(created=True)).execute()
-        self.assertTrue(r["existed"])  # FakeFs.store_ready() is True
-        self.assertTrue(r["created"])
-        self.assertEqual(r["config_path"], "/cfg/the-grid/config")
+        r = InitGridUseCase(FakeStore(), FakeFs(), FakeConfig(created=True)).execute()
+        self.assertTrue(r.existed)  # FakeFs.store_ready() is True
+        self.assertTrue(r.created)
+        self.assertEqual(r.config_path, "/cfg/the-grid/config")
 
     def test_created_false_when_config_present(self):
-        r = InitGrid(FakeStore(), FakeFs(), FakeConfig(created=False)).execute()
-        self.assertFalse(r["created"])
+        r = InitGridUseCase(FakeStore(), FakeFs(), FakeConfig(created=False)).execute()
+        self.assertFalse(r.created)
 
 
 if __name__ == "__main__":
