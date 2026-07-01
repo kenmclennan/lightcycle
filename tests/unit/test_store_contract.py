@@ -96,7 +96,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
     def test_route_to_human(self):
         s = self.make_store()
         tid = s.create_task("t", step="build", role="coder")
-        s.route_to_human(tid, "needs review", "coder")
+        s.route_to_human(tid, "needs review")
         task = s.get_task(tid)
         self.assertEqual(task.role, "human")
         self.assertIn("needs review", task.notes)

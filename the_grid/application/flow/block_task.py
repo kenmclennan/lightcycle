@@ -25,10 +25,4 @@ class BlockTaskUseCase:
             if v:
                 resume[k] = v
         self._store.update_metadata(input.task, resume)
-        self._store.note(input.task, "BLOCKED: %s" % input.needs)
-        role = self._store.get_task(input.task).role
-        if role and role != "human":
-            self._store.label_remove(input.task, "for:%s" % role)
-        self._store.label_add(input.task, "for:human")
-        self._store.update_status(input.task, "open")
-        self._store.assign(input.task, "")
+        self._store.route_to_human(input.task, "BLOCKED: %s" % input.needs)

@@ -29,7 +29,11 @@ class StorePort(ABC):
         """Return the set of artifact types present on the task's story."""
 
     @abstractmethod
-    def route_to_human(self, tid, note, role):
+    def reassign(self, tid, role):
+        """Make the task owned by role and reset it to ready (open, unclaimed)."""
+
+    @abstractmethod
+    def route_to_human(self, tid, note):
         """Re-route a task to the human queue with a note."""
 
     @abstractmethod

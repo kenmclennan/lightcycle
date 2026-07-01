@@ -39,9 +39,7 @@ class ClaimTaskUseCase:
             self._store.present_types(t))
         if missing:
             self._store.route_to_human(
-                t.id,
-                "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)),
-                role)
+                t.id, "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)))
             return None
         spawnid = self._config.spawn_id()
         if spawnid:

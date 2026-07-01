@@ -81,13 +81,17 @@ class BdStore(StorePort):
         story = task.parent or task.id
         return {a.type for a in self.story_artifacts(story)}
 
-    def route_to_human(self, tid, note, role):
-        self.note(tid, note)
-        if role and role != "human":
-            self.label_remove(tid, "for:%s" % role)
-        self.label_add(tid, "for:human")
+    def reassign(self, tid, role):
+        cur = self.get_task(tid).role
+        if cur and cur != role:
+            self.label_remove(tid, "for:%s" % cur)
+        self.label_add(tid, "for:%s" % role)
         self.update_status(tid, "open")
         self.assign(tid, "")
+
+    def route_to_human(self, tid, note):
+        self.note(tid, note)
+        self.reassign(tid, "human")
 
     def closed_stories(self):
         beads = self._json("list", "--status", "closed", "--json")
