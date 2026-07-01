@@ -10,6 +10,7 @@ import tempfile
 import unittest
 
 from the_grid.adapters.store import BdStore
+from the_grid.application.work.status import StatusUseCase
 from the_grid.config import Config
 
 _TEMPLATE = None
@@ -86,6 +87,20 @@ class TestBdStoreSmoke(unittest.TestCase):
         self.assertNotIn(blocked, ready)
         s.close(blocker, "done")
         self.assertIn(blocked, [t.id for t in s.ready_tasks()])
+
+    def test_status_blocked_lane_reflects_open_blocker(self):
+        s = self._store()
+        blocker = s.create_task("blocker", role="coder")
+        blocked = s.create_task("blocked", role="coder")
+        s.dep_add(blocked, blocker)
+        lanes = StatusUseCase(s).execute().lanes
+        self.assertIn(blocked, [t.id for t in lanes["blocked"]])
+        self.assertNotIn(blocked, [t.id for t in lanes["queue"]])
+        self.assertIn(blocker, [t.id for t in lanes["queue"]])
+        s.close(blocker, "done")
+        lanes = StatusUseCase(s).execute().lanes
+        self.assertIn(blocked, [t.id for t in lanes["queue"]])
+        self.assertNotIn(blocked, [t.id for t in lanes["blocked"]])
 
     def test_route_to_human_relabels_and_notes(self):
         s = self._store()

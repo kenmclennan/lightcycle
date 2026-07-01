@@ -46,16 +46,24 @@ class TestTrace(unittest.TestCase):
 
 
 class TestStatus(unittest.TestCase):
-    def test_buckets_tasks_by_status(self):
+    def test_lanes_tasks_by_status(self):
         s = FakeStore()
         ready = s.create_task("ready one", step="build", role="coder")
         human = s.create_task("needs me", role="human")
         running = s.create_task("running", step="build", role="coder")
         s.assign(running, "worker-1")
-        buckets = StatusUseCase(s).execute().buckets
-        self.assertEqual([t.id for t in buckets["queue"]], [ready])
-        self.assertEqual([t.id for t in buckets["mine"]], [human])
-        self.assertEqual([t.id for t in buckets["active"]], [running])
+        lanes = StatusUseCase(s).execute().lanes
+        self.assertEqual([t.id for t in lanes["queue"]], [ready])
+        self.assertEqual([t.id for t in lanes["inbox"]], [human])
+        self.assertEqual([t.id for t in lanes["active"]], [running])
+
+    def test_dep_blocked_task_lands_in_blocked_not_queue(self):
+        s = FakeStore()
+        blocker = s.create_task("blocker", step="build", role="coder")
+        blocked = s.create_task("blocked", step="build", role="coder", deps=[blocker])
+        lanes = StatusUseCase(s).execute().lanes
+        self.assertEqual([t.id for t in lanes["blocked"]], [blocked])
+        self.assertNotIn(blocked, [t.id for t in lanes["queue"]])
 
 
 class TestActiveTasks(unittest.TestCase):

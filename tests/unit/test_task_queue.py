@@ -26,20 +26,23 @@ class TestClassifyForHuman(unittest.TestCase):
                          ("blocked", ["done", "unblock"]))
 
 
-class TestBucketAndByStatus(unittest.TestCase):
-    def _queue(self):
-        return TaskQueue([
-            tk(status="done"), tk(status="in-progress"), tk(status="needs-human"),
-            tk(status="ready"), tk(status="blocked"),
+class TestByLaneAndByStatus(unittest.TestCase):
+    def test_by_lane_groups_statuses_into_lanes(self):
+        q = TaskQueue([
+            tk(id="d", status="done"), tk(id="a", status="in-progress"),
+            tk(id="h", status="needs-human"), tk(id="r", status="ready"),
+            tk(id="b", status="ready"),  # ready status, but has an open blocker
         ])
-
-    def test_bucket_partitions_by_status(self):
-        b = self._queue().bucket()
-        self.assertEqual([len(b[k]) for k in ("done", "active", "mine", "queue", "blocked")],
-                         [1, 1, 1, 1, 1])
+        lanes = q.by_lane(ready_ids={"r"})
+        self.assertEqual([t.id for t in lanes["done"]], ["d"])
+        self.assertEqual([t.id for t in lanes["active"]], ["a"])
+        self.assertEqual([t.id for t in lanes["inbox"]], ["h"])
+        self.assertEqual([t.id for t in lanes["queue"]], ["r"])
+        self.assertEqual([t.id for t in lanes["blocked"]], ["b"])
 
     def test_by_status(self):
-        self.assertEqual(len(self._queue().by_status("ready")), 1)
+        q = TaskQueue([tk(status="ready"), tk(status="done")])
+        self.assertEqual(len(q.by_status("ready")), 1)
 
 
 class TestForHuman(unittest.TestCase):
