@@ -1,3 +1,4 @@
+import os
 import unittest
 
 from the_grid.application.errors import UseCaseError
@@ -119,6 +120,14 @@ class TestClaimTask(unittest.TestCase):
                                 FakeWorkers(), FakeConfig()).execute(ClaimInput(role="coder"))
         self.assertIsNone(resp)
         self.assertEqual(s.get_task(bid).role, "human")
+
+    def test_resolves_spec_path_against_specs_root(self):
+        s = FakeStore()
+        story = s.create_story("st")
+        s.add_artifact(story, "spec", "specs/X.md")
+        s.create_task("build: x", step="build", role="coder", parent=story)
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.spec_path, os.path.join("/specs", "specs/X.md"))
 
 
 class TestBlockTask(unittest.TestCase):

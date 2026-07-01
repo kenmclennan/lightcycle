@@ -1222,14 +1222,8 @@ class TestConfig(unittest.TestCase):
         self.assertIn("projects: %s" % proj, r.stdout)
         self.assertIn("specs: %s" % specs, r.stdout)
 
-    def test_spec_path_resolves_against_configured_specs_root(self):
-        root = new_store_with_origin()
-        write_steps(root)
-        specs = tempfile.mkdtemp()
-        Path(self.cfg).write_text("projects: %s\nspecs: %s\n" % (os.path.dirname(root), specs))
-        run_tg("file", "specs/X.md", "--step", "build", root=root, config=self.cfg)
-        view = json.loads(run_tg("claim", "coder", root=root, config=self.cfg).stdout)
-        self.assertEqual(view["spec_path"], os.path.join(specs, "specs/X.md"))
+    # spec_path resolution is covered fast in-process by
+    # test_flow_usecases.TestClaimTask.test_resolves_spec_path_against_specs_root
 
 
 class TestLogRender(unittest.TestCase):
