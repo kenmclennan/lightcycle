@@ -8,7 +8,7 @@ so the pool does not pile redundant workers onto one task. `now` is passed in
 (the caller owns the clock).
 """
 from the_grid.application.pool.sweep import Sweep
-from the_grid.domain import pool as cpool
+from the_grid.domain.pool import PoolPlan, ReadyQueue, WorkerPool
 
 
 class Tick:
@@ -23,18 +23,14 @@ class Tick:
     def execute(self, now):
         result = self._sweep.execute()
         result["spawned"] = []
-        alive = [w for w in self._workers.workers_state()
-                 if self._workers.pid_alive(w.get("pid", -1))]
-        slots = self._config.max_agents() - len(alive)
+        pool = WorkerPool.from_state(self._workers.workers_state())
+        probe = self._workers.pid_alive
+        slots = pool.free_slots(self._config.max_agents(), probe)
         if slots <= 0:
             return result
-        max_boot = self._config.max_boot_seconds()
-        inflight = {}
-        for w in alive:
-            if w.get("bead") is None and (now - w.get("started", 0)) < max_boot:
-                inflight[w["role"]] = inflight.get(w["role"], 0) + 1
-        ready = cpool.ready_task_roles(self._store.ready_tasks())
-        for role in cpool.pool_plan(ready, inflight, slots):
+        inflight = pool.inflight(probe, now, self._config.max_boot_seconds())
+        roles = ReadyQueue(self._store.ready_tasks()).roles()
+        for role in PoolPlan(inflight, slots).roles_to_spawn(roles):
             self._spawner.spawn_worker(role)
             result["spawned"].append(role)
         return result
