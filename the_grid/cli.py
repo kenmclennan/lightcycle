@@ -13,7 +13,10 @@ from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroIn
 from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, ListWorkers,
                                           Mine, Queue, ResolveLog, ShowTask, Status, Trace)
 from the_grid.application.errors import UseCaseError
-from the_grid.application.flow import AdvanceTask, BlockTask, ClaimTask, CompleteTask, UnblockTask
+from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockInput,
+                                       BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
+                                       CompleteInput, CompleteTaskUseCase, UnblockInput,
+                                       UnblockTaskUseCase)
 from the_grid.application.intake import AddTask, CloseStory, FileStory, LinkArtifact
 from the_grid.application.pool import Sweep, Tick
 from the_grid.application.setup import InitGrid
@@ -181,11 +184,11 @@ def cmd_claim(argv):
     ap = argparse.ArgumentParser(prog="tg claim")
     ap.add_argument("role")
     a = ap.parse_args(argv)
-    view = ClaimTask(_container.store, _flow(), _worktrees(),
-                     _container.workers, _container.config).execute(a.role)
-    if view is None:
+    resp = ClaimTaskUseCase(_container.store, _flow(), _worktrees(),
+                            _container.workers, _container.config).execute(ClaimInput(role=a.role))
+    if resp is None:
         return 0
-    print(json.dumps(view, indent=2))
+    print(json.dumps(resp.view, indent=2))
     return 0
 
 
@@ -246,9 +249,10 @@ def cmd_advance(argv):
     ap.add_argument("id")
     ap.add_argument("outcome")
     a = ap.parse_args(argv)
-    new = AdvanceTask(_container.store, _flow()).execute(a.id, a.outcome)
-    if new:
-        print(new)
+    resp = AdvanceTaskUseCase(_container.store, _flow()).execute(
+        AdvanceInput(task=a.id, outcome=a.outcome))
+    if resp.next_task:
+        print(resp.next_task)
     return 0
 
 
@@ -311,12 +315,13 @@ def cmd_done(argv):
     ap.add_argument("--note")
     a = ap.parse_args(argv)
     try:
-        new = CompleteTask(_container.store, _flow()).execute(a.id, a.outcome, a.note)
+        resp = CompleteTaskUseCase(_container.store, _flow()).execute(
+            CompleteInput(task=a.id, outcome=a.outcome, note=a.note))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    if new:
-        print(new)
+    if resp.next_task:
+        print(resp.next_task)
     return 0
 
 
@@ -329,8 +334,8 @@ def cmd_block(argv):
     if not a.needs:
         sys.stderr.write("tg block requires --needs (what the human must decide/provide)\n")
         return 2
-    BlockTask(_container.store).execute(a.id, a.needs, branch=a.branch, pr=a.pr,
-                                        reason=a.reason, tried=a.tried)
+    BlockTaskUseCase(_container.store).execute(BlockInput(
+        task=a.id, needs=a.needs, branch=a.branch, pr=a.pr, reason=a.reason, tried=a.tried))
     print("blocked -> human")
     return 0
 
@@ -340,11 +345,11 @@ def cmd_unblock(argv):
     ap.add_argument("id")
     a = ap.parse_args(argv)
     try:
-        role = UnblockTask(_container.store, _flow()).execute(a.id)
+        resp = UnblockTaskUseCase(_container.store, _flow()).execute(UnblockInput(task=a.id))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    print("unblocked -> %s" % role)
+    print("unblocked -> %s" % resp.role)
     return 0
 
 
