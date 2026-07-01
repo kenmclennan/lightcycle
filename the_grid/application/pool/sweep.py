@@ -4,6 +4,7 @@ A task is owned by a live worker iff its assignee is the spawnid of a worker
 whose pid is alive. The spawnid->pid mapping is written at spawn (before the
 claim), so it never lags - a just-claimed task is protected immediately.
 """
+from the_grid.domain.pool import WorkerPool
 
 
 class Sweep:
@@ -13,8 +14,8 @@ class Sweep:
         self._workers = workers
 
     def execute(self):
-        live = {w.get("spawnid") for w in self._workers.workers_state()
-                if w.get("spawnid") and self._workers.pid_alive(w.get("pid", -1))}
+        live = WorkerPool.from_state(self._workers.workers_state()).live_spawnids(
+            self._workers.pid_alive)
         swept = []
         for bead in self._store.list_beads_by_status("in_progress"):
             if bead.get("assignee") in live:
