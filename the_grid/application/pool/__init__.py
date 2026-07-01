@@ -1,5 +1,8 @@
-"""Pool: the agent-pool lifecycle (sweep stale claims, fill workers)."""
-from the_grid.application.pool.sweep import Sweep
-from the_grid.application.pool.tick import Tick
+"""Pool: the agent-pool lifecycle (list workers, resolve logs, sweep, fill)."""
+from the_grid.application.pool.list_workers import ListWorkersUseCase
+from the_grid.application.pool.resolve_log import ResolveLogInput, ResolveLogUseCase
+from the_grid.application.pool.sweep import SweepUseCase
+from the_grid.application.pool.tick import TickInput, TickUseCase
 
-__all__ = ["Sweep", "Tick"]
+__all__ = ["ListWorkersUseCase", "ResolveLogInput", "ResolveLogUseCase", "SweepUseCase",
+           "TickInput", "TickUseCase"]

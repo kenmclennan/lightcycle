@@ -10,7 +10,6 @@ from the_grid.logrender import render_log_line
 
 from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
                                            WorklogInput, WorklogUseCase)
-from the_grid.application.inspect import ListWorkers, ResolveLog
 from the_grid.application.work import (ActiveTasksUseCase, AddTaskInput, AddTaskUseCase,
                                        BacklogInput, BacklogUseCase, CloseStoryInput,
                                        CloseStoryUseCase, FileStoryInput, FileStoryUseCase,
@@ -23,7 +22,8 @@ from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockIn
                                        BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
                                        CompleteInput, CompleteTaskUseCase, FlowCheckInput,
                                        FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
-from the_grid.application.pool import Sweep, Tick
+from the_grid.application.pool import (ListWorkersUseCase, ResolveLogInput, ResolveLogUseCase,
+                                       SweepUseCase, TickInput, TickUseCase)
 from the_grid.application.setup import InitGrid
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
@@ -208,7 +208,7 @@ def cmd_ps(argv):
     ap = argparse.ArgumentParser(prog="tg ps")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    rows = ListWorkers(_container.workers).execute()
+    rows = ListWorkersUseCase(_container.workers).execute().workers
     if a.json:
         print(json.dumps(rows, indent=2))
     else:
@@ -223,7 +223,8 @@ def cmd_logs(argv):
     ap.add_argument("target")
     ap.add_argument("-f", action="store_true")
     a = ap.parse_args(argv)
-    path = ResolveLog(_container.workers, _container.config).execute(a.target)
+    path = ResolveLogUseCase(_container.workers, _container.config).execute(
+        ResolveLogInput(target=a.target)).path
     if not path or not os.path.exists(path):
         sys.stderr.write("no log for %s\n" % a.target)
         return 1
@@ -403,7 +404,7 @@ def cmd_trace(argv):
 
 
 def cmd_sweep(argv):
-    _render_tick(Sweep(_container.store, _container.workers).execute())
+    _render_tick(SweepUseCase(_container.store, _container.workers).execute())
     return 0
 
 
@@ -494,10 +495,10 @@ def cmd_add(argv):
 
 
 def _render_tick(result):
-    for bid in result["swept"]:
+    for bid in result.swept:
         print("swept %s" % bid)
-    if result["pruned"]:
-        print("pruned %d dead worker entr%s" % (result["pruned"], "y" if result["pruned"] == 1 else "ies"))
+    if result.pruned:
+        print("pruned %d dead worker entr%s" % (result.pruned, "y" if result.pruned == 1 else "ies"))
 
 
 def cmd_run(argv):
@@ -506,14 +507,14 @@ def cmd_run(argv):
     a = ap.parse_args(argv)
     if not require_store():
         return 1
-    tick = Tick(_container.store, _container.workers, _container.spawner, _container.config)
+    tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config)
     if a.once:
-        _render_tick(tick.execute(time.time()))
+        _render_tick(tick.execute(TickInput(now=time.time())))
         return 0
     interval = _container.config.poll_seconds()
     print("tg run (poll %ds)" % interval)
     while True:
-        _render_tick(tick.execute(time.time()))
+        _render_tick(tick.execute(TickInput(now=time.time())))
         time.sleep(interval)
 
 
