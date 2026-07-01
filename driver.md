@@ -70,7 +70,7 @@ These are how you work, not suggestions:
 `tg inbox` (actions + blockers needing you), `tg backlog [N]` (items to develop later),
 `tg status` (all buckets), `tg active` (running), `tg queue` (upcoming agent work), `tg ps` (workers),
 `tg logs <task|role|run> [-f]` (watch worker output), `tg trace <story>` (a story end to end),
-`tg flow` (the pipeline and its steps). (`tg mine` is the deprecated union of inbox + backlog.)
+`tg flow` (the pipeline and its steps).
 
 ## Drive work in
 
@@ -80,6 +80,9 @@ These are how you work, not suggestions:
 - `tg file <spec> --step build --repo <name> [--epic/--project/--goal/--blocked-by]` creates a STORY
   (spec attached) and its first task. `--repo` names the repo under projects/ (default: the engine
   itself); `--blocked-by` gates it on another task. Attach more artifacts with `tg link`.
+- For multi-phase specs, file phase 1 first to get its task id (e.g. `myapp-abc`), then file
+  phase 2 with `tg file p2.md --step build --repo myapp --blocked-by myapp-abc` - the store
+  holds it until phase 1 closes.
 - `tg add "<title>"` for a rough idea or reminder - it lands in the backlog, no spec or flow needed.
 
 ## Work the human-facing steps
