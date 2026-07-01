@@ -105,7 +105,7 @@ COMMAND_GROUPS = [
         ("mine", "", "(deprecated) use tg inbox and tg backlog"),
         ("active", "", "tasks a worker is running right now"),
         ("queue", "[N]", "the next N ready/blocked agent tasks"),
-        ("ps", "[--json]", "running workers: role, task, pid, alive/dead"),
+        ("ps", "[--all] [--json]", "running workers (alive only; --all includes dead)"),
         ("logs", "<task|role|run> [-f]", "tail a worker's or the loop's log"),
         ("show", "<id>", "one task or story as JSON (artifacts, resume-state)"),
         ("trace", "<story> [--json]", "a story end to end: artifacts + child tasks + logs"),
@@ -214,9 +214,12 @@ def cmd_spawn(argv):
 
 def cmd_ps(argv):
     ap = argparse.ArgumentParser(prog="tg ps")
+    ap.add_argument("--all", action="store_true")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     rows = ListWorkersUseCase(_container.workers).execute().workers
+    if not a.all:
+        rows = [w for w in rows if w["alive"]]
     if a.json:
         print(json.dumps(rows, indent=2))
     else:
