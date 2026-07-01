@@ -326,11 +326,13 @@ def cmd_done(argv):
     ap = argparse.ArgumentParser(prog="tg done")
     ap.add_argument("id")
     ap.add_argument("outcome")
-    ap.add_argument("--note")
+    ap.add_argument("--note", nargs="+",
+                    help="a note to forward to the next task; unquoted multi-word is fine")
     a = ap.parse_args(argv)
+    note = " ".join(a.note) if a.note else None
     try:
         resp = CompleteTaskUseCase(_container.store, _flow()).execute(
-            CompleteInput(task=a.id, outcome=a.outcome, note=a.note))
+            CompleteInput(task=a.id, outcome=a.outcome, note=note))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1

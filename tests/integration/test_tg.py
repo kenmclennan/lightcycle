@@ -353,6 +353,13 @@ class TestDoneBlock(unittest.TestCase):
         self.assertTrue(new)
         self.assertNotIn("from build", self.store.get_task(new).notes or "")
 
+    def test_done_note_accepts_unquoted_multiword(self):
+        b = self.store.create_task("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix", "the", "flaky", "test")
+        self.assertEqual(rc, 0, err)
+        notes = self.store.get_task(out.strip()).notes or ""
+        self.assertIn("fix the flaky test", notes)
+
 
 class TestSweep(unittest.TestCase):
     def setUp(self):
