@@ -39,3 +39,7 @@ class FsPort(ABC):
     @abstractmethod
     def ensure_logs_dir(self):
         """Create the engine's logs dir if absent; return its path."""
+
+    @abstractmethod
+    def ensure_worktrees_ignored(self):
+        """Ensure `.worktrees/` is gitignored at the engine root (idempotent)."""

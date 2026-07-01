@@ -61,6 +61,22 @@ def ensure_logs_dir(root):
     return d
 
 
+def ensure_worktrees_ignored(root):
+    """Ensure `.worktrees/` is listed in the engine root's .gitignore (idempotent)."""
+    gi = os.path.join(root, ".gitignore")
+    line = ".worktrees/"
+    existing = ""
+    if os.path.exists(gi):
+        with open(gi) as f:
+            existing = f.read()
+    if line in (l.strip() for l in existing.splitlines()):
+        return
+    with open(gi, "a") as f:
+        if existing and not existing.endswith("\n"):
+            f.write("\n")
+        f.write(line + "\n")
+
+
 class FsAdapter(FsPort):
     """FsPort rooted at Config.grid_root()."""
 
@@ -90,3 +106,6 @@ class FsAdapter(FsPort):
 
     def ensure_logs_dir(self):
         return ensure_logs_dir(self._config.grid_root())
+
+    def ensure_worktrees_ignored(self):
+        return ensure_worktrees_ignored(self._config.grid_root())

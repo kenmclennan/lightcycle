@@ -395,19 +395,16 @@ def cmd_trace(argv):
     ap.add_argument("story")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    out = TraceUseCase(_container.store, _container.workers).execute(TraceInput(story=a.story)).view
-    story = out["story"]
-    arts = out["artifacts"]
-    tasks = out["tasks"]
+    resp = TraceUseCase(_container.store, _container.workers).execute(TraceInput(story=a.story))
     if a.json:
-        print(json.dumps(out, indent=2))
+        print(json.dumps(resp.as_dict(), indent=2))
     else:
-        print("story %s  %s  [%s]" % (story["id"], story["title"], story["status"]))
-        for art in arts:
-            print("  artifact %s: %s" % (art["type"], art["value"]))
-        for t in tasks:
-            log = "  log:" + t["log"] if t["log"] else ""
-            print("  task %s  %s  [%s]%s" % (t["id"], t["step"] or "-", t["status"], log))
+        print("story %s  %s  [%s]" % (resp.story.id, resp.story.title, resp.story.status))
+        for art in resp.artifacts:
+            print("  artifact %s: %s" % (art.type, art.value))
+        for t in resp.tasks:
+            log = "  log:" + t.log if t.log else ""
+            print("  task %s  %s  [%s]%s" % (t.id, t.step or "-", t.status, log))
     return 0
 
 
