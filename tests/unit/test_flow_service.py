@@ -23,7 +23,7 @@ class TestFlowService(unittest.TestCase):
         flow = svc().load_flow()
         self.assertEqual(flow.owner_of("build"), "coder")
         self.assertEqual(flow.owner_of("review"), "reviewer")
-        self.assertEqual(flow.routes_map()["build"], {"done": "review"})
+        self.assertEqual(flow.next("build", "done").to_step, "review")
 
     def test_flow_next_derives_owner_of_target(self):
         t = svc().flow_next("build", "done")

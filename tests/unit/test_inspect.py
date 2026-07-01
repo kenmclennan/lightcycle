@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.application.inspect import (ActiveTasks, Backlog, FlowCheck, Inbox, Mine,
+from the_grid.application.inspect import (ActiveTasks, Backlog, Inbox, Mine,
                                           Queue, ShowTask, Status)
 from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
@@ -84,15 +84,6 @@ class TestInboxBacklogMine(unittest.TestCase):
         kinds = [cls[0] for cls, _t in rows]
         self.assertEqual(set(t.id for _c, t in rows), {self.todo, self.gate})
         self.assertLess(kinds.index("blocked"), kinds.index("todo"))
-
-
-class TestFlowCheck(unittest.TestCase):
-    def test_returns_owner_routes_and_analysis(self):
-        metas = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
-        result = FlowCheck(FlowService(FakeFs(metas), FakeStore())).execute()
-        self.assertEqual(result["owner"]["build"], "coder")
-        self.assertEqual(result["routes"]["build"], {"done": "review"})
-        self.assertIn("ok", result["analysis"])
 
 
 if __name__ == "__main__":

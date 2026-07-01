@@ -29,11 +29,12 @@ class TestFlowAssembly(unittest.TestCase):
         flow = Flow.assemble(METAS)
         self.assertEqual(flow.owner_of("build"), "coder")
         self.assertEqual(flow.owner_of("review"), "reviewer")
-        self.assertEqual(flow.routes_map()["build"], {"done": "review"})
+        self.assertEqual(flow.outcomes_for("build"), ["done"])
+        self.assertEqual(flow.next("build", "done").to_step, "review")
 
     def test_driver_owns_nothing(self):
         flow = Flow.assemble(METAS)
-        self.assertEqual(set(flow.owner_map().values()), {"coder", "reviewer", "pr-watcher"})
+        self.assertEqual({flow.owner_of(s) for s in flow.steps()}, {"coder", "reviewer", "pr-watcher"})
         self.assertEqual(flow.steps(), ["build", "open-pr", "review"])
 
 
