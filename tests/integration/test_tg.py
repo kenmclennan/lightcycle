@@ -417,8 +417,46 @@ class TestSpawn(unittest.TestCase):
         self.assertEqual(len(workers), 1)
         self.assertEqual(workers[0]["role"], "coder")
         self.assertTrue(os.path.exists(workers[0]["log"]))
-        r = subprocess.run([sys.executable, TG, "ps", "--json"], capture_output=True, text=True, env=env)
+        r = subprocess.run([sys.executable, TG, "ps", "--all", "--json"], capture_output=True, text=True, env=env)
         self.assertEqual(json.loads(r.stdout)[0]["role"], "coder")
+
+
+class TestPs(unittest.TestCase):
+    def setUp(self):
+        self.root = new_store()
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+
+    def _write_workers(self, workers):
+        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(workers))
+
+    def _run_ps(self, *args):
+        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root)
+        return subprocess.run([sys.executable, TG, "ps", *args, "--json"],
+                              capture_output=True, text=True, env=env)
+
+    def test_default_shows_only_alive_workers(self):
+        dead = subprocess.Popen(["true"]); dead.wait()
+        self._write_workers([
+            {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
+            {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
+        ])
+        r = self._run_ps()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = json.loads(r.stdout)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["role"], "coder")
+
+    def test_all_shows_alive_and_dead_workers(self):
+        dead = subprocess.Popen(["true"]); dead.wait()
+        self._write_workers([
+            {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
+            {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
+        ])
+        r = self._run_ps("--all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = json.loads(r.stdout)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({w["role"] for w in rows}, {"coder", "reviewer"})
 
 
 class TestRun(unittest.TestCase):
