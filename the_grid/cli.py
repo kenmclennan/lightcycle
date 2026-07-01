@@ -221,8 +221,8 @@ def cmd_ps(argv):
         print(json.dumps(rows, indent=2))
     else:
         for w in rows:
-            print("  %-11s bead=%-18s pid=%s %s" % (
-                w["role"], w.get("bead") or "-", w["pid"], "alive" if w["alive"] else "dead"))
+            print("  %-11s task=%-18s pid=%s %s" % (
+                w["role"], w.get("task") or "-", w["pid"], "alive" if w["alive"] else "dead"))
     return 0
 
 

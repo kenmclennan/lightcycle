@@ -60,10 +60,10 @@ class TestResolveLog(unittest.TestCase):
             ResolveLogInput(target="run"))
         self.assertEqual(resp.path, "/grid/logs/run.log")
 
-    def test_by_bead_or_role_most_recent_wins(self):
+    def test_by_task_or_role_most_recent_wins(self):
         workers = FakeWorkers(workers=[
-            {"role": "coder", "bead": "b1", "log": "/l/old.log"},
-            {"role": "coder", "bead": "b2", "log": "/l/new.log"},
+            {"role": "coder", "task": "b1", "log": "/l/old.log"},
+            {"role": "coder", "task": "b2", "log": "/l/new.log"},
         ])
         self.assertEqual(ResolveLogUseCase(workers, FakeConfig()).execute(
             ResolveLogInput(target="b1")).path, "/l/old.log")

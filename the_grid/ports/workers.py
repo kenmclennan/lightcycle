@@ -21,5 +21,5 @@ class WorkersPort(ABC):
         """Remove dead workers from the registry; return the pruned registry."""
 
     @abstractmethod
-    def stamp_bead(self, spawnid, bead):
-        """Record the bead a worker is running against its spawn id."""
+    def set_task(self, spawnid, task):
+        """Record the task a worker has claimed against its spawn id."""

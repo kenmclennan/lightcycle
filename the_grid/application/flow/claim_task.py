@@ -47,7 +47,7 @@ class ClaimTaskUseCase:
             return None
         spawnid = self._config.spawn_id()
         if spawnid:
-            self._workers.stamp_bead(spawnid, t.id)
+            self._workers.set_task(spawnid, t.id)
         view = self._store.task_view(t.id)
         story = t.parent or t.id
         ws = self._worktrees.ensure(story)

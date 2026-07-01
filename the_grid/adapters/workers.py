@@ -47,11 +47,11 @@ def prune_workers(root, keep_dead):
     return n_drop
 
 
-def stamp_bead(root, spawnid, bead):
+def set_task(root, spawnid, task):
     workers = workers_state(root)
     for w in workers:
         if w.get("spawnid") == spawnid:
-            w["bead"] = bead
+            w["task"] = task
     write_workers(root, workers)
 
 
@@ -74,5 +74,5 @@ class WorkersAdapter(WorkersPort):
         kd = self._config.worker_history() if keep_dead is None else keep_dead
         return prune_workers(self._config.grid_root(), kd)
 
-    def stamp_bead(self, spawnid, bead):
-        return stamp_bead(self._config.grid_root(), spawnid, bead)
+    def set_task(self, spawnid, task):
+        return set_task(self._config.grid_root(), spawnid, task)

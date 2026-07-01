@@ -41,15 +41,15 @@ class TraceUseCase:
         self._store = store
         self._workers = workers
 
-    def _log_for_bead(self, bid):
+    def _log_for_task(self, tid):
         for w in reversed(self._workers.workers_state()):
-            if w.get("bead") == bid:
+            if w.get("task") == tid:
                 return w.get("log")
         return None
 
     def execute(self, input: TraceInput) -> TraceResponse:
         story = self._store.get_task(input.story)
         artifacts = self._store.story_artifacts(input.story)
-        tasks = [TraceTask(id=kt.id, step=kt.step, status=kt.status, log=self._log_for_bead(kt.id))
+        tasks = [TraceTask(id=kt.id, step=kt.step, status=kt.status, log=self._log_for_task(kt.id))
                  for kt in self._store.children(input.story)]
         return TraceResponse(story=story, artifacts=artifacts, tasks=tasks)

@@ -38,8 +38,8 @@ class FakeWorkers:
     def __init__(self):
         self.stamped = []
 
-    def stamp_bead(self, spawnid, bid):
-        self.stamped.append((spawnid, bid))
+    def set_task(self, spawnid, task):
+        self.stamped.append((spawnid, task))
 
 
 class FakeConfig:

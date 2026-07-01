@@ -24,6 +24,6 @@ class ResolveLogUseCase:
         if input.target == "run":
             return ResolveLogResponse(path=os.path.join(self._config.grid_root(), "logs", "run.log"))
         for w in reversed(self._workers.workers_state()):
-            if w.get("bead") == input.target or w.get("role") == input.target:
+            if w.get("task") == input.target or w.get("role") == input.target:
                 return ResolveLogResponse(path=w["log"])
         return ResolveLogResponse(path=None)

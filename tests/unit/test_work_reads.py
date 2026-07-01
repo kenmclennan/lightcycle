@@ -37,7 +37,7 @@ class TestTrace(unittest.TestCase):
         sid = s.create_story("st")
         s.add_artifact(sid, "spec", "specs/x.md")
         k = s.create_task("build: x", step="build", role="coder", parent=sid)
-        workers = _Workers([{"role": "coder", "bead": k, "log": "/l/k.log"}])
+        workers = _Workers([{"role": "coder", "task": k, "log": "/l/k.log"}])
         resp = TraceUseCase(s, workers).execute(TraceInput(story=sid))
         self.assertEqual(resp.story.id, sid)
         self.assertEqual(resp.artifacts[0].type, "spec")
