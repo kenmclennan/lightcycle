@@ -6,6 +6,7 @@ routes:
 signals:
   resets: changes
 on_pr_merge: merged
+on_pr_close: abandoned
 ---
 
 # Ready-merge (you + driver)

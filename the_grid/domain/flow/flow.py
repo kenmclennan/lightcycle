@@ -11,14 +11,15 @@ from the_grid.domain.flow.transition import Transition
 
 class Flow:
 
-    def __init__(self, owner, routes, pr_merge):
+    def __init__(self, owner, routes, pr_merge, pr_close):
         self._owner = owner
         self._routes = routes
         self._pr_merge = pr_merge
+        self._pr_close = pr_close
 
     @classmethod
     def assemble(cls, role_metas) -> "Flow":
-        owner, routes, pr_merge = {}, {}, {}
+        owner, routes, pr_merge, pr_close = {}, {}, {}, {}
         for role, meta in role_metas.items():
             meta = meta or {}
             step = meta.get("step")
@@ -30,7 +31,10 @@ class Flow:
             declared = meta.get("on_pr_merge")
             if declared:
                 pr_merge[step] = declared
-        return cls(owner, routes, pr_merge)
+            declared_close = meta.get("on_pr_close")
+            if declared_close:
+                pr_close[step] = declared_close
+        return cls(owner, routes, pr_merge, pr_close)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -46,6 +50,9 @@ class Flow:
 
     def pr_merge_outcome(self, step):
         return self._pr_merge.get(step)
+
+    def pr_close_outcome(self, step):
+        return self._pr_close.get(step)
 
     def next(self, step, outcome):
         target = (self._routes.get(step) or {}).get(outcome)

@@ -23,7 +23,7 @@ from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockIn
                                        BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
                                        CompleteInput, CompleteTaskUseCase, FlowCheckInput,
                                        FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
-from the_grid.application.pool import (ListWorkersUseCase, MonitorMergedPrsUseCase,
+from the_grid.application.pool import (ListWorkersUseCase, MonitorPrsUseCase,
                                        ResolveLogInput, ResolveLogUseCase,
                                        SweepUseCase, TickInput, TickUseCase)
 from the_grid.application.setup import InitGridUseCase
@@ -524,6 +524,8 @@ def cmd_edit(argv):
 def _render_tick(result):
     for sid in result.merged:
         print("merged %s" % sid)
+    for sid in result.abandoned:
+        print("abandoned %s" % sid)
     for bid in result.swept:
         print("swept %s" % bid)
     if result.pruned:
@@ -537,7 +539,7 @@ def cmd_run(argv):
     if not require_store():
         return 1
     flow = _flow().load_flow()
-    monitor = MonitorMergedPrsUseCase(_container.store, _container.github, _worktrees(), flow)
+    monitor = MonitorPrsUseCase(_container.store, _container.github, _worktrees(), flow)
     tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config,
                        monitor=monitor)
     if a.once:
