@@ -1224,6 +1224,28 @@ class TestClose(unittest.TestCase):
         self.assertFalse(os.path.isdir(ws))
         self.assertFalse(self._has_branch(self.root, "feat/w"))
 
+    def test_close_epic_closes_when_all_stories_closed(self):
+        epic = self.store.create_story("epic e")
+        child = self.store.create_story("story s", epic=epic)
+        self.store.close(child, "merged")
+        rc, out, err = call(_cli_mod.cmd_close, epic, "done")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store._records[epic]["status"], "closed")
+
+    def test_close_epic_refuses_with_open_story(self):
+        epic = self.store.create_story("epic e")
+        child = self.store.create_story("story s", epic=epic)
+        rc, _, err = call(_cli_mod.cmd_close, epic, "done")
+        self.assertEqual(rc, 1)
+        self.assertIn(child, err)
+        self.assertEqual(self.store._records[epic]["status"], "open")
+
+    def test_close_epic_refuses_does_not_cascade_close_open_stories(self):
+        epic = self.store.create_story("epic e")
+        child = self.store.create_story("story s", epic=epic)
+        call(_cli_mod.cmd_close, epic, "done")
+        self.assertEqual(self.store._records[child]["status"], "open")
+
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
