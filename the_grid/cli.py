@@ -526,6 +526,8 @@ def _render_tick(result):
         print("merged %s" % sid)
     for sid in result.abandoned:
         print("abandoned %s" % sid)
+    for sid in result.reworked:
+        print("rework %s" % sid)
     for bid in result.swept:
         print("swept %s" % bid)
     if result.pruned:
@@ -538,8 +540,10 @@ def cmd_run(argv):
     a = ap.parse_args(argv)
     if not require_store():
         return 1
-    flow = _flow().load_flow()
-    monitor = MonitorPrsUseCase(_container.store, _container.github, _worktrees(), flow)
+    flow_service = _flow()
+    flow = flow_service.load_flow()
+    complete = CompleteTaskUseCase(_container.store, flow_service)
+    monitor = MonitorPrsUseCase(_container.store, _container.github, _worktrees(), flow, complete)
     tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config,
                        monitor=monitor)
     if a.once:

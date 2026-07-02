@@ -7,6 +7,7 @@ signals:
   resets: changes
 on_pr_merge: merged
 on_pr_close: abandoned
+on_pr_rework: changes
 ---
 
 # Ready-merge (you + driver)
