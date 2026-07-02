@@ -38,13 +38,8 @@ def delete_branch(root, branch):
         git(root, "branch", "-D", branch)
 
 
-def remote_branch_exists(root, branch):
-    return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + branch)
-
-
 def delete_remote_branch(root, branch):
-    if remote_branch_exists(root, branch):
-        git(root, "push", "origin", "--delete", branch)
+    git_ok(root, "push", "origin", "--delete", branch)
 
 
 def worktree_registered(root, path):
