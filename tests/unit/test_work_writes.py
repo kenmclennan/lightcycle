@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from the_grid.application.errors import UseCaseError
@@ -12,6 +13,15 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 METAS = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
+
+
+def _epic_flow(store):
+    return FlowService(FakeFs(), store)
+
+
+def _add_reflection(store, task_id, feedback):
+    store.add_artifact(task_id, "reflection",
+                       json.dumps({"task": task_id, "feedback": feedback, "spec_hash": "h"}))
 
 
 class FakeGit:
@@ -140,7 +150,7 @@ class TestCloseEpic(unittest.TestCase):
         epic = s.create_story("epic")
         child = s.create_story("story", epic=epic)
         s.close(child, "merged")
-        CloseEpicUseCase(s).execute(CloseEpicInput(epic=epic, reason="done"))
+        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
         self.assertEqual(s.get_task(epic).status, "done")
 
     def test_refuses_with_open_child_and_names_it(self):
@@ -148,7 +158,7 @@ class TestCloseEpic(unittest.TestCase):
         epic = s.create_story("epic")
         child = s.create_story("story", epic=epic)
         with self.assertRaises(UseCaseError) as ctx:
-            CloseEpicUseCase(s).execute(CloseEpicInput(epic=epic, reason="done"))
+            CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
         self.assertIn(child, str(ctx.exception))
         self.assertEqual(s.get_task(epic).status, "ready")
 
@@ -159,10 +169,78 @@ class TestCloseEpic(unittest.TestCase):
         open_ = s.create_story("open story", epic=epic)
         s.close(closed, "merged")
         with self.assertRaises(UseCaseError) as ctx:
-            CloseEpicUseCase(s).execute(CloseEpicInput(epic=epic, reason="done"))
+            CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
         self.assertIn(open_, str(ctx.exception))
         self.assertNotIn(closed, str(ctx.exception))
         self.assertEqual(s.get_task(epic).status, "ready")
+
+
+class TestCloseEpicWithRetro(unittest.TestCase):
+    def _setup(self, feedback=None):
+        s = FakeStore()
+        epic = s.create_story("my epic")
+        story = s.create_story("child story", epic=epic)
+        task = s.create_task("build: x", step="build", role="coder", parent=story)
+        if feedback:
+            _add_reflection(s, task, feedback)
+        s.close(story, "merged")
+        return s, epic
+
+    def test_retro_included_in_response(self):
+        s, epic = self._setup(feedback="useful feedback")
+        resp = CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        self.assertEqual(resp.retro.reflection_count, 1)
+        self.assertEqual(resp.retro.feedback[0].text, "useful feedback")
+        self.assertEqual(len(resp.retro.story_signals), 1)
+
+    def test_retro_digest_recorded_as_artifact_on_epic(self):
+        s, epic = self._setup(feedback="spec was thin")
+        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        arts = s.story_artifacts(epic)
+        retro_arts = [a for a in arts if a.type == "retro"]
+        self.assertEqual(len(retro_arts), 1)
+        digest = json.loads(retro_arts[0].value)
+        self.assertIn("feedback", digest)
+        self.assertIn("story_signals", digest)
+        self.assertEqual(digest["feedback"][0]["text"], "spec was thin")
+
+    def test_epic_closed_before_retro_digest_is_stored(self):
+        s, epic = self._setup()
+        call_order = []
+        orig_close = s.close
+        orig_add = s.add_artifact
+
+        def tracking_close(tid, reason):
+            call_order.append(("close", tid))
+            return orig_close(tid, reason)
+
+        def tracking_add(tid, atype, value, label=None):
+            call_order.append(("add_artifact", tid, atype))
+            return orig_add(tid, atype, value, label)
+
+        s.close = tracking_close
+        s.add_artifact = tracking_add
+        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        close_idx = next(i for i, e in enumerate(call_order) if e == ("close", epic))
+        retro_idx = next(i for i, e in enumerate(call_order)
+                         if len(e) >= 3 and e[1] == epic and e[2] == "retro")
+        self.assertLess(close_idx, retro_idx)
+
+    def test_empty_reflections_still_records_artifact(self):
+        s, epic = self._setup()
+        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        arts = [a for a in s.story_artifacts(epic) if a.type == "retro"]
+        self.assertEqual(len(arts), 1)
+        digest = json.loads(arts[0].value)
+        self.assertEqual(digest["feedback"], [])
+
+    def test_refusal_skips_retro_and_leaves_no_artifact(self):
+        s = FakeStore()
+        epic = s.create_story("my epic")
+        s.create_story("open story", epic=epic)
+        with self.assertRaises(UseCaseError):
+            CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        self.assertEqual([a for a in s.story_artifacts(epic) if a.type == "retro"], [])
 
 
 class TestWorktreeServiceStoryBranch(unittest.TestCase):

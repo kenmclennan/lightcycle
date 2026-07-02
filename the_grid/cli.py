@@ -384,15 +384,18 @@ def cmd_close(argv):
     is_epic = any(c.type == "story" for c in children)
     try:
         if is_epic:
-            CloseEpicUseCase(_container.store).execute(
+            resp = CloseEpicUseCase(_container.store, _flow()).execute(
                 CloseEpicInput(epic=a.story, reason=a.reason))
         else:
             CloseStoryUseCase(_container.store, _worktrees()).execute(
                 CloseStoryInput(story=a.story, reason=a.reason))
+            resp = None
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
     print("closed %s (%s)" % (a.story, a.reason))
+    if resp is not None:
+        _print_retro(resp.retro)
     return 0
 
 
@@ -693,6 +696,20 @@ def cmd_worklog(argv):
     return 0
 
 
+def _print_retro(resp):
+    print("== retro: %s  (N=%d) ==" % (resp.subject, resp.reflection_count))
+    if resp.feedback:
+        print("\nFeedback (read it; an analyser agent can later):")
+        for item in resp.feedback:
+            print("  [%s] %s" % (item.task, item.text))
+    elif resp.reflection_count == 0:
+        print("no reflections yet - agents call `tg reflect --feedback` before `tg done`")
+    print("\nPer-story signals:")
+    for row in resp.story_signals:
+        sig_str = "  ".join("%s=%s" % (k, row.signals[k]) for k in sorted(row.signals))
+        print("  %-20s  %s  (N=%d)" % (row.story.id, sig_str, row.reflections))
+
+
 def cmd_retro(argv):
     ap = argparse.ArgumentParser(prog="tg retro")
     ap.add_argument("id", nargs="?", default=None, help="story or epic id")
@@ -706,18 +723,5 @@ def cmd_retro(argv):
 
     inp = RetroInput(subject=a.id, since=a.since, last=a.last)
     resp = RetroUseCase(_container.store, _flow()).execute(inp)
-    print("== retro: %s  (N=%d) ==" % (resp.subject, resp.reflection_count))
-
-    if resp.feedback:
-        print("\nFeedback (read it; an analyser agent can later):")
-        for item in resp.feedback:
-            print("  [%s] %s" % (item.task, item.text))
-    elif resp.reflection_count == 0:
-        print("no reflections yet - agents call `tg reflect --feedback` before `tg done`")
-
-    print("\nPer-story signals:")
-    for row in resp.story_signals:
-        sig_str = "  ".join("%s=%s" % (k, row.signals[k]) for k in sorted(row.signals))
-        print("  %-20s  %s  (N=%d)" % (row.story.id, sig_str, row.reflections))
-
+    _print_retro(resp)
     return 0
