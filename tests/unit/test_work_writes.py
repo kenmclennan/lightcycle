@@ -1,7 +1,8 @@
 import unittest
 
 from the_grid.application.errors import UseCaseError
-from the_grid.application.work import (AddTaskInput, AddTaskUseCase, CloseStoryInput,
+from the_grid.application.work import (AddTaskInput, AddTaskUseCase, CloseEpicInput,
+                                       CloseEpicUseCase, CloseStoryInput,
                                        CloseStoryUseCase, EditTaskInput, EditTaskUseCase,
                                        FileStoryInput, FileStoryUseCase,
                                        LinkArtifactInput, LinkArtifactUseCase)
@@ -131,6 +132,37 @@ class TestCloseStory(unittest.TestCase):
         self.assertEqual(s.get_task(sid).status, "done")
         self.assertEqual(s.get_task(k).status, "done")
         self.assertEqual(wt.removed, [sid])
+
+
+class TestCloseEpic(unittest.TestCase):
+    def test_closes_epic_when_all_children_closed(self):
+        s = FakeStore()
+        epic = s.create_story("epic")
+        child = s.create_story("story", epic=epic)
+        s.close(child, "merged")
+        CloseEpicUseCase(s).execute(CloseEpicInput(epic=epic, reason="done"))
+        self.assertEqual(s.get_task(epic).status, "done")
+
+    def test_refuses_with_open_child_and_names_it(self):
+        s = FakeStore()
+        epic = s.create_story("epic")
+        child = s.create_story("story", epic=epic)
+        with self.assertRaises(UseCaseError) as ctx:
+            CloseEpicUseCase(s).execute(CloseEpicInput(epic=epic, reason="done"))
+        self.assertIn(child, str(ctx.exception))
+        self.assertEqual(s.get_task(epic).status, "ready")
+
+    def test_refuses_leaves_epic_open_with_mixed_children(self):
+        s = FakeStore()
+        epic = s.create_story("epic")
+        closed = s.create_story("done story", epic=epic)
+        open_ = s.create_story("open story", epic=epic)
+        s.close(closed, "merged")
+        with self.assertRaises(UseCaseError) as ctx:
+            CloseEpicUseCase(s).execute(CloseEpicInput(epic=epic, reason="done"))
+        self.assertIn(open_, str(ctx.exception))
+        self.assertNotIn(closed, str(ctx.exception))
+        self.assertEqual(s.get_task(epic).status, "ready")
 
 
 class TestWorktreeServiceStoryBranch(unittest.TestCase):

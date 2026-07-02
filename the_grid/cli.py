@@ -11,7 +11,8 @@ from the_grid.logrender import render_log_line
 from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
                                            WorklogInput, WorklogUseCase)
 from the_grid.application.work import (ActiveTasksUseCase, AddTaskInput, AddTaskUseCase,
-                                       BacklogInput, BacklogUseCase, CloseStoryInput,
+                                       BacklogInput, BacklogUseCase, CloseEpicInput,
+                                       CloseEpicUseCase, CloseStoryInput,
                                        CloseStoryUseCase, EditTaskInput, EditTaskUseCase,
                                        FileStoryInput, FileStoryUseCase,
                                        InboxInput, InboxUseCase, LinkArtifactInput,
@@ -379,8 +380,18 @@ def cmd_close(argv):
     ap.add_argument("story")
     ap.add_argument("reason")
     a = ap.parse_args(argv)
-    CloseStoryUseCase(_container.store, _worktrees()).execute(
-        CloseStoryInput(story=a.story, reason=a.reason))
+    children = _container.store.children(a.story)
+    is_epic = any(c.type == "story" for c in children)
+    try:
+        if is_epic:
+            CloseEpicUseCase(_container.store).execute(
+                CloseEpicInput(epic=a.story, reason=a.reason))
+        else:
+            CloseStoryUseCase(_container.store, _worktrees()).execute(
+                CloseStoryInput(story=a.story, reason=a.reason))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     print("closed %s (%s)" % (a.story, a.reason))
     return 0
 
