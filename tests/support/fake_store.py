@@ -215,6 +215,16 @@ class FakeStore(StorePort):
         self._records[tid] = b
         return tid
 
+    def create_epic(self, title, *, project=None, goal=None):
+        b = self._new_record(
+            title=title,
+            issue_type="epic",
+            labels=labels_for(project=project, goal=goal),
+        )
+        tid = b["id"]
+        self._records[tid] = b
+        return tid
+
     def children(self, story_id):
         return [bead_to_task(b) for b in self._records.values() if b.get("parent") == story_id]
 
