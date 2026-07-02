@@ -105,5 +105,32 @@ class TestTransition(unittest.TestCase):
                          "from review (rejected): add missing coverage")
 
 
+class TestEpicClose(unittest.TestCase):
+    def test_no_on_epic_close_returns_empty(self):
+        flow = Flow.assemble(METAS)
+        self.assertEqual(flow.epic_close_steps(), [])
+
+    def test_step_declaring_on_epic_close_is_returned(self):
+        metas = {
+            "inspector": {"model": "sonnet", "step": "inspect", "on_epic_close": True},
+            "coder": {"model": "sonnet", "step": "build"},
+        }
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.epic_close_steps(), [("inspect", "inspector")])
+
+    def test_agnostic_arbitrary_step_name(self):
+        metas = {"checker": {"model": "haiku", "step": "check-it", "on_epic_close": True}}
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.epic_close_steps(), [("check-it", "checker")])
+
+    def test_multiple_on_epic_close_steps_sorted(self):
+        metas = {
+            "beta": {"model": "sonnet", "step": "zz-step", "on_epic_close": True},
+            "alpha": {"model": "sonnet", "step": "aa-step", "on_epic_close": True},
+        }
+        steps = Flow.assemble(metas).epic_close_steps()
+        self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
+
+
 if __name__ == "__main__":
     unittest.main()

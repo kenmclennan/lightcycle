@@ -243,6 +243,66 @@ class TestCloseEpicWithRetro(unittest.TestCase):
         self.assertEqual([a for a in s.story_artifacts(epic) if a.type == "retro"], [])
 
 
+class TestCloseEpicOnEpicClose(unittest.TestCase):
+    def _setup(self):
+        s = FakeStore()
+        epic = s.create_story("my epic")
+        child = s.create_story("child story", epic=epic)
+        s.close(child, "merged")
+        return s, epic
+
+    def _flow_with_on_epic_close(self, store, step="process-check", role="checker"):
+        metas = {role: {"model": "sonnet", "step": step, "on_epic_close": True}}
+        return FlowService(FakeFs(metas), store)
+
+    def test_creates_task_at_on_epic_close_step(self):
+        s, epic = self._setup()
+        flow = self._flow_with_on_epic_close(s)
+        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
+        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0].step, "process-check")
+        self.assertEqual(tasks[0].role, "checker")
+
+    def test_epic_id_in_metadata_not_parent(self):
+        s, epic = self._setup()
+        flow = self._flow_with_on_epic_close(s)
+        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
+        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
+        self.assertEqual(len(tasks), 1)
+        self.assertIsNone(tasks[0].parent)
+
+    def test_task_title_contains_step_and_epic_title(self):
+        s, epic = self._setup()
+        flow = self._flow_with_on_epic_close(s)
+        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
+        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
+        self.assertEqual(tasks[0].title, "process-check: my epic")
+
+    def test_agnostic_arbitrary_step_name_not_audit(self):
+        s, epic = self._setup()
+        flow = self._flow_with_on_epic_close(s, step="scrutinise", role="scrutiniser")
+        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
+        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0].step, "scrutinise")
+
+    def test_no_on_epic_close_step_no_task_created(self):
+        s, epic = self._setup()
+        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
+        self.assertEqual(tasks, [])
+
+    def test_closed_epic_is_not_a_close_candidate(self):
+        s, epic = self._setup()
+        flow = self._flow_with_on_epic_close(s)
+        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
+        open_tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic
+                      and t.status != "done"]
+        self.assertEqual(len(open_tasks), 1)
+        self.assertEqual(s.get_task(epic).status, "done")
+
+
 class TestWorktreeServiceStoryBranch(unittest.TestCase):
     def test_none_then_branch_artifact(self):
         s = FakeStore()

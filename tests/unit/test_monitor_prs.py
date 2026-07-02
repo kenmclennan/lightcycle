@@ -16,6 +16,9 @@ class _FlowAdapter:
     def flow_next(self, step, outcome):
         return self._flow.next(step, outcome)
 
+    def outcomes_for(self, step):
+        return self._flow.outcomes_for(step)
+
     def meta_for_step(self, step):
         return {}
 

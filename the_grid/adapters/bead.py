@@ -59,4 +59,5 @@ def bead_to_task(bead):
         deps=bead.get("dependency_count") or 0,
         notes=bead.get("notes"),
         claimed_by=bead.get("assignee"),
+        epic=meta.get("epic"),
     )

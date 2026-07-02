@@ -42,4 +42,12 @@ class CloseEpicUseCase:
             ],
         })
         self._store.add_artifact(input.epic, "retro", digest)
+        epic = self._store.get_task(input.epic)
+        flow = self._flow.load_flow()
+        for step, role in flow.epic_close_steps():
+            tid = self._store.create_task(
+                "%s: %s" % (step, epic.title),
+                step=step, role=role,
+            )
+            self._store.update_metadata(tid, {"epic": input.epic})
         return CloseEpicResponse(retro=retro)

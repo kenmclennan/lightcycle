@@ -11,16 +11,17 @@ from the_grid.domain.flow.transition import Transition
 
 class Flow:
 
-    def __init__(self, owner, routes, pr_merge, pr_close, pr_rework):
+    def __init__(self, owner, routes, pr_merge, pr_close, pr_rework, epic_close=None):
         self._owner = owner
         self._routes = routes
         self._pr_merge = pr_merge
         self._pr_close = pr_close
         self._pr_rework = pr_rework
+        self._epic_close = epic_close or set()
 
     @classmethod
     def assemble(cls, role_metas) -> "Flow":
-        owner, routes, pr_merge, pr_close, pr_rework = {}, {}, {}, {}, {}
+        owner, routes, pr_merge, pr_close, pr_rework, epic_close = {}, {}, {}, {}, {}, set()
         for role, meta in role_metas.items():
             meta = meta or {}
             step = meta.get("step")
@@ -38,7 +39,9 @@ class Flow:
             declared_rework = meta.get("on_pr_rework")
             if declared_rework:
                 pr_rework[step] = declared_rework
-        return cls(owner, routes, pr_merge, pr_close, pr_rework)
+            if meta.get("on_epic_close"):
+                epic_close.add(step)
+        return cls(owner, routes, pr_merge, pr_close, pr_rework, epic_close)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -60,6 +63,9 @@ class Flow:
 
     def pr_rework_outcome(self, step):
         return self._pr_rework.get(step)
+
+    def epic_close_steps(self):
+        return [(step, self._owner[step]) for step in sorted(self._epic_close) if step in self._owner]
 
     def next(self, step, outcome):
         target = (self._routes.get(step) or {}).get(outcome)

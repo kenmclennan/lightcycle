@@ -90,6 +90,21 @@ class TestCompleteTask(unittest.TestCase):
         with self.assertRaises(UseCaseError):
             CompleteTaskUseCase(s, flow_for(METAS, s)).execute(CompleteInput(task=rid, outcome="done"))
 
+    def test_terminal_step_closes_without_routing(self):
+        terminal_metas = {"finaliser": {"model": "sonnet", "step": "finalise"}}
+        s = FakeStore()
+        tid = s.create_task("finalise: x", step="finalise", role="finaliser")
+        resp = CompleteTaskUseCase(s, flow_for(terminal_metas, s)).execute(
+            CompleteInput(task=tid, outcome="done"))
+        self.assertEqual(s.get_task(tid).status, "done")
+        self.assertIsNone(resp.next_task)
+
+    def test_step_with_routes_unknown_outcome_still_errors(self):
+        s = FakeStore()
+        bid = s.create_task("build: x", step="build", role="coder")
+        with self.assertRaises(UseCaseError):
+            CompleteTaskUseCase(s, flow_for(METAS, s)).execute(CompleteInput(task=bid, outcome="typo"))
+
 
 class TestClaimTask(unittest.TestCase):
     def _uc(self, store, config=None):
