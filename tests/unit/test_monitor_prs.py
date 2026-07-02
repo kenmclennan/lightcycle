@@ -1,9 +1,23 @@
 import unittest
 
+from the_grid.application.flow import CompleteTaskUseCase
 from the_grid.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
 from the_grid.domain.flow import Flow
-from the_grid.ports.github import GitHubEventsPort
+from the_grid.ports.github import Comment, GitHubEventsPort
 from tests.support.fake_store import FakeStore
+
+
+class _FlowAdapter:
+    """Wraps a domain Flow to satisfy CompleteTaskUseCase's duck-typed interface."""
+
+    def __init__(self, flow):
+        self._flow = flow
+
+    def flow_next(self, step, outcome):
+        return self._flow.next(step, outcome)
+
+    def meta_for_step(self, step):
+        return {}
 
 _FLOW = Flow.assemble({
     "reviewer": {
@@ -11,6 +25,7 @@ _FLOW = Flow.assemble({
         "routes": {"merged": "cleanup", "changes": "build"},
         "on_pr_merge": "merged",
         "on_pr_close": "abandoned",
+        "on_pr_rework": "changes",
     }
 })
 
@@ -22,17 +37,38 @@ _MERGE_ONLY_FLOW = Flow.assemble({
     }
 })
 
+_REWORK_ONLY_FLOW = Flow.assemble({
+    "coder": {
+        "model": "sonnet",
+        "step": "build",
+        "routes": {"done": "ready-merge"},
+    },
+    "reviewer": {
+        "step": "ready-merge",
+        "routes": {"changes": "build"},
+        "on_pr_rework": "changes",
+    },
+})
+
 
 class FakeGitHub(GitHubEventsPort):
-    def __init__(self, merged_prs=(), closed_prs=()):
+    def __init__(self, merged_prs=(), closed_prs=(), push_time=0.0, timed_comments=None):
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
+        self._push_time = push_time
+        self._timed_comments = timed_comments or []
 
     def is_merged(self, pr):
         return pr in self._merged
 
     def is_closed_unmerged(self, pr):
         return pr in self._closed
+
+    def last_push_time(self, pr):
+        return self._push_time
+
+    def comments_since(self, pr, since):
+        return [c for ts, c in self._timed_comments if ts > since]
 
 
 class FakeWorktrees:
@@ -230,6 +266,168 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertEqual(store.get_task(story).status, "ready")
 
 
+class TestMonitorPrsRework(unittest.TestCase):
+
+    def _setup(self, pr_url, github, flow=None):
+        f = flow or _REWORK_ONLY_FLOW
+        store = FakeStore()
+        story = store.create_story("in-review feature")
+        store.add_artifact(story, "pr", pr_url)
+        task = store.create_task("ready-merge: in-review feature", step="ready-merge",
+                                 role="human", parent=story)
+        worktrees = FakeWorktrees()
+        complete = CompleteTaskUseCase(store, _FlowAdapter(f))
+        uc = MonitorPrsUseCase(store, github, worktrees, f, complete)
+        return store, story, task, worktrees, uc
+
+    def _rework_comment(self, ts):
+        return (ts, Comment(author="reviewer", body="/rework fix the tests", is_top_level=True))
+
+    def _inline_comment(self, ts):
+        return (ts, Comment(author="reviewer", body="nit: rename this", is_top_level=False,
+                            path="src/foo.py", line=42))
+
+    def test_rework_comment_after_push_advances_task(self):
+        url = "https://github.com/x/y/pull/30"
+        gh = FakeGitHub(push_time=1000.0,
+                        timed_comments=[self._rework_comment(1500.0)])
+        store, story, task, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [story])
+        self.assertEqual(store.get_task(task).status, "done")
+        self.assertEqual(store.get_task(task).outcome, "changes")
+
+    def test_rework_creates_new_build_task(self):
+        url = "https://github.com/x/y/pull/31"
+        gh = FakeGitHub(push_time=1000.0,
+                        timed_comments=[self._rework_comment(1500.0)])
+        store, story, task, _, uc = self._setup(url, gh)
+
+        uc.execute()
+
+        tasks = [t for t in store.all_tasks() if t.id != task and t.type == "task"]
+        self.assertEqual(len(tasks), 1)
+        new_task = tasks[0]
+        self.assertEqual(new_task.step, "build")
+        self.assertEqual(new_task.status, "ready")
+
+    def test_rework_note_forwards_guidance_including_inline_context(self):
+        url = "https://github.com/x/y/pull/32"
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[
+            self._inline_comment(1200.0),
+            self._rework_comment(1500.0),
+        ])
+        store, story, task, _, uc = self._setup(url, gh)
+
+        uc.execute()
+
+        tasks = [t for t in store.all_tasks() if t.id != task and t.type == "task"]
+        note = store.get_task(tasks[0].id).notes
+        self.assertIn("[src/foo.py:42]", note)
+        self.assertIn("nit: rename this", note)
+
+    def test_rework_note_excludes_marker_comment_body(self):
+        url = "https://github.com/x/y/pull/33"
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[
+            self._rework_comment(1500.0),
+        ])
+        store, story, task, _, uc = self._setup(url, gh)
+
+        uc.execute()
+
+        tasks = [t for t in store.all_tasks() if t.id != task and t.type == "task"]
+        note = store.get_task(tasks[0].id).notes or ""
+        self.assertNotIn("/rework fix the tests", note)
+
+    def test_inline_only_does_not_trigger_rework(self):
+        url = "https://github.com/x/y/pull/34"
+        gh = FakeGitHub(push_time=1000.0,
+                        timed_comments=[self._inline_comment(1500.0)])
+        store, story, task, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertNotEqual(store.get_task(task).status, "done")
+        self.assertEqual(worktrees.removed, [])
+
+    def test_rework_comment_before_push_does_not_refire(self):
+        url = "https://github.com/x/y/pull/35"
+        gh = FakeGitHub(push_time=1000.0,
+                        timed_comments=[self._rework_comment(500.0)])
+        store, story, task, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertNotEqual(store.get_task(task).status, "done")
+
+    def test_bot_comment_with_rework_marker_does_not_trigger(self):
+        url = "https://github.com/x/y/pull/36"
+        bot_comment = (1500.0, Comment(author="some-ci[bot]", body="/rework", is_top_level=True))
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[bot_comment])
+        store, story, task, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+
+    def test_bot_comment_excluded_from_guidance(self):
+        url = "https://github.com/x/y/pull/37"
+        bot_inline = (1200.0, Comment(author="lint-bot[bot]", body="linting issue", is_top_level=False,
+                                      path="src/x.py", line=1))
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[
+            bot_inline,
+            self._rework_comment(1500.0),
+        ])
+        store, story, task, _, uc = self._setup(url, gh)
+
+        uc.execute()
+
+        tasks = [t for t in store.all_tasks() if t.id != task and t.type == "task"]
+        note = store.get_task(tasks[0].id).notes or ""
+        self.assertNotIn("linting issue", note)
+
+    def test_arbitrary_rework_outcome_name_is_used(self):
+        arbitrary_flow = Flow.assemble({
+            "gatekeeper": {
+                "step": "await-ship",
+                "routes": {"revise": "build-step"},
+                "on_pr_rework": "revise",
+            }
+        })
+        url = "https://github.com/x/y/pull/38"
+        store = FakeStore()
+        story = store.create_story("arbitrary rework")
+        store.add_artifact(story, "pr", url)
+        task = store.create_task("await-ship: arbitrary rework", step="await-ship", role="human",
+                                 parent=story)
+        gh = FakeGitHub(push_time=1000.0,
+                        timed_comments=[self._rework_comment(1500.0)])
+        worktrees = FakeWorktrees()
+        complete = CompleteTaskUseCase(store, _FlowAdapter(arbitrary_flow))
+        uc = MonitorPrsUseCase(store, gh, worktrees, arbitrary_flow, complete)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [story])
+        self.assertEqual(store.get_task(task).outcome, "revise")
+
+    def test_merged_pr_takes_merge_path_not_rework(self):
+        url = "https://github.com/x/y/pull/39"
+        gh = FakeGitHub(merged_prs={url}, push_time=1000.0,
+                        timed_comments=[self._rework_comment(1500.0)])
+        store, story, task, worktrees, uc = self._setup(url, gh, flow=_FLOW)
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [story])
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(store.get_task(story).status, "done")
+
+
 class FakeWorkers:
     def __init__(self):
         pass
@@ -301,6 +499,7 @@ class TestTickWithMonitor(unittest.TestCase):
             TickInput(now=1000.0))
         self.assertEqual(result.merged, [])
         self.assertEqual(result.abandoned, [])
+        self.assertEqual(result.reworked, [])
 
 
 if __name__ == "__main__":

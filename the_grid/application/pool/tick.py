@@ -26,6 +26,7 @@ class TickResponse:
     spawned: List[str]
     merged: List[str] = field(default_factory=list)
     abandoned: List[str] = field(default_factory=list)
+    reworked: List[str] = field(default_factory=list)
 
 
 class TickUseCase:
@@ -42,6 +43,7 @@ class TickUseCase:
         monitor_result = self._monitor.execute() if self._monitor else None
         merged = monitor_result.merged if monitor_result else []
         abandoned = monitor_result.abandoned if monitor_result else []
+        reworked = monitor_result.reworked if monitor_result else []
         swept = self._sweep.execute()
         spawned = []
         pool = WorkerPool.from_state(self._workers.workers_state())
@@ -54,4 +56,4 @@ class TickUseCase:
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
         return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged,
-                            abandoned=abandoned)
+                            abandoned=abandoned, reworked=reworked)
