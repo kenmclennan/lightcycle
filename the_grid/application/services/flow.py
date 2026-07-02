@@ -32,5 +32,8 @@ class FlowService:
         a = self._fs.parse_step(role)
         return a["meta"] if a else {}
 
+    def outcomes_for(self, step):
+        return self.load_flow().outcomes_for(step)
+
     def ready_roles(self):
         return ReadyQueue(self._store.ready_tasks()).distinct_roles()

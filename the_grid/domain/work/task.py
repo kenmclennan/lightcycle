@@ -24,6 +24,7 @@ class Task:
     deps: int = 0
     notes: Optional[str] = None
     claimed_by: Optional[str] = None
+    epic: Optional[str] = None
 
     def classify_for_human(self, flow):
         """Classify this for:human task for tg inbox / tg backlog as (kind, outcomes):
@@ -46,5 +47,5 @@ class Task:
             "artifacts": [a.as_dict() for a in self.artifacts],
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
-            "notes": self.notes,
+            "notes": self.notes, "epic": self.epic,
         }

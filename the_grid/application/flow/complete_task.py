@@ -29,7 +29,7 @@ class CompleteTaskUseCase:
     def execute(self, input: CompleteInput) -> CompleteResponse:
         t = self._store.get_task(input.task)
         transition = self._flow.flow_next(t.step, input.outcome)
-        if transition is None:
+        if transition is None and self._flow.outcomes_for(t.step):
             raise UseCaseError(
                 "no transition for step=%s outcome=%s; not closing. "
                 "Fix the flow or use a defined outcome." % (t.step, input.outcome))
@@ -43,6 +43,8 @@ class CompleteTaskUseCase:
         self._store.close(input.task, input.outcome)
         new = self._advance.execute(AdvanceInput(task=input.task, outcome=input.outcome)).next_task
         if input.note:
-            target = new if new else input.task
-            self._store.note(target, transition.forward_note(input.note))
+            if transition:
+                self._store.note(new if new else input.task, transition.forward_note(input.note))
+            else:
+                self._store.note(input.task, input.note)
         return CompleteResponse(next_task=new)
