@@ -5,6 +5,7 @@ routes:
   changes: build
 signals:
   resets: changes
+on_pr_merge: merged
 ---
 
 # Ready-merge (you + driver)
