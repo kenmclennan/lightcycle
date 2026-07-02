@@ -23,7 +23,8 @@ from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockIn
                                        BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
                                        CompleteInput, CompleteTaskUseCase, FlowCheckInput,
                                        FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
-from the_grid.application.pool import (ListWorkersUseCase, ResolveLogInput, ResolveLogUseCase,
+from the_grid.application.pool import (ListWorkersUseCase, MonitorMergedPrsUseCase,
+                                       ResolveLogInput, ResolveLogUseCase,
                                        SweepUseCase, TickInput, TickUseCase)
 from the_grid.application.setup import InitGridUseCase
 from the_grid.application.services.flow import FlowService
@@ -415,7 +416,11 @@ def cmd_trace(argv):
 
 
 def cmd_sweep(argv):
-    _render_tick(SweepUseCase(_container.store, _container.workers).execute())
+    result = SweepUseCase(_container.store, _container.workers).execute()
+    for bid in result.swept:
+        print("swept %s" % bid)
+    if result.pruned:
+        print("pruned %d dead worker entr%s" % (result.pruned, "y" if result.pruned == 1 else "ies"))
     return 0
 
 
@@ -517,6 +522,8 @@ def cmd_edit(argv):
 
 
 def _render_tick(result):
+    for sid in result.merged:
+        print("merged %s" % sid)
     for bid in result.swept:
         print("swept %s" % bid)
     if result.pruned:
@@ -529,7 +536,10 @@ def cmd_run(argv):
     a = ap.parse_args(argv)
     if not require_store():
         return 1
-    tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config)
+    flow = _flow().load_flow()
+    monitor = MonitorMergedPrsUseCase(_container.store, _container.github, _worktrees(), flow)
+    tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config,
+                       monitor=monitor)
     if a.once:
         _render_tick(tick.execute(TickInput(now=time.time())))
         return 0

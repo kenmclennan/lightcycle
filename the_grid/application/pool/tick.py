@@ -7,7 +7,7 @@ not yet claimed (task is None) within the boot window covers a task of its role,
 so the pool does not pile redundant workers onto one task. `now` is passed in
 (the caller owns the clock).
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 from the_grid.application.pool.sweep import SweepUseCase
@@ -24,18 +24,21 @@ class TickResponse:
     swept: List[str]
     pruned: int
     spawned: List[str]
+    merged: List[str] = field(default_factory=list)
 
 
 class TickUseCase:
 
-    def __init__(self, store, workers, spawner, config):
+    def __init__(self, store, workers, spawner, config, monitor=None):
         self._store = store
         self._workers = workers
         self._spawner = spawner
         self._config = config
         self._sweep = SweepUseCase(store, workers)
+        self._monitor = monitor
 
     def execute(self, input: TickInput) -> TickResponse:
+        merged = self._monitor.execute().merged if self._monitor else []
         swept = self._sweep.execute()
         spawned = []
         pool = WorkerPool.from_state(self._workers.workers_state())
@@ -47,4 +50,4 @@ class TickUseCase:
             for role in PoolPlan(inflight, slots).roles_to_spawn(roles):
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
-        return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned)
+        return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged)
