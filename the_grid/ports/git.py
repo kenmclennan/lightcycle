@@ -33,5 +33,9 @@ class GitPort(ABC):
         """Delete branch in root."""
 
     @abstractmethod
+    def delete_remote_branch(self, root, branch):
+        """Delete the remote branch on origin, no-op if already absent."""
+
+    @abstractmethod
     def worktree_registered(self, root, path):
         """Return True if path is a registered worktree of root."""

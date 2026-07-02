@@ -89,5 +89,7 @@ class WorktreeService:
         target = self.target_repo(story)
         if not self._git.is_git_repo(target):
             return
+        branch = self._branch_for(story)
         self._git.remove_worktree(target, self.worktree_path(story))
-        self._git.delete_branch(target, self._branch_for(story))
+        self._git.delete_branch(target, branch)
+        self._git.delete_remote_branch(target, branch)
