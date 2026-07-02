@@ -451,8 +451,15 @@ def cmd_inbox(argv):
     ap = argparse.ArgumentParser(prog="tg inbox")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    for row in InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n)).rows:
+    resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n))
+    for row in resp.rows:
         _print_human_row(row.kind, row.task)
+    if resp.candidate_epics:
+        print("close-candidate epics:")
+        for e in resp.candidate_epics:
+            print("  %s  %s (%d %s closed)  -- tg close %s <reason>"
+                  % (e.id, e.title, e.closed_story_count,
+                     "story" if e.closed_story_count == 1 else "stories", e.id))
     return 0
 
 

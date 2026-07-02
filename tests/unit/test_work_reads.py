@@ -109,5 +109,55 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertIn(self.todo, ids)
         self.assertNotIn(self.gate, ids)
 
+
+class TestInboxCandidateEpics(unittest.TestCase):
+    def test_all_closed_stories_epic_is_candidate(self):
+        s = FakeStore()
+        epic = s.create_epic("My Epic")
+        s.close(s.create_story("story 1", epic=epic), "done")
+        s.close(s.create_story("story 2", epic=epic), "done")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        self.assertIn(epic, [e.id for e in resp.candidate_epics])
+
+    def test_one_open_story_epic_not_candidate(self):
+        s = FakeStore()
+        epic = s.create_epic("My Epic")
+        s.close(s.create_story("story 1", epic=epic), "done")
+        s.create_story("story 2", epic=epic)
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        self.assertNotIn(epic, [e.id for e in resp.candidate_epics])
+
+    def test_no_children_epic_not_candidate(self):
+        s = FakeStore()
+        epic = s.create_epic("Empty Epic")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        self.assertNotIn(epic, [e.id for e in resp.candidate_epics])
+
+    def test_closed_epic_not_candidate(self):
+        s = FakeStore()
+        epic = s.create_epic("Closed Epic")
+        s.close(s.create_story("story", epic=epic), "done")
+        s.close(epic, "done")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        self.assertNotIn(epic, [e.id for e in resp.candidate_epics])
+
+    def test_candidate_epic_has_closed_story_count(self):
+        s = FakeStore()
+        epic = s.create_epic("My Epic")
+        for i in range(3):
+            s.close(s.create_story("story %d" % i, epic=epic), "done")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        candidates = {e.id: e for e in resp.candidate_epics}
+        self.assertEqual(candidates[epic].closed_story_count, 3)
+
+    def test_existing_inbox_rows_unchanged(self):
+        s = FakeStore()
+        epic = s.create_epic("My Epic")
+        s.close(s.create_story("story", epic=epic), "done")
+        gate = s.create_task("a gate", step="review", role="human")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        self.assertIn(gate, [row.task.id for row in resp.rows])
+
+
 if __name__ == "__main__":
     unittest.main()
