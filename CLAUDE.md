@@ -49,6 +49,10 @@ fast suite) or `bash tests/run.sh -k <name>`.
   runner - a future Go/godog port runs them unchanged.
 - New pure logic ships with unit tests; a new command ships with an integration test. Get it green
   before `tg done`.
+- **Never verify against the live grid store.** When checking a `tg` command by hand, point it at a
+  throwaway store (`GRID_ROOT_OVERRIDE` on a temp dir with its own `bd init`, as the integration
+  tests do) - never the live grid, or you pollute (or worse, mutate) the real backlog. Same rule as
+  the tests: isolate the store.
 
 ## Preferred skills (invoke before the work)
 
