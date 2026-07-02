@@ -25,6 +25,7 @@ class TickResponse:
     pruned: int
     spawned: List[str]
     merged: List[str] = field(default_factory=list)
+    abandoned: List[str] = field(default_factory=list)
 
 
 class TickUseCase:
@@ -38,7 +39,9 @@ class TickUseCase:
         self._monitor = monitor
 
     def execute(self, input: TickInput) -> TickResponse:
-        merged = self._monitor.execute().merged if self._monitor else []
+        monitor_result = self._monitor.execute() if self._monitor else None
+        merged = monitor_result.merged if monitor_result else []
+        abandoned = monitor_result.abandoned if monitor_result else []
         swept = self._sweep.execute()
         spawned = []
         pool = WorkerPool.from_state(self._workers.workers_state())
@@ -50,4 +53,5 @@ class TickUseCase:
             for role in PoolPlan(inflight, slots).roles_to_spawn(roles):
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
-        return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged)
+        return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged,
+                            abandoned=abandoned)
