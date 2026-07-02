@@ -38,6 +38,15 @@ def delete_branch(root, branch):
         git(root, "branch", "-D", branch)
 
 
+def remote_branch_exists(root, branch):
+    return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + branch)
+
+
+def delete_remote_branch(root, branch):
+    if remote_branch_exists(root, branch):
+        git(root, "push", "origin", "--delete", branch)
+
+
 def worktree_registered(root, path):
     proc = git(root, "worktree", "list", "--porcelain")
     if proc.returncode != 0:
@@ -72,6 +81,9 @@ class GitAdapter(GitPort):
 
     def delete_branch(self, root, branch):
         return delete_branch(root, branch)
+
+    def delete_remote_branch(self, root, branch):
+        return delete_remote_branch(root, branch)
 
     def worktree_registered(self, root, path):
         return worktree_registered(root, path)

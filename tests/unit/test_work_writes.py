@@ -28,6 +28,27 @@ class FakeConfig:
     def projects_root(self):
         return self._projects
 
+    def grid_root(self):
+        return self._projects
+
+
+class FakeGitRemove:
+    def __init__(self, repos=()):
+        self._repos = set(repos)
+        self.remote_deletes = []
+
+    def is_git_repo(self, path):
+        return path in self._repos
+
+    def remove_worktree(self, root, path):
+        pass
+
+    def delete_branch(self, root, branch):
+        pass
+
+    def delete_remote_branch(self, root, branch):
+        self.remote_deletes.append((root, branch))
+
 
 class FakeWorktrees:
     def __init__(self):
@@ -153,6 +174,28 @@ class TestFileStory(unittest.TestCase):
         with self.assertRaises(UseCaseError) as ctx:
             self._file(s, repo="missing")
         self.assertIn("app", str(ctx.exception))
+
+
+class TestWorktreeServiceRemove(unittest.TestCase):
+    def test_remove_requests_remote_branch_delete(self):
+        s = FakeStore()
+        sid = s.create_story("my story")
+        s.add_artifact(sid, "repo", "app")
+        s.add_artifact(sid, "branch", "feat/my-branch")
+        git = FakeGitRemove(repos={"/projects/app"})
+        svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
+        svc.remove(sid)
+        self.assertIn(("/projects/app", "feat/my-branch"), git.remote_deletes)
+
+    def test_remove_skips_remote_delete_when_not_git_repo(self):
+        s = FakeStore()
+        sid = s.create_story("my story")
+        s.add_artifact(sid, "repo", "app")
+        s.add_artifact(sid, "branch", "feat/my-branch")
+        git = FakeGitRemove(repos=set())
+        svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
+        svc.remove(sid)
+        self.assertEqual(git.remote_deletes, [])
 
 
 if __name__ == "__main__":
