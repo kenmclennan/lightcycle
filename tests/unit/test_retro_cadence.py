@@ -159,6 +159,48 @@ class TestRetroCadenceLastFireReference(unittest.TestCase):
         self.assertEqual(result2.fired, [])
 
 
+class TestRetroCadenceClosedFireSeen(unittest.TestCase):
+
+    def _setup_with_closed_fire(self, fired_at_date, step="trend-check", role="trend-checker"):
+        s = FakeStore()
+        for i in range(3):
+            _close_epic(s, "epic %d" % i, "2026-06-01")
+        flow = _flow_with_cadence(s, step=step, role=role)
+        tid = s.create_task("%s: cross-epic trend audit" % step, step=step, role=role)
+        s.update_metadata(tid, {"since": "2026-06-01", "fired_at": fired_at_date})
+        s.close(tid, "done")
+        return s, flow
+
+    def test_closed_prior_fire_suppresses_tick_within_interval(self):
+        s, flow = self._setup_with_closed_fire("2026-07-03")
+        gate = _gate(s, flow, interval_days=7, min_epics=3)
+        result = gate.execute(_ts("2026-07-05"))
+        self.assertEqual(result.fired, [])
+
+    def test_tick_past_interval_from_closed_fire_fires_again(self):
+        s, flow = self._setup_with_closed_fire("2026-07-01")
+        for i in range(3):
+            _close_epic(s, "new epic %d" % i, "2026-07-02")
+        gate = _gate(s, flow, interval_days=7, min_epics=3)
+        result = gate.execute(_ts("2026-07-09"))
+        self.assertEqual(len(result.fired), 1)
+        task = s.get_task(result.fired[0])
+        self.assertEqual(task.since, "2026-07-01")
+
+    def test_max_fired_at_across_multiple_closed_fires(self):
+        s = FakeStore()
+        for i in range(3):
+            _close_epic(s, "epic %d" % i, "2026-06-01")
+        flow = _flow_with_cadence(s)
+        for date in ("2026-06-15", "2026-07-01", "2026-06-20"):
+            tid = s.create_task("trend-check: audit", step="trend-check", role="trend-checker")
+            s.update_metadata(tid, {"since": "2026-06-01", "fired_at": date})
+            s.close(tid, "done")
+        gate = _gate(s, flow, interval_days=7, min_epics=3)
+        result = gate.execute(_ts("2026-07-05"))
+        self.assertEqual(result.fired, [])
+
+
 class TestRetroCadenceAgnostic(unittest.TestCase):
     def test_arbitrary_step_name_fires(self):
         s = FakeStore()

@@ -66,9 +66,7 @@ class RetroCadenceUseCase:
 
     def _last_fire_reference(self, step) -> Optional[str]:
         max_fired_at = None
-        for task in self._store.all_tasks():
-            if task.type != "task" or task.step != step:
-                continue
+        for task in self._store.tasks_at_step(step):
             if task.fired_at and (max_fired_at is None or task.fired_at > max_fired_at):
                 max_fired_at = task.fired_at
         if max_fired_at:
