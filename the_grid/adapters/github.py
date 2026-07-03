@@ -40,6 +40,19 @@ class GitHubEventsAdapter(GitHubEventsPort):
     def is_closed_unmerged(self, pr: str) -> bool:
         return self._pr_state(pr) == "CLOSED"
 
+    def is_conflicted(self, pr: str) -> bool:
+        result = subprocess.run(
+            ["gh", "pr", "view", pr, "--json", "mergeable,mergeStateStatus"],
+            capture_output=True, text=True)
+        if result.returncode != 0:
+            return False
+        try:
+            data = json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return False
+        return (data.get("mergeable") == "CONFLICTING"
+                or data.get("mergeStateStatus") == "DIRTY")
+
     def last_push_time(self, pr: str) -> float:
         parts = _repo_parts(pr)
         if not parts:

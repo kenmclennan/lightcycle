@@ -3,11 +3,16 @@ step: ready-merge
 routes:
   merged: cleanup
   changes: build
+  conflicted: resolve
+  gave-up: conflict-review
 signals:
   resets: changes
 on_pr_merge: merged
 on_pr_close: abandoned
 on_pr_rework: changes
+on_pr_conflict: conflicted
+on_pr_conflict_cap: 3
+on_pr_conflict_escalate: gave-up
 ---
 
 # Ready-merge (you + driver)

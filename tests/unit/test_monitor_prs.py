@@ -53,11 +53,51 @@ _REWORK_ONLY_FLOW = Flow.assemble({
     },
 })
 
+_CONFLICT_FLOW = Flow.assemble({
+    "watcher": {
+        "model": "sonnet",
+        "step": "watch-step",
+        "routes": {"conflicted": "fix-step", "gave-up": "escalate-step"},
+        "on_pr_conflict": "conflicted",
+        "on_pr_conflict_cap": 2,
+        "on_pr_conflict_escalate": "gave-up",
+    },
+    "fixer": {
+        "model": "sonnet",
+        "step": "fix-step",
+        "routes": {"resolved": "watch-step"},
+    },
+})
+
+_READY_MERGE_QUAD_FLOW = Flow.assemble({
+    "reviewer": {
+        "model": "sonnet",
+        "step": "watch-pr",
+        "routes": {
+            "merged": "done-step",
+            "abandoned": "done-step",
+            "changes": "build-step",
+            "conflicted": "resolve-step",
+        },
+        "on_pr_merge": "merged",
+        "on_pr_close": "abandoned",
+        "on_pr_rework": "changes",
+        "on_pr_conflict": "conflicted",
+    },
+    "resolver": {
+        "model": "sonnet",
+        "step": "resolve-step",
+        "routes": {"resolved": "watch-pr", "escalate": "human-step"},
+    },
+})
+
 
 class FakeGitHub(GitHubEventsPort):
-    def __init__(self, merged_prs=(), closed_prs=(), push_time=0.0, timed_comments=None):
+    def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
+                 timed_comments=None):
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
+        self._conflicted = set(conflicted_prs)
         self._push_time = push_time
         self._timed_comments = timed_comments or []
 
@@ -66,6 +106,9 @@ class FakeGitHub(GitHubEventsPort):
 
     def is_closed_unmerged(self, pr):
         return pr in self._closed
+
+    def is_conflicted(self, pr):
+        return pr in self._conflicted
 
     def last_push_time(self, pr):
         return self._push_time
@@ -429,6 +472,202 @@ class TestMonitorPrsRework(unittest.TestCase):
         self.assertEqual(result.merged, [story])
         self.assertEqual(result.reworked, [])
         self.assertEqual(store.get_task(story).status, "done")
+
+
+class TestMonitorPrsConflict(unittest.TestCase):
+
+    def _setup(self, pr_url, github, flow=None, prior_conflicts=0):
+        f = flow or _CONFLICT_FLOW
+        store = FakeStore()
+        story = store.create_story("conflicting feature")
+        store.add_artifact(story, "pr", pr_url)
+        for _ in range(prior_conflicts):
+            old = store.create_task("watch-step: conflicting feature", step="watch-step",
+                                    role="watcher", parent=story)
+            store.close(old, "conflicted")
+        task = store.create_task("watch-step: conflicting feature", step="watch-step",
+                                 role="watcher", parent=story)
+        worktrees = FakeWorktrees()
+        complete = CompleteTaskUseCase(store, _FlowAdapter(f))
+        uc = MonitorPrsUseCase(store, github, worktrees, f, complete)
+        return store, story, task, worktrees, uc
+
+    def test_conflicting_pr_advances_task_via_conflict_outcome(self):
+        url = "https://github.com/x/y/pull/50"
+        store, story, task, _, uc = self._setup(url, FakeGitHub(conflicted_prs={url}))
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [story])
+        self.assertEqual(store.get_task(task).status, "done")
+        self.assertEqual(store.get_task(task).outcome, "conflicted")
+
+    def test_conflicting_pr_creates_fix_task(self):
+        url = "https://github.com/x/y/pull/51"
+        store, story, task, _, uc = self._setup(url, FakeGitHub(conflicted_prs={url}))
+
+        uc.execute()
+
+        tasks = [t for t in store.all_tasks() if t.id != task and t.type == "task"
+                 and t.status != "done"]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0].step, "fix-step")
+
+    def test_unknown_mergeable_state_does_not_trigger_conflict(self):
+        url = "https://github.com/x/y/pull/52"
+        store, story, task, _, uc = self._setup(url, FakeGitHub())
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [])
+        self.assertNotEqual(store.get_task(task).status, "done")
+
+    def test_merged_pr_does_not_take_conflict_path(self):
+        url = "https://github.com/x/y/pull/53"
+        store, story, task, worktrees, uc = self._setup(
+            url, FakeGitHub(merged_prs={url}, conflicted_prs={url}),
+            flow=Flow.assemble({
+                "watcher": {
+                    "model": "sonnet",
+                    "step": "watch-step",
+                    "routes": {"merged": "done-step", "conflicted": "fix-step"},
+                    "on_pr_merge": "merged",
+                    "on_pr_conflict": "conflicted",
+                },
+            })
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [story])
+        self.assertEqual(result.conflicted, [])
+
+    def test_arbitrary_step_names_work_for_conflict(self):
+        url = "https://github.com/x/y/pull/54"
+        arbitrary_flow = Flow.assemble({
+            "sentinel": {
+                "model": "claude",
+                "step": "await-green",
+                "routes": {"stuck": "untangle-step"},
+                "on_pr_conflict": "stuck",
+            }
+        })
+        store = FakeStore()
+        story = store.create_story("arbitrary")
+        store.add_artifact(story, "pr", url)
+        task = store.create_task("await-green: arbitrary", step="await-green",
+                                 role="sentinel", parent=story)
+        worktrees = FakeWorktrees()
+        complete = CompleteTaskUseCase(store, _FlowAdapter(arbitrary_flow))
+        uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), worktrees,
+                               arbitrary_flow, complete)
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [story])
+        self.assertEqual(store.get_task(task).outcome, "stuck")
+
+    def test_escalates_after_cap_reached(self):
+        url = "https://github.com/x/y/pull/55"
+        store, story, task, _, uc = self._setup(
+            url, FakeGitHub(conflicted_prs={url}), prior_conflicts=2)
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [story])
+        self.assertEqual(store.get_task(task).outcome, "gave-up")
+
+    def test_under_cap_uses_conflict_outcome(self):
+        url = "https://github.com/x/y/pull/56"
+        store, story, task, _, uc = self._setup(
+            url, FakeGitHub(conflicted_prs={url}), prior_conflicts=1)
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [story])
+        self.assertEqual(store.get_task(task).outcome, "conflicted")
+
+    def test_escalated_task_surfaces_for_human(self):
+        url = "https://github.com/x/y/pull/57"
+        store, story, task, _, uc = self._setup(
+            url, FakeGitHub(conflicted_prs={url}), prior_conflicts=2)
+
+        uc.execute()
+
+        tasks = [t for t in store.all_tasks() if t.id != task and t.type == "task"
+                 and t.status != "done"]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0].role, "human")
+        self.assertEqual(tasks[0].step, "escalate-step")
+
+    def test_conflict_fires_when_step_also_declares_rework(self):
+        url = "https://github.com/x/y/pull/59"
+        store = FakeStore()
+        story = store.create_story("quad feature")
+        store.add_artifact(story, "pr", url)
+        task = store.create_task("watch-pr: quad feature", step="watch-pr", role="reviewer",
+                                 parent=story)
+        complete = CompleteTaskUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
+        uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
+                               _READY_MERGE_QUAD_FLOW, complete)
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [story])
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(store.get_task(task).outcome, "conflicted")
+
+    def test_rework_wins_over_conflict_when_both_conditions_true(self):
+        url = "https://github.com/x/y/pull/60"
+        store = FakeStore()
+        story = store.create_story("both quad feature")
+        store.add_artifact(story, "pr", url)
+        task = store.create_task("watch-pr: both quad feature", step="watch-pr", role="reviewer",
+                                 parent=story)
+        rework_comment = (1500.0, Comment(author="reviewer", body="/rework fix it",
+                                          is_top_level=True))
+        gh = FakeGitHub(conflicted_prs={url}, push_time=1000.0, timed_comments=[rework_comment])
+        complete = CompleteTaskUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
+        uc = MonitorPrsUseCase(store, gh, FakeWorktrees(), _READY_MERGE_QUAD_FLOW, complete)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [story])
+        self.assertEqual(result.conflicted, [])
+        self.assertEqual(store.get_task(task).outcome, "changes")
+
+    def test_no_cap_declared_never_escalates(self):
+        url = "https://github.com/x/y/pull/58"
+        no_cap_flow = Flow.assemble({
+            "watcher": {
+                "model": "sonnet",
+                "step": "watch-step",
+                "routes": {"conflicted": "fix-step"},
+                "on_pr_conflict": "conflicted",
+            },
+            "fixer": {
+                "model": "sonnet",
+                "step": "fix-step",
+                "routes": {"resolved": "watch-step"},
+            },
+        })
+        store = FakeStore()
+        story = store.create_story("no-cap feature")
+        store.add_artifact(story, "pr", url)
+        for _ in range(5):
+            old = store.create_task("watch-step: no-cap feature", step="watch-step",
+                                    role="watcher", parent=story)
+            store.close(old, "conflicted")
+        task = store.create_task("watch-step: no-cap feature", step="watch-step",
+                                 role="watcher", parent=story)
+        complete = CompleteTaskUseCase(store, _FlowAdapter(no_cap_flow))
+        uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
+                               no_cap_flow, complete)
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [story])
+        self.assertEqual(store.get_task(task).outcome, "conflicted")
 
 
 class FakeWorkers:

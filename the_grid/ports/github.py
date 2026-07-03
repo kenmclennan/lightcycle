@@ -28,5 +28,9 @@ class GitHubEventsPort(ABC):
         """Return UTC epoch seconds of the last push to the PR's head branch."""
 
     @abstractmethod
+    def is_conflicted(self, pr: str) -> bool:
+        """Return True only for definitive conflict (CONFLICTING/DIRTY); False for UNKNOWN."""
+
+    @abstractmethod
     def comments_since(self, pr: str, since: float) -> List[Comment]:
         """Return comments posted on the PR after the given UTC epoch timestamp."""
