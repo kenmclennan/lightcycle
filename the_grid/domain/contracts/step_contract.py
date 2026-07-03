@@ -29,5 +29,8 @@ class StepContract:
     def missing_inputs(self, present):
         return self.required_inputs() - set(present)
 
-    def missing_outputs(self, present):
-        return self.required_outputs() - set(present)
+    def missing_outputs(self, present, target=None):
+        if target is None:
+            return set()
+        required = self.required_outputs() & target.required_inputs()
+        return required - set(present)
