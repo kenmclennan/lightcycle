@@ -55,6 +55,15 @@ class TestBranchPrefix(unittest.TestCase):
         self.assertEqual(_cfg(branch_prefix="wip").branch_prefix(), "wip")
 
 
+class TestShortcode(unittest.TestCase):
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().shortcode()
+
+    def test_config_value_read(self):
+        self.assertEqual(_cfg(shortcode="GRID").shortcode(), "GRID")
+
+
 class TestMaxAgents(unittest.TestCase):
     def test_missing_key_raises(self):
         with self.assertRaises(ConfigError):
@@ -133,6 +142,7 @@ class TestEnsureConfig(unittest.TestCase):
         text = Path(p).read_text()
         self.assertIn("max-agents: 5", text)
         self.assertIn("branch-prefix: feat", text)
+        self.assertIn("shortcode: PROJ", text)
         self.assertIn("editor: vi", text)
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
@@ -164,7 +174,7 @@ class TestEnsureConfig(unittest.TestCase):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
         all_keys = (
-            "projects: /p\nspecs: /s\nbranch-prefix: feat\nmax-agents: 5\n"
+            "projects: /p\nspecs: /s\nbranch-prefix: feat\nshortcode: PROJ\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
             "retro-interval-days: 7\nretro-min-epics: 3\n"

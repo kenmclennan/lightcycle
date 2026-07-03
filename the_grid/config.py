@@ -8,6 +8,7 @@ _SEED_KEYS = [
     ("projects", "~/workspace/projects"),
     ("specs", "~/workspace/specs"),
     ("branch-prefix", "feat"),
+    ("shortcode", "PROJ"),
     ("max-agents", "5"),
     ("worktree-retries", "6"),
     ("worktree-retry-sleep", "0.25"),
@@ -155,6 +156,9 @@ class Config:
 
     def branch_prefix(self):
         return self._required_str("branch-prefix")
+
+    def shortcode(self):
+        return self._required_str("shortcode")
 
     def max_agents(self):
         env = self._env_int("GRID_MAX_AGENTS", None)

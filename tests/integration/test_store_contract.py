@@ -8,6 +8,7 @@ import unittest
 from the_grid.adapters.store import BdStore
 from the_grid.application.work.status import StatusUseCase
 from the_grid.config import Config
+from tests.support.store_contract import StoreContractBase
 
 _TEMPLATE = None
 
@@ -203,6 +204,22 @@ class TestBdStoreSmoke(unittest.TestCase):
         result_ids = {t.id for t in s.all_tasks()}
         for tid in created:
             self.assertIn(tid, result_ids)
+
+
+class TestBdStoreContract(StoreContractBase, unittest.TestCase):
+    def setUp(self):
+        self._root = _new_bd_root()
+        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
+        os.environ["GRID_ROOT_OVERRIDE"] = self._root
+
+    def tearDown(self):
+        if self._prior is None:
+            os.environ.pop("GRID_ROOT_OVERRIDE", None)
+        else:
+            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
+
+    def make_store(self):
+        return BdStore(Config())
 
 
 class TestBdStoreIdSeam(unittest.TestCase):
