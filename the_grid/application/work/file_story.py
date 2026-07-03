@@ -5,6 +5,8 @@ from typing import List, Optional
 from the_grid.application.errors import UseCaseError
 from the_grid.domain.contracts import FILE_PROVIDES, StepContract
 
+_NESTED_REPO_MAX_DEPTH = 2
+
 
 @dataclass(frozen=True)
 class FileStoryInput:
@@ -34,10 +36,20 @@ class FileStoryUseCase:
         return os.path.join(self._config.projects_root(), repo)
 
     def _available_repos(self):
-        pr = self._config.projects_root()
-        return [
-            name for name in self._fs.list_dir(pr) if self._git.is_git_repo(os.path.join(pr, name))
-        ]
+        found = []
+        self._collect_repos(self._config.projects_root(), "", 1, found)
+        return found
+
+    def _collect_repos(self, abs_dir, rel_prefix, depth, found):
+        for name in self._fs.list_dir(abs_dir):
+            if name.startswith("."):
+                continue
+            child_abs = os.path.join(abs_dir, name)
+            child_rel = "%s/%s" % (rel_prefix, name) if rel_prefix else name
+            if self._git.is_git_repo(child_abs):
+                found.append(child_rel)
+            elif depth < _NESTED_REPO_MAX_DEPTH:
+                self._collect_repos(child_abs, child_rel, depth + 1, found)
 
     def execute(self, input: FileStoryInput) -> FileStoryResponse:
         flow = self._flow.load_flow()
