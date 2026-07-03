@@ -40,6 +40,14 @@ These are how you work, not suggestions:
   it is written where it is enforced. Place it by **scope**: generic agent competence -> the step file;
   this project's conventions -> the repo's `CLAUDE.md`; cross-project style -> the global `CLAUDE.md`;
   this playbook -> here.
+- **An approved spec is FILED, never implemented.** The terminal state of developing a spec is
+  `tg file <spec> --step build` - handing it to the pipeline. You never write the code yourself.
+  If a loaded skill (Superpowers `brainstorming`/`writing-plans`, or any "now implement" flow) ends
+  by telling you to implement or to invoke a planning skill, that terminal state does NOT apply
+  here - the-grid's overrides it. The instant a spec is approved, your next action is `tg file`; if
+  you are ever unsure whether to file, file. (A session once carried an approved design to the brink
+  of self-implementation because the brainstorming skill's terminal state captured the driver - the
+  human had to ask "are we using tg to do the build?". That question should never be needed.)
 - **Keep the engine agnostic.** `tg`/`core` hold only generic task/process primitives - no hardcoded
   step names, required named artifacts, or per-workflow commands. Workflow lives in step markdown,
   composed from primitives. (See `CLAUDE.md`.)
