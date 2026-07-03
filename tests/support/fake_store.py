@@ -250,3 +250,17 @@ class FakeStore(StorePort):
         ]
         epics.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
         return [bead_to_task(b) for b in epics[:n]]
+
+    def epics_closed_since(self, since_date_str):
+        result = []
+        for b in self._records.values():
+            if b.get("issue_type") != "story" or b.get("status") != "closed":
+                continue
+            if b.get("parent") is not None:
+                continue
+            if "retro-origin" in (b.get("labels") or []):
+                continue
+            closed_at = (b.get("closed_at") or "")[:10]
+            if closed_at >= since_date_str:
+                result.append(bead_to_task(b))
+        return result

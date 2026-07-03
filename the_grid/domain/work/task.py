@@ -25,6 +25,9 @@ class Task:
     notes: Optional[str] = None
     claimed_by: Optional[str] = None
     epic: Optional[str] = None
+    since: Optional[str] = None
+    fired_at: Optional[str] = None
+    closed_at: Optional[str] = None
 
     def classify_for_human(self, flow):
         """Classify this for:human task for tg inbox / tg backlog as (kind, outcomes):
@@ -48,4 +51,5 @@ class Task:
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "notes": self.notes, "epic": self.epic,
+            "since": self.since, "fired_at": self.fired_at,
         }

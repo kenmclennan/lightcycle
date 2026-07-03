@@ -60,4 +60,7 @@ def bead_to_task(bead):
         notes=bead.get("notes"),
         claimed_by=bead.get("assignee"),
         epic=meta.get("epic"),
+        since=meta.get("since"),
+        fired_at=meta.get("fired_at"),
+        closed_at=bead.get("closed_at"),
     )

@@ -32,6 +32,8 @@ class Config:
     DEFAULT_POLL_SECONDS = 5
     DEFAULT_WORKER_HISTORY = 20
     DEFAULT_EDITOR = "vi"
+    DEFAULT_RETRO_INTERVAL_DAYS = 7
+    DEFAULT_RETRO_MIN_EPICS = 3
 
     def __init__(self, environ=None):
         self._environ = environ if environ is not None else os.environ
@@ -163,6 +165,32 @@ class Config:
 
     def editor(self):
         return self._env("EDITOR") or self.DEFAULT_EDITOR
+
+    def retro_interval_days(self):
+        env = self._env_int("GRID_RETRO_INTERVAL_DAYS", None)
+        if env is not None:
+            return env
+        raw = (self.load_config().get("retro-interval-days")
+               or self.load_config().get("retro_interval_days"))
+        if not raw:
+            return self.DEFAULT_RETRO_INTERVAL_DAYS
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            raise ConfigError("config value 'retro-interval-days' must be an integer (got %r)" % raw)
+
+    def retro_min_epics(self):
+        env = self._env_int("GRID_RETRO_MIN_EPICS", None)
+        if env is not None:
+            return env
+        raw = (self.load_config().get("retro-min-epics")
+               or self.load_config().get("retro_min_epics"))
+        if not raw:
+            return self.DEFAULT_RETRO_MIN_EPICS
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            raise ConfigError("config value 'retro-min-epics' must be an integer (got %r)" % raw)
 
     # ---- the spawn protocol (set per child process by the spawner) ----
 

@@ -129,3 +129,8 @@ class StorePort(ABC):
     @abstractmethod
     def last_n_closed_epics(self, n):
         """Return the last N closed top-level stories (epics), ordered by closed_at descending."""
+
+    @abstractmethod
+    def epics_closed_since(self, since_date_str):
+        """Return closed top-level stories (epics) with closed_at >= since_date_str,
+        excluding those labelled retro-origin."""

@@ -27,23 +27,27 @@ class TickResponse:
     merged: List[str] = field(default_factory=list)
     abandoned: List[str] = field(default_factory=list)
     reworked: List[str] = field(default_factory=list)
+    cadence_fired: List[str] = field(default_factory=list)
 
 
 class TickUseCase:
 
-    def __init__(self, store, workers, spawner, config, monitor=None):
+    def __init__(self, store, workers, spawner, config, monitor=None, cadence_gate=None):
         self._store = store
         self._workers = workers
         self._spawner = spawner
         self._config = config
         self._sweep = SweepUseCase(store, workers)
         self._monitor = monitor
+        self._cadence_gate = cadence_gate
 
     def execute(self, input: TickInput) -> TickResponse:
         monitor_result = self._monitor.execute() if self._monitor else None
         merged = monitor_result.merged if monitor_result else []
         abandoned = monitor_result.abandoned if monitor_result else []
         reworked = monitor_result.reworked if monitor_result else []
+        cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
+        cadence_fired = cadence_result.fired if cadence_result else []
         swept = self._sweep.execute()
         spawned = []
         pool = WorkerPool.from_state(self._workers.workers_state())
@@ -56,4 +60,4 @@ class TickUseCase:
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
         return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged,
-                            abandoned=abandoned, reworked=reworked)
+                            abandoned=abandoned, reworked=reworked, cadence_fired=cadence_fired)

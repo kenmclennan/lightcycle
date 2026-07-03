@@ -1543,5 +1543,31 @@ class TestWorklog(unittest.TestCase):
         self.assertIn("worklog", r.stdout)
 
 
+class TestCadenceTaskDTO(unittest.TestCase):
+    """Verifies that the CLI DTO emitted by tg show / tg claim includes 'since'."""
+
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_show_cadence_task_includes_since(self):
+        tid = self.store.create_task("trend: window", step="audit", role="auditor")
+        self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["since"], "2025-12-01")
+        self.assertEqual(d["fired_at"], "2026-01-01")
+
+    def test_claim_cadence_task_includes_since(self):
+        tid = self.store.create_task("trend: window", step="audit", role="auditor")
+        self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
+        rc, out, err = call(_cli_mod.cmd_claim, "auditor")
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["id"], tid)
+        self.assertEqual(d["since"], "2025-12-01")
+        self.assertEqual(d["fired_at"], "2026-01-01")
+
+
 if __name__ == "__main__":
     unittest.main()
