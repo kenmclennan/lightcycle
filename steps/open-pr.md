@@ -27,7 +27,10 @@ You are an ephemeral Open-PR agent in the-grid. You claim ONE task, complete it,
    `tg done TASK conflicted` (-> resolve) and EXIT.
 5. PUSH: `git push --force-with-lease` (the rebase rewrote history).
 6. Find or open the PR - NEVER a duplicate. `gh pr list --head BRANCH`; if one exists, use it.
-   Only if none exists: `gh pr create` targeting main. Then `tg link STORY pr <url>`.
+   Only if none exists: `gh pr create` targeting main. Title it `<commit-subject> (<SPEC-ID>)` -
+   the branch's commit subject, and if it does not already end with the spec id, append it in
+   parens (the leading id token of the story's `spec` artifact filename, e.g. `GRID-045`) for
+   PR->spec traceability. Then `tg link STORY pr <url>`.
 7. Reflect: `tg reflect TASK --feedback "<text>"`. Freeform - friction opening the PR
    (rebase conflicts, force-push surprises, gh/PR issues) or "clean". Skip only if truly nothing.
 8. `tg done TASK done` (-> watch-pr). One-line summary. EXIT.
