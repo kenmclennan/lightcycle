@@ -8,8 +8,6 @@ from tests.support.fake_store import FakeStore
 
 
 class _FlowAdapter:
-    """Wraps a domain Flow to satisfy CompleteTaskUseCase's duck-typed interface."""
-
     def __init__(self, flow):
         self._flow = flow
 
@@ -22,36 +20,43 @@ class _FlowAdapter:
     def meta_for_step(self, step):
         return {}
 
-_FLOW = Flow.assemble({
-    "reviewer": {
-        "step": "ready-merge",
-        "routes": {"merged": "cleanup", "changes": "build"},
-        "on_pr_merge": "merged",
-        "on_pr_close": "abandoned",
-        "on_pr_rework": "changes",
-    }
-})
 
-_MERGE_ONLY_FLOW = Flow.assemble({
-    "reviewer": {
-        "step": "ready-merge",
-        "routes": {"merged": "cleanup", "changes": "build"},
-        "on_pr_merge": "merged",
+_FLOW = Flow.assemble(
+    {
+        "reviewer": {
+            "step": "ready-merge",
+            "routes": {"merged": "cleanup", "changes": "build"},
+            "on_pr_merge": "merged",
+            "on_pr_close": "abandoned",
+            "on_pr_rework": "changes",
+        }
     }
-})
+)
 
-_REWORK_ONLY_FLOW = Flow.assemble({
-    "coder": {
-        "model": "sonnet",
-        "step": "build",
-        "routes": {"done": "ready-merge"},
-    },
-    "reviewer": {
-        "step": "ready-merge",
-        "routes": {"changes": "build"},
-        "on_pr_rework": "changes",
-    },
-})
+_MERGE_ONLY_FLOW = Flow.assemble(
+    {
+        "reviewer": {
+            "step": "ready-merge",
+            "routes": {"merged": "cleanup", "changes": "build"},
+            "on_pr_merge": "merged",
+        }
+    }
+)
+
+_REWORK_ONLY_FLOW = Flow.assemble(
+    {
+        "coder": {
+            "model": "sonnet",
+            "step": "build",
+            "routes": {"done": "ready-merge"},
+        },
+        "reviewer": {
+            "step": "ready-merge",
+            "routes": {"changes": "build"},
+            "on_pr_rework": "changes",
+        },
+    }
+)
 
 _CONFLICT_FLOW = Flow.assemble({
     "watcher": {
@@ -126,13 +131,13 @@ class FakeWorktrees:
 
 
 class TestMonitorPrsMerged(unittest.TestCase):
-
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()
         story = store.create_story("my feature")
         store.add_artifact(story, "pr", pr_url)
-        task = store.create_task("ready-merge: my feature", step="ready-merge", role="human",
-                                 parent=story)
+        task = store.create_task(
+            "ready-merge: my feature", step="ready-merge", role="human", parent=story
+        )
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, github, worktrees, flow or _FLOW)
         return store, story, task, worktrees, uc
@@ -173,8 +178,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         story = store.create_story("done feature")
         store.add_artifact(story, "pr", url)
-        task = store.create_task("ready-merge: done feature", step="ready-merge", role="human",
-                                 parent=story)
+        task = store.create_task(
+            "ready-merge: done feature", step="ready-merge", role="human", parent=story
+        )
         store.close(task, "merged")
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FLOW)
@@ -186,8 +192,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_task_without_pr_artifact_is_skipped(self):
         store = FakeStore()
         story = store.create_story("no-pr feature")
-        store.create_task("ready-merge: no-pr feature", step="ready-merge", role="human",
-                          parent=story)
+        store.create_task(
+            "ready-merge: no-pr feature", step="ready-merge", role="human", parent=story
+        )
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={"anything"})
         uc = MonitorPrsUseCase(store, github, worktrees, _FLOW)
@@ -208,8 +215,13 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
     def test_arbitrary_step_and_outcome_names_monitored_via_merge(self):
         arbitrary_flow = Flow.assemble(
-            {"gatekeeper": {"step": "await-ship", "routes": {"shipped": "done-step"},
-                            "on_pr_merge": "shipped"}}
+            {
+                "gatekeeper": {
+                    "step": "await-ship",
+                    "routes": {"shipped": "done-step"},
+                    "on_pr_merge": "shipped",
+                }
+            }
         )
         url = "https://github.com/x/y/pull/99"
         store = FakeStore()
@@ -227,13 +239,13 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
 
 class TestMonitorPrsClosedUnmerged(unittest.TestCase):
-
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()
         story = store.create_story("abandoned feature")
         store.add_artifact(story, "pr", pr_url)
-        task = store.create_task("ready-merge: abandoned feature", step="ready-merge", role="human",
-                                 parent=story)
+        task = store.create_task(
+            "ready-merge: abandoned feature", step="ready-merge", role="human", parent=story
+        )
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, github, worktrees, flow or _FLOW)
         return store, story, task, worktrees, uc
@@ -278,20 +290,23 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertEqual(result.merged, [story])
 
     def test_arbitrary_close_outcome_name_is_used(self):
-        arbitrary_flow = Flow.assemble({
-            "gatekeeper": {
-                "step": "await-ship",
-                "routes": {"shipped": "done-step", "cancelled": "done-step"},
-                "on_pr_merge": "shipped",
-                "on_pr_close": "cancelled",
+        arbitrary_flow = Flow.assemble(
+            {
+                "gatekeeper": {
+                    "step": "await-ship",
+                    "routes": {"shipped": "done-step", "cancelled": "done-step"},
+                    "on_pr_merge": "shipped",
+                    "on_pr_close": "cancelled",
+                }
             }
-        })
+        )
         url = "https://github.com/x/y/pull/20"
         store = FakeStore()
         story = store.create_story("cancelled work")
         store.add_artifact(story, "pr", url)
-        store.create_task("await-ship: cancelled work", step="await-ship", role="human",
-                          parent=story)
+        store.create_task(
+            "await-ship: cancelled work", step="await-ship", role="human", parent=story
+        )
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, arbitrary_flow)
 
@@ -303,8 +318,9 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
 
     def test_step_without_on_pr_close_not_abandoned_on_close(self):
         url = "https://github.com/x/y/pull/21"
-        store, story, task, worktrees, uc = self._setup(url, FakeGitHub(closed_prs={url}),
-                                                        flow=_MERGE_ONLY_FLOW)
+        store, story, task, worktrees, uc = self._setup(
+            url, FakeGitHub(closed_prs={url}), flow=_MERGE_ONLY_FLOW
+        )
 
         result = uc.execute()
 
@@ -313,14 +329,14 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
 
 
 class TestMonitorPrsRework(unittest.TestCase):
-
     def _setup(self, pr_url, github, flow=None):
         f = flow or _REWORK_ONLY_FLOW
         store = FakeStore()
         story = store.create_story("in-review feature")
         store.add_artifact(story, "pr", pr_url)
-        task = store.create_task("ready-merge: in-review feature", step="ready-merge",
-                                 role="human", parent=story)
+        task = store.create_task(
+            "ready-merge: in-review feature", step="ready-merge", role="human", parent=story
+        )
         worktrees = FakeWorktrees()
         complete = CompleteTaskUseCase(store, _FlowAdapter(f))
         uc = MonitorPrsUseCase(store, github, worktrees, f, complete)
@@ -330,13 +346,20 @@ class TestMonitorPrsRework(unittest.TestCase):
         return (ts, Comment(author="reviewer", body="/rework fix the tests", is_top_level=True))
 
     def _inline_comment(self, ts):
-        return (ts, Comment(author="reviewer", body="nit: rename this", is_top_level=False,
-                            path="src/foo.py", line=42))
+        return (
+            ts,
+            Comment(
+                author="reviewer",
+                body="nit: rename this",
+                is_top_level=False,
+                path="src/foo.py",
+                line=42,
+            ),
+        )
 
     def test_rework_comment_after_push_advances_task(self):
         url = "https://github.com/x/y/pull/30"
-        gh = FakeGitHub(push_time=1000.0,
-                        timed_comments=[self._rework_comment(1500.0)])
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._rework_comment(1500.0)])
         store, story, task, worktrees, uc = self._setup(url, gh)
 
         result = uc.execute()
@@ -347,8 +370,7 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_rework_creates_new_build_task(self):
         url = "https://github.com/x/y/pull/31"
-        gh = FakeGitHub(push_time=1000.0,
-                        timed_comments=[self._rework_comment(1500.0)])
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._rework_comment(1500.0)])
         store, story, task, _, uc = self._setup(url, gh)
 
         uc.execute()
@@ -361,10 +383,13 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_rework_note_forwards_guidance_including_inline_context(self):
         url = "https://github.com/x/y/pull/32"
-        gh = FakeGitHub(push_time=1000.0, timed_comments=[
-            self._inline_comment(1200.0),
-            self._rework_comment(1500.0),
-        ])
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_comments=[
+                self._inline_comment(1200.0),
+                self._rework_comment(1500.0),
+            ],
+        )
         store, story, task, _, uc = self._setup(url, gh)
 
         uc.execute()
@@ -376,9 +401,12 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_rework_note_excludes_marker_comment_body(self):
         url = "https://github.com/x/y/pull/33"
-        gh = FakeGitHub(push_time=1000.0, timed_comments=[
-            self._rework_comment(1500.0),
-        ])
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_comments=[
+                self._rework_comment(1500.0),
+            ],
+        )
         store, story, task, _, uc = self._setup(url, gh)
 
         uc.execute()
@@ -389,8 +417,7 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_inline_only_does_not_trigger_rework(self):
         url = "https://github.com/x/y/pull/34"
-        gh = FakeGitHub(push_time=1000.0,
-                        timed_comments=[self._inline_comment(1500.0)])
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._inline_comment(1500.0)])
         store, story, task, worktrees, uc = self._setup(url, gh)
 
         result = uc.execute()
@@ -401,8 +428,7 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_rework_comment_before_push_does_not_refire(self):
         url = "https://github.com/x/y/pull/35"
-        gh = FakeGitHub(push_time=1000.0,
-                        timed_comments=[self._rework_comment(500.0)])
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._rework_comment(500.0)])
         store, story, task, worktrees, uc = self._setup(url, gh)
 
         result = uc.execute()
@@ -422,12 +448,23 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_bot_comment_excluded_from_guidance(self):
         url = "https://github.com/x/y/pull/37"
-        bot_inline = (1200.0, Comment(author="lint-bot[bot]", body="linting issue", is_top_level=False,
-                                      path="src/x.py", line=1))
-        gh = FakeGitHub(push_time=1000.0, timed_comments=[
-            bot_inline,
-            self._rework_comment(1500.0),
-        ])
+        bot_inline = (
+            1200.0,
+            Comment(
+                author="lint-bot[bot]",
+                body="linting issue",
+                is_top_level=False,
+                path="src/x.py",
+                line=1,
+            ),
+        )
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_comments=[
+                bot_inline,
+                self._rework_comment(1500.0),
+            ],
+        )
         store, story, task, _, uc = self._setup(url, gh)
 
         uc.execute()
@@ -437,21 +474,23 @@ class TestMonitorPrsRework(unittest.TestCase):
         self.assertNotIn("linting issue", note)
 
     def test_arbitrary_rework_outcome_name_is_used(self):
-        arbitrary_flow = Flow.assemble({
-            "gatekeeper": {
-                "step": "await-ship",
-                "routes": {"revise": "build-step"},
-                "on_pr_rework": "revise",
+        arbitrary_flow = Flow.assemble(
+            {
+                "gatekeeper": {
+                    "step": "await-ship",
+                    "routes": {"revise": "build-step"},
+                    "on_pr_rework": "revise",
+                }
             }
-        })
+        )
         url = "https://github.com/x/y/pull/38"
         store = FakeStore()
         story = store.create_story("arbitrary rework")
         store.add_artifact(story, "pr", url)
-        task = store.create_task("await-ship: arbitrary rework", step="await-ship", role="human",
-                                 parent=story)
-        gh = FakeGitHub(push_time=1000.0,
-                        timed_comments=[self._rework_comment(1500.0)])
+        task = store.create_task(
+            "await-ship: arbitrary rework", step="await-ship", role="human", parent=story
+        )
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._rework_comment(1500.0)])
         worktrees = FakeWorktrees()
         complete = CompleteTaskUseCase(store, _FlowAdapter(arbitrary_flow))
         uc = MonitorPrsUseCase(store, gh, worktrees, arbitrary_flow, complete)
@@ -463,8 +502,9 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_merged_pr_takes_merge_path_not_rework(self):
         url = "https://github.com/x/y/pull/39"
-        gh = FakeGitHub(merged_prs={url}, push_time=1000.0,
-                        timed_comments=[self._rework_comment(1500.0)])
+        gh = FakeGitHub(
+            merged_prs={url}, push_time=1000.0, timed_comments=[self._rework_comment(1500.0)]
+        )
         store, story, task, worktrees, uc = self._setup(url, gh, flow=_FLOW)
 
         result = uc.execute()
@@ -704,7 +744,6 @@ class FakeConfig:
 
 
 class TestTickWithMonitor(unittest.TestCase):
-
     def test_tick_runs_monitor_and_returns_merged(self):
         url = "https://github.com/x/y/pull/5"
         store = FakeStore()
@@ -714,8 +753,9 @@ class TestTickWithMonitor(unittest.TestCase):
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FLOW)
 
-        result = TickUseCase(store, FakeWorkers(), FakeSpawner(), FakeConfig(),
-                             monitor=monitor).execute(TickInput(now=1000.0))
+        result = TickUseCase(
+            store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
+        ).execute(TickInput(now=1000.0))
 
         self.assertEqual(result.merged, [story])
         self.assertEqual(result.abandoned, [])
@@ -725,12 +765,15 @@ class TestTickWithMonitor(unittest.TestCase):
         store = FakeStore()
         story = store.create_story("abandoned me")
         store.add_artifact(story, "pr", url)
-        store.create_task("ready-merge: abandoned me", step="ready-merge", role="human", parent=story)
+        store.create_task(
+            "ready-merge: abandoned me", step="ready-merge", role="human", parent=story
+        )
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FLOW)
 
-        result = TickUseCase(store, FakeWorkers(), FakeSpawner(), FakeConfig(),
-                             monitor=monitor).execute(TickInput(now=1000.0))
+        result = TickUseCase(
+            store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
+        ).execute(TickInput(now=1000.0))
 
         self.assertEqual(result.abandoned, [story])
         self.assertEqual(result.merged, [])
@@ -738,7 +781,8 @@ class TestTickWithMonitor(unittest.TestCase):
     def test_tick_without_monitor_has_empty_merged_and_abandoned(self):
         store = FakeStore()
         result = TickUseCase(store, FakeWorkers(), FakeSpawner(), FakeConfig()).execute(
-            TickInput(now=1000.0))
+            TickInput(now=1000.0)
+        )
         self.assertEqual(result.merged, [])
         self.assertEqual(result.abandoned, [])
         self.assertEqual(result.reworked, [])

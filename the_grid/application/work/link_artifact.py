@@ -1,4 +1,3 @@
-"""LinkArtifact: attach an artifact (pr, branch, spec, ...) to a story."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -12,7 +11,6 @@ class LinkArtifactInput:
 
 
 class LinkArtifactUseCase:
-
     def __init__(self, store):
         self._store = store
 

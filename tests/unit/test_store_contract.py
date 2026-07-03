@@ -1,4 +1,3 @@
-"""Full port-contract suite against FakeStore (no subprocess)."""
 import unittest
 
 from tests.support.fake_store import FakeStore
@@ -6,7 +5,6 @@ from tests.support.store_contract import StoreContractBase
 
 
 class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
-
     def make_store(self):
         return FakeStore()
 

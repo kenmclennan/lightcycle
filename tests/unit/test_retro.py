@@ -12,8 +12,10 @@ def tk(**kw):
 class TestSignalSpec(unittest.TestCase):
     def test_parse_exact(self):
         spec = SignalSpec.parse("review_rounds", "review", "rejected")
-        self.assertEqual((spec.name, spec.step, spec.outcome, spec.match),
-                         ("review_rounds", "review", "rejected", "exact"))
+        self.assertEqual(
+            (spec.name, spec.step, spec.outcome, spec.match),
+            ("review_rounds", "review", "rejected", "exact"),
+        )
 
     def test_parse_contains_via_tilde(self):
         spec = SignalSpec.parse("conflicts", "open-pr", "~conflict")
@@ -35,8 +37,8 @@ class TestSignals(unittest.TestCase):
     METAS = {
         "reviewer": {"step": "review", "signals": {"review_rounds": "rejected"}},
         "pr-watcher": {"step": "open-pr", "signals": {"conflicts": "~conflict"}},
-        "coder": {"step": "build"},  # no signals declared
-        "driver": {"model": "opus"},  # no step
+        "coder": {"step": "build"},
+        "driver": {"model": "opus"},
     }
 
     def test_from_metas_reads_declarations(self):
@@ -49,11 +51,14 @@ class TestSignals(unittest.TestCase):
         self.assertEqual(signals.tally(tasks), {"review_rounds": 1, "conflicts": 1})
 
     def test_tally_reports_zero_for_declared_but_unmatched(self):
-        self.assertEqual(Signals.from_metas(self.METAS).tally([]),
-                         {"review_rounds": 0, "conflicts": 0})
+        self.assertEqual(
+            Signals.from_metas(self.METAS).tally([]), {"review_rounds": 0, "conflicts": 0}
+        )
 
     def test_no_declarations_gives_empty_tally(self):
-        self.assertEqual(Signals.from_metas({"coder": {"step": "build"}}).tally([tk(step="build")]), {})
+        self.assertEqual(
+            Signals.from_metas({"coder": {"step": "build"}}).tally([tk(step="build")]), {}
+        )
 
     def test_same_named_signal_across_steps_aggregates(self):
         metas = {
@@ -66,24 +71,31 @@ class TestSignals(unittest.TestCase):
             tk(id="b", step="watch-pr", outcome="ci-failed"),
             tk(id="c", step="ready-merge", outcome="changes"),
             tk(id="d", step="ready-merge", outcome="changes"),
-            tk(id="e", step="review", outcome="done"),  # forward, not a reset
+            tk(id="e", step="review", outcome="done"),
         ]
         self.assertEqual(Signals.from_metas(metas).tally(tasks), {"resets": 4})
 
 
 class TestRetro(unittest.TestCase):
     def test_collects_feedback_with_task_ids(self):
-        refs = [Reflection(task="t1", feedback="pytest not found"),
-                Reflection(task="t2", feedback="spec was thin on error cases")]
-        self.assertEqual(Retro(refs).feedback(), [
-            {"task": "t1", "feedback": "pytest not found"},
-            {"task": "t2", "feedback": "spec was thin on error cases"},
-        ])
+        refs = [
+            Reflection(task="t1", feedback="pytest not found"),
+            Reflection(task="t2", feedback="spec was thin on error cases"),
+        ]
+        self.assertEqual(
+            Retro(refs).feedback(),
+            [
+                {"task": "t1", "feedback": "pytest not found"},
+                {"task": "t2", "feedback": "spec was thin on error cases"},
+            ],
+        )
 
     def test_skips_empty_and_whitespace_feedback(self):
-        refs = [Reflection(task="t1", feedback=""),
-                Reflection(task="t2", feedback="   "),
-                Reflection(task="t3", feedback="real feedback")]
+        refs = [
+            Reflection(task="t1", feedback=""),
+            Reflection(task="t2", feedback="   "),
+            Reflection(task="t3", feedback="real feedback"),
+        ]
         self.assertEqual([g["task"] for g in Retro(refs).feedback()], ["t3"])
 
     def test_empty_reflections(self):

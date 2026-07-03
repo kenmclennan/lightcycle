@@ -1,4 +1,3 @@
-"""Queue: the next N ready or blocked agent tasks."""
 from dataclasses import dataclass
 from typing import List
 
@@ -16,11 +15,10 @@ class QueueResponse:
 
 
 class QueueUseCase:
-
     def __init__(self, store):
         self._store = store
 
     def execute(self, input: QueueInput) -> QueueResponse:
         ready_ids = {t.id for t in self._store.ready_tasks()}
         lanes = TaskQueue(self._store.all_tasks()).by_lane(ready_ids)
-        return QueueResponse(tasks=(lanes["queue"] + lanes["blocked"])[:input.n])
+        return QueueResponse(tasks=(lanes["queue"] + lanes["blocked"])[: input.n])

@@ -1,4 +1,3 @@
-"""The work subdomain: the items flowing through the workflow and their state."""
 from the_grid.domain.work.artifact import Artifact
 from the_grid.domain.work.external_ref import ExternalRef
 from the_grid.domain.work.lane import Lane

@@ -1,4 +1,3 @@
-"""AddTask: create a standalone human task (no spec, no flow)."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -18,7 +17,6 @@ class AddTaskResponse:
 
 
 class AddTaskUseCase:
-
     def __init__(self, store):
         self._store = store
 

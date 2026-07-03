@@ -1,4 +1,3 @@
-"""Worklog: the stories shipped in a period (today, yesterday, a date, a range)."""
 import datetime
 from dataclasses import dataclass
 from typing import List, Optional
@@ -27,13 +26,15 @@ class WorklogResponse:
 
 
 class WorklogUseCase:
-
     def __init__(self, store):
         self._store = store
 
     def execute(self, input: WorklogInput) -> WorklogResponse:
         period = cfeedback.Period.resolve(input.period_args, input.today)
         rows = cfeedback.Worklog(self._store.closed_stories()).entries(period, input.tz)
-        return WorklogResponse(entries=[
-            WorklogEntry(id=r["id"], title=r["title"], outcome=r["outcome"], pr=r["pr"])
-            for r in rows])
+        return WorklogResponse(
+            entries=[
+                WorklogEntry(id=r["id"], title=r["title"], outcome=r["outcome"], pr=r["pr"])
+                for r in rows
+            ]
+        )

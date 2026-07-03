@@ -1,12 +1,4 @@
-"""StorePort contract: parameterised assertions shared by FakeStore and BdStore tests.
-
-Subclass StoreContractBase together with unittest.TestCase and implement make_store()
-to run the full suite against any StorePort implementation.
-"""
-
-
 class StoreContractBase:
-
     def make_store(self):
         raise NotImplementedError
 

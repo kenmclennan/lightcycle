@@ -1,4 +1,3 @@
-"""Retro: gather feedback + signals into a digest at story, epic, or window scope."""
 import json
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -36,7 +35,6 @@ class RetroResponse:
 
 
 class RetroUseCase:
-
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
@@ -104,8 +102,11 @@ class RetroUseCase:
                     refs.extend(self._reflections_of(t.id))
                 all_refs.extend(refs)
                 story = self._store.get_task(story_id)
-                rows.append(StorySignals(story=story, signals=signals.tally(story_tasks),
-                                         reflections=len(refs)))
+                rows.append(
+                    StorySignals(
+                        story=story, signals=signals.tally(story_tasks), reflections=len(refs)
+                    )
+                )
             for task in orphan_tasks:
                 all_refs.extend(self._reflections_of(task.id))
             label = "since:%s" % input.since
@@ -120,7 +121,10 @@ class RetroUseCase:
                 all_refs.extend(epic_refs)
             label = "last:%d" % input.last
 
-        feedback = [FeedbackItem(task=f["task"], text=f["feedback"])
-                    for f in cfeedback.Retro(all_refs).feedback()]
-        return RetroResponse(subject=label, reflection_count=len(all_refs),
-                             feedback=feedback, story_signals=rows)
+        feedback = [
+            FeedbackItem(task=f["task"], text=f["feedback"])
+            for f in cfeedback.Retro(all_refs).feedback()
+        ]
+        return RetroResponse(
+            subject=label, reflection_count=len(all_refs), feedback=feedback, story_signals=rows
+        )

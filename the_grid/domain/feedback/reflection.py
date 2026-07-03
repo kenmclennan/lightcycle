@@ -1,8 +1,3 @@
-"""Reflection: a worker's freeform feedback on a task (a value object).
-
-The feedback is read and analysed by a human or an LLM, never parsed - what
-belongs in it is guided by the agent's step file, not codified here.
-"""
 import hashlib
 from dataclasses import dataclass
 
@@ -19,14 +14,15 @@ class Reflection:
 
     @staticmethod
     def spec_hash_of(data) -> str:
-        """First 8 hex chars of SHA-256 of spec file bytes - the spec a reflection was
-        written against, so a later reader knows whether it still applies."""
         return hashlib.sha256(data).hexdigest()[:8]
 
     @classmethod
     def from_dict(cls, d: dict) -> "Reflection":
-        return cls(task=d.get("task"), feedback=d.get("feedback") or "",
-                   spec_hash=d.get("spec_hash") or "unknown")
+        return cls(
+            task=d.get("task"),
+            feedback=d.get("feedback") or "",
+            spec_hash=d.get("spec_hash") or "unknown",
+        )
 
     def as_dict(self) -> dict:
         return {"task": self.task, "feedback": self.feedback, "spec_hash": self.spec_hash}

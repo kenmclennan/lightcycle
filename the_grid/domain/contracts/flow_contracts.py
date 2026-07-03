@@ -1,26 +1,17 @@
-"""FlowContracts: static analysis of an assembled flow's artifact contracts.
-
-Contracts are read from the file that DECLARES a step (its accepts/produces
-frontmatter), not from the owner: a human step's owner is the literal "human", but
-its contract still lives in its own file. The analysis answers: which steps can be
-filed (entries), which are unreachable, which require an input no path guarantees
-(missing), which route targets are human terminals, and which steps are declared
-by more than one role (dups).
-"""
 from the_grid.domain.contracts.step_contract import StepContract
 
 FILE_PROVIDES = {"spec"}
 
 
 class FlowContracts:
-
     def __init__(self, flow, role_metas):
         self._flow = flow
         self._role_metas = role_metas
         self._declarer, self._dups = self._declare()
         self._steps = flow.steps()
-        self._contract = {s: StepContract.from_meta(role_metas.get(self._declarer.get(s)))
-                          for s in self._steps}
+        self._contract = {
+            s: StepContract.from_meta(role_metas.get(self._declarer.get(s))) for s in self._steps
+        }
 
     def _declare(self):
         declarer, dups = {}, []
@@ -45,9 +36,6 @@ class FlowContracts:
         return [s for s in self._steps if req[s] <= FILE_PROVIDES]
 
     def _guaranteed(self):
-        """Greatest fixpoint: artifact types guaranteed present when each step starts -
-        the intersection over its incoming contexts (the entry budget for filable steps,
-        plus each predecessor's guaranteed set unioned with what it produces)."""
         prod, entries = self._produced(), set(self.entries())
         universe = set().union(FILE_PROVIDES, *prod.values()) if self._steps else set()
         incoming = {s: [] for s in self._steps}

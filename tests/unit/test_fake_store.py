@@ -1,4 +1,3 @@
-"""Unit tests for FakeStore: bd semantic fidelity in isolation."""
 import unittest
 
 from tests.support.fake_store import FakeStore
@@ -229,7 +228,7 @@ class TestListBeads(unittest.TestCase):
 
     def test_claimed_tasks_are_in_progress_with_claimer(self):
         claimed = self.s.create_task("build: a", role="coder")
-        self.s.create_task("build: b", role="coder")  # ready, not claimed
+        self.s.create_task("build: b", role="coder")
         self.s.update_status(claimed, "in_progress")
         self.s.assign(claimed, "sp-1")
         got = self.s.claimed_tasks()
@@ -282,6 +281,7 @@ class TestRouteToHuman(unittest.TestCase):
 class TestNoSubprocess(unittest.TestCase):
     def test_importable_without_spawning_bd(self):
         from tests.support.fake_store import FakeStore as FS
+
         s = FS()
         tid = s.create_task("build: thing", role="coder")
         s.note(tid, "hello")

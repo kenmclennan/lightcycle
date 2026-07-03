@@ -9,8 +9,9 @@ class TestArtifact(unittest.TestCase):
         self.assertEqual(Artifact.from_dict(d).as_dict(), d)
 
     def test_as_dict_omits_absent_label(self):
-        self.assertEqual(Artifact(type="spec", value="s.md").as_dict(),
-                         {"type": "spec", "value": "s.md"})
+        self.assertEqual(
+            Artifact(type="spec", value="s.md").as_dict(), {"type": "spec", "value": "s.md"}
+        )
 
     def test_attribute_access(self):
         a = Artifact.from_dict({"type": "branch", "value": "feat/x"})

@@ -1,4 +1,3 @@
-"""FakeStore: in-memory StorePort for tests. No subprocess, no bd."""
 import datetime
 import os
 import uuid
@@ -13,18 +12,25 @@ def _new_id():
 
 
 class FakeStore(StorePort):
-
     def __init__(self):
-        self._records = {}   # id -> raw bead dict
-        self._deps = {}    # task_id -> set of blocking dep ids
-        self._history = {} # id -> list of {"Issue": {"status": ...}} (newest first)
+        self._records = {}
+        self._deps = {}
+        self._history = {}
 
     def _new_record(self, **fields):
         b = {
-            "id": _new_id(), "title": "", "issue_type": "task",
-            "labels": [], "status": "open", "assignee": None,
-            "metadata": {}, "parent": None, "dependency_count": 0,
-            "close_reason": None, "notes": None, "closed_at": None,
+            "id": _new_id(),
+            "title": "",
+            "issue_type": "task",
+            "labels": [],
+            "status": "open",
+            "assignee": None,
+            "metadata": {},
+            "parent": None,
+            "dependency_count": 0,
+            "close_reason": None,
+            "notes": None,
+            "closed_at": None,
             "description": None,
         }
         b.update(fields)
@@ -84,14 +90,18 @@ class FakeStore(StorePort):
         for b in self._records.values():
             if b.get("issue_type") != "story" or b.get("status") != "closed":
                 continue
-            result.append({
-                "id": b["id"],
-                "title": b.get("title", ""),
-                "closed_at": b.get("closed_at"),
-                "outcome": b.get("close_reason"),
-                "artifacts": [Artifact.from_dict(a)
-                              for a in ((b.get("metadata") or {}).get("artifacts") or [])],
-            })
+            result.append(
+                {
+                    "id": b["id"],
+                    "title": b.get("title", ""),
+                    "closed_at": b.get("closed_at"),
+                    "outcome": b.get("close_reason"),
+                    "artifacts": [
+                        Artifact.from_dict(a)
+                        for a in ((b.get("metadata") or {}).get("artifacts") or [])
+                    ],
+                }
+            )
         return result
 
     def ensure_store(self):
@@ -147,7 +157,8 @@ class FakeStore(StorePort):
 
     def _ready_bead_dicts(self):
         return [
-            b for b in self._records.values()
+            b
+            for b in self._records.values()
             if b.get("status") == "open"
             and not b.get("assignee")
             and not (b.get("dependency_count") or 0)
@@ -158,7 +169,9 @@ class FakeStore(StorePort):
         return [bead_to_task(b) for b in self._ready_bead_dicts()]
 
     def claim_ready(self, role):
-        candidates = [b for b in self._ready_bead_dicts() if "for:%s" % role in (b.get("labels") or [])]
+        candidates = [
+            b for b in self._ready_bead_dicts() if "for:%s" % role in (b.get("labels") or [])
+        ]
         if not candidates:
             return None
         b = candidates[0]
@@ -247,7 +260,8 @@ class FakeStore(StorePort):
 
     def last_n_closed_epics(self, n):
         epics = [
-            b for b in self._records.values()
+            b
+            for b in self._records.values()
             if b.get("issue_type") == "story"
             and b.get("status") == "closed"
             and b.get("parent") is None

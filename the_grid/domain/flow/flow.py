@@ -1,19 +1,21 @@
-"""Flow: the workflow graph assembled from the step roster (the aggregate root).
-
-The flow is read from the step markdown (each role's frontmatter): a file with
-`model` + `step` is an automated agent and owns its step as itself; a file with
-`step` but NO `model` is a human step, owned by the literal role "human" (never
-spawned, surfaces in tg inbox); a file with no `step` (the driver) owns nothing;
-a route target absent from the owner map is a human terminal.
-"""
 from the_grid.domain.flow.transition import Transition
 
 
 class Flow:
-
-    def __init__(self, owner, routes, pr_merge, pr_close, pr_rework, epic_close=None,
-                 retro_cadence=None, hooks=None, pr_conflict=None, pr_conflict_cap=None,
-                 pr_conflict_escalate=None):
+    def __init__(
+        self,
+        owner,
+        routes,
+        pr_merge,
+        pr_close,
+        pr_rework,
+        epic_close=None,
+        retro_cadence=None,
+        hooks=None,
+        pr_conflict=None,
+        pr_conflict_cap=None,
+        pr_conflict_escalate=None,
+    ):
         self._owner = owner
         self._routes = routes
         self._pr_merge = pr_merge
@@ -98,7 +100,9 @@ class Flow:
         return self._pr_conflict_escalate.get(step)
 
     def epic_close_steps(self):
-        return [(step, self._owner[step]) for step in sorted(self._epic_close) if step in self._owner]
+        return [
+            (step, self._owner[step]) for step in sorted(self._epic_close) if step in self._owner
+        ]
 
     def retro_cadence_steps(self):
         return [(step, self._owner[step]) for step in sorted(self._retro_cadence) if step in self._owner]
@@ -110,5 +114,9 @@ class Flow:
         target = (self._routes.get(step) or {}).get(outcome)
         if not target:
             return None
-        return Transition(from_step=step, outcome=outcome, to_step=target,
-                          to_role=self._owner.get(target, "human"))
+        return Transition(
+            from_step=step,
+            outcome=outcome,
+            to_step=target,
+            to_role=self._owner.get(target, "human"),
+        )

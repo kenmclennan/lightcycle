@@ -2,8 +2,14 @@ import datetime
 import json
 import unittest
 
-from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
-                                           WorklogInput, WorklogUseCase)
+from the_grid.application.feedback import (
+    ReflectInput,
+    ReflectUseCase,
+    RetroInput,
+    RetroUseCase,
+    WorklogInput,
+    WorklogUseCase,
+)
 from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -16,8 +22,9 @@ def _flow(store):
 
 
 def _add_reflection(store, task_id, feedback):
-    store.add_artifact(task_id, "reflection",
-                       json.dumps({"task": task_id, "feedback": feedback, "spec_hash": "h"}))
+    store.add_artifact(
+        task_id, "reflection", json.dumps({"task": task_id, "feedback": feedback, "spec_hash": "h"})
+    )
 
 
 class TestReflect(unittest.TestCase):

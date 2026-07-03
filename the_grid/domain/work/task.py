@@ -1,4 +1,3 @@
-"""Task: the work-item entity."""
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -40,9 +39,15 @@ class Task:
 
     def as_dict(self) -> dict:
         return {
-            "id": self.id, "title": self.title, "type": self.type, "parent": self.parent,
-            "role": self.role, "step": self.step, "status": self.status,
-            "project": self.project, "goal": self.goal,
+            "id": self.id,
+            "title": self.title,
+            "type": self.type,
+            "parent": self.parent,
+            "role": self.role,
+            "step": self.step,
+            "status": self.status,
+            "project": self.project,
+            "goal": self.goal,
             "artifacts": [a.as_dict() for a in self.artifacts],
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,

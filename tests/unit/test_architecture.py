@@ -1,14 +1,8 @@
-"""Architecture guardrail: the domain speaks no bd wire-format.
-
-The bead -> domain mapping lives only in adapters/bead.py. If bd's shape leaks
-back into the domain, this fails.
-"""
 import pathlib
 import unittest
 
 DOMAIN = pathlib.Path(__file__).resolve().parents[2] / "the_grid" / "domain"
 
-# Unambiguous bd wire-format markers - these only ever appear in the bd adapter.
 BD_MARKERS = ('"Issue"', "issue_type", "close_reason", "dependency_count")
 ALLOW = set()
 

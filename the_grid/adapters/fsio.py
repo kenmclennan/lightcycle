@@ -1,8 +1,3 @@
-"""Filesystem IO: step files and well-known dirs under the engine root.
-
-The engine root and the config file are owned by Config; these functions take an
-explicit `root` (Config.grid_root()) and do no environment reads.
-"""
 import os
 
 from the_grid.adapters import frontmatter
@@ -17,7 +12,6 @@ def step_roles(root):
 
 
 def read_md(root, relpath):
-    """Read a markdown file under the grid root; return {meta, body, path} or None."""
     path = os.path.join(root, relpath)
     if not os.path.exists(path):
         return None
@@ -28,7 +22,6 @@ def read_md(root, relpath):
 
 
 def parse_step(root, role):
-    """Read a step file steps/<role>.md; return {meta, body, path} or None."""
     return read_md(root, os.path.join("steps", "%s.md" % role))
 
 
@@ -41,7 +34,6 @@ def store_ready(root):
 
 
 def read_bytes(path):
-    """Read a file's bytes at an absolute path, or None if it does not exist."""
     if not path or not os.path.exists(path):
         return None
     with open(path, "rb") as f:
@@ -49,7 +41,6 @@ def read_bytes(path):
 
 
 def list_dir(path):
-    """Sorted names of the subdirectories of path (empty if path is not a dir)."""
     if not os.path.isdir(path):
         return []
     return sorted(e.name for e in os.scandir(path) if e.is_dir())
@@ -62,7 +53,6 @@ def ensure_logs_dir(root):
 
 
 def ensure_worktrees_ignored(root):
-    """Ensure `.worktrees/` is listed in the engine root's .gitignore (idempotent)."""
     gi = os.path.join(root, ".gitignore")
     line = ".worktrees/"
     existing = ""
@@ -78,8 +68,6 @@ def ensure_worktrees_ignored(root):
 
 
 class FsAdapter(FsPort):
-    """FsPort rooted at Config.grid_root()."""
-
     def __init__(self, config):
         self._config = config
 

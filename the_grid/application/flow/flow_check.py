@@ -1,4 +1,3 @@
-"""FlowCheck: assemble and analyze the flow (steps, routes, contracts, composition)."""
 from dataclasses import dataclass
 from typing import Dict
 
@@ -20,7 +19,6 @@ class FlowCheckResponse:
 
 
 class FlowCheckUseCase:
-
     def __init__(self, flow):
         self._flow = flow
 
@@ -30,6 +28,9 @@ class FlowCheckUseCase:
         steps = flow.steps()
         owner = {s: flow.owner_of(s) for s in steps}
         routes = {s: {o: flow.next(s, o).to_step for o in flow.outcomes_for(s)} for s in steps}
-        return FlowCheckResponse(owner=owner, routes=routes,
-                                 analysis=FlowContracts(flow, role_metas).as_dict(),
-                                 hooks=flow.hooks())
+        return FlowCheckResponse(
+            owner=owner,
+            routes=routes,
+            analysis=FlowContracts(flow, role_metas).as_dict(),
+            hooks=flow.hooks(),
+        )

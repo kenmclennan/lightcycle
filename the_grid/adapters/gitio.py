@@ -1,4 +1,3 @@
-"""Git IO: the only caller of git. Repo checks and per-story worktree plumbing."""
 import os
 import subprocess
 
@@ -48,14 +47,12 @@ def worktree_registered(root, path):
         return False
     want = os.path.realpath(path)
     for line in proc.stdout.splitlines():
-        if line.startswith("worktree ") and os.path.realpath(line[len("worktree "):]) == want:
+        if line.startswith("worktree ") and os.path.realpath(line[len("worktree ") :]) == want:
             return True
     return False
 
 
 class GitAdapter(GitPort):
-    """Thin GitPort over the module functions."""
-
     def git(self, root, *args):
         return git(root, *args)
 

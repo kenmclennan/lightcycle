@@ -1,4 +1,3 @@
-"""BdStore: the subprocess StorePort implementation (the bd adapter)."""
 import dataclasses
 import json
 import os
@@ -9,8 +8,12 @@ from the_grid.adapters.bead import bead_to_task, labels_for
 from the_grid.domain.work import Artifact, ExternalRef, TaskView
 from the_grid.ports.store import StorePort
 
-_BD_NOISE = ("bd --json output format will change", "beads.role not configured",
-             "Fix: git config", "Or:  git config")
+_BD_NOISE = (
+    "bd --json output format will change",
+    "beads.role not configured",
+    "Fix: git config",
+    "Or:  git config",
+)
 
 _UNLIMITED = ("--limit", "0")
 
@@ -20,15 +23,10 @@ def _is_noise(line):
 
 
 class BdStore(StorePort):
-
     def __init__(self, config):
         self._config = config
 
     def _env(self):
-        """Env for bd calls. Inside a worker (spawn id set), make bd record the
-        worker's UNIQUE spawnid as the claim assignee (via git's env-config override)
-        so a claim's ownership is atomic - exactly one worker holds a task, and sweep
-        can key liveness off assignee -> spawnid -> pid with no registry lag."""
         env = self._config.base_env()
         spawnid = self._config.spawn_id()
         if spawnid:
@@ -39,7 +37,9 @@ class BdStore(StorePort):
 
     def _run(self, *args):
         root = self._config.grid_root()
-        proc = subprocess.run(["bd", "-C", root, *args], capture_output=True, text=True, env=self._env())
+        proc = subprocess.run(
+            ["bd", "-C", root, *args], capture_output=True, text=True, env=self._env()
+        )
         if proc.returncode != 0:
             sys.stderr.write(proc.stderr)
             raise SystemExit("bd failed: " + " ".join(args))
@@ -119,22 +119,29 @@ class BdStore(StorePort):
         for b in beads:
             if b.get("issue_type") != "story":
                 continue
-            result.append({
-                "id": self._short(b["id"]),
-                "title": b.get("title", ""),
-                "closed_at": b.get("closed_at"),
-                "outcome": b.get("close_reason"),
-                "artifacts": [Artifact.from_dict(a)
-                              for a in ((b.get("metadata") or {}).get("artifacts") or [])],
-            })
+            result.append(
+                {
+                    "id": self._short(b["id"]),
+                    "title": b.get("title", ""),
+                    "closed_at": b.get("closed_at"),
+                    "outcome": b.get("close_reason"),
+                    "artifacts": [
+                        Artifact.from_dict(a)
+                        for a in ((b.get("metadata") or {}).get("artifacts") or [])
+                    ],
+                }
+            )
         return result
 
     def ensure_store(self):
         root = self._config.grid_root()
         if os.path.isdir(os.path.join(root, ".beads", "embeddeddolt")):
             return
-        subprocess.run(["bd", "init", "--skip-agents", "--skip-hooks",
-                        "--non-interactive", "--quiet"], cwd=root, check=True)
+        subprocess.run(
+            ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
+            cwd=root,
+            check=True,
+        )
 
     def reclaim(self, tid):
         self.update_status(tid, "open")
@@ -225,7 +232,10 @@ class BdStore(StorePort):
         return [self._strip_task(bead_to_task(b)) for b in self._json("children", self._qualify(story_id), "--json")]
 
     def claimed_tasks(self):
-        return [self._strip_task(bead_to_task(b)) for b in self._json("list", "--status", "in_progress", *_UNLIMITED, "--json")]
+        return [
+            self._strip_task(bead_to_task(b))
+            for b in self._json("list", "--status", "in_progress", *_UNLIMITED, "--json")
+        ]
 
     def history(self, tid):
         return self._json("history", self._qualify(tid), "--json")
@@ -243,11 +253,7 @@ class BdStore(StorePort):
 
     def last_n_closed_epics(self, n):
         beads = self._json("list", "--status", "closed", *_UNLIMITED, "--json")
-        epics = [
-            b for b in beads
-            if b.get("issue_type") == "story"
-            and not b.get("parent")
-        ]
+        epics = [b for b in beads if b.get("issue_type") == "story" and not b.get("parent")]
         epics.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
         return [self._strip_task(bead_to_task(b)) for b in epics[:n]]
 

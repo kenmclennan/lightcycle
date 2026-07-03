@@ -1,10 +1,3 @@
-"""WorktreeService: the per-story git worktree lifecycle.
-
-A worker never mutates the primary tree - each story gets its own worktree on a
-feature-named branch in the target repo (the engine itself by default, or the
-repo named in the story's `repo` artifact). This service owns resolving that
-target, creating/reusing the worktree, and tearing it down on close.
-"""
 import os
 import sys
 import time
@@ -14,7 +7,6 @@ from the_grid.domain.workspace import Branch, Worktree
 
 
 class WorktreeService:
-
     def __init__(self, store, git, fs, config):
         self._store = store
         self._git = git
@@ -37,8 +29,12 @@ class WorktreeService:
         return self._story(story).branch()
 
     def _branch_for(self, story):
-        return self.story_branch(story) or Branch.for_feature(
-            self._store.get_task(story).title, self._config.branch_prefix()).name
+        return (
+            self.story_branch(story)
+            or Branch.for_feature(
+                self._store.get_task(story).title, self._config.branch_prefix()
+            ).name
+        )
 
     def _ensure_branch_artifact(self, story, branch):
         if any(a.type == "branch" for a in self._store.story_artifacts(story)):
@@ -46,9 +42,6 @@ class WorktreeService:
         self._store.add_artifact(story, "branch", branch)
 
     def ensure(self, story):
-        """Create (or reuse) the per-story worktree. Returns the workspace path, or
-        None when no isolated tree can be made (not a git repo, or no origin/main to
-        branch from). Idempotent."""
         target = self.target_repo(story)
         if not self._git.is_git_repo(target):
             return None
@@ -66,9 +59,6 @@ class WorktreeService:
             add_args = ["worktree", "add", path, "-b", branch, base]
         os.makedirs(self._fs.worktrees_dir(), exist_ok=True)
         self._fs.ensure_worktrees_ignored()
-        # Several pool workers may add worktrees against one target repo at once and
-        # race on git's `.git/worktrees` lock; the add is idempotent, so retry the
-        # transient lock failure with a short backoff before giving up.
         retries = self._config.worktree_retries()
         backoff = self._config.worktree_retry_sleep()
         self._git.git(target, "worktree", "prune")
@@ -85,7 +75,6 @@ class WorktreeService:
         return path
 
     def remove(self, story):
-        """Tear down the story's worktree and delete its branch (on close)."""
         target = self.target_repo(story)
         if not self._git.is_git_repo(target):
             return

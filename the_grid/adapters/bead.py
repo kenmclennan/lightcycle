@@ -1,9 +1,3 @@
-"""The bd wire-format -> domain mapping (anti-corruption for the bead store).
-
-This is the one place that knows bd's bead shape (labels, status strings, the
-metadata block). It maps a raw bead dict to a Task so nothing past the store
-adapters ever sees the wire format.
-"""
 from the_grid.domain.work import Artifact, Status, Task
 
 
@@ -14,7 +8,7 @@ def _labels(bead):
 def _label_value(bead, prefix):
     for l in _labels(bead):
         if l.startswith(prefix):
-            return l[len(prefix):]
+            return l[len(prefix) :]
     return None
 
 
@@ -48,11 +42,15 @@ def bead_to_task(bead):
     role = _label_value(bead, "for:")
     meta = bead.get("metadata") or {}
     return Task(
-        id=bead["id"], title=bead.get("title", ""),
-        type=bead.get("issue_type"), parent=bead.get("parent"),
-        role=role, step=_label_value(bead, "step:"),
+        id=bead["id"],
+        title=bead.get("title", ""),
+        type=bead.get("issue_type"),
+        parent=bead.get("parent"),
+        role=role,
+        step=_label_value(bead, "step:"),
         status=_status_of(bead, role),
-        project=_label_value(bead, "project:"), goal=_label_value(bead, "goal:"),
+        project=_label_value(bead, "project:"),
+        goal=_label_value(bead, "goal:"),
         artifacts=[Artifact.from_dict(a) for a in (meta.get("artifacts") or [])],
         description=bead.get("description"),
         needs=meta.get("needs"),

@@ -1,4 +1,3 @@
-"""Branch: the feature branch a story's work lands on (a value object)."""
 import re
 from dataclasses import dataclass
 

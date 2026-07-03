@@ -1,8 +1,3 @@
-"""Artifact: a typed reference attached to a story (spec, branch, pr, repo, ...).
-
-A value object. Stored in the task's metadata as a plain dict, so it hydrates with
-from_dict and serialises (for the JSON views) with as_dict.
-"""
 from dataclasses import dataclass
 from typing import Optional
 

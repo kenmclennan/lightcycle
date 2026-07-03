@@ -9,10 +9,20 @@ YESTERDAY = datetime.date(2026, 6, 26)
 UTC = datetime.timezone.utc
 
 
-def story(id="s-1", title="Thing shipped", closed_at="2026-06-27T12:00:00Z",
-          outcome="merged", artifacts=None):
-    return {"id": id, "title": title, "closed_at": closed_at,
-            "outcome": outcome, "artifacts": artifacts or []}
+def story(
+    id="s-1",
+    title="Thing shipped",
+    closed_at="2026-06-27T12:00:00Z",
+    outcome="merged",
+    artifacts=None,
+):
+    return {
+        "id": id,
+        "title": title,
+        "closed_at": closed_at,
+        "outcome": outcome,
+        "artifacts": artifacts or [],
+    }
 
 
 def entries(stories, start, end):
@@ -38,15 +48,16 @@ class TestPeriod(unittest.TestCase):
         self.assertEqual(self._bounds("2026-06-01"), (d, d))
 
     def test_two_iso_dates_inclusive_range(self):
-        self.assertEqual(self._bounds("2026-06-01", "2026-06-30"),
-                         (datetime.date(2026, 6, 1), datetime.date(2026, 6, 30)))
+        self.assertEqual(
+            self._bounds("2026-06-01", "2026-06-30"),
+            (datetime.date(2026, 6, 1), datetime.date(2026, 6, 30)),
+        )
 
     def test_keywords_in_two_arg_range(self):
         self.assertEqual(self._bounds("yesterday", "today"), (YESTERDAY, TODAY))
 
     def test_mixed_keyword_and_iso(self):
-        self.assertEqual(self._bounds("2026-06-25", "today"),
-                         (datetime.date(2026, 6, 25), TODAY))
+        self.assertEqual(self._bounds("2026-06-25", "today"), (datetime.date(2026, 6, 25), TODAY))
 
 
 class TestWorklog(unittest.TestCase):
@@ -71,7 +82,10 @@ class TestWorklog(unittest.TestCase):
             story(id="d", closed_at="2026-06-28T12:00:00Z"),
             story(id="e", closed_at="2026-06-24T12:00:00Z"),
         ]
-        ids = [e["id"] for e in entries(stories, datetime.date(2026, 6, 25), datetime.date(2026, 6, 27))]
+        ids = [
+            e["id"]
+            for e in entries(stories, datetime.date(2026, 6, 25), datetime.date(2026, 6, 27))
+        ]
         self.assertEqual(ids, ["a", "b", "c"])
 
     def test_pr_artifact_surfaced(self):

@@ -1,8 +1,3 @@
-"""End-to-end smoke test: one tg + bd subprocess path against a real bd store.
-
-SmokeTest is the only test class in this suite that spawns tg as a subprocess
-against a live bd store. All other integration tests use FakeStore in-process.
-"""
 import json
 import os
 import subprocess
@@ -47,14 +42,13 @@ def _bd_init():
     subprocess.run(["git", "init", "-q"], cwd=d, check=True)
     subprocess.run(
         ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-        cwd=d, check=True,
+        cwd=d,
+        check=True,
     )
     return d
 
 
 class SmokeTest(unittest.TestCase):
-    """End-to-end: create -> claim -> done -> advance -> show via tg subprocess + real bd store."""
-
     def setUp(self):
         self.root = _bd_init()
         steps = Path(self.root) / "steps"
@@ -74,8 +68,9 @@ class SmokeTest(unittest.TestCase):
         shown = json.loads(r.stdout)
         self.assertEqual(shown["description"], "detail here")
 
-        r = _tg("edit", tid, "--title", "updated title", "--description", "updated desc",
-                root=self.root)
+        r = _tg(
+            "edit", tid, "--title", "updated title", "--description", "updated desc", root=self.root
+        )
         self.assertEqual(r.returncode, 0, r.stderr)
 
         r = _tg("show", tid, root=self.root)

@@ -1,9 +1,4 @@
-"""Frontmatter parsing for the step and config files (a file-format detail of the
-fs/config adapters, not a domain concern). Operates on text only."""
-
-
 def parse_frontmatter(text):
-    """Parse simple `key: value` lines, with one level of `key:` + indented block."""
     meta = {}
     pending = None
     for fl in text.splitlines():
@@ -28,16 +23,12 @@ def parse_frontmatter(text):
 
 
 def split_frontmatter(text):
-    """Split a leading --- ... --- block from the body. Returns (meta, body).
-
-    meta is the parsed frontmatter (empty if none); body is the remaining text.
-    """
     meta, body = {}, text
     lines = text.splitlines()
     if lines and lines[0].strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
                 meta = parse_frontmatter("\n".join(lines[1:i]))
-                body = "\n".join(lines[i + 1:]).lstrip("\n")
+                body = "\n".join(lines[i + 1 :]).lstrip("\n")
                 break
     return meta, body

@@ -19,7 +19,7 @@ class FakeConfig:
 class TestInitGrid(unittest.TestCase):
     def test_reports_existed_created_and_path(self):
         r = InitGridUseCase(FakeStore(), FakeFs(), FakeConfig(created=True)).execute()
-        self.assertTrue(r.existed)  # FakeFs.store_ready() is True
+        self.assertTrue(r.existed)
         self.assertTrue(r.created)
         self.assertEqual(r.config_path, "/cfg/the-grid/config")
 

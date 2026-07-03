@@ -1,4 +1,3 @@
-"""Status: all tasks grouped into their board lanes (inbox / active / queue / blocked / done)."""
 from dataclasses import dataclass
 from typing import Dict, List
 
@@ -11,7 +10,6 @@ class StatusResponse:
 
 
 class StatusUseCase:
-
     def __init__(self, store):
         self._store = store
 

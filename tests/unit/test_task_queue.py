@@ -3,10 +3,12 @@ import unittest
 from the_grid.domain.flow import Flow
 from the_grid.domain.work import Task, TaskQueue
 
-FLOW = Flow.assemble({
-    "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
-    "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
-})
+FLOW = Flow.assemble(
+    {
+        "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
+        "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
+    }
+)
 
 
 def tk(id="t", **kw):
@@ -18,21 +20,27 @@ class TestClassifyForHuman(unittest.TestCase):
         self.assertEqual(tk(step=None).classify_for_human(FLOW), ("todo", []))
 
     def test_action_for_a_human_step(self):
-        self.assertEqual(tk(step="ready-merge").classify_for_human(FLOW),
-                         ("action", ["changes", "merged"]))
+        self.assertEqual(
+            tk(step="ready-merge").classify_for_human(FLOW), ("action", ["changes", "merged"])
+        )
 
     def test_blocked_for_an_agent_step_plus_unblock(self):
-        self.assertEqual(tk(step="build").classify_for_human(FLOW),
-                         ("blocked", ["done", "unblock"]))
+        self.assertEqual(
+            tk(step="build").classify_for_human(FLOW), ("blocked", ["done", "unblock"])
+        )
 
 
 class TestByLaneAndByStatus(unittest.TestCase):
     def test_by_lane_groups_statuses_into_lanes(self):
-        q = TaskQueue([
-            tk(id="d", status="done"), tk(id="a", status="in-progress"),
-            tk(id="h", status="needs-human"), tk(id="r", status="ready"),
-            tk(id="b", status="ready"),  # ready status, but has an open blocker
-        ])
+        q = TaskQueue(
+            [
+                tk(id="d", status="done"),
+                tk(id="a", status="in-progress"),
+                tk(id="h", status="needs-human"),
+                tk(id="r", status="ready"),
+                tk(id="b", status="ready"),
+            ]
+        )
         lanes = q.by_lane(ready_ids={"r"})
         self.assertEqual([t.id for t in lanes["done"]], ["d"])
         self.assertEqual([t.id for t in lanes["active"]], ["a"])
@@ -55,7 +63,9 @@ class TestForHuman(unittest.TestCase):
         return TaskQueue(tasks)
 
     def test_only_needs_human_tasks_are_considered(self):
-        q = TaskQueue([tk(id="r", status="ready", step=None), tk(id="h", status="needs-human", step=None)])
+        q = TaskQueue(
+            [tk(id="r", status="ready", step=None), tk(id="h", status="needs-human", step=None)]
+        )
         rows = q.for_human(FLOW, {"todo"})
         self.assertEqual([t.id for _, t in rows], ["h"])
 
@@ -70,9 +80,13 @@ class TestForHuman(unittest.TestCase):
         self.assertEqual(kinds, ["todo"])
 
     def test_sorted_by_id(self):
-        q = self._queue([tk(id="b-3", status="needs-human", step=None),
-                         tk(id="b-1", status="needs-human", step=None),
-                         tk(id="b-2", status="needs-human", step=None)])
+        q = self._queue(
+            [
+                tk(id="b-3", status="needs-human", step=None),
+                tk(id="b-1", status="needs-human", step=None),
+                tk(id="b-2", status="needs-human", step=None),
+            ]
+        )
         self.assertEqual([t.id for _, t in q.for_human(FLOW, {"todo"})], ["b-1", "b-2", "b-3"])
 
     def test_limit_n(self):

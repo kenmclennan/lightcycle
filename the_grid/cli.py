@@ -1,4 +1,3 @@
-"""tg - the-grid domain CLI. Wires the pure core to the IO adapters; all cmd_*."""
 import argparse
 import json
 import os
@@ -8,33 +7,71 @@ import time
 from the_grid.domain.contracts import FILE_PROVIDES
 from the_grid.logrender import render_log_line
 
-from the_grid.application.feedback import (ReflectInput, ReflectUseCase, RetroInput, RetroUseCase,
-                                           WorklogInput, WorklogUseCase)
-from the_grid.application.work import (ActiveTasksUseCase, AddTaskInput, AddTaskUseCase,
-                                       BacklogInput, BacklogUseCase, CloseEpicInput,
-                                       CloseEpicUseCase, CloseStoryInput,
-                                       CloseStoryUseCase, EditTaskInput, EditTaskUseCase,
-                                       FileStoryInput, FileStoryUseCase,
-                                       InboxInput, InboxUseCase, LinkArtifactInput,
-                                       LinkArtifactUseCase, QueueInput, QueueUseCase,
-                                       ShowTaskInput, ShowTaskUseCase, StatusUseCase, TraceInput,
-                                       TraceUseCase)
+from the_grid.application.feedback import (
+    ReflectInput,
+    ReflectUseCase,
+    RetroInput,
+    RetroUseCase,
+    WorklogInput,
+    WorklogUseCase,
+)
+from the_grid.application.work import (
+    ActiveTasksUseCase,
+    AddTaskInput,
+    AddTaskUseCase,
+    BacklogInput,
+    BacklogUseCase,
+    CloseEpicInput,
+    CloseEpicUseCase,
+    CloseStoryInput,
+    CloseStoryUseCase,
+    EditTaskInput,
+    EditTaskUseCase,
+    FileStoryInput,
+    FileStoryUseCase,
+    InboxInput,
+    InboxUseCase,
+    LinkArtifactInput,
+    LinkArtifactUseCase,
+    QueueInput,
+    QueueUseCase,
+    ShowTaskInput,
+    ShowTaskUseCase,
+    StatusUseCase,
+    TraceInput,
+    TraceUseCase,
+)
 from the_grid.application.errors import UseCaseError
-from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockInput,
-                                       BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
-                                       CompleteInput, CompleteTaskUseCase, FlowCheckInput,
-                                       FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
-from the_grid.application.pool import (ListWorkersUseCase, MonitorPrsUseCase,
-                                       ResolveLogInput, ResolveLogUseCase,
-                                       RetroCadenceUseCase,
-                                       SweepUseCase, TickInput, TickUseCase)
+from the_grid.application.flow import (
+    AdvanceInput,
+    AdvanceTaskUseCase,
+    BlockInput,
+    BlockTaskUseCase,
+    ClaimInput,
+    ClaimTaskUseCase,
+    CompleteInput,
+    CompleteTaskUseCase,
+    FlowCheckInput,
+    FlowCheckUseCase,
+    UnblockInput,
+    UnblockTaskUseCase,
+)
+from the_grid.application.pool import (
+    ListWorkersUseCase,
+    MonitorPrsUseCase,
+    ResolveLogInput,
+    ResolveLogUseCase,
+    RetroCadenceUseCase,
+    SweepUseCase,
+    TickInput,
+    TickUseCase,
+)
 from the_grid.application.setup import InitGridUseCase
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
 from the_grid.config import ConfigError
 from the_grid.container import Container
 
-# ---- composition root -------------------------------------------------------
 
 _container = None
 
@@ -47,8 +84,6 @@ def set_container(impl):
 def container():
     return _container
 
-# ---- config / roots ---------------------------------------------------------
-
 
 def projects_root():
     return _container.config.projects_root()
@@ -56,9 +91,6 @@ def projects_root():
 
 def specs_root():
     return _container.config.specs_root()
-
-
-# ---- flow assembly (IO gather -> pure decision) -----------------------------
 
 
 def _flow():
@@ -69,17 +101,8 @@ def ready_roles():
     return _flow().ready_roles()
 
 
-# ---- claim / advance (pure decision + bd effect) ----------------------------
-
-
-# ---- worktrees (core decision + gitio effect) -------------------------------
-
-
 def _worktrees():
     return WorktreeService(_container.store, _container.git, _container.fs, _container.config)
-
-
-# ---- store guard ------------------------------------------------------------
 
 
 def require_store():
@@ -89,10 +112,6 @@ def require_store():
     return False
 
 
-# ---- CLI dispatch -----------------------------------------------------------
-
-# Command catalog: (group, [(verb, usage-args, description), ...]). The order is
-# the help order; VERBS is derived from it, so adding a command here registers it.
 COMMAND_GROUPS = [
     ("Setup", [
         ("init", "", "create the grid store and seed the HOME config (run once)"),
@@ -154,8 +173,12 @@ VERBS = tuple(verb for _, cmds in COMMAND_GROUPS for verb, _, _ in cmds)
 def print_help():
     print("tg - the-grid domain CLI\n")
     print("Usage: tg <command> [args]\n")
-    width = min(34, max(len(("%s %s" % (v, args)).rstrip())
-                        for _, cmds in COMMAND_GROUPS for v, args, _ in cmds))
+    width = min(
+        34,
+        max(
+            len(("%s %s" % (v, args)).rstrip()) for _, cmds in COMMAND_GROUPS for v, args, _ in cmds
+        ),
+    )
     for group, cmds in COMMAND_GROUPS:
         print("%s:" % group)
         for verb, args, desc in cmds:
@@ -180,9 +203,6 @@ def main(argv=None):
     return fn(argv[1:]) or 0
 
 
-# ---- commands ---------------------------------------------------------------
-
-
 def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="tg show")
     ap.add_argument("id")
@@ -196,8 +216,9 @@ def cmd_claim(argv):
     ap = argparse.ArgumentParser(prog="tg claim")
     ap.add_argument("role")
     a = ap.parse_args(argv)
-    resp = ClaimTaskUseCase(_container.store, _flow(), _worktrees(),
-                            _container.workers, _container.config).execute(ClaimInput(role=a.role))
+    resp = ClaimTaskUseCase(
+        _container.store, _flow(), _worktrees(), _container.workers, _container.config
+    ).execute(ClaimInput(role=a.role))
     if resp is None:
         return 0
     out = resp.view.as_dict()
@@ -230,8 +251,10 @@ def cmd_ps(argv):
         print(json.dumps(rows, indent=2))
     else:
         for w in rows:
-            print("  %-11s task=%-18s pid=%s %s" % (
-                w["role"], w.get("task") or "-", w["pid"], "alive" if w["alive"] else "dead"))
+            print(
+                "  %-11s task=%-18s pid=%s %s"
+                % (w["role"], w.get("task") or "-", w["pid"], "alive" if w["alive"] else "dead")
+            )
     return 0
 
 
@@ -240,8 +263,11 @@ def cmd_logs(argv):
     ap.add_argument("target")
     ap.add_argument("-f", action="store_true")
     a = ap.parse_args(argv)
-    path = ResolveLogUseCase(_container.workers, _container.config).execute(
-        ResolveLogInput(target=a.target)).path
+    path = (
+        ResolveLogUseCase(_container.workers, _container.config)
+        .execute(ResolveLogInput(target=a.target))
+        .path
+    )
     if not path or not os.path.exists(path):
         sys.stderr.write("no log for %s\n" % a.target)
         return 1
@@ -250,6 +276,7 @@ def cmd_logs(argv):
         r = render_log_line(line)
         if r is not None:
             print(r, flush=True)
+
     if a.f:
         with open(path) as f:
             try:
@@ -273,7 +300,8 @@ def cmd_advance(argv):
     ap.add_argument("outcome")
     a = ap.parse_args(argv)
     resp = AdvanceTaskUseCase(_container.store, _flow()).execute(
-        AdvanceInput(task=a.id, outcome=a.outcome))
+        AdvanceInput(task=a.id, outcome=a.outcome)
+    )
     if resp.next_task:
         print(resp.next_task)
     return 0
@@ -302,20 +330,33 @@ def cmd_flow(argv):
 
     hooks = resp.hooks
     if a.json:
-        print(json.dumps({"owner": owner, "routes": routes,
-                          "accepts": {s: {"required": sorted(req[s]),
-                                          "optional": sorted(opt[s])} for s in steps},
-                          "produces": {s: sorted(prod[s]) for s in steps},
-                          "entries": entries, "terminals": terminals,
-                          "hooks": hooks,
-                          "unreachable": unreachable, "missing_inputs": missing,
-                          "conflicts": dups, "ok": ok}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "owner": owner,
+                    "routes": routes,
+                    "accepts": {
+                        s: {"required": sorted(req[s]), "optional": sorted(opt[s])} for s in steps
+                    },
+                    "produces": {s: sorted(prod[s]) for s in steps},
+                    "entries": entries,
+                    "terminals": terminals,
+                    "hooks": hooks,
+                    "unreachable": unreachable,
+                    "missing_inputs": missing,
+                    "conflicts": dups,
+                    "ok": ok,
+                },
+                indent=2,
+            )
+        )
         return 0 if ok else 1
 
     for s in steps:
         print("%s  (%s)" % (s, owner[s]))
-        accepts = ([t + " (required)" for t in sorted(req[s])]
-                   + [t + " (optional)" for t in sorted(opt[s])])
+        accepts = [t + " (required)" for t in sorted(req[s])] + [
+            t + " (optional)" for t in sorted(opt[s])
+        ]
         if accepts:
             print("  accepts   %s" % ", ".join(accepts))
         if prod[s]:
@@ -327,15 +368,17 @@ def cmd_flow(argv):
     if entries:
         print("entry steps: %s" % ", ".join(sorted(entries)))
     else:
-        sys.stderr.write("warning: no entry step (none requires only %s)\n"
-                         % ", ".join(sorted(FILE_PROVIDES)))
+        sys.stderr.write(
+            "warning: no entry step (none requires only %s)\n" % ", ".join(sorted(FILE_PROVIDES))
+        )
     if hooks:
         print("on_* hooks:")
         for hook, hook_steps in hooks.items():
             print("  %s -> %s" % (hook, ", ".join(hook_steps)))
     for s, miss in sorted(missing.items()):
-        sys.stderr.write("composition: step '%s' needs %s, not guaranteed upstream\n"
-                         % (s, ", ".join(miss)))
+        sys.stderr.write(
+            "composition: step '%s' needs %s, not guaranteed upstream\n" % (s, ", ".join(miss))
+        )
     for s in unreachable:
         sys.stderr.write("warning: step '%s' is unreachable from any entry\n" % s)
     for d in dups:
@@ -347,13 +390,15 @@ def cmd_done(argv):
     ap = argparse.ArgumentParser(prog="tg done")
     ap.add_argument("id")
     ap.add_argument("outcome")
-    ap.add_argument("--note", nargs="+",
-                    help="a note to forward to the next task; unquoted multi-word is fine")
+    ap.add_argument(
+        "--note", nargs="+", help="a note to forward to the next task; unquoted multi-word is fine"
+    )
     a = ap.parse_args(argv)
     note = " ".join(a.note) if a.note else None
     try:
         resp = CompleteTaskUseCase(_container.store, _flow()).execute(
-            CompleteInput(task=a.id, outcome=a.outcome, note=note))
+            CompleteInput(task=a.id, outcome=a.outcome, note=note)
+        )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -371,8 +416,11 @@ def cmd_block(argv):
     if not a.needs:
         sys.stderr.write("tg block requires --needs (what the human must decide/provide)\n")
         return 2
-    BlockTaskUseCase(_container.store).execute(BlockInput(
-        task=a.id, needs=a.needs, branch=a.branch, pr=a.pr, reason=a.reason, tried=a.tried))
+    BlockTaskUseCase(_container.store).execute(
+        BlockInput(
+            task=a.id, needs=a.needs, branch=a.branch, pr=a.pr, reason=a.reason, tried=a.tried
+        )
+    )
     print("blocked -> human")
     return 0
 
@@ -400,10 +448,12 @@ def cmd_close(argv):
     try:
         if is_epic:
             resp = CloseEpicUseCase(_container.store, _flow()).execute(
-                CloseEpicInput(epic=a.story, reason=a.reason))
+                CloseEpicInput(epic=a.story, reason=a.reason)
+            )
         else:
             CloseStoryUseCase(_container.store, _worktrees()).execute(
-                CloseStoryInput(story=a.story, reason=a.reason))
+                CloseStoryInput(story=a.story, reason=a.reason)
+            )
             resp = None
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
@@ -422,7 +472,8 @@ def cmd_link(argv):
     ap.add_argument("--label")
     a = ap.parse_args(argv)
     LinkArtifactUseCase(_container.store).execute(
-        LinkArtifactInput(story=a.story, atype=a.type, value=a.value, label=a.label))
+        LinkArtifactInput(story=a.story, atype=a.type, value=a.value, label=a.label)
+    )
     return 0
 
 
@@ -449,11 +500,10 @@ def cmd_sweep(argv):
     for bid in result.swept:
         print("swept %s" % bid)
     if result.pruned:
-        print("pruned %d dead worker entr%s" % (result.pruned, "y" if result.pruned == 1 else "ies"))
+        print(
+            "pruned %d dead worker entr%s" % (result.pruned, "y" if result.pruned == 1 else "ies")
+        )
     return 0
-
-
-# ---- read views -------------------------------------------------------------
 
 
 def _print_human_row(kind, t, show_description=False):
@@ -475,9 +525,16 @@ def cmd_inbox(argv):
     if resp.candidate_epics:
         print("close-candidate epics:")
         for e in resp.candidate_epics:
-            print("  %s  %s (%d %s closed)  -- tg close %s <reason>"
-                  % (e.id, e.title, e.closed_story_count,
-                     "story" if e.closed_story_count == 1 else "stories", e.id))
+            print(
+                "  %s  %s (%d %s closed)  -- tg close %s <reason>"
+                % (
+                    e.id,
+                    e.title,
+                    e.closed_story_count,
+                    "story" if e.closed_story_count == 1 else "stories",
+                    e.id,
+                )
+            )
     return 0
 
 
@@ -516,10 +573,19 @@ def cmd_file(argv):
     ap.add_argument("--blocked-by", action="append", dest="blocked_by", metavar="ID")
     a = ap.parse_args(argv)
     try:
-        resp = FileStoryUseCase(_container.store, _flow(), _container.git, _container.fs,
-                                _container.config).execute(FileStoryInput(
-            spec=a.spec, step=a.step, epic=a.epic, project=a.project, goal=a.goal,
-            repo=a.repo, blocked_by=a.blocked_by))
+        resp = FileStoryUseCase(
+            _container.store, _flow(), _container.git, _container.fs, _container.config
+        ).execute(
+            FileStoryInput(
+                spec=a.spec,
+                step=a.step,
+                epic=a.epic,
+                project=a.project,
+                goal=a.goal,
+                repo=a.repo,
+                blocked_by=a.blocked_by,
+            )
+        )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -552,12 +618,16 @@ def cmd_edit(argv):
     ap.add_argument("--parent")
     a = ap.parse_args(argv)
     EditTaskUseCase(_container.store).execute(
-        EditTaskInput(task=a.id, title=a.title, description=a.description,
-                      goal=a.goal, project=a.project, parent=a.parent))
+        EditTaskInput(
+            task=a.id,
+            title=a.title,
+            description=a.description,
+            goal=a.goal,
+            project=a.project,
+            parent=a.parent,
+        )
+    )
     return 0
-
-
-# ---- run loop / launch ------------------------------------------------------
 
 
 def _format_tick(result, prev_snapshot, now):
@@ -596,8 +666,14 @@ def cmd_run(argv):
     complete = CompleteTaskUseCase(_container.store, flow_service)
     monitor = MonitorPrsUseCase(_container.store, _container.github, _worktrees(), flow, complete)
     cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
-    tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config,
-                       monitor=monitor, cadence_gate=cadence_gate)
+    tick = TickUseCase(
+        _container.store,
+        _container.workers,
+        _container.spawner,
+        _container.config,
+        monitor=monitor,
+        cadence_gate=cadence_gate,
+    )
     if a.once:
         now = time.time()
         result = tick.execute(TickInput(now=now))
@@ -619,8 +695,6 @@ def cmd_run(argv):
 
 
 def _human_step_skills():
-    """The skill bodies of human-performed steps (a `step` but no `model:`), each as
-    (step, body), ordered by step. The Driver loads all of these - it is their performer."""
     skills = []
     for role in _container.fs.step_roles():
         a = _container.fs.parse_step(role)
@@ -630,15 +704,14 @@ def _human_step_skills():
 
 
 def _compose_driver(base_body, skills):
-    """The Driver's system prompt: its base persona (driver.md) plus a skill per
-    human-performed step. The Driver is the performer of human-facing steps, so it
-    carries their procedures. skills is a list of (step, body), already ordered."""
     if not skills:
         return base_body
-    parts = [base_body,
-             "\n\n# Skills for human-facing steps\n",
-             "These steps surface in `tg inbox`. When the human picks one, run the skill "
-             "for its step: assist them, and record the outcome (`tg done` / `tg close`).\n"]
+    parts = [
+        base_body,
+        "\n\n# Skills for human-facing steps\n",
+        "These steps surface in `tg inbox`. When the human picks one, run the skill "
+        "for its step: assist them, and record the outcome (`tg done` / `tg close`).\n",
+    ]
     for step, body in skills:
         parts.append("\n## %s\n\n%s" % (step, body.strip()))
     return "\n".join(parts)
@@ -653,9 +726,21 @@ def cmd_driver(argv):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
         return 1
     body = _compose_driver(seat["body"], _human_step_skills())
-    os.execvp("claude", ["claude", "--model", seat["meta"]["model"], "--name", "driver",
-                         "--append-system-prompt", body, "--add-dir", root,
-                         "--dangerously-skip-permissions"])
+    os.execvp(
+        "claude",
+        [
+            "claude",
+            "--model",
+            seat["meta"]["model"],
+            "--name",
+            "driver",
+            "--append-system-prompt",
+            body,
+            "--add-dir",
+            root,
+            "--dangerously-skip-permissions",
+        ],
+    )
 
 
 def cmd_init(argv):
@@ -700,9 +785,6 @@ def cmd_status(argv):
     return 0
 
 
-# ---- spec feedback loop ------------------------------------------------------
-
-
 def cmd_label(argv):
     ap = argparse.ArgumentParser(prog="tg label")
     ap.add_argument("id")
@@ -715,13 +797,17 @@ def cmd_label(argv):
 def cmd_reflect(argv):
     ap = argparse.ArgumentParser(prog="tg reflect")
     ap.add_argument("id")
-    ap.add_argument("--feedback", default="",
-                    help="freeform feedback for the retro: what went well, what got in the way, "
-                         "tooling friction, spec gaps - whatever is worth surfacing (your step "
-                         "file says what to look for)")
+    ap.add_argument(
+        "--feedback",
+        default="",
+        help="freeform feedback for the retro: what went well, what got in the way, "
+        "tooling friction, spec gaps - whatever is worth surfacing (your step "
+        "file says what to look for)",
+    )
     a = ap.parse_args(argv)
     ReflectUseCase(_container.store, _container.fs).execute(
-        ReflectInput(task=a.id, feedback=a.feedback))
+        ReflectInput(task=a.id, feedback=a.feedback)
+    )
     print("reflected")
     return 0
 
@@ -732,11 +818,13 @@ def cmd_worklog(argv):
     ap.add_argument("end", nargs="?")
     a = ap.parse_args(argv)
     import datetime as _dt
+
     now = _dt.datetime.now().astimezone()
     today, tz = now.date(), now.tzinfo
     args = [x for x in (a.start, a.end) if x is not None]
     resp = WorklogUseCase(_container.store).execute(
-        WorklogInput(period_args=args, today=today, tz=tz))
+        WorklogInput(period_args=args, today=today, tz=tz)
+    )
     if not resp.entries:
         print("no stories shipped in that period")
         return 0

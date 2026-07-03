@@ -12,7 +12,7 @@ class TestComposeDriver(unittest.TestCase):
         self.assertIn("BASE", out)
         for marker in ("## review-plan", "REVIEW BODY", "## cleanup", "CLEAN BODY"):
             self.assertIn(marker, out)
-        self.assertLess(out.index("BASE"), out.index("review-plan"))  # base persona leads
+        self.assertLess(out.index("BASE"), out.index("review-plan"))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-"""Backlog: todo items to develop later (human tasks with no step)."""
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -17,11 +16,14 @@ class BacklogResponse:
 
 
 class BacklogUseCase:
-
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
 
     def execute(self, input: BacklogInput) -> BacklogResponse:
-        rows = TaskQueue(self._store.all_tasks()).for_human(self._flow.load_flow(), {"todo"}, input.n)
-        return BacklogResponse(rows=[HumanTaskRow(kind=k, outcomes=o, task=t) for (k, o), t in rows])
+        rows = TaskQueue(self._store.all_tasks()).for_human(
+            self._flow.load_flow(), {"todo"}, input.n
+        )
+        return BacklogResponse(
+            rows=[HumanTaskRow(kind=k, outcomes=o, task=t) for (k, o), t in rows]
+        )

@@ -1,4 +1,3 @@
-"""AdvanceTask: create the next task in the flow for an outcome (no closing)."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -15,7 +14,6 @@ class AdvanceResponse:
 
 
 class AdvanceTaskUseCase:
-
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
@@ -25,4 +23,6 @@ class AdvanceTaskUseCase:
         transition = self._flow.flow_next(t.step, input.outcome)
         if transition is None:
             return AdvanceResponse(next_task=None)
-        return AdvanceResponse(next_task=self._store.create_task(**transition.next_task_spec(t).as_kwargs()))
+        return AdvanceResponse(
+            next_task=self._store.create_task(**transition.next_task_spec(t).as_kwargs())
+        )
