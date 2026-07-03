@@ -105,6 +105,29 @@ class TestSpawnProtocol(unittest.TestCase):
         self.assertEqual(c.spawn_cmd(), "echo hi")
 
 
+class TestRetroCadenceConfig(unittest.TestCase):
+    def test_defaults(self):
+        c = _cfg()
+        self.assertEqual(c.retro_interval_days(), 7)
+        self.assertEqual(c.retro_min_epics(), 3)
+
+    def test_config_file_override(self):
+        self.assertEqual(_cfg(retro_interval_days="14").retro_interval_days(), 14)
+        self.assertEqual(_cfg(retro_min_epics="5").retro_min_epics(), 5)
+
+    def test_env_override_wins(self):
+        self.assertEqual(
+            _cfg({"GRID_RETRO_INTERVAL_DAYS": "21"}, retro_interval_days="14").retro_interval_days(), 21)
+        self.assertEqual(
+            _cfg({"GRID_RETRO_MIN_EPICS": "10"}, retro_min_epics="5").retro_min_epics(), 10)
+
+    def test_malformed_config_fails_fast(self):
+        with self.assertRaises(ConfigError):
+            _cfg(retro_interval_days="weekly").retro_interval_days()
+        with self.assertRaises(ConfigError):
+            _cfg(retro_min_epics="many").retro_min_epics()
+
+
 class TestGridRootAndEnv(unittest.TestCase):
     def test_grid_root_override(self):
         self.assertEqual(_cfg({"GRID_ROOT_OVERRIDE": "/tmp/grid"}).grid_root(), "/tmp/grid")

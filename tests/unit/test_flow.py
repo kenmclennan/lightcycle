@@ -132,5 +132,39 @@ class TestEpicClose(unittest.TestCase):
         self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
 
 
+class TestRetroCadence(unittest.TestCase):
+    def test_no_on_retro_cadence_returns_empty(self):
+        flow = Flow.assemble(METAS)
+        self.assertEqual(flow.retro_cadence_steps(), [])
+
+    def test_step_declaring_on_retro_cadence_is_returned(self):
+        metas = {
+            "scanner": {"model": "sonnet", "step": "scan", "on_retro_cadence": True},
+            "coder": {"model": "sonnet", "step": "build"},
+        }
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.retro_cadence_steps(), [("scan", "scanner")])
+
+    def test_agnostic_arbitrary_step_name_not_audit(self):
+        metas = {"checker": {"model": "haiku", "step": "check-trends", "on_retro_cadence": True}}
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.retro_cadence_steps(), [("check-trends", "checker")])
+
+    def test_multiple_retro_cadence_steps_sorted(self):
+        metas = {
+            "beta": {"model": "sonnet", "step": "zz-step", "on_retro_cadence": True},
+            "alpha": {"model": "sonnet", "step": "aa-step", "on_retro_cadence": True},
+        }
+        steps = Flow.assemble(metas).retro_cadence_steps()
+        self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
+
+    def test_step_can_declare_both_epic_close_and_retro_cadence(self):
+        metas = {"auditor": {"model": "sonnet", "step": "audit",
+                              "on_epic_close": True, "on_retro_cadence": True}}
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.epic_close_steps(), [("audit", "auditor")])
+        self.assertEqual(flow.retro_cadence_steps(), [("audit", "auditor")])
+
+
 if __name__ == "__main__":
     unittest.main()

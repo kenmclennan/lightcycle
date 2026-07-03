@@ -26,6 +26,7 @@ from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockIn
                                        FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
 from the_grid.application.pool import (ListWorkersUseCase, MonitorPrsUseCase,
                                        ResolveLogInput, ResolveLogUseCase,
+                                       RetroCadenceUseCase,
                                        SweepUseCase, TickInput, TickUseCase)
 from the_grid.application.setup import InitGridUseCase
 from the_grid.application.services.flow import FlowService
@@ -131,6 +132,7 @@ COMMAND_GROUPS = [
         ("unblock", "<id>", "flip a blocked task back to its agent role so it re-claims and retries"),
         ("reflect", '<task> [--feedback "text"]',
          "record freeform feedback on the story for the retro (call before tg done)"),
+        ("label", "<id> <label>", "add a label to a task"),
     ]),
     ("Feedback loop", [
         ("retro", "<epic>", "gather child feedback + objective signals into a read digest"),
@@ -565,8 +567,9 @@ def cmd_run(argv):
     flow = flow_service.load_flow()
     complete = CompleteTaskUseCase(_container.store, flow_service)
     monitor = MonitorPrsUseCase(_container.store, _container.github, _worktrees(), flow, complete)
+    cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
     tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config,
-                       monitor=monitor)
+                       monitor=monitor, cadence_gate=cadence_gate)
     if a.once:
         _render_tick(tick.execute(TickInput(now=time.time())))
         return 0
@@ -660,6 +663,15 @@ def cmd_status(argv):
 
 
 # ---- spec feedback loop ------------------------------------------------------
+
+
+def cmd_label(argv):
+    ap = argparse.ArgumentParser(prog="tg label")
+    ap.add_argument("id")
+    ap.add_argument("label")
+    a = ap.parse_args(argv)
+    _container.store.label_add(a.id, a.label)
+    return 0
 
 
 def cmd_reflect(argv):
