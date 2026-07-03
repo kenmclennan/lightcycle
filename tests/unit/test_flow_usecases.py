@@ -162,6 +162,13 @@ class TestFlowCheck(unittest.TestCase):
         self.assertEqual(resp.owner["build"], "coder")
         self.assertEqual(resp.routes["build"], {"done": "review"})
         self.assertIn("ok", resp.analysis)
+        self.assertEqual(resp.hooks, {})
+
+    def test_hooks_surfaced_from_arbitrary_on_key(self):
+        metas = {"deployer": {"model": "sonnet", "step": "deploy", "on_ship_it": True}}
+        s = FakeStore()
+        resp = FlowCheckUseCase(flow_for(metas, s)).execute(FlowCheckInput())
+        self.assertEqual(resp.hooks, {"on_ship_it": ["deploy"]})
 
 
 class TestUnblockTask(unittest.TestCase):
