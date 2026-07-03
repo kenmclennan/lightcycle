@@ -1,9 +1,19 @@
 import unittest
 
-from the_grid.application.work import (ActiveTasksUseCase, BacklogInput, BacklogUseCase,
-                                       InboxInput, InboxUseCase, QueueInput,
-                                       QueueUseCase, ShowTaskInput, ShowTaskUseCase, StatusUseCase,
-                                       TraceInput, TraceUseCase)
+from the_grid.application.work import (
+    ActiveTasksUseCase,
+    BacklogInput,
+    BacklogUseCase,
+    InboxInput,
+    InboxUseCase,
+    QueueInput,
+    QueueUseCase,
+    ShowTaskInput,
+    ShowTaskUseCase,
+    StatusUseCase,
+    TraceInput,
+    TraceUseCase,
+)
 from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -93,8 +103,8 @@ class TestQueue(unittest.TestCase):
 class TestInboxBacklog(unittest.TestCase):
     def _store(self):
         s = FakeStore()
-        self.todo = s.create_task("todo item", role="human")          # no step -> backlog
-        self.gate = s.create_task("a gate", step="review", role="human")  # stepped -> inbox
+        self.todo = s.create_task("todo item", role="human")
+        self.gate = s.create_task("a gate", step="review", role="human")
         return s
 
     def test_inbox_has_stepped_human_tasks_not_todos(self):
@@ -105,7 +115,9 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_backlog_has_todos_not_stepped(self):
         s = self._store()
-        ids = [row.task.id for row in BacklogUseCase(s, _empty_flow(s)).execute(BacklogInput()).rows]
+        ids = [
+            row.task.id for row in BacklogUseCase(s, _empty_flow(s)).execute(BacklogInput()).rows
+        ]
         self.assertIn(self.todo, ids)
         self.assertNotIn(self.gate, ids)
 

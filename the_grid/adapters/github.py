@@ -1,4 +1,3 @@
-"""GitHub Events Adapter: checks PR state and retrieves comments via the gh CLI."""
 import datetime
 import json
 import re
@@ -6,7 +5,7 @@ import subprocess
 
 from the_grid.ports.github import Comment, GitHubEventsPort
 
-_PR_URL_RE = re.compile(r'https://github\.com/([^/]+)/([^/]+)/pull/(\d+)')
+_PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 
 
 def _parse_iso(s):
@@ -21,11 +20,10 @@ def _repo_parts(pr):
 
 
 class GitHubEventsAdapter(GitHubEventsPort):
-
     def _pr_state(self, pr: str) -> str:
         result = subprocess.run(
-            ["gh", "pr", "view", pr, "--json", "state"],
-            capture_output=True, text=True)
+            ["gh", "pr", "view", pr, "--json", "state"], capture_output=True, text=True
+        )
         if result.returncode != 0:
             return ""
         try:
@@ -60,7 +58,9 @@ class GitHubEventsAdapter(GitHubEventsPort):
         owner, repo, number = parts
         result = subprocess.run(
             ["gh", "api", "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number)],
-            capture_output=True, text=True)
+            capture_output=True,
+            text=True,
+        )
         if result.returncode != 0:
             return 0.0
         try:
@@ -86,38 +86,44 @@ class GitHubEventsAdapter(GitHubEventsPort):
         result = []
 
         r = subprocess.run(
-            ["gh", "api", "--paginate",
-             "/repos/%s/%s/issues/%s/comments" % (owner, repo, number)],
-            capture_output=True, text=True)
+            ["gh", "api", "--paginate", "/repos/%s/%s/issues/%s/comments" % (owner, repo, number)],
+            capture_output=True,
+            text=True,
+        )
         if r.returncode == 0:
             try:
                 for c in json.loads(r.stdout):
                     created = _parse_iso(c.get("created_at", "1970-01-01T00:00:00Z"))
                     if created > since:
-                        result.append(Comment(
-                            author=c.get("user", {}).get("login", ""),
-                            body=c.get("body", ""),
-                            is_top_level=True,
-                        ))
+                        result.append(
+                            Comment(
+                                author=c.get("user", {}).get("login", ""),
+                                body=c.get("body", ""),
+                                is_top_level=True,
+                            )
+                        )
             except (json.JSONDecodeError, ValueError):
                 pass
 
         r = subprocess.run(
-            ["gh", "api", "--paginate",
-             "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number)],
-            capture_output=True, text=True)
+            ["gh", "api", "--paginate", "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number)],
+            capture_output=True,
+            text=True,
+        )
         if r.returncode == 0:
             try:
                 for c in json.loads(r.stdout):
                     created = _parse_iso(c.get("created_at", "1970-01-01T00:00:00Z"))
                     if created > since:
-                        result.append(Comment(
-                            author=c.get("user", {}).get("login", ""),
-                            body=c.get("body", ""),
-                            is_top_level=False,
-                            path=c.get("path"),
-                            line=c.get("line"),
-                        ))
+                        result.append(
+                            Comment(
+                                author=c.get("user", {}).get("login", ""),
+                                body=c.get("body", ""),
+                                is_top_level=False,
+                                path=c.get("path"),
+                                line=c.get("line"),
+                            )
+                        )
             except (json.JSONDecodeError, ValueError):
                 pass
 

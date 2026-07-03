@@ -2,11 +2,20 @@ import json
 import unittest
 
 from the_grid.application.errors import UseCaseError
-from the_grid.application.work import (AddTaskInput, AddTaskUseCase, CloseEpicInput,
-                                       CloseEpicUseCase, CloseStoryInput,
-                                       CloseStoryUseCase, EditTaskInput, EditTaskUseCase,
-                                       FileStoryInput, FileStoryUseCase,
-                                       LinkArtifactInput, LinkArtifactUseCase)
+from the_grid.application.work import (
+    AddTaskInput,
+    AddTaskUseCase,
+    CloseEpicInput,
+    CloseEpicUseCase,
+    CloseStoryInput,
+    CloseStoryUseCase,
+    EditTaskInput,
+    EditTaskUseCase,
+    FileStoryInput,
+    FileStoryUseCase,
+    LinkArtifactInput,
+    LinkArtifactUseCase,
+)
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
 from tests.support.fake_fs import FakeFs
@@ -20,8 +29,9 @@ def _epic_flow(store):
 
 
 def _add_reflection(store, task_id, feedback):
-    store.add_artifact(task_id, "reflection",
-                       json.dumps({"task": task_id, "feedback": feedback, "spec_hash": "h"}))
+    store.add_artifact(
+        task_id, "reflection", json.dumps({"task": task_id, "feedback": feedback, "spec_hash": "h"})
+    )
 
 
 class FakeGit:
@@ -81,7 +91,8 @@ class TestAddTask(unittest.TestCase):
     def test_creates_task_with_description(self):
         s = FakeStore()
         resp = AddTaskUseCase(s).execute(
-            AddTaskInput(title="my task", description="detailed notes"))
+            AddTaskInput(title="my task", description="detailed notes")
+        )
         t = s.get_task(resp.task)
         self.assertEqual(t.description, "detailed notes")
 
@@ -150,7 +161,8 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_story("st")
         LinkArtifactUseCase(s).execute(
-            LinkArtifactInput(story=sid, atype="pr", value="http://x/1", label="PR 1"))
+            LinkArtifactInput(story=sid, atype="pr", value="http://x/1", label="PR 1")
+        )
         arts = s.story_artifacts(sid)
         self.assertEqual(arts[0].type, "pr")
         self.assertEqual(arts[0].value, "http://x/1")
@@ -247,8 +259,9 @@ class TestCloseEpicWithRetro(unittest.TestCase):
         s.add_artifact = tracking_add
         CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
         close_idx = next(i for i, e in enumerate(call_order) if e == ("close", epic))
-        retro_idx = next(i for i, e in enumerate(call_order)
-                         if len(e) >= 3 and e[1] == epic and e[2] == "retro")
+        retro_idx = next(
+            i for i, e in enumerate(call_order) if len(e) >= 3 and e[1] == epic and e[2] == "retro"
+        )
         self.assertLess(close_idx, retro_idx)
 
     def test_empty_reflections_still_records_artifact(self):
@@ -322,8 +335,9 @@ class TestCloseEpicOnEpicClose(unittest.TestCase):
         s, epic = self._setup()
         flow = self._flow_with_on_epic_close(s)
         CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
-        open_tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic
-                      and t.status != "done"]
+        open_tasks = [
+            t for t in s.all_tasks() if t.type == "task" and t.epic == epic and t.status != "done"
+        ]
         self.assertEqual(len(open_tasks), 1)
         self.assertEqual(s.get_task(epic).status, "done")
 
@@ -343,8 +357,11 @@ class TestFileStory(unittest.TestCase):
         fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
         flow = FlowService(fs, store)
         git = FakeGit(repos={"/projects/app"})
-        return FileStoryUseCase(store, flow, git, fs, FakeConfig("/projects")).execute(
-            FileStoryInput(spec="specs/x.md", step="build", repo=repo)).story
+        return (
+            FileStoryUseCase(store, flow, git, fs, FakeConfig("/projects"))
+            .execute(FileStoryInput(spec="specs/x.md", step="build", repo=repo))
+            .story
+        )
 
     def test_creates_story_with_spec_and_task(self):
         s = FakeStore()
@@ -362,7 +379,8 @@ class TestFileStory(unittest.TestCase):
         fs = FakeFs(metas=METAS)
         with self.assertRaises(UseCaseError):
             FileStoryUseCase(s, FlowService(fs, s), FakeGit(), fs, FakeConfig()).execute(
-                FileStoryInput(spec="specs/x.md", step="nonexistent"))
+                FileStoryInput(spec="specs/x.md", step="nonexistent")
+            )
 
     def test_unknown_repo_raises_with_available(self):
         s = FakeStore()

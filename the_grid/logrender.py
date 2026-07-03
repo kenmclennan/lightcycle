@@ -1,12 +1,7 @@
-"""Presentation: rendering of a single worker-log line (claude stream-json or plain
-text) for `tg tail`. Not a domain concern - it formats for the terminal."""
 import json
 
 
 def render_log_line(line):
-    """Render one worker-log line. Worker logs are claude stream-json (one event
-    per line); turn each into a readable line. Non-JSON lines (e.g. run.log) pass
-    through. Returns the text to print, or None to skip the event."""
     line = line.rstrip("\n")
     if not line.strip():
         return None
@@ -17,7 +12,7 @@ def render_log_line(line):
     t = e.get("type")
     if t == "assistant":
         out = []
-        for c in (e.get("message", {}).get("content") or []):
+        for c in e.get("message", {}).get("content") or []:
             if c.get("type") == "text" and c.get("text", "").strip():
                 out.append(c["text"].rstrip())
             elif c.get("type") == "tool_use":
@@ -30,7 +25,7 @@ def render_log_line(line):
                     out.append("[%s]" % label)
         return "\n".join(out) if out else None
     if t == "user":
-        for c in (e.get("message", {}).get("content") or []):
+        for c in e.get("message", {}).get("content") or []:
             if c.get("type") == "tool_result":
                 r = c.get("content")
                 if isinstance(r, list):

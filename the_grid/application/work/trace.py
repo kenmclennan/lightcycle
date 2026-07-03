@@ -1,4 +1,3 @@
-"""Trace: a story end to end - its artifacts, child tasks, and each task's log."""
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -36,7 +35,6 @@ class TraceResponse:
 
 
 class TraceUseCase:
-
     def __init__(self, store, workers):
         self._store = store
         self._workers = workers
@@ -50,6 +48,8 @@ class TraceUseCase:
     def execute(self, input: TraceInput) -> TraceResponse:
         story = self._store.get_task(input.story)
         artifacts = self._store.story_artifacts(input.story)
-        tasks = [TraceTask(id=kt.id, step=kt.step, status=kt.status, log=self._log_for_task(kt.id))
-                 for kt in self._store.children(input.story)]
+        tasks = [
+            TraceTask(id=kt.id, step=kt.step, status=kt.status, log=self._log_for_task(kt.id))
+            for kt in self._store.children(input.story)
+        ]
         return TraceResponse(story=story, artifacts=artifacts, tasks=tasks)

@@ -1,4 +1,3 @@
-"""ShowTask: one task or story as a TaskView (artifacts + resume-state)."""
 from dataclasses import dataclass
 
 from the_grid.domain.work import TaskView
@@ -15,7 +14,6 @@ class ShowTaskResponse:
 
 
 class ShowTaskUseCase:
-
     def __init__(self, store):
         self._store = store
 

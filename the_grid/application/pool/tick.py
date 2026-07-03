@@ -1,12 +1,3 @@
-"""Tick: one pass of the agent pool - sweep, then fill workers from the queue.
-
-Fill up to GRID_MAX_AGENTS alive workers from the ready queue, one worker per
-uncovered ready task regardless of role (bd ready already hides blocked-by tasks,
-so declared dependencies are honoured for free). A worker that has spawned but
-not yet claimed (task is None) within the boot window covers a task of its role,
-so the pool does not pile redundant workers onto one task. `now` is passed in
-(the caller owns the clock).
-"""
 from dataclasses import dataclass, field
 from typing import List
 
@@ -36,7 +27,6 @@ class TickResponse:
 
 
 class TickUseCase:
-
     def __init__(self, store, workers, spawner, config, monitor=None, cadence_gate=None):
         self._store = store
         self._workers = workers
@@ -70,9 +60,16 @@ class TickUseCase:
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
         return TickResponse(
-            swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged,
-            abandoned=abandoned, reworked=reworked, conflicted=conflicted,
+            swept=swept.swept,
+            pruned=swept.pruned,
+            spawned=spawned,
+            merged=merged,
+            abandoned=abandoned,
+            reworked=reworked,
+            conflicted=conflicted,
             cadence_fired=cadence_fired,
-            alive=alive_count, max_agents=max_agents, ready=ready_count,
+            alive=alive_count,
+            max_agents=max_agents,
+            ready=ready_count,
             inflight_count=inflight_total,
         )

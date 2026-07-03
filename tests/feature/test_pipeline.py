@@ -1,8 +1,3 @@
-"""Step definitions for pipeline.feature (pytest-bdd).
-
-The .feature file is the language-agnostic behaviour spec; only this glue is
-Python. Steps drive the real wired cli in-process over a FakeStore.
-"""
 import json
 import os
 

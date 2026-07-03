@@ -6,8 +6,11 @@ from tests.support.fake_store import FakeStore
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
-    "reviewer": {"model": "opus", "step": "review",
-                 "routes": {"done": "open-pr", "rejected": "build"}},
+    "reviewer": {
+        "model": "opus",
+        "step": "review",
+        "routes": {"done": "open-pr", "rejected": "build"},
+    },
 }
 
 

@@ -1,9 +1,7 @@
-"""WorkerPool: the pool of spawned workers (an aggregate)."""
 from the_grid.domain.pool.worker import Worker
 
 
 class WorkerPool:
-
     def __init__(self, workers):
         self._workers = list(workers)
 
@@ -21,7 +19,6 @@ class WorkerPool:
         return {w.spawnid for w in self._workers if w.spawnid and w.is_alive(probe)}
 
     def inflight(self, probe, now, max_boot):
-        """Booting workers per role - each covers one ready task of its role this tick."""
         counts = {}
         for w in self.alive(probe):
             if w.is_booting(now, max_boot):

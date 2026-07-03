@@ -1,4 +1,3 @@
-"""InitGrid: create the grid store and seed the logs dir + HOME config."""
 from dataclasses import dataclass
 
 
@@ -10,7 +9,6 @@ class InitGridResponse:
 
 
 class InitGridUseCase:
-
     def __init__(self, store, fs, config):
         self._store = store
         self._fs = fs
@@ -21,5 +19,6 @@ class InitGridUseCase:
         self._store.ensure_store()
         self._fs.ensure_logs_dir()
         created = self._config.ensure_config()
-        return InitGridResponse(existed=existed, created=created,
-                                config_path=self._config.config_path())
+        return InitGridResponse(
+            existed=existed, created=created, config_path=self._config.config_path()
+        )

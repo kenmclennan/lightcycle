@@ -1,4 +1,3 @@
-"""CompleteTask: close a task with a flow outcome and advance the chain."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -20,7 +19,6 @@ class CompleteResponse:
 
 
 class CompleteTaskUseCase:
-
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
@@ -32,13 +30,16 @@ class CompleteTaskUseCase:
         if transition is None and self._flow.outcomes_for(t.step):
             raise UseCaseError(
                 "no transition for step=%s outcome=%s; not closing. "
-                "Fix the flow or use a defined outcome." % (t.step, input.outcome))
+                "Fix the flow or use a defined outcome." % (t.step, input.outcome)
+            )
         missing = StepContract.from_meta(self._flow.meta_for_step(t.step)).missing_outputs(
-            self._store.present_types(t))
+            self._store.present_types(t)
+        )
         if missing:
             raise UseCaseError(
                 "cannot close %s: step '%s' must produce %s; none on the story. "
-                "tg link the artifact first." % (input.task, t.step, ", ".join(sorted(missing))))
+                "tg link the artifact first." % (input.task, t.step, ", ".join(sorted(missing)))
+            )
         self._store.note(input.task, "outcome: %s" % input.outcome)
         self._store.close(input.task, input.outcome)
         new = self._advance.execute(AdvanceInput(task=input.task, outcome=input.outcome)).next_task

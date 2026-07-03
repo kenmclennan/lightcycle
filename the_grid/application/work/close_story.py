@@ -1,4 +1,3 @@
-"""CloseStory: close a story and its open tasks, then tear down its worktree."""
 from dataclasses import dataclass
 
 
@@ -9,7 +8,6 @@ class CloseStoryInput:
 
 
 class CloseStoryUseCase:
-
     def __init__(self, store, worktrees):
         self._store = store
         self._worktrees = worktrees

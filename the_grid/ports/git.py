@@ -1,41 +1,39 @@
-"""GitPort: the abstract git interface the application depends on."""
 from abc import ABC, abstractmethod
 
 
 class GitPort(ABC):
-
     @abstractmethod
     def git(self, root, *args):
-        """Run a git command in root and return its stdout."""
+        pass
 
     @abstractmethod
     def git_ok(self, root, *args):
-        """Run a git command in root and return True on success."""
+        pass
 
     @abstractmethod
     def is_git_repo(self, root):
-        """Return True if root is a git working tree."""
+        pass
 
     @abstractmethod
     def branch_exists(self, root, branch):
-        """Return True if branch exists in root."""
+        pass
 
     @abstractmethod
     def worktree_base(self, root):
-        """Return the main worktree path for root."""
+        pass
 
     @abstractmethod
     def remove_worktree(self, root, path):
-        """Remove the worktree at path."""
+        pass
 
     @abstractmethod
     def delete_branch(self, root, branch):
-        """Delete branch in root."""
+        pass
 
     @abstractmethod
     def delete_remote_branch(self, root, branch):
-        """Delete the remote branch on origin, no-op if already absent."""
+        pass
 
     @abstractmethod
     def worktree_registered(self, root, path):
-        """Return True if path is a registered worktree of root."""
+        pass

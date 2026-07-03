@@ -1,4 +1,3 @@
-"""Story: a unit of work and the artifacts attached to it (an aggregate)."""
 from dataclasses import dataclass
 from typing import Tuple
 

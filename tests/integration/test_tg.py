@@ -18,10 +18,6 @@ import the_grid.cli as _cli_mod
 from tests.support.fake_store import FakeStore
 from the_grid.domain.work import Artifact
 
-# Point every subprocess at a config that does NOT exist, so the suite reads
-# config-absent DEFAULTS and never touches the real ~/.config/the-grid/config.
-# Config-specific tests override GRID_CONFIG (per-test temp file, or by setting
-# os.environ["GRID_CONFIG"] in setUp and restoring _ABSENT_CONFIG in tearDown).
 _ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
 os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
 
@@ -36,7 +32,6 @@ def run_tg(*args, root=None, config=None):
 
 
 def write_config(projects=None, specs=None):
-    """Write a temp grid config (the parts given) and return its path."""
     p = os.path.join(tempfile.mkdtemp(), "config")
     lines = []
     if projects is not None:
@@ -51,15 +46,14 @@ _STORE_TEMPLATE = None
 
 
 def _store_template():
-    """A bd store inited once per run (git + bd init). new_store copies it - a
-    filesystem copy is far cheaper than re-running bd/Dolt init for every test."""
     global _STORE_TEMPLATE
     if _STORE_TEMPLATE is None:
         d = tempfile.mkdtemp()
         subprocess.run(["git", "init", "-q"], cwd=d, check=True)
         subprocess.run(
             ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-            cwd=d, check=True,
+            cwd=d,
+            check=True,
         )
         _STORE_TEMPLATE = d
     return _STORE_TEMPLATE
@@ -80,8 +74,6 @@ def git_in(root, *a):
 
 
 def make_repo(parent, name):
-    """A git repo `name` under `parent` with an `origin` whose `main` branch exists,
-    so `git worktree add ... origin/main` resolves. Returns its path."""
     remote = tempfile.mkdtemp()
     subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
     d = os.path.join(parent, name)
@@ -100,13 +92,11 @@ def make_repo(parent, name):
 
 
 def new_store_with_origin():
-    """A grid store (the engine) that is a git repo with an `origin`/`main`, sitting
-    under a parent dir so a test can point `projects` at that parent and have the
-    engine's own basename resolve back to the store (the self-repo worktree)."""
     parent = tempfile.mkdtemp()
     d = make_repo(parent, "engine")
-    shutil.copytree(os.path.join(_store_template(), ".beads"),
-                    os.path.join(d, ".beads"), dirs_exist_ok=True)
+    shutil.copytree(
+        os.path.join(_store_template(), ".beads"), os.path.join(d, ".beads"), dirs_exist_ok=True
+    )
     return d
 
 
@@ -117,12 +107,10 @@ _AGENT_SPECS = {
     "driver": ("opus", None, None),
 }
 
-# The-grid's own workflow signals, declared per step (matches steps/*.md).
 _STEP_SIGNALS = {"review": {"review_rounds": "rejected"}, "open-pr": {"conflicts": "~conflict"}}
 
 
 def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
-    """Write the standard pipeline agents (routing only, no artifact contracts)."""
     adir = Path(root) / "steps"
     adir.mkdir(exist_ok=True)
     for r in roles:
@@ -141,20 +129,31 @@ def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
 
 
 _CONTRACT_SPECS = {
-    "coder": dict(model="sonnet", step="build",
-                  accepts={"spec": "required", "branch": "optional"},
-                  produces={"branch": "required"}, routes={"done": "review"}),
-    "reviewer": dict(model="opus", step="review",
-                     accepts={"spec": "required", "branch": "required"}, produces={},
-                     routes={"done": "open-pr", "rejected": "build"}),
-    "pr-watcher": dict(model="sonnet", step="open-pr", accepts={"branch": "required"},
-                       produces={"pr": "required"},
-                       routes={"done": "ready-merge", "ci-failed": "build"}),
+    "coder": dict(
+        model="sonnet",
+        step="build",
+        accepts={"spec": "required", "branch": "optional"},
+        produces={"branch": "required"},
+        routes={"done": "review"},
+    ),
+    "reviewer": dict(
+        model="opus",
+        step="review",
+        accepts={"spec": "required", "branch": "required"},
+        produces={},
+        routes={"done": "open-pr", "rejected": "build"},
+    ),
+    "pr-watcher": dict(
+        model="sonnet",
+        step="open-pr",
+        accepts={"branch": "required"},
+        produces={"pr": "required"},
+        routes={"done": "ready-merge", "ci-failed": "build"},
+    ),
 }
 
 
 def write_contract_steps(root, specs=None):
-    """Write agents that declare accepts/produces artifact contracts."""
     specs = specs or _CONTRACT_SPECS
     adir = Path(root) / "steps"
     adir.mkdir(exist_ok=True)
@@ -170,7 +169,6 @@ def write_contract_steps(root, specs=None):
 
 
 def call(fn, *args):
-    """Run a cmd_* in-process; return (rc, stdout, stderr)."""
     out, err = io.StringIO(), io.StringIO()
     try:
         with redirect_stdout(out), redirect_stderr(err):
@@ -181,7 +179,6 @@ def call(fn, *args):
 
 
 def _fake_setUp(test, *, steps=False, contract_steps=False):
-    """Common setUp for FakeStore-based tests: temp root, injected store, cleanup."""
     test.root = tempfile.mkdtemp()
     os.environ["GRID_ROOT_OVERRIDE"] = test.root
     os.environ["GRID_CONFIG"] = write_config(projects=test.root, specs=test.root)
@@ -211,9 +208,8 @@ class TestSkeleton(unittest.TestCase):
     def test_help_is_grouped_and_described(self):
         r = run_tg("--help")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("See what's happening", r.stdout)   # a group header
+        self.assertIn("See what's happening", r.stdout)
         self.assertIn("Start working", r.stdout)
-        # a command must carry a real description, not just its name
         for line in r.stdout.splitlines():
             if line.strip().startswith("status "):
                 self.assertGreater(len(line.split()), 3)
@@ -339,8 +335,6 @@ class TestDoneBlock(unittest.TestCase):
         self.assertNotIn("for:coder", bead["labels"])
 
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
-        # A claimed task (assignee set) that gets blocked must clear the assignee,
-        # else it stays "in-progress" and hides in `tg active` instead of `tg inbox`.
         b = self.store.create_task("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
         rc, out, err = call(_cli_mod.cmd_block, b, "--needs", "rebase first")
@@ -386,19 +380,19 @@ class TestSweep(unittest.TestCase):
 
     def test_sweep_releases_orphaned_claim(self):
         b = self.store.create_task("build: t", step="build", role="coder")
-        self.store.claim_ready("coder")  # sets status="in_progress", assignee="coder"
+        self.store.claim_ready("coder")
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store._records[b]["status"], "open")
         self.assertIn(self.store._records[b].get("assignee"), (None, ""))
 
     def test_sweep_keeps_task_of_live_worker_before_stamp(self):
-        # Reproduces the double-claim TOCTOU: a worker has claimed the task
-        # (assignee = its spawnid) but has not yet stamped its registry task.
-        # Sweep must NOT reclaim it - the owning worker is alive.
         b = self.store.create_task("build: t", step="build", role="coder")
-        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "task": None}]))
+        (Path(self.root) / "logs" / "workers.json").write_text(
+            json.dumps(
+                [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "task": None}]
+            )
+        )
         self.store.assign(b, "S")
         self.store.update_status(b, "in_progress")
         rc, out, err = call(_cli_mod.cmd_sweep)
@@ -407,10 +401,12 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(self.store._records[b].get("assignee"), "S")
 
     def test_sweep_reclaims_dead_worker_claim(self):
-        dead = subprocess.Popen(["true"]); dead.wait()
+        dead = subprocess.Popen(["true"])
+        dead.wait()
         b = self.store.create_task("build: t", step="build", role="coder")
-        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "D", "role": "coder", "pid": dead.pid, "log": "x", "task": b}]))
+        (Path(self.root) / "logs" / "workers.json").write_text(
+            json.dumps([{"spawnid": "D", "role": "coder", "pid": dead.pid, "log": "x", "task": b}])
+        )
         self.store.assign(b, "D")
         self.store.update_status(b, "in_progress")
         rc, out, err = call(_cli_mod.cmd_sweep)
@@ -425,17 +421,22 @@ class TestSpawn(unittest.TestCase):
             (Path(self.root) / d).mkdir(exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
-                "---\nmodel: sonnet\n---\nstub %s" % r)
+                "---\nmodel: sonnet\n---\nstub %s" % r
+            )
 
     def test_spawn_records_worker_log_and_lists_in_ps(self):
         env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo started >> {log}")
-        r = subprocess.run([sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env)
+        r = subprocess.run(
+            [sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env
+        )
         self.assertEqual(r.returncode, 0, r.stderr)
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
         self.assertEqual(len(workers), 1)
         self.assertEqual(workers[0]["role"], "coder")
         self.assertTrue(os.path.exists(workers[0]["log"]))
-        r = subprocess.run([sys.executable, TG, "ps", "--all", "--json"], capture_output=True, text=True, env=env)
+        r = subprocess.run(
+            [sys.executable, TG, "ps", "--all", "--json"], capture_output=True, text=True, env=env
+        )
         self.assertEqual(json.loads(r.stdout)[0]["role"], "coder")
 
 
@@ -449,15 +450,19 @@ class TestPs(unittest.TestCase):
 
     def _run_ps(self, *args):
         env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root)
-        return subprocess.run([sys.executable, TG, "ps", *args, "--json"],
-                              capture_output=True, text=True, env=env)
+        return subprocess.run(
+            [sys.executable, TG, "ps", *args, "--json"], capture_output=True, text=True, env=env
+        )
 
     def test_default_shows_only_alive_workers(self):
-        dead = subprocess.Popen(["true"]); dead.wait()
-        self._write_workers([
-            {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
-            {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
-        ])
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        self._write_workers(
+            [
+                {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
+                {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
+            ]
+        )
         r = self._run_ps()
         self.assertEqual(r.returncode, 0, r.stderr)
         rows = json.loads(r.stdout)
@@ -465,11 +470,14 @@ class TestPs(unittest.TestCase):
         self.assertEqual(rows[0]["role"], "coder")
 
     def test_all_shows_alive_and_dead_workers(self):
-        dead = subprocess.Popen(["true"]); dead.wait()
-        self._write_workers([
-            {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
-            {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
-        ])
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        self._write_workers(
+            [
+                {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
+                {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
+            ]
+        )
         r = self._run_ps("--all")
         self.assertEqual(r.returncode, 0, r.stderr)
         rows = json.loads(r.stdout)
@@ -480,11 +488,12 @@ class TestPs(unittest.TestCase):
 class TestRun(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
-        for d in ("steps", "logs", "flows", ".beads"):  # .beads satisfies the store guard
+        for d in ("steps", "logs", "flows", ".beads"):
             (Path(self.root) / d).mkdir(exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
-                "---\nmodel: sonnet\n---\nstub %s" % r)
+                "---\nmodel: sonnet\n---\nstub %s" % r
+            )
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
         self.store = FakeStore()
@@ -515,34 +524,36 @@ class TestRun(unittest.TestCase):
         self.assertIn(c, out)
 
     def test_run_skips_role_with_inflight_worker(self):
-        # A coder is already booting (alive, claimed nothing yet -> task None) recently.
         self.store.create_task("build: t", step="build", role="coder")
-        self._preset_worker(spawnid="boot", role="coder", pid=os.getpid(), log="x",
-                            task=None, started=time.time())
+        self._preset_worker(
+            spawnid="boot", role="coder", pid=os.getpid(), log="x", task=None, started=time.time()
+        )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
-        self.assertEqual(len(self._workers()), 1)  # no second coder spawned
+        self.assertEqual(len(self._workers()), 1)
 
     def test_run_spawns_when_inflight_worker_is_stale(self):
-        # A worker stuck booting far longer than the max boot age must not block forever.
         self.store.create_task("build: t", step="build", role="coder")
-        self._preset_worker(spawnid="stuck", role="coder", pid=os.getpid(), log="x",
-                            task=None, started=time.time() - 9999)
+        self._preset_worker(
+            spawnid="stuck",
+            role="coder",
+            pid=os.getpid(),
+            log="x",
+            task=None,
+            started=time.time() - 9999,
+        )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
-        self.assertEqual(len(self._workers()), 2)  # stale boot no longer blocks the role
+        self.assertEqual(len(self._workers()), 2)
 
     def test_run_spawns_when_prior_worker_already_claimed(self):
         self.store.create_task("build: t", step="build", role="coder")
-        # prior coder already claimed something (task set) -> not inflight
         self._preset_worker(spawnid="old", role="coder", pid=os.getpid(), log="x", task="other-1")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
-        self.assertEqual(len(self._workers()), 2)  # a fresh coder spawned for the ready task
+        self.assertEqual(len(self._workers()), 2)
 
     def test_run_pool_fills_up_to_max_agents(self):
-        # 7 build + 3 review ready; the default pool cap of 4 spawns 4 workers in
-        # one tick, drawn across roles from the ready queue (not one per role).
         for i in range(7):
             self.store.create_task("build: %d" % i, step="build", role="coder")
         for i in range(3):
@@ -576,6 +587,7 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(t["status"], "needs-human")
         self.assertIsNone(t["step"])
         self.assertEqual(t["title"], "look at X later")
+
 
 class TestArtifacts(unittest.TestCase):
     def setUp(self):
@@ -684,8 +696,9 @@ class TestFileBlockedBy(unittest.TestCase):
 
     def test_blocked_by_creates_dependency_on_first_task(self):
         gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
-        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
-                            "--blocked-by", gate)
+        rc, out, err = call(
+            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--blocked-by", gate
+        )
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         self.assertTrue(sid)
@@ -696,16 +709,24 @@ class TestFileBlockedBy(unittest.TestCase):
         gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
         call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--blocked-by", gate)
         rc, out, _ = call(_cli_mod.cmd_claim, "coder")
-        self.assertEqual(out.strip(), "")  # not claimable while gate is open
+        self.assertEqual(out.strip(), "")
         self.store.close(gate, "approved")
         rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
-        self.assertTrue(out2.strip())  # now claimable
+        self.assertTrue(out2.strip())
 
     def test_multiple_blocked_by_ids(self):
         gate1 = self.store.create_task("gate1", role="human")
         gate2 = self.store.create_task("gate2", role="human")
-        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
-                          "--blocked-by", gate1, "--blocked-by", gate2)
+        rc, out, _ = call(
+            _cli_mod.cmd_file,
+            "specs/X.md",
+            "--step",
+            "build",
+            "--blocked-by",
+            gate1,
+            "--blocked-by",
+            gate2,
+        )
         sid = out.strip()
         task_id = self.store.children(sid)[0].id
         blocker_ids = self.store._deps.get(task_id, set())
@@ -747,15 +768,17 @@ class TestTrace(unittest.TestCase):
 
 class TestAgentFrontmatter(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()  # parse_step reads step files - no bd needed
+        self.root = tempfile.mkdtemp()
         (Path(self.root) / "steps").mkdir(exist_ok=True)
         (Path(self.root) / "steps" / "coder.md").write_text(
-            "---\nmodel: sonnet\n---\n# Coder\n\nDo the thing.\n")
+            "---\nmodel: sonnet\n---\n# Coder\n\nDo the thing.\n"
+        )
         (Path(self.root) / "logs").mkdir(exist_ok=True)
 
     def _tg(self):
         import importlib.util
         from importlib.machinery import SourceFileLoader
+
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         loader = SourceFileLoader("tgmod_fm", TG)
         spec = importlib.util.spec_from_loader("tgmod_fm", loader)
@@ -774,7 +797,8 @@ class TestAgentFrontmatter(unittest.TestCase):
     def test_parse_step_reads_nested_routes(self):
         (Path(self.root) / "steps" / "reviewer.md").write_text(
             "---\nmodel: opus\nstep: review\nroutes:\n  done: open-pr\n"
-            "  rejected: build\n---\n# Reviewer\n")
+            "  rejected: build\n---\n# Reviewer\n"
+        )
         tg = self._tg()
         a = tg.container().fs.parse_step("reviewer")
         self.assertEqual(a["meta"]["step"], "review")
@@ -784,12 +808,13 @@ class TestAgentFrontmatter(unittest.TestCase):
 
 class TestFlowFromAgents(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()  # tests pure flow_next over step files - no bd needed
+        self.root = tempfile.mkdtemp()
         write_steps(self.root)
 
     def _tg(self):
         import importlib.util
         from importlib.machinery import SourceFileLoader
+
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         loader = SourceFileLoader("tgmod_flow", TG)
         spec = importlib.util.spec_from_loader("tgmod_flow", loader)
@@ -867,7 +892,7 @@ class TestArtifactContracts(unittest.TestCase):
         b = self.store.create_task("build: x", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(out.strip(), "")  # not claimed
+        self.assertEqual(out.strip(), "")
         bead = self.store._records[b]
         self.assertIn("for:human", bead["labels"])
         self.assertNotIn("for:coder", bead["labels"])
@@ -908,12 +933,13 @@ class TestArtifactContracts(unittest.TestCase):
     def test_flow_reports_composition_ok(self):
         rc, out, err = call(_cli_mod.cmd_flow)
         self.assertEqual(rc, 0, err)
-        self.assertIn("branch", out)  # produces shown
+        self.assertIn("branch", out)
 
     def test_flow_flags_broken_composition(self):
         specs = {k: dict(v) for k, v in _CONTRACT_SPECS.items()}
-        specs["reviewer"] = dict(specs["reviewer"],
-                                 accepts={"spec": "required", "design": "required"})
+        specs["reviewer"] = dict(
+            specs["reviewer"], accepts={"spec": "required", "design": "required"}
+        )
         write_contract_steps(self.root, specs)
         rc, out, err = call(_cli_mod.cmd_flow)
         self.assertEqual(rc, 1)
@@ -938,14 +964,18 @@ class TestPruneWorkers(unittest.TestCase):
         env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root)
         if history is not None:
             env["GRID_WORKER_HISTORY"] = str(history)
-        return subprocess.run([sys.executable, TG, "sweep"], capture_output=True, text=True, env=env)
+        return subprocess.run(
+            [sys.executable, TG, "sweep"], capture_output=True, text=True, env=env
+        )
 
     def test_sweep_prunes_dead_keeps_live(self):
         dead = self._dead_pid()
-        self._write([
-            {"spawnid": "a", "role": "coder", "pid": os.getpid(), "log": "x", "task": None},
-            {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "task": None},
-        ])
+        self._write(
+            [
+                {"spawnid": "a", "role": "coder", "pid": os.getpid(), "log": "x", "task": None},
+                {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "task": None},
+            ]
+        )
         r = self._sweep(history=0)
         self.assertEqual(r.returncode, 0, r.stderr)
         ids = [w["spawnid"] for w in json.loads(self.wfile.read_text())]
@@ -953,8 +983,12 @@ class TestPruneWorkers(unittest.TestCase):
 
     def test_sweep_keeps_recent_dead_for_log_lookup(self):
         dead = self._dead_pid()
-        self._write([{"spawnid": "d%d" % i, "role": "coder", "pid": dead, "log": "l", "task": None}
-                     for i in range(3)])
+        self._write(
+            [
+                {"spawnid": "d%d" % i, "role": "coder", "pid": dead, "log": "l", "task": None}
+                for i in range(3)
+            ]
+        )
         self._sweep(history=2)
         ids = [w["spawnid"] for w in json.loads(self.wfile.read_text())]
         self.assertEqual(ids, ["d1", "d2"])
@@ -967,7 +1001,6 @@ class TestInitAndStoreGuard(unittest.TestCase):
         return d
 
     def _cfg(self, d):
-        # init now seeds a config; keep it inside d so it can't pollute the suite.
         return os.path.join(d, "grid-config")
 
     def test_init_creates_store_and_is_idempotent(self):
@@ -992,7 +1025,7 @@ class TestInitAndStoreGuard(unittest.TestCase):
 
 class TestContractsOptional(unittest.TestCase):
     def setUp(self):
-        _fake_setUp(self, steps=True)  # no requires/produces
+        _fake_setUp(self, steps=True)
 
     def test_done_without_contract_needs_no_artifacts(self):
         b = self.store.create_task("build: t", step="build", role="coder")
@@ -1002,7 +1035,6 @@ class TestContractsOptional(unittest.TestCase):
 
 class TestWorktree(unittest.TestCase):
     def setUp(self):
-        # Real git engine repo (for the worktree assertions); FakeStore for bd (fast).
         parent = tempfile.mkdtemp()
         self.root = make_repo(parent, "engine")
         write_steps(self.root)
@@ -1084,7 +1116,7 @@ class TestWorktreeNoOrigin(unittest.TestCase):
     def setUp(self):
         parent = tempfile.mkdtemp()
         self.root = os.path.join(parent, "engine")
-        subprocess.run(["git", "init", "-q", self.root], check=True)  # git repo, no origin
+        subprocess.run(["git", "init", "-q", self.root], check=True)
         write_steps(self.root)
         os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
@@ -1108,9 +1140,9 @@ class TestWorktreeNoOrigin(unittest.TestCase):
 class TestNamedRepo(unittest.TestCase):
     def setUp(self):
         self.projects = tempfile.mkdtemp()
-        self.engine = make_repo(self.projects, "engine")  # real git engine; FakeStore for bd
+        self.engine = make_repo(self.projects, "engine")
         write_steps(self.engine)
-        self.app = make_repo(self.projects, "app")  # a sibling repo, referenced by name
+        self.app = make_repo(self.projects, "app")
         os.environ["GRID_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
         os.environ["GRID_ROOT_OVERRIDE"] = self.engine
         self.store = FakeStore()
@@ -1123,8 +1155,13 @@ class TestNamedRepo(unittest.TestCase):
         os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
 
     def _has_branch(self, repo, branch):
-        return subprocess.run(["git", "-C", repo, "rev-parse", "--verify", "--quiet",
-                               "refs/heads/" + branch], capture_output=True).returncode == 0
+        return (
+            subprocess.run(
+                ["git", "-C", repo, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch],
+                capture_output=True,
+            ).returncode
+            == 0
+        )
 
     def _claim(self, repo=None):
         args = ["specs/X.md", "--step", "build"]
@@ -1138,24 +1175,23 @@ class TestNamedRepo(unittest.TestCase):
     def test_named_repo_worktree_created_engine_untouched(self):
         view = self._claim("app")
         branch = "feat/x"
-        self.assertEqual(view["workspace"],
-                         os.path.join(self.engine, ".worktrees", view["parent"]))
+        self.assertEqual(view["workspace"], os.path.join(self.engine, ".worktrees", view["parent"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
-        self.assertTrue(self._has_branch(self.app, branch))      # branch lives in the named repo
-        self.assertFalse(self._has_branch(self.engine, branch))  # engine repo untouched
+        self.assertTrue(self._has_branch(self.app, branch))
+        self.assertFalse(self._has_branch(self.engine, branch))
 
     def test_default_repo_targets_self(self):
-        view = self._claim()  # no --repo
+        view = self._claim()
         branch = "feat/x"
         self.assertTrue(os.path.isdir(view["workspace"]))
-        self.assertTrue(self._has_branch(self.engine, branch))  # self repo got the branch
+        self.assertTrue(self._has_branch(self.engine, branch))
         self.assertFalse(self._has_branch(self.app, branch))
 
     def test_claim_includes_absolute_spec_path(self):
         view = self._claim("app")
         self.assertTrue(os.path.isabs(view["spec_path"]))
         self.assertTrue(view["spec_path"].endswith("specs/X.md"))
-        self.assertTrue(view["spec_path"].startswith(self.engine))  # default specs_root = engine
+        self.assertTrue(view["spec_path"].startswith(self.engine))
 
     def test_file_stores_single_repo_artifact(self):
         _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--repo", "app")
@@ -1165,8 +1201,9 @@ class TestNamedRepo(unittest.TestCase):
 
     def test_file_rejects_unknown_repo(self):
         before = len(self.store._records)
-        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build",
-                            "--repo", "does-not-exist")
+        rc, out, err = call(
+            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--repo", "does-not-exist"
+        )
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
         self.assertEqual(len(self.store._records), before)
@@ -1178,7 +1215,7 @@ class TestUnblock(unittest.TestCase):
 
     def test_unblock_returns_blocked_task_to_agent_role(self):
         b = self.store.create_task("build: t", step="build", role="coder")
-        self.store.claim_ready("coder")  # claim it
+        self.store.claim_ready("coder")
         call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         rc, out, err = call(_cli_mod.cmd_unblock, b)
         self.assertEqual(rc, 0, err)
@@ -1193,7 +1230,8 @@ class TestUnblock(unittest.TestCase):
 
     def test_unblock_refuses_human_step(self):
         (Path(self.root) / "steps" / "ready-merge.md").write_text(
-            "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n")
+            "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n"
+        )
         b = self.store.create_task("ready-merge: t", step="ready-merge", role="human")
         rc, out, err = call(_cli_mod.cmd_unblock, b)
         self.assertEqual(rc, 1)
@@ -1203,7 +1241,7 @@ class TestUnblock(unittest.TestCase):
 class TestClose(unittest.TestCase):
     def setUp(self):
         parent = tempfile.mkdtemp()
-        self.root = make_repo(parent, "engine")  # real git engine; FakeStore for bd
+        self.root = make_repo(parent, "engine")
         write_steps(self.root)
         os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
@@ -1217,8 +1255,13 @@ class TestClose(unittest.TestCase):
         os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
 
     def _has_branch(self, repo, branch):
-        return subprocess.run(["git", "-C", repo, "rev-parse", "--verify", "--quiet",
-                               "refs/heads/" + branch], capture_output=True).returncode == 0
+        return (
+            subprocess.run(
+                ["git", "-C", repo, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch],
+                capture_output=True,
+            ).returncode
+            == 0
+        )
 
     def test_close_closes_story_and_tasks_and_removes_worktree(self):
         _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build")
@@ -1259,7 +1302,7 @@ class TestClose(unittest.TestCase):
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()  # config is filesystem; spec_path test makes its own store
+        self.root = tempfile.mkdtemp()
         self.dir = tempfile.mkdtemp()
         self.cfg = os.path.join(self.dir, "config")
 
@@ -1290,26 +1333,57 @@ class TestConfig(unittest.TestCase):
         self.assertIn("projects: %s" % proj, r.stdout)
         self.assertIn("specs: %s" % specs, r.stdout)
 
-    # spec_path resolution is covered fast in-process by
-    # test_flow_usecases.TestClaimTask.test_resolves_spec_path_against_specs_root
-
 
 class TestLogRender(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()  # cmd_logs reads log files only - no bd needed
+        self.root = tempfile.mkdtemp()
         (Path(self.root) / "logs").mkdir(exist_ok=True)
         self.log = Path(self.root) / "logs" / "worker-coder-x.log"
-        self.log.write_text("\n".join([
-            json.dumps({"type": "system", "subtype": "init"}),
-            json.dumps({"type": "assistant", "message": {"content": [
-                {"type": "text", "text": "Claiming the task."}]}}),
-            json.dumps({"type": "assistant", "message": {"content": [
-                {"type": "tool_use", "name": "Bash", "input": {"command": "tg claim coder"}}]}}),
-            json.dumps({"type": "result", "result": "done; banner fixed"}),
-        ]) + "\n")
-        (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(
-            [{"spawnid": "x", "role": "coder", "pid": os.getpid(),
-              "log": str(self.log), "task": None, "started": time.time()}]))
+        self.log.write_text(
+            "\n".join(
+                [
+                    json.dumps({"type": "system", "subtype": "init"}),
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [{"type": "text", "text": "Claiming the task."}]
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "name": "Bash",
+                                        "input": {"command": "tg claim coder"},
+                                    }
+                                ]
+                            },
+                        }
+                    ),
+                    json.dumps({"type": "result", "result": "done; banner fixed"}),
+                ]
+            )
+            + "\n"
+        )
+        (Path(self.root) / "logs" / "workers.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "spawnid": "x",
+                        "role": "coder",
+                        "pid": os.getpid(),
+                        "log": str(self.log),
+                        "task": None,
+                        "started": time.time(),
+                    }
+                ]
+            )
+        )
 
     def test_logs_renders_stream_json(self):
         r = run_tg("logs", "coder", root=self.root)
@@ -1317,7 +1391,7 @@ class TestLogRender(unittest.TestCase):
         self.assertIn("Claiming the task.", r.stdout)
         self.assertIn("$ tg claim coder", r.stdout)
         self.assertIn("done; banner fixed", r.stdout)
-        self.assertNotIn('"type"', r.stdout)  # raw JSON is not shown
+        self.assertNotIn('"type"', r.stdout)
 
 
 class TestInboxBacklog(unittest.TestCase):
@@ -1327,9 +1401,11 @@ class TestInboxBacklog(unittest.TestCase):
         adir = Path(self.root) / "steps"
         adir.mkdir(exist_ok=True)
         (adir / "coder.md").write_text(
-            "---\nmodel: sonnet\nstep: build\nroutes:\n  done: review\n---\nstub")
+            "---\nmodel: sonnet\nstep: build\nroutes:\n  done: review\n---\nstub"
+        )
         (adir / "ready-merge.md").write_text(
-            "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n  changes: build\n---\nstub")
+            "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n  changes: build\n---\nstub"
+        )
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
@@ -1337,9 +1413,9 @@ class TestInboxBacklog(unittest.TestCase):
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def test_inbox_shows_action_and_blocked_only(self):
-        call(_cli_mod.cmd_add, "a seed")                                           # todo
-        self.store.create_task("merge: z", step="ready-merge", role="human")       # action
-        self.store.create_task("build: q", step="build", role="human")             # blocked
+        call(_cli_mod.cmd_add, "a seed")
+        self.store.create_task("merge: z", step="ready-merge", role="human")
+        self.store.create_task("build: q", step="build", role="human")
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("[action]", out)
         self.assertIn("[blocked]", out)
@@ -1347,8 +1423,8 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertNotIn("a seed", out)
 
     def test_backlog_shows_todo_only(self):
-        call(_cli_mod.cmd_add, "a seed")                                           # todo
-        self.store.create_task("merge: z", step="ready-merge", role="human")       # action
+        call(_cli_mod.cmd_add, "a seed")
+        self.store.create_task("merge: z", step="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_backlog)
         self.assertIn("[todo]", out)
         self.assertIn("a seed", out)
@@ -1381,16 +1457,22 @@ class TestReflect(unittest.TestCase):
 
     def _file_story(self, spec_path=None):
         sid = self.store.create_story("feat")
-        self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]})
+        self.store.update_metadata(
+            sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]}
+        )
         tid = self.store.create_task("build: feat", step="build", role="coder", parent=sid)
         return sid, tid
 
     def test_reflect_stores_feedback_on_task(self):
         sid, tid = self._file_story()
-        rc, out, err = call(_cli_mod.cmd_reflect, tid, "--feedback", "pytest not found; spec thin on errors")
+        rc, out, err = call(
+            _cli_mod.cmd_reflect, tid, "--feedback", "pytest not found; spec thin on errors"
+        )
         self.assertEqual(rc, 0, err)
         self.assertIn("reflected", out)
-        self.assertEqual(self.store.story_artifacts(sid), [Artifact(type="spec", value="/tmp/no-spec.md")])
+        self.assertEqual(
+            self.store.story_artifacts(sid), [Artifact(type="spec", value="/tmp/no-spec.md")]
+        )
         refs = [a for a in self.store.story_artifacts(tid) if a.type == "reflection"]
         self.assertEqual(len(refs), 1)
         data = json.loads(refs[0].value)
@@ -1406,13 +1488,16 @@ class TestReflect(unittest.TestCase):
 
     def test_reflect_stamps_spec_hash(self):
         import tempfile as _tmpfile
+
         spec = _tmpfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w")
         spec.write("# spec\ncontent")
         spec.close()
         sid, tid = self._file_story(spec_path=spec.name)
         self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
         call(_cli_mod.cmd_reflect, tid, "--feedback", "ok")
-        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value)
+        data = json.loads(
+            next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value
+        )
         self.assertNotEqual(data["spec_hash"], "unknown")
         self.assertEqual(len(data["spec_hash"]), 8)
 
@@ -1420,7 +1505,9 @@ class TestReflect(unittest.TestCase):
         sid, tid = self._file_story()
         rc, out, err = call(_cli_mod.cmd_reflect, tid)
         self.assertEqual(rc, 0, err)
-        data = json.loads(next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value)
+        data = json.loads(
+            next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value
+        )
         self.assertEqual(data["feedback"], "")
 
 
@@ -1453,7 +1540,6 @@ class TestRetro(unittest.TestCase):
         self.assertIn("edge case coverage was thin", out)
 
     def test_retro_surfaces_epic_level_feedback(self):
-        # the planner reflects on its plan task, whose parent is the epic (not a story)
         epic, _ = self._make_epic_with_story()
         ptid = self.store.create_task("plan: e", step="plan", role="planner", parent=epic)
         call(_cli_mod.cmd_reflect, ptid, "--feedback", "brief was thin on dep ordering")
@@ -1509,6 +1595,7 @@ class TestWorklog(unittest.TestCase):
 
     def test_worklog_two_arg_range_includes_today(self):
         import datetime
+
         yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
         today = datetime.date.today().isoformat()
         sid = self._close_story()
@@ -1523,7 +1610,9 @@ class TestWorklog(unittest.TestCase):
 
     def test_worklog_shows_pr_link_when_present(self):
         sid = self._close_story()
-        self.store.update_metadata(sid, {"artifacts": [{"type": "pr", "value": "https://github.com/x/y/pull/9"}]})
+        self.store.update_metadata(
+            sid, {"artifacts": [{"type": "pr", "value": "https://github.com/x/y/pull/9"}]}
+        )
         rc, out, err = call(_cli_mod.cmd_worklog)
         self.assertEqual(rc, 0, err)
         self.assertIn("https://github.com/x/y/pull/9", out)

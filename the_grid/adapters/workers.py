@@ -1,4 +1,3 @@
-"""Worker run-state: the workers.json registry and pid liveness."""
 import json
 import os
 
@@ -34,9 +33,6 @@ def pid_alive(pid):
 
 
 def prune_workers(root, keep_dead):
-    """Drop dead worker entries from the registry, keeping all live workers plus
-    the most recent `keep_dead` dead ones (so tg logs can still find recently
-    finished workers). Returns the number pruned."""
     workers = workers_state(root)
     dead_idx = [i for i, w in enumerate(workers) if not pid_alive(w.get("pid", -1))]
     n_drop = max(0, len(dead_idx) - keep_dead)
@@ -56,8 +52,6 @@ def set_task(root, spawnid, task):
 
 
 class WorkersAdapter(WorkersPort):
-    """WorkersPort rooted at Config.grid_root()."""
-
     def __init__(self, config):
         self._config = config
 

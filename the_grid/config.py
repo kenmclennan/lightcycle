@@ -1,17 +1,3 @@
-"""Config: the single boundary to the process environment and the config file.
-
-Every value the engine reads from outside its own code passes through here - the
-config file (key -> value) and the process environment (GRID_* tunables and the
-spawn protocol). This is the ONLY module that reads os.environ.
-
-Policy:
-- projects/specs roots are REQUIRED: absent -> a clear error naming the key and
-  the config path. `tg init` seeds them, so a configured engine is unaffected.
-- every other value carries an EXPLICIT, documented default (the DEFAULT_*
-  constants below) - there are no hidden fallbacks buried in call sites.
-- a malformed numeric value fails fast naming the key, rather than silently
-  reverting to its default.
-"""
 import os
 from pathlib import Path
 
@@ -19,11 +5,10 @@ from the_grid.adapters import frontmatter
 
 
 class ConfigError(Exception):
-    """A required configuration value is missing, or a value is malformed."""
+    pass
 
 
 class Config:
-
     DEFAULT_BRANCH_PREFIX = "feat"
     DEFAULT_MAX_AGENTS = 4
     DEFAULT_WORKTREE_RETRIES = 6
@@ -37,8 +22,6 @@ class Config:
 
     def __init__(self, environ=None):
         self._environ = environ if environ is not None else os.environ
-
-    # ---- environment helpers (the only os.environ reads in the codebase) ----
 
     def _env(self, key):
         v = self._environ.get(key)
@@ -63,19 +46,13 @@ class Config:
             raise ConfigError("%s must be a number (got %r)" % (key, raw))
 
     def base_env(self):
-        """A mutable copy of the process environment, for propagation to child
-        processes (bd, spawned workers). Callers add their own keys."""
         return dict(self._environ)
-
-    # ---- the engine / data-store root (GRID_ROOT_OVERRIDE redirects the store) ----
 
     def grid_root(self):
         override = self._env("GRID_ROOT_OVERRIDE")
         if override:
             return override
         return str(Path(__file__).resolve().parents[1])
-
-    # ---- config file ----
 
     def config_path(self):
         override = self._env("GRID_CONFIG")
@@ -95,7 +72,6 @@ class Config:
         return "projects: ~/workspace/projects\nspecs: ~/workspace/specs\n"
 
     def ensure_config(self):
-        """Seed the default config file if absent. Returns True if it was created."""
         p = self.config_path()
         if os.path.exists(p):
             return False
@@ -103,8 +79,6 @@ class Config:
         with open(p, "w") as f:
             f.write(self._default_config_text())
         return True
-
-    # ---- value resolution ----
 
     def _home(self):
         return os.path.expanduser("~")
@@ -123,7 +97,8 @@ class Config:
             raise ConfigError(
                 "required config value %r is not set. Add `%s: <path>` to %s "
                 "(or run `tg init`), or point GRID_CONFIG at a config that sets it."
-                % (key, key, self.config_path()))
+                % (key, key, self.config_path())
+            )
         return self._expand(v)
 
     def projects_root(self):
@@ -191,8 +166,6 @@ class Config:
             return int(raw)
         except (TypeError, ValueError):
             raise ConfigError("config value 'retro-min-epics' must be an integer (got %r)" % raw)
-
-    # ---- the spawn protocol (set per child process by the spawner) ----
 
     def spawn_id(self):
         return self._env("GRID_SPAWNID")

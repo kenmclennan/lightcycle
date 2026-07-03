@@ -1,4 +1,3 @@
-"""Worker: one spawned agent process (an entity)."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -13,13 +12,16 @@ class Worker:
 
     @classmethod
     def from_state(cls, d) -> "Worker":
-        return cls(spawnid=d.get("spawnid"), pid=d.get("pid"), role=d.get("role"),
-                   task=d.get("task"), started=d.get("started", 0))
+        return cls(
+            spawnid=d.get("spawnid"),
+            pid=d.get("pid"),
+            role=d.get("role"),
+            task=d.get("task"),
+            started=d.get("started", 0),
+        )
 
     def is_alive(self, probe):
         return bool(probe(self.pid if self.pid is not None else -1))
 
     def is_booting(self, now, max_boot):
-        """Alive but not yet claimed (no task) within the boot window - it already
-        covers one ready task of its role, so the pool must not double-spawn."""
         return self.task is None and (now - self.started) < max_boot

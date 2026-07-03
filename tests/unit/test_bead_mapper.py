@@ -5,10 +5,15 @@ from the_grid.domain.work import Status
 
 
 def _bead(**over):
-    b = {"id": "t-1", "title": "build it", "issue_type": "task",
-         "labels": ["for:coder", "step:build", "project:grid", "goal:ship"],
-         "metadata": {"artifacts": [{"type": "spec", "value": "s.md"}], "needs": "a branch"},
-         "dependency_count": 2, "notes": "hi"}
+    b = {
+        "id": "t-1",
+        "title": "build it",
+        "issue_type": "task",
+        "labels": ["for:coder", "step:build", "project:grid", "goal:ship"],
+        "metadata": {"artifacts": [{"type": "spec", "value": "s.md"}], "needs": "a branch"},
+        "dependency_count": 2,
+        "notes": "hi",
+    }
     b.update(over)
     return b
 
@@ -31,7 +36,7 @@ class TestBeadToTask(unittest.TestCase):
         st = bead_to_task(_bead()).status
         self.assertIsInstance(st, Status)
         self.assertEqual(st, Status.READY)
-        self.assertEqual(st, "ready")  # still string-equal for legacy comparisons
+        self.assertEqual(st, "ready")
 
     def test_status_mapping(self):
         self.assertEqual(bead_to_task(_bead(status="closed")).status, "done")
@@ -46,7 +51,7 @@ class TestBeadToTask(unittest.TestCase):
         self.assertEqual(d["id"], "t-1")
         self.assertEqual(d["step"], "build")
         self.assertEqual(d["status"], "ready")
-        self.assertNotIn("workspace", d)  # no enrichments
+        self.assertNotIn("workspace", d)
 
 
 if __name__ == "__main__":

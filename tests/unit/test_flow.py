@@ -5,20 +5,26 @@ from the_grid.domain.work import Task
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
-    "reviewer": {"model": "opus", "step": "review",
-                 "routes": {"done": "open-pr", "rejected": "build"}},
-    "pr-watcher": {"model": "sonnet", "step": "open-pr",
-                   "routes": {"done": "ready-merge", "ci-failed": "build"}},
+    "reviewer": {
+        "model": "opus",
+        "step": "review",
+        "routes": {"done": "open-pr", "rejected": "build"},
+    },
+    "pr-watcher": {
+        "model": "sonnet",
+        "step": "open-pr",
+        "routes": {"done": "ready-merge", "ci-failed": "build"},
+    },
     "driver": {"model": "opus"},
 }
 
-# A flow that mixes automated agents (model + step) with human steps (step, no
-# model). watch-pr is automated; ready-merge and cleanup are human steps.
 HUMAN_METAS = {
-    "watch-pr": {"model": "sonnet", "step": "watch-pr",
-                 "routes": {"done": "ready-merge", "ci-failed": "build"}},
-    "ready-merge": {"step": "ready-merge",
-                    "routes": {"merged": "cleanup", "changes": "build"}},
+    "watch-pr": {
+        "model": "sonnet",
+        "step": "watch-pr",
+        "routes": {"done": "ready-merge", "ci-failed": "build"},
+    },
+    "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
     "cleanup": {"step": "cleanup"},
     "driver": {"model": "opus"},
 }
@@ -34,7 +40,9 @@ class TestFlowAssembly(unittest.TestCase):
 
     def test_driver_owns_nothing(self):
         flow = Flow.assemble(METAS)
-        self.assertEqual({flow.owner_of(s) for s in flow.steps()}, {"coder", "reviewer", "pr-watcher"})
+        self.assertEqual(
+            {flow.owner_of(s) for s in flow.steps()}, {"coder", "reviewer", "pr-watcher"}
+        )
         self.assertEqual(flow.steps(), ["build", "open-pr", "review"])
 
 
@@ -58,8 +66,9 @@ class TestNext(unittest.TestCase):
 
     def test_owned_target_derives_role(self):
         t = self.flow.next("build", "done")
-        self.assertEqual((t.from_step, t.outcome, t.to_step, t.to_role),
-                         ("build", "done", "review", "reviewer"))
+        self.assertEqual(
+            (t.from_step, t.outcome, t.to_step, t.to_role), ("build", "done", "review", "reviewer")
+        )
         t2 = self.flow.next("review", "rejected")
         self.assertEqual((t2.to_step, t2.to_role), ("build", "coder"))
 
@@ -92,17 +101,29 @@ class TestTransition(unittest.TestCase):
 
     def test_next_task_spec_as_kwargs_matches_create_task(self):
         kw = self._t().next_task_spec(Task(id="t-1", title="build: x", parent="s-9")).as_kwargs()
-        self.assertEqual(kw, {"title": "review: x", "step": "review", "role": "reviewer",
-                              "parent": "s-9", "deps": ["t-1"], "project": None, "goal": None})
+        self.assertEqual(
+            kw,
+            {
+                "title": "review: x",
+                "step": "review",
+                "role": "reviewer",
+                "parent": "s-9",
+                "deps": ["t-1"],
+                "project": None,
+                "goal": None,
+            },
+        )
 
     def test_forward_note_provenance_format(self):
-        self.assertEqual(self._t().forward_note("fix the tests"),
-                         "from build (done): fix the tests")
+        self.assertEqual(
+            self._t().forward_note("fix the tests"), "from build (done): fix the tests"
+        )
 
     def test_forward_note_preserves_text_verbatim(self):
         t = self._t(from_step="review", outcome="rejected", to_step="build", to_role="coder")
-        self.assertEqual(t.forward_note("add missing coverage"),
-                         "from review (rejected): add missing coverage")
+        self.assertEqual(
+            t.forward_note("add missing coverage"), "from review (rejected): add missing coverage"
+        )
 
 
 class TestEpicClose(unittest.TestCase):

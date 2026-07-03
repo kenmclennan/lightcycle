@@ -2,23 +2,40 @@ import os
 import unittest
 
 from the_grid.application.errors import UseCaseError
-from the_grid.application.flow import (AdvanceInput, AdvanceTaskUseCase, BlockInput,
-                                       BlockTaskUseCase, ClaimInput, ClaimTaskUseCase,
-                                       CompleteInput, CompleteTaskUseCase, FlowCheckInput,
-                                       FlowCheckUseCase, UnblockInput, UnblockTaskUseCase)
+from the_grid.application.flow import (
+    AdvanceInput,
+    AdvanceTaskUseCase,
+    BlockInput,
+    BlockTaskUseCase,
+    ClaimInput,
+    ClaimTaskUseCase,
+    CompleteInput,
+    CompleteTaskUseCase,
+    FlowCheckInput,
+    FlowCheckUseCase,
+    UnblockInput,
+    UnblockTaskUseCase,
+)
 from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
-    "reviewer": {"model": "opus", "step": "review",
-                 "produces": {"pr": "required"},
-                 "routes": {"done": "open-pr", "rejected": "build"}},
+    "reviewer": {
+        "model": "opus",
+        "step": "review",
+        "produces": {"pr": "required"},
+        "routes": {"done": "open-pr", "rejected": "build"},
+    },
 }
 SPEC_METAS = {
-    "coder": {"model": "sonnet", "step": "build",
-              "accepts": {"spec": "required"}, "routes": {"done": "review"}},
+    "coder": {
+        "model": "sonnet",
+        "step": "build",
+        "accepts": {"spec": "required"},
+        "routes": {"done": "review"},
+    },
 }
 
 
@@ -57,7 +74,9 @@ class TestAdvanceTask(unittest.TestCase):
     def test_creates_next_task(self):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
-        resp = AdvanceTaskUseCase(s, flow_for(METAS, s)).execute(AdvanceInput(task=bid, outcome="done"))
+        resp = AdvanceTaskUseCase(s, flow_for(METAS, s)).execute(
+            AdvanceInput(task=bid, outcome="done")
+        )
         nt = s.get_task(resp.next_task)
         self.assertEqual(nt.step, "review")
         self.assertEqual(nt.role, "reviewer")
@@ -65,7 +84,9 @@ class TestAdvanceTask(unittest.TestCase):
     def test_unknown_outcome_returns_none(self):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
-        resp = AdvanceTaskUseCase(s, flow_for(METAS, s)).execute(AdvanceInput(task=bid, outcome="nope"))
+        resp = AdvanceTaskUseCase(s, flow_for(METAS, s)).execute(
+            AdvanceInput(task=bid, outcome="nope")
+        )
         self.assertIsNone(resp.next_task)
 
 
@@ -73,7 +94,9 @@ class TestCompleteTask(unittest.TestCase):
     def test_closes_and_advances(self):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
-        resp = CompleteTaskUseCase(s, flow_for(METAS, s)).execute(CompleteInput(task=bid, outcome="done"))
+        resp = CompleteTaskUseCase(s, flow_for(METAS, s)).execute(
+            CompleteInput(task=bid, outcome="done")
+        )
         self.assertEqual(s.get_task(bid).status, "done")
         self.assertEqual(s.get_task(resp.next_task).step, "review")
 
@@ -81,21 +104,26 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
         with self.assertRaises(UseCaseError):
-            CompleteTaskUseCase(s, flow_for(METAS, s)).execute(CompleteInput(task=bid, outcome="banana"))
+            CompleteTaskUseCase(s, flow_for(METAS, s)).execute(
+                CompleteInput(task=bid, outcome="banana")
+            )
 
     def test_missing_required_output_raises(self):
         s = FakeStore()
         story = s.create_story("st")
         rid = s.create_task("review: x", step="review", role="reviewer", parent=story)
         with self.assertRaises(UseCaseError):
-            CompleteTaskUseCase(s, flow_for(METAS, s)).execute(CompleteInput(task=rid, outcome="done"))
+            CompleteTaskUseCase(s, flow_for(METAS, s)).execute(
+                CompleteInput(task=rid, outcome="done")
+            )
 
     def test_terminal_step_closes_without_routing(self):
         terminal_metas = {"finaliser": {"model": "sonnet", "step": "finalise"}}
         s = FakeStore()
         tid = s.create_task("finalise: x", step="finalise", role="finaliser")
         resp = CompleteTaskUseCase(s, flow_for(terminal_metas, s)).execute(
-            CompleteInput(task=tid, outcome="done"))
+            CompleteInput(task=tid, outcome="done")
+        )
         self.assertEqual(s.get_task(tid).status, "done")
         self.assertIsNone(resp.next_task)
 
@@ -103,13 +131,16 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
         with self.assertRaises(UseCaseError):
-            CompleteTaskUseCase(s, flow_for(METAS, s)).execute(CompleteInput(task=bid, outcome="typo"))
+            CompleteTaskUseCase(s, flow_for(METAS, s)).execute(
+                CompleteInput(task=bid, outcome="typo")
+            )
 
 
 class TestClaimTask(unittest.TestCase):
     def _uc(self, store, config=None):
-        return ClaimTaskUseCase(store, flow_for(METAS, store), FakeWorktrees(),
-                                FakeWorkers(), config or FakeConfig())
+        return ClaimTaskUseCase(
+            store, flow_for(METAS, store), FakeWorktrees(), FakeWorkers(), config or FakeConfig()
+        )
 
     def test_claims_ready_task(self):
         s = FakeStore()
@@ -124,15 +155,17 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         s.create_task("build: x", step="build", role="coder")
         workers = FakeWorkers()
-        ClaimTaskUseCase(s, flow_for(METAS, s), FakeWorktrees(), workers,
-                         FakeConfig(spawn="sp1")).execute(ClaimInput(role="coder"))
+        ClaimTaskUseCase(
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+        ).execute(ClaimInput(role="coder"))
         self.assertEqual(len(workers.stamped), 1)
 
     def test_missing_required_input_routes_to_human(self):
         s = FakeStore()
         bid = s.create_task("build: x", step="build", role="coder")
-        resp = ClaimTaskUseCase(s, flow_for(SPEC_METAS, s), FakeWorktrees(),
-                                FakeWorkers(), FakeConfig()).execute(ClaimInput(role="coder"))
+        resp = ClaimTaskUseCase(
+            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
+        ).execute(ClaimInput(role="coder"))
         self.assertIsNone(resp)
         self.assertEqual(s.get_task(bid).role, "human")
 
@@ -181,7 +214,7 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_no_agent_owner_raises(self):
         s = FakeStore()
-        bid = s.create_task("a todo", role="human")  # no step
+        bid = s.create_task("a todo", role="human")
         with self.assertRaises(UseCaseError):
             UnblockTaskUseCase(s, flow_for(METAS, s)).execute(UnblockInput(task=bid))
 

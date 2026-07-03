@@ -1,4 +1,3 @@
-"""StepContract: the artifact types a step accepts and produces (a value object)."""
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -13,8 +12,10 @@ class StepContract:
     @classmethod
     def from_meta(cls, meta) -> "StepContract":
         meta = meta or {}
-        return cls(accepts=tuple(ArtifactRequirement.from_block(meta.get("accepts"))),
-                   produces=tuple(ArtifactRequirement.from_block(meta.get("produces"))))
+        return cls(
+            accepts=tuple(ArtifactRequirement.from_block(meta.get("accepts"))),
+            produces=tuple(ArtifactRequirement.from_block(meta.get("produces"))),
+        )
 
     def required_inputs(self):
         return {r.type for r in self.accepts if r.required}

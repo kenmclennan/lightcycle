@@ -1,4 +1,3 @@
-"""TaskView: a task (or story) with its story's artifacts, for display (a value object)."""
 from dataclasses import dataclass
 from typing import List
 

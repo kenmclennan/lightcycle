@@ -1,9 +1,3 @@
-"""In-process harness for feature tests: the real wired cli over a FakeStore.
-
-A temp grid root holds the step files (so the real FsAdapter assembles the flow),
-a temp config points projects/specs at it, and commands run in-process through the
-cli's cmd_* against an injected FakeStore - no subprocess, no bd, fast.
-"""
 import io
 import os
 import tempfile
@@ -39,8 +33,6 @@ def _write_config(root):
 
 
 class Harness:
-    """A wired grid over a FakeStore, with the given agent roles defined."""
-
     def __init__(self, roles):
         self.root = tempfile.mkdtemp()
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
@@ -50,7 +42,6 @@ class Harness:
         cli.set_container(Container(store=self.store))
 
     def run(self, verb, *args):
-        """Run a tg command in-process; return (rc, stdout, stderr)."""
         fn = getattr(cli, "cmd_" + verb.replace("-", "_"))
         out, err = io.StringIO(), io.StringIO()
         try:

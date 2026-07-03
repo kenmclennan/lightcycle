@@ -1,4 +1,3 @@
-"""HumanTaskRow: a human-facing task with its classification (a response row)."""
 from dataclasses import dataclass
 from typing import List
 

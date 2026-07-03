@@ -1,9 +1,3 @@
-"""ClaimTask: atomically claim the next ready task for a role and build its view.
-
-Returns the worker's claim view (the task enriched with workspace, branch, and an
-absolute spec path), or None when nothing is ready or a required input is missing
-(in which case the task is routed to a human).
-"""
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -26,7 +20,6 @@ class ClaimResponse:
 
 
 class ClaimTaskUseCase:
-
     def __init__(self, store, flow, worktrees, workers, config):
         self._store = store
         self._flow = flow
@@ -40,10 +33,12 @@ class ClaimTaskUseCase:
         if t is None:
             return None
         missing = StepContract.from_meta(self._flow.meta_for_step(t.step)).missing_inputs(
-            self._store.present_types(t))
+            self._store.present_types(t)
+        )
         if missing:
             self._store.route_to_human(
-                t.id, "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing)))
+                t.id, "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing))
+            )
             return None
         spawnid = self._config.spawn_id()
         if spawnid:
@@ -55,5 +50,7 @@ class ClaimTaskUseCase:
         spec = next((a.value for a in view.story_artifacts if a.type == "spec"), None)
         spec_path = None
         if spec:
-            spec_path = spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
+            spec_path = (
+                spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
+            )
         return ClaimResponse(view=view, workspace=ws, branch=branch, spec_path=spec_path)

@@ -1,12 +1,8 @@
-"""FakeFs: in-memory FsPort for tests. Holds step metas, no filesystem."""
-
-
 class FakeFs:
-
     def __init__(self, metas=None, files=None, dirs=None):
-        self._metas = metas or {}  # {role: meta dict}
-        self._files = files or {}  # {abs path: bytes}
-        self._dirs = dirs or {}    # {abs path: [subdir names]}
+        self._metas = metas or {}
+        self._files = files or {}
+        self._dirs = dirs or {}
 
     def step_roles(self):
         return sorted(self._metas)

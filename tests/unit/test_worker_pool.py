@@ -9,9 +9,12 @@ def probe(alive_pids):
 
 class TestWorker(unittest.TestCase):
     def test_from_state_reads_the_registry_dict(self):
-        w = Worker.from_state({"spawnid": "sp-1", "pid": 42, "role": "coder",
-                               "task": "b-1", "started": 100})
-        self.assertEqual((w.spawnid, w.pid, w.role, w.task, w.started), ("sp-1", 42, "coder", "b-1", 100))
+        w = Worker.from_state(
+            {"spawnid": "sp-1", "pid": 42, "role": "coder", "task": "b-1", "started": 100}
+        )
+        self.assertEqual(
+            (w.spawnid, w.pid, w.role, w.task, w.started), ("sp-1", 42, "coder", "b-1", 100)
+        )
 
     def test_is_alive_delegates_to_probe(self):
         w = Worker(pid=42)
@@ -30,11 +33,13 @@ class TestWorker(unittest.TestCase):
 
 class TestWorkerPool(unittest.TestCase):
     def _pool(self):
-        return WorkerPool.from_state([
-            {"spawnid": "live", "pid": 1, "role": "coder", "task": None, "started": 100},
-            {"spawnid": "dead", "pid": 2, "role": "coder", "task": None, "started": 100},
-            {"spawnid": "busy", "pid": 3, "role": "reviewer", "task": "b-9", "started": 100},
-        ])
+        return WorkerPool.from_state(
+            [
+                {"spawnid": "live", "pid": 1, "role": "coder", "task": None, "started": 100},
+                {"spawnid": "dead", "pid": 2, "role": "coder", "task": None, "started": 100},
+                {"spawnid": "busy", "pid": 3, "role": "reviewer", "task": "b-9", "started": 100},
+            ]
+        )
 
     def test_live_spawnids_only_counts_alive(self):
         self.assertEqual(self._pool().live_spawnids(probe({1, 3})), {"live", "busy"})
@@ -43,7 +48,6 @@ class TestWorkerPool(unittest.TestCase):
         self.assertEqual(self._pool().free_slots(4, probe({1, 3})), 2)
 
     def test_inflight_counts_alive_booting_by_role(self):
-        # live coder is booting; busy reviewer has a task; dead (pid 2) is not alive
         self.assertEqual(self._pool().inflight(probe({1, 3}), now=150, max_boot=120), {"coder": 1})
 
 

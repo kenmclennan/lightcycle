@@ -1,13 +1,3 @@
-"""MonitorPrs: detect closed/conflicting PRs and close or advance their stories.
-
-Each call scans open tasks whose flow step declares any on_pr_* hook and acts:
-- on_pr_merge + merged PR: closes the story (M1)
-- on_pr_close + unmerged-closed PR: closes the story (M2)
-- on_pr_rework + open PR with /rework top-level comment since last push: advances
-  the task with the declared outcome (M3)
-- on_pr_conflict + definitively-conflicting PR: advances the task via the conflict
-  outcome; escalates after on_pr_conflict_cap cycles if configured (M4)
-"""
 from dataclasses import dataclass, field
 from typing import List
 
@@ -44,7 +34,6 @@ class MonitorPrsResponse:
 
 
 class MonitorPrsUseCase:
-
     def __init__(self, store, github, worktrees, flow, complete=None):
         self._store = store
         self._github = github
@@ -86,7 +75,8 @@ class MonitorPrsUseCase:
                     if any(_REWORK_MARKER in c.body for c in top_level):
                         guidance = _format_guidance(human)
                         self._complete.execute(
-                            CompleteInput(task=task.id, outcome=rework_outcome, note=guidance or None))
+                            CompleteInput(task=task.id, outcome=rework_outcome, note=guidance or None)
+                        )
                         reworked.append(task.parent)
                         advanced = True
                 if not advanced and conflict_outcome and self._github.is_conflicted(pr.value):
@@ -101,5 +91,6 @@ class MonitorPrsUseCase:
                         outcome = conflict_outcome
                     self._complete.execute(CompleteInput(task=task.id, outcome=outcome))
                     conflicted.append(task.parent)
-        return MonitorPrsResponse(merged=merged, abandoned=abandoned, reworked=reworked,
-                                  conflicted=conflicted)
+        return MonitorPrsResponse(
+            merged=merged, abandoned=abandoned, reworked=reworked, conflicted=conflicted
+        )

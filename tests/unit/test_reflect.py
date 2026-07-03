@@ -30,8 +30,9 @@ class TestSpecHashOf(unittest.TestCase):
 
 class TestCreate(unittest.TestCase):
     def test_carries_feedback(self):
-        r = Reflection.create("task-1", feedback="pytest not found; used bash tests/run.sh",
-                              spec_hash="abc12345")
+        r = Reflection.create(
+            "task-1", feedback="pytest not found; used bash tests/run.sh", spec_hash="abc12345"
+        )
         self.assertEqual(r.task, "task-1")
         self.assertEqual(r.feedback, "pytest not found; used bash tests/run.sh")
         self.assertEqual(r.spec_hash, "abc12345")

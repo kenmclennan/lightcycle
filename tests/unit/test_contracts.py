@@ -8,13 +8,23 @@ from the_grid.domain.flow import Flow
 _ROOT = str(Path(__file__).resolve().parents[2])
 
 CONTRACT_METAS = {
-    "coder": {"step": "build", "accepts": {"spec": "required", "branch": "optional"},
-              "produces": {"branch": "required"}, "routes": {"done": "review"}},
-    "reviewer": {"step": "review", "accepts": {"spec": "required", "branch": "required"},
-                 "routes": {"done": "open-pr", "rejected": "build"}},
-    "pr-watcher": {"step": "open-pr", "accepts": {"branch": "required"},
-                   "produces": {"pr": "required"},
-                   "routes": {"done": "ready-merge", "ci-failed": "build"}},
+    "coder": {
+        "step": "build",
+        "accepts": {"spec": "required", "branch": "optional"},
+        "produces": {"branch": "required"},
+        "routes": {"done": "review"},
+    },
+    "reviewer": {
+        "step": "review",
+        "accepts": {"spec": "required", "branch": "required"},
+        "routes": {"done": "open-pr", "rejected": "build"},
+    },
+    "pr-watcher": {
+        "step": "open-pr",
+        "accepts": {"branch": "required"},
+        "produces": {"pr": "required"},
+        "routes": {"done": "ready-merge", "ci-failed": "build"},
+    },
 }
 
 
@@ -64,8 +74,6 @@ class TestFlowContracts(unittest.TestCase):
         self.assertEqual(a.duplicates(), [])
 
     def test_entry_guarantee_satisfies_downstream_required_input(self):
-        # build (entry) guarantees spec; build produces branch on the only path to review,
-        # so review's required branch is never missing.
         a = contracts(CONTRACT_METAS)
         d = a.as_dict()
         self.assertIn("spec", d["req"]["build"])
@@ -73,8 +81,9 @@ class TestFlowContracts(unittest.TestCase):
 
     def test_broken_composition_flagged(self):
         metas = {k: dict(v) for k, v in CONTRACT_METAS.items()}
-        metas["reviewer"] = dict(metas["reviewer"],
-                                 accepts={"spec": "required", "design": "required"})
+        metas["reviewer"] = dict(
+            metas["reviewer"], accepts={"spec": "required", "design": "required"}
+        )
         a = contracts(metas)
         self.assertFalse(a.ok())
         self.assertIn("design", a.missing().get("review", []))

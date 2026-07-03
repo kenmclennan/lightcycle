@@ -1,4 +1,3 @@
-"""Transition: the flow edge taken for an outcome (a value object)."""
 import re
 from dataclasses import dataclass
 

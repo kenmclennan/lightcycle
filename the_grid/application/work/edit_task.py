@@ -1,4 +1,3 @@
-"""EditTask: update an existing backlog item's title, description, goal, project, or parent."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -19,7 +18,6 @@ class EditTaskResponse:
 
 
 class EditTaskUseCase:
-
     def __init__(self, store):
         self._store = store
 

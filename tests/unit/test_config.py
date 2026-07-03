@@ -9,13 +9,12 @@ HOME = os.path.expanduser("~")
 
 
 def _cfg(environ=None, **filevals):
-    """A Config whose config file (if filevals given) is written to a temp path
-    referenced by GRID_CONFIG; with no filevals the config file is absent."""
     env = dict(environ or {})
     if filevals:
         p = os.path.join(tempfile.mkdtemp(), "config")
-        Path(p).write_text("".join("%s: %s\n" % (k.replace("_", "-"), v)
-                                   for k, v in filevals.items()))
+        Path(p).write_text(
+            "".join("%s: %s\n" % (k.replace("_", "-"), v) for k, v in filevals.items())
+        )
         env["GRID_CONFIG"] = p
     else:
         env.setdefault("GRID_CONFIG", os.path.join(tempfile.mkdtemp(), "absent"))

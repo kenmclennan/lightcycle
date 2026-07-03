@@ -1,10 +1,3 @@
-"""Signals: declarative, workflow-defined retro metrics.
-
-A signal is declared in a step's frontmatter and counts completed tasks at that
-step whose outcome matches - so the engine ships no workflow-specific step or
-outcome names. A declaration is `name: <outcome>` (exact match) or `name:
-~<outcome>` (the leading ~ means substring match).
-"""
 from dataclasses import dataclass
 
 
@@ -32,7 +25,6 @@ class SignalSpec:
 
 
 class Signals:
-
     def __init__(self, specs):
         self._specs = list(specs)
 
@@ -50,9 +42,6 @@ class Signals:
         return cls(specs)
 
     def tally(self, tasks):
-        """{signal name: count of matching tasks} for every declared signal. A name
-        declared on more than one step aggregates (sums) across them, so a workflow
-        can roll several edges up into one metric (e.g. resets)."""
         totals = {spec.name: 0 for spec in self._specs}
         for spec in self._specs:
             totals[spec.name] += sum(1 for t in tasks if spec.matches(t))

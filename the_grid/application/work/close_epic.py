@@ -1,4 +1,3 @@
-"""CloseEpic: close an epic only when all its child stories are already closed."""
 import json
 from dataclasses import dataclass
 
@@ -18,7 +17,6 @@ class CloseEpicResponse:
 
 
 class CloseEpicUseCase:
-
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
@@ -29,25 +27,27 @@ class CloseEpicUseCase:
         if open_stories:
             ids = ", ".join(c.id for c in open_stories)
             raise UseCaseError(
-                "epic %s has open stories: %s - close or abandon them first"
-                % (input.epic, ids)
+                "epic %s has open stories: %s - close or abandon them first" % (input.epic, ids)
             )
         self._store.close(input.epic, input.reason)
         retro = RetroUseCase(self._store, self._flow).execute(RetroInput(subject=input.epic))
-        digest = json.dumps({
-            "feedback": [{"task": f.task, "text": f.text} for f in retro.feedback],
-            "story_signals": [
-                {"story": row.story.id, "signals": row.signals, "reflections": row.reflections}
-                for row in retro.story_signals
-            ],
-        })
+        digest = json.dumps(
+            {
+                "feedback": [{"task": f.task, "text": f.text} for f in retro.feedback],
+                "story_signals": [
+                    {"story": row.story.id, "signals": row.signals, "reflections": row.reflections}
+                    for row in retro.story_signals
+                ],
+            }
+        )
         self._store.add_artifact(input.epic, "retro", digest)
         epic = self._store.get_task(input.epic)
         flow = self._flow.load_flow()
         for step, role in flow.epic_close_steps():
             tid = self._store.create_task(
                 "%s: %s" % (step, epic.title),
-                step=step, role=role,
+                step=step,
+                role=role,
             )
             self._store.update_metadata(tid, {"epic": input.epic})
         return CloseEpicResponse(retro=retro)

@@ -1,4 +1,3 @@
-"""Reflect: record freeform feedback on the task that produced it (for the retro)."""
 import json
 from dataclasses import dataclass
 
@@ -17,7 +16,6 @@ class ReflectResponse:
 
 
 class ReflectUseCase:
-
     def __init__(self, store, fs):
         self._store = store
         self._fs = fs
@@ -25,8 +23,7 @@ class ReflectUseCase:
     def _spec_hash(self, tid):
         t = self._store.get_task(tid)
         story = t.parent or tid
-        spec = next((a.value for a in self._store.story_artifacts(story)
-                     if a.type == "spec"), None)
+        spec = next((a.value for a in self._store.story_artifacts(story) if a.type == "spec"), None)
         data = self._fs.read_bytes(spec)
         return Reflection.spec_hash_of(data) if data is not None else "unknown"
 

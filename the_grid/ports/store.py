@@ -1,135 +1,128 @@
-"""StorePort: the abstract task-store interface the application depends on."""
 from abc import ABC, abstractmethod
 
 
 class StorePort(ABC):
-
     @abstractmethod
     def story_artifacts(self, story_id):
-        """Return the artifact list for a story."""
+        pass
 
     @abstractmethod
     def add_artifact(self, story_id, atype, value, label=None):
-        """Append an artifact entry to a story's metadata."""
+        pass
 
     @abstractmethod
     def all_tasks(self):
-        """Return all tasks as domain dicts."""
+        pass
 
     @abstractmethod
     def get_task(self, tid):
-        """Return one task as a domain dict."""
+        pass
 
     @abstractmethod
     def task_view(self, tid):
-        """Return a TaskView - the task plus its story's artifacts."""
+        pass
 
     @abstractmethod
     def present_types(self, task):
-        """Return the set of artifact types present on the task's story."""
+        pass
 
     @abstractmethod
     def reassign(self, tid, role):
-        """Make the task owned by role and reset it to ready (open, unclaimed)."""
+        pass
 
     @abstractmethod
     def route_to_human(self, tid, note):
-        """Re-route a task to the human queue with a note."""
+        pass
 
     @abstractmethod
     def closed_stories(self):
-        """Return closed stories shaped for core.worklog."""
+        pass
 
     @abstractmethod
     def ensure_store(self):
-        """Initialise the task store if not already present."""
+        pass
 
     @abstractmethod
     def reclaim(self, tid):
-        """Release a task's claim - reset it to ready (open, unclaimed)."""
+        pass
 
     @abstractmethod
     def note(self, tid, text):
-        """Add a freeform note to a task."""
+        pass
 
     @abstractmethod
     def close(self, tid, reason):
-        """Close a task with a reason string."""
+        pass
 
     @abstractmethod
     def update_metadata(self, tid, meta):
-        """Replace a task's metadata dict."""
+        pass
 
     @abstractmethod
     def label_add(self, tid, label):
-        """Add a label to a task."""
+        pass
 
     @abstractmethod
     def label_remove(self, tid, label):
-        """Remove a label from a task."""
+        pass
 
     @abstractmethod
     def update_status(self, tid, status):
-        """Set a task's status."""
+        pass
 
     @abstractmethod
     def assign(self, tid, assignee):
-        """Set (or clear) a task's assignee."""
+        pass
 
     @abstractmethod
     def dep_add(self, task_id, blocked_by):
-        """Record that task_id is blocked by blocked_by."""
+        pass
 
     @abstractmethod
     def ready_tasks(self):
-        """Return all ready tasks as Task entities."""
+        pass
 
     @abstractmethod
     def claim_ready(self, role):
-        """Atomically claim the next ready task for role. Returns a Task, or None."""
+        pass
 
     @abstractmethod
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):
-        """Create a task and return its id."""
+        pass
 
     @abstractmethod
     def edit_task(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
-        """Update an existing task's fields. Only the given (non-None) fields change."""
+        pass
 
     @abstractmethod
     def create_story(self, title, *, epic=None, project=None, goal=None):
-        """Create a story and return its id.
-
-        epic, if given, is the parent story id. project/goal are structured
-        attributes the adapter encodes.
-        """
+        pass
 
     @abstractmethod
     def children(self, story_id):
-        """Return the child tasks of a story as Task entities."""
+        pass
 
     @abstractmethod
     def claimed_tasks(self):
-        """Return the tasks currently claimed by a worker (each carries claimed_by)."""
+        pass
 
     @abstractmethod
     def history(self, tid):
-        """Return the raw history list for a task."""
+        pass
 
     @abstractmethod
     def tasks_closed_since(self, since_date):
-        """Return all tasks (not stories) closed on/after since_date (YYYY-MM-DD string)."""
+        pass
 
     @abstractmethod
     def last_n_closed_epics(self, n):
-        """Return the last N closed top-level stories (epics), ordered by closed_at descending."""
+        pass
 
     @abstractmethod
     def epics_closed_since(self, since_date_str):
-        """Return closed top-level stories (epics) with closed_at >= since_date_str,
-        excluding those labelled retro-origin."""
+        pass
 
     @abstractmethod
     def tasks_at_step(self, step):
-        """Return all tasks at the given step regardless of status (open and closed)."""
+        pass

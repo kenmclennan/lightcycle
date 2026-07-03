@@ -1,4 +1,3 @@
-"""Period: an inclusive date range for the worklog (a value object)."""
 import datetime
 from dataclasses import dataclass
 
@@ -10,9 +9,6 @@ class Period:
 
     @classmethod
     def resolve(cls, args, today) -> "Period":
-        """Resolve positional date args to an inclusive range. Each arg is 'today',
-        'yesterday', or 'YYYY-MM-DD'. No args -> today for both bounds. today is passed
-        in (the domain reads no ambient clock)."""
         def _parse(arg):
             if arg == "today":
                 return today

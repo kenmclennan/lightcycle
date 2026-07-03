@@ -1,8 +1,3 @@
-"""Real-bd wiring smoke: proves bd's actual output round-trips through our mappers
-(bead_to_task / labels_for / status mapping). The FULL behavioural store contract
-runs against FakeStore in unit (fast); here we only pay real bd for the core
-mappings that a fake cannot vouch for.
-"""
 import os
 import shutil
 import subprocess
@@ -17,15 +12,14 @@ _TEMPLATE = None
 
 
 def _template():
-    """One real bd store inited per run; copied per test (real-bd fidelity without
-    paying bd/Dolt init every time)."""
     global _TEMPLATE
     if _TEMPLATE is None:
         d = tempfile.mkdtemp()
         subprocess.run(["git", "init", "-q"], cwd=d, check=True)
         subprocess.run(
             ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-            cwd=d, check=True,
+            cwd=d,
+            check=True,
         )
         _TEMPLATE = d
     return _TEMPLATE
@@ -39,7 +33,6 @@ def _new_bd_root():
 
 
 class TestBdStoreSmoke(unittest.TestCase):
-
     def setUp(self):
         self._root = _new_bd_root()
         self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
@@ -75,8 +68,9 @@ class TestBdStoreSmoke(unittest.TestCase):
         sid = s.create_story("story: foo")
         s.add_artifact(sid, "spec", "specs/foo.md", "the spec")
         arts = s.story_artifacts(sid)
-        self.assertEqual((arts[0].type, arts[0].value, arts[0].label),
-                         ("spec", "specs/foo.md", "the spec"))
+        self.assertEqual(
+            (arts[0].type, arts[0].value, arts[0].label), ("spec", "specs/foo.md", "the spec")
+        )
 
     def test_ready_reflects_deps_and_closes(self):
         s = self._store()

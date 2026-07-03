@@ -1,23 +1,17 @@
-"""FlowService: assemble the flow from step files and answer flow questions.
-
-The flow is read from the step markdown (each role's frontmatter) and composed by
-the domain Flow aggregate. This service is the one place that gathers the step
-metas and exposes the assembled flow; use cases depend on it rather than re-reading
-step files.
-"""
 from the_grid.domain.flow import Flow
 from the_grid.domain.pool import ReadyQueue
 
 
 class FlowService:
-
     def __init__(self, fs, store):
         self._fs = fs
         self._store = store
 
     def role_metas(self):
-        return {role: (self._fs.parse_step(role) or {"meta": {}})["meta"]
-                for role in self._fs.step_roles()}
+        return {
+            role: (self._fs.parse_step(role) or {"meta": {}})["meta"]
+            for role in self._fs.step_roles()
+        }
 
     def load_flow(self):
         return Flow.assemble(self.role_metas())

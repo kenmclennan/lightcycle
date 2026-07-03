@@ -1,7 +1,13 @@
 import unittest
 
-from the_grid.application.pool import (ListWorkersUseCase, ResolveLogInput, ResolveLogUseCase,
-                                       SweepUseCase, TickInput, TickUseCase)
+from the_grid.application.pool import (
+    ListWorkersUseCase,
+    ResolveLogInput,
+    ResolveLogUseCase,
+    SweepUseCase,
+    TickInput,
+    TickUseCase,
+)
 from tests.support.fake_store import FakeStore
 
 
@@ -48,8 +54,9 @@ class FakeConfig:
 
 class TestListWorkers(unittest.TestCase):
     def test_marks_liveness(self):
-        workers = FakeWorkers(workers=[{"role": "coder", "pid": 1}, {"role": "reviewer", "pid": 2}],
-                              alive_pids={1})
+        workers = FakeWorkers(
+            workers=[{"role": "coder", "pid": 1}, {"role": "reviewer", "pid": 2}], alive_pids={1}
+        )
         rows = ListWorkersUseCase(workers).execute().workers
         self.assertEqual([r["alive"] for r in rows], [True, False])
 
@@ -57,22 +64,32 @@ class TestListWorkers(unittest.TestCase):
 class TestResolveLog(unittest.TestCase):
     def test_run_target(self):
         resp = ResolveLogUseCase(FakeWorkers(), FakeConfig(root="/grid")).execute(
-            ResolveLogInput(target="run"))
+            ResolveLogInput(target="run")
+        )
         self.assertEqual(resp.path, "/grid/logs/run.log")
 
     def test_by_task_or_role_most_recent_wins(self):
-        workers = FakeWorkers(workers=[
-            {"role": "coder", "task": "b1", "log": "/l/old.log"},
-            {"role": "coder", "task": "b2", "log": "/l/new.log"},
-        ])
-        self.assertEqual(ResolveLogUseCase(workers, FakeConfig()).execute(
-            ResolveLogInput(target="b1")).path, "/l/old.log")
-        self.assertEqual(ResolveLogUseCase(workers, FakeConfig()).execute(
-            ResolveLogInput(target="coder")).path, "/l/new.log")
+        workers = FakeWorkers(
+            workers=[
+                {"role": "coder", "task": "b1", "log": "/l/old.log"},
+                {"role": "coder", "task": "b2", "log": "/l/new.log"},
+            ]
+        )
+        self.assertEqual(
+            ResolveLogUseCase(workers, FakeConfig()).execute(ResolveLogInput(target="b1")).path,
+            "/l/old.log",
+        )
+        self.assertEqual(
+            ResolveLogUseCase(workers, FakeConfig()).execute(ResolveLogInput(target="coder")).path,
+            "/l/new.log",
+        )
 
     def test_unknown_target_is_none(self):
-        self.assertIsNone(ResolveLogUseCase(FakeWorkers(), FakeConfig()).execute(
-            ResolveLogInput(target="nope")).path)
+        self.assertIsNone(
+            ResolveLogUseCase(FakeWorkers(), FakeConfig())
+            .execute(ResolveLogInput(target="nope"))
+            .path
+        )
 
 
 class TestSweep(unittest.TestCase):
@@ -84,8 +101,9 @@ class TestSweep(unittest.TestCase):
         held = s.create_task("h", step="build", role="coder")
         s.update_status(held, "in_progress")
         s.assign(held, "live-sp")
-        workers = FakeWorkers(workers=[{"spawnid": "live-sp", "pid": 111}],
-                              alive_pids={111}, pruned=2)
+        workers = FakeWorkers(
+            workers=[{"spawnid": "live-sp", "pid": 111}], alive_pids={111}, pruned=2
+        )
         result = SweepUseCase(s, workers).execute()
         self.assertEqual(result.swept, [orphan])
         self.assertEqual(result.pruned, 2)
@@ -100,7 +118,8 @@ class TestTick(unittest.TestCase):
         s.create_task("b2", step="build", role="coder")
         spawner = FakeSpawner()
         result = TickUseCase(s, FakeWorkers(), spawner, FakeConfig(max_agents=4)).execute(
-            TickInput(now=1000.0))
+            TickInput(now=1000.0)
+        )
         self.assertIn("coder", spawner.spawned)
         self.assertEqual(spawner.spawned, result.spawned)
         self.assertLessEqual(len(spawner.spawned), 4)
@@ -110,7 +129,8 @@ class TestTick(unittest.TestCase):
         s.create_task("b1", step="build", role="coder")
         spawner = FakeSpawner()
         result = TickUseCase(s, FakeWorkers(), spawner, FakeConfig(max_agents=0)).execute(
-            TickInput(now=1000.0))
+            TickInput(now=1000.0)
+        )
         self.assertEqual(spawner.spawned, [])
         self.assertEqual(result.spawned, [])
 

@@ -1,4 +1,3 @@
-"""GitHubEventsPort: abstract interface for querying GitHub PR state."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
@@ -14,18 +13,17 @@ class Comment:
 
 
 class GitHubEventsPort(ABC):
-
     @abstractmethod
     def is_merged(self, pr: str) -> bool:
-        """Return True if the PR (a GitHub PR URL or number) has been merged."""
+        pass
 
     @abstractmethod
     def is_closed_unmerged(self, pr: str) -> bool:
-        """Return True if the PR was closed without merging (state == CLOSED on GitHub)."""
+        pass
 
     @abstractmethod
     def last_push_time(self, pr: str) -> float:
-        """Return UTC epoch seconds of the last push to the PR's head branch."""
+        pass
 
     @abstractmethod
     def is_conflicted(self, pr: str) -> bool:
@@ -33,4 +31,4 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def comments_since(self, pr: str, since: float) -> List[Comment]:
-        """Return comments posted on the PR after the given UTC epoch timestamp."""
+        pass
