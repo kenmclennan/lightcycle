@@ -50,13 +50,14 @@ class WorktreeService:
         if self._git.worktree_registered(target, path) and os.path.isdir(path):
             self._ensure_branch_artifact(story, branch)
             return path
-        if self._git.branch_exists(target, branch):
-            add_args = ["worktree", "add", path, branch]
-        else:
+        is_new_branch = not self._git.branch_exists(target, branch)
+        if is_new_branch:
             base = self._git.worktree_base(target)
             if base is None:
                 return None
-            add_args = ["worktree", "add", path, "-b", branch, base]
+            add_args = ["worktree", "add", path, "--no-track", "-b", branch, base]
+        else:
+            add_args = ["worktree", "add", path, branch]
         os.makedirs(self._fs.worktrees_dir(), exist_ok=True)
         self._fs.ensure_worktrees_ignored()
         retries = self._config.worktree_retries()
@@ -71,6 +72,10 @@ class WorktreeService:
         if res.returncode != 0:
             sys.stderr.write(res.stderr)
             return None
+        if is_new_branch:
+            self._git.git(target, "config", "branch.%s.remote" % branch, "origin")
+            self._git.git(target, "config", "branch.%s.merge" % branch,
+                          "refs/heads/%s" % branch)
         self._ensure_branch_artifact(story, branch)
         return path
 

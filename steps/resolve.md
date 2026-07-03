@@ -21,7 +21,7 @@ You are an ephemeral conflict resolver in the-grid. You claim ONE task, complete
    before choosing a resolution. Do not guess at semantic intent; if it is unclear, escalate.
 5. Run `bash tests/run.sh` to confirm the rebase is clean.
 6. Force-push the rebased branch:
-   `git push --force-with-lease origin BRANCH`
+   `git push --force-with-lease`
 7. If reconciliation was unambiguous: `tg done TASK resolved` (-> re-enters the PR watch).
 8. If reconciliation is semantic or ambiguous, or tests fail after resolution:
    `tg done TASK escalate --note "<describe what conflicts and why it is ambiguous>"` (-> human).
