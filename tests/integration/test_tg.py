@@ -38,6 +38,18 @@ def write_config(projects=None, specs=None):
         lines.append("projects: %s" % projects)
     if specs is not None:
         lines.append("specs: %s" % specs)
+    lines += [
+        "branch-prefix: feat",
+        "max-agents: 5",
+        "worktree-retries: 6",
+        "worktree-retry-sleep: 0.25",
+        "max-boot-seconds: 120",
+        "poll-seconds: 5",
+        "worker-history: 20",
+        "editor: vi",
+        "retro-interval-days: 7",
+        "retro-min-epics: 3",
+    ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p
 
@@ -496,12 +508,14 @@ class TestRun(unittest.TestCase):
             )
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
+        os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
         self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
+        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
 
     def _run_once(self):
         return call(_cli_mod.cmd_run, "--once")
@@ -560,7 +574,7 @@ class TestRun(unittest.TestCase):
             self.store.create_task("review: %d" % i, step="review", role="reviewer")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
-        self.assertEqual(len(self._workers()), 4)
+        self.assertEqual(len(self._workers()), 5)
 
     def test_run_pool_respects_max_agents_env(self):
         for i in range(5):
@@ -1332,6 +1346,15 @@ class TestConfig(unittest.TestCase):
         r = run_tg("config", root=self.root, config=self.cfg)
         self.assertIn("projects: %s" % proj, r.stdout)
         self.assertIn("specs: %s" % specs, r.stdout)
+
+    def test_init_tops_up_existing_config_with_missing_keys(self):
+        Path(self.cfg).write_text("projects: /p\nspecs: /s\n")
+        r = run_tg("init", root=self.root, config=self.cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("created", r.stdout)
+        text = Path(self.cfg).read_text()
+        self.assertIn("max-agents: 5", text)
+        self.assertIn("projects: /p", text)
 
 
 class TestLogRender(unittest.TestCase):

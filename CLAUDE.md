@@ -73,7 +73,7 @@ concept into a durable identifier).
 
 ## Style
 
-- Near-zero comments: the "why" goes in commit messages and test names, not inline comments.
+- No comments and no docstrings: zero `#` comments and zero docstrings anywhere. The "why" goes in commit messages and test names.
 - No emdashes anywhere - use hyphens.
 - Python modules are `snake_case.py`; step files are `kebab-case.md`.
 - **The engine ships zero runtime dependencies.** Code under `the_grid/` imports the stdlib only -

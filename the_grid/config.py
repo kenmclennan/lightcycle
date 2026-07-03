@@ -4,21 +4,27 @@ from pathlib import Path
 from the_grid.adapters import frontmatter
 
 
+_SEED_KEYS = [
+    ("projects", "~/workspace/projects"),
+    ("specs", "~/workspace/specs"),
+    ("branch-prefix", "feat"),
+    ("max-agents", "5"),
+    ("worktree-retries", "6"),
+    ("worktree-retry-sleep", "0.25"),
+    ("max-boot-seconds", "120"),
+    ("poll-seconds", "5"),
+    ("worker-history", "20"),
+    ("editor", "vi"),
+    ("retro-interval-days", "7"),
+    ("retro-min-epics", "3"),
+]
+
+
 class ConfigError(Exception):
     pass
 
 
 class Config:
-    DEFAULT_BRANCH_PREFIX = "feat"
-    DEFAULT_MAX_AGENTS = 4
-    DEFAULT_WORKTREE_RETRIES = 6
-    DEFAULT_WORKTREE_RETRY_SLEEP = 0.25
-    DEFAULT_MAX_BOOT_SECONDS = 120
-    DEFAULT_POLL_SECONDS = 5
-    DEFAULT_WORKER_HISTORY = 20
-    DEFAULT_EDITOR = "vi"
-    DEFAULT_RETRO_INTERVAL_DAYS = 7
-    DEFAULT_RETRO_MIN_EPICS = 3
 
     def __init__(self, environ=None):
         self._environ = environ if environ is not None else os.environ
@@ -69,15 +75,22 @@ class Config:
             return frontmatter.parse_frontmatter(f.read())
 
     def _default_config_text(self):
-        return "projects: ~/workspace/projects\nspecs: ~/workspace/specs\n"
+        return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)
 
     def ensure_config(self):
         p = self.config_path()
-        if os.path.exists(p):
+        if not os.path.exists(p):
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w") as f:
+                f.write(self._default_config_text())
+            return True
+        existing = self.load_config()
+        missing = [(k, v) for k, v in _SEED_KEYS if k not in existing]
+        if not missing:
             return False
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "w") as f:
-            f.write(self._default_config_text())
+        with open(p, "a") as f:
+            for k, v in missing:
+                f.write("%s: %s\n" % (k, v))
         return True
 
     def _home(self):
@@ -101,6 +114,39 @@ class Config:
             )
         return self._expand(v)
 
+    def _required_int(self, key):
+        v = self.load_config().get(key)
+        if not v:
+            raise ConfigError(
+                "required config value %r is not set. Add `%s: <value>` to %s "
+                "(or run `tg init`)."
+                % (key, key, self.config_path()))
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            raise ConfigError("config value %r must be an integer (got %r)" % (key, v))
+
+    def _required_float(self, key):
+        v = self.load_config().get(key)
+        if not v:
+            raise ConfigError(
+                "required config value %r is not set. Add `%s: <value>` to %s "
+                "(or run `tg init`)."
+                % (key, key, self.config_path()))
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            raise ConfigError("config value %r must be a number (got %r)" % (key, v))
+
+    def _required_str(self, key):
+        v = self.load_config().get(key)
+        if not v:
+            raise ConfigError(
+                "required config value %r is not set. Add `%s: <value>` to %s "
+                "(or run `tg init`)."
+                % (key, key, self.config_path()))
+        return str(v)
+
     def projects_root(self):
         return self._required_path("projects")
 
@@ -108,64 +154,61 @@ class Config:
         return self._required_path("specs")
 
     def branch_prefix(self):
-        cfg = self.load_config()
-        return cfg.get("branch-prefix") or cfg.get("branch_prefix") or self.DEFAULT_BRANCH_PREFIX
+        return self._required_str("branch-prefix")
 
     def max_agents(self):
         env = self._env_int("GRID_MAX_AGENTS", None)
         if env is not None:
             return env
-        raw = self.load_config().get("max-agents") or self.load_config().get("max_agents")
-        if not raw:
-            return self.DEFAULT_MAX_AGENTS
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
-            raise ConfigError("config value 'max-agents' must be an integer (got %r)" % raw)
+        return self._required_int("max-agents")
 
     def worktree_retries(self):
-        return self._env_int("GRID_WORKTREE_RETRIES", self.DEFAULT_WORKTREE_RETRIES)
+        env = self._env_int("GRID_WORKTREE_RETRIES", None)
+        if env is not None:
+            return env
+        return self._required_int("worktree-retries")
 
     def worktree_retry_sleep(self):
-        return self._env_float("GRID_WORKTREE_RETRY_SLEEP", self.DEFAULT_WORKTREE_RETRY_SLEEP)
+        env = self._env_float("GRID_WORKTREE_RETRY_SLEEP", None)
+        if env is not None:
+            return env
+        return self._required_float("worktree-retry-sleep")
 
     def max_boot_seconds(self):
-        return self._env_int("GRID_MAX_BOOT_SECONDS", self.DEFAULT_MAX_BOOT_SECONDS)
+        env = self._env_int("GRID_MAX_BOOT_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("max-boot-seconds")
 
     def poll_seconds(self):
-        return self._env_int("GRID_POLL_SECONDS", self.DEFAULT_POLL_SECONDS)
+        env = self._env_int("GRID_POLL_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("poll-seconds")
 
     def worker_history(self):
-        return self._env_int("GRID_WORKER_HISTORY", self.DEFAULT_WORKER_HISTORY)
+        env = self._env_int("GRID_WORKER_HISTORY", None)
+        if env is not None:
+            return env
+        return self._required_int("worker-history")
 
     def editor(self):
-        return self._env("EDITOR") or self.DEFAULT_EDITOR
+        raw = self._env("EDITOR")
+        if raw:
+            return raw
+        return self._required_str("editor")
 
     def retro_interval_days(self):
         env = self._env_int("GRID_RETRO_INTERVAL_DAYS", None)
         if env is not None:
             return env
-        raw = (self.load_config().get("retro-interval-days")
-               or self.load_config().get("retro_interval_days"))
-        if not raw:
-            return self.DEFAULT_RETRO_INTERVAL_DAYS
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
-            raise ConfigError("config value 'retro-interval-days' must be an integer (got %r)" % raw)
+        return self._required_int("retro-interval-days")
 
     def retro_min_epics(self):
         env = self._env_int("GRID_RETRO_MIN_EPICS", None)
         if env is not None:
             return env
-        raw = (self.load_config().get("retro-min-epics")
-               or self.load_config().get("retro_min_epics"))
-        if not raw:
-            return self.DEFAULT_RETRO_MIN_EPICS
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
-            raise ConfigError("config value 'retro-min-epics' must be an integer (got %r)" % raw)
+        return self._required_int("retro-min-epics")
 
     def spawn_id(self):
         return self._env("GRID_SPAWNID")
