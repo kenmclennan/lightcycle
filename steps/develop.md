@@ -20,7 +20,8 @@ invent intent.
    something the human can review. the-grid imposes NO fixed shape or contents - use the best
    spec-writing approach available to you. Hyphens not emdashes; format with prettier
    (`npx prettier --write`). If the work is big, the spec may break into phases, each with a
-   review checkpoint - one story per phase, from the single spec.
+   review checkpoint - one story per phase, from the single spec. Run `tg specs-dir` to get the
+   configured specs directory, then write the spec to `<specs-dir>/<name>.md`.
 4. `tg link TASK spec <path>` to attach it.
 5. `tg done TASK drafted` (-> review-plan), which surfaces the spec in the human's inbox to review.
 

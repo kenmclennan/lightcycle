@@ -222,6 +222,16 @@ class TestSkeleton(unittest.TestCase):
             self.fail("status command not listed with a description")
 
 
+class TestSpecsDir(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_specs_dir_prints_specs_root_from_config(self):
+        rc, out, err = call(_cli_mod.cmd_specs_dir)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(out.strip(), self.root)
+
+
 class TestModel(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)

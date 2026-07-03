@@ -144,6 +144,7 @@ COMMAND_GROUPS = [
         ("advance", "<id> <outcome>", "create the next task for an outcome without closing"),
         ("ready-roles", "", "list roles that have a ready task"),
         ("spawn", "<role>", "spawn one worker for a role"),
+        ("specs-dir", "", "print the resolved specs directory (absolute path)"),
     ]),
 ]
 
@@ -280,6 +281,12 @@ def cmd_advance(argv):
 
 def cmd_ready_roles(argv):
     print(" ".join(ready_roles()))
+    return 0
+
+
+def cmd_specs_dir(argv):
+    argparse.ArgumentParser(prog="tg specs-dir").parse_args(argv)
+    print(_container.config.specs_root())
     return 0
 
 
