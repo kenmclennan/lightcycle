@@ -1747,6 +1747,38 @@ class TestCadenceTaskDTO(unittest.TestCase):
         self.assertEqual(d["fired_at"], "2026-01-01")
 
 
+class TestTaskDTOReadSurface(unittest.TestCase):
+    AGENT_CONSUMED_FIELDS = (
+        "id", "parent", "step", "status", "artifacts", "description",
+        "notes", "epic", "since", "fired_at", "closed_at", "attention",
+    )
+
+    def setUp(self):
+        _fake_setUp(self)
+
+    def _make_task(self):
+        tid = self.store.create_task("build: t", step="build", role="coder")
+        self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
+        return tid
+
+    def test_show_surfaces_agent_consumed_fields(self):
+        tid = self._make_task()
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        for field in self.AGENT_CONSUMED_FIELDS:
+            self.assertIn(field, d, "tg show dropped field: %s" % field)
+
+    def test_claim_surfaces_agent_consumed_fields(self):
+        tid = self._make_task()
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["id"], tid)
+        for field in self.AGENT_CONSUMED_FIELDS:
+            self.assertIn(field, d, "tg claim dropped field: %s" % field)
+
+
 class TestWorktreePushTarget(unittest.TestCase):
     def setUp(self):
         self.parent = tempfile.mkdtemp()

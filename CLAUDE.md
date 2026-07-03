@@ -49,6 +49,11 @@ fast suite) or `bash tests/run.sh -k <name>`.
   runner - a future Go/godog port runs them unchanged.
 - New pure logic ships with unit tests; a new command ships with an integration test. Get it green
   before `tg done`.
+- **Any `Task` (or story) field a step reads from `tg show`/`tg claim` JSON needs an integration
+  test asserting the field appears in that CLI output** - a unit test on the domain entity alone
+  does not prove the field survives `Task.as_dict()` onto the read surface agents actually consume
+  (`tests/integration/test_tg.py::TestTaskDTOReadSurface` pins the current set; extend it, don't
+  bypass it, when a step starts reading a new field).
 - **Never verify against the live grid store.** When checking a `tg` command by hand, point it at a
   throwaway store (`GRID_ROOT_OVERRIDE` on a temp dir with its own `bd init`, as the integration
   tests do) - never the live grid, or you pollute (or worse, mutate) the real backlog. Same rule as
