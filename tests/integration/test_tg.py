@@ -16,6 +16,8 @@ TG = str(ROOT / "bin" / "tg")
 sys.path.insert(0, str(ROOT))
 import the_grid.cli as _cli_mod
 from tests.support.fake_store import FakeStore
+from the_grid.adapters.gitio import GitAdapter
+from the_grid.application.services.worktree import WorktreeService
 from the_grid.domain.work import Artifact
 
 _ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
@@ -1689,6 +1691,110 @@ class TestCadenceTaskDTO(unittest.TestCase):
         self.assertEqual(d["id"], tid)
         self.assertEqual(d["since"], "2025-12-01")
         self.assertEqual(d["fired_at"], "2026-01-01")
+
+
+class TestWorktreePushTarget(unittest.TestCase):
+    def setUp(self):
+        self.parent = tempfile.mkdtemp()
+        self.repo = make_repo(self.parent, "app")
+        self.worktrees_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.parent, True)
+        self.addCleanup(shutil.rmtree, self.worktrees_dir, True)
+
+    def _svc(self, store):
+        parent = self.parent
+        wt_dir = self.worktrees_dir
+
+        class _Fs:
+            def worktrees_dir(self):
+                return wt_dir
+
+            def ensure_worktrees_ignored(self):
+                pass
+
+        class _Cfg:
+            def projects_root(self):
+                return parent
+
+            def grid_root(self):
+                return parent
+
+            def worktree_retries(self):
+                return 2
+
+            def worktree_retry_sleep(self):
+                return 0.1
+
+        return WorktreeService(store, GitAdapter(), _Fs(), _Cfg())
+
+    def _git(self, path, *args):
+        return subprocess.run(["git", "-C", path] + list(args),
+                              capture_output=True, text=True)
+
+    def _make_store(self, branch="feat/my-feat"):
+        store = FakeStore()
+        sid = store.create_story("my-feat")
+        store.add_artifact(sid, "repo", "app")
+        store.add_artifact(sid, "branch", branch)
+        return store, sid
+
+    def test_branch_tracking_targets_feature_not_main(self):
+        store, sid = self._make_store()
+        ws = self._svc(store).ensure(sid)
+        self.assertIsNotNone(ws)
+
+        remote = self._git(self.repo, "config", "branch.feat/my-feat.remote").stdout.strip()
+        merge = self._git(self.repo, "config", "branch.feat/my-feat.merge").stdout.strip()
+        self.assertEqual(remote, "origin")
+        self.assertEqual(merge, "refs/heads/feat/my-feat")
+
+    def test_bare_force_push_lands_on_feature_branch(self):
+        store, sid = self._make_store()
+        ws = self._svc(store).ensure(sid)
+        self.assertIsNotNone(ws)
+
+        (Path(ws) / "f.txt").write_text("hello")
+        git_in(ws, "add", "f.txt")
+        git_in(ws, "commit", "-m", "wip")
+
+        r = subprocess.run(["git", "push", "--force-with-lease"],
+                           cwd=ws, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+        ls = self._git(self.repo, "ls-remote", "--heads", "origin").stdout
+        self.assertIn("refs/heads/feat/my-feat", ls)
+
+        remote_feat_sha = self._git(self.repo, "rev-parse",
+                                    "origin/feat/my-feat").stdout.strip()
+        ws_head_sha = self._git(ws, "rev-parse", "HEAD").stdout.strip()
+        self.assertEqual(remote_feat_sha, ws_head_sha)
+
+        remote_main_sha = self._git(self.repo, "rev-parse", "origin/main").stdout.strip()
+        self.assertNotEqual(remote_main_sha, ws_head_sha)
+
+    def test_second_bare_force_push_after_amend_updates_feature_branch(self):
+        store, sid = self._make_store()
+        ws = self._svc(store).ensure(sid)
+        self.assertIsNotNone(ws)
+
+        (Path(ws) / "f.txt").write_text("v1")
+        git_in(ws, "add", "f.txt")
+        git_in(ws, "commit", "-m", "first")
+        subprocess.run(["git", "push", "--force-with-lease"], cwd=ws,
+                       check=True, capture_output=True)
+
+        (Path(ws) / "f.txt").write_text("v2")
+        git_in(ws, "add", "f.txt")
+        git_in(ws, "commit", "--amend", "--no-edit")
+
+        r = subprocess.run(["git", "push", "--force-with-lease"],
+                           cwd=ws, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+        remote_sha = self._git(self.repo, "rev-parse",
+                               "origin/feat/my-feat").stdout.strip()
+        local_sha = self._git(ws, "rev-parse", "HEAD").stdout.strip()
+        self.assertEqual(remote_sha, local_sha)
 
 
 if __name__ == "__main__":
