@@ -287,3 +287,8 @@ class FakeStore(StorePort):
         label = "step:%s" % step
         return [bead_to_task(b) for b in self._records.values()
                 if b.get("issue_type") == "task" and label in (b.get("labels") or [])]
+
+    def delete(self, tid):
+        self._records.pop(tid, None)
+        self._deps.pop(tid, None)
+        self._history.pop(tid, None)

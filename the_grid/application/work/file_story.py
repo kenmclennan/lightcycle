@@ -62,12 +62,19 @@ class FileStoryUseCase:
         story = self._store.create_story(
             base, epic=input.epic, project=input.project, goal=input.goal
         )
-        self._store.add_artifact(story, "spec", input.spec)
-        if input.repo:
-            self._store.add_artifact(story, "repo", input.repo)
-        task = self._store.create_task(
-            "%s: %s" % (input.step, base), step=input.step, role=role, parent=story
-        )
-        for blocker in input.blocked_by or []:
-            self._store.dep_add(task, blocker)
+        task = None
+        try:
+            self._store.add_artifact(story, "spec", input.spec)
+            if input.repo:
+                self._store.add_artifact(story, "repo", input.repo)
+            task = self._store.create_task(
+                "%s: %s" % (input.step, base), step=input.step, role=role, parent=story
+            )
+            for blocker in input.blocked_by or []:
+                self._store.dep_add(task, blocker)
+        except Exception:
+            if task:
+                self._store.delete(task)
+            self._store.delete(story)
+            raise
         return FileStoryResponse(story=story)
