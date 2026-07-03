@@ -32,8 +32,9 @@ def _template():
 
 
 def _new_bd_root():
-    d = tempfile.mkdtemp()
-    shutil.copytree(_template(), d, dirs_exist_ok=True)
+    outer = tempfile.mkdtemp()
+    d = os.path.join(outer, os.path.basename(_template()))
+    shutil.copytree(_template(), d)
     return d
 
 
@@ -190,6 +191,99 @@ class TestBdStoreSmoke(unittest.TestCase):
         result_ids = {t.id for t in s.all_tasks()}
         for tid in created:
             self.assertIn(tid, result_ids)
+
+
+class TestBdStoreIdSeam(unittest.TestCase):
+    """Adapter-seam: ids above the port are short; both short and full ids are accepted."""
+
+    def setUp(self):
+        self._root = _new_bd_root()
+        self._prefix = os.path.basename(self._root)
+        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
+        os.environ["GRID_ROOT_OVERRIDE"] = self._root
+
+    def tearDown(self):
+        if self._prior is None:
+            os.environ.pop("GRID_ROOT_OVERRIDE", None)
+        else:
+            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
+
+    def _store(self):
+        return BdStore(Config())
+
+    def _is_short(self, tid):
+        return tid is not None and not tid.startswith(self._prefix + "-")
+
+    def test_task_id_is_short(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        self.assertTrue(self._is_short(tid), f"expected short id, got {tid!r}")
+
+    def test_get_task_id_is_short(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        t = s.get_task(tid)
+        self.assertTrue(self._is_short(t.id), f"task.id not short: {t.id!r}")
+
+    def test_get_task_accepts_full_id(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        full_id = self._prefix + "-" + tid
+        t = s.get_task(full_id)
+        self.assertEqual(t.id, tid)
+
+    def test_parent_is_short(self):
+        s = self._store()
+        sid = s.create_story("story")
+        tid = s.create_task("t", role="coder", parent=sid)
+        t = s.get_task(tid)
+        self.assertTrue(self._is_short(t.parent), f"task.parent not short: {t.parent!r}")
+        self.assertEqual(t.parent, sid)
+
+    def test_story_children_ids_are_short(self):
+        s = self._store()
+        sid = s.create_story("story")
+        tid = s.create_task("t", role="coder", parent=sid)
+        kids = s.children(sid)
+        self.assertEqual(len(kids), 1)
+        self.assertTrue(self._is_short(kids[0].id), f"child id not short: {kids[0].id!r}")
+        self.assertEqual(kids[0].id, tid)
+
+    def test_closed_stories_id_is_short(self):
+        s = self._store()
+        sid = s.create_story("closed story")
+        s.close(sid, "done")
+        closed = s.closed_stories()
+        self.assertEqual(len(closed), 1)
+        self.assertTrue(self._is_short(closed[0]["id"]), f"closed story id not short: {closed[0]['id']!r}")
+        self.assertEqual(closed[0]["id"], sid)
+
+    def test_all_tasks_ids_are_short(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        tasks = s.all_tasks()
+        ids = [t.id for t in tasks]
+        self.assertIn(tid, ids)
+        for i in ids:
+            self.assertTrue(self._is_short(i), f"id not short: {i!r}")
+
+    def test_story_id_is_short(self):
+        s = self._store()
+        sid = s.create_story("s")
+        self.assertTrue(self._is_short(sid), f"story id not short: {sid!r}")
+
+    def test_close_with_short_id_works(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        s.close(tid, "done")
+        self.assertEqual(s.get_task(tid).status, "done")
+
+    def test_close_with_full_id_works(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        full_id = self._prefix + "-" + tid
+        s.close(full_id, "done")
+        self.assertEqual(s.get_task(tid).status, "done")
 
 
 if __name__ == "__main__":
