@@ -16,6 +16,7 @@ class FlowCheckResponse:
     owner: Dict[str, str]
     routes: Dict[str, Dict[str, str]]
     analysis: dict
+    hooks: Dict[str, list]
 
 
 class FlowCheckUseCase:
@@ -30,4 +31,5 @@ class FlowCheckUseCase:
         owner = {s: flow.owner_of(s) for s in steps}
         routes = {s: {o: flow.next(s, o).to_step for o in flow.outcomes_for(s)} for s in steps}
         return FlowCheckResponse(owner=owner, routes=routes,
-                                 analysis=FlowContracts(flow, role_metas).as_dict())
+                                 analysis=FlowContracts(flow, role_metas).as_dict(),
+                                 hooks=flow.hooks())

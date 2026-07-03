@@ -12,7 +12,7 @@ from the_grid.domain.flow.transition import Transition
 class Flow:
 
     def __init__(self, owner, routes, pr_merge, pr_close, pr_rework, epic_close=None,
-                 retro_cadence=None):
+                 retro_cadence=None, hooks=None):
         self._owner = owner
         self._routes = routes
         self._pr_merge = pr_merge
@@ -20,11 +20,12 @@ class Flow:
         self._pr_rework = pr_rework
         self._epic_close = epic_close or set()
         self._retro_cadence = retro_cadence or set()
+        self._hooks = hooks or {}
 
     @classmethod
     def assemble(cls, role_metas) -> "Flow":
-        owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence = (
-            {}, {}, {}, {}, {}, set(), set())
+        owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks = (
+            {}, {}, {}, {}, {}, set(), set(), {})
         for role, meta in role_metas.items():
             meta = meta or {}
             step = meta.get("step")
@@ -46,7 +47,10 @@ class Flow:
                 epic_close.add(step)
             if meta.get("on_retro_cadence"):
                 retro_cadence.add(step)
-        return cls(owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence)
+            for key, val in meta.items():
+                if key.startswith("on_") and val:
+                    hooks.setdefault(key, set()).add(step)
+        return cls(owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -74,6 +78,9 @@ class Flow:
 
     def retro_cadence_steps(self):
         return [(step, self._owner[step]) for step in sorted(self._retro_cadence) if step in self._owner]
+
+    def hooks(self):
+        return {hook: sorted(steps) for hook, steps in sorted(self._hooks.items())}
 
     def next(self, step, outcome):
         target = (self._routes.get(step) or {}).get(outcome)

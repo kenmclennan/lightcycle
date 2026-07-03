@@ -293,12 +293,14 @@ def cmd_flow(argv):
     entries, terminals = an["entries"], an["terminals"]
     unreachable, missing, dups, ok = an["unreachable"], an["missing"], an["dups"], an["ok"]
 
+    hooks = resp.hooks
     if a.json:
         print(json.dumps({"owner": owner, "routes": routes,
                           "accepts": {s: {"required": sorted(req[s]),
                                           "optional": sorted(opt[s])} for s in steps},
                           "produces": {s: sorted(prod[s]) for s in steps},
                           "entries": entries, "terminals": terminals,
+                          "hooks": hooks,
                           "unreachable": unreachable, "missing_inputs": missing,
                           "conflicts": dups, "ok": ok}, indent=2))
         return 0 if ok else 1
@@ -320,6 +322,10 @@ def cmd_flow(argv):
     else:
         sys.stderr.write("warning: no entry step (none requires only %s)\n"
                          % ", ".join(sorted(FILE_PROVIDES)))
+    if hooks:
+        print("on_* hooks:")
+        for hook, hook_steps in hooks.items():
+            print("  %s -> %s" % (hook, ", ".join(hook_steps)))
     for s, miss in sorted(missing.items()):
         sys.stderr.write("composition: step '%s' needs %s, not guaranteed upstream\n"
                          % (s, ", ".join(miss)))
