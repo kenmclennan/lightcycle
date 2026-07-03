@@ -15,6 +15,10 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
+    def kill(self, pid):
+        pass
+
+    @abstractmethod
     def prune_workers(self, keep_dead=None):
         pass
 

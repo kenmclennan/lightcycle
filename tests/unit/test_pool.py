@@ -16,12 +16,16 @@ class FakeWorkers:
         self._workers = workers or []
         self._alive = set(alive_pids)
         self._pruned = pruned
+        self.killed = []
 
     def workers_state(self):
         return self._workers
 
     def pid_alive(self, pid):
         return pid in self._alive
+
+    def kill(self, pid):
+        self.killed.append(pid)
 
     def prune_workers(self):
         return self._pruned
@@ -102,12 +106,50 @@ class TestSweep(unittest.TestCase):
         s.update_status(held, "in_progress")
         s.assign(held, "live-sp")
         workers = FakeWorkers(
-            workers=[{"spawnid": "live-sp", "pid": 111}], alive_pids={111}, pruned=2
+            workers=[{"spawnid": "live-sp", "pid": 111, "task": "h", "started": 100}],
+            alive_pids={111},
+            pruned=2,
         )
-        result = SweepUseCase(s, workers).execute()
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(result.swept, [orphan])
         self.assertEqual(result.pruned, 2)
         self.assertEqual(s.get_task(orphan).status, "ready")
+        self.assertEqual(s.get_task(held).status, "in-progress")
+
+    def test_kills_and_prunes_a_live_past_boot_worker_owning_no_task(self):
+        s = FakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "zombie-sp", "pid": 222, "task": None, "started": 100}],
+            alive_pids={222},
+            pruned=1,
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        self.assertEqual(workers.killed, [222])
+        self.assertEqual(result.killed, ["zombie-sp"])
+        self.assertEqual(result.pruned, 1)
+
+    def test_does_not_kill_a_live_worker_still_within_the_boot_window(self):
+        s = FakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "booting-sp", "pid": 333, "task": None, "started": 950}],
+            alive_pids={333},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.killed, [])
+
+    def test_does_not_kill_a_live_worker_on_a_claimed_task(self):
+        s = FakeStore()
+        held = s.create_task("h", step="build", role="coder")
+        s.update_status(held, "in_progress")
+        s.assign(held, "busy-sp")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "busy-sp", "pid": 444, "task": "h", "started": 100}],
+            alive_pids={444},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.killed, [])
         self.assertEqual(s.get_task(held).status, "in-progress")
 
 

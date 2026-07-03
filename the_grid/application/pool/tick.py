@@ -44,7 +44,7 @@ class TickUseCase:
         conflicted = monitor_result.conflicted if monitor_result else []
         cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
         cadence_fired = cadence_result.fired if cadence_result else []
-        swept = self._sweep.execute()
+        swept = self._sweep.execute(input.now, self._config.max_boot_seconds())
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
         max_agents = self._config.max_agents()

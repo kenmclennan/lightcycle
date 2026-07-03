@@ -24,3 +24,12 @@ class WorkerPool:
             if w.is_booting(now, max_boot):
                 counts[w.role] = counts.get(w.role, 0) + 1
         return counts
+
+    def orphaned(self, probe, now, max_boot, claimed_spawnids):
+        return [
+            w
+            for w in self.alive(probe)
+            if w.spawnid
+            and not w.is_booting(now, max_boot)
+            and w.spawnid not in claimed_spawnids
+        ]

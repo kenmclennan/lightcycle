@@ -1,5 +1,6 @@
 import json
 import os
+import signal
 
 from the_grid.ports.workers import WorkersPort
 
@@ -30,6 +31,13 @@ def pid_alive(pid):
         return True
     except (OSError, ValueError, TypeError):
         return False
+
+
+def kill(pid):
+    try:
+        os.kill(int(pid), signal.SIGTERM)
+    except (OSError, ValueError, TypeError):
+        pass
 
 
 def prune_workers(root, keep_dead):
@@ -63,6 +71,9 @@ class WorkersAdapter(WorkersPort):
 
     def pid_alive(self, pid):
         return pid_alive(pid)
+
+    def kill(self, pid):
+        return kill(pid)
 
     def prune_workers(self, keep_dead=None):
         kd = self._config.worker_history() if keep_dead is None else keep_dead
