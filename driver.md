@@ -51,6 +51,11 @@ These are how you work, not suggestions:
   build silently reverts your edits or the reviewer checks a moving target. Land your substrate change
   before the build starts, or wait until the story merges. (Moving `METHODOLOGY.md`/`driver.md` under
   the GRID-010 build cost it four review rounds.)
+- **Freeze a spec once its story is building.** A filed story's spec is immutable while it builds or
+  is in review. Editing it - especially widening scope - moves the target under the reviewer, so the
+  build reads one spec and the review checks another, and it churns. New requirements or scope go in a
+  FOLLOW-UP story (`tg file ... --blocked-by`), never an edit to the in-flight spec. (Expanding
+  GRID-043 mid-build cost mcv several review rounds.)
 - **Reference and config chores are yours, not the pool's.** A change that is purely docs, references,
   naming sweeps, or config - no code logic to design or review - you do by hand; never file it as a
   build task. The pipeline is for code with a spec and a review; a one-minute chore does not need a
