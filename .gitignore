@@ -8,6 +8,7 @@ __pycache__/
 logs/
 specs/*.md
 .worktrees/
+.tg-run.pid
 
 # Beads / Dolt files (added by bd init)
 .dolt/
