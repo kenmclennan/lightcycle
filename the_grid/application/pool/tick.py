@@ -29,6 +29,10 @@ class TickResponse:
     reworked: List[str] = field(default_factory=list)
     conflicted: List[str] = field(default_factory=list)
     cadence_fired: List[str] = field(default_factory=list)
+    alive: int = 0
+    max_agents: int = 0
+    ready: int = 0
+    inflight_count: int = 0
 
 
 class TickUseCase:
@@ -51,16 +55,24 @@ class TickUseCase:
         cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
         cadence_fired = cadence_result.fired if cadence_result else []
         swept = self._sweep.execute()
-        spawned = []
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
-        slots = pool.free_slots(self._config.max_agents(), probe)
+        max_agents = self._config.max_agents()
+        slots = pool.free_slots(max_agents, probe)
+        alive_count = max_agents - slots
+        inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
+        inflight_total = sum(inflight_dict.values())
+        ready_roles = ReadyQueue(self._store.ready_tasks()).roles()
+        ready_count = len(ready_roles)
+        spawned = []
         if slots > 0:
-            inflight = pool.inflight(probe, input.now, self._config.max_boot_seconds())
-            roles = ReadyQueue(self._store.ready_tasks()).roles()
-            for role in PoolPlan(inflight, slots).roles_to_spawn(roles):
+            for role in PoolPlan(inflight_dict, slots).roles_to_spawn(ready_roles):
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
-        return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged,
-                            abandoned=abandoned, reworked=reworked, conflicted=conflicted,
-                            cadence_fired=cadence_fired)
+        return TickResponse(
+            swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged,
+            abandoned=abandoned, reworked=reworked, conflicted=conflicted,
+            cadence_fired=cadence_fired,
+            alive=alive_count, max_agents=max_agents, ready=ready_count,
+            inflight_count=inflight_total,
+        )

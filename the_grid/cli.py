@@ -553,19 +553,29 @@ def cmd_edit(argv):
 # ---- run loop / launch ------------------------------------------------------
 
 
-def _render_tick(result):
+def _format_tick(result, prev_snapshot, now):
+    ts = time.strftime("%H:%M:%S", time.localtime(now))
+    lines = []
+    for role in result.spawned:
+        lines.append("%s  %-7s  %s" % (ts, "spawn", role))
     for sid in result.merged:
-        print("merged %s" % sid)
+        lines.append("%s  %-7s  %s" % (ts, "merge", sid))
     for sid in result.abandoned:
-        print("abandoned %s" % sid)
+        lines.append("%s  %-7s  %s" % (ts, "abandon", sid))
     for sid in result.reworked:
-        print("rework %s" % sid)
+        lines.append("%s  %-7s  %s" % (ts, "rework", sid))
     for sid in result.conflicted:
-        print("conflicted %s" % sid)
+        lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
     for bid in result.swept:
-        print("swept %s" % bid)
-    if result.pruned:
-        print("pruned %d dead worker entr%s" % (result.pruned, "y" if result.pruned == 1 else "ies"))
+        lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
+    cur = (result.alive, result.max_agents, result.ready, result.inflight_count)
+    if cur != prev_snapshot or result.pruned:
+        state = "active=%d/%d ready=%d inflight=%d" % (
+            result.alive, result.max_agents, result.ready, result.inflight_count)
+        if result.pruned:
+            state += " pruned=%d" % result.pruned
+        lines.append("%s  %-7s  %s" % (ts, "state", state))
+    return lines, cur
 
 
 def cmd_run(argv):
@@ -582,12 +592,22 @@ def cmd_run(argv):
     tick = TickUseCase(_container.store, _container.workers, _container.spawner, _container.config,
                        monitor=monitor, cadence_gate=cadence_gate)
     if a.once:
-        _render_tick(tick.execute(TickInput(now=time.time())))
+        now = time.time()
+        result = tick.execute(TickInput(now=now))
+        lines, _ = _format_tick(result, None, now)
+        for line in lines:
+            print(line)
         return 0
     interval = _container.config.poll_seconds()
-    print("tg run (poll %ds)" % interval)
+    max_agents = _container.config.max_agents()
+    print("tg run  poll=%ds  max-agents=%d" % (interval, max_agents))
+    prev_snapshot = None
     while True:
-        _render_tick(tick.execute(TickInput(now=time.time())))
+        now = time.time()
+        result = tick.execute(TickInput(now=now))
+        lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
+        for line in lines:
+            print(line)
         time.sleep(interval)
 
 
