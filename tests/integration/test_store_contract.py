@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -30,6 +31,23 @@ def _new_bd_root():
     d = os.path.join(outer, os.path.basename(_template()))
     shutil.copytree(_template(), d)
     return d
+
+
+def _new_named_bd_root(name):
+    outer = tempfile.mkdtemp()
+    d = os.path.join(outer, name)
+    os.makedirs(d)
+    subprocess.run(["git", "init", "-q"], cwd=d, check=True)
+    subprocess.run(
+        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
+        cwd=d,
+        check=True,
+    )
+    return d
+
+
+def _new_dotted_bd_root():
+    return _new_named_bd_root("foo-1.2")
 
 
 class TestBdStoreSmoke(unittest.TestCase):
@@ -278,6 +296,70 @@ class TestBdStoreIdSeam(unittest.TestCase):
         full_id = self._prefix + "-" + tid
         s.close(full_id, "done")
         self.assertEqual(s.get_task(tid).status, "done")
+
+
+class TestBdStorePrefixFromBd(unittest.TestCase):
+    def setUp(self):
+        self._root = _new_dotted_bd_root()
+        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
+        os.environ["GRID_ROOT_OVERRIDE"] = self._root
+
+    def tearDown(self):
+        if self._prior is None:
+            os.environ.pop("GRID_ROOT_OVERRIDE", None)
+        else:
+            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
+
+    def _store(self):
+        return BdStore(Config())
+
+    def test_prefix_is_bds_sanitized_prefix_not_the_dirname(self):
+        s = self._store()
+        self.assertEqual(s._prefix(), "foo-1_2")
+        self.assertNotEqual(s._prefix(), os.path.basename(self._root))
+
+    def test_get_task_roundtrips_id_on_dotted_root(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        t = s.get_task(tid)
+        self.assertEqual(t.id, tid)
+
+    def test_close_roundtrips_id_on_dotted_root(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        s.close(tid, "done")
+        self.assertEqual(s.get_task(tid).status, "done")
+
+
+class TestBdStorePrefixOnCollidingRoot(unittest.TestCase):
+    def setUp(self):
+        self._root = _new_named_bd_root("the-grid")
+        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
+        os.environ["GRID_ROOT_OVERRIDE"] = self._root
+
+    def tearDown(self):
+        if self._prior is None:
+            os.environ.pop("GRID_ROOT_OVERRIDE", None)
+        else:
+            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
+
+    def _store(self):
+        return BdStore(Config())
+
+    def test_prefix_discovery_does_not_create_a_stray_bead(self):
+        s = self._store()
+        self.assertEqual(s._prefix(), "the-grid")
+        listing = subprocess.run(
+            ["bd", "-C", self._root, "list", "--json"],
+            capture_output=True, text=True, check=True,
+        )
+        self.assertEqual(json.loads(listing.stdout), [])
+
+    def test_get_task_roundtrips_id_on_colliding_root(self):
+        s = self._store()
+        tid = s.create_task("t", role="coder")
+        t = s.get_task(tid)
+        self.assertEqual(t.id, tid)
 
 
 if __name__ == "__main__":

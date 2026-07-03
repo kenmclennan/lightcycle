@@ -25,6 +25,7 @@ def _is_noise(line):
 class BdStore(StorePort):
     def __init__(self, config):
         self._config = config
+        self._prefix_cache = None
 
     def _env(self):
         env = self._config.base_env()
@@ -52,7 +53,16 @@ class BdStore(StorePort):
         return json.loads(self._run(*args))
 
     def _prefix(self):
-        return os.path.basename(self._config.grid_root())
+        if self._prefix_cache is None:
+            self._prefix_cache = self._discover_prefix()
+        return self._prefix_cache
+
+    def _discover_prefix(self):
+        data = self._json("config", "get", "issue_prefix", "--json")
+        prefix = data.get("value")
+        if not prefix:
+            raise SystemExit("could not determine bd issue prefix: " + json.dumps(data))
+        return prefix
 
     def _short(self, bead_id):
         if bead_id is None:
