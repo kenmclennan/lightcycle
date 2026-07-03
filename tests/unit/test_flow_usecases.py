@@ -1,6 +1,8 @@
 import os
 import unittest
+from pathlib import Path
 
+from the_grid.adapters.fsio import parse_step, step_roles
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import (
     AdvanceInput,
@@ -20,6 +22,16 @@ from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
+_ROOT = str(Path(__file__).resolve().parents[2])
+
+
+class _RealFs:
+    def step_roles(self):
+        return step_roles(_ROOT)
+
+    def parse_step(self, role):
+        return parse_step(_ROOT, role)
+
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
     "reviewer": {
@@ -27,6 +39,11 @@ METAS = {
         "step": "review",
         "produces": {"pr": "required"},
         "routes": {"done": "open-pr", "rejected": "build"},
+    },
+    "pr-watcher": {
+        "model": "sonnet",
+        "step": "open-pr",
+        "accepts": {"pr": "required"},
     },
 }
 SPEC_METAS = {
@@ -134,6 +151,72 @@ class TestCompleteTask(unittest.TestCase):
             CompleteTaskUseCase(s, flow_for(METAS, s)).execute(
                 CompleteInput(task=bid, outcome="typo")
             )
+
+    def test_terminal_step_with_required_produce_does_not_demand_it(self):
+        terminal_metas = {
+            "finaliser": {
+                "model": "sonnet",
+                "step": "finalise",
+                "produces": {"widget": "required"},
+            },
+        }
+        s = FakeStore()
+        tid = s.create_task("finalise: x", step="finalise", role="finaliser")
+        resp = CompleteTaskUseCase(s, flow_for(terminal_metas, s)).execute(
+            CompleteInput(task=tid, outcome="done")
+        )
+        self.assertEqual(s.get_task(tid).status, "done")
+        self.assertIsNone(resp.next_task)
+
+
+class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
+    DIVERSION_METAS = {
+        "alpha-role": {
+            "model": "sonnet",
+            "step": "alpha",
+            "produces": {"widget": "required"},
+            "routes": {"forward": "beta", "sideways": "gamma"},
+        },
+        "beta-role": {"model": "sonnet", "step": "beta", "accepts": {"widget": "required"}},
+        "gamma-role": {"model": "sonnet", "step": "gamma"},
+    }
+
+    def test_blocked_on_outcome_whose_target_requires_the_produce(self):
+        s = FakeStore()
+        aid = s.create_task("alpha: x", step="alpha", role="alpha-role")
+        with self.assertRaises(UseCaseError):
+            CompleteTaskUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
+                CompleteInput(task=aid, outcome="forward")
+            )
+
+    def test_allowed_on_outcome_whose_target_does_not_require_the_produce(self):
+        s = FakeStore()
+        aid = s.create_task("alpha: x", step="alpha", role="alpha-role")
+        resp = CompleteTaskUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
+            CompleteInput(task=aid, outcome="sideways")
+        )
+        self.assertEqual(s.get_task(aid).status, "done")
+        self.assertEqual(s.get_task(resp.next_task).step, "gamma")
+
+
+class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
+    def _uc(self, store):
+        return CompleteTaskUseCase(store, FlowService(_RealFs(), store))
+
+    def test_conflicted_outcome_closes_without_a_pr_and_routes_to_resolve(self):
+        s = FakeStore()
+        story = s.create_story("st")
+        tid = s.create_task("open-pr: x", step="open-pr", role="open-pr", parent=story)
+        resp = self._uc(s).execute(CompleteInput(task=tid, outcome="conflicted"))
+        self.assertEqual(s.get_task(tid).status, "done")
+        self.assertEqual(s.get_task(resp.next_task).step, "resolve")
+
+    def test_done_outcome_still_requires_a_pr(self):
+        s = FakeStore()
+        story = s.create_story("st")
+        tid = s.create_task("open-pr: x", step="open-pr", role="open-pr", parent=story)
+        with self.assertRaises(UseCaseError):
+            self._uc(s).execute(CompleteInput(task=tid, outcome="done"))
 
 
 class TestClaimTask(unittest.TestCase):

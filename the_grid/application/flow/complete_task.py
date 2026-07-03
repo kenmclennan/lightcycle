@@ -32,8 +32,13 @@ class CompleteTaskUseCase:
                 "no transition for step=%s outcome=%s; not closing. "
                 "Fix the flow or use a defined outcome." % (t.step, input.outcome)
             )
+        target = (
+            StepContract.from_meta(self._flow.meta_for_step(transition.to_step))
+            if transition
+            else None
+        )
         missing = StepContract.from_meta(self._flow.meta_for_step(t.step)).missing_outputs(
-            self._store.present_types(t)
+            self._store.present_types(t), target
         )
         if missing:
             raise UseCaseError(

@@ -58,10 +58,20 @@ class TestStepContract(unittest.TestCase):
         c = StepContract.from_meta({"accepts": {"spec": "required", "branch": "required"}})
         self.assertEqual(c.missing_inputs({"spec"}), {"branch"})
 
-    def test_missing_outputs(self):
+    def test_missing_outputs_required_by_target(self):
         c = StepContract.from_meta({"produces": {"pr": "required"}})
-        self.assertEqual(c.missing_outputs(set()), {"pr"})
-        self.assertEqual(c.missing_outputs({"pr"}), set())
+        target = StepContract.from_meta({"accepts": {"pr": "required"}})
+        self.assertEqual(c.missing_outputs(set(), target), {"pr"})
+        self.assertEqual(c.missing_outputs({"pr"}, target), set())
+
+    def test_missing_outputs_no_target_demands_nothing(self):
+        c = StepContract.from_meta({"produces": {"pr": "required"}})
+        self.assertEqual(c.missing_outputs(set(), None), set())
+
+    def test_missing_outputs_target_not_requiring_demands_nothing(self):
+        c = StepContract.from_meta({"produces": {"pr": "required"}})
+        target = StepContract.from_meta({})
+        self.assertEqual(c.missing_outputs(set(), target), set())
 
 
 class TestFlowContracts(unittest.TestCase):
