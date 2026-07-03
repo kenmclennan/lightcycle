@@ -33,7 +33,7 @@ class InboxUseCase:
 
     def execute(self, input: InboxInput) -> InboxResponse:
         rows = TaskQueue(self._store.all_tasks()).for_human(
-            self._flow.load_flow(), {"action", "blocked"}, input.n)
+            self._flow.load_flow(), {"action", "blocked", "triage"}, input.n)
         return InboxResponse(
             rows=[HumanTaskRow(kind=k, outcomes=o, task=t) for (k, o), t in rows],
             candidate_epics=self._candidate_epics(),

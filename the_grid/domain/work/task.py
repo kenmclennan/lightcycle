@@ -28,21 +28,17 @@ class Task:
     since: Optional[str] = None
     fired_at: Optional[str] = None
     closed_at: Optional[str] = None
+    attention: bool = False
 
     def classify_for_human(self, flow):
-        """Classify this for:human task for tg inbox / tg backlog as (kind, outcomes):
-        no step -> "todo" (backlog); a human-owned step -> "action" (inbox); an
-        agent-owned step that has landed on the human (a block) -> "blocked" (inbox).
-        Outcomes are the step's routes, plus "unblock" for a block."""
         if not self.step:
-            return ("todo", [])
+            return ("triage", []) if self.attention else ("todo", [])
         outs = flow.outcomes_for(self.step)
         if flow.owner_of(self.step) == "human":
             return ("action", outs)
         return ("blocked", outs + ["unblock"])
 
     def as_dict(self) -> dict:
-        """A plain serializable dict of the entity's fields (for JSON views and DTOs)."""
         return {
             "id": self.id, "title": self.title, "type": self.type, "parent": self.parent,
             "role": self.role, "step": self.step, "status": self.status,
@@ -50,6 +46,6 @@ class Task:
             "artifacts": [a.as_dict() for a in self.artifacts],
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
-            "notes": self.notes, "epic": self.epic,
+            "notes": self.notes, "epic": self.epic, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at,
         }

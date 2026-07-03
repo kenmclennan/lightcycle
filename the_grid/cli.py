@@ -119,7 +119,7 @@ COMMAND_GROUPS = [
         ("file", "<spec> --step <step> [--repo/--epic/--project/--goal/--blocked-by]",
          "create a story (for one repo) from a spec + its first task at <step>"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
-        ("add", '"<title>" [--description/--goal/--project]', "create a standalone human task (no spec/flow)"),
+        ("add", '"<title>" [--description/--goal/--project/--inbox]', "create a standalone human task (no spec/flow); --inbox surfaces it in tg inbox immediately"),
         ("edit", "<id> [--title/--description/--goal/--project/--parent]", "update a task's fields"),
         ("close", "<story> <reason>",
          "close a story + its tasks, remove the worktree, delete the merged branch"),
@@ -526,9 +526,11 @@ def cmd_add(argv):
     ap.add_argument("--goal")
     ap.add_argument("--project")
     ap.add_argument("--description")
+    ap.add_argument("--inbox", action="store_true", dest="attention")
     a = ap.parse_args(argv)
     resp = AddTaskUseCase(_container.store).execute(
-        AddTaskInput(title=a.title, goal=a.goal, project=a.project, description=a.description))
+        AddTaskInput(title=a.title, goal=a.goal, project=a.project, description=a.description,
+                     attention=a.attention))
     print(resp.task)
     return 0
 

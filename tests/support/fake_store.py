@@ -169,12 +169,13 @@ class FakeStore(StorePort):
         return self._history.get(tid, [])
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None, description=None):
+                    project=None, goal=None, description=None, attention=False):
         b = self._new_record(
             title=title,
             issue_type="task",
             parent=parent,
-            labels=labels_for(role=role, step=step, project=project, goal=goal),
+            labels=labels_for(role=role, step=step, project=project, goal=goal,
+                              attention=attention),
             description=description,
         )
         tid = b["id"]
