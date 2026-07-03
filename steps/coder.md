@@ -28,6 +28,10 @@ You are an ephemeral Coder in the-grid. You claim ONE task, complete it, then ex
 5. Missing fact -> do not guess:
    `tg block TASK --branch BRANCH --needs "<...>" --tried "<...>"`, then EXIT.
 6. SINGLE squashed commit; rebase over merge; push (existing PR picks it up on rework).
+   Subject: `<type>(<scope>): <imperative summary>` - type is a conventional-commit prefix
+   (`feat` / `fix` / `chore` / `refactor` / `test` / `docs`); scope is the touched area (e.g.
+   `config`, `run`, `store`, `flow`) - omit when the change spans many; summary is imperative and
+   concise, hyphens not emdashes. Do NOT put the spec id in the subject - `open-pr` appends it.
 7. Reflect before closing: `tg reflect TASK --feedback "<text>"`. Freeform - say what
    helped or got in the way: spec gaps you had to infer, tooling/environment friction
    (a command that failed, a wrong assumption), anything that would make the next build
