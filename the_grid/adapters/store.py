@@ -167,13 +167,15 @@ class BdStore(StorePort):
         args += ["--json"]
         return self._json(*args)["id"]
 
-    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None):
+    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
         update_args = ["update", tid]
         if title is not None:
             update_args += ["--title", title]
         if description is not None:
             update_args += ["-d", description]
-        if title is not None or description is not None:
+        if parent is not None:
+            update_args += ["--parent", parent]
+        if title is not None or description is not None or parent is not None:
             self._run(*update_args)
         if goal is not None:
             cur = self.get_task(tid).goal

@@ -176,6 +176,13 @@ class TestBdStoreSmoke(unittest.TestCase):
         self.assertEqual(t.goal, "g2")
         self.assertEqual(t.project, "p2")
 
+    def test_edit_task_reparents(self):
+        s = self._store()
+        epic = s.create_story("epic")
+        tid = s.create_task("a task")
+        s.edit_task(tid, parent=epic)
+        t = s.get_task(tid)
+        self.assertEqual(t.parent, epic)
 
     def test_all_tasks_returns_beyond_default_bd_limit(self):
         s = self._store()

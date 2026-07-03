@@ -185,7 +185,7 @@ class FakeStore(StorePort):
                 self.dep_add(tid, dep)
         return tid
 
-    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None):
+    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
         b = self._get(tid)
         if title is not None:
             b["title"] = title
@@ -203,6 +203,8 @@ class FakeStore(StorePort):
                 self.label_remove(tid, "project:%s" % cur)
             if project:
                 self.label_add(tid, "project:%s" % project)
+        if parent is not None:
+            b["parent"] = parent
 
     def create_story(self, title, *, epic=None, project=None, goal=None):
         b = self._new_record(
