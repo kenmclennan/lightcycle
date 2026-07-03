@@ -27,6 +27,7 @@ class TickResponse:
     merged: List[str] = field(default_factory=list)
     abandoned: List[str] = field(default_factory=list)
     reworked: List[str] = field(default_factory=list)
+    conflicted: List[str] = field(default_factory=list)
     cadence_fired: List[str] = field(default_factory=list)
 
 
@@ -46,6 +47,7 @@ class TickUseCase:
         merged = monitor_result.merged if monitor_result else []
         abandoned = monitor_result.abandoned if monitor_result else []
         reworked = monitor_result.reworked if monitor_result else []
+        conflicted = monitor_result.conflicted if monitor_result else []
         cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
         cadence_fired = cadence_result.fired if cadence_result else []
         swept = self._sweep.execute()
@@ -60,4 +62,5 @@ class TickUseCase:
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
         return TickResponse(swept=swept.swept, pruned=swept.pruned, spawned=spawned, merged=merged,
-                            abandoned=abandoned, reworked=reworked, cadence_fired=cadence_fired)
+                            abandoned=abandoned, reworked=reworked, conflicted=conflicted,
+                            cadence_fired=cadence_fired)

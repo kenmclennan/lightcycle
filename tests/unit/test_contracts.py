@@ -1,7 +1,11 @@
 import unittest
+from pathlib import Path
 
+from the_grid.adapters.fsio import parse_step, step_roles
 from the_grid.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
 from the_grid.domain.flow import Flow
+
+_ROOT = str(Path(__file__).resolve().parents[2])
 
 CONTRACT_METAS = {
     "coder": {"step": "build", "accepts": {"spec": "required", "branch": "optional"},
@@ -81,6 +85,18 @@ class TestFlowContracts(unittest.TestCase):
         a = contracts(metas)
         self.assertFalse(a.ok())
         self.assertTrue(any("build" in d for d in a.duplicates()))
+
+
+class TestRealStepsFlowComposition(unittest.TestCase):
+    def test_real_steps_flow_is_ok(self):
+        role_metas = {
+            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
+            for role in step_roles(_ROOT)
+        }
+        flow = Flow.assemble(role_metas)
+        result = FlowContracts(flow, role_metas).as_dict()
+        self.assertTrue(result["ok"],
+                        msg="Flow composition error - missing inputs: %s" % result.get("missing", {}))
 
 
 if __name__ == "__main__":

@@ -12,7 +12,8 @@ from the_grid.domain.flow.transition import Transition
 class Flow:
 
     def __init__(self, owner, routes, pr_merge, pr_close, pr_rework, epic_close=None,
-                 retro_cadence=None, hooks=None):
+                 retro_cadence=None, hooks=None, pr_conflict=None, pr_conflict_cap=None,
+                 pr_conflict_escalate=None):
         self._owner = owner
         self._routes = routes
         self._pr_merge = pr_merge
@@ -21,11 +22,15 @@ class Flow:
         self._epic_close = epic_close or set()
         self._retro_cadence = retro_cadence or set()
         self._hooks = hooks or {}
+        self._pr_conflict = pr_conflict or {}
+        self._pr_conflict_cap = pr_conflict_cap or {}
+        self._pr_conflict_escalate = pr_conflict_escalate or {}
 
     @classmethod
     def assemble(cls, role_metas) -> "Flow":
         owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks = (
             {}, {}, {}, {}, {}, set(), set(), {})
+        pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
         for role, meta in role_metas.items():
             meta = meta or {}
             step = meta.get("step")
@@ -50,7 +55,17 @@ class Flow:
             for key, val in meta.items():
                 if key.startswith("on_") and val:
                     hooks.setdefault(key, set()).add(step)
-        return cls(owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks)
+            declared_conflict = meta.get("on_pr_conflict")
+            if declared_conflict:
+                pr_conflict[step] = declared_conflict
+            cap = meta.get("on_pr_conflict_cap")
+            if cap is not None:
+                pr_conflict_cap[step] = int(cap)
+            esc = meta.get("on_pr_conflict_escalate")
+            if esc:
+                pr_conflict_escalate[step] = esc
+        return cls(owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks,
+                   pr_conflict, pr_conflict_cap, pr_conflict_escalate)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -72,6 +87,15 @@ class Flow:
 
     def pr_rework_outcome(self, step):
         return self._pr_rework.get(step)
+
+    def pr_conflict_outcome(self, step):
+        return self._pr_conflict.get(step)
+
+    def pr_conflict_cap(self, step):
+        return self._pr_conflict_cap.get(step)
+
+    def pr_conflict_escalate(self, step):
+        return self._pr_conflict_escalate.get(step)
 
     def epic_close_steps(self):
         return [(step, self._owner[step]) for step in sorted(self._epic_close) if step in self._owner]

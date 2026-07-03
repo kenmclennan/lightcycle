@@ -558,6 +558,8 @@ def _render_tick(result):
         print("abandoned %s" % sid)
     for sid in result.reworked:
         print("rework %s" % sid)
+    for sid in result.conflicted:
+        print("conflicted %s" % sid)
     for bid in result.swept:
         print("swept %s" % bid)
     if result.pruned:
