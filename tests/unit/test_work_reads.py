@@ -159,5 +159,36 @@ class TestInboxCandidateEpics(unittest.TestCase):
         self.assertIn(gate, [row.task.id for row in resp.rows])
 
 
+class TestInboxAttentionFlag(unittest.TestCase):
+    def test_flagged_task_appears_in_inbox_as_triage(self):
+        s = FakeStore()
+        tid = s.create_task("urgent finding", role="human", attention=True)
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        ids = [row.task.id for row in resp.rows]
+        kinds = {row.task.id: row.kind for row in resp.rows}
+        self.assertIn(tid, ids)
+        self.assertEqual(kinds[tid], "triage")
+
+    def test_unflagged_task_absent_from_inbox(self):
+        s = FakeStore()
+        tid = s.create_task("someday idea", role="human")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        self.assertNotIn(tid, [row.task.id for row in resp.rows])
+
+    def test_closing_flagged_task_removes_it_from_inbox(self):
+        s = FakeStore()
+        tid = s.create_task("urgent finding", role="human", attention=True)
+        s.close(tid, "done")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        self.assertNotIn(tid, [row.task.id for row in resp.rows])
+
+    def test_flagged_task_title_accessible_via_row(self):
+        s = FakeStore()
+        tid = s.create_task("audit: spec gaps", role="human", attention=True)
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        row = next(r for r in resp.rows if r.task.id == tid)
+        self.assertEqual(row.task.title, "audit: spec gaps")
+
+
 if __name__ == "__main__":
     unittest.main()

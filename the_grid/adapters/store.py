@@ -152,9 +152,9 @@ class BdStore(StorePort):
         return bead_to_task(arr[0]) if arr else None
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None, description=None):
+                    project=None, goal=None, description=None, attention=False):
         args = ["create", title, "-t", "task"]
-        labels = labels_for(role=role, step=step, project=project, goal=goal)
+        labels = labels_for(role=role, step=step, project=project, goal=goal, attention=attention)
         if labels:
             args += ["-l", ",".join(labels)]
         if parent:

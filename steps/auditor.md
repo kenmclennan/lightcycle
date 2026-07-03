@@ -25,7 +25,7 @@ cadence (trend lens). Check your task metadata to see which applies.
    Routine friction (a slow test, a vague comment) does NOT meet this bar; it accumulates
    for trend analysis later.
 4. If the bar is met, file one process-bug item:
-   `tg add "<concise title>" --description "<finding: what was wrong> | <recommendation: what to change>"`
+   `tg add --inbox "<concise title>" --description "<finding: what was wrong> | <recommendation: what to change>"`
    Label it: `tg label <task-id> retro-origin`
    Then: `tg done TASK done --note "filed: <title>"`.
 5. If the bar is not met: `tg done TASK done --note "no finding"`. Do not file noise.
