@@ -498,9 +498,13 @@ def cmd_trace(argv):
 
 
 def cmd_sweep(argv):
-    result = SweepUseCase(_container.store, _container.workers).execute()
+    result = SweepUseCase(_container.store, _container.workers).execute(
+        time.time(), _container.config.max_boot_seconds()
+    )
     for bid in result.swept:
         print("swept %s" % bid)
+    for spawnid in result.killed:
+        print("killed %s" % spawnid)
     if result.pruned:
         print(
             "pruned %d dead worker entr%s" % (result.pruned, "y" if result.pruned == 1 else "ies")

@@ -550,6 +550,9 @@ class TestRun(unittest.TestCase):
 
     def test_run_spawns_when_inflight_worker_is_stale(self):
         self.store.create_task("build: t", step="build", role="coder")
+        stuck = self.store.create_task("build: stuck", step="build", role="coder")
+        self.store.update_status(stuck, "in_progress")
+        self.store.assign(stuck, "stuck")
         self._preset_worker(
             spawnid="stuck",
             role="coder",
@@ -564,6 +567,9 @@ class TestRun(unittest.TestCase):
 
     def test_run_spawns_when_prior_worker_already_claimed(self):
         self.store.create_task("build: t", step="build", role="coder")
+        other = self.store.create_task("build: other", step="build", role="coder")
+        self.store.update_status(other, "in_progress")
+        self.store.assign(other, "old")
         self._preset_worker(spawnid="old", role="coder", pid=os.getpid(), log="x", task="other-1")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
@@ -1021,6 +1027,8 @@ class TestPruneWorkers(unittest.TestCase):
         self.root = new_store()
         (Path(self.root) / "logs").mkdir(exist_ok=True)
         self.wfile = Path(self.root) / "logs" / "workers.json"
+        os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
 
     def _dead_pid(self):
         p = subprocess.Popen(["true"])
@@ -1042,7 +1050,14 @@ class TestPruneWorkers(unittest.TestCase):
         dead = self._dead_pid()
         self._write(
             [
-                {"spawnid": "a", "role": "coder", "pid": os.getpid(), "log": "x", "task": None},
+                {
+                    "spawnid": "a",
+                    "role": "coder",
+                    "pid": os.getpid(),
+                    "log": "x",
+                    "task": None,
+                    "started": time.time(),
+                },
                 {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "task": None},
             ]
         )
