@@ -52,5 +52,5 @@ class Task:
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "notes": self.notes, "epic": self.epic, "attention": self.attention,
-            "since": self.since, "fired_at": self.fired_at,
+            "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
         }
