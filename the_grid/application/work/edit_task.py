@@ -1,4 +1,4 @@
-"""EditTask: update an existing backlog item's title, description, goal, or project."""
+"""EditTask: update an existing backlog item's title, description, goal, project, or parent."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -10,6 +10,7 @@ class EditTaskInput:
     description: Optional[str] = None
     goal: Optional[str] = None
     project: Optional[str] = None
+    parent: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -29,5 +30,6 @@ class EditTaskUseCase:
             description=input.description,
             goal=input.goal,
             project=input.project,
+            parent=input.parent,
         )
         return EditTaskResponse()

@@ -99,7 +99,7 @@ class StorePort(ABC):
         """
 
     @abstractmethod
-    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None):
+    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
         """Update an existing task's fields. Only the given (non-None) fields change."""
 
     @abstractmethod

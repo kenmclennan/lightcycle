@@ -136,3 +136,19 @@ class StoreContractBase:
         self.assertEqual(t.description, "desc stays")
         self.assertEqual(t.goal, "g1")
         self.assertEqual(t.project, "p1")
+
+    def test_edit_task_reparents(self):
+        s = self.make_store()
+        epic = s.create_story("epic")
+        tid = s.create_task("a task")
+        s.edit_task(tid, parent=epic)
+        t = s.get_task(tid)
+        self.assertEqual(t.parent, epic)
+
+    def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
+        s = self.make_store()
+        epic = s.create_story("epic")
+        tid = s.create_task("a task", parent=epic)
+        s.edit_task(tid, title="renamed")
+        t = s.get_task(tid)
+        self.assertEqual(t.parent, epic)

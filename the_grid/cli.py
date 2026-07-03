@@ -120,7 +120,7 @@ COMMAND_GROUPS = [
          "create a story (for one repo) from a spec + its first task at <step>"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
         ("add", '"<title>" [--description/--goal/--project]', "create a standalone human task (no spec/flow)"),
-        ("edit", "<id> [--title/--description/--goal/--project]", "update a task's fields"),
+        ("edit", "<id> [--title/--description/--goal/--project/--parent]", "update a task's fields"),
         ("close", "<story> <reason>",
          "close a story + its tasks, remove the worktree, delete the merged branch"),
     ]),
@@ -534,10 +534,11 @@ def cmd_edit(argv):
     ap.add_argument("--description")
     ap.add_argument("--goal")
     ap.add_argument("--project")
+    ap.add_argument("--parent")
     a = ap.parse_args(argv)
     EditTaskUseCase(_container.store).execute(
         EditTaskInput(task=a.id, title=a.title, description=a.description,
-                      goal=a.goal, project=a.project))
+                      goal=a.goal, project=a.project, parent=a.parent))
     return 0
 
 

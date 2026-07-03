@@ -119,6 +119,31 @@ class TestEditTask(unittest.TestCase):
         self.assertEqual(t.goal, "g1")
         self.assertEqual(t.project, "p1")
 
+    def test_edits_parent_alone(self):
+        s = FakeStore()
+        epic = s.create_story("my epic")
+        tid = s.create_task("a task", role="human")
+        EditTaskUseCase(s).execute(EditTaskInput(task=tid, parent=epic))
+        t = s.get_task(tid)
+        self.assertEqual(t.parent, epic)
+
+    def test_edits_parent_and_title_together(self):
+        s = FakeStore()
+        epic = s.create_story("my epic")
+        tid = s.create_task("old title", role="human")
+        EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="new title", parent=epic))
+        t = s.get_task(tid)
+        self.assertEqual(t.title, "new title")
+        self.assertEqual(t.parent, epic)
+
+    def test_omitting_parent_leaves_parentage_unchanged(self):
+        s = FakeStore()
+        epic = s.create_story("my epic")
+        tid = s.create_task("a task", role="human", parent=epic)
+        EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="renamed"))
+        t = s.get_task(tid)
+        self.assertEqual(t.parent, epic)
+
 
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
