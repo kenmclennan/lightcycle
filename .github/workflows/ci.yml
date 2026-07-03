@@ -39,5 +39,6 @@ jobs:
             sleep 15
           done
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/bd" --version
+          command -v bd || { echo "bd not on PATH after install"; exit 1; }
+          bd --version
       - run: bash tests/run.sh tests/integration
