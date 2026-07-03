@@ -29,7 +29,15 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - name: Install bd
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
+          for i in 1 2 3; do
+            curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash && break
+            echo "bd install attempt $i failed; retrying in 15s"
+            sleep 15
+          done
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/bd" --version
       - run: bash tests/run.sh tests/integration
