@@ -152,3 +152,12 @@ class StoreContractBase:
         s.edit_task(tid, title="renamed")
         t = s.get_task(tid)
         self.assertEqual(t.parent, epic)
+
+    def test_all_tasks_excludes_closed(self):
+        s = self.make_store()
+        open_tid = s.create_task("open task")
+        closed_tid = s.create_task("closed task")
+        s.close(closed_tid, "done")
+        ids = [t.id for t in s.all_tasks()]
+        self.assertIn(open_tid, ids)
+        self.assertNotIn(closed_tid, ids)

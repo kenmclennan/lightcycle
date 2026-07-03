@@ -93,8 +93,8 @@ class MonitorPrsUseCase:
                     cap = self._flow.pr_conflict_cap(task.step)
                     esc = self._flow.pr_conflict_escalate(task.step)
                     if cap is not None and esc:
-                        prior = sum(1 for t in self._store.all_tasks()
-                                    if t.parent == task.parent and t.step == task.step
+                        prior = sum(1 for t in self._store.tasks_at_step(task.step)
+                                    if t.parent == task.parent
                                     and t.status == Status.DONE and t.outcome == conflict_outcome)
                         outcome = esc if prior >= cap else conflict_outcome
                     else:

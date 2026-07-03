@@ -52,7 +52,8 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_tasks(self):
-        return [bead_to_task(b) for b in self._records.values()]
+        return [bead_to_task(b) for b in self._records.values()
+                if b.get("status") != "closed"]
 
     def get_task(self, tid):
         return bead_to_task(self._get(tid))
@@ -267,3 +268,8 @@ class FakeStore(StorePort):
             if closed_at >= since_date_str:
                 result.append(bead_to_task(b))
         return result
+
+    def tasks_at_step(self, step):
+        label = "step:%s" % step
+        return [bead_to_task(b) for b in self._records.values()
+                if b.get("issue_type") == "task" and label in (b.get("labels") or [])]

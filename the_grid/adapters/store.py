@@ -263,3 +263,10 @@ class BdStore(StorePort):
             if closed_at >= since_date_str:
                 result.append(self._strip_task(bead_to_task(b)))
         return result
+
+    def tasks_at_step(self, step):
+        open_beads = self._json("list", *_UNLIMITED, "--json")
+        closed_beads = self._json("list", "--status", "closed", *_UNLIMITED, "--json")
+        label = "step:%s" % step
+        return [bead_to_task(b) for b in open_beads + closed_beads
+                if b.get("issue_type") == "task" and label in (b.get("labels") or [])]

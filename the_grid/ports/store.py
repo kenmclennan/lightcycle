@@ -129,3 +129,7 @@ class StorePort(ABC):
     def epics_closed_since(self, since_date_str):
         """Return closed top-level stories (epics) with closed_at >= since_date_str,
         excluding those labelled retro-origin."""
+
+    @abstractmethod
+    def tasks_at_step(self, step):
+        """Return all tasks at the given step regardless of status (open and closed)."""
