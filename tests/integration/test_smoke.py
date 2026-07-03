@@ -56,7 +56,12 @@ class SmokeTest(unittest.TestCase):
         (steps / "coder.md").write_text(_CODER_STEP)
         (steps / "reviewer.md").write_text(_REVIEWER_STEP)
         ws = tempfile.mkdtemp()
-        Path(self.root, "grid.config").write_text("projects: %s\nspecs: %s\n" % (ws, ws))
+        Path(self.root, "grid.config").write_text(
+            "projects: %s\nspecs: %s\n"
+            "branch-prefix: feat\nmax-agents: 5\nworktree-retries: 6\n"
+            "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
+            "worker-history: 20\neditor: vi\n" % (ws, ws)
+        )
 
     def test_add_with_description_and_edit(self):
         r = _tg("add", "my task", "--description", "detail here", root=self.root)

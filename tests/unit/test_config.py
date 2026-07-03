@@ -47,22 +47,27 @@ class TestRequiredRoots(unittest.TestCase):
 
 
 class TestBranchPrefix(unittest.TestCase):
-    def test_default(self):
-        self.assertEqual(_cfg().branch_prefix(), "feat")
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().branch_prefix()
 
-    def test_hyphen_key_override(self):
+    def test_config_value_read(self):
         self.assertEqual(_cfg(branch_prefix="wip").branch_prefix(), "wip")
 
 
 class TestMaxAgents(unittest.TestCase):
-    def test_default(self):
-        self.assertEqual(_cfg().max_agents(), 4)
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().max_agents()
 
-    def test_config_override(self):
+    def test_config_value_read(self):
         self.assertEqual(_cfg(max_agents="6").max_agents(), 6)
 
     def test_env_override_wins(self):
         self.assertEqual(_cfg({"GRID_MAX_AGENTS": "2"}, max_agents="6").max_agents(), 2)
+
+    def test_env_override_without_config_key(self):
+        self.assertEqual(_cfg({"GRID_MAX_AGENTS": "7"}).max_agents(), 7)
 
     def test_malformed_config_fails_fast(self):
         with self.assertRaises(ConfigError):
@@ -74,8 +79,19 @@ class TestMaxAgents(unittest.TestCase):
 
 
 class TestTunables(unittest.TestCase):
-    def test_explicit_defaults(self):
-        c = _cfg()
+    def _full_cfg(self, environ=None):
+        return _cfg(
+            environ,
+            worktree_retries="6",
+            worktree_retry_sleep="0.25",
+            max_boot_seconds="120",
+            poll_seconds="5",
+            worker_history="20",
+            editor="vi",
+        )
+
+    def test_values_from_config(self):
+        c = self._full_cfg()
         self.assertEqual(c.worktree_retries(), 6)
         self.assertEqual(c.worktree_retry_sleep(), 0.25)
         self.assertEqual(c.max_boot_seconds(), 120)
@@ -83,15 +99,80 @@ class TestTunables(unittest.TestCase):
         self.assertEqual(c.worker_history(), 20)
         self.assertEqual(c.editor(), "vi")
 
+    def test_missing_tunable_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().worktree_retries()
+        with self.assertRaises(ConfigError):
+            _cfg().poll_seconds()
+        with self.assertRaises(ConfigError):
+            _cfg().editor()
+
     def test_env_overrides(self):
-        c = _cfg({"GRID_WORKTREE_RETRIES": "3", "GRID_POLL_SECONDS": "1", "EDITOR": "nano"})
+        c = self._full_cfg({"GRID_WORKTREE_RETRIES": "3", "GRID_POLL_SECONDS": "1",
+                            "EDITOR": "nano"})
         self.assertEqual(c.worktree_retries(), 3)
         self.assertEqual(c.poll_seconds(), 1)
         self.assertEqual(c.editor(), "nano")
 
+    def test_env_override_without_config_key(self):
+        self.assertEqual(_cfg({"GRID_WORKER_HISTORY": "10"}).worker_history(), 10)
+        self.assertEqual(_cfg({"EDITOR": "emacs"}).editor(), "emacs")
+
     def test_malformed_tunable_fails_fast(self):
         with self.assertRaises(ConfigError):
             _cfg({"GRID_POLL_SECONDS": "soon"}).poll_seconds()
+
+
+class TestEnsureConfig(unittest.TestCase):
+    def test_creates_all_keys_when_absent(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"GRID_CONFIG": p})
+        result = c.ensure_config()
+        self.assertTrue(result)
+        text = Path(p).read_text()
+        self.assertIn("max-agents: 5", text)
+        self.assertIn("branch-prefix: feat", text)
+        self.assertIn("editor: vi", text)
+        self.assertIn("worktree-retry-sleep: 0.25", text)
+        self.assertIn("~/workspace/projects", text)
+        self.assertIn("retro-interval-days: 7", text)
+        self.assertIn("retro-min-epics: 3", text)
+
+    def test_tops_up_missing_keys_in_existing_config(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\nspecs: /s\n")
+        c = Config(environ={"GRID_CONFIG": p})
+        result = c.ensure_config()
+        self.assertTrue(result)
+        text = Path(p).read_text()
+        self.assertIn("projects: /p", text)
+        self.assertIn("max-agents: 5", text)
+        self.assertIn("editor: vi", text)
+
+    def test_topup_leaves_existing_values_untouched(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\nspecs: /s\nmax-agents: 8\n")
+        c = Config(environ={"GRID_CONFIG": p})
+        c.ensure_config()
+        cfg = c.load_config()
+        self.assertEqual(cfg["max-agents"], "8")
+
+    def test_noop_returns_false_when_all_keys_present(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        all_keys = (
+            "projects: /p\nspecs: /s\nbranch-prefix: feat\nmax-agents: 5\n"
+            "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
+            "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
+            "retro-interval-days: 7\nretro-min-epics: 3\n"
+        )
+        Path(p).write_text(all_keys)
+        c = Config(environ={"GRID_CONFIG": p})
+        result = c.ensure_config()
+        self.assertFalse(result)
 
 
 class TestSpawnProtocol(unittest.TestCase):
@@ -105,12 +186,15 @@ class TestSpawnProtocol(unittest.TestCase):
 
 
 class TestRetroCadenceConfig(unittest.TestCase):
-    def test_defaults(self):
-        c = _cfg()
-        self.assertEqual(c.retro_interval_days(), 7)
-        self.assertEqual(c.retro_min_epics(), 3)
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().retro_interval_days()
+        with self.assertRaises(ConfigError):
+            _cfg().retro_min_epics()
 
-    def test_config_file_override(self):
+    def test_config_values_read(self):
+        self.assertEqual(_cfg(retro_interval_days="7").retro_interval_days(), 7)
+        self.assertEqual(_cfg(retro_min_epics="3").retro_min_epics(), 3)
         self.assertEqual(_cfg(retro_interval_days="14").retro_interval_days(), 14)
         self.assertEqual(_cfg(retro_min_epics="5").retro_min_epics(), 5)
 
@@ -119,6 +203,10 @@ class TestRetroCadenceConfig(unittest.TestCase):
             _cfg({"GRID_RETRO_INTERVAL_DAYS": "21"}, retro_interval_days="14").retro_interval_days(), 21)
         self.assertEqual(
             _cfg({"GRID_RETRO_MIN_EPICS": "10"}, retro_min_epics="5").retro_min_epics(), 10)
+
+    def test_env_override_without_config_key(self):
+        self.assertEqual(_cfg({"GRID_RETRO_INTERVAL_DAYS": "7"}).retro_interval_days(), 7)
+        self.assertEqual(_cfg({"GRID_RETRO_MIN_EPICS": "3"}).retro_min_epics(), 3)
 
     def test_malformed_config_fails_fast(self):
         with self.assertRaises(ConfigError):
