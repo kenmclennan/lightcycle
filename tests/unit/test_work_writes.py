@@ -388,6 +388,37 @@ class TestFileStory(unittest.TestCase):
             self._file(s, repo="missing")
         self.assertIn("app", str(ctx.exception))
 
+    def test_available_repos_includes_nested_repo(self):
+        fs = FakeFs(
+            metas=METAS,
+            dirs={
+                "/projects": ["app", "group", "plain"],
+                "/projects/group": ["svc"],
+            },
+        )
+        git = FakeGit(repos={"/projects/app", "/projects/group/svc"})
+        use_case = FileStoryUseCase(
+            FakeStore(), FlowService(fs, FakeStore()), git, fs, FakeConfig("/projects")
+        )
+        self.assertEqual(use_case._available_repos(), ["app", "group/svc"])
+
+    def test_nested_repo_accepted_by_validation_is_also_discoverable(self):
+        fs = FakeFs(
+            metas=METAS,
+            dirs={
+                "/projects": ["app", "group", "plain"],
+                "/projects/group": ["svc"],
+            },
+        )
+        s = FakeStore()
+        git = FakeGit(repos={"/projects/app", "/projects/group/svc"})
+        story = (
+            FileStoryUseCase(s, FlowService(fs, s), git, fs, FakeConfig("/projects"))
+            .execute(FileStoryInput(spec="specs/x.md", step="build", repo="group/svc"))
+            .story
+        )
+        self.assertIn("repo", [a.type for a in s.story_artifacts(story)])
+
 
 class TestWorktreeServiceRemove(unittest.TestCase):
     def test_remove_requests_remote_branch_delete(self):
