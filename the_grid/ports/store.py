@@ -126,3 +126,7 @@ class StorePort(ABC):
     @abstractmethod
     def tasks_at_step(self, step):
         pass
+
+    @abstractmethod
+    def delete(self, tid):
+        pass

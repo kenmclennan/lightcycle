@@ -420,6 +420,65 @@ class TestFileStory(unittest.TestCase):
         self.assertIn("repo", [a.type for a in s.story_artifacts(story)])
 
 
+class TestFileStoryAtomicity(unittest.TestCase):
+    def _file(self, store, repo=None, blocked_by=None):
+        fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
+        flow = FlowService(fs, store)
+        git = FakeGit(repos={"/projects/app"})
+        return FileStoryUseCase(store, flow, git, fs, FakeConfig("/projects")).execute(
+            FileStoryInput(spec="specs/x.md", step="build", repo=repo, blocked_by=blocked_by)
+        )
+
+    def test_spec_artifact_failure_leaves_no_story(self):
+        s = FakeStore()
+
+        def boom(story_id, atype, value, label=None):
+            raise RuntimeError("boom")
+
+        s.add_artifact = boom
+        with self.assertRaises(RuntimeError):
+            self._file(s)
+        self.assertEqual(s._records, {})
+
+    def test_repo_artifact_failure_leaves_no_story(self):
+        s = FakeStore()
+        orig_add_artifact = s.add_artifact
+
+        def maybe_boom(story_id, atype, value, label=None):
+            if atype == "repo":
+                raise RuntimeError("boom")
+            return orig_add_artifact(story_id, atype, value, label)
+
+        s.add_artifact = maybe_boom
+        with self.assertRaises(RuntimeError):
+            self._file(s, repo="app")
+        self.assertEqual(s._records, {})
+
+    def test_task_creation_failure_leaves_no_story(self):
+        s = FakeStore()
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        s.create_task = boom
+        with self.assertRaises(RuntimeError):
+            self._file(s)
+        self.assertEqual(s._records, {})
+
+    def test_dep_add_failure_leaves_no_story_or_task(self):
+        s = FakeStore()
+        blocker = s.create_task("blocker task", role="coder")
+
+        def boom(task_id, blocked_by):
+            raise RuntimeError("boom")
+
+        s.dep_add = boom
+        with self.assertRaises(RuntimeError):
+            self._file(s, blocked_by=[blocker])
+        remaining = {k: v for k, v in s._records.items() if k != blocker}
+        self.assertEqual(remaining, {})
+
+
 class TestWorktreeServiceRemove(unittest.TestCase):
     def test_remove_requests_remote_branch_delete(self):
         s = FakeStore()

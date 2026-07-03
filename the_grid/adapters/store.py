@@ -276,3 +276,6 @@ class BdStore(StorePort):
         label = "step:%s" % step
         return [bead_to_task(b) for b in open_beads + closed_beads
                 if b.get("issue_type") == "task" and label in (b.get("labels") or [])]
+
+    def delete(self, tid):
+        self._run("delete", self._qualify(tid), "--force")

@@ -137,6 +137,12 @@ class StoreContractBase:
         t = s.get_task(tid)
         self.assertEqual(t.parent, epic)
 
+    def test_delete_removes_task(self):
+        s = self.make_store()
+        tid = s.create_task("t")
+        s.delete(tid)
+        self.assertNotIn(tid, [t.id for t in s.all_tasks()])
+
     def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
         s = self.make_store()
         epic = s.create_story("epic")
