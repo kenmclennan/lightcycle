@@ -57,8 +57,10 @@ from the_grid.application.flow import (
     UnblockTaskUseCase,
 )
 from the_grid.application.pool import (
+    AcquireRunLockUseCase,
     ListWorkersUseCase,
     MonitorPrsUseCase,
+    ReleaseRunLockUseCase,
     ResolveLogInput,
     ResolveLogUseCase,
     RetroCadenceUseCase,
@@ -661,37 +663,46 @@ def cmd_run(argv):
     a = ap.parse_args(argv)
     if not require_store():
         return 1
-    flow_service = _flow()
-    flow = flow_service.load_flow()
-    complete = CompleteTaskUseCase(_container.store, flow_service)
-    monitor = MonitorPrsUseCase(_container.store, _container.github, _worktrees(), flow, complete)
-    cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
-    tick = TickUseCase(
-        _container.store,
-        _container.workers,
-        _container.spawner,
-        _container.config,
-        monitor=monitor,
-        cadence_gate=cadence_gate,
-    )
-    if a.once:
-        now = time.time()
-        result = tick.execute(TickInput(now=now))
-        lines, _ = _format_tick(result, None, now)
-        for line in lines:
-            print(line)
-        return 0
-    interval = _container.config.poll_seconds()
-    max_agents = _container.config.max_agents()
-    print("tg run  poll=%ds  max-agents=%d" % (interval, max_agents))
-    prev_snapshot = None
-    while True:
-        now = time.time()
-        result = tick.execute(TickInput(now=now))
-        lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
-        for line in lines:
-            print(line)
-        time.sleep(interval)
+    lock_result = AcquireRunLockUseCase(_container.lock).execute()
+    if not lock_result.acquired:
+        sys.stderr.write("tg run already running, pid %d\n" % lock_result.holder_pid)
+        return 1
+    try:
+        flow_service = _flow()
+        flow = flow_service.load_flow()
+        complete = CompleteTaskUseCase(_container.store, flow_service)
+        monitor = MonitorPrsUseCase(
+            _container.store, _container.github, _worktrees(), flow, complete
+        )
+        cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
+        tick = TickUseCase(
+            _container.store,
+            _container.workers,
+            _container.spawner,
+            _container.config,
+            monitor=monitor,
+            cadence_gate=cadence_gate,
+        )
+        if a.once:
+            now = time.time()
+            result = tick.execute(TickInput(now=now))
+            lines, _ = _format_tick(result, None, now)
+            for line in lines:
+                print(line)
+            return 0
+        interval = _container.config.poll_seconds()
+        max_agents = _container.config.max_agents()
+        print("tg run  poll=%ds  max-agents=%d" % (interval, max_agents))
+        prev_snapshot = None
+        while True:
+            now = time.time()
+            result = tick.execute(TickInput(now=now))
+            lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
+            for line in lines:
+                print(line)
+            time.sleep(interval)
+    finally:
+        ReleaseRunLockUseCase(_container.lock).execute()
 
 
 def _human_step_skills():

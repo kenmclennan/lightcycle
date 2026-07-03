@@ -588,6 +588,60 @@ class TestRun(unittest.TestCase):
         self.assertEqual(len(self._workers()), 2)
 
 
+class TestRunSingletonLock(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        for d in ("steps", "logs", "flows", ".beads"):
+            (Path(self.root) / d).mkdir(exist_ok=True)
+        for r in ("coder", "reviewer", "pr-watcher"):
+            (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
+                "---\nmodel: sonnet\n---\nstub %s" % r
+            )
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
+        os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        self.store = FakeStore()
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
+        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
+
+    def _run_once(self):
+        return call(_cli_mod.cmd_run, "--once")
+
+    def _lock_path(self):
+        return Path(self.root) / ".tg-run.pid"
+
+    def test_second_start_refused_while_holder_alive(self):
+        self._lock_path().write_text(str(os.getpid()))
+        rc, _, err = self._run_once()
+        self.assertNotEqual(rc, 0)
+        self.assertIn("already running, pid %d" % os.getpid(), err)
+
+    def test_start_succeeds_after_holder_releases(self):
+        rc1, _, err1 = self._run_once()
+        self.assertEqual(rc1, 0, err1)
+        self.assertFalse(self._lock_path().exists())
+        rc2, _, err2 = self._run_once()
+        self.assertEqual(rc2, 0, err2)
+
+    def test_stale_lock_reclaimed_not_treated_as_live_holder(self):
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        self._lock_path().write_text(str(dead.pid))
+        self.store.create_task("build: t", step="build", role="coder")
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
+        self.assertTrue(any(w["role"] == "coder" for w in workers))
+
+    def test_clean_exit_releases_lock(self):
+        self._run_once()
+        self.assertFalse(self._lock_path().exists())
+
+
 class TestAdd(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
