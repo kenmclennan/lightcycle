@@ -40,6 +40,16 @@ tests are stdlib `unittest.TestCase` classes, which pytest runs as-is; new tests
 `unittest` style or plain pytest functions. Run a subset with `bash tests/run.sh tests/unit` (the
 fast suite) or `bash tests/run.sh -k <name>`.
 
+**Iterate on the fast tier; run the full suite once at the end.** The unit tier
+(`bash tests/run.sh tests/unit`) is ~2s (485 tests); feature is ~0.25s. The integration tier shells
+out to real `bd` per operation and takes **minutes** - it is the only slow tier. So while you code,
+run `bash tests/run.sh tests/unit` (plus `-k <name>` on the integration test your change touches);
+run the **full** `bash tests/run.sh` **once** before `tg done`, not on every edit. Do NOT background
+the suite and poll for output - the fast tier finishes in seconds foreground, and long backgrounded
+commands often surface no output until they exit (agents thrash polling an empty file). `timeout` is
+**not** available on macOS (it is `gtimeout`, and usually not installed) - do not wrap test runs in
+it; the fast tier needs no bounding.
+
 - `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not
   collected as tests.
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
