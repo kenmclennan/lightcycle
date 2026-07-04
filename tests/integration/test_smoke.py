@@ -49,14 +49,15 @@ def _bd_init():
 
 
 class SmokeTest(unittest.TestCase):
-    def setUp(self):
-        self.root = _bd_init()
-        steps = Path(self.root) / "steps"
+    @classmethod
+    def setUpClass(cls):
+        cls.root = _bd_init()
+        steps = Path(cls.root) / "steps"
         steps.mkdir()
         (steps / "coder.md").write_text(_CODER_STEP)
         (steps / "reviewer.md").write_text(_REVIEWER_STEP)
         ws = tempfile.mkdtemp()
-        Path(self.root, "grid.config").write_text(
+        Path(cls.root, "grid.config").write_text(
             "projects: %s\nspecs: %s\n"
             "branch-prefix: feat\nmax-agents: 5\nworktree-retries: 6\n"
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
