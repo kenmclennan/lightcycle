@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import signal
 import sys
 import time
 
@@ -671,6 +672,11 @@ def cmd_run(argv):
     if not lock_result.acquired:
         sys.stderr.write("tg run already running, pid %d\n" % lock_result.holder_pid)
         return 1
+
+    def _stop(*_):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _stop)
     try:
         flow_service = _flow()
         flow = flow_service.load_flow()
@@ -705,6 +711,9 @@ def cmd_run(argv):
             for line in lines:
                 print(line)
             time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\ntg run stopped")
+        return 0
     finally:
         ReleaseRunLockUseCase(_container.lock).execute()
 
