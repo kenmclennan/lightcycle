@@ -526,7 +526,7 @@ def cmd_inbox(argv):
     ap = argparse.ArgumentParser(prog="tg inbox")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n))
+    resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(now=time.time(), n=a.n))
     for row in resp.rows:
         _print_human_row(row.kind, row.task)
     if resp.candidate_epics:
