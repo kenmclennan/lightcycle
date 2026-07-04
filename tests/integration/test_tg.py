@@ -404,7 +404,8 @@ class TestSweep(unittest.TestCase):
         b = self.store.create_task("build: t", step="build", role="coder")
         (Path(self.root) / "logs" / "workers.json").write_text(
             json.dumps(
-                [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "task": None}]
+                [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "task": None,
+                  "started": time.time()}]
             )
         )
         self.store.assign(b, "S")
@@ -549,6 +550,8 @@ class TestRun(unittest.TestCase):
         self.assertEqual(len(self._workers()), 1)
 
     def test_run_spawns_when_inflight_worker_is_stale(self):
+        live = subprocess.Popen(["sleep", "300"])
+        self.addCleanup(lambda: live.poll() is None and live.kill())
         self.store.create_task("build: t", step="build", role="coder")
         stuck = self.store.create_task("build: stuck", step="build", role="coder")
         self.store.update_status(stuck, "in_progress")
@@ -556,21 +559,24 @@ class TestRun(unittest.TestCase):
         self._preset_worker(
             spawnid="stuck",
             role="coder",
-            pid=os.getpid(),
+            pid=live.pid,
             log="x",
             task=None,
             started=time.time() - 9999,
         )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
-        self.assertEqual(len(self._workers()), 2)
+        self.assertTrue(any(w["spawnid"] != "stuck" for w in self._workers()))
 
     def test_run_spawns_when_prior_worker_already_claimed(self):
         self.store.create_task("build: t", step="build", role="coder")
         other = self.store.create_task("build: other", step="build", role="coder")
         self.store.update_status(other, "in_progress")
         self.store.assign(other, "old")
-        self._preset_worker(spawnid="old", role="coder", pid=os.getpid(), log="x", task="other-1")
+        self._preset_worker(
+            spawnid="old", role="coder", pid=os.getpid(), log="x", task=other,
+            started=time.time(),
+        )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 2)

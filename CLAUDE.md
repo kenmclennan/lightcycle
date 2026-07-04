@@ -65,10 +65,19 @@ integration test ONLY when the thing under test IS the IO a fake cannot stand in
 
 1. the store adapter's **contract against real `bd`** - one file (`test_store_contract.py`); extend
    it, never scatter ad-hoc bd tests across the suite;
-2. **genuine external IO** - git/worktree operations, process/worker spawning, the run-lock, the
-   filesystem;
+2. **a genuine external-IO effect** - that an adapter's IO actually happens (a git/worktree op runs,
+   the run-lock locks, `WorkersAdapter.kill` really signals a process). Test the EFFECT in isolation
+   against a real disposable target - **never `os.getpid()`**;
 3. **read-surface JSON pins** - a `Task`/story field an agent consumes must be proven to survive
    real serialization onto `tg show`/`tg claim` output (see the read-surface bullet below).
+
+**Decision vs effect (the trap that took CI down).** An integration test verifies an adapter
+_contract_, real IO, or wiring - it must NEVER verify a _decision_ a fake can make. `SweepUseCase`
+deciding _which_ worker to reclaim or kill is pure logic -> **unit** (`FakeWorkers.kill` records the
+pid; no real signal). Only _that `os.kill` sends SIGTERM_ is an adapter test, and it targets a real
+sacrificial child, never the test's own pid. Driving a decision through its real effect is slow,
+duplicative, and self-destructive - a sweep test that registered `os.getpid()` as a worker made the
+sweep SIGTERM the whole test run (exit 143), reproducibly, and took down CI for the repo.
 
 If a change does not touch (1)-(3), it ships with a unit test, not an integration test. Any
 integration test that must touch `bd` **shares one store per class** (`setUpClass`, never a fresh
