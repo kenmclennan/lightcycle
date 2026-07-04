@@ -40,15 +40,20 @@ tests are stdlib `unittest.TestCase` classes, which pytest runs as-is; new tests
 `unittest` style or plain pytest functions. Run a subset with `bash tests/run.sh tests/unit` (the
 fast suite) or `bash tests/run.sh -k <name>`.
 
-**Iterate on the fast tier; run the full suite once at the end.** The unit tier
+**Coders verify on the fast tier; the full suite is the reviewer's gate.** The unit tier
 (`bash tests/run.sh tests/unit`) is ~2s (485 tests); feature is ~0.25s. The integration tier shells
-out to real `bd` per operation and takes **minutes** - it is the only slow tier. So while you code,
-run `bash tests/run.sh tests/unit` (plus `-k <name>` on the integration test your change touches);
-run the **full** `bash tests/run.sh` **once** before `tg done`, not on every edit. Do NOT background
-the suite and poll for output - the fast tier finishes in seconds foreground, and long backgrounded
-commands often surface no output until they exit (agents thrash polling an empty file). `timeout` is
-**not** available on macOS (it is `gtimeout`, and usually not installed) - do not wrap test runs in
-it; the fast tier needs no bounding.
+out to real `bd` per operation and takes **minutes** - the only slow tier. As a **coder**, verify
+with the unit tier plus `-k <name>` on any integration test your change touches - fast, foreground,
+and it never trips the harness. Do **NOT** run the full `bash tests/run.sh` as a coder: it takes
+minutes, and the harness **auto-backgrounds any command over ~2 min**. An ephemeral worker that ends
+its turn while a command runs in the background **abandons its task** - it is reclaimed by the sweep
+and restarted from scratch, losing all its work. The **reviewer** runs the full suite as the gate.
+
+When you must run a command that may exceed ~2 min (the reviewer's full-suite gate), pass an explicit
+high `timeout` to the Bash tool (up to 600000 ms) so it runs to completion in the **foreground**;
+never let it auto-background and then end your turn waiting on it. Do not use the shell `timeout`
+command to bound runs - it is not on macOS (it is `gtimeout`, usually absent); use the Bash tool's
+own `timeout` parameter.
 
 - `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not
   collected as tests.
