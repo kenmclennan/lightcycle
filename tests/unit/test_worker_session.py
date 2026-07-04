@@ -1,0 +1,54 @@
+import unittest
+
+from the_grid.domain.pool.worker_session import (
+    CLOSE,
+    NUDGE,
+    SessionPolicy,
+    is_terminal_command,
+)
+
+
+class TestTerminalCommand(unittest.TestCase):
+    def test_tg_done_is_terminal(self):
+        self.assertTrue(is_terminal_command("tg done abc.1 done"))
+        self.assertTrue(is_terminal_command("bin/tg done abc.1 rejected"))
+        self.assertTrue(is_terminal_command("./bin/tg block xyz --needs foo"))
+
+    def test_non_terminal_tg_commands(self):
+        self.assertFalse(is_terminal_command("tg claim coder"))
+        self.assertFalse(is_terminal_command("tg reflect abc.1 --feedback ok"))
+        self.assertFalse(is_terminal_command("tg show abc.1"))
+
+    def test_empty(self):
+        self.assertFalse(is_terminal_command(""))
+        self.assertFalse(is_terminal_command(None))
+
+
+class TestSessionPolicy(unittest.TestCase):
+    def test_close_after_terminal_then_result(self):
+        p = SessionPolicy()
+        p.observe_claimed(True)
+        p.observe_command("tg done abc.1 done")
+        self.assertEqual(p.on_result(has_open_task=True), CLOSE)
+
+    def test_no_work_exit_closes(self):
+        p = SessionPolicy()
+        self.assertEqual(p.on_result(has_open_task=False), CLOSE)
+
+    def test_unresolved_task_nudges_then_closes_at_cap(self):
+        p = SessionPolicy(max_nudges=2)
+        p.observe_claimed(True)
+        self.assertEqual(p.on_result(has_open_task=True), NUDGE)
+        self.assertEqual(p.on_result(has_open_task=True), NUDGE)
+        self.assertEqual(p.on_result(has_open_task=True), CLOSE)
+
+    def test_terminal_overrides_nudge(self):
+        p = SessionPolicy()
+        p.observe_claimed(True)
+        self.assertEqual(p.on_result(has_open_task=True), NUDGE)
+        p.observe_command("tg block abc.1 --needs x")
+        self.assertEqual(p.on_result(has_open_task=True), CLOSE)
+
+
+if __name__ == "__main__":
+    unittest.main()
