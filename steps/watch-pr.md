@@ -26,6 +26,10 @@ You are an ephemeral Watch-PR agent in the-grid. You claim ONE task, complete it
       or cancelled run as representing the current state.
    b. If the PR has **no checks configured** for the head SHA, skip straight to the comment check
       and conclude `done` - never wait or poll for checks that do not exist.
+   b1. Fast path: if the diff touches only `steps/*.md`, other `*.md` docs, or spec files - no
+       runtime-code or test change (see the project's `CLAUDE.md` for its layout) - the CI
+       `integration` job is expected to be skipped/short for this SHA - do not wait on it or treat
+       its absence as a failure; lint and `unit-feature` still gate as normal.
    c. A `CANCELLED` or superseded run (cancelled because a newer push started a fresh run) is
       **not a failure** - treat it as "CI re-running". Wait for the new run on the current head
       SHA using the bounded poll in (d).
