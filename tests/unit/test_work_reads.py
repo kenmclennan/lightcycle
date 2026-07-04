@@ -1,3 +1,5 @@
+import datetime
+import time
 import unittest
 
 from the_grid.application.work import (
@@ -21,6 +23,15 @@ from tests.support.fake_store import FakeStore
 
 def _empty_flow(store):
     return FlowService(FakeFs({}), store)
+
+
+def _settled_now():
+    return time.time() + 7200
+
+
+def _ts(date_str):
+    d = datetime.date.fromisoformat(date_str)
+    return float(datetime.datetime(d.year, d.month, d.day, 12, 0, 0).timestamp())
 
 
 class _Workers:
@@ -109,7 +120,8 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_inbox_has_stepped_human_tasks_not_todos(self):
         s = self._store()
-        ids = [row.task.id for row in InboxUseCase(s, _empty_flow(s)).execute(InboxInput()).rows]
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
+        ids = [row.task.id for row in resp.rows]
         self.assertIn(self.gate, ids)
         self.assertNotIn(self.todo, ids)
 
@@ -128,7 +140,7 @@ class TestInboxCandidateEpics(unittest.TestCase):
         epic = s.create_epic("My Epic")
         s.close(s.create_story("story 1", epic=epic), "done")
         s.close(s.create_story("story 2", epic=epic), "done")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         self.assertIn(epic, [e.id for e in resp.candidate_epics])
 
     def test_one_open_story_epic_not_candidate(self):
@@ -136,13 +148,13 @@ class TestInboxCandidateEpics(unittest.TestCase):
         epic = s.create_epic("My Epic")
         s.close(s.create_story("story 1", epic=epic), "done")
         s.create_story("story 2", epic=epic)
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         self.assertNotIn(epic, [e.id for e in resp.candidate_epics])
 
     def test_no_children_epic_not_candidate(self):
         s = FakeStore()
         epic = s.create_epic("Empty Epic")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         self.assertNotIn(epic, [e.id for e in resp.candidate_epics])
 
     def test_closed_epic_not_candidate(self):
@@ -150,7 +162,7 @@ class TestInboxCandidateEpics(unittest.TestCase):
         epic = s.create_epic("Closed Epic")
         s.close(s.create_story("story", epic=epic), "done")
         s.close(epic, "done")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         self.assertNotIn(epic, [e.id for e in resp.candidate_epics])
 
     def test_candidate_epic_has_closed_story_count(self):
@@ -158,7 +170,7 @@ class TestInboxCandidateEpics(unittest.TestCase):
         epic = s.create_epic("My Epic")
         for i in range(3):
             s.close(s.create_story("story %d" % i, epic=epic), "done")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         candidates = {e.id: e for e in resp.candidate_epics}
         self.assertEqual(candidates[epic].closed_story_count, 3)
 
@@ -167,15 +179,43 @@ class TestInboxCandidateEpics(unittest.TestCase):
         epic = s.create_epic("My Epic")
         s.close(s.create_story("story", epic=epic), "done")
         gate = s.create_task("a gate", step="review", role="human")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         self.assertIn(gate, [row.task.id for row in resp.rows])
+
+
+class TestInboxCandidateEpicQuiescence(unittest.TestCase):
+    def _close_story(self, store, epic, title, closed_date_str):
+        sid = store.create_story(title, epic=epic)
+        store.close(sid, "done")
+        store._records[sid]["closed_at"] = closed_date_str + "T12:00:00.000000"
+        return sid
+
+    def test_epic_not_candidate_until_recency_window_elapses(self):
+        s = FakeStore()
+        epic = s.create_epic("My Epic")
+        self._close_story(s, epic, "story", "2026-07-04")
+
+        just_closed = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_ts("2026-07-04")))
+        self.assertNotIn(epic, [e.id for e in just_closed.candidate_epics])
+
+        settled = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_ts("2026-07-06")))
+        self.assertIn(epic, [e.id for e in settled.candidate_epics])
+
+    def test_recency_gate_uses_latest_of_multiple_story_closures(self):
+        s = FakeStore()
+        epic = s.create_epic("My Epic")
+        self._close_story(s, epic, "story 1", "2026-07-01")
+        self._close_story(s, epic, "story 2", "2026-07-04")
+
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_ts("2026-07-04")))
+        self.assertNotIn(epic, [e.id for e in resp.candidate_epics])
 
 
 class TestInboxAttentionFlag(unittest.TestCase):
     def test_flagged_task_appears_in_inbox_as_triage(self):
         s = FakeStore()
         tid = s.create_task("urgent finding", role="human", attention=True)
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         ids = [row.task.id for row in resp.rows]
         kinds = {row.task.id: row.kind for row in resp.rows}
         self.assertIn(tid, ids)
@@ -184,20 +224,20 @@ class TestInboxAttentionFlag(unittest.TestCase):
     def test_unflagged_task_absent_from_inbox(self):
         s = FakeStore()
         tid = s.create_task("someday idea", role="human")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         self.assertNotIn(tid, [row.task.id for row in resp.rows])
 
     def test_closing_flagged_task_removes_it_from_inbox(self):
         s = FakeStore()
         tid = s.create_task("urgent finding", role="human", attention=True)
         s.close(tid, "done")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         self.assertNotIn(tid, [row.task.id for row in resp.rows])
 
     def test_flagged_task_title_accessible_via_row(self):
         s = FakeStore()
         tid = s.create_task("audit: spec gaps", role="human", attention=True)
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
         row = next(r for r in resp.rows if r.task.id == tid)
         self.assertEqual(row.task.title, "audit: spec gaps")
 
