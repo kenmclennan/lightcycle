@@ -35,12 +35,12 @@ class TestSessionPolicy(unittest.TestCase):
         p = SessionPolicy()
         self.assertEqual(p.on_result(has_open_task=False), CLOSE)
 
-    def test_unresolved_task_nudges_then_closes_at_cap(self):
-        p = SessionPolicy(max_nudges=2)
+    def test_unresolved_task_nudges_indefinitely_never_closes_a_working_worker(self):
+        p = SessionPolicy()
         p.observe_claimed(True)
-        self.assertEqual(p.on_result(has_open_task=True), NUDGE)
-        self.assertEqual(p.on_result(has_open_task=True), NUDGE)
-        self.assertEqual(p.on_result(has_open_task=True), CLOSE)
+        for _ in range(20):
+            self.assertEqual(p.on_result(has_open_task=True), NUDGE)
+        self.assertEqual(p.nudges, 20)
 
     def test_terminal_overrides_nudge(self):
         p = SessionPolicy()

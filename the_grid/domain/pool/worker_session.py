@@ -12,10 +12,9 @@ def is_terminal_command(command):
 
 
 class SessionPolicy:
-    def __init__(self, max_nudges=3):
+    def __init__(self):
         self._terminal = False
         self._claimed = False
-        self._max_nudges = max_nudges
         self._nudges = 0
 
     def observe_command(self, command):
@@ -30,8 +29,6 @@ class SessionPolicy:
         if self._terminal:
             return CLOSE
         if not has_open_task and not self._claimed:
-            return CLOSE
-        if self._nudges >= self._max_nudges:
             return CLOSE
         self._nudges += 1
         return NUDGE
