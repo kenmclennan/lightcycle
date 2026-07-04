@@ -176,6 +176,7 @@ class TestEnsureConfig(unittest.TestCase):
         all_keys = (
             "projects: /p\nspecs: /s\nbranch-prefix: feat\nshortcode: PROJ\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
+            "max-session-seconds: 1800\n"
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
             "retro-interval-days: 7\nretro-min-epics: 3\n"
         )
