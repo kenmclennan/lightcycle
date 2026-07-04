@@ -275,6 +275,90 @@ class SqliteStore(StorePort):
             for r in rows
         ]
 
+    def shortcode(self):
+        return self._shortcode
+
+    def is_empty(self):
+        return self._conn.execute("SELECT 1 FROM tasks LIMIT 1").fetchone() is None
+
+    def seed_counter(self, namespace, next_value):
+        row = self._conn.execute(
+            "SELECT next FROM counters WHERE namespace = ?", (namespace,)
+        ).fetchone()
+        if row is not None and row[0] >= next_value:
+            return
+        self._conn.execute(
+            "INSERT INTO counters (namespace, next) VALUES (?, ?) "
+            "ON CONFLICT(namespace) DO UPDATE SET next = excluded.next",
+            (namespace, next_value),
+        )
+        self._conn.commit()
+
+    def import_task(self, migrated):
+        exists = self._conn.execute(
+            "SELECT 1 FROM tasks WHERE id = ?", (migrated.id,)
+        ).fetchone()
+        if exists:
+            raise ValueError("id already in use: %s" % migrated.id)
+        self._conn.execute(
+            "INSERT INTO tasks (id, type, title, status, step, role, parent, project, goal, "
+            "notes, close_reason, assignee, since, fired_at, closed_at, created_at, attention) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                migrated.id, migrated.type, migrated.title, migrated.status, migrated.step,
+                migrated.role, migrated.parent, migrated.project, migrated.goal, migrated.notes,
+                migrated.outcome, migrated.assignee, migrated.since, migrated.fired_at,
+                migrated.closed_at, migrated.created_at, 1 if migrated.attention else 0,
+            ),
+        )
+        for a in migrated.artifacts:
+            self._conn.execute(
+                "INSERT INTO artifacts (story_id, atype, value, label) VALUES (?, ?, ?, ?)",
+                (migrated.id, a.type, a.value, a.label),
+            )
+        for blocked_by in migrated.blocked_by:
+            self._conn.execute(
+                "INSERT INTO deps (task_id, blocked_by) VALUES (?, ?)", (migrated.id, blocked_by)
+            )
+        for label in migrated.labels:
+            self._conn.execute(
+                "INSERT INTO labels (task_id, label) VALUES (?, ?)", (migrated.id, label)
+            )
+        self._conn.commit()
+
+    def export_rows(self):
+        export_columns = _COLUMNS + ("created_at",)
+        rows = self._conn.execute(
+            "SELECT %s FROM tasks ORDER BY rowid" % ", ".join(export_columns)
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(zip(export_columns, row))
+            tid = d["id"]
+            artifacts = self.story_artifacts(tid)
+            blocked_by = [
+                r[0] for r in self._conn.execute(
+                    "SELECT blocked_by FROM deps WHERE task_id = ?", (tid,)
+                ).fetchall()
+            ]
+            labels = [
+                r[0] for r in self._conn.execute(
+                    "SELECT label FROM labels WHERE task_id = ?", (tid,)
+                ).fetchall()
+            ]
+            result.append({
+                "id": tid, "type": d["type"], "title": d["title"], "status": d["status"],
+                "parent": d["parent"], "role": d["role"], "step": d["step"],
+                "project": d["project"], "goal": d["goal"], "attention": bool(d["attention"]),
+                "description": d["description"], "notes": d["notes"],
+                "close_reason": d["close_reason"], "assignee": d["assignee"], "epic": d["epic"],
+                "needs": d["needs"], "artifacts": [a.as_dict() for a in artifacts],
+                "blocked_by": blocked_by, "labels": labels, "since": d["since"],
+                "fired_at": d["fired_at"], "closed_at": d["closed_at"],
+                "created_at": d["created_at"],
+            })
+        return result
+
     def ensure_store(self):
         pass
 
