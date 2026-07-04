@@ -45,6 +45,13 @@ class TestBeadToTask(unittest.TestCase):
         self.assertEqual(bead_to_task(_bead(labels=["for:human"])).status, "needs-human")
         self.assertEqual(bead_to_task(_bead()).status, "ready")
 
+    def test_model_from_metadata(self):
+        t = bead_to_task(_bead(metadata={"model": "sonnet"}))
+        self.assertEqual(t.model, "sonnet")
+
+    def test_model_absent_is_none(self):
+        self.assertIsNone(bead_to_task(_bead()).model)
+
     def test_as_dict_is_a_plain_field_dict(self):
         d = bead_to_task(_bead()).as_dict()
         self.assertEqual(type(d), dict)

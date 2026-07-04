@@ -868,8 +868,16 @@ def _print_retro(resp):
         print("no reflections yet - agents call `tg reflect --feedback` before `tg done`")
     print("\nPer-story signals:")
     for row in resp.story_signals:
-        sig_str = "  ".join("%s=%s" % (k, row.signals[k]) for k in sorted(row.signals))
+        sig_str = "  ".join(_fmt_signal(k, row.signals[k]) for k in sorted(row.signals))
         print("  %-20s  %s  (N=%d)" % (row.story.id, sig_str, row.reflections))
+
+
+def _fmt_signal(name, by_model):
+    total = sum(by_model.values())
+    if not by_model:
+        return "%s=%d" % (name, total)
+    breakdown = ",".join("%s:%d" % (m, by_model[m]) for m in sorted(by_model))
+    return "%s=%d(%s)" % (name, total, breakdown)
 
 
 def cmd_retro(argv):

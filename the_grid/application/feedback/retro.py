@@ -22,7 +22,7 @@ class FeedbackItem:
 @dataclass(frozen=True)
 class StorySignals:
     story: Task
-    signals: Dict[str, int]
+    signals: Dict[str, Dict[str, int]]
     reflections: int
 
 

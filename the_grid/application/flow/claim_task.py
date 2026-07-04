@@ -32,14 +32,16 @@ class ClaimTaskUseCase:
         t = self._store.claim_ready(role)
         if t is None:
             return None
-        missing = StepContract.from_meta(self._flow.meta_for_step(t.step)).missing_inputs(
-            self._store.present_types(t)
-        )
+        meta = self._flow.meta_for_step(t.step)
+        missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:
             self._store.route_to_human(
                 t.id, "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing))
             )
             return None
+        model = meta.get("model")
+        if model:
+            self._store.set_model(t.id, model)
         spawnid = self._config.spawn_id()
         if spawnid:
             self._workers.set_task(spawnid, t.id)

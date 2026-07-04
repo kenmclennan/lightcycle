@@ -24,6 +24,9 @@ class SignalSpec:
         return outcome == self.outcome
 
 
+UNLABELED_MODEL = "unlabeled"
+
+
 class Signals:
     def __init__(self, specs):
         self._specs = list(specs)
@@ -42,7 +45,12 @@ class Signals:
         return cls(specs)
 
     def tally(self, tasks):
-        totals = {spec.name: 0 for spec in self._specs}
+        totals = {spec.name: {} for spec in self._specs}
         for spec in self._specs:
-            totals[spec.name] += sum(1 for t in tasks if spec.matches(t))
+            by_model = totals[spec.name]
+            for t in tasks:
+                if not spec.matches(t):
+                    continue
+                model = t.model or UNLABELED_MODEL
+                by_model[model] = by_model.get(model, 0) + 1
         return totals

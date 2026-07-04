@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at TEXT,
     attention INTEGER NOT NULL DEFAULT 0,
     epic TEXT,
-    needs TEXT
+    needs TEXT,
+    model TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -68,7 +69,7 @@ CREATE TABLE IF NOT EXISTS history (
 _COLUMNS = (
     "id", "type", "title", "status", "step", "role", "parent", "project", "goal",
     "description", "notes", "close_reason", "assignee", "since", "fired_at",
-    "closed_at", "attention", "epic", "needs",
+    "closed_at", "attention", "epic", "needs", "model",
 )
 
 _METADATA_COLUMNS = ("epic", "needs", "since", "fired_at")
@@ -121,6 +122,7 @@ class SqliteStore(StorePort):
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
             attention=bool(d["attention"]),
+            model=d["model"],
         )
 
     def _rows_to_tasks(self, rows):
@@ -303,6 +305,10 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "UPDATE tasks SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
         )
+        self._conn.commit()
+
+    def set_model(self, tid, model):
+        self._conn.execute("UPDATE tasks SET model = ? WHERE id = ?", (model, tid))
         self._conn.commit()
 
     def label_add(self, tid, label):

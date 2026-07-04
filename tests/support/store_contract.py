@@ -151,6 +151,21 @@ class StoreContractBase:
         t = s.get_task(tid)
         self.assertEqual(t.parent, epic)
 
+    def test_set_model_roundtrip(self):
+        s = self.make_store()
+        tid = s.create_task("t")
+        s.set_model(tid, "sonnet")
+        self.assertEqual(s.get_task(tid).model, "sonnet")
+
+    def test_set_model_preserves_other_metadata(self):
+        s = self.make_store()
+        tid = s.create_task("t")
+        s.update_metadata(tid, {"since": "2025-01-01"})
+        s.set_model(tid, "sonnet")
+        t = s.get_task(tid)
+        self.assertEqual(t.model, "sonnet")
+        self.assertEqual(t.since, "2025-01-01")
+
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()
         open_tid = s.create_task("open task")

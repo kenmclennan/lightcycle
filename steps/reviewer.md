@@ -1,5 +1,5 @@
 ---
-model: opus
+model: sonnet
 step: review
 accepts:
   spec: required
