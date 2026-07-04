@@ -71,6 +71,12 @@ These are how you work, not suggestions:
 - **Gate held work; do not hand-track it.** If work must wait on other work, file it with
   `tg file ... --blocked-by <id>`. The store releases it when the blocker closes and the pool picks it
   up. Never carry "what goes next" in your head.
+- **Check blast radius before filing; block overlapping work.** Before you file, check whether the
+  work touches the same files/subsystem as in-flight or just-filed work, or a spec references another
+  spec. If so, file it `--blocked-by` that work rather than in parallel. Overlapping parallel work
+  conflicts - a semantic rebase and rework - while serializing it builds cleanly on top. (GRID-058
+  reused `c1y`/GRID-053's kill path but was filed in parallel, so it duplicated the path and hit a
+  five-file conflict.) Until a planning agent automates this, it is your manual check at file time.
 - **Back up before you restructure.** Before any structural change to the backlog or store, refresh the
   bd snapshot (export + commit) so the state survives. (The durable mechanism is its own feature.)
 - **Prime every review.** The reviewer surfaces its concerns and the spec makes the work falsifiable,
