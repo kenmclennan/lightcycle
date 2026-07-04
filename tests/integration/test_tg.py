@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT))
 import the_grid.cli as _cli_mod
 from tests.support.fake_store import FakeStore
 from the_grid.adapters.gitio import GitAdapter
+from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
 from the_grid.domain.work import Artifact
 
@@ -103,6 +104,22 @@ def make_repo(parent, name):
     git_in(d, "push", "-q", "origin", "main")
     git_in(d, "fetch", "-q", "origin")
     return d
+
+
+def _reset_git_repo(repo):
+    listing = git_in(repo, "worktree", "list", "--porcelain").stdout
+    for block in listing.split("\n\n"):
+        lines = block.splitlines()
+        if not lines:
+            continue
+        path = lines[0].split(" ", 1)[1]
+        if os.path.realpath(path) != os.path.realpath(repo):
+            subprocess.run(["git", "-C", repo, "worktree", "remove", "--force", path], check=True)
+    subprocess.run(["git", "-C", repo, "worktree", "prune"], check=True)
+    git_in(repo, "checkout", "-q", "main")
+    for b in git_in(repo, "branch", "--format=%(refname:short)").stdout.split():
+        if b != "main":
+            git_in(repo, "branch", "-D", b)
 
 
 def new_store_with_origin():
@@ -400,32 +417,22 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(self.store._records[b]["status"], "open")
         self.assertIn(self.store._records[b].get("assignee"), (None, ""))
 
-    def test_sweep_keeps_task_of_live_worker_before_stamp(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
-        (Path(self.root) / "logs" / "workers.json").write_text(
-            json.dumps(
-                [{"spawnid": "S", "role": "coder", "pid": os.getpid(), "log": "x", "task": None}]
-            )
-        )
-        self.store.assign(b, "S")
-        self.store.update_status(b, "in_progress")
-        rc, out, err = call(_cli_mod.cmd_sweep)
-        self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._records[b]["status"], "in_progress")
-        self.assertEqual(self.store._records[b].get("assignee"), "S")
 
-    def test_sweep_reclaims_dead_worker_claim(self):
-        dead = subprocess.Popen(["true"])
-        dead.wait()
-        b = self.store.create_task("build: t", step="build", role="coder")
-        (Path(self.root) / "logs" / "workers.json").write_text(
-            json.dumps([{"spawnid": "D", "role": "coder", "pid": dead.pid, "log": "x", "task": b}])
-        )
-        self.store.assign(b, "D")
-        self.store.update_status(b, "in_progress")
-        rc, out, err = call(_cli_mod.cmd_sweep)
-        self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._records[b]["status"], "open")
+class TestWorkersAdapterEffects(unittest.TestCase):
+    def test_pid_alive_and_kill_hit_a_real_process_never_the_test(self):
+        from the_grid.adapters import workers as workers_adapter
+
+        alive = subprocess.Popen(["sleep", "300"])
+        self.addCleanup(lambda: alive.poll() is None and alive.kill())
+        done = subprocess.Popen(["true"])
+        done.wait()
+
+        self.assertTrue(workers_adapter.pid_alive(alive.pid))
+        self.assertFalse(workers_adapter.pid_alive(done.pid))
+
+        workers_adapter.kill(alive.pid)
+        alive.wait(timeout=5)
+        self.assertIsNotNone(alive.poll())
 
 
 class TestSpawn(unittest.TestCase):
@@ -455,9 +462,10 @@ class TestSpawn(unittest.TestCase):
 
 
 class TestPs(unittest.TestCase):
-    def setUp(self):
-        self.root = new_store()
-        (Path(self.root) / "logs").mkdir(exist_ok=True)
+    @classmethod
+    def setUpClass(cls):
+        cls.root = new_store()
+        (Path(cls.root) / "logs").mkdir(exist_ok=True)
 
     def _write_workers(self, workers):
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(workers))
@@ -547,33 +555,6 @@ class TestRun(unittest.TestCase):
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 1)
-
-    def test_run_spawns_when_inflight_worker_is_stale(self):
-        self.store.create_task("build: t", step="build", role="coder")
-        stuck = self.store.create_task("build: stuck", step="build", role="coder")
-        self.store.update_status(stuck, "in_progress")
-        self.store.assign(stuck, "stuck")
-        self._preset_worker(
-            spawnid="stuck",
-            role="coder",
-            pid=os.getpid(),
-            log="x",
-            task=None,
-            started=time.time() - 9999,
-        )
-        rc, _, err = self._run_once()
-        self.assertEqual(rc, 0, err)
-        self.assertEqual(len(self._workers()), 2)
-
-    def test_run_spawns_when_prior_worker_already_claimed(self):
-        self.store.create_task("build: t", step="build", role="coder")
-        other = self.store.create_task("build: other", step="build", role="coder")
-        self.store.update_status(other, "in_progress")
-        self.store.assign(other, "old")
-        self._preset_worker(spawnid="old", role="coder", pid=os.getpid(), log="x", task="other-1")
-        rc, _, err = self._run_once()
-        self.assertEqual(rc, 0, err)
-        self.assertEqual(len(self._workers()), 2)
 
     def test_run_pool_fills_up_to_max_agents(self):
         for i in range(7):
@@ -844,28 +825,14 @@ class TestTrace(unittest.TestCase):
 
 class TestAgentFrontmatter(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
+        _fake_setUp(self)
         (Path(self.root) / "steps").mkdir(exist_ok=True)
         (Path(self.root) / "steps" / "coder.md").write_text(
             "---\nmodel: sonnet\n---\n# Coder\n\nDo the thing.\n"
         )
-        (Path(self.root) / "logs").mkdir(exist_ok=True)
-
-    def _tg(self):
-        import importlib.util
-        from importlib.machinery import SourceFileLoader
-
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        loader = SourceFileLoader("tgmod_fm", TG)
-        spec = importlib.util.spec_from_loader("tgmod_fm", loader)
-        mod = importlib.util.module_from_spec(spec)
-        loader.exec_module(mod)
-        mod.set_container(mod.Container())
-        return mod
 
     def test_parse_step_extracts_model_and_strips_frontmatter(self):
-        tg = self._tg()
-        a = tg.container().fs.parse_step("coder")
+        a = _cli_mod.container().fs.parse_step("coder")
         self.assertEqual(a["meta"]["model"], "sonnet")
         self.assertTrue(a["body"].startswith("# Coder"))
         self.assertNotIn("model:", a["body"])
@@ -875,8 +842,7 @@ class TestAgentFrontmatter(unittest.TestCase):
             "---\nmodel: opus\nstep: review\nroutes:\n  done: open-pr\n"
             "  rejected: build\n---\n# Reviewer\n"
         )
-        tg = self._tg()
-        a = tg.container().fs.parse_step("reviewer")
+        a = _cli_mod.container().fs.parse_step("reviewer")
         self.assertEqual(a["meta"]["step"], "review")
         self.assertEqual(a["meta"]["routes"], {"done": "open-pr", "rejected": "build"})
         self.assertTrue(a["body"].startswith("# Reviewer"))
@@ -884,46 +850,30 @@ class TestAgentFrontmatter(unittest.TestCase):
 
 class TestFlowFromAgents(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        write_steps(self.root)
+        _fake_setUp(self, steps=True)
 
-    def _tg(self):
-        import importlib.util
-        from importlib.machinery import SourceFileLoader
-
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        loader = SourceFileLoader("tgmod_flow", TG)
-        spec = importlib.util.spec_from_loader("tgmod_flow", loader)
-        mod = importlib.util.module_from_spec(spec)
-        loader.exec_module(mod)
-        mod.set_container(mod.Container())
-        return mod
-
-    def _flow(self, tg):
-        return tg.FlowService(tg.container().fs, tg.container().store)
+    def _flow(self):
+        return FlowService(_cli_mod.container().fs, _cli_mod.container().store)
 
     def test_flow_next_derives_role_from_owner(self):
-        tg = self._tg()
-        t = self._flow(tg).flow_next("build", "done")
+        t = self._flow().flow_next("build", "done")
         self.assertEqual((t.to_step, t.to_role), ("review", "reviewer"))
-        t2 = self._flow(tg).flow_next("review", "rejected")
+        t2 = self._flow().flow_next("review", "rejected")
         self.assertEqual((t2.to_step, t2.to_role), ("build", "coder"))
 
     def test_flow_next_unowned_target_routes_to_human(self):
-        tg = self._tg()
-        t = self._flow(tg).flow_next("open-pr", "done")
+        t = self._flow().flow_next("open-pr", "done")
         self.assertEqual((t.to_step, t.to_role), ("ready-merge", "human"))
 
     def test_flow_next_unknown_outcome_is_none(self):
-        tg = self._tg()
-        self.assertIsNone(self._flow(tg).flow_next("build", "banana"))
+        self.assertIsNone(self._flow().flow_next("build", "banana"))
 
     def test_flow_command_lists_steps_and_human_terminal(self):
-        r = run_tg("flow", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("build", r.stdout)
-        self.assertIn("review", r.stdout)
-        self.assertIn("human", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_flow)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("build", out)
+        self.assertIn("review", out)
+        self.assertIn("human", out)
 
 
 class TestFileStep(unittest.TestCase):
@@ -1023,9 +973,12 @@ class TestArtifactContracts(unittest.TestCase):
 
 
 class TestPruneWorkers(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = new_store()
+        (Path(cls.root) / "logs").mkdir(exist_ok=True)
+
     def setUp(self):
-        self.root = new_store()
-        (Path(self.root) / "logs").mkdir(exist_ok=True)
         self.wfile = Path(self.root) / "logs" / "workers.json"
         os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
@@ -1119,11 +1072,16 @@ class TestContractsOptional(unittest.TestCase):
 
 
 class TestWorktree(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         parent = tempfile.mkdtemp()
-        self.root = make_repo(parent, "engine")
-        write_steps(self.root)
-        os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
+        cls.root = make_repo(parent, "engine")
+        write_steps(cls.root)
+
+    def setUp(self):
+        os.environ["GRID_CONFIG"] = write_config(
+            projects=os.path.dirname(self.root), specs=self.root
+        )
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
@@ -1133,6 +1091,7 @@ class TestWorktree(unittest.TestCase):
 
     def tearDown(self):
         os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+        _reset_git_repo(self.root)
 
     def _branch_of(self, path):
         return git_in(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
@@ -1223,11 +1182,14 @@ class TestWorktreeNoOrigin(unittest.TestCase):
 
 
 class TestNamedRepo(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.projects = tempfile.mkdtemp()
+        cls.engine = make_repo(cls.projects, "engine")
+        write_steps(cls.engine)
+        cls.app = make_repo(cls.projects, "app")
+
     def setUp(self):
-        self.projects = tempfile.mkdtemp()
-        self.engine = make_repo(self.projects, "engine")
-        write_steps(self.engine)
-        self.app = make_repo(self.projects, "app")
         os.environ["GRID_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
         os.environ["GRID_ROOT_OVERRIDE"] = self.engine
         self.store = FakeStore()
@@ -1238,6 +1200,8 @@ class TestNamedRepo(unittest.TestCase):
 
     def tearDown(self):
         os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+        _reset_git_repo(self.engine)
+        _reset_git_repo(self.app)
 
     def _has_branch(self, repo, branch):
         return (
@@ -1323,7 +1287,7 @@ class TestUnblock(unittest.TestCase):
         self.assertIn("ready-merge", err)
 
 
-class TestClose(unittest.TestCase):
+class TestCloseWorktree(unittest.TestCase):
     def setUp(self):
         parent = tempfile.mkdtemp()
         self.root = make_repo(parent, "engine")
@@ -1362,6 +1326,11 @@ class TestClose(unittest.TestCase):
         self.assertFalse(os.path.isdir(ws))
         self.assertFalse(self._has_branch(self.root, "feat/w"))
 
+
+class TestClose(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self, steps=True)
+
     def test_close_epic_closes_when_all_stories_closed(self):
         epic = self.store.create_story("epic e")
         child = self.store.create_story("story s", epic=epic)
@@ -1390,39 +1359,48 @@ class TestConfig(unittest.TestCase):
         self.root = tempfile.mkdtemp()
         self.dir = tempfile.mkdtemp()
         self.cfg = os.path.join(self.dir, "config")
+        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        os.environ["GRID_CONFIG"] = self.cfg
+        self.store = FakeStore()
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
+        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
 
     def test_config_prints_path_and_unset_roots(self):
-        r = run_tg("config", root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn(self.cfg, r.stdout)
-        self.assertIn("not found", r.stdout)
-        self.assertIn("projects: (not set", r.stdout)
-        self.assertIn("specs: (not set", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_config)
+        self.assertEqual(rc, 0, err)
+        self.assertIn(self.cfg, out)
+        self.assertIn("not found", out)
+        self.assertIn("projects: (not set", out)
+        self.assertIn("specs: (not set", out)
 
     def test_init_seeds_config_when_absent_and_is_idempotent(self):
         self.assertFalse(os.path.exists(self.cfg))
-        r = run_tg("init", root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("created", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("created", out)
         self.assertTrue(os.path.exists(self.cfg))
         self.assertIn("~/workspace/projects", Path(self.cfg).read_text())
-        r2 = run_tg("init", root=self.root, config=self.cfg)
-        self.assertEqual(r2.returncode, 0, r2.stderr)
-        self.assertIn("already exists", r2.stdout)
+        rc2, out2, err2 = call(_cli_mod.cmd_init)
+        self.assertEqual(rc2, 0, err2)
+        self.assertIn("already exists", out2)
 
     def test_written_config_overrides_roots(self):
         proj = tempfile.mkdtemp()
         specs = tempfile.mkdtemp()
         Path(self.cfg).write_text("projects: %s\nspecs: %s\n" % (proj, specs))
-        r = run_tg("config", root=self.root, config=self.cfg)
-        self.assertIn("projects: %s" % proj, r.stdout)
-        self.assertIn("specs: %s" % specs, r.stdout)
+        rc, out, err = call(_cli_mod.cmd_config)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("projects: %s" % proj, out)
+        self.assertIn("specs: %s" % specs, out)
 
     def test_init_tops_up_existing_config_with_missing_keys(self):
         Path(self.cfg).write_text("projects: /p\nspecs: /s\n")
-        r = run_tg("init", root=self.root, config=self.cfg)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("created", r.stdout)
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("created", out)
         text = Path(self.cfg).read_text()
         self.assertIn("max-agents: 5", text)
         self.assertIn("projects: /p", text)
@@ -1430,7 +1408,7 @@ class TestConfig(unittest.TestCase):
 
 class TestLogRender(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
+        _fake_setUp(self)
         (Path(self.root) / "logs").mkdir(exist_ok=True)
         self.log = Path(self.root) / "logs" / "worker-coder-x.log"
         self.log.write_text(
@@ -1480,18 +1458,17 @@ class TestLogRender(unittest.TestCase):
         )
 
     def test_logs_renders_stream_json(self):
-        r = run_tg("logs", "coder", root=self.root)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("Claiming the task.", r.stdout)
-        self.assertIn("$ tg claim coder", r.stdout)
-        self.assertIn("done; banner fixed", r.stdout)
-        self.assertNotIn('"type"', r.stdout)
+        rc, out, err = call(_cli_mod.cmd_logs, "coder")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("Claiming the task.", out)
+        self.assertIn("$ tg claim coder", out)
+        self.assertIn("done; banner fixed", out)
+        self.assertNotIn('"type"', out)
 
 
 class TestInboxBacklog(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        _fake_setUp(self)
         adir = Path(self.root) / "steps"
         adir.mkdir(exist_ok=True)
         (adir / "coder.md").write_text(
@@ -1500,11 +1477,6 @@ class TestInboxBacklog(unittest.TestCase):
         (adir / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n  changes: build\n---\nstub"
         )
-        self.store = FakeStore()
-        self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
-        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
 
     def test_inbox_shows_action_and_blocked_only(self):
         call(_cli_mod.cmd_add, "a seed")
