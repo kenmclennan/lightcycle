@@ -307,6 +307,25 @@ class TestUnblockTask(unittest.TestCase):
         with self.assertRaises(UseCaseError):
             UnblockTaskUseCase(s, flow_for(METAS, s)).execute(UnblockInput(task=bid))
 
+    def test_clears_needs_and_blocked_note(self):
+        s = FakeStore()
+        bid = s.create_task("build: x", step="build", role="coder")
+        BlockTaskUseCase(s).execute(BlockInput(task=bid, needs="confirm approach"))
+        UnblockTaskUseCase(s, flow_for(METAS, s)).execute(UnblockInput(task=bid))
+        t = s.get_task(bid)
+        self.assertIsNone(t.needs)
+        self.assertNotIn("BLOCKED:", t.notes or "")
+
+    def test_preserves_notes_unrelated_to_block(self):
+        s = FakeStore()
+        bid = s.create_task("build: x", step="build", role="coder")
+        s.note(bid, "from review: lgtm")
+        BlockTaskUseCase(s).execute(BlockInput(task=bid, needs="confirm approach"))
+        UnblockTaskUseCase(s, flow_for(METAS, s)).execute(UnblockInput(task=bid))
+        t = s.get_task(bid)
+        self.assertIn("from review: lgtm", t.notes or "")
+        self.assertNotIn("BLOCKED:", t.notes or "")
+
 
 if __name__ == "__main__":
     unittest.main()

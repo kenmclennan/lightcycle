@@ -25,5 +25,11 @@ class UnblockTaskUseCase:
             raise UseCaseError(
                 "nothing to unblock: step '%s' has no agent owner" % (t.step or "(none)")
             )
+        self._store.update_metadata(
+            input.task,
+            {"epic": t.epic, "since": t.since, "fired_at": t.fired_at, "needs": None},
+        )
+        kept = [l for l in (t.notes or "").splitlines() if not l.startswith("BLOCKED:")]
+        self._store.set_notes(input.task, "\n".join(kept))
         self._store.reassign(input.task, role)
         return UnblockResponse(role=role)

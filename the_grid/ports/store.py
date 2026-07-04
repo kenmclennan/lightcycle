@@ -51,6 +51,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def set_notes(self, tid, text):
+        pass
+
+    @abstractmethod
     def close(self, tid, reason):
         pass
 
