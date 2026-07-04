@@ -53,12 +53,31 @@ it; the fast tier needs no bounding.
 - `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not
   collected as tests.
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
-- `tests/integration/` - the wired `tg` commands and the `BdStore` contract, via subprocess (slow).
+- `tests/integration/` - the store contract against real `bd` and the tests that exercise genuine
+  IO, via subprocess/real backend (slow).
 - `tests/feature/` - gherkin `.feature` files (the language-agnostic behaviour spec) with pytest-bdd
   step definitions driving the wired cli in-process. The `.feature` files are meant to outlive the
   runner - a future Go/godog port runs them unchanged.
-- New pure logic ships with unit tests; a new command ships with an integration test. Get it green
-  before `tg done`.
+
+**When to write an integration test (firm - the default is NOT integration).** Almost all behaviour
+is tested in-process against `FakeStore`, in milliseconds. Use-case logic, `tg` command behaviour,
+and rendering go in `tests/unit/` (or the in-process `call(cmd_x, ...)` + `_fake_setUp` pattern) -
+inject a fake, assert the outcome. A new command does **NOT** automatically warrant an integration
+test; if its behaviour is expressible against `FakeStore`, that is where it belongs. Write a slow
+integration test ONLY when the thing under test IS the IO a fake cannot stand in for:
+
+1. the store adapter's **contract against real `bd`** - one file (`test_store_contract.py`); extend
+   it, never scatter ad-hoc bd tests across the suite;
+2. **genuine external IO** - git/worktree operations, process/worker spawning, the run-lock, the
+   filesystem;
+3. **read-surface JSON pins** - a `Task`/story field an agent consumes must be proven to survive
+   real serialization onto `tg show`/`tg claim` output (see the read-surface bullet below).
+
+If a change does not touch (1)-(3), it ships with a unit test, not an integration test. Any
+integration test that must touch `bd` **shares one store per class** (`setUpClass`, never a fresh
+`bd init` per `setUp` - `bd init` is ~1.6s and a per-method init is the tier's dominant cost). Get
+it green before `tg done`.
+
 - **Any `Task` (or story) field a step reads from `tg show`/`tg claim` JSON needs an integration
   test asserting the field appears in that CLI output** - a unit test on the domain entity alone
   does not prove the field survives `Task.as_dict()` onto the read surface agents actually consume
