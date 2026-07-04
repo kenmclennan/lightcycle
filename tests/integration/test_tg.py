@@ -122,6 +122,19 @@ def _reset_git_repo(repo):
             git_in(repo, "branch", "-D", b)
 
 
+def new_named_store(name):
+    outer = tempfile.mkdtemp()
+    d = os.path.join(outer, name)
+    os.makedirs(d)
+    subprocess.run(["git", "init", "-q"], cwd=d, check=True)
+    subprocess.run(
+        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
+        cwd=d,
+        check=True,
+    )
+    return d
+
+
 def new_store_with_origin():
     parent = tempfile.mkdtemp()
     d = make_repo(parent, "engine")
@@ -1868,6 +1881,55 @@ class TestWorktreePushTarget(unittest.TestCase):
                                "origin/feat/my-feat").stdout.strip()
         local_sha = self._git(ws, "rev-parse", "HEAD").stdout.strip()
         self.assertEqual(remote_sha, local_sha)
+
+
+class TestDottedGridRootIdRoundtrip(unittest.TestCase):
+    def setUp(self):
+        self.root = new_named_store("foo-1.2")
+
+    def _run(self, *args):
+        return run_tg(*args, root=self.root)
+
+    def test_tg_add_show_done_roundtrip(self):
+        added = self._run("add", "a task")
+        self.assertEqual(added.returncode, 0, added.stderr)
+        tid = added.stdout.strip()
+        self.assertTrue(tid)
+
+        shown = self._run("show", tid)
+        self.assertEqual(shown.returncode, 0, shown.stderr)
+        self.assertEqual(json.loads(shown.stdout)["id"], tid)
+
+        done = self._run("done", tid, "done")
+        self.assertEqual(done.returncode, 0, done.stderr)
+
+        reshown = self._run("show", tid)
+        self.assertEqual(reshown.returncode, 0, reshown.stderr)
+        self.assertEqual(json.loads(reshown.stdout)["status"], "done")
+
+
+class TestNestedRepoDiscovery(unittest.TestCase):
+    def setUp(self):
+        self.engine = new_store()
+        write_steps(self.engine)
+        self.projects = tempfile.mkdtemp()
+        self.repo = os.path.join(self.projects, "group", "svc")
+        os.makedirs(self.repo)
+        subprocess.run(["git", "init", "-q", self.repo], check=True)
+        self.cfg = write_config(projects=self.projects, specs=self.engine)
+
+    def _run(self, *args):
+        return run_tg(*args, root=self.engine, config=self.cfg)
+
+    def test_available_repos_lists_nested_repo(self):
+        r = self._run("file", "specs/X.md", "--step", "build", "--repo", "does-not-exist")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("group/svc", r.stderr)
+
+    def test_file_accepts_nested_repo(self):
+        r = self._run("file", "specs/X.md", "--step", "build", "--repo", "group/svc")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.strip())
 
 
 if __name__ == "__main__":
