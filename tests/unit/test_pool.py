@@ -106,7 +106,7 @@ class TestSweep(unittest.TestCase):
         s.update_status(held, "in_progress")
         s.assign(held, "live-sp")
         workers = FakeWorkers(
-            workers=[{"spawnid": "live-sp", "pid": 111, "task": "h", "started": 100}],
+            workers=[{"spawnid": "live-sp", "pid": 111, "task": held, "started": 100}],
             alive_pids={111},
             pruned=2,
         )
@@ -144,13 +144,37 @@ class TestSweep(unittest.TestCase):
         s.update_status(held, "in_progress")
         s.assign(held, "busy-sp")
         workers = FakeWorkers(
-            workers=[{"spawnid": "busy-sp", "pid": 444, "task": "h", "started": 100}],
+            workers=[{"spawnid": "busy-sp", "pid": 444, "task": held, "started": 100}],
             alive_pids={444},
         )
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
+
+    def test_live_worker_holding_task_kept_when_claimed_by_is_none(self):
+        s = FakeStore()
+        held = s.create_task("h", step="build", role="coder")
+        s.update_status(held, "in_progress")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp", "pid": 555, "task": held, "started": 100}],
+            alive_pids={555},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.swept, [])
         self.assertEqual(s.get_task(held).status, "in-progress")
+
+    def test_booting_worker_suppresses_reclaim_of_uncovered_task(self):
+        s = FakeStore()
+        t = s.create_task("t", step="build", role="coder")
+        s.update_status(t, "in_progress")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "boot", "pid": 666, "task": None, "started": 950}],
+            alive_pids={666},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        self.assertEqual(result.swept, [])
+        self.assertEqual(s.get_task(t).status, "in-progress")
 
 
 class TestTick(unittest.TestCase):
