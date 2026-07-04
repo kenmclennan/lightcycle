@@ -13,6 +13,7 @@ _SEED_KEYS = [
     ("worktree-retries", "6"),
     ("worktree-retry-sleep", "0.25"),
     ("max-boot-seconds", "120"),
+    ("max-session-seconds", "1800"),
     ("poll-seconds", "5"),
     ("worker-history", "20"),
     ("editor", "vi"),
@@ -183,6 +184,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("max-boot-seconds")
+
+    def max_session_seconds(self):
+        env = self._env_int("GRID_MAX_SESSION_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("max-session-seconds")
 
     def poll_seconds(self):
         env = self._env_int("GRID_POLL_SECONDS", None)

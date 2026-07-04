@@ -7,13 +7,13 @@ import time
 
 from the_grid.adapters import fsio
 from the_grid.adapters.workers import workers_state
+from the_grid.config import Config
 from the_grid.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 
 KICKOFF = ("You are the %s. Claim your next task and complete it per your role instructions, "
            "then exit.")
 NUDGE_TEXT = ("Your previous turn ended but your task is not resolved yet. Continue and finish it, "
               "reach your terminal tg outcome, then exit.")
-MAX_SESSION_SECONDS = 1800
 EXIT_GRACE_SECONDS = 20
 
 
@@ -40,7 +40,7 @@ def build_command(model, sysprompt, root):
             "--dangerously-skip-permissions"]
 
 
-def run(root, role, spawnid, model, sysprompt):
+def run(root, role, spawnid, model, sysprompt, max_session_seconds):
     proc = subprocess.Popen(build_command(model, sysprompt, root), cwd=root,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1)
@@ -82,7 +82,7 @@ def run(root, role, spawnid, model, sysprompt):
     start = time.time()
     processed = 0
     while proc.poll() is None:
-        if time.time() - start > MAX_SESSION_SECONDS:
+        if time.time() - start > max_session_seconds:
             proc.terminate()
             break
         with lock:
@@ -128,7 +128,8 @@ def main():
     if not model:
         sys.stderr.write("worker_session: agent %s has no 'model' in frontmatter\n" % role)
         return 1
-    return run(root, role, spawnid, model, agent["body"])
+    max_session_seconds = Config().max_session_seconds()
+    return run(root, role, spawnid, model, agent["body"], max_session_seconds)
 
 
 if __name__ == "__main__":
