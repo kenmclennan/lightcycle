@@ -59,6 +59,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def set_model(self, tid, model):
+        pass
+
+    @abstractmethod
     def label_add(self, tid, label):
         pass
 

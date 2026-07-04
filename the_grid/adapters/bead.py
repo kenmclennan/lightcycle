@@ -63,4 +63,5 @@ def bead_to_task(bead):
         fired_at=meta.get("fired_at"),
         closed_at=bead.get("closed_at"),
         attention="attention" in _labels(bead),
+        model=meta.get("model"),
     )

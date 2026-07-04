@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.feedback import Reflection, Retro, SignalSpec, Signals
+from the_grid.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec, Signals
 from the_grid.domain.work import Task
 
 
@@ -44,15 +44,36 @@ class TestSignals(unittest.TestCase):
     def test_from_metas_reads_declarations(self):
         signals = Signals.from_metas(self.METAS)
         tasks = [
-            tk(id="t1", step="review", outcome="rejected"),
-            tk(id="t2", step="review", outcome="done"),
-            tk(id="t3", step="open-pr", outcome="conflict-rebase"),
+            tk(id="t1", step="review", outcome="rejected", model="sonnet"),
+            tk(id="t2", step="review", outcome="done", model="sonnet"),
+            tk(id="t3", step="open-pr", outcome="conflict-rebase", model="sonnet"),
         ]
-        self.assertEqual(signals.tally(tasks), {"review_rounds": 1, "conflicts": 1})
-
-    def test_tally_reports_zero_for_declared_but_unmatched(self):
         self.assertEqual(
-            Signals.from_metas(self.METAS).tally([]), {"review_rounds": 0, "conflicts": 0}
+            signals.tally(tasks),
+            {"review_rounds": {"sonnet": 1}, "conflicts": {"sonnet": 1}},
+        )
+
+    def test_tally_buckets_by_task_model(self):
+        signals = Signals.from_metas(self.METAS)
+        tasks = [
+            tk(id="t1", step="review", outcome="rejected", model="opus"),
+            tk(id="t2", step="review", outcome="rejected", model="sonnet"),
+            tk(id="t3", step="review", outcome="rejected", model="sonnet"),
+        ]
+        self.assertEqual(
+            signals.tally(tasks), {"review_rounds": {"opus": 1, "sonnet": 2}, "conflicts": {}}
+        )
+
+    def test_tally_labels_missing_model_as_unlabeled(self):
+        signals = Signals.from_metas(self.METAS)
+        tasks = [tk(id="t1", step="review", outcome="rejected")]
+        self.assertEqual(
+            signals.tally(tasks), {"review_rounds": {UNLABELED_MODEL: 1}, "conflicts": {}}
+        )
+
+    def test_tally_reports_empty_for_declared_but_unmatched(self):
+        self.assertEqual(
+            Signals.from_metas(self.METAS).tally([]), {"review_rounds": {}, "conflicts": {}}
         )
 
     def test_no_declarations_gives_empty_tally(self):
@@ -67,13 +88,15 @@ class TestSignals(unittest.TestCase):
             "merger": {"step": "ready-merge", "signals": {"resets": "changes"}},
         }
         tasks = [
-            tk(id="a", step="review", outcome="rejected"),
-            tk(id="b", step="watch-pr", outcome="ci-failed"),
-            tk(id="c", step="ready-merge", outcome="changes"),
-            tk(id="d", step="ready-merge", outcome="changes"),
-            tk(id="e", step="review", outcome="done"),
+            tk(id="a", step="review", outcome="rejected", model="opus"),
+            tk(id="b", step="watch-pr", outcome="ci-failed", model="sonnet"),
+            tk(id="c", step="ready-merge", outcome="changes", model="sonnet"),
+            tk(id="d", step="ready-merge", outcome="changes", model="sonnet"),
+            tk(id="e", step="review", outcome="done", model="opus"),
         ]
-        self.assertEqual(Signals.from_metas(metas).tally(tasks), {"resets": 4})
+        self.assertEqual(
+            Signals.from_metas(metas).tally(tasks), {"resets": {"opus": 1, "sonnet": 3}}
+        )
 
 
 class TestRetro(unittest.TestCase):

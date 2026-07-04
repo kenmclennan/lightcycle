@@ -231,6 +231,12 @@ class TestClaimTask(unittest.TestCase):
         resp = self._uc(s).execute(ClaimInput(role="coder"))
         self.assertEqual(resp.view.task.id, bid)
 
+    def test_records_model_from_role_frontmatter(self):
+        s = FakeStore()
+        bid = s.create_task("build: x", step="build", role="coder")
+        self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(s.get_task(bid).model, "sonnet")
+
     def test_nothing_ready_returns_none(self):
         self.assertIsNone(self._uc(FakeStore()).execute(ClaimInput(role="coder")))
 

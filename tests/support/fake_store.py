@@ -130,6 +130,12 @@ class FakeStore(StorePort):
     def update_metadata(self, tid, meta):
         self._get(tid)["metadata"] = dict(meta)
 
+    def set_model(self, tid, model):
+        b = self._get(tid)
+        meta = dict(b.get("metadata") or {})
+        meta["model"] = model
+        b["metadata"] = meta
+
     def label_add(self, tid, label):
         b = self._get(tid)
         if label not in b["labels"]:

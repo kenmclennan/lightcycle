@@ -166,6 +166,9 @@ class BdStore(StorePort):
     def update_metadata(self, tid, meta):
         self._run("update", self._qualify(tid), "--metadata", json.dumps(meta))
 
+    def set_model(self, tid, model):
+        self._run("update", self._qualify(tid), "--set-metadata", "model=%s" % model)
+
     def label_add(self, tid, label):
         self._run("label", "add", self._qualify(tid), label)
 

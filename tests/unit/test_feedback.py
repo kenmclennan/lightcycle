@@ -11,6 +11,7 @@ from the_grid.application.feedback import (
     WorklogUseCase,
 )
 from the_grid.application.services.flow import FlowService
+from the_grid.domain.feedback import UNLABELED_MODEL
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -105,7 +106,7 @@ class TestRetroStoryScope(unittest.TestCase):
         k = s.create_task("review: x", step="review", role="reviewer", parent=story)
         s.close(k, "rejected")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=story))
-        self.assertEqual(resp.story_signals[0].signals.get("review_rounds"), 1)
+        self.assertEqual(resp.story_signals[0].signals.get("review_rounds"), {UNLABELED_MODEL: 1})
 
 
 class TestRetroSinceScope(unittest.TestCase):

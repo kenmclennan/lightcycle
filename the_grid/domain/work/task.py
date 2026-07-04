@@ -28,6 +28,7 @@ class Task:
     fired_at: Optional[str] = None
     closed_at: Optional[str] = None
     attention: bool = False
+    model: Optional[str] = None
 
     def classify_for_human(self, flow):
         if not self.step:
@@ -53,4 +54,5 @@ class Task:
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "notes": self.notes, "epic": self.epic, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
+            "model": self.model,
         }
