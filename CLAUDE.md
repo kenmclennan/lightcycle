@@ -43,9 +43,15 @@ fast suite) or `bash tests/run.sh -k <name>`.
 **Iterate on the fast tier; run the full suite before you finish.** The unit tier
 (`bash tests/run.sh tests/unit`) is ~2s and feature is ~0.25s; the integration tier shells out to
 real `bd` per operation and takes minutes. Iterate against the unit tier (plus `-k <name>` on the
-integration test your change touches), and run the full `bash tests/run.sh` before `tg done`. Workers
-run under a managed session that stays alive through long and backgrounded commands, so a
-multi-minute suite completes inline - no need to avoid, background, or bound it.
+integration test your change touches), and run the full `bash tests/run.sh` before `tg done`.
+
+**Run the full suite as a single foreground call and let it block.** The managed session stays alive
+through long foreground commands, so a multi-minute suite completes inline - no need to avoid or bound
+it. Do NOT background the suite and poll for completion: a backgrounded process only reliably gets CPU
+while your turn is active, so polling a background run starves it between turns and makes the suite
+look slow or hung when it is neither. For the same reason, never reach for `caffeinate`, `pmset`, or
+other host power/`sudo` tweaks to "keep it running" - the stall is turn scheduling, not real OS sleep,
+and mutating the host's system state is out of bounds. Foreground, blocking, once.
 
 - `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not
   collected as tests.
