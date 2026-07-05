@@ -76,7 +76,8 @@ def run(root, role, spawnid, model, sysprompt, max_session_seconds):
                 with lock:
                     counters["results"] += 1
 
-    threading.Thread(target=reader, daemon=True).start()
+    reader_thread = threading.Thread(target=reader, daemon=True)
+    reader_thread.start()
     send(KICKOFF % role)
 
     start = time.time()
@@ -110,7 +111,9 @@ def run(root, role, spawnid, model, sysprompt, max_session_seconds):
         time.sleep(2)
         if proc.poll() is None:
             proc.kill()
-    return proc.wait()
+    rc = proc.wait()
+    reader_thread.join(timeout=5)
+    return rc
 
 
 def main():
@@ -133,4 +136,10 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _rc = main()
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except (ValueError, OSError):
+        pass
+    os._exit(_rc if isinstance(_rc, int) else 0)
