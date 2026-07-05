@@ -1,12 +1,30 @@
+import fcntl
 import json
 import os
 import signal
+from contextlib import contextmanager
 
 from the_grid.ports.workers import WorkersPort
 
 
 def workers_path(root):
     return os.path.join(root, "logs", "workers.json")
+
+
+def _lock_path(root):
+    return os.path.join(root, "logs", "workers.lock")
+
+
+@contextmanager
+def registry_lock(root):
+    os.makedirs(os.path.join(root, "logs"), exist_ok=True)
+    fd = os.open(_lock_path(root), os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def workers_state(root):
@@ -21,8 +39,11 @@ def workers_state(root):
 
 def write_workers(root, workers):
     os.makedirs(os.path.join(root, "logs"), exist_ok=True)
-    with open(workers_path(root), "w") as f:
+    p = workers_path(root)
+    tmp = "%s.%d.tmp" % (p, os.getpid())
+    with open(tmp, "w") as f:
         f.write(json.dumps(workers, indent=2))
+    os.replace(tmp, p)
 
 
 def pid_alive(pid):
@@ -40,23 +61,32 @@ def kill(pid):
         pass
 
 
+def register_worker(root, entry):
+    with registry_lock(root):
+        workers = workers_state(root)
+        workers.append(entry)
+        write_workers(root, workers)
+
+
 def prune_workers(root, keep_dead):
-    workers = workers_state(root)
-    dead_idx = [i for i, w in enumerate(workers) if not pid_alive(w.get("pid", -1))]
-    n_drop = max(0, len(dead_idx) - keep_dead)
-    if not n_drop:
-        return 0
-    drop = set(dead_idx[:n_drop])
-    write_workers(root, [w for i, w in enumerate(workers) if i not in drop])
-    return n_drop
+    with registry_lock(root):
+        workers = workers_state(root)
+        dead_idx = [i for i, w in enumerate(workers) if not pid_alive(w.get("pid", -1))]
+        n_drop = max(0, len(dead_idx) - keep_dead)
+        if not n_drop:
+            return 0
+        drop = set(dead_idx[:n_drop])
+        write_workers(root, [w for i, w in enumerate(workers) if i not in drop])
+        return n_drop
 
 
 def set_task(root, spawnid, task):
-    workers = workers_state(root)
-    for w in workers:
-        if w.get("spawnid") == spawnid:
-            w["task"] = task
-    write_workers(root, workers)
+    with registry_lock(root):
+        workers = workers_state(root)
+        for w in workers:
+            if w.get("spawnid") == spawnid:
+                w["task"] = task
+        write_workers(root, workers)
 
 
 class WorkersAdapter(WorkersPort):

@@ -6,7 +6,7 @@ import time
 import uuid
 
 from the_grid.adapters import fsio
-from the_grid.adapters.workers import workers_state, write_workers
+from the_grid.adapters.workers import register_worker
 from the_grid.ports.spawner import SpawnerPort
 
 
@@ -34,8 +34,8 @@ def spawn_worker(config, role):
     else:
         cmd = [sys.executable, "-m", "the_grid.adapters.worker_session"]
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=root, env=env)
-    workers = workers_state(root)
-    workers.append(
+    register_worker(
+        root,
         {
             "spawnid": spawnid,
             "role": role,
@@ -43,9 +43,8 @@ def spawn_worker(config, role):
             "log": log,
             "task": None,
             "started": time.time(),
-        }
+        },
     )
-    write_workers(root, workers)
     return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
 
 
