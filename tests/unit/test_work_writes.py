@@ -132,7 +132,7 @@ class TestEditTask(unittest.TestCase):
 
     def test_edits_parent_alone(self):
         s = FakeStore()
-        epic = s.create_story("my epic")
+        epic = s.create_epic("my epic")
         tid = s.create_task("a task", role="human")
         EditTaskUseCase(s).execute(EditTaskInput(task=tid, parent=epic))
         t = s.get_task(tid)
@@ -140,7 +140,7 @@ class TestEditTask(unittest.TestCase):
 
     def test_edits_parent_and_title_together(self):
         s = FakeStore()
-        epic = s.create_story("my epic")
+        epic = s.create_epic("my epic")
         tid = s.create_task("old title", role="human")
         EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="new title", parent=epic))
         t = s.get_task(tid)
@@ -149,7 +149,7 @@ class TestEditTask(unittest.TestCase):
 
     def test_omitting_parent_leaves_parentage_unchanged(self):
         s = FakeStore()
-        epic = s.create_story("my epic")
+        epic = s.create_epic("my epic")
         tid = s.create_task("a task", role="human", parent=epic)
         EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="renamed"))
         t = s.get_task(tid)
@@ -159,7 +159,7 @@ class TestEditTask(unittest.TestCase):
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
         s = FakeStore()
-        sid = s.create_story("st")
+        sid = s.create_story("st", epic=s.create_epic("epic"))
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(story=sid, atype="pr", value="http://x/1", label="PR 1")
         )
@@ -172,7 +172,7 @@ class TestLinkArtifact(unittest.TestCase):
 class TestCloseStory(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):
         s = FakeStore()
-        sid = s.create_story("st")
+        sid = s.create_story("st", epic=s.create_epic("epic"))
         k = s.create_task("build: x", step="build", role="coder", parent=sid)
         wt = FakeWorktrees()
         CloseStoryUseCase(s, wt).execute(CloseStoryInput(story=sid, reason="merged"))
@@ -184,7 +184,7 @@ class TestCloseStory(unittest.TestCase):
 class TestCloseEpic(unittest.TestCase):
     def test_closes_epic_when_all_children_closed(self):
         s = FakeStore()
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         child = s.create_story("story", epic=epic)
         s.close(child, "merged")
         CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
@@ -192,7 +192,7 @@ class TestCloseEpic(unittest.TestCase):
 
     def test_refuses_with_open_child_and_names_it(self):
         s = FakeStore()
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         child = s.create_story("story", epic=epic)
         with self.assertRaises(UseCaseError) as ctx:
             CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
@@ -201,7 +201,7 @@ class TestCloseEpic(unittest.TestCase):
 
     def test_refuses_leaves_epic_open_with_mixed_children(self):
         s = FakeStore()
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         closed = s.create_story("done story", epic=epic)
         open_ = s.create_story("open story", epic=epic)
         s.close(closed, "merged")
@@ -212,10 +212,30 @@ class TestCloseEpic(unittest.TestCase):
         self.assertEqual(s.get_task(epic).status, "ready")
 
 
+class TestCloseEpicBacklogResolution(unittest.TestCase):
+    def test_closes_linked_backlog_item_on_epic_close(self):
+        s = FakeStore()
+        backlog = s.create_task("a backlog item", role="human")
+        epic = s.create_epic("my epic")
+        s.add_artifact(epic, "backlog", backlog)
+        child = s.create_story("story", epic=epic)
+        s.close(child, "merged")
+        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        self.assertEqual(s.get_task(backlog).status, "done")
+
+    def test_no_backlog_link_is_a_no_op(self):
+        s = FakeStore()
+        epic = s.create_epic("my epic")
+        child = s.create_story("story", epic=epic)
+        s.close(child, "merged")
+        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        self.assertEqual(s.get_task(epic).status, "done")
+
+
 class TestCloseEpicWithRetro(unittest.TestCase):
     def _setup(self, feedback=None):
         s = FakeStore()
-        epic = s.create_story("my epic")
+        epic = s.create_epic("my epic")
         story = s.create_story("child story", epic=epic)
         task = s.create_task("build: x", step="build", role="coder", parent=story)
         if feedback:
@@ -274,7 +294,7 @@ class TestCloseEpicWithRetro(unittest.TestCase):
 
     def test_refusal_skips_retro_and_leaves_no_artifact(self):
         s = FakeStore()
-        epic = s.create_story("my epic")
+        epic = s.create_epic("my epic")
         s.create_story("open story", epic=epic)
         with self.assertRaises(UseCaseError):
             CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
@@ -284,7 +304,7 @@ class TestCloseEpicWithRetro(unittest.TestCase):
 class TestCloseEpicOnEpicClose(unittest.TestCase):
     def _setup(self):
         s = FakeStore()
-        epic = s.create_story("my epic")
+        epic = s.create_epic("my epic")
         child = s.create_story("child story", epic=epic)
         s.close(child, "merged")
         return s, epic
@@ -345,7 +365,7 @@ class TestCloseEpicOnEpicClose(unittest.TestCase):
 class TestWorktreeServiceStoryBranch(unittest.TestCase):
     def test_none_then_branch_artifact(self):
         s = FakeStore()
-        sid = s.create_story("st")
+        sid = s.create_story("st", epic=s.create_epic("epic"))
         svc = WorktreeService(s, None, None, None)
         self.assertIsNone(svc.story_branch(sid))
         s.add_artifact(sid, "branch", "feat/x")
@@ -357,9 +377,10 @@ class TestFileStory(unittest.TestCase):
         fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
         flow = FlowService(fs, store)
         git = FakeGit(repos={"/projects/app"})
+        epic = store.create_epic("epic")
         return (
             FileStoryUseCase(store, flow, git, fs, FakeConfig("/projects"))
-            .execute(FileStoryInput(spec="specs/x.md", step="build", repo=repo))
+            .execute(FileStoryInput(spec="specs/x.md", step="build", epic=epic, repo=repo))
             .story
         )
 
@@ -379,7 +400,7 @@ class TestFileStory(unittest.TestCase):
         fs = FakeFs(metas=METAS)
         with self.assertRaises(UseCaseError):
             FileStoryUseCase(s, FlowService(fs, s), FakeGit(), fs, FakeConfig()).execute(
-                FileStoryInput(spec="specs/x.md", step="nonexistent")
+                FileStoryInput(spec="specs/x.md", step="nonexistent", epic=s.create_epic("epic"))
             )
 
     def test_unknown_repo_raises_with_available(self):
@@ -387,6 +408,37 @@ class TestFileStory(unittest.TestCase):
         with self.assertRaises(UseCaseError) as ctx:
             self._file(s, repo="missing")
         self.assertIn("app", str(ctx.exception))
+
+    def _use_case(self, store):
+        fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
+        return FileStoryUseCase(store, FlowService(fs, store), FakeGit(), fs, FakeConfig("/projects"))
+
+    def test_missing_epic_raises(self):
+        s = FakeStore()
+        with self.assertRaises(UseCaseError):
+            self._use_case(s).execute(FileStoryInput(spec="specs/x.md", step="build", epic=None))
+
+    def test_unknown_epic_raises(self):
+        s = FakeStore()
+        with self.assertRaises(UseCaseError):
+            self._use_case(s).execute(
+                FileStoryInput(spec="specs/x.md", step="build", epic="does-not-exist")
+            )
+
+    def test_non_epic_parent_raises(self):
+        s = FakeStore()
+        not_an_epic = s.create_task("just a task", role="human")
+        with self.assertRaises(UseCaseError):
+            self._use_case(s).execute(
+                FileStoryInput(spec="specs/x.md", step="build", epic=not_an_epic)
+            )
+
+    def test_closed_epic_raises(self):
+        s = FakeStore()
+        epic = s.create_epic("epic")
+        s.close(epic, "done")
+        with self.assertRaises(UseCaseError):
+            self._use_case(s).execute(FileStoryInput(spec="specs/x.md", step="build", epic=epic))
 
     def test_available_repos_includes_nested_repo(self):
         fs = FakeFs(
@@ -412,36 +464,40 @@ class TestFileStory(unittest.TestCase):
         )
         s = FakeStore()
         git = FakeGit(repos={"/projects/app", "/projects/group/svc"})
+        epic = s.create_epic("epic")
         story = (
             FileStoryUseCase(s, FlowService(fs, s), git, fs, FakeConfig("/projects"))
-            .execute(FileStoryInput(spec="specs/x.md", step="build", repo="group/svc"))
+            .execute(FileStoryInput(spec="specs/x.md", step="build", epic=epic, repo="group/svc"))
             .story
         )
         self.assertIn("repo", [a.type for a in s.story_artifacts(story)])
 
 
 class TestFileStoryAtomicity(unittest.TestCase):
-    def _file(self, store, repo=None, blocked_by=None):
+    def _file(self, store, epic, repo=None, blocked_by=None):
         fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
         flow = FlowService(fs, store)
         git = FakeGit(repos={"/projects/app"})
         return FileStoryUseCase(store, flow, git, fs, FakeConfig("/projects")).execute(
-            FileStoryInput(spec="specs/x.md", step="build", repo=repo, blocked_by=blocked_by)
+            FileStoryInput(spec="specs/x.md", step="build", epic=epic, repo=repo, blocked_by=blocked_by)
         )
 
     def test_spec_artifact_failure_leaves_no_story(self):
         s = FakeStore()
+        epic = s.create_epic("epic")
 
         def boom(story_id, atype, value, label=None):
             raise RuntimeError("boom")
 
         s.add_artifact = boom
         with self.assertRaises(RuntimeError):
-            self._file(s)
-        self.assertEqual(s._records, {})
+            self._file(s, epic)
+        remaining = {k: v for k, v in s._records.items() if k != epic}
+        self.assertEqual(remaining, {})
 
     def test_repo_artifact_failure_leaves_no_story(self):
         s = FakeStore()
+        epic = s.create_epic("epic")
         orig_add_artifact = s.add_artifact
 
         def maybe_boom(story_id, atype, value, label=None):
@@ -451,22 +507,26 @@ class TestFileStoryAtomicity(unittest.TestCase):
 
         s.add_artifact = maybe_boom
         with self.assertRaises(RuntimeError):
-            self._file(s, repo="app")
-        self.assertEqual(s._records, {})
+            self._file(s, epic, repo="app")
+        remaining = {k: v for k, v in s._records.items() if k != epic}
+        self.assertEqual(remaining, {})
 
     def test_task_creation_failure_leaves_no_story(self):
         s = FakeStore()
+        epic = s.create_epic("epic")
 
         def boom(*args, **kwargs):
             raise RuntimeError("boom")
 
         s.create_task = boom
         with self.assertRaises(RuntimeError):
-            self._file(s)
-        self.assertEqual(s._records, {})
+            self._file(s, epic)
+        remaining = {k: v for k, v in s._records.items() if k != epic}
+        self.assertEqual(remaining, {})
 
     def test_dep_add_failure_leaves_no_story_or_task(self):
         s = FakeStore()
+        epic = s.create_epic("epic")
         blocker = s.create_task("blocker task", role="coder")
 
         def boom(task_id, blocked_by):
@@ -474,15 +534,15 @@ class TestFileStoryAtomicity(unittest.TestCase):
 
         s.dep_add = boom
         with self.assertRaises(RuntimeError):
-            self._file(s, blocked_by=[blocker])
-        remaining = {k: v for k, v in s._records.items() if k != blocker}
+            self._file(s, epic, blocked_by=[blocker])
+        remaining = {k: v for k, v in s._records.items() if k not in (blocker, epic)}
         self.assertEqual(remaining, {})
 
 
 class TestWorktreeServiceRemove(unittest.TestCase):
     def test_remove_requests_remote_branch_delete(self):
         s = FakeStore()
-        sid = s.create_story("my story")
+        sid = s.create_story("my story", epic=s.create_epic("epic"))
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
         git = FakeGitRemove(repos={"/projects/app"})
@@ -492,7 +552,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
 
     def test_remove_skips_remote_delete_when_not_git_repo(self):
         s = FakeStore()
-        sid = s.create_story("my story")
+        sid = s.create_story("my story", epic=s.create_epic("epic"))
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
         git = FakeGitRemove(repos=set())

@@ -34,6 +34,8 @@ from the_grid.application.work import (
     InboxUseCase,
     LinkArtifactInput,
     LinkArtifactUseCase,
+    OpenEpicInput,
+    OpenEpicUseCase,
     QueueInput,
     QueueUseCase,
     ShowTaskInput,
@@ -138,7 +140,9 @@ COMMAND_GROUPS = [
         ("worklog", "[start] [end]", "stories shipped in a period (today, yesterday, YYYY-MM-DD)"),
     ]),
     ("Drive work in", [
-        ("file", "<spec> --step <step> [--repo/--epic/--project/--goal/--blocked-by]",
+        ("epic", '"<objective>" [--backlog <id>] [--project <p>]',
+         "open an epic: the objective container a story files under"),
+        ("file", "<spec> --step <step> --epic <id> [--repo/--project/--goal/--blocked-by]",
          "create a story (for one repo) from a spec + its first task at <step>"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
         ("add", '"<title>" [--description/--goal/--project/--inbox]', "create a standalone human task (no spec/flow); --inbox surfaces it in tg inbox immediately"),
@@ -447,7 +451,9 @@ def cmd_close(argv):
     ap.add_argument("reason")
     a = ap.parse_args(argv)
     children = _container.store.children(a.story)
-    is_epic = any(c.type == "story" for c in children)
+    is_epic = _container.store.get_task(a.story).type == "epic" or any(
+        c.type == "story" for c in children
+    )
     try:
         if is_epic:
             resp = CloseEpicUseCase(_container.store, _flow()).execute(
@@ -569,11 +575,28 @@ def cmd_queue(argv):
     return 0
 
 
+def cmd_epic(argv):
+    ap = argparse.ArgumentParser(prog="tg epic")
+    ap.add_argument("objective")
+    ap.add_argument("--backlog")
+    ap.add_argument("--project")
+    a = ap.parse_args(argv)
+    try:
+        resp = OpenEpicUseCase(_container.store).execute(
+            OpenEpicInput(objective=a.objective, backlog=a.backlog, project=a.project)
+        )
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print(resp.epic)
+    return 0
+
+
 def cmd_file(argv):
     ap = argparse.ArgumentParser(prog="tg file")
     ap.add_argument("spec")
     ap.add_argument("--step", required=True)
-    ap.add_argument("--epic")
+    ap.add_argument("--epic", required=True)
     ap.add_argument("--project")
     ap.add_argument("--goal")
     ap.add_argument("--repo")

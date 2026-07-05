@@ -104,6 +104,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def create_epic(self, title, *, project=None, goal=None):
+        pass
+
+    @abstractmethod
     def children(self, story_id):
         pass
 

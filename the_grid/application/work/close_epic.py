@@ -21,6 +21,12 @@ class CloseEpicUseCase:
         self._store = store
         self._flow = flow
 
+    def _linked_backlog(self, epic):
+        for artifact in self._store.story_artifacts(epic):
+            if artifact.type == "backlog":
+                return artifact.value
+        return None
+
     def execute(self, input: CloseEpicInput) -> CloseEpicResponse:
         children = self._store.children(input.epic)
         open_stories = [c for c in children if c.type == "story" and c.status != "done"]
@@ -30,6 +36,9 @@ class CloseEpicUseCase:
                 "epic %s has open stories: %s - close or abandon them first" % (input.epic, ids)
             )
         self._store.close(input.epic, input.reason)
+        backlog = self._linked_backlog(input.epic)
+        if backlog:
+            self._store.close(backlog, "resolved by epic close: %s" % input.epic)
         retro = RetroUseCase(self._store, self._flow).execute(RetroInput(subject=input.epic))
         digest = json.dumps(
             {

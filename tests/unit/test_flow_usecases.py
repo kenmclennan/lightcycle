@@ -127,7 +127,7 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_missing_required_output_raises(self):
         s = FakeStore()
-        story = s.create_story("st")
+        story = s.create_story("st", epic=s.create_epic("epic"))
         rid = s.create_task("review: x", step="review", role="reviewer", parent=story)
         with self.assertRaises(UseCaseError):
             CompleteTaskUseCase(s, flow_for(METAS, s)).execute(
@@ -205,7 +205,7 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
 
     def test_conflicted_outcome_closes_without_a_pr_and_routes_to_resolve(self):
         s = FakeStore()
-        story = s.create_story("st")
+        story = s.create_story("st", epic=s.create_epic("epic"))
         tid = s.create_task("open-pr: x", step="open-pr", role="open-pr", parent=story)
         resp = self._uc(s).execute(CompleteInput(task=tid, outcome="conflicted"))
         self.assertEqual(s.get_task(tid).status, "done")
@@ -213,7 +213,7 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
 
     def test_done_outcome_still_requires_a_pr(self):
         s = FakeStore()
-        story = s.create_story("st")
+        story = s.create_story("st", epic=s.create_epic("epic"))
         tid = s.create_task("open-pr: x", step="open-pr", role="open-pr", parent=story)
         with self.assertRaises(UseCaseError):
             self._uc(s).execute(CompleteInput(task=tid, outcome="done"))
@@ -260,7 +260,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_resolves_spec_path_against_specs_root(self):
         s = FakeStore()
-        story = s.create_story("st")
+        story = s.create_story("st", epic=s.create_epic("epic"))
         s.add_artifact(story, "spec", "specs/X.md")
         s.create_task("build: x", step="build", role="coder", parent=story)
         resp = self._uc(s).execute(ClaimInput(role="coder"))

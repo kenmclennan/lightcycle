@@ -50,12 +50,12 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_stories_excluded_from_ready(self):
         s = self.make_store()
-        s.create_story("story: foo")
+        s.create_story("story: foo", epic=s.create_epic("epic"))
         self.assertEqual(s.ready_tasks(), [])
 
     def test_children_returns_child_records(self):
         s = self.make_store()
-        sid = s.create_story("story: foo")
+        sid = s.create_story("story: foo", epic=s.create_epic("epic"))
         tid = s.create_task("task: t", parent=sid)
         kids = s.children(sid)
         self.assertEqual(len(kids), 1)
@@ -63,7 +63,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_task_view_inherits_story_artifacts(self):
         s = self.make_store()
-        sid = s.create_story("story: foo")
+        sid = s.create_story("story: foo", epic=s.create_epic("epic"))
         tid = s.create_task("task: t", parent=sid)
         s.add_artifact(sid, "branch", "feat/foo")
         view = s.task_view(tid)
@@ -82,7 +82,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_closed_stories_roundtrip(self):
         s = self.make_store()
-        sid = s.create_story("story: foo")
+        sid = s.create_story("story: foo", epic=s.create_epic("epic"))
         s.add_artifact(sid, "spec", "specs/foo.md")
         s.close(sid, "done")
         stories = s.closed_stories()

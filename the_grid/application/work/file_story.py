@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from the_grid.application.errors import UseCaseError
 from the_grid.domain.contracts import FILE_PROVIDES, StepContract
+from the_grid.domain.work.status import Status
 
 _NESTED_REPO_MAX_DEPTH = 2
 
@@ -12,7 +13,7 @@ _NESTED_REPO_MAX_DEPTH = 2
 class FileStoryInput:
     spec: str
     step: str
-    epic: Optional[str] = None
+    epic: str
     project: Optional[str] = None
     goal: Optional[str] = None
     repo: Optional[str] = None
@@ -51,6 +52,20 @@ class FileStoryUseCase:
             elif depth < _NESTED_REPO_MAX_DEPTH:
                 self._collect_repos(child_abs, child_rel, depth + 1, found)
 
+    def _require_open_epic(self, epic_id):
+        if not epic_id:
+            raise UseCaseError(
+                "tg file requires --epic <id>; open one with `tg epic \"<objective>\"`"
+            )
+        try:
+            epic = self._store.get_task(epic_id)
+        except KeyError:
+            raise UseCaseError("unknown epic '%s'" % epic_id)
+        if epic.type != "epic":
+            raise UseCaseError("'%s' is not an epic (type=%s)" % (epic_id, epic.type))
+        if epic.status == Status.DONE:
+            raise UseCaseError("epic '%s' is already closed" % epic_id)
+
     def execute(self, input: FileStoryInput) -> FileStoryResponse:
         flow = self._flow.load_flow()
         role = flow.owner_of(input.step)
@@ -67,6 +82,7 @@ class FileStoryUseCase:
                 "step '%s' requires %s; a filed story only carries a spec. "
                 "File at an entry step." % (input.step, ", ".join(sorted(unmet)))
             )
+        self._require_open_epic(input.epic)
         if input.repo and not self._git.is_git_repo(self._repo_path(input.repo)):
             avail = ", ".join(self._available_repos()) or "(none)"
             raise UseCaseError("unknown repo '%s'; available repos: %s" % (input.repo, avail))

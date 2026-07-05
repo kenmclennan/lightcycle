@@ -133,7 +133,7 @@ class FakeWorktrees:
 class TestMonitorPrsMerged(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()
-        story = store.create_story("my feature")
+        story = store.create_story("my feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", pr_url)
         task = store.create_task(
             "ready-merge: my feature", step="ready-merge", role="human", parent=story
@@ -176,7 +176,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_already_closed_story_task_is_skipped(self):
         url = "https://github.com/x/y/pull/4"
         store = FakeStore()
-        story = store.create_story("done feature")
+        story = store.create_story("done feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task(
             "ready-merge: done feature", step="ready-merge", role="human", parent=story
@@ -191,7 +191,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
     def test_task_without_pr_artifact_is_skipped(self):
         store = FakeStore()
-        story = store.create_story("no-pr feature")
+        story = store.create_story("no-pr feature", epic=store.create_epic("epic"))
         store.create_task(
             "ready-merge: no-pr feature", step="ready-merge", role="human", parent=story
         )
@@ -225,7 +225,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         )
         url = "https://github.com/x/y/pull/99"
         store = FakeStore()
-        story = store.create_story("ship it")
+        story = store.create_story("ship it", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         store.create_task("await-ship: ship it", step="await-ship", role="human", parent=story)
         worktrees = FakeWorktrees()
@@ -241,7 +241,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 class TestMonitorPrsClosedUnmerged(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()
-        story = store.create_story("abandoned feature")
+        story = store.create_story("abandoned feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", pr_url)
         task = store.create_task(
             "ready-merge: abandoned feature", step="ready-merge", role="human", parent=story
@@ -302,7 +302,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         )
         url = "https://github.com/x/y/pull/20"
         store = FakeStore()
-        story = store.create_story("cancelled work")
+        story = store.create_story("cancelled work", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         store.create_task(
             "await-ship: cancelled work", step="await-ship", role="human", parent=story
@@ -332,7 +332,7 @@ class TestMonitorPrsRework(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         f = flow or _REWORK_ONLY_FLOW
         store = FakeStore()
-        story = store.create_story("in-review feature")
+        story = store.create_story("in-review feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", pr_url)
         task = store.create_task(
             "ready-merge: in-review feature", step="ready-merge", role="human", parent=story
@@ -485,7 +485,7 @@ class TestMonitorPrsRework(unittest.TestCase):
         )
         url = "https://github.com/x/y/pull/38"
         store = FakeStore()
-        story = store.create_story("arbitrary rework")
+        story = store.create_story("arbitrary rework", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task(
             "await-ship: arbitrary rework", step="await-ship", role="human", parent=story
@@ -519,7 +519,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None, prior_conflicts=0):
         f = flow or _CONFLICT_FLOW
         store = FakeStore()
-        story = store.create_story("conflicting feature")
+        story = store.create_story("conflicting feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", pr_url)
         for _ in range(prior_conflicts):
             old = store.create_task("watch-step: conflicting feature", step="watch-step",
@@ -593,7 +593,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
             }
         })
         store = FakeStore()
-        story = store.create_story("arbitrary")
+        story = store.create_story("arbitrary", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task("await-green: arbitrary", step="await-green",
                                  role="sentinel", parent=story)
@@ -643,7 +643,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
     def test_conflict_fires_when_step_also_declares_rework(self):
         url = "https://github.com/x/y/pull/59"
         store = FakeStore()
-        story = store.create_story("quad feature")
+        story = store.create_story("quad feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task("watch-pr: quad feature", step="watch-pr", role="reviewer",
                                  parent=story)
@@ -660,7 +660,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
     def test_rework_wins_over_conflict_when_both_conditions_true(self):
         url = "https://github.com/x/y/pull/60"
         store = FakeStore()
-        story = store.create_story("both quad feature")
+        story = store.create_story("both quad feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task("watch-pr: both quad feature", step="watch-pr", role="reviewer",
                                  parent=story)
@@ -692,7 +692,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
             },
         })
         store = FakeStore()
-        story = store.create_story("no-cap feature")
+        story = store.create_story("no-cap feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         for _ in range(5):
             old = store.create_task("watch-step: no-cap feature", step="watch-step",
@@ -747,7 +747,7 @@ class TestTickWithMonitor(unittest.TestCase):
     def test_tick_runs_monitor_and_returns_merged(self):
         url = "https://github.com/x/y/pull/5"
         store = FakeStore()
-        story = store.create_story("merge me")
+        story = store.create_story("merge me", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         store.create_task("ready-merge: merge me", step="ready-merge", role="human", parent=story)
         worktrees = FakeWorktrees()
@@ -763,7 +763,7 @@ class TestTickWithMonitor(unittest.TestCase):
     def test_tick_runs_monitor_and_returns_abandoned(self):
         url = "https://github.com/x/y/pull/6"
         store = FakeStore()
-        story = store.create_story("abandoned me")
+        story = store.create_story("abandoned me", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         store.create_task(
             "ready-merge: abandoned me", step="ready-merge", role="human", parent=story

@@ -37,7 +37,7 @@ def _flow_without_cadence(store):
 
 
 def _close_epic(store, title, closed_date_str):
-    eid = store.create_story(title)
+    eid = store.create_epic(title)
     store.close(eid, "done")
     store._records[eid]["closed_at"] = closed_date_str + "T12:00:00.000000"
     return eid

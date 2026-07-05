@@ -32,7 +32,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_story_artifacts_roundtrip(self):
         s = self._store()
-        sid = s.create_story("story: foo")
+        sid = s.create_story("story: foo", epic=s.create_epic("epic"))
         s.add_artifact(sid, "spec", "specs/foo.md", "the spec")
         arts = s.story_artifacts(sid)
         self.assertEqual(
@@ -88,29 +88,29 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_tasks_closed_since_excludes_stories(self):
         s = self._store()
-        sid = s.create_story("closed story")
+        sid = s.create_story("closed story", epic=s.create_epic("epic"))
         s.close(sid, "merged")
         results = s.tasks_closed_since("2000-01-01")
         self.assertNotIn(sid, [t.id for t in results])
 
-    def test_last_n_closed_epics_returns_top_level_closed_stories(self):
+    def test_last_n_closed_epics_returns_closed_epics(self):
         s = self._store()
-        epic1 = s.create_story("epic1")
+        epic1 = s.create_epic("epic1")
         s.close(epic1, "merged")
-        epic2 = s.create_story("epic2")
+        epic2 = s.create_epic("epic2")
         s.close(epic2, "merged")
         results = s.last_n_closed_epics(1)
         self.assertEqual(len(results), 1)
 
-    def test_last_n_closed_epics_excludes_open_stories(self):
+    def test_last_n_closed_epics_excludes_open_epics(self):
         s = self._store()
-        s.create_story("open epic")
+        s.create_epic("open epic")
         results = s.last_n_closed_epics(10)
         self.assertEqual(results, [])
 
     def test_last_n_closed_epics_excludes_nested_stories(self):
         s = self._store()
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         child = s.create_story("child story", epic=epic)
         s.close(epic, "merged")
         s.close(child, "merged")

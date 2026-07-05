@@ -1,14 +1,3 @@
-"""RetroCadence: cadence-triggered cross-epic trend audit.
-
-Each tick, for each step declaring on_retro_cadence, check whether the interval
-has elapsed AND enough epics have closed since the last fire. If both hold, create
-a task at that step with {"since": <last_fire_date>, "fired_at": <today>} in its
-metadata. The auditor reads `since` to run `tg retro --since <since>`.
-
-Last-fire is store-derived: max fired_at across all tasks at the cadence step that
-have fired_at set; if none, the oldest closed epic's closed_at date. Stateless and
-restart-safe.
-"""
 import datetime
 from dataclasses import dataclass, field
 from typing import List, Optional

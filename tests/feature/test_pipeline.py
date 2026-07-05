@@ -32,7 +32,9 @@ def _flow(ctx):
 
 @given(parsers.parse('the story "{spec}" is filed at step "{step}"'))
 def _filed(ctx, spec, step):
-    rc, out, err = ctx["h"].run("file", spec, "--step", step)
+    rc, epic, err = ctx["h"].run("epic", "objective for %s" % spec)
+    assert rc == 0, err
+    rc, out, err = ctx["h"].run("file", spec, "--step", step, "--epic", epic.strip())
     assert rc == 0, err
     ctx["story"] = out.strip()
 
@@ -46,7 +48,11 @@ def _has_claimed(ctx):
 
 @when(parsers.parse('I file the story "{spec}" at step "{step}"'))
 def _file(ctx, spec, step):
-    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("file", spec, "--step", step)
+    rc, epic, err = ctx["h"].run("epic", "objective for %s" % spec)
+    assert rc == 0, err
+    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run(
+        "file", spec, "--step", step, "--epic", epic.strip()
+    )
 
 
 @when("the coder claims the next task")

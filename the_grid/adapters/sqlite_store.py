@@ -448,11 +448,23 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def create_story(self, title, *, epic=None, project=None, goal=None, id=None):
+        if not epic:
+            raise ValueError("story requires an epic parent")
         tid = self._mint_or_adopt(id, epic)
         self._conn.execute(
             "INSERT INTO tasks (id, type, title, status, parent, project, goal, created_at) "
             "VALUES (?, 'story', ?, 'open', ?, ?, ?, ?)",
             (tid, title, epic, project, goal, datetime.datetime.now().isoformat()),
+        )
+        self._conn.commit()
+        return tid
+
+    def create_epic(self, title, *, project=None, goal=None, id=None):
+        tid = self._mint_or_adopt(id, None)
+        self._conn.execute(
+            "INSERT INTO tasks (id, type, title, status, project, goal, created_at) "
+            "VALUES (?, 'epic', ?, 'open', ?, ?, ?)",
+            (tid, title, project, goal, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
         return tid
@@ -477,14 +489,14 @@ class SqliteStore(StorePort):
 
     def last_n_closed_epics(self, n):
         return self._select(
-            "type = 'story' AND status = 'closed' AND parent IS NULL",
+            "type = 'epic' AND status = 'closed'",
             params=(n,),
             suffix="ORDER BY closed_at DESC LIMIT ?",
         )
 
     def epics_closed_since(self, since_date_str):
         return self._select(
-            "type = 'story' AND status = 'closed' AND parent IS NULL "
+            "type = 'epic' AND status = 'closed' "
             "AND substr(closed_at, 1, 10) >= ? "
             "AND id NOT IN (SELECT task_id FROM labels WHERE label = 'retro-origin')",
             (since_date_str,),

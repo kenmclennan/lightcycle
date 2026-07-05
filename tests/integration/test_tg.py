@@ -624,7 +624,7 @@ class TestArtifacts(unittest.TestCase):
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
 
     def test_add_and_read_artifacts_append(self):
-        sid = self.store.create_story("story s")
+        sid = self.store.create_story("story s", epic=self.store.create_epic("epic"))
         self.store.add_artifact(sid, "spec", "specs/X.md")
         self.store.add_artifact(sid, "pr", "https://gh/9", "PR 9")
         arts = self.store.story_artifacts(sid)
@@ -661,7 +661,7 @@ class TestLink(unittest.TestCase):
         _fake_setUp(self)
 
     def test_link_appends_artifact(self):
-        sid = self.store.create_story("story s")
+        sid = self.store.create_story("story s", epic=self.store.create_epic("epic"))
         rc, out, err = call(_cli_mod.cmd_link, sid, "pr", "https://gh/9", "--label", "PR 9")
         self.assertEqual(rc, 0, err)
         arts = self.store.story_artifacts(sid)
@@ -675,7 +675,7 @@ class TestModelV2(unittest.TestCase):
         _fake_setUp(self)
 
     def test_task_exposes_type_parent_and_parent_artifacts(self):
-        epic = self.store.create_story("epic e")
+        epic = self.store.create_epic("epic e")
         story = self.store.create_story("story s", epic=epic)
         self.store.update_metadata(story, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
         task = self.store.create_task("build: b", step="build", role="coder", parent=story)
@@ -686,12 +686,39 @@ class TestModelV2(unittest.TestCase):
         self.assertEqual(v["story_artifacts"][0]["value"], "specs/X.md")
 
 
+class TestEpicCommand(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_epic_creates_epic_and_prints_id(self):
+        rc, out, err = call(_cli_mod.cmd_epic, "ship the thing")
+        self.assertEqual(rc, 0, err)
+        eid = out.strip()
+        self.assertTrue(eid)
+        self.assertEqual(self.store.get_task(eid).type, "epic")
+
+    def test_epic_links_backlog(self):
+        rc, out, _ = call(_cli_mod.cmd_add, "a backlog item")
+        backlog = out.strip()
+        rc2, out2, err2 = call(_cli_mod.cmd_epic, "ship the thing", "--backlog", backlog)
+        self.assertEqual(rc2, 0, err2)
+        eid = out2.strip()
+        arts = self.store.story_artifacts(eid)
+        self.assertEqual([(a.type, a.value) for a in arts], [("backlog", backlog)])
+
+    def test_epic_unknown_backlog_errors(self):
+        rc, _, err = call(_cli_mod.cmd_epic, "ship the thing", "--backlog", "does-not-exist")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("does-not-exist", err)
+
+
 class TestFileStory(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, steps=True)
 
     def test_file_creates_story_with_spec_and_build_task(self):
-        rc, out, err = call(_cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build", "--epic", epic)
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         self.assertTrue(sid)
@@ -702,8 +729,16 @@ class TestFileStory(unittest.TestCase):
         rc2, out2, _ = call(_cli_mod.cmd_show, kids[0].id)
         self.assertEqual(json.loads(out2)["step"], "build")
 
+    def test_file_requires_valid_epic(self):
+        rc, _, err = call(
+            _cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build", "--epic", "does-not-exist"
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn("does-not-exist", err)
+
     def test_advance_parents_next_task_to_same_story(self):
-        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
         sid = out.strip()
         build = self.store.children(sid)[0].id
         self.store.close(build, "done")
@@ -721,9 +756,10 @@ class TestFileBlockedBy(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_blocked_by_creates_dependency_on_first_task(self):
+        epic = self.store.create_epic("epic")
         gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
         rc, out, err = call(
-            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--blocked-by", gate
+            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic, "--blocked-by", gate
         )
         self.assertEqual(rc, 0, err)
         sid = out.strip()
@@ -732,8 +768,9 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertIn(gate, self.store._deps.get(task_id, set()))
 
     def test_blocked_task_not_claimable_until_gate_closes(self):
+        epic = self.store.create_epic("epic")
         gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
-        call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--blocked-by", gate)
+        call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic, "--blocked-by", gate)
         rc, out, _ = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(out.strip(), "")
         self.store.close(gate, "approved")
@@ -741,6 +778,7 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertTrue(out2.strip())
 
     def test_multiple_blocked_by_ids(self):
+        epic = self.store.create_epic("epic")
         gate1 = self.store.create_task("gate1", role="human")
         gate2 = self.store.create_task("gate2", role="human")
         rc, out, _ = call(
@@ -748,6 +786,8 @@ class TestFileBlockedBy(unittest.TestCase):
             "specs/X.md",
             "--step",
             "build",
+            "--epic",
+            epic,
             "--blocked-by",
             gate1,
             "--blocked-by",
@@ -765,7 +805,8 @@ class TestClaimArtifacts(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_claim_surfaces_story_artifacts(self):
-        call(_cli_mod.cmd_file, "specs/Y.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        call(_cli_mod.cmd_file, "specs/Y.md", "--step", "build", "--epic", epic)
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
@@ -781,7 +822,8 @@ class TestTrace(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_trace_shows_story_artifacts_and_tasks(self):
-        rc, out, err = call(_cli_mod.cmd_file, "specs/Z.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/Z.md", "--step", "build", "--epic", epic)
         sid = out.strip()
         rc2, out2, err2 = call(_cli_mod.cmd_trace, sid, "--json")
         self.assertEqual(rc2, 0, err2)
@@ -854,12 +896,14 @@ class TestFileStep(unittest.TestCase):
         self.assertEqual(rc, 2)
 
     def test_file_rejects_unknown_step(self):
-        rc, _, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "bogus")
+        epic = self.store.create_epic("epic")
+        rc, _, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "bogus", "--epic", epic)
         self.assertNotEqual(rc, 0)
         self.assertIn("bogus", err)
 
     def test_file_starts_at_given_step(self):
-        _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
         kid = self.store.get_task(self.store.children(out.strip())[0].id)
         self.assertEqual(kid.step, "build")
         self.assertEqual(kid.role, "coder")
@@ -893,7 +937,8 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(task.status, "needs-human")
 
     def test_claim_proceeds_when_inputs_present(self):
-        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
         sid = out.strip()
         rc2, out2, err2 = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc2, 0, err2)
@@ -902,7 +947,8 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(t["parent"], sid)
 
     def test_done_refused_when_required_output_missing(self):
-        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
         sid = out.strip()
         task = self.store.children(sid)[0].id
         rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
@@ -911,7 +957,8 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(self.store.get_task(task).status, "ready")
 
     def test_done_succeeds_when_output_present(self):
-        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
         sid = out.strip()
         task = self.store.children(sid)[0].id
         call(_cli_mod.cmd_link, sid, "branch", "grid/x")
@@ -920,7 +967,8 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(self.store.get_task(task).status, "done")
 
     def test_file_rejects_non_entry_step(self):
-        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "review")
+        epic = self.store.create_epic("epic")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "review", "--epic", epic)
         self.assertEqual(rc, 1)
         self.assertIn("branch", err)
 
@@ -1065,7 +1113,8 @@ class TestWorktree(unittest.TestCase):
         return git_in(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
 
     def _file(self):
-        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build", "--epic", epic)
         return out.strip()
 
     def test_claim_returns_isolated_workspace(self):
@@ -1181,7 +1230,8 @@ class TestNamedRepo(unittest.TestCase):
         )
 
     def _claim(self, repo=None):
-        args = ["specs/X.md", "--step", "build"]
+        epic = self.store.create_epic("epic")
+        args = ["specs/X.md", "--step", "build", "--epic", epic]
         if repo:
             args += ["--repo", repo]
         call(_cli_mod.cmd_file, *args)
@@ -1211,15 +1261,26 @@ class TestNamedRepo(unittest.TestCase):
         self.assertTrue(view["spec_path"].startswith(self.engine))
 
     def test_file_stores_single_repo_artifact(self):
-        _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--repo", "app")
+        epic = self.store.create_epic("epic")
+        _, out, _ = call(
+            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic, "--repo", "app"
+        )
         arts = self.store.story_artifacts(out.strip())
         repos = [a.value for a in arts if a.type == "repo"]
         self.assertEqual(repos, ["app"])
 
     def test_file_rejects_unknown_repo(self):
+        epic = self.store.create_epic("epic")
         before = len(self.store.all_tasks())
         rc, out, err = call(
-            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--repo", "does-not-exist"
+            _cli_mod.cmd_file,
+            "specs/X.md",
+            "--step",
+            "build",
+            "--epic",
+            epic,
+            "--repo",
+            "does-not-exist",
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
@@ -1277,7 +1338,8 @@ class TestCloseWorktree(unittest.TestCase):
         )
 
     def test_close_closes_story_and_tasks_and_removes_worktree(self):
-        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build")
+        epic = self.store.create_epic("epic")
+        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build", "--epic", epic)
         sid = out.strip()
         _, cout, _ = call(_cli_mod.cmd_claim, "coder")
         ws = json.loads(cout)["workspace"]
@@ -1296,7 +1358,7 @@ class TestClose(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_close_epic_closes_when_all_stories_closed(self):
-        epic = self.store.create_story("epic e")
+        epic = self.store.create_epic("epic e")
         child = self.store.create_story("story s", epic=epic)
         self.store.close(child, "merged")
         rc, out, err = call(_cli_mod.cmd_close, epic, "done")
@@ -1304,7 +1366,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.store.get_task(epic).status, "done")
 
     def test_close_epic_refuses_with_open_story(self):
-        epic = self.store.create_story("epic e")
+        epic = self.store.create_epic("epic e")
         child = self.store.create_story("story s", epic=epic)
         rc, _, err = call(_cli_mod.cmd_close, epic, "done")
         self.assertEqual(rc, 1)
@@ -1312,7 +1374,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.store.get_task(epic).status, "ready")
 
     def test_close_epic_refuses_does_not_cascade_close_open_stories(self):
-        epic = self.store.create_story("epic e")
+        epic = self.store.create_epic("epic e")
         child = self.store.create_story("story s", epic=epic)
         call(_cli_mod.cmd_close, epic, "done")
         self.assertEqual(self.store.get_task(child).status, "ready")
@@ -1486,7 +1548,7 @@ class TestReflect(unittest.TestCase):
         _fake_setUp(self)
 
     def _file_story(self, spec_path=None):
-        sid = self.store.create_story("feat")
+        sid = self.store.create_story("feat", epic=self.store.create_epic("epic"))
         self.store.update_metadata(
             sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]}
         )
@@ -1546,7 +1608,7 @@ class TestRetro(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def _make_epic_with_story(self, sid=None):
-        epic = self.store.create_story("epic-1")
+        epic = self.store.create_epic("epic-1")
         if sid is None:
             sid = self.store.create_story("story-1", epic=epic)
         return epic, sid
@@ -1600,7 +1662,7 @@ class TestWorklog(unittest.TestCase):
         _fake_setUp(self)
 
     def _close_story(self, title="feat: shipped-thing", reason="merged"):
-        sid = self.store.create_story(title)
+        sid = self.store.create_story(title, epic=self.store.create_epic("epic"))
         self.store.close(sid, reason)
         return sid
 
@@ -1770,7 +1832,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 
     def _make_store(self, branch="feat/my-feat"):
         store = FakeStore()
-        sid = store.create_story("my-feat")
+        sid = store.create_story("my-feat", epic=store.create_epic("epic"))
         store.add_artifact(sid, "repo", "app")
         store.add_artifact(sid, "branch", branch)
         return store, sid
