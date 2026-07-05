@@ -1,6 +1,7 @@
 import unittest
 
 from the_grid.application.pool import (
+    BreakerGateResponse,
     ListWorkersUseCase,
     ResolveLogInput,
     ResolveLogUseCase,
@@ -9,6 +10,7 @@ from the_grid.application.pool import (
     TickUseCase,
 )
 from the_grid.application.work.close_story import CloseStoryInput, CloseStoryUseCase
+from the_grid.domain.pool import Breaker
 from tests.support.fake_store import FakeStore
 
 
@@ -30,6 +32,17 @@ class FakeWorkers:
 
     def prune_workers(self):
         return self._pruned
+
+    def mark_checked(self, spawnid):
+        pass
+
+
+class FakeBreakerGate:
+    def __init__(self, breaker):
+        self._breaker = breaker
+
+    def execute(self, now):
+        return BreakerGateResponse(breaker=self._breaker)
 
 
 class FakeWorktrees:
@@ -225,6 +238,41 @@ class TestTick(unittest.TestCase):
         )
         self.assertEqual(spawner.spawned, [])
         self.assertEqual(result.spawned, [])
+
+    def test_breaker_open_pre_reset_spawns_nothing(self):
+        s = FakeStore()
+        s.create_task("b1", step="build", role="coder")
+        spawner = FakeSpawner()
+        breaker_gate = FakeBreakerGate(Breaker().trip(2000.0))
+        result = TickUseCase(
+            s, FakeWorkers(), spawner, FakeConfig(max_agents=4), breaker_gate=breaker_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(spawner.spawned, [])
+        self.assertTrue(result.breaker_open)
+        self.assertEqual(result.breaker_reset_at, 2000.0)
+
+    def test_breaker_half_open_spawns_exactly_one_probe(self):
+        s = FakeStore()
+        s.create_task("b1", step="build", role="coder")
+        s.create_task("b2", step="build", role="coder")
+        spawner = FakeSpawner()
+        breaker_gate = FakeBreakerGate(Breaker().trip(1000.0))
+        TickUseCase(
+            s, FakeWorkers(), spawner, FakeConfig(max_agents=4), breaker_gate=breaker_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(len(spawner.spawned), 1)
+
+    def test_breaker_closed_spawns_normally(self):
+        s = FakeStore()
+        s.create_task("b1", step="build", role="coder")
+        s.create_task("b2", step="build", role="coder")
+        spawner = FakeSpawner()
+        breaker_gate = FakeBreakerGate(Breaker())
+        result = TickUseCase(
+            s, FakeWorkers(), spawner, FakeConfig(max_agents=4), breaker_gate=breaker_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(len(spawner.spawned), 2)
+        self.assertFalse(result.breaker_open)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,14 @@ class TestWorker(unittest.TestCase):
             (w.spawnid, w.pid, w.role, w.task, w.started), ("sp-1", 42, "coder", "b-1", 100)
         )
 
+    def test_from_state_reads_log_and_checked(self):
+        w = Worker.from_state({"spawnid": "sp-1", "log": "/l/1.log", "checked": True})
+        self.assertEqual(w.log, "/l/1.log")
+        self.assertTrue(w.checked)
+
+    def test_checked_defaults_to_false(self):
+        self.assertFalse(Worker.from_state({"spawnid": "sp-1"}).checked)
+
     def test_is_alive_delegates_to_probe(self):
         w = Worker(pid=42)
         self.assertTrue(w.is_alive(probe({42})))
@@ -49,6 +57,18 @@ class TestWorkerPool(unittest.TestCase):
 
     def test_inflight_counts_alive_booting_by_role(self):
         self.assertEqual(self._pool().inflight(probe({1, 3}), now=150, max_boot=120), {"coder": 1})
+
+    def test_dead_unchecked_only_includes_dead_unchecked_workers(self):
+        pool = WorkerPool.from_state(
+            [
+                {"spawnid": "dead", "pid": 1, "checked": False},
+                {"spawnid": "live", "pid": 2, "checked": False},
+                {"spawnid": "dead-checked", "pid": 3, "checked": True},
+            ]
+        )
+        self.assertEqual(
+            [w.spawnid for w in pool.dead_unchecked(probe({2}))], ["dead"]
+        )
 
 
 if __name__ == "__main__":
