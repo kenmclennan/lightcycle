@@ -8,6 +8,7 @@ from the_grid.application.pool import (
     TickInput,
     TickUseCase,
 )
+from the_grid.application.work.close_story import CloseStoryInput, CloseStoryUseCase
 from tests.support.fake_store import FakeStore
 
 
@@ -29,6 +30,14 @@ class FakeWorkers:
 
     def prune_workers(self):
         return self._pruned
+
+
+class FakeWorktrees:
+    def __init__(self):
+        self.removed = []
+
+    def remove(self, story):
+        self.removed.append(story)
 
 
 class FakeSpawner:
@@ -163,6 +172,23 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
         self.assertEqual(s.get_task(held).status, "in-progress")
+
+    def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
+        s = FakeStore()
+        story = s.create_story("merged feature")
+        task = s.create_task("build: merged feature", step="build", role="coder", parent=story)
+        s.update_status(task, "in_progress")
+        s.assign(task, "live-sp")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "live-sp", "pid": 888, "task": task, "started": 100}],
+            alive_pids={888},
+        )
+        CloseStoryUseCase(s, FakeWorktrees()).execute(CloseStoryInput(story=story, reason="merged"))
+
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+
+        self.assertEqual(workers.killed, [888])
+        self.assertEqual(result.killed, ["live-sp"])
 
     def test_booting_worker_suppresses_reclaim_of_uncovered_task(self):
         s = FakeStore()

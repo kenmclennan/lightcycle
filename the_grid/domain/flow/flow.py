@@ -81,11 +81,11 @@ class Flow:
     def targets_from(self, step):
         return list((self._routes.get(step) or {}).values())
 
-    def pr_merge_outcome(self, step):
-        return self._pr_merge.get(step)
+    def terminal_merge_outcome(self):
+        return next(iter(self._pr_merge.values()), None)
 
-    def pr_close_outcome(self, step):
-        return self._pr_close.get(step)
+    def terminal_close_outcome(self):
+        return next(iter(self._pr_close.values()), None)
 
     def pr_rework_outcome(self, step):
         return self._pr_rework.get(step)
