@@ -65,7 +65,7 @@ class TestClose(unittest.TestCase):
         self.s.close(self.tid, "done")
         self.assertEqual(self.s.get_task(self.tid).status, "done")
 
-    def test_close_reason_roundtrip(self):
+    def test_outcome_roundtrip(self):
         self.s.close(self.tid, "rejected")
         self.assertEqual(self.s.get_task(self.tid).outcome, "rejected")
 
@@ -99,7 +99,7 @@ class TestParentChildren(unittest.TestCase):
     def test_child_has_parent(self):
         self.assertEqual(self.s.get_task(self.task).parent, self.story)
 
-    def test_children_returns_child_bead(self):
+    def test_children_returns_child_task(self):
         kids = self.s.children(self.story)
         self.assertEqual(len(kids), 1)
         self.assertEqual(kids[0].id, self.task)
@@ -222,7 +222,7 @@ class TestMetadata(unittest.TestCase):
         self.assertEqual(len(task.artifacts), 1)
 
 
-class TestListBeads(unittest.TestCase):
+class TestListTasks(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
 
@@ -279,7 +279,7 @@ class TestRouteToHuman(unittest.TestCase):
 
 
 class TestNoSubprocess(unittest.TestCase):
-    def test_importable_without_spawning_bd(self):
+    def test_importable_without_subprocess(self):
         from tests.support.fake_store import FakeStore as FS
 
         s = FS()

@@ -42,6 +42,7 @@ def write_config(projects=None, specs=None):
     if specs is not None:
         lines.append("specs: %s" % specs)
     lines += [
+        "shortcode: tg",
         "branch-prefix: feat",
         "max-agents: 5",
         "worktree-retries: 6",
@@ -57,31 +58,8 @@ def write_config(projects=None, specs=None):
     return p
 
 
-_STORE_TEMPLATE = None
-
-
-def _store_template():
-    global _STORE_TEMPLATE
-    if _STORE_TEMPLATE is None:
-        d = tempfile.mkdtemp()
-        subprocess.run(["git", "init", "-q"], cwd=d, check=True)
-        subprocess.run(
-            ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-            cwd=d,
-            check=True,
-        )
-        _STORE_TEMPLATE = d
-    return _STORE_TEMPLATE
-
-
 def new_store():
-    d = tempfile.mkdtemp()
-    shutil.copytree(_store_template(), d, dirs_exist_ok=True)
-    return d
-
-
-def bd_in(root, *a):
-    return subprocess.run(["bd", "-C", root, *a], capture_output=True, text=True, check=True).stdout
+    return tempfile.mkdtemp()
 
 
 def git_in(root, *a):
@@ -120,15 +98,6 @@ def _reset_git_repo(repo):
     for b in git_in(repo, "branch", "--format=%(refname:short)").stdout.split():
         if b != "main":
             git_in(repo, "branch", "-D", b)
-
-
-def new_store_with_origin():
-    parent = tempfile.mkdtemp()
-    d = make_repo(parent, "engine")
-    shutil.copytree(
-        os.path.join(_store_template(), ".beads"), os.path.join(d, ".beads"), dirs_exist_ok=True
-    )
-    return d
 
 
 _AGENT_SPECS = {
@@ -313,7 +282,7 @@ class TestClaim(unittest.TestCase):
                 os.environ.pop("GRID_SPAWNID", None)
             else:
                 os.environ["GRID_SPAWNID"] = old
-        self.assertEqual(self.store._records[b].get("assignee"), "spawn-xyz")
+        self.assertEqual(self.store.get_task(b).claimed_by, "spawn-xyz")
 
 
 class TestFlow(unittest.TestCase):
@@ -347,31 +316,29 @@ class TestDoneBlock(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
-        self.assertEqual(self.store._records[b]["status"], "closed")
+        self.assertEqual(self.store.get_task(b).status, "done")
 
     def test_done_unknown_outcome_errors_without_closing(self):
         b = self.store.create_task("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "banana")
         self.assertEqual(rc, 1)
-        self.assertEqual(self.store._records[b]["status"], "open")
+        self.assertEqual(self.store.get_task(b).status, "ready")
 
     def test_block_writes_metadata_and_routes_human(self):
         b = self.store.create_task("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_block, b, "--branch", "grid/x", "--needs", "confirm aud")
         self.assertEqual(rc, 0, err)
-        bead = self.store._records[b]
-        self.assertEqual(bead["metadata"]["branch"], "grid/x")
-        self.assertEqual(bead["metadata"]["needs"], "confirm aud")
-        self.assertIn("for:human", bead["labels"])
-        self.assertNotIn("for:coder", bead["labels"])
+        task = self.store.get_task(b)
+        self.assertEqual(task.needs, "confirm aud")
+        self.assertEqual(task.role, "human")
+        self.assertEqual(self.store._records[b]["metadata"]["branch"], "grid/x")
 
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
         b = self.store.create_task("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
         rc, out, err = call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         self.assertEqual(rc, 0, err)
-        bead = self.store._records[b]
-        self.assertIn(bead.get("assignee"), (None, ""))
+        self.assertIsNone(self.store.get_task(b).claimed_by)
         rc2, inbox_out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn(b, inbox_out)
 
@@ -414,8 +381,9 @@ class TestSweep(unittest.TestCase):
         self.store.claim_ready("coder")
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._records[b]["status"], "open")
-        self.assertIn(self.store._records[b].get("assignee"), (None, ""))
+        task = self.store.get_task(b)
+        self.assertEqual(task.status, "ready")
+        self.assertIsNone(task.claimed_by)
 
 
 class TestWorkersAdapterEffects(unittest.TestCase):
@@ -510,8 +478,9 @@ class TestPs(unittest.TestCase):
 class TestRun(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
-        for d in ("steps", "logs", "flows", ".beads"):
+        for d in ("steps", "logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
+        (Path(self.root) / ".grid.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
@@ -578,8 +547,9 @@ class TestRun(unittest.TestCase):
 class TestRunSingletonLock(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
-        for d in ("steps", "logs", "flows", ".beads"):
+        for d in ("steps", "logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
+        (Path(self.root) / ".grid.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
@@ -725,9 +695,8 @@ class TestFileStory(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         self.assertTrue(sid)
-        story_bead = self.store._records[sid]
-        self.assertEqual(story_bead["issue_type"], "story")
-        self.assertEqual(story_bead["metadata"]["artifacts"][0]["value"], "specs/HSS-435.md")
+        self.assertEqual(self.store.get_task(sid).type, "story")
+        self.assertEqual(self.store.story_artifacts(sid)[0].value, "specs/HSS-435.md")
         kids = self.store.children(sid)
         self.assertEqual(len(kids), 1)
         rc2, out2, _ = call(_cli_mod.cmd_show, kids[0].id)
@@ -919,10 +888,9 @@ class TestArtifactContracts(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.strip(), "")
-        bead = self.store._records[b]
-        self.assertIn("for:human", bead["labels"])
-        self.assertNotIn("for:coder", bead["labels"])
-        self.assertEqual(bead["status"], "open")
+        task = self.store.get_task(b)
+        self.assertEqual(task.role, "human")
+        self.assertEqual(task.status, "needs-human")
 
     def test_claim_proceeds_when_inputs_present(self):
         rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
@@ -940,7 +908,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
         self.assertEqual(rc2, 1)
         self.assertIn("branch", err2)
-        self.assertEqual(self.store._records[task]["status"], "open")
+        self.assertEqual(self.store.get_task(task).status, "ready")
 
     def test_done_succeeds_when_output_present(self):
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build")
@@ -949,7 +917,7 @@ class TestArtifactContracts(unittest.TestCase):
         call(_cli_mod.cmd_link, sid, "branch", "grid/x")
         rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
         self.assertEqual(rc2, 0, err2)
-        self.assertEqual(self.store._records[task]["status"], "closed")
+        self.assertEqual(self.store.get_task(task).status, "done")
 
     def test_file_rejects_non_entry_step(self):
         rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "review")
@@ -1046,7 +1014,7 @@ class TestInitAndStoreGuard(unittest.TestCase):
         cfg = self._cfg(d)
         r = run_tg("init", root=d, config=cfg)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(os.path.isdir(os.path.join(d, ".beads")))
+        self.assertTrue(os.path.exists(os.path.join(d, ".grid.db")))
         r2 = run_tg("init", root=d, config=cfg)
         self.assertEqual(r2.returncode, 0, r2.stderr)
 
@@ -1249,13 +1217,13 @@ class TestNamedRepo(unittest.TestCase):
         self.assertEqual(repos, ["app"])
 
     def test_file_rejects_unknown_repo(self):
-        before = len(self.store._records)
+        before = len(self.store.all_tasks())
         rc, out, err = call(
             _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--repo", "does-not-exist"
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
-        self.assertEqual(len(self.store._records), before)
+        self.assertEqual(len(self.store.all_tasks()), before)
 
 
 class TestUnblock(unittest.TestCase):
@@ -1268,14 +1236,10 @@ class TestUnblock(unittest.TestCase):
         call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         rc, out, err = call(_cli_mod.cmd_unblock, b)
         self.assertEqual(rc, 0, err)
-        bead = self.store._records[b]
-        self.assertIn("for:coder", bead["labels"])
-        self.assertNotIn("for:human", bead["labels"])
-        self.assertEqual(bead["status"], "open")
-        self.assertIn(bead.get("assignee"), (None, ""))
         t = self.store.get_task(b)
         self.assertEqual(t.status, "ready")
         self.assertEqual(t.role, "coder")
+        self.assertIsNone(t.claimed_by)
 
     def test_unblock_refuses_human_step(self):
         (Path(self.root) / "steps" / "ready-merge.md").write_text(
@@ -1321,8 +1285,8 @@ class TestCloseWorktree(unittest.TestCase):
         build = self.store.children(sid)[0].id
         rc, _, err = call(_cli_mod.cmd_close, sid, "merged")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._records[sid]["status"], "closed")
-        self.assertEqual(self.store._records[build]["status"], "closed")
+        self.assertEqual(self.store.get_task(sid).status, "done")
+        self.assertEqual(self.store.get_task(build).status, "done")
         self.assertFalse(os.path.isdir(ws))
         self.assertFalse(self._has_branch(self.root, "feat/w"))
 
@@ -1337,7 +1301,7 @@ class TestClose(unittest.TestCase):
         self.store.close(child, "merged")
         rc, out, err = call(_cli_mod.cmd_close, epic, "done")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store._records[epic]["status"], "closed")
+        self.assertEqual(self.store.get_task(epic).status, "done")
 
     def test_close_epic_refuses_with_open_story(self):
         epic = self.store.create_story("epic e")
@@ -1345,13 +1309,13 @@ class TestClose(unittest.TestCase):
         rc, _, err = call(_cli_mod.cmd_close, epic, "done")
         self.assertEqual(rc, 1)
         self.assertIn(child, err)
-        self.assertEqual(self.store._records[epic]["status"], "open")
+        self.assertEqual(self.store.get_task(epic).status, "ready")
 
     def test_close_epic_refuses_does_not_cascade_close_open_stories(self):
         epic = self.store.create_story("epic e")
         child = self.store.create_story("story s", epic=epic)
         call(_cli_mod.cmd_close, epic, "done")
-        self.assertEqual(self.store._records[child]["status"], "open")
+        self.assertEqual(self.store.get_task(child).status, "ready")
 
 
 class TestConfig(unittest.TestCase):

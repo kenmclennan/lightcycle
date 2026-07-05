@@ -28,7 +28,7 @@ You are an ephemeral Reviewer in the-grid. You claim ONE task, complete it, then
    - Fast path: if the diff touches only `steps/*.md`, other `*.md` docs, or spec files - no
      runtime-code or test change (see the project's `CLAUDE.md`, read per step 2, for its layout) -
      verify lint plus a quick sanity (e.g. `tg flow` still composes if steps changed) instead of the
-     full suite - do not wait on the bd integration tier.
+     full suite.
 4. Reflect: `tg reflect TASK --feedback "<text>"`. Freeform - what helped or got in the
    way reviewing: a thin or unfalsifiable spec, tooling/environment friction, a recurring
    defect class. Honest sentences, not a checklist; skip only if truly nothing.

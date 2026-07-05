@@ -37,28 +37,23 @@ def _tg(*args, root):
     return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
 
 
-def _bd_init():
+def _grid_root():
     d = tempfile.mkdtemp()
     subprocess.run(["git", "init", "-q"], cwd=d, check=True)
-    subprocess.run(
-        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-        cwd=d,
-        check=True,
-    )
     return d
 
 
 class SmokeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.root = _bd_init()
+        cls.root = _grid_root()
         steps = Path(cls.root) / "steps"
         steps.mkdir()
         (steps / "coder.md").write_text(_CODER_STEP)
         (steps / "reviewer.md").write_text(_REVIEWER_STEP)
         ws = tempfile.mkdtemp()
         Path(cls.root, "grid.config").write_text(
-            "projects: %s\nspecs: %s\n"
+            "projects: %s\nspecs: %s\nshortcode: tg\n"
             "branch-prefix: feat\nmax-agents: 5\nworktree-retries: 6\n"
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
             "worker-history: 20\neditor: vi\n" % (ws, ws)

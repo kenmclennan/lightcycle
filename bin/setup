@@ -14,9 +14,8 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "missing prerequisite: $1 - $
 say "Checking prerequisites"
 need python3 "install Python >= 3.11"
 need uv      "install uv: https://docs.astral.sh/uv/getting-started/installation/"
-need bd      "install beads (bd): the task store"
 need git     "install git"
-echo "ok: python3, uv, bd, git"
+echo "ok: python3, uv, git"
 
 say "Installing the dev environment (uv sync)"
 uv sync

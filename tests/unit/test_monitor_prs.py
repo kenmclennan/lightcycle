@@ -262,7 +262,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertEqual(store.get_task(task).status, "done")
         self.assertIn(story, worktrees.removed)
 
-    def test_closed_unmerged_story_closes_with_declared_close_reason(self):
+    def test_closed_unmerged_story_closes_with_declared_outcome(self):
         url = "https://github.com/x/y/pull/11"
         store, story, task, worktrees, uc = self._setup(url, FakeGitHub(closed_prs={url}))
 

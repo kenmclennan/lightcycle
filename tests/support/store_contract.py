@@ -26,7 +26,7 @@ class StoreContractBase:
         s.close(tid, "done")
         self.assertEqual(s.get_task(tid).status, "done")
 
-    def test_close_reason_preserved(self):
+    def test_outcome_preserved(self):
         s = self.make_store()
         tid = s.create_task("t")
         s.close(tid, "rejected")

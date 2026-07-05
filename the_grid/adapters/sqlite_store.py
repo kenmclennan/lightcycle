@@ -90,7 +90,6 @@ def _domain_status(raw_status, assignee, role):
 class SqliteStore(StorePort):
     def __init__(self, config):
         self._config = config
-        self._shortcode = config.shortcode()
         path = os.path.join(config.grid_root(), _DB_FILENAME)
         self._conn = sqlite3.connect(path)
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -165,7 +164,7 @@ class SqliteStore(StorePort):
         return self._rows_to_tasks(rows)
 
     def _mint_id(self, parent):
-        namespace = parent if parent is not None else self._shortcode
+        namespace = parent if parent is not None else self.shortcode()
         row = self._conn.execute(
             "SELECT next FROM counters WHERE namespace = ?", (namespace,)
         ).fetchone()
@@ -176,7 +175,7 @@ class SqliteStore(StorePort):
             (namespace, n + 1),
         )
         if parent is None:
-            return "%s-%d" % (self._shortcode, n)
+            return "%s-%d" % (self.shortcode(), n)
         return "%s.%d" % (parent, n)
 
     def _mint_or_adopt(self, explicit_id, parent):
@@ -276,55 +275,7 @@ class SqliteStore(StorePort):
         ]
 
     def shortcode(self):
-        return self._shortcode
-
-    def is_empty(self):
-        return self._conn.execute("SELECT 1 FROM tasks LIMIT 1").fetchone() is None
-
-    def seed_counter(self, namespace, next_value):
-        row = self._conn.execute(
-            "SELECT next FROM counters WHERE namespace = ?", (namespace,)
-        ).fetchone()
-        if row is not None and row[0] >= next_value:
-            return
-        self._conn.execute(
-            "INSERT INTO counters (namespace, next) VALUES (?, ?) "
-            "ON CONFLICT(namespace) DO UPDATE SET next = excluded.next",
-            (namespace, next_value),
-        )
-        self._conn.commit()
-
-    def import_task(self, migrated):
-        exists = self._conn.execute(
-            "SELECT 1 FROM tasks WHERE id = ?", (migrated.id,)
-        ).fetchone()
-        if exists:
-            raise ValueError("id already in use: %s" % migrated.id)
-        self._conn.execute(
-            "INSERT INTO tasks (id, type, title, status, step, role, parent, project, goal, "
-            "notes, close_reason, assignee, since, fired_at, closed_at, created_at, attention) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                migrated.id, migrated.type, migrated.title, migrated.status, migrated.step,
-                migrated.role, migrated.parent, migrated.project, migrated.goal, migrated.notes,
-                migrated.outcome, migrated.assignee, migrated.since, migrated.fired_at,
-                migrated.closed_at, migrated.created_at, 1 if migrated.attention else 0,
-            ),
-        )
-        for a in migrated.artifacts:
-            self._conn.execute(
-                "INSERT INTO artifacts (story_id, atype, value, label) VALUES (?, ?, ?, ?)",
-                (migrated.id, a.type, a.value, a.label),
-            )
-        for blocked_by in migrated.blocked_by:
-            self._conn.execute(
-                "INSERT INTO deps (task_id, blocked_by) VALUES (?, ?)", (migrated.id, blocked_by)
-            )
-        for label in migrated.labels:
-            self._conn.execute(
-                "INSERT INTO labels (task_id, label) VALUES (?, ?)", (migrated.id, label)
-            )
-        self._conn.commit()
+        return self._config.shortcode()
 
     def export_rows(self):
         export_columns = _COLUMNS + ("created_at",)
