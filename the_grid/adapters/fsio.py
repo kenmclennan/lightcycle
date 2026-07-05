@@ -30,7 +30,7 @@ def worktrees_dir(root):
 
 
 def store_ready(root):
-    return os.path.isdir(os.path.join(root, ".beads"))
+    return os.path.exists(os.path.join(root, ".grid.db"))
 
 
 def read_bytes(path):

@@ -1,18 +1,18 @@
 # the-grid
 
 A workflow-agnostic agent engine fronted by **`tg`**, a single Python CLI that owns
-all work and its lifecycle. Work lives in **beads** (`bd`, hidden behind `tg`) as
-tasks chained by dependencies. A run-loop spawns headless `claude -p` workers that
+all work and its lifecycle. Work lives in a local SQLite store (hidden behind `tg`)
+as tasks chained by dependencies. A run-loop spawns headless `claude -p` workers that
 each claim one task, do it, and exit. tmux is optional - every part runs as a
 standalone command. You define how you work by editing the steps in `steps/`; the
 engine imposes no spec format or fixed pipeline.
 
-The live backlog and roadmap are in beads - run `tg backlog` for open items, `tg status` for the
+The live backlog and roadmap live in the store - run `tg backlog` for open items, `tg status` for the
 whole picture.
 
 ## Prerequisites
 
-`python3` (3.9+, stdlib only - no pip deps), `bd` (beads), `claude` CLI, `git`,
+`python3` (3.9+, stdlib only - no pip deps), `claude` CLI, `git`,
 `gh` (authenticated), `glow` (for `bin/grid-spec.sh`).
 
 ## Install
@@ -61,7 +61,7 @@ any directory.
   assembles the flow from them - the next performer is derived from whichever step
   file owns the next step (an unowned target is a `for:human` terminal). `tg flow`
   prints the assembled graph.
-- **`tg` owns the domain and the processes.** It is the only caller of `bd`. It
+- **`tg` owns the domain and the processes.** It is the only caller of the store. It
   spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own task.** The loop spawns a role
   (`coder`/`reviewer`/`open-pr`/`watch-pr`); the worker's first act is `tg claim
@@ -104,7 +104,7 @@ Initialise once with `tg init`, then run the parts in separate terminals.
 | `tg backlog [N]`                                                | backlog items to develop later                                                      |
 | `tg active`                                                     | tasks being worked now                                                              |
 | `tg queue [N]`                                                  | next N upcoming agent tasks                                                         |
-| `tg ps [--json]`                                                | running workers (role, bead, pid, alive)                                            |
+| `tg ps [--json]`                                                | running workers (role, task, pid, alive)                                            |
 | `tg logs <task\|role\|run> [-f]`                                | tail a worker's or the loop's log                                                   |
 | `tg show <id>`                                                  | a story (artifacts + child tasks) or a task (+ story artifacts)                     |
 | `tg trace <story>`                                              | story + its artifacts + child tasks + logs                                          |
@@ -136,13 +136,13 @@ separately in `driver.md` (not under `steps/`, since it is not a single step);
 
 ## Telemetry / logs
 
-- `logs/workers.json` - role, bead (stamped at claim), pid, log path per worker.
+- `logs/workers.json` - role, task (stamped at claim), pid, log path per worker.
   Each `tg sweep` (and so each run-loop tick) prunes dead entries, keeping all live
   workers plus the most recent `GRID_WORKER_HISTORY` dead ones (default 20) so
   `tg logs` can still reach recently finished workers.
 - `logs/worker-<role>-<spawnid>.log` - each worker's output (`tg logs` finds it).
 - `logs/run.log` - the run-loop's activity.
-- Beads history gives cycle time, rework, throughput.
+- Task history gives cycle time, rework, throughput.
 
 ## Tests
 

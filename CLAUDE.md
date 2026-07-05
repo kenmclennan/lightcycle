@@ -17,8 +17,8 @@ Dependencies point inward; the domain depends on nothing.
 - `the_grid/application/` - use cases (one action each, grouped by activity: `inspect`, `intake`,
   `flow`, `pool`, `feedback`, `setup`) + cross-cutting services (`FlowService`, `WorktreeService`).
   Depend on ports, not concrete adapters. This is the home for business logic.
-- `the_grid/adapters/` - all IO: the bd store (`BdStore`), git, the worker spawner, the workers
-  registry, the filesystem. The only callers of `bd` / `git` / `subprocess`.
+- `the_grid/adapters/` - all IO: the sqlite store (`SqliteStore`), git, the worker spawner, the workers
+  registry, the filesystem. The only callers of `sqlite3` / `git` / `subprocess`.
 - `the_grid/config.py` - the single boundary to the environment and the config file (the only reader
   of `os.environ`); required values fail fast. `the_grid/container.py` - the composition root that
   builds Config + the adapters and injects them.
@@ -29,7 +29,7 @@ use case (`application/`), and any pure rule belongs in `domain/`.
 
 ## Tests
 
-**First-time setup: `bin/setup`** - it checks prerequisites (python3, uv, bd, git), installs the dev
+**First-time setup: `bin/setup`** - it checks prerequisites (python3, uv, git), installs the dev
 environment (`uv sync`), initialises the grid store (`tg init`), and verifies. Idempotent. (The
 engine runs on system `python3` with zero runtime deps, so `bin/tg` works without the venv; the venv
 is only for the tests.)
@@ -40,24 +40,18 @@ tests are stdlib `unittest.TestCase` classes, which pytest runs as-is; new tests
 `unittest` style or plain pytest functions. Run a subset with `bash tests/run.sh tests/unit` (the
 fast suite) or `bash tests/run.sh -k <name>`.
 
-**Iterate on the fast tier; run the full suite before you finish.** The unit tier
-(`bash tests/run.sh tests/unit`) is ~2s and feature is ~0.25s; the integration tier shells out to
-real `bd` per operation and takes minutes. Iterate against the unit tier (plus `-k <name>` on the
-integration test your change touches), and run the full `bash tests/run.sh` before `tg done`.
-
-**Run the full suite as a single foreground call and let it block.** The managed session stays alive
-through long foreground commands, so a multi-minute suite completes inline - no need to avoid or bound
-it. Do NOT background the suite and poll for completion: a backgrounded process only reliably gets CPU
-while your turn is active, so polling a background run starves it between turns and makes the suite
-look slow or hung when it is neither. For the same reason, never reach for `caffeinate`, `pmset`, or
-other host power/`sudo` tweaks to "keep it running" - the stall is turn scheduling, not real OS sleep,
-and mutating the host's system state is out of bounds. Foreground, blocking, once.
+**Run the full suite before you finish.** The whole suite (`bash tests/run.sh`) runs in seconds now
+that the store is in-process `SqliteStore` (unit tier ~2s, feature ~0.25s, and the integration tier
+drives the wired `tg` CLI against a temp sqlite store with no external process to `init`). Run it as a
+single foreground call and let it block - never background it and poll (a backgrounded process only
+reliably gets CPU while your turn is active, so polling starves it), and never reach for `caffeinate` /
+`pmset` / host power tweaks to "keep it running" - mutating the host's system state is out of bounds.
 
 - `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not
   collected as tests.
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
-- `tests/integration/` - the store contract against real `bd` and the tests that exercise genuine
-  IO, via subprocess/real backend (slow).
+- `tests/integration/` - the store contract against a real `SqliteStore` and the tests that drive the
+  wired `tg` CLI or exercise genuine git/worktree IO, via subprocess.
 - `tests/feature/` - gherkin `.feature` files (the language-agnostic behaviour spec) with pytest-bdd
   step definitions driving the wired cli in-process. The `.feature` files are meant to outlive the
   runner - a future Go/godog port runs them unchanged.
@@ -66,11 +60,11 @@ and mutating the host's system state is out of bounds. Foreground, blocking, onc
 is tested in-process against `FakeStore`, in milliseconds. Use-case logic, `tg` command behaviour,
 and rendering go in `tests/unit/` (or the in-process `call(cmd_x, ...)` + `_fake_setUp` pattern) -
 inject a fake, assert the outcome. A new command does **NOT** automatically warrant an integration
-test; if its behaviour is expressible against `FakeStore`, that is where it belongs. Write a slow
+test; if its behaviour is expressible against `FakeStore`, that is where it belongs. Write an
 integration test ONLY when the thing under test IS the IO a fake cannot stand in for:
 
-1. the store adapter's **contract against real `bd`** - one file (`test_store_contract.py`); extend
-   it, never scatter ad-hoc bd tests across the suite;
+1. the store adapter's **contract against a real `SqliteStore`** - one file (`test_store_contract.py`);
+   extend it, never scatter ad-hoc store tests across the suite;
 2. **a genuine external-IO effect** - that an adapter's IO actually happens (a git/worktree op runs,
    the run-lock locks, `WorkersAdapter.kill` really signals a process). Test the EFFECT in isolation
    against a real disposable target - **never `os.getpid()`**;
@@ -85,10 +79,8 @@ sacrificial child, never the test's own pid. Driving a decision through its real
 duplicative, and self-destructive - a sweep test that registered `os.getpid()` as a worker made the
 sweep SIGTERM the whole test run (exit 143), reproducibly, and took down CI for the repo.
 
-If a change does not touch (1)-(3), it ships with a unit test, not an integration test. Any
-integration test that must touch `bd` **shares one store per class** (`setUpClass`, never a fresh
-`bd init` per `setUp` - `bd init` is ~1.6s and a per-method init is the tier's dominant cost). Get
-it green before `tg done`.
+If a change does not touch (1)-(3), it ships with a unit test, not an integration test. Get it green
+before `tg done`.
 
 - **Any `Task` (or story) field a step reads from `tg show`/`tg claim` JSON needs an integration
   test asserting the field appears in that CLI output** - a unit test on the domain entity alone
@@ -96,7 +88,7 @@ it green before `tg done`.
   (`tests/integration/test_tg.py::TestTaskDTOReadSurface` pins the current set; extend it, don't
   bypass it, when a step starts reading a new field).
 - **Never verify against the live grid store.** When checking a `tg` command by hand, point it at a
-  throwaway store (`GRID_ROOT_OVERRIDE` on a temp dir with its own `bd init`, as the integration
+  throwaway store (`GRID_ROOT_OVERRIDE` on a temp dir with its own sqlite store, as the integration
   tests do) - never the live grid, or you pollute (or worse, mutate) the real backlog. Same rule as
   the tests: isolate the store.
 

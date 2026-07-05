@@ -2,13 +2,75 @@ import datetime
 import os
 import uuid
 
-from the_grid.adapters.bead import bead_to_task, labels_for
 from the_grid.ports.store import StorePort
-from the_grid.domain.work import Artifact, TaskView
+from the_grid.domain.work import Artifact, Status, Task, TaskView
 
 
 def _new_id():
     return "fake-" + uuid.uuid4().hex[:8]
+
+
+def _label_value(labels, prefix):
+    for l in labels:
+        if l.startswith(prefix):
+            return l[len(prefix):]
+    return None
+
+
+def _status_of(record, role):
+    status = record.get("status")
+    if status == "closed":
+        return Status.DONE
+    if record.get("assignee") or status == "in_progress":
+        return Status.IN_PROGRESS
+    if role == "human":
+        return Status.NEEDS_HUMAN
+    return Status.READY
+
+
+def labels_for(*, role=None, step=None, project=None, goal=None, attention=False):
+    parts = []
+    if role:
+        parts.append("for:%s" % role)
+    if step:
+        parts.append("step:%s" % step)
+    if project:
+        parts.append("project:%s" % project)
+    if goal:
+        parts.append("goal:%s" % goal)
+    if attention:
+        parts.append("attention")
+    return parts
+
+
+def record_to_task(record):
+    labels = record.get("labels") or []
+    role = _label_value(labels, "for:")
+    meta = record.get("metadata") or {}
+    return Task(
+        id=record["id"],
+        title=record.get("title", ""),
+        type=record.get("type"),
+        parent=record.get("parent"),
+        role=role,
+        step=_label_value(labels, "step:"),
+        status=_status_of(record, role),
+        project=_label_value(labels, "project:"),
+        goal=_label_value(labels, "goal:"),
+        artifacts=[Artifact.from_dict(a) for a in (meta.get("artifacts") or [])],
+        description=record.get("description"),
+        needs=meta.get("needs"),
+        outcome=record.get("outcome"),
+        deps=record.get("dep_count") or 0,
+        notes=record.get("notes"),
+        claimed_by=record.get("assignee"),
+        epic=meta.get("epic"),
+        since=meta.get("since"),
+        fired_at=meta.get("fired_at"),
+        closed_at=record.get("closed_at"),
+        attention="attention" in labels,
+        model=meta.get("model"),
+    )
 
 
 class FakeStore(StorePort):
@@ -21,14 +83,14 @@ class FakeStore(StorePort):
         b = {
             "id": _new_id(),
             "title": "",
-            "issue_type": "task",
+            "type": "task",
             "labels": [],
             "status": "open",
             "assignee": None,
             "metadata": {},
             "parent": None,
-            "dependency_count": 0,
-            "close_reason": None,
+            "dep_count": 0,
+            "outcome": None,
             "notes": None,
             "closed_at": None,
             "description": None,
@@ -40,7 +102,7 @@ class FakeStore(StorePort):
         try:
             return self._records[tid]
         except KeyError:
-            raise KeyError("bead not found: %s" % tid)
+            raise KeyError("task not found: %s" % tid)
 
     def story_artifacts(self, story_id):
         b = self._get(story_id)
@@ -58,11 +120,11 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_tasks(self):
-        return [bead_to_task(b) for b in self._records.values()
+        return [record_to_task(b) for b in self._records.values()
                 if b.get("status") != "closed"]
 
     def get_task(self, tid):
-        return bead_to_task(self._get(tid))
+        return record_to_task(self._get(tid))
 
     def task_view(self, tid):
         t = self.get_task(tid)
@@ -88,14 +150,14 @@ class FakeStore(StorePort):
     def closed_stories(self):
         result = []
         for b in self._records.values():
-            if b.get("issue_type") != "story" or b.get("status") != "closed":
+            if b.get("type") != "story" or b.get("status") != "closed":
                 continue
             result.append(
                 {
                     "id": b["id"],
                     "title": b.get("title", ""),
                     "closed_at": b.get("closed_at"),
-                    "outcome": b.get("close_reason"),
+                    "outcome": b.get("outcome"),
                     "artifacts": [
                         Artifact.from_dict(a)
                         for a in ((b.get("metadata") or {}).get("artifacts") or [])
@@ -119,13 +181,13 @@ class FakeStore(StorePort):
     def close(self, tid, reason):
         b = self._get(tid)
         b["status"] = "closed"
-        b["close_reason"] = reason
+        b["outcome"] = reason
         b["closed_at"] = datetime.datetime.now().isoformat()
         for other_id, blockers in self._deps.items():
             if tid in blockers:
                 other = self._records.get(other_id)
                 if other and other.get("status") != "closed":
-                    other["dependency_count"] = max(0, (other.get("dependency_count") or 0) - 1)
+                    other["dep_count"] = max(0, (other.get("dep_count") or 0) - 1)
 
     def update_metadata(self, tid, meta):
         self._get(tid)["metadata"] = dict(meta)
@@ -159,31 +221,31 @@ class FakeStore(StorePort):
         blocker = self._records.get(blocked_by)
         if blocker and blocker.get("status") != "closed":
             b = self._get(task_id)
-            b["dependency_count"] = (b.get("dependency_count") or 0) + 1
+            b["dep_count"] = (b.get("dep_count") or 0) + 1
 
-    def _ready_bead_dicts(self):
+    def _ready_records(self):
         return [
             b
             for b in self._records.values()
             if b.get("status") == "open"
             and not b.get("assignee")
-            and not (b.get("dependency_count") or 0)
-            and b.get("issue_type") == "task"
+            and not (b.get("dep_count") or 0)
+            and b.get("type") == "task"
         ]
 
     def ready_tasks(self):
-        return [bead_to_task(b) for b in self._ready_bead_dicts()]
+        return [record_to_task(b) for b in self._ready_records()]
 
     def claim_ready(self, role):
         candidates = [
-            b for b in self._ready_bead_dicts() if "for:%s" % role in (b.get("labels") or [])
+            b for b in self._ready_records() if "for:%s" % role in (b.get("labels") or [])
         ]
         if not candidates:
             return None
         b = candidates[0]
         b["assignee"] = os.environ.get("GRID_SPAWNID") or role
         b["status"] = "in_progress"
-        return bead_to_task(b)
+        return record_to_task(b)
 
     def history(self, tid):
         return self._history.get(tid, [])
@@ -192,7 +254,7 @@ class FakeStore(StorePort):
                     project=None, goal=None, description=None, attention=False):
         b = self._new_record(
             title=title,
-            issue_type="task",
+            type="task",
             parent=parent,
             labels=labels_for(role=role, step=step, project=project, goal=goal,
                               attention=attention),
@@ -230,7 +292,7 @@ class FakeStore(StorePort):
     def create_story(self, title, *, epic=None, project=None, goal=None):
         b = self._new_record(
             title=title,
-            issue_type="story",
+            type="story",
             parent=epic,
             labels=labels_for(project=project, goal=goal),
         )
@@ -241,7 +303,7 @@ class FakeStore(StorePort):
     def create_epic(self, title, *, project=None, goal=None):
         b = self._new_record(
             title=title,
-            issue_type="epic",
+            type="epic",
             labels=labels_for(project=project, goal=goal),
         )
         tid = b["id"]
@@ -249,36 +311,36 @@ class FakeStore(StorePort):
         return tid
 
     def children(self, story_id):
-        return [bead_to_task(b) for b in self._records.values() if b.get("parent") == story_id]
+        return [record_to_task(b) for b in self._records.values() if b.get("parent") == story_id]
 
     def claimed_tasks(self):
-        return [bead_to_task(b) for b in self._records.values() if b.get("status") == "in_progress"]
+        return [record_to_task(b) for b in self._records.values() if b.get("status") == "in_progress"]
 
     def tasks_closed_since(self, since_date):
         result = []
         for b in self._records.values():
-            if b.get("issue_type") != "task" or b.get("status") != "closed":
+            if b.get("type") != "task" or b.get("status") != "closed":
                 continue
             closed_at = (b.get("closed_at") or "")[:10]
             if closed_at >= since_date:
-                result.append(bead_to_task(b))
+                result.append(record_to_task(b))
         return result
 
     def last_n_closed_epics(self, n):
         epics = [
             b
             for b in self._records.values()
-            if b.get("issue_type") == "story"
+            if b.get("type") == "story"
             and b.get("status") == "closed"
             and b.get("parent") is None
         ]
         epics.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
-        return [bead_to_task(b) for b in epics[:n]]
+        return [record_to_task(b) for b in epics[:n]]
 
     def epics_closed_since(self, since_date_str):
         result = []
         for b in self._records.values():
-            if b.get("issue_type") != "story" or b.get("status") != "closed":
+            if b.get("type") != "story" or b.get("status") != "closed":
                 continue
             if b.get("parent") is not None:
                 continue
@@ -286,13 +348,13 @@ class FakeStore(StorePort):
                 continue
             closed_at = (b.get("closed_at") or "")[:10]
             if closed_at >= since_date_str:
-                result.append(bead_to_task(b))
+                result.append(record_to_task(b))
         return result
 
     def tasks_at_step(self, step):
         label = "step:%s" % step
-        return [bead_to_task(b) for b in self._records.values()
-                if b.get("issue_type") == "task" and label in (b.get("labels") or [])]
+        return [record_to_task(b) for b in self._records.values()
+                if b.get("type") == "task" and label in (b.get("labels") or [])]
 
     def delete(self, tid):
         self._records.pop(tid, None)

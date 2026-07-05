@@ -1,70 +1,18 @@
-import json
-import os
-import shutil
-import subprocess
-import tempfile
 import unittest
 
-from the_grid.adapters.store import BdStore
-from the_grid.application.work.status import StatusUseCase
-from the_grid.config import Config
+from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.store_contract import StoreContractBase
-
-_TEMPLATE = None
-
-
-def _template():
-    global _TEMPLATE
-    if _TEMPLATE is None:
-        d = tempfile.mkdtemp()
-        subprocess.run(["git", "init", "-q"], cwd=d, check=True)
-        subprocess.run(
-            ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-            cwd=d,
-            check=True,
-        )
-        _TEMPLATE = d
-    return _TEMPLATE
+from the_grid.application.work.status import StatusUseCase
 
 
-def _new_bd_root():
-    outer = tempfile.mkdtemp()
-    d = os.path.join(outer, os.path.basename(_template()))
-    shutil.copytree(_template(), d)
-    return d
+class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
+    def make_store(self):
+        return make_sqlite_store()
 
 
-def _new_named_bd_root(name):
-    outer = tempfile.mkdtemp()
-    d = os.path.join(outer, name)
-    os.makedirs(d)
-    subprocess.run(["git", "init", "-q"], cwd=d, check=True)
-    subprocess.run(
-        ["bd", "init", "--skip-agents", "--skip-hooks", "--non-interactive", "--quiet"],
-        cwd=d,
-        check=True,
-    )
-    return d
-
-
-def _new_dotted_bd_root():
-    return _new_named_bd_root("foo-1.2")
-
-
-class TestBdStoreSmoke(unittest.TestCase):
-    def setUp(self):
-        self._root = _new_bd_root()
-        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
-        os.environ["GRID_ROOT_OVERRIDE"] = self._root
-
-    def tearDown(self):
-        if self._prior is None:
-            os.environ.pop("GRID_ROOT_OVERRIDE", None)
-        else:
-            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
-
+class TestSqliteStoreRoundtrips(unittest.TestCase):
     def _store(self):
-        return BdStore(Config())
+        return make_sqlite_store()
 
     def test_create_task_roundtrips_structured_attrs(self):
         s = self._store()
@@ -143,8 +91,7 @@ class TestBdStoreSmoke(unittest.TestCase):
         sid = s.create_story("closed story")
         s.close(sid, "merged")
         results = s.tasks_closed_since("2000-01-01")
-        story_ids = [t.id for t in results]
-        self.assertNotIn(sid, story_ids)
+        self.assertNotIn(sid, [t.id for t in results])
 
     def test_last_n_closed_epics_returns_top_level_closed_stories(self):
         s = self._store()
@@ -172,211 +119,12 @@ class TestBdStoreSmoke(unittest.TestCase):
         self.assertIn(epic, result_ids)
         self.assertNotIn(child, result_ids)
 
-    def test_create_with_description_and_edit(self):
+    def test_all_tasks_returns_many(self):
         s = self._store()
-        tid = s.create_task("my task", description="initial desc")
-        t = s.get_task(tid)
-        self.assertEqual(t.description, "initial desc")
-        s.edit_task(tid, title="updated title", description="updated desc")
-        t2 = s.get_task(tid)
-        self.assertEqual(t2.title, "updated title")
-        self.assertEqual(t2.description, "updated desc")
-
-    def test_edit_task_goal_and_project(self):
-        s = self._store()
-        tid = s.create_task("t", goal="g1", project="p1")
-        s.edit_task(tid, goal="g2", project="p2")
-        t = s.get_task(tid)
-        self.assertEqual(t.goal, "g2")
-        self.assertEqual(t.project, "p2")
-
-    def test_edit_task_reparents(self):
-        s = self._store()
-        epic = s.create_story("epic")
-        tid = s.create_task("a task")
-        s.edit_task(tid, parent=epic)
-        t = s.get_task(tid)
-        self.assertEqual(t.parent, epic)
-
-    def test_all_tasks_returns_beyond_default_bd_limit(self):
-        s = self._store()
-        created = [s.create_task(f"task {i}", role="coder") for i in range(51)]
+        created = [s.create_task("task %d" % i, role="coder") for i in range(51)]
         result_ids = {t.id for t in s.all_tasks()}
         for tid in created:
             self.assertIn(tid, result_ids)
-
-
-class TestBdStoreContract(StoreContractBase, unittest.TestCase):
-    def setUp(self):
-        self._root = _new_bd_root()
-        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
-        os.environ["GRID_ROOT_OVERRIDE"] = self._root
-
-    def tearDown(self):
-        if self._prior is None:
-            os.environ.pop("GRID_ROOT_OVERRIDE", None)
-        else:
-            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
-
-    def make_store(self):
-        return BdStore(Config())
-
-
-class TestBdStoreIdSeam(unittest.TestCase):
-    """Adapter-seam: ids above the port are short; both short and full ids are accepted."""
-
-    def setUp(self):
-        self._root = _new_bd_root()
-        self._prefix = os.path.basename(self._root)
-        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
-        os.environ["GRID_ROOT_OVERRIDE"] = self._root
-
-    def tearDown(self):
-        if self._prior is None:
-            os.environ.pop("GRID_ROOT_OVERRIDE", None)
-        else:
-            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
-
-    def _store(self):
-        return BdStore(Config())
-
-    def _is_short(self, tid):
-        return tid is not None and not tid.startswith(self._prefix + "-")
-
-    def test_task_id_is_short(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        self.assertTrue(self._is_short(tid), f"expected short id, got {tid!r}")
-
-    def test_get_task_id_is_short(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        t = s.get_task(tid)
-        self.assertTrue(self._is_short(t.id), f"task.id not short: {t.id!r}")
-
-    def test_get_task_accepts_full_id(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        full_id = self._prefix + "-" + tid
-        t = s.get_task(full_id)
-        self.assertEqual(t.id, tid)
-
-    def test_parent_is_short(self):
-        s = self._store()
-        sid = s.create_story("story")
-        tid = s.create_task("t", role="coder", parent=sid)
-        t = s.get_task(tid)
-        self.assertTrue(self._is_short(t.parent), f"task.parent not short: {t.parent!r}")
-        self.assertEqual(t.parent, sid)
-
-    def test_story_children_ids_are_short(self):
-        s = self._store()
-        sid = s.create_story("story")
-        tid = s.create_task("t", role="coder", parent=sid)
-        kids = s.children(sid)
-        self.assertEqual(len(kids), 1)
-        self.assertTrue(self._is_short(kids[0].id), f"child id not short: {kids[0].id!r}")
-        self.assertEqual(kids[0].id, tid)
-
-    def test_closed_stories_id_is_short(self):
-        s = self._store()
-        sid = s.create_story("closed story")
-        s.close(sid, "done")
-        closed = s.closed_stories()
-        self.assertEqual(len(closed), 1)
-        self.assertTrue(self._is_short(closed[0]["id"]), f"closed story id not short: {closed[0]['id']!r}")
-        self.assertEqual(closed[0]["id"], sid)
-
-    def test_all_tasks_ids_are_short(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        tasks = s.all_tasks()
-        ids = [t.id for t in tasks]
-        self.assertIn(tid, ids)
-        for i in ids:
-            self.assertTrue(self._is_short(i), f"id not short: {i!r}")
-
-    def test_story_id_is_short(self):
-        s = self._store()
-        sid = s.create_story("s")
-        self.assertTrue(self._is_short(sid), f"story id not short: {sid!r}")
-
-    def test_close_with_short_id_works(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        s.close(tid, "done")
-        self.assertEqual(s.get_task(tid).status, "done")
-
-    def test_close_with_full_id_works(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        full_id = self._prefix + "-" + tid
-        s.close(full_id, "done")
-        self.assertEqual(s.get_task(tid).status, "done")
-
-
-class TestBdStorePrefixFromBd(unittest.TestCase):
-    def setUp(self):
-        self._root = _new_dotted_bd_root()
-        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
-        os.environ["GRID_ROOT_OVERRIDE"] = self._root
-
-    def tearDown(self):
-        if self._prior is None:
-            os.environ.pop("GRID_ROOT_OVERRIDE", None)
-        else:
-            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
-
-    def _store(self):
-        return BdStore(Config())
-
-    def test_prefix_is_bds_sanitized_prefix_not_the_dirname(self):
-        s = self._store()
-        self.assertEqual(s._prefix(), "foo-1_2")
-        self.assertNotEqual(s._prefix(), os.path.basename(self._root))
-
-    def test_get_task_roundtrips_id_on_dotted_root(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        t = s.get_task(tid)
-        self.assertEqual(t.id, tid)
-
-    def test_close_roundtrips_id_on_dotted_root(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        s.close(tid, "done")
-        self.assertEqual(s.get_task(tid).status, "done")
-
-
-class TestBdStorePrefixOnCollidingRoot(unittest.TestCase):
-    def setUp(self):
-        self._root = _new_named_bd_root("the-grid")
-        self._prior = os.environ.get("GRID_ROOT_OVERRIDE")
-        os.environ["GRID_ROOT_OVERRIDE"] = self._root
-
-    def tearDown(self):
-        if self._prior is None:
-            os.environ.pop("GRID_ROOT_OVERRIDE", None)
-        else:
-            os.environ["GRID_ROOT_OVERRIDE"] = self._prior
-
-    def _store(self):
-        return BdStore(Config())
-
-    def test_prefix_discovery_does_not_create_a_stray_bead(self):
-        s = self._store()
-        self.assertEqual(s._prefix(), "the-grid")
-        listing = subprocess.run(
-            ["bd", "-C", self._root, "list", "--json"],
-            capture_output=True, text=True, check=True,
-        )
-        self.assertEqual(json.loads(listing.stdout), [])
-
-    def test_get_task_roundtrips_id_on_colliding_root(self):
-        s = self._store()
-        tid = s.create_task("t", role="coder")
-        t = s.get_task(tid)
-        self.assertEqual(t.id, tid)
 
 
 if __name__ == "__main__":

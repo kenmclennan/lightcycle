@@ -24,7 +24,7 @@ tg inbox               # what needs YOU now (gates + blocks)
 tg backlog             # backlog items to develop later
 tg active              # what agents are working now
 tg queue 10            # next 10 upcoming agent tasks
-tg ps                  # running workers: role, bead, pid, alive/dead
+tg ps                  # running workers: role, task, pid, alive/dead
 tg logs run -f         # tail the run-loop
 tg logs <task> -f      # tail the worker on a task
 tg logs coder -f       # tail the most recent coder

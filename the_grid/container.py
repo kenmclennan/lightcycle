@@ -3,7 +3,7 @@ from the_grid.adapters.github import GitHubEventsAdapter
 from the_grid.adapters.gitio import GitAdapter
 from the_grid.adapters.lock import RunLockAdapter
 from the_grid.adapters.spawner import SpawnerAdapter
-from the_grid.adapters.store import BdStore
+from the_grid.adapters.sqlite_store import SqliteStore
 from the_grid.adapters.workers import WorkersAdapter
 from the_grid.config import Config
 
@@ -14,7 +14,7 @@ class Container:
         github=None, lock=None,
     ):
         self.config = config if config is not None else Config()
-        self.store = store if store is not None else BdStore(self.config)
+        self.store = store if store is not None else SqliteStore(self.config)
         self.git = git if git is not None else GitAdapter()
         self.spawner = spawner if spawner is not None else SpawnerAdapter(self.config)
         self.workers = workers if workers is not None else WorkersAdapter(self.config)

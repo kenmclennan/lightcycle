@@ -65,8 +65,8 @@ currently running._
 
 ### State lives in the store, not in processes
 
-Work is durable in the bead store, not in any worker or pool process. The pool is a stateless engine
-that polls `bd ready` and runs whatever is ready; kill it, suspend the laptop, lose a worker - nothing
+Work is durable in the store, not in any worker or pool process. The pool is a stateless engine
+that polls the store for ready work and runs whatever is ready; kill it, suspend the laptop, lose a worker - nothing
 is lost, because the truth is in the store and `sweep` reconciles on restart. Two corollaries:
 **gate held work with `--blocked-by`** (the store releases it automatically - never hand-track what
 goes next), and **prefer pull (poll the store) over push** (more robust; push is only a latency
