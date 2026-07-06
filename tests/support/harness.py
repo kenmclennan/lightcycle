@@ -6,6 +6,7 @@ from pathlib import Path
 
 import the_grid.cli as cli
 from the_grid.container import Container
+from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
 _AGENTS = {
@@ -18,17 +19,24 @@ _AGENTS = {
 def _write_steps(root, roles):
     adir = Path(root) / "steps"
     adir.mkdir(exist_ok=True)
+    metas = {}
     for r in roles:
         model, step, routes = _AGENTS[r]
         fm = ["---", "model: %s" % model, "step: %s" % step, "routes:"]
         fm += ["  %s: %s" % (o, n) for o, n in routes.items()]
         fm += ["---", "# %s" % r, "stub"]
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
+        metas[r] = {"model": model, "step": step, "routes": routes}
+    wdir = Path(root) / "workflows"
+    wdir.mkdir(exist_ok=True)
+    (wdir / "standard.md").write_text(graph_text_from_metas(metas, entry="build"))
 
 
 def _write_config(root):
     p = os.path.join(tempfile.mkdtemp(), "config")
-    Path(p).write_text("projects: %s\nspecs: %s\n" % (root, root))
+    Path(p).write_text(
+        "projects: %s\nspecs: %s\ndefault-workflow: standard\n" % (root, root)
+    )
     return p
 
 

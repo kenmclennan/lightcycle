@@ -15,6 +15,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def workflow_text(self, name):
+        pass
+
+    @abstractmethod
     def worktrees_dir(self):
         pass
 

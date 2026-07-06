@@ -88,7 +88,7 @@ class RetroUseCase:
         return rows, all_refs
 
     def execute(self, input: RetroInput) -> RetroResponse:
-        signals = cfeedback.Signals.from_metas(self._flow.role_metas())
+        signals = cfeedback.Signals.from_graph(self._flow.load_graph())
 
         if input.subject is not None:
             children = self._store.children(input.subject)

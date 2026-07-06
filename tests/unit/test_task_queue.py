@@ -1,9 +1,9 @@
 import unittest
 
-from the_grid.domain.flow import Flow
+from tests.support.fake_fs import flow_from_metas
 from the_grid.domain.work import Task, TaskQueue
 
-FLOW = Flow.assemble(
+FLOW = flow_from_metas(
     {
         "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
         "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},

@@ -32,14 +32,9 @@ class Signals:
         self._specs = list(specs)
 
     @classmethod
-    def from_metas(cls, role_metas) -> "Signals":
+    def from_graph(cls, graph) -> "Signals":
         specs = []
-        for meta in role_metas.values():
-            meta = meta or {}
-            step = meta.get("step")
-            decls = meta.get("signals")
-            if not step or not isinstance(decls, dict):
-                continue
+        for step, decls in graph.signals.items():
             for name, decl in decls.items():
                 specs.append(SignalSpec.parse(name, step, decl))
         return cls(specs)

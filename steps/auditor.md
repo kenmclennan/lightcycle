@@ -1,8 +1,5 @@
 ---
 model: sonnet
-step: audit
-on_epic_close: true
-on_retro_cadence: true
 ---
 
 # Auditor

@@ -1,9 +1,6 @@
 ---
-step: develop
 produces:
   spec: required
-routes:
-  drafted: review-plan
 ---
 
 # Develop (you + driver)

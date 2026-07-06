@@ -1,11 +1,3 @@
----
-step: review-plan
-routes:
-  changes: develop
-signals:
-  resets: changes
----
-
 # Review-plan (you + driver)
 
 A spec is waiting for review before work proceeds. You decide; the driver runs this skill to help

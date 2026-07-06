@@ -51,10 +51,16 @@ class SmokeTest(unittest.TestCase):
         steps.mkdir()
         (steps / "coder.md").write_text(_CODER_STEP)
         (steps / "reviewer.md").write_text(_REVIEWER_STEP)
+        workflows = Path(cls.root) / "workflows"
+        workflows.mkdir()
+        (workflows / "standard.md").write_text(
+            "entry: build\n\nnodes:\n  build   coder\n  review  reviewer\n"
+            "\nedges:\n  build  done  review\n"
+        )
         ws = tempfile.mkdtemp()
         Path(cls.root, "grid.config").write_text(
             "projects: %s\nspecs: %s\nshortcode: tg\n"
-            "branch-prefix: feat\nmax-agents: 5\nworktree-retries: 6\n"
+            "branch-prefix: feat\ndefault-workflow: standard\nmax-agents: 5\nworktree-retries: 6\n"
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
             "worker-history: 20\neditor: vi\n" % (ws, ws)
         )

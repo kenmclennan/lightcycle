@@ -9,6 +9,7 @@ _SEED_KEYS = [
     ("specs", "~/workspace/specs"),
     ("branch-prefix", "feat"),
     ("shortcode", "PROJ"),
+    ("default-workflow", "standard"),
     ("max-agents", "5"),
     ("worktree-retries", "6"),
     ("worktree-retry-sleep", "0.25"),
@@ -160,6 +161,24 @@ class Config:
 
     def shortcode(self):
         return self._required_str("shortcode")
+
+    def default_workflow(self):
+        return self._required_str("default-workflow")
+
+    def project_config(self, project):
+        if not project:
+            return {}
+        p = os.path.join(self.projects_root(), project, ".grid", "config")
+        if not os.path.exists(p):
+            return {}
+        with open(p) as f:
+            return frontmatter.parse_frontmatter(f.read())
+
+    def shortcode_for(self, project):
+        return self.project_config(project).get("shortcode") or self.shortcode()
+
+    def default_workflow_for(self, project):
+        return self.project_config(project).get("default-workflow") or self.default_workflow()
 
     def max_agents(self):
         env = self._env_int("GRID_MAX_AGENTS", None)

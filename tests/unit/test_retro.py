@@ -1,7 +1,8 @@
 import unittest
 
-from the_grid.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec, Signals
+from the_grid.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec
 from the_grid.domain.work import Task
+from tests.support.fake_fs import signals_from_metas
 
 
 def tk(**kw):
@@ -42,7 +43,7 @@ class TestSignals(unittest.TestCase):
     }
 
     def test_from_metas_reads_declarations(self):
-        signals = Signals.from_metas(self.METAS)
+        signals = signals_from_metas(self.METAS)
         tasks = [
             tk(id="t1", step="review", outcome="rejected", model="sonnet"),
             tk(id="t2", step="review", outcome="done", model="sonnet"),
@@ -54,7 +55,7 @@ class TestSignals(unittest.TestCase):
         )
 
     def test_tally_buckets_by_task_model(self):
-        signals = Signals.from_metas(self.METAS)
+        signals = signals_from_metas(self.METAS)
         tasks = [
             tk(id="t1", step="review", outcome="rejected", model="opus"),
             tk(id="t2", step="review", outcome="rejected", model="sonnet"),
@@ -65,7 +66,7 @@ class TestSignals(unittest.TestCase):
         )
 
     def test_tally_labels_missing_model_as_unlabeled(self):
-        signals = Signals.from_metas(self.METAS)
+        signals = signals_from_metas(self.METAS)
         tasks = [tk(id="t1", step="review", outcome="rejected")]
         self.assertEqual(
             signals.tally(tasks), {"review_rounds": {UNLABELED_MODEL: 1}, "conflicts": {}}
@@ -73,12 +74,12 @@ class TestSignals(unittest.TestCase):
 
     def test_tally_reports_empty_for_declared_but_unmatched(self):
         self.assertEqual(
-            Signals.from_metas(self.METAS).tally([]), {"review_rounds": {}, "conflicts": {}}
+            signals_from_metas(self.METAS).tally([]), {"review_rounds": {}, "conflicts": {}}
         )
 
     def test_no_declarations_gives_empty_tally(self):
         self.assertEqual(
-            Signals.from_metas({"coder": {"step": "build"}}).tally([tk(step="build")]), {}
+            signals_from_metas({"coder": {"step": "build"}}).tally([tk(step="build")]), {}
         )
 
     def test_same_named_signal_across_steps_aggregates(self):
@@ -95,7 +96,7 @@ class TestSignals(unittest.TestCase):
             tk(id="e", step="review", outcome="done", model="opus"),
         ]
         self.assertEqual(
-            Signals.from_metas(metas).tally(tasks), {"resets": {"opus": 1, "sonnet": 3}}
+            signals_from_metas(metas).tally(tasks), {"resets": {"opus": 1, "sonnet": 3}}
         )
 
 

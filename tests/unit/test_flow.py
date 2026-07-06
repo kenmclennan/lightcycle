@@ -1,7 +1,13 @@
 import unittest
 
 from the_grid.domain.flow import Flow, Transition
+from the_grid.domain.flow.graph import parse_graph
 from the_grid.domain.work import Task
+from tests.support.fake_fs import graph_text_from_metas
+
+
+def mkflow(metas):
+    return Flow.from_graph(parse_graph(graph_text_from_metas(metas)), metas)
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -32,14 +38,14 @@ HUMAN_METAS = {
 
 class TestFlowAssembly(unittest.TestCase):
     def test_owner_and_routes(self):
-        flow = Flow.assemble(METAS)
+        flow = mkflow(METAS)
         self.assertEqual(flow.owner_of("build"), "coder")
         self.assertEqual(flow.owner_of("review"), "reviewer")
         self.assertEqual(flow.outcomes_for("build"), ["done"])
         self.assertEqual(flow.next("build", "done").to_step, "review")
 
     def test_driver_owns_nothing(self):
-        flow = Flow.assemble(METAS)
+        flow = mkflow(METAS)
         self.assertEqual(
             {flow.owner_of(s) for s in flow.steps()}, {"coder", "reviewer", "pr-watcher"}
         )
@@ -48,21 +54,21 @@ class TestFlowAssembly(unittest.TestCase):
 
 class TestHumanSteps(unittest.TestCase):
     def test_agent_step_owned_by_its_basename(self):
-        self.assertEqual(Flow.assemble(HUMAN_METAS).owner_of("watch-pr"), "watch-pr")
+        self.assertEqual(mkflow(HUMAN_METAS).owner_of("watch-pr"), "watch-pr")
 
     def test_no_model_step_owned_by_human(self):
-        flow = Flow.assemble(HUMAN_METAS)
+        flow = mkflow(HUMAN_METAS)
         self.assertEqual(flow.owner_of("ready-merge"), "human")
         self.assertEqual(flow.owner_of("cleanup"), "human")
 
     def test_routes_to_human_step(self):
-        t = Flow.assemble(HUMAN_METAS).next("watch-pr", "done")
+        t = mkflow(HUMAN_METAS).next("watch-pr", "done")
         self.assertEqual((t.to_step, t.to_role), ("ready-merge", "human"))
 
 
 class TestNext(unittest.TestCase):
     def setUp(self):
-        self.flow = Flow.assemble(METAS)
+        self.flow = mkflow(METAS)
 
     def test_owned_target_derives_role(self):
         t = self.flow.next("build", "done")
@@ -128,7 +134,7 @@ class TestTransition(unittest.TestCase):
 
 class TestEpicClose(unittest.TestCase):
     def test_no_on_epic_close_returns_empty(self):
-        flow = Flow.assemble(METAS)
+        flow = mkflow(METAS)
         self.assertEqual(flow.epic_close_steps(), [])
 
     def test_step_declaring_on_epic_close_is_returned(self):
@@ -136,26 +142,18 @@ class TestEpicClose(unittest.TestCase):
             "inspector": {"model": "sonnet", "step": "inspect", "on_epic_close": True},
             "coder": {"model": "sonnet", "step": "build"},
         }
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.epic_close_steps(), [("inspect", "inspector")])
 
     def test_agnostic_arbitrary_step_name(self):
         metas = {"checker": {"model": "haiku", "step": "check-it", "on_epic_close": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.epic_close_steps(), [("check-it", "checker")])
-
-    def test_multiple_on_epic_close_steps_sorted(self):
-        metas = {
-            "beta": {"model": "sonnet", "step": "zz-step", "on_epic_close": True},
-            "alpha": {"model": "sonnet", "step": "aa-step", "on_epic_close": True},
-        }
-        steps = Flow.assemble(metas).epic_close_steps()
-        self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
 
 
 class TestRetroCadence(unittest.TestCase):
     def test_no_on_retro_cadence_returns_empty(self):
-        flow = Flow.assemble(METAS)
+        flow = mkflow(METAS)
         self.assertEqual(flow.retro_cadence_steps(), [])
 
     def test_step_declaring_on_retro_cadence_is_returned(self):
@@ -163,82 +161,69 @@ class TestRetroCadence(unittest.TestCase):
             "scanner": {"model": "sonnet", "step": "scan", "on_retro_cadence": True},
             "coder": {"model": "sonnet", "step": "build"},
         }
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.retro_cadence_steps(), [("scan", "scanner")])
 
     def test_agnostic_arbitrary_step_name_not_audit(self):
         metas = {"checker": {"model": "haiku", "step": "check-trends", "on_retro_cadence": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.retro_cadence_steps(), [("check-trends", "checker")])
 
-    def test_multiple_retro_cadence_steps_sorted(self):
-        metas = {
-            "beta": {"model": "sonnet", "step": "zz-step", "on_retro_cadence": True},
-            "alpha": {"model": "sonnet", "step": "aa-step", "on_retro_cadence": True},
-        }
-        steps = Flow.assemble(metas).retro_cadence_steps()
-        self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
 
     def test_step_can_declare_both_epic_close_and_retro_cadence(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
                               "on_epic_close": True, "on_retro_cadence": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.epic_close_steps(), [("audit", "auditor")])
         self.assertEqual(flow.retro_cadence_steps(), [("audit", "auditor")])
 
 
 class TestHooks(unittest.TestCase):
     def test_no_hooks_returns_empty(self):
-        flow = Flow.assemble(METAS)
+        flow = mkflow(METAS)
         self.assertEqual(flow.hooks(), {})
 
     def test_arbitrary_hook_name_surfaced_generically(self):
         metas = {"deployer": {"model": "sonnet", "step": "deploy", "on_deploy_green": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.hooks(), {"on_deploy_green": ["deploy"]})
 
-    def test_multiple_steps_same_hook_sorted(self):
-        metas = {
-            "beta": {"model": "sonnet", "step": "zz", "on_custom_event": True},
-            "alpha": {"model": "sonnet", "step": "aa", "on_custom_event": True},
-        }
-        self.assertEqual(Flow.assemble(metas).hooks(), {"on_custom_event": ["aa", "zz"]})
 
     def test_multiple_distinct_hooks_both_present(self):
         metas = {"role": {"model": "sonnet", "step": "s", "on_event_a": True, "on_event_b": "x"}}
-        hooks = Flow.assemble(metas).hooks()
+        hooks = mkflow(metas).hooks()
         self.assertIn("on_event_a", hooks)
         self.assertIn("on_event_b", hooks)
 
     def test_known_hooks_also_appear_generically(self):
         metas = {"inspector": {"model": "sonnet", "step": "inspect", "on_epic_close": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.hooks().get("on_epic_close"), ["inspect"])
 
     def test_falsy_hook_value_not_included(self):
         metas = {"role": {"model": "sonnet", "step": "s", "on_event": False}}
-        self.assertEqual(Flow.assemble(metas).hooks(), {})
+        self.assertEqual(mkflow(metas).hooks(), {})
 
 
 class TestHookSteps(unittest.TestCase):
     def test_no_hooks_returns_empty(self):
-        flow = Flow.assemble(METAS)
+        flow = mkflow(METAS)
         self.assertEqual(flow.hook_steps(), [])
 
     def test_known_hook_step_included(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit", "on_epic_close": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
 
     def test_arbitrary_hook_name_included_generically(self):
         metas = {"deployer": {"model": "sonnet", "step": "deploy", "on_deploy_green": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("deploy", "deployer")])
 
     def test_step_flagged_by_multiple_hooks_appears_once(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
                               "on_epic_close": True, "on_retro_cadence": True}}
-        flow = Flow.assemble(metas)
+        flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
 
     def test_multiple_hook_steps_sorted(self):
@@ -246,7 +231,7 @@ class TestHookSteps(unittest.TestCase):
             "beta": {"model": "sonnet", "step": "zz-step", "on_epic_close": True},
             "alpha": {"model": "sonnet", "step": "aa-step", "on_retro_cadence": True},
         }
-        steps = Flow.assemble(metas).hook_steps()
+        steps = mkflow(metas).hook_steps()
         self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
 
 

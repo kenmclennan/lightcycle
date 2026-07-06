@@ -64,6 +64,7 @@ def record_to_task(record):
         deps=record.get("dep_count") or 0,
         notes=record.get("notes"),
         claimed_by=record.get("assignee"),
+        workflow=record.get("workflow"),
         epic=meta.get("epic"),
         since=meta.get("since"),
         fired_at=meta.get("fired_at"),
@@ -298,7 +299,7 @@ class FakeStore(StorePort):
         if parent is not None:
             b["parent"] = parent
 
-    def create_story(self, title, *, epic=None, project=None, goal=None):
+    def create_story(self, title, *, epic=None, project=None, goal=None, workflow=None):
         if not epic:
             raise ValueError("story requires an epic parent")
         b = self._new_record(
@@ -306,16 +307,18 @@ class FakeStore(StorePort):
             type="story",
             parent=epic,
             labels=labels_for(project=project, goal=goal),
+            workflow=workflow,
         )
         tid = b["id"]
         self._records[tid] = b
         return tid
 
-    def create_epic(self, title, *, project=None, goal=None):
+    def create_epic(self, title, *, project=None, goal=None, workflow=None):
         b = self._new_record(
             title=title,
             type="epic",
             labels=labels_for(project=project, goal=goal),
+            workflow=workflow,
         )
         tid = b["id"]
         self._records[tid] = b

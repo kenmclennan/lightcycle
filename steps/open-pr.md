@@ -1,15 +1,9 @@
 ---
 model: sonnet
-step: open-pr
 accepts:
   branch: optional
 produces:
   pr: required
-routes:
-  done: watch-pr
-  conflicted: resolve
-signals:
-  conflicts: ~conflict
 ---
 
 # Open-PR
