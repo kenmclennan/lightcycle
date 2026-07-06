@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS counters (
 CREATE TABLE IF NOT EXISTS history (
     task_id TEXT NOT NULL,
     seq INTEGER NOT NULL,
-    status TEXT NOT NULL
+    status TEXT NOT NULL,
+    ts TEXT
 );
 """
 
@@ -88,14 +89,21 @@ def _domain_status(raw_status, assignee, role):
 
 
 class SqliteStore(StorePort):
-    def __init__(self, config):
+    def __init__(self, config, now=None):
         self._config = config
+        self._now = now or (lambda: datetime.datetime.now().isoformat())
         path = os.path.join(config.grid_root(), _DB_FILENAME)
         self._conn = sqlite3.connect(path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
+        self._migrate_history_ts()
         self._conn.commit()
+
+    def _migrate_history_ts(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}
+        if "ts" not in cols:
+            self._conn.execute("ALTER TABLE history ADD COLUMN ts TEXT")
 
     def _row_to_task(self, row, artifacts, deps):
         d = dict(zip(_COLUMNS, row))
@@ -208,8 +216,8 @@ class SqliteStore(StorePort):
             "SELECT COALESCE(MAX(seq), -1) FROM history WHERE task_id = ?", (tid,)
         ).fetchone()
         self._conn.execute(
-            "INSERT INTO history (task_id, seq, status) VALUES (?, ?, ?)",
-            (tid, row[0] + 1, status),
+            "INSERT INTO history (task_id, seq, status, ts) VALUES (?, ?, ?, ?)",
+            (tid, row[0] + 1, str(status), self._now()),
         )
 
     def story_artifacts(self, story_id):
@@ -337,6 +345,7 @@ class SqliteStore(StorePort):
             "UPDATE tasks SET status = 'closed', close_reason = ?, closed_at = ? WHERE id = ?",
             (reason, datetime.datetime.now().isoformat(), tid),
         )
+        self._record_history(tid, Status.DONE)
         self._conn.commit()
 
     def update_metadata(self, tid, meta):
@@ -416,6 +425,7 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "UPDATE tasks SET assignee = ?, status = 'in_progress' WHERE id = ?", (assignee, tid)
         )
+        self._record_history(tid, Status.IN_PROGRESS)
         self._conn.commit()
         return self.get_task(tid)
 
@@ -484,9 +494,9 @@ class SqliteStore(StorePort):
 
     def history(self, tid):
         rows = self._conn.execute(
-            "SELECT status FROM history WHERE task_id = ? ORDER BY seq DESC", (tid,)
+            "SELECT status, ts FROM history WHERE task_id = ? ORDER BY seq ASC", (tid,)
         ).fetchall()
-        return [{"Issue": {"status": r[0]}} for r in rows]
+        return [(r[0], r[1]) for r in rows]
 
     def tasks_closed_since(self, since_date):
         return self._select(

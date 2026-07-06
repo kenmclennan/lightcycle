@@ -1,5 +1,5 @@
 class StoreContractBase:
-    def make_store(self):
+    def make_store(self, now=None):
         raise NotImplementedError
 
     def test_label_add_visible_as_role(self):
@@ -199,3 +199,27 @@ class StoreContractBase:
         ids = [t.id for t in s.all_tasks()]
         self.assertIn(open_tid, ids)
         self.assertNotIn(closed_tid, ids)
+
+    def test_history_records_claim_and_close_in_order(self):
+        s = self.make_store()
+        tid = s.create_task("t", role="coder")
+        s.claim_ready("coder")
+        s.close(tid, "done")
+        statuses = [status for status, _ in s.history(tid)]
+        self.assertEqual(statuses, ["in-progress", "done"])
+
+    def test_history_stamps_ts_from_injected_clock(self):
+        ticks = iter(["2026-01-01T10:00:00", "2026-01-01T10:30:00"])
+        s = self.make_store(now=lambda: next(ticks))
+        tid = s.create_task("t", role="coder")
+        s.claim_ready("coder")
+        s.close(tid, "done")
+        self.assertEqual(
+            [ts for _, ts in s.history(tid)],
+            ["2026-01-01T10:00:00", "2026-01-01T10:30:00"],
+        )
+
+    def test_history_empty_for_unclaimed_task(self):
+        s = self.make_store()
+        tid = s.create_task("t", role="coder")
+        self.assertEqual(s.history(tid), [])

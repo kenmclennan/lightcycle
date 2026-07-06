@@ -5,8 +5,8 @@ from tests.support.store_contract import StoreContractBase
 
 
 class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
-    def make_store(self):
-        return FakeStore()
+    def make_store(self, now=None):
+        return FakeStore(now=now)
 
     def test_label_add_idempotent(self):
         s = self.make_store()

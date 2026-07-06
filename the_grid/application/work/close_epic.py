@@ -44,7 +44,13 @@ class CloseEpicUseCase:
             {
                 "feedback": [{"task": f.task, "text": f.text} for f in retro.feedback],
                 "story_signals": [
-                    {"story": row.story.id, "signals": row.signals, "reflections": row.reflections}
+                    {
+                        "story": row.story.id,
+                        "signals": row.signals,
+                        "reflections": row.reflections,
+                        "durations": row.durations,
+                        "duration": row.total_duration(),
+                    }
                     for row in retro.story_signals
                 ],
             }

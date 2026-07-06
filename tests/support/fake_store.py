@@ -74,10 +74,11 @@ def record_to_task(record):
 
 
 class FakeStore(StorePort):
-    def __init__(self):
+    def __init__(self, now=None):
         self._records = {}
         self._deps = {}
         self._history = {}
+        self._now = now or (lambda: datetime.datetime.now().isoformat())
 
     def _new_record(self, **fields):
         b = {
@@ -186,6 +187,7 @@ class FakeStore(StorePort):
         b["status"] = "closed"
         b["outcome"] = reason
         b["closed_at"] = datetime.datetime.now().isoformat()
+        self._record_history(tid, Status.DONE)
         for other_id, blockers in self._deps.items():
             if tid in blockers:
                 other = self._records.get(other_id)
@@ -212,7 +214,10 @@ class FakeStore(StorePort):
 
     def update_status(self, tid, status):
         self._get(tid)["status"] = status
-        self._history.setdefault(tid, []).insert(0, {"Issue": {"status": status}})
+        self._record_history(tid, status)
+
+    def _record_history(self, tid, status):
+        self._history.setdefault(tid, []).append((str(status), self._now()))
 
     def assign(self, tid, assignee):
         self._get(tid)["assignee"] = assignee or None
@@ -248,10 +253,11 @@ class FakeStore(StorePort):
         b = candidates[0]
         b["assignee"] = os.environ.get("GRID_SPAWNID") or role
         b["status"] = "in_progress"
+        self._record_history(b["id"], Status.IN_PROGRESS)
         return record_to_task(b)
 
     def history(self, tid):
-        return self._history.get(tid, [])
+        return list(self._history.get(tid, []))
 
     def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):

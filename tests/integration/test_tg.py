@@ -1432,6 +1432,22 @@ class TestClose(unittest.TestCase):
         call(_cli_mod.cmd_close, epic, "done")
         self.assertEqual(self.store.get_task(child).status, "ready")
 
+    def test_close_epic_retro_artifact_surfaces_task_and_story_duration(self):
+        epic = self.store.create_epic("epic e")
+        child = self.store.create_story("story s", epic=epic)
+        tid = self.store.create_task("build: t", step="build", role="coder", parent=child)
+        claimed = self.store.claim_ready("coder")
+        self.store.close(claimed.id, "done")
+        self.store.close(child, "merged")
+        rc, out, err = call(_cli_mod.cmd_close, epic, "done")
+        self.assertEqual(rc, 0, err)
+        artifact = next(a for a in self.store.story_artifacts(epic) if a.type == "retro")
+        digest = json.loads(artifact.value)
+        row = next(s for s in digest["story_signals"] if s["story"] == child)
+        self.assertIn(tid, row["durations"])
+        self.assertIsNotNone(row["durations"][tid])
+        self.assertIsNotNone(row["duration"])
+
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
@@ -1708,6 +1724,23 @@ class TestRetro(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_retro, epic)
         self.assertEqual(rc, 0, err)
         self.assertIn("conflicts=1", out)
+
+    def test_retro_shows_story_duration_for_claimed_and_closed_task(self):
+        epic, sid = self._make_epic_with_story()
+        self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        claimed = self.store.claim_ready("coder")
+        self.store.close(claimed.id, "done")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertRegex(out, r"duration=\d")
+
+    def test_retro_shows_unknown_duration_when_task_never_claimed(self):
+        epic, sid = self._make_epic_with_story()
+        tid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        self.store.close(tid, "done")
+        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("duration=unknown", out)
 
 
 class TestWorklog(unittest.TestCase):

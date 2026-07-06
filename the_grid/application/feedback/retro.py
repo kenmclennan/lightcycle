@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from the_grid.domain import feedback as cfeedback
@@ -24,6 +24,11 @@ class StorySignals:
     story: Task
     signals: Dict[str, Dict[str, int]]
     reflections: int
+    durations: Dict[str, Optional[float]] = field(default_factory=dict)
+
+    def total_duration(self) -> Optional[float]:
+        known = [v for v in self.durations.values() if v is not None]
+        return sum(known) if known else None
 
 
 @dataclass(frozen=True)
@@ -49,13 +54,24 @@ class RetroUseCase:
                     pass
         return out
 
+    def _durations_of(self, tasks):
+        result = {}
+        for t in tasks:
+            elapsed = cfeedback.Duration(self._store.history(t.id)).elapsed()
+            result[t.id] = elapsed.total_seconds() if elapsed is not None else None
+        return result
+
     def _collect_story_row(self, story, signals):
         children = self._store.children(story.id)
         tasks = [c for c in children if c.type == "task"]
         refs = []
         for t in tasks:
             refs.extend(self._reflections_of(t.id))
-        return StorySignals(story=story, signals=signals.tally(tasks), reflections=len(refs)), refs
+        row = StorySignals(
+            story=story, signals=signals.tally(tasks), reflections=len(refs),
+            durations=self._durations_of(tasks),
+        )
+        return row, refs
 
     def _epic_scope(self, subject_id, signals):
         children = self._store.children(subject_id)
@@ -104,7 +120,8 @@ class RetroUseCase:
                 story = self._store.get_task(story_id)
                 rows.append(
                     StorySignals(
-                        story=story, signals=signals.tally(story_tasks), reflections=len(refs)
+                        story=story, signals=signals.tally(story_tasks), reflections=len(refs),
+                        durations=self._durations_of(story_tasks),
                     )
                 )
             for task in orphan_tasks:

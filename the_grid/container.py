@@ -12,10 +12,10 @@ from the_grid.config import Config
 class Container:
     def __init__(
         self, *, config=None, store=None, git=None, spawner=None, workers=None, fs=None,
-        github=None, lock=None, breaker=None,
+        github=None, lock=None, breaker=None, now=None,
     ):
         self.config = config if config is not None else Config()
-        self.store = store if store is not None else SqliteStore(self.config)
+        self.store = store if store is not None else SqliteStore(self.config, now=now)
         self.git = git if git is not None else GitAdapter()
         self.spawner = spawner if spawner is not None else SpawnerAdapter(self.config)
         self.workers = workers if workers is not None else WorkersAdapter(self.config)
