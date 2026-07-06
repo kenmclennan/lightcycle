@@ -1,3 +1,4 @@
+from the_grid.ports.breaker import BreakerPort
 from the_grid.ports.fs import FsPort
 from the_grid.ports.git import GitPort
 from the_grid.ports.github import GitHubEventsPort
@@ -7,6 +8,7 @@ from the_grid.ports.store import StorePort
 from the_grid.ports.workers import WorkersPort
 
 __all__ = [
+    "BreakerPort",
     "FsPort",
     "GitHubEventsPort",
     "GitPort",

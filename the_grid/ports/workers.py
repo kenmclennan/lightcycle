@@ -25,3 +25,7 @@ class WorkersPort(ABC):
     @abstractmethod
     def set_task(self, spawnid, task):
         pass
+
+    @abstractmethod
+    def mark_checked(self, spawnid):
+        pass

@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from the_grid.application.pool.sweep import SweepUseCase
-from the_grid.domain.pool import PoolPlan, ReadyQueue, WorkerPool
+from the_grid.domain.pool import Breaker, PoolPlan, ReadyQueue, WorkerPool
 
 
 @dataclass(frozen=True)
@@ -24,10 +24,16 @@ class TickResponse:
     max_agents: int = 0
     ready: int = 0
     inflight_count: int = 0
+    breaker_open: bool = False
+    breaker_reset_at: Optional[float] = None
+    breaker_opened: bool = False
+    breaker_closed: bool = False
 
 
 class TickUseCase:
-    def __init__(self, store, workers, spawner, config, monitor=None, cadence_gate=None):
+    def __init__(
+        self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None
+    ):
         self._store = store
         self._workers = workers
         self._spawner = spawner
@@ -35,6 +41,7 @@ class TickUseCase:
         self._sweep = SweepUseCase(store, workers)
         self._monitor = monitor
         self._cadence_gate = cadence_gate
+        self._breaker_gate = breaker_gate
 
     def execute(self, input: TickInput) -> TickResponse:
         monitor_result = self._monitor.execute() if self._monitor else None
@@ -44,12 +51,17 @@ class TickUseCase:
         conflicted = monitor_result.conflicted if monitor_result else []
         cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
         cadence_fired = cadence_result.fired if cadence_result else []
+        breaker_result = self._breaker_gate.execute(input.now) if self._breaker_gate else None
+        breaker = breaker_result.breaker if breaker_result else Breaker()
         swept = self._sweep.execute(input.now, self._config.max_boot_seconds())
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
         max_agents = self._config.max_agents()
         slots = pool.free_slots(max_agents, probe)
         alive_count = max_agents - slots
+        cap = breaker.spawn_cap(input.now, alive_count)
+        if cap is not None:
+            slots = min(slots, cap)
         inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
         inflight_total = sum(inflight_dict.values())
         ready_roles = ReadyQueue(self._store.ready_tasks()).roles()
@@ -72,4 +84,8 @@ class TickUseCase:
             max_agents=max_agents,
             ready=ready_count,
             inflight_count=inflight_total,
+            breaker_open=breaker.is_open,
+            breaker_reset_at=breaker.reset_at,
+            breaker_opened=breaker_result.opened if breaker_result else False,
+            breaker_closed=breaker_result.closed if breaker_result else False,
         )

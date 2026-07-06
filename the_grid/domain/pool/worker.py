@@ -9,6 +9,8 @@ class Worker:
     role: Optional[str] = None
     task: Optional[str] = None
     started: float = 0
+    log: Optional[str] = None
+    checked: bool = False
 
     @classmethod
     def from_state(cls, d) -> "Worker":
@@ -18,6 +20,8 @@ class Worker:
             role=d.get("role"),
             task=d.get("task"),
             started=d.get("started", 0),
+            log=d.get("log"),
+            checked=bool(d.get("checked", False)),
         )
 
     def is_alive(self, probe):

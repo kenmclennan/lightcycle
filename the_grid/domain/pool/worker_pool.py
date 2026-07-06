@@ -39,3 +39,6 @@ class WorkerPool:
             and not w.is_booting(now, max_boot)
             and (w.task is None or w.task not in claimed_ids)
         ]
+
+    def dead_unchecked(self, probe):
+        return [w for w in self._workers if w.spawnid and not w.checked and not w.is_alive(probe)]

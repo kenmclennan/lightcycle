@@ -61,6 +61,7 @@ from the_grid.application.flow import (
 )
 from the_grid.application.pool import (
     AcquireRunLockUseCase,
+    BreakerGateUseCase,
     ListWorkersUseCase,
     MonitorPrsUseCase,
     ReleaseRunLockUseCase,
@@ -675,6 +676,11 @@ def _format_tick(result, prev_snapshot, now):
         lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
     for bid in result.swept:
         lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
+    if result.breaker_opened:
+        reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
+        lines.append("%s  %-7s  %s" % (ts, "breaker", "opened until %s" % reset_ts))
+    if result.breaker_closed:
+        lines.append("%s  %-7s  %s" % (ts, "breaker", "closed"))
     cur = (result.alive, result.max_agents, result.ready, result.inflight_count)
     if cur != prev_snapshot or result.pruned:
         state = "active=%d/%d ready=%d inflight=%d" % (
@@ -708,6 +714,7 @@ def cmd_run(argv):
             _container.store, _container.github, _worktrees(), flow, complete
         )
         cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
+        breaker_gate = BreakerGateUseCase(_container.workers, _container.fs, _container.breaker)
         tick = TickUseCase(
             _container.store,
             _container.workers,
@@ -715,6 +722,7 @@ def cmd_run(argv):
             _container.config,
             monitor=monitor,
             cadence_gate=cadence_gate,
+            breaker_gate=breaker_gate,
         )
         if a.once:
             now = time.time()

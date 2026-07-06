@@ -543,6 +543,36 @@ class TestRun(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 2)
 
+    def _breaker_state(self):
+        return json.loads((Path(self.root) / "logs" / "breaker.json").read_text())
+
+    def test_run_opens_breaker_on_a_rejected_rate_limit_event_and_stops_spawning(self):
+        self.store.create_task("build: t", step="build", role="coder")
+        log_path = Path(self.root) / "logs" / "worker-coder-dead.log"
+        log_path.write_text(
+            '{"type":"rate_limit_event","rate_limit_info":'
+            '{"status":"rejected","resetsAt":9999999999}}\n'
+        )
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        self._preset_worker(
+            spawnid="dead", role="coder", pid=dead.pid, log=str(log_path), task=None, started=0
+        )
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self._breaker_state(), {"open": True, "reset_at": 9999999999})
+        self.assertEqual(len(self._workers()), 1)
+
+    def test_run_spawns_nothing_while_breaker_open_pre_reset(self):
+        self.store.create_task("build: t", step="build", role="coder")
+        (Path(self.root) / "logs" / "workers.json").write_text("[]")
+        (Path(self.root) / "logs" / "breaker.json").write_text(
+            json.dumps({"open": True, "reset_at": time.time() + 9999})
+        )
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self._workers(), [])
+
 
 class TestRunSingletonLock(unittest.TestCase):
     def setUp(self):

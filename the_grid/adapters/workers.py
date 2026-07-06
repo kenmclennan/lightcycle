@@ -89,6 +89,15 @@ def set_task(root, spawnid, task):
         write_workers(root, workers)
 
 
+def mark_checked(root, spawnid):
+    with registry_lock(root):
+        workers = workers_state(root)
+        for w in workers:
+            if w.get("spawnid") == spawnid:
+                w["checked"] = True
+        write_workers(root, workers)
+
+
 class WorkersAdapter(WorkersPort):
     def __init__(self, config):
         self._config = config
@@ -111,3 +120,6 @@ class WorkersAdapter(WorkersPort):
 
     def set_task(self, spawnid, task):
         return set_task(self._config.grid_root(), spawnid, task)
+
+    def mark_checked(self, spawnid):
+        return mark_checked(self._config.grid_root(), spawnid)
