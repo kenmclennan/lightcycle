@@ -16,6 +16,7 @@ TG = str(ROOT / "bin" / "tg")
 
 sys.path.insert(0, str(ROOT))
 import the_grid.cli as _cli_mod
+from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from the_grid.adapters.gitio import GitAdapter
 from the_grid.application.services.flow import FlowService
@@ -45,6 +46,7 @@ def write_config(projects=None, specs=None):
     lines += [
         "shortcode: tg",
         "branch-prefix: feat",
+        "default-workflow: standard",
         "max-agents: 5",
         "worktree-retries: 6",
         "worktree-retry-sleep: 0.25",
@@ -111,22 +113,45 @@ _AGENT_SPECS = {
 _STEP_SIGNALS = {"review": {"review_rounds": "rejected"}, "open-pr": {"conflicts": "~conflict"}}
 
 
+def write_workflow(root, metas, name="standard", entry=None):
+    wdir = Path(root) / "workflows"
+    wdir.mkdir(exist_ok=True)
+    (wdir / ("%s.md" % name)).write_text(graph_text_from_metas(metas, entry=entry))
+
+
+def write_workflow_from_steps(root, name="standard"):
+    from the_grid.adapters import frontmatter
+
+    metas = {}
+    for f in sorted((Path(root) / "steps").glob("*.md")):
+        meta, _ = frontmatter.split_frontmatter(f.read_text())
+        metas[f.stem] = meta
+    write_workflow(root, metas, name)
+
+
 def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
     adir = Path(root) / "steps"
     adir.mkdir(exist_ok=True)
+    metas = {}
     for r in roles:
         model, step, routes = _AGENT_SPECS[r]
         fm = ["---", "model: %s" % model]
+        meta = {"model": model}
         if step:
             fm.append("step: %s" % step)
+            meta["step"] = step
         if routes:
             fm.append("routes:")
             fm += ["  %s: %s" % (o, n) for o, n in routes.items()]
+            meta["routes"] = routes
         if _STEP_SIGNALS.get(step):
             fm.append("signals:")
             fm += ["  %s: %s" % (k, v) for k, v in _STEP_SIGNALS[step].items()]
+            meta["signals"] = _STEP_SIGNALS[step]
         fm += ["---", "# %s" % r, "stub"]
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
+        metas[r] = meta
+    write_workflow(root, metas, entry="build")
 
 
 _CONTRACT_SPECS = {
@@ -167,6 +192,7 @@ def write_contract_steps(root, specs=None):
                 fm += ["  %s: %s" % (k, v) for k, v in d.items()]
         fm += ["---", "# %s" % r, "stub"]
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
+    write_workflow(root, specs, entry="build")
 
 
 def call(fn, *args):
@@ -183,6 +209,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     test.root = tempfile.mkdtemp()
     os.environ["GRID_ROOT_OVERRIDE"] = test.root
     os.environ["GRID_CONFIG"] = write_config(projects=test.root, specs=test.root)
+    write_workflow(test.root, {})
     if steps:
         write_steps(test.root)
     if contract_steps:
@@ -486,6 +513,7 @@ class TestRun(unittest.TestCase):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
+        write_workflow_from_steps(self.root)
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
         os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
@@ -597,6 +625,7 @@ class TestRunSingletonLock(unittest.TestCase):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
+        write_workflow_from_steps(self.root)
         os.environ["GRID_ROOT_OVERRIDE"] = self.root
         os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
         os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
@@ -907,7 +936,9 @@ class TestFlowFromAgents(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def _flow(self):
-        return FlowService(_cli_mod.container().fs, _cli_mod.container().store)
+        return FlowService(
+            _cli_mod.container().fs, _cli_mod.container().store, _cli_mod.container().config
+        )
 
     def test_flow_next_derives_role_from_owner(self):
         t = self._flow().flow_next("build", "done")
@@ -1572,6 +1603,7 @@ class TestInboxBacklog(unittest.TestCase):
         (adir / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n  changes: build\n---\nstub"
         )
+        write_workflow_from_steps(self.root)
 
     def test_inbox_shows_action_and_blocked_only(self):
         call(_cli_mod.cmd_add, "a seed")
@@ -1980,6 +2012,60 @@ class TestWorktreePushTarget(unittest.TestCase):
                                "origin/feat/my-feat").stdout.strip()
         local_sha = self._git(ws, "rev-parse", "HEAD").stdout.strip()
         self.assertEqual(remote_sha, local_sha)
+
+
+class TestWorkflowSelection(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self, steps=True)
+        (Path(self.root) / "workflows" / "solo.md").write_text(
+            "entry: build\n\nnodes:\n  build  coder\n"
+        )
+
+    def _epic(self, *args):
+        _, out, err = call(_cli_mod.cmd_epic, *args)
+        return out.strip()
+
+    def _file(self, spec, epic, *args):
+        _, out, err = call(_cli_mod.cmd_file, spec, "--epic", epic, *args)
+        return out.strip()
+
+    def _build_task(self, story):
+        return next(
+            t for t in self.store.all_tasks() if t.parent == story and t.step == "build"
+        )
+
+    def _open_successor_steps(self, story):
+        return {t.step for t in self.store.all_tasks() if t.parent == story and t.step != "build"}
+
+    def test_two_epics_route_by_their_own_workflow(self):
+        std_epic = self._epic("standard objective")
+        std_story = self._file("A.md", std_epic)
+        solo_epic = self._epic("solo objective", "--workflow", "solo")
+        solo_story = self._file("B.md", solo_epic)
+
+        call(_cli_mod.cmd_done, self._build_task(std_story).id, "done")
+        self.assertIn("review", self._open_successor_steps(std_story))
+
+        call(_cli_mod.cmd_done, self._build_task(solo_story).id, "done")
+        self.assertEqual(self._open_successor_steps(solo_story), set())
+
+    def test_file_derives_entry_step_from_the_workflow(self):
+        epic = self._epic("obj")
+        story = self._file("A.md", epic)
+        self.assertEqual(self._build_task(story).step, "build")
+
+    def test_epic_workflow_is_inherited_without_stamping_the_story(self):
+        epic = self._epic("obj", "--workflow", "solo")
+        story = self._file("A.md", epic)
+        self.assertEqual(self.store.get_task(epic).workflow, "solo")
+        self.assertIsNone(self.store.get_task(story).workflow)
+
+    def test_story_can_override_the_epic_workflow(self):
+        epic = self._epic("obj")
+        story = self._file("A.md", epic, "--workflow", "solo")
+        self.assertEqual(self.store.get_task(story).workflow, "solo")
+        call(_cli_mod.cmd_done, self._build_task(story).id, "done")
+        self.assertEqual(self._open_successor_steps(story), set())
 
 
 if __name__ == "__main__":

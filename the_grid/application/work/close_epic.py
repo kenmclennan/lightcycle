@@ -57,7 +57,7 @@ class CloseEpicUseCase:
         )
         self._store.add_artifact(input.epic, "retro", digest)
         epic = self._store.get_task(input.epic)
-        flow = self._flow.load_flow()
+        flow = self._flow.load_flow(self._flow.workflow_for(epic))
         for step, role in flow.epic_close_steps():
             tid = self._store.create_task(
                 "%s: %s" % (step, epic.title),

@@ -1,11 +1,5 @@
 ---
 model: sonnet
-step: resolve
-routes:
-  resolved: open-pr
-  escalate: conflict-review
-signals:
-  resolve_attempts: escalate
 ---
 
 # Resolve (conflict resolver)

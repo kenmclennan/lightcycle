@@ -4,8 +4,10 @@ A workflow-agnostic agent engine fronted by **`tg`**, a single Python CLI that o
 all work and its lifecycle. Work lives in a local SQLite store (hidden behind `tg`)
 as tasks chained by dependencies. A run-loop spawns headless `claude -p` workers that
 each claim one task, do it, and exit. tmux is optional - every part runs as a
-standalone command. You define how you work by editing the steps in `steps/`; the
-engine imposes no spec format or fixed pipeline.
+standalone command. You define how you work by composing **workflows** (routing
+graphs in `workflows/`) over a library of reusable **steps** (`steps/`); the
+engine imposes no spec format or fixed pipeline, and different epics can run
+different workflows at once.
 
 The live backlog and roadmap live in the store - run `tg backlog` for open items, `tg status` for the
 whole picture.
@@ -32,9 +34,9 @@ any directory.
   spec's path as an artifact; it never parses it. The steps in `steps/` are an
   _example_ workflow (a feature pipeline: coder -> reviewer -> open-pr -> watch-pr,
   then the human steps ready-merge -> cleanup). You define your own way of working
-  by editing and creating steps - their routes,
-  and whatever a "spec" means to them. A spec is whatever your steps
-  understand; hand the Driver one you wrote and it flows in as-is.
+  by composing [workflows](#workflows) over the step library, and whatever a "spec"
+  means to them. A spec is whatever your steps understand; hand the Driver one you
+  wrote and it flows in as-is.
 - **Hierarchy: epic / story / task.** An **epic** is a goal; a **story** is a
   deliverable outcome (one spec -> one branch -> one PR) and **holds the
   artifacts**; a **task** is the work (a flow step under a story, or a standalone
@@ -56,11 +58,12 @@ any directory.
   git/GitHub reality. Agents with no contract are unconstrained.
 - **Everything is a task.** "build", "review", "open-pr" are tasks chained by
   dependencies; closing one makes its dependents ready. Which task is ready IS the
-  stage. The chain is defined by the steps themselves: each step declares its
-  `step` name and `routes:` (`outcome -> next-step`) in frontmatter, and `tg`
-  assembles the flow from them - the next performer is derived from whichever step
-  file owns the next step (an unowned target is a `for:human` terminal). `tg flow`
-  prints the assembled graph.
+  stage. The chain is defined by the **workflow graph** (see [Workflows](#workflows)),
+  not by the steps: a workflow file names the entry stage, the `outcome -> next-stage`
+  edges, and which step file performs each stage. `tg` resolves each task's workflow
+  (from its epic) and routes its outcome through that graph - the next performer is the
+  step file the target stage maps to (an unowned target is a `for:human` terminal).
+  `tg flow` prints the assembled graph.
 - **`tg` owns the domain and the processes.** It is the only caller of the store. It
   spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own task.** The loop spawns a role
@@ -71,9 +74,15 @@ any directory.
 - **HOME config: where your work lives.** A single config file (`$GRID_CONFIG`, else
   `$XDG_CONFIG_HOME`/`~/.config`/`the-grid/config`) names two roots: `projects` (the
   dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (the
-  base for relative spec paths; default `~/workspace/specs`). `tg init` seeds it;
-  `tg config [--edit]` shows or edits it. The engine's own data (tg, steps, store,
+  base for relative spec paths; default `~/workspace/specs`), plus the global
+  `shortcode` (id prefix) and `default-workflow`. `tg init` seeds it; `tg config
+[--edit]` shows or edits it. The engine's own data (tg, steps, workflows, store,
   logs) stays at the grid root - the config is only about _your_ work's location.
+- **Per-project `.grid/` (optional).** A project can override the defaults in
+  `projects/<name>/.grid/config`: its own `shortcode` (new epic ids under it mint as
+  `SHORTCODE-N`, and it's the prefix its specs use) and its own `default-workflow`. It
+  may also drop project-local graphs in `.grid/workflows/`. A project with no `.grid/`
+  just inherits the global defaults; `tg init <project>` scaffolds the folder.
 - **One repo per story, by name.** A story targets exactly one repo, named by a
   `repo` artifact (`tg file <spec> --repo <name>`); the name resolves to
   `projects/<name>`. With no `--repo`, the story targets the engine itself
@@ -89,38 +98,101 @@ any directory.
 - **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow step),
   `project:`/`goal:`. `for:human` tasks never auto-run; they surface to you.
 
+## Workflows
+
+A **workflow** is a routing graph over the step library - a markdown file in
+`workflows/` (or a project's `.grid/workflows/`). The split is deliberate: **steps
+are reusable prompts** (`steps/*.md`, carrying only `model` + the optional
+`accepts`/`produces` contract), and the **workflow owns all the routing**. Improve a
+step once and every workflow benefits; vary the graph without touching the prompts.
+
+A workflow file has up to five sections; only `entry` is required:
+
+```
+# Standard - spec -> code -> review -> PR -> merge
+
+entry: build            # the stage a filed story starts at
+
+nodes:                  # stage -> step file (omit when they already match)
+  build   coder
+  review  reviewer
+
+edges:                  # from-stage  outcome  to-stage
+  build     done        review
+  review    done        open-pr
+  review    rejected    build
+  open-pr   done        watch-pr
+
+hooks:                  # engine event -> handling stage (+ value)
+  pr_merge       ready-merge  merged
+  epic_close     audit
+  retro_cadence  audit
+
+signals:                # stage  metric-name  outcome   (retro telemetry)
+  review  review_rounds  rejected
+```
+
+- A **stage** is a lane (`build`); a **node** maps it to the step file that performs
+  it (`coder`). A target with no node/step file (e.g. `conflict-review`) is a
+  `for:human` terminal. A stage owned by a step file with no `model` is a human step.
+- The engine reacts to a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_rework`,
+  `pr_conflict` (+ `_cap`/`_escalate`), `epic_close`, `retro_cadence`); the graph only
+  names which stage handles each. A workflow that omits `pr_*` never opens a PR - e.g.
+  a two-line local-only spike: `entry: build` + `build done DONE`.
+- `tg flow [--json]` prints and statically checks the resolved graph.
+
+**Selecting a workflow.** Selection lives on the epic and its stories inherit it:
+
+```bash
+tg epic "ship the thing"                 # uses the default workflow
+tg epic "spike an idea"  --workflow poc  # this epic (and its stories) run poc
+tg file spec.md --epic <id>              # inherits the epic's workflow; entry step derived
+tg file spec.md --epic <id> --workflow gherkin   # override for one story
+```
+
+Resolution order for a task: **story override -> epic workflow -> the project's
+`.grid/config` `default-workflow` -> the global `default-workflow`**. Because it's
+resolved per task, two epics can run different workflows concurrently.
+
+**Where workflows resolve from.** The engine ships a central library in `workflows/`;
+a project may shadow a name (or add its own) in `projects/<name>/.grid/workflows/`.
+A variant step is just another named file the graph points a stage at
+(`build -> coder-gherkin`) - no step is ever forked in place.
+
 ## Commands
 
 Initialise once with `tg init`, then run the parts in separate terminals.
 
-| Command                                                         | What it does                                                                        |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `tg init`                                                       | one-time: create the grid store and seed the HOME config                            |
-| `tg config [--edit]`                                            | show (or `--edit`) the grid config: projects + specs roots                          |
-| `tg run [--once]`                                               | the agent pool: sweep, then fill up to GRID_MAX_AGENTS workers from the ready queue |
-| `tg driver`                                                     | open the interactive driver `claude` (your seat)                                    |
-| `tg status`                                                     | all buckets: inbox / active / queue / blocked                                       |
-| `tg inbox [N]`                                                  | what needs you now: gates to clear and agents waiting on you                        |
-| `tg backlog [N]`                                                | backlog items to develop later                                                      |
-| `tg active`                                                     | tasks being worked now                                                              |
-| `tg queue [N]`                                                  | next N upcoming agent tasks                                                         |
-| `tg ps [--json]`                                                | running workers (role, task, pid, alive)                                            |
-| `tg logs <task\|role\|run> [-f]`                                | tail a worker's or the loop's log                                                   |
-| `tg show <id>`                                                  | a story (artifacts + child tasks) or a task (+ story artifacts)                     |
-| `tg trace <story>`                                              | story + its artifacts + child tasks + logs                                          |
-| `tg flow [--json]`                                              | print + check the assembled flow (steps, routes, contracts, composition)            |
-| `tg file <spec> --step <step> [--repo/--epic/--project/--goal]` | create a story (spec + one repo) + first task at `<step>`                           |
-| `tg link <story> <type> <value> [--label]`                      | attach an artifact to a story                                                       |
-| `tg add "<title>"`                                              | create a standalone human task (no story/flow)                                      |
-| `tg sweep`                                                      | release orphaned claims (dead worker -> task reclaimable)                           |
-| `tg claim <role>`                                               | (agents) atomically claim the next task for a role                                  |
-| `tg done <id> <outcome>`                                        | (agents) close with a flow outcome; advances the chain                              |
-| `tg block <id> --needs ...`                                     | (agents) escalate with resume-state -> `for:human`                                  |
+| Command                                                                              | What it does                                                                             |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `tg init [<project>]`                                                                | no arg: create the grid store + seed the HOME config. `<project>`: scaffold its `.grid/` |
+| `tg config [--edit]`                                                                 | show (or `--edit`) the grid config: projects + specs roots                               |
+| `tg run [--once]`                                                                    | the agent pool: sweep, then fill up to GRID_MAX_AGENTS workers from the ready queue      |
+| `tg driver`                                                                          | open the interactive driver `claude` (your seat)                                         |
+| `tg status`                                                                          | all buckets: inbox / active / queue / blocked                                            |
+| `tg inbox [N]`                                                                       | what needs you now: gates to clear and agents waiting on you                             |
+| `tg backlog [N]`                                                                     | backlog items to develop later                                                           |
+| `tg active`                                                                          | tasks being worked now                                                                   |
+| `tg queue [N]`                                                                       | next N upcoming agent tasks                                                              |
+| `tg ps [--json]`                                                                     | running workers (role, task, pid, alive)                                                 |
+| `tg logs <task\|role\|run> [-f]`                                                     | tail a worker's or the loop's log                                                        |
+| `tg show <id>`                                                                       | a story (artifacts + child tasks) or a task (+ story artifacts)                          |
+| `tg trace <story>`                                                                   | story + its artifacts + child tasks + logs                                               |
+| `tg flow [--json]`                                                                   | print + check the assembled flow (stages, routes, contracts, composition)                |
+| `tg epic "<objective>" [--workflow <w>]`                                             | open an epic; `--workflow` sets the pipeline its stories run                             |
+| `tg file <spec> --epic <id> [--step <s>] [--workflow <w>] [--repo/--project/--goal]` | create a story + first task (step/workflow default to the epic's)                        |
+| `tg link <story> <type> <value> [--label]`                                           | attach an artifact to a story                                                            |
+| `tg add "<title>"`                                                                   | create a standalone human task (no story/flow)                                           |
+| `tg sweep`                                                                           | release orphaned claims (dead worker -> task reclaimable)                                |
+| `tg claim <role>`                                                                    | (agents) atomically claim the next task for a role                                       |
+| `tg done <id> <outcome>`                                                             | (agents) close with a flow outcome; advances the chain                                   |
+| `tg block <id> --needs ...`                                                          | (agents) escalate with resume-state -> `for:human`                                       |
 
 ## Steps and performers
 
-Every file in `steps/` defines one workflow step, and its `model:` frontmatter
-selects who _performs_ it:
+Every file in `steps/` is a reusable step prompt (routing lives in the
+[workflow](#workflows), not here). Its `model:` frontmatter selects who _performs_
+it:
 
 - **`model:` present** - an **ephemeral agent**. `tg` spawns a fresh `claude -p`
   (the file body is its system prompt), it does the step and exits. The example

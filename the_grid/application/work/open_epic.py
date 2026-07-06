@@ -9,6 +9,7 @@ class OpenEpicInput:
     objective: str
     backlog: Optional[str] = None
     project: Optional[str] = None
+    workflow: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,9 @@ class OpenEpicUseCase:
                 self._store.get_task(input.backlog)
             except KeyError:
                 raise UseCaseError("unknown backlog item '%s'" % input.backlog)
-        epic = self._store.create_epic(input.objective, project=input.project)
+        epic = self._store.create_epic(
+            input.objective, project=input.project, workflow=input.workflow
+        )
         if input.backlog:
             self._store.add_artifact(epic, "backlog", input.backlog)
         return OpenEpicResponse(epic=epic)

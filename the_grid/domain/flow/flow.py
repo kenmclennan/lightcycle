@@ -29,43 +29,53 @@ class Flow:
         self._pr_conflict_escalate = pr_conflict_escalate or {}
 
     @classmethod
-    def assemble(cls, role_metas) -> "Flow":
-        owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks = (
-            {}, {}, {}, {}, {}, set(), set(), {})
-        pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
-        for role, meta in role_metas.items():
-            meta = meta or {}
-            step = meta.get("step")
-            if not step:
+    def from_graph(cls, graph, step_metas) -> "Flow":
+        stages = set()
+        if graph.entry:
+            stages.add(graph.entry)
+        for frm, outs in graph.edges.items():
+            stages.add(frm)
+            stages.update(outs.values())
+        for toks in graph.hooks.values():
+            if toks:
+                stages.add(toks[0])
+        stages.update(graph.nodes.keys())
+        stages.update(graph.signals.keys())
+
+        owner, routes = {}, {}
+        for stage in stages:
+            meta = step_metas.get(graph.file_for(stage))
+            if meta is None:
                 continue
-            owner[step] = role if meta.get("model") else "human"
-            rts = meta.get("routes")
-            routes[step] = dict(rts) if isinstance(rts, dict) else {}
-            declared = meta.get("on_pr_merge")
-            if declared:
-                pr_merge[step] = declared
-            declared_close = meta.get("on_pr_close")
-            if declared_close:
-                pr_close[step] = declared_close
-            declared_rework = meta.get("on_pr_rework")
-            if declared_rework:
-                pr_rework[step] = declared_rework
-            if meta.get("on_epic_close"):
-                epic_close.add(step)
-            if meta.get("on_retro_cadence"):
-                retro_cadence.add(step)
-            for key, val in meta.items():
-                if key.startswith("on_") and val:
-                    hooks.setdefault(key, set()).add(step)
-            declared_conflict = meta.get("on_pr_conflict")
-            if declared_conflict:
-                pr_conflict[step] = declared_conflict
-            cap = meta.get("on_pr_conflict_cap")
-            if cap is not None:
-                pr_conflict_cap[step] = int(cap)
-            esc = meta.get("on_pr_conflict_escalate")
-            if esc:
-                pr_conflict_escalate[step] = esc
+            owner[stage] = graph.file_for(stage) if meta.get("model") else "human"
+        for stage in owner:
+            routes[stage] = dict(graph.edges.get(stage) or {})
+
+        pr_merge, pr_close, pr_rework = {}, {}, {}
+        pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
+        epic_close, retro_cadence, hooks = set(), set(), {}
+        outcome_hooks = {
+            "pr_merge": pr_merge,
+            "pr_close": pr_close,
+            "pr_rework": pr_rework,
+            "pr_conflict": pr_conflict,
+            "pr_conflict_escalate": pr_conflict_escalate,
+        }
+        for name, bucket in outcome_hooks.items():
+            stage = graph.hook_stage(name)
+            if stage:
+                bucket[stage] = graph.hook_value(name)
+        cap_stage = graph.hook_stage("pr_conflict_cap")
+        if cap_stage:
+            pr_conflict_cap[cap_stage] = int(graph.hook_value("pr_conflict_cap"))
+        if graph.hook_stage("epic_close"):
+            epic_close.add(graph.hook_stage("epic_close"))
+        if graph.hook_stage("retro_cadence"):
+            retro_cadence.add(graph.hook_stage("retro_cadence"))
+        for name, toks in graph.hooks.items():
+            if toks:
+                hooks.setdefault("on_" + name, set()).add(toks[0])
+
         return cls(owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks,
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate)
 

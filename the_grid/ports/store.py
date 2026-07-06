@@ -104,11 +104,11 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_story(self, title, *, epic=None, project=None, goal=None):
+    def create_story(self, title, *, epic=None, project=None, goal=None, workflow=None):
         pass
 
     @abstractmethod
-    def create_epic(self, title, *, project=None, goal=None):
+    def create_epic(self, title, *, project=None, goal=None, workflow=None):
         pass
 
     @abstractmethod

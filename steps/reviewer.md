@@ -1,15 +1,8 @@
 ---
 model: sonnet
-step: review
 accepts:
   spec: required
   branch: required
-routes:
-  done: open-pr
-  rejected: build
-signals:
-  review_rounds: rejected
-  resets: rejected
 ---
 
 # Reviewer

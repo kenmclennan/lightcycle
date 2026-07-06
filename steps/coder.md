@@ -1,13 +1,10 @@
 ---
 model: sonnet
-step: build
 accepts:
   spec: required
   branch: optional
 produces:
   branch: required
-routes:
-  done: review
 ---
 
 # Coder

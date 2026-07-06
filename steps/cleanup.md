@@ -1,7 +1,3 @@
----
-step: cleanup
----
-
 # Cleanup (you + driver, terminal)
 
 The PR is merged; tidy up. No routes - the flow ends here. The task surfaces in `tg inbox`; the

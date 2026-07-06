@@ -1,9 +1,11 @@
 import unittest
 from pathlib import Path
 
-from the_grid.adapters.fsio import parse_step, step_roles
+from the_grid.adapters.fsio import parse_step, step_roles, workflow_text
 from the_grid.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
 from the_grid.domain.flow import Flow
+from the_grid.domain.flow.graph import parse_graph
+from tests.support.fake_fs import graph_text_from_metas
 
 _ROOT = str(Path(__file__).resolve().parents[2])
 
@@ -29,7 +31,8 @@ CONTRACT_METAS = {
 
 
 def contracts(metas):
-    return FlowContracts(Flow.assemble(metas), metas)
+    graph = parse_graph(graph_text_from_metas(metas))
+    return FlowContracts(Flow.from_graph(graph, metas), graph, metas)
 
 
 class TestArtifactRequirement(unittest.TestCase):
@@ -98,22 +101,15 @@ class TestFlowContracts(unittest.TestCase):
         self.assertFalse(a.ok())
         self.assertIn("design", a.missing().get("review", []))
 
-    def test_duplicate_step_owner_flagged(self):
-        metas = dict(CONTRACT_METAS)
-        metas["coder2"] = {"step": "build"}
-        a = contracts(metas)
-        self.assertFalse(a.ok())
-        self.assertTrue(any("build" in d for d in a.duplicates()))
-
-
 class TestRealStepsFlowComposition(unittest.TestCase):
     def test_real_steps_flow_is_ok(self):
-        role_metas = {
+        step_metas = {
             role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
             for role in step_roles(_ROOT)
         }
-        flow = Flow.assemble(role_metas)
-        result = FlowContracts(flow, role_metas).as_dict()
+        graph = parse_graph(workflow_text(_ROOT, "standard"))
+        flow = Flow.from_graph(graph, step_metas)
+        result = FlowContracts(flow, graph, step_metas).as_dict()
         self.assertTrue(result["ok"],
                         msg="Flow composition error - missing inputs: %s" % result.get("missing", {}))
 

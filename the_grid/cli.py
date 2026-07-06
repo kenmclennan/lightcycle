@@ -73,7 +73,7 @@ from the_grid.application.pool import (
     TickInput,
     TickUseCase,
 )
-from the_grid.application.setup import InitGridUseCase
+from the_grid.application.setup import InitGridUseCase, InitProjectInput, InitProjectUseCase
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
 from the_grid.config import ConfigError
@@ -101,7 +101,7 @@ def specs_root():
 
 
 def _flow():
-    return FlowService(_container.fs, _container.store)
+    return FlowService(_container.fs, _container.store, _container.config)
 
 
 def ready_roles():
@@ -121,7 +121,8 @@ def require_store():
 
 COMMAND_GROUPS = [
     ("Setup", [
-        ("init", "", "create the grid store and seed the HOME config (run once)"),
+        ("init", "[<project>]", "no arg: create the grid store + seed the HOME config (run once). "
+         "<project>: scaffold that project's .grid/ (workflows, config with a shortcode)"),
         ("config", "[--edit]", "show or edit the grid config (projects + specs roots)"),
     ]),
     ("Start working", [
@@ -142,10 +143,10 @@ COMMAND_GROUPS = [
         ("worklog", "[start] [end]", "stories shipped in a period (today, yesterday, YYYY-MM-DD)"),
     ]),
     ("Drive work in", [
-        ("epic", '"<objective>" [--backlog <id>] [--project <p>]',
-         "open an epic: the objective container a story files under"),
-        ("file", "<spec> --step <step> --epic <id> [--repo/--project/--goal/--blocked-by]",
-         "create a story (for one repo) from a spec + its first task at <step>"),
+        ("epic", '"<objective>" [--workflow <w>] [--backlog <id>] [--project <p>]',
+         "open an epic: the objective container a story files under (--workflow sets its pipeline)"),
+        ("file", "<spec> --epic <id> [--step <s>] [--workflow <w>] [--repo/--project/--goal/--blocked-by]",
+         "create a story from a spec + its first task (step/workflow default to the epic's)"),
         ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
         ("add", '"<title>" [--description/--goal/--project/--inbox]', "create a standalone human task (no spec/flow); --inbox surfaces it in tg inbox immediately"),
         ("edit", "<id> [--title/--description/--goal/--project/--parent]", "update a task's fields"),
@@ -582,10 +583,13 @@ def cmd_epic(argv):
     ap.add_argument("objective")
     ap.add_argument("--backlog")
     ap.add_argument("--project")
+    ap.add_argument("--workflow")
     a = ap.parse_args(argv)
     try:
         resp = OpenEpicUseCase(_container.store).execute(
-            OpenEpicInput(objective=a.objective, backlog=a.backlog, project=a.project)
+            OpenEpicInput(
+                objective=a.objective, backlog=a.backlog, project=a.project, workflow=a.workflow
+            )
         )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
@@ -597,8 +601,9 @@ def cmd_epic(argv):
 def cmd_file(argv):
     ap = argparse.ArgumentParser(prog="tg file")
     ap.add_argument("spec")
-    ap.add_argument("--step", required=True)
     ap.add_argument("--epic", required=True)
+    ap.add_argument("--step")
+    ap.add_argument("--workflow")
     ap.add_argument("--project")
     ap.add_argument("--goal")
     ap.add_argument("--repo")
@@ -611,6 +616,7 @@ def cmd_file(argv):
             FileStoryInput(
                 spec=a.spec,
                 step=a.step,
+                workflow=a.workflow,
                 epic=a.epic,
                 project=a.project,
                 goal=a.goal,
@@ -807,7 +813,22 @@ def cmd_driver(argv):
 
 
 def cmd_init(argv):
-    argparse.ArgumentParser(prog="tg init").parse_args(argv)
+    ap = argparse.ArgumentParser(prog="tg init")
+    ap.add_argument("project", nargs="?")
+    a = ap.parse_args(argv)
+    if a.project:
+        try:
+            r = InitProjectUseCase(_container.config, _container.fs).execute(
+                InitProjectInput(project=a.project)
+            )
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        if r.created:
+            print("scaffolded %s (%s)" % (r.grid_dir, ", ".join(r.created)))
+        else:
+            print("%s already scaffolded" % r.grid_dir)
+        return 0
     r = InitGridUseCase(_container.store, _container.fs, _container.config).execute()
     print("grid store already initialised" if r.existed else "grid store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))

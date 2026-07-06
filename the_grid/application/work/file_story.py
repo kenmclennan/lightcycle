@@ -12,8 +12,9 @@ _NESTED_REPO_MAX_DEPTH = 2
 @dataclass(frozen=True)
 class FileStoryInput:
     spec: str
-    step: str
     epic: str
+    step: Optional[str] = None
+    workflow: Optional[str] = None
     project: Optional[str] = None
     goal: Optional[str] = None
     repo: Optional[str] = None
@@ -65,30 +66,33 @@ class FileStoryUseCase:
             raise UseCaseError("'%s' is not an epic (type=%s)" % (epic_id, epic.type))
         if epic.status == Status.DONE:
             raise UseCaseError("epic '%s' is already closed" % epic_id)
+        return epic
 
     def execute(self, input: FileStoryInput) -> FileStoryResponse:
-        flow = self._flow.load_flow()
-        role = flow.owner_of(input.step)
+        epic = self._require_open_epic(input.epic)
+        workflow = input.workflow or self._flow.workflow_for(epic)
+        step = input.step or self._flow.load_graph(workflow).entry
+        flow = self._flow.load_flow(workflow)
+        role = flow.owner_of(step)
         if not role:
             raise UseCaseError(
-                "unknown step '%s'; owned steps: %s"
-                % (input.step, ", ".join(flow.steps()) or "(none)")
+                "unknown step '%s' in workflow '%s'; owned steps: %s"
+                % (step, workflow, ", ".join(flow.steps()) or "(none)")
             )
-        unmet = StepContract.from_meta(self._flow.meta_for_step(input.step)).missing_inputs(
+        unmet = StepContract.from_meta(self._flow.meta_for_step(step, workflow)).missing_inputs(
             FILE_PROVIDES
         )
         if unmet:
             raise UseCaseError(
                 "step '%s' requires %s; a filed story only carries a spec. "
-                "File at an entry step." % (input.step, ", ".join(sorted(unmet)))
+                "File at an entry step." % (step, ", ".join(sorted(unmet)))
             )
-        self._require_open_epic(input.epic)
         if input.repo and not self._git.is_git_repo(self._repo_path(input.repo)):
             avail = ", ".join(self._available_repos()) or "(none)"
             raise UseCaseError("unknown repo '%s'; available repos: %s" % (input.repo, avail))
         base = os.path.splitext(os.path.basename(input.spec))[0]
         story = self._store.create_story(
-            base, epic=input.epic, project=input.project, goal=input.goal
+            base, epic=input.epic, project=input.project, goal=input.goal, workflow=input.workflow
         )
         task = None
         try:
@@ -96,7 +100,7 @@ class FileStoryUseCase:
             if input.repo:
                 self._store.add_artifact(story, "repo", input.repo)
             task = self._store.create_task(
-                "%s: %s" % (input.step, base), step=input.step, role=role, parent=story
+                "%s: %s" % (step, base), step=step, role=role, parent=story
             )
             for blocker in input.blocked_by or []:
                 self._store.dep_add(task, blocker)

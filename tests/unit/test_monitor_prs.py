@@ -2,7 +2,7 @@ import unittest
 
 from the_grid.application.flow import CompleteTaskUseCase
 from the_grid.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
-from the_grid.domain.flow import Flow
+from tests.support.fake_fs import flow_from_metas
 from the_grid.ports.github import Comment, GitHubEventsPort
 from tests.support.fake_store import FakeStore
 
@@ -11,17 +11,20 @@ class _FlowAdapter:
     def __init__(self, flow):
         self._flow = flow
 
-    def flow_next(self, step, outcome):
+    def workflow_for(self, task):
+        return None
+
+    def flow_next(self, step, outcome, name=None):
         return self._flow.next(step, outcome)
 
-    def outcomes_for(self, step):
+    def outcomes_for(self, step, name=None):
         return self._flow.outcomes_for(step)
 
-    def meta_for_step(self, step):
+    def meta_for_step(self, step, name=None):
         return {}
 
 
-_FLOW = Flow.assemble(
+_FLOW = flow_from_metas(
     {
         "reviewer": {
             "step": "ready-merge",
@@ -33,7 +36,7 @@ _FLOW = Flow.assemble(
     }
 )
 
-_MERGE_ONLY_FLOW = Flow.assemble(
+_MERGE_ONLY_FLOW = flow_from_metas(
     {
         "reviewer": {
             "step": "ready-merge",
@@ -43,7 +46,7 @@ _MERGE_ONLY_FLOW = Flow.assemble(
     }
 )
 
-_REWORK_ONLY_FLOW = Flow.assemble(
+_REWORK_ONLY_FLOW = flow_from_metas(
     {
         "coder": {
             "model": "sonnet",
@@ -58,7 +61,7 @@ _REWORK_ONLY_FLOW = Flow.assemble(
     }
 )
 
-_CONFLICT_FLOW = Flow.assemble({
+_CONFLICT_FLOW = flow_from_metas({
     "watcher": {
         "model": "sonnet",
         "step": "watch-step",
@@ -74,7 +77,7 @@ _CONFLICT_FLOW = Flow.assemble({
     },
 })
 
-_READY_MERGE_QUAD_FLOW = Flow.assemble({
+_READY_MERGE_QUAD_FLOW = flow_from_metas({
     "reviewer": {
         "model": "sonnet",
         "step": "watch-pr",
@@ -250,7 +253,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         self.assertEqual(result.merged, [])
 
     def test_arbitrary_step_and_outcome_names_monitored_via_merge(self):
-        arbitrary_flow = Flow.assemble(
+        arbitrary_flow = flow_from_metas(
             {
                 "gatekeeper": {
                     "step": "await-ship",
@@ -326,7 +329,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertEqual(result.merged, [story])
 
     def test_arbitrary_close_outcome_name_is_used(self):
-        arbitrary_flow = Flow.assemble(
+        arbitrary_flow = flow_from_metas(
             {
                 "gatekeeper": {
                     "step": "await-ship",
@@ -528,7 +531,7 @@ class TestMonitorPrsRework(unittest.TestCase):
         self.assertNotIn("linting issue", note)
 
     def test_arbitrary_rework_outcome_name_is_used(self):
-        arbitrary_flow = Flow.assemble(
+        arbitrary_flow = flow_from_metas(
             {
                 "gatekeeper": {
                     "step": "await-ship",
@@ -620,7 +623,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         url = "https://github.com/x/y/pull/53"
         store, story, task, worktrees, uc = self._setup(
             url, FakeGitHub(merged_prs={url}, conflicted_prs={url}),
-            flow=Flow.assemble({
+            flow=flow_from_metas({
                 "watcher": {
                     "model": "sonnet",
                     "step": "watch-step",
@@ -638,7 +641,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
 
     def test_arbitrary_step_names_work_for_conflict(self):
         url = "https://github.com/x/y/pull/54"
-        arbitrary_flow = Flow.assemble({
+        arbitrary_flow = flow_from_metas({
             "sentinel": {
                 "model": "claude",
                 "step": "await-green",
@@ -732,7 +735,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
 
     def test_no_cap_declared_never_escalates(self):
         url = "https://github.com/x/y/pull/58"
-        no_cap_flow = Flow.assemble({
+        no_cap_flow = flow_from_metas({
             "watcher": {
                 "model": "sonnet",
                 "step": "watch-step",

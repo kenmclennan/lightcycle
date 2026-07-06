@@ -2,7 +2,7 @@ import os
 import unittest
 from pathlib import Path
 
-from the_grid.adapters.fsio import parse_step, step_roles
+from the_grid.adapters.fsio import parse_step, step_roles, workflow_text
 from the_grid.application.errors import UseCaseError
 from the_grid.application.flow import (
     AdvanceInput,
@@ -31,6 +31,17 @@ class _RealFs:
 
     def parse_step(self, role):
         return parse_step(_ROOT, role)
+
+    def workflow_text(self, name):
+        return workflow_text(_ROOT, name)
+
+
+class _RealConfig:
+    def default_workflow(self):
+        return "standard"
+
+    def default_workflow_for(self, project):
+        return "standard"
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -201,7 +212,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
 
 class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
     def _uc(self, store):
-        return CompleteTaskUseCase(store, FlowService(_RealFs(), store))
+        return CompleteTaskUseCase(store, FlowService(_RealFs(), store, _RealConfig()))
 
     def test_conflicted_outcome_closes_without_a_pr_and_routes_to_resolve(self):
         s = FakeStore()

@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     attention INTEGER NOT NULL DEFAULT 0,
     epic TEXT,
     needs TEXT,
-    model TEXT
+    model TEXT,
+    workflow TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -70,10 +71,10 @@ CREATE TABLE IF NOT EXISTS history (
 _COLUMNS = (
     "id", "type", "title", "status", "step", "role", "parent", "project", "goal",
     "description", "notes", "close_reason", "assignee", "since", "fired_at",
-    "closed_at", "attention", "epic", "needs", "model",
+    "closed_at", "attention", "epic", "needs", "model", "workflow",
 )
 
-_METADATA_COLUMNS = ("epic", "needs", "since", "fired_at")
+_METADATA_COLUMNS = ("epic", "needs", "since", "fired_at", "workflow")
 
 _LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
 
@@ -98,12 +99,18 @@ class SqliteStore(StorePort):
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
         self._migrate_history_ts()
+        self._migrate_tasks_workflow()
         self._conn.commit()
 
     def _migrate_history_ts(self):
         cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}
         if "ts" not in cols:
             self._conn.execute("ALTER TABLE history ADD COLUMN ts TEXT")
+
+    def _migrate_tasks_workflow(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(tasks)").fetchall()}
+        if "workflow" not in cols:
+            self._conn.execute("ALTER TABLE tasks ADD COLUMN workflow TEXT")
 
     def _row_to_task(self, row, artifacts, deps):
         d = dict(zip(_COLUMNS, row))
@@ -130,6 +137,7 @@ class SqliteStore(StorePort):
             closed_at=d["closed_at"],
             attention=bool(d["attention"]),
             model=d["model"],
+            workflow=d["workflow"],
         )
 
     def _rows_to_tasks(self, rows):
@@ -171,8 +179,9 @@ class SqliteStore(StorePort):
         rows = self._conn.execute(sql, params).fetchall()
         return self._rows_to_tasks(rows)
 
-    def _mint_id(self, parent):
-        namespace = parent if parent is not None else self.shortcode()
+    def _mint_id(self, parent, shortcode=None):
+        prefix = shortcode or self.shortcode()
+        namespace = parent if parent is not None else prefix
         row = self._conn.execute(
             "SELECT next FROM counters WHERE namespace = ?", (namespace,)
         ).fetchone()
@@ -183,12 +192,12 @@ class SqliteStore(StorePort):
             (namespace, n + 1),
         )
         if parent is None:
-            return "%s-%d" % (self.shortcode(), n)
+            return "%s-%d" % (prefix, n)
         return "%s.%d" % (parent, n)
 
-    def _mint_or_adopt(self, explicit_id, parent):
+    def _mint_or_adopt(self, explicit_id, parent, shortcode=None):
         if explicit_id is None:
-            return self._mint_id(parent)
+            return self._mint_id(parent, shortcode)
         exists = self._conn.execute(
             "SELECT 1 FROM tasks WHERE id = ?", (explicit_id,)
         ).fetchone()
@@ -464,24 +473,24 @@ class SqliteStore(StorePort):
         )
         self._conn.commit()
 
-    def create_story(self, title, *, epic=None, project=None, goal=None, id=None):
+    def create_story(self, title, *, epic=None, project=None, goal=None, workflow=None, id=None):
         if not epic:
             raise ValueError("story requires an epic parent")
         tid = self._mint_or_adopt(id, epic)
         self._conn.execute(
-            "INSERT INTO tasks (id, type, title, status, parent, project, goal, created_at) "
-            "VALUES (?, 'story', ?, 'open', ?, ?, ?, ?)",
-            (tid, title, epic, project, goal, datetime.datetime.now().isoformat()),
+            "INSERT INTO tasks (id, type, title, status, parent, project, goal, workflow, "
+            "created_at) VALUES (?, 'story', ?, 'open', ?, ?, ?, ?, ?)",
+            (tid, title, epic, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
         return tid
 
-    def create_epic(self, title, *, project=None, goal=None, id=None):
-        tid = self._mint_or_adopt(id, None)
+    def create_epic(self, title, *, project=None, goal=None, workflow=None, id=None):
+        tid = self._mint_or_adopt(id, None, shortcode=self._config.shortcode_for(project))
         self._conn.execute(
-            "INSERT INTO tasks (id, type, title, status, project, goal, created_at) "
-            "VALUES (?, 'epic', ?, 'open', ?, ?, ?)",
-            (tid, title, project, goal, datetime.datetime.now().isoformat()),
+            "INSERT INTO tasks (id, type, title, status, project, goal, workflow, created_at) "
+            "VALUES (?, 'epic', ?, 'open', ?, ?, ?, ?)",
+            (tid, title, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
         return tid

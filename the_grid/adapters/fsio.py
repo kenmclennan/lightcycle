@@ -25,6 +25,14 @@ def parse_step(root, role):
     return read_md(root, os.path.join("steps", "%s.md" % role))
 
 
+def workflow_text(root, name):
+    path = os.path.join(root, "workflows", "%s.md" % name)
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return f.read()
+
+
 def worktrees_dir(root):
     return os.path.join(root, ".worktrees")
 
@@ -79,6 +87,9 @@ class FsAdapter(FsPort):
 
     def parse_step(self, role):
         return parse_step(self._config.grid_root(), role)
+
+    def workflow_text(self, name):
+        return workflow_text(self._config.grid_root(), name)
 
     def worktrees_dir(self):
         return worktrees_dir(self._config.grid_root())

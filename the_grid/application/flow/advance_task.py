@@ -20,7 +20,7 @@ class AdvanceTaskUseCase:
 
     def execute(self, input: AdvanceInput) -> AdvanceResponse:
         t = self._store.get_task(input.task)
-        transition = self._flow.flow_next(t.step, input.outcome)
+        transition = self._flow.flow_next(t.step, input.outcome, self._flow.workflow_for(t))
         if transition is None:
             return AdvanceResponse(next_task=None)
         return AdvanceResponse(

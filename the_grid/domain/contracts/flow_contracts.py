@@ -4,26 +4,13 @@ FILE_PROVIDES = {"spec"}
 
 
 class FlowContracts:
-    def __init__(self, flow, role_metas):
+    def __init__(self, flow, graph, step_metas):
         self._flow = flow
-        self._role_metas = role_metas
-        self._declarer, self._dups = self._declare()
         self._steps = flow.steps()
         self._contract = {
-            s: StepContract.from_meta(role_metas.get(self._declarer.get(s))) for s in self._steps
+            s: StepContract.from_meta(step_metas.get(graph.file_for(s))) for s in self._steps
         }
-
-    def _declare(self):
-        declarer, dups = {}, []
-        for role in sorted(self._role_metas):
-            step = (self._role_metas[role] or {}).get("step")
-            if not step:
-                continue
-            if step in declarer:
-                dups.append("step '%s' owned by both %s and %s" % (step, declarer[step], role))
-            else:
-                declarer[step] = role
-        return declarer, dups
+        self._dups = []
 
     def _required(self):
         return {s: self._contract[s].required_inputs() for s in self._steps}

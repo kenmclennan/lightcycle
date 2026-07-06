@@ -174,7 +174,8 @@ class TestEnsureConfig(unittest.TestCase):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
         all_keys = (
-            "projects: /p\nspecs: /s\nbranch-prefix: feat\nshortcode: PROJ\nmax-agents: 5\n"
+            "projects: /p\nspecs: /s\nbranch-prefix: feat\nshortcode: PROJ\n"
+            "default-workflow: standard\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
             "max-session-seconds: 1800\n"
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"

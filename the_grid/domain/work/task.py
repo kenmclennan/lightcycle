@@ -29,6 +29,7 @@ class Task:
     closed_at: Optional[str] = None
     attention: bool = False
     model: Optional[str] = None
+    workflow: Optional[str] = None
 
     def classify_for_human(self, flow):
         if not self.step:
