@@ -9,6 +9,7 @@ import time
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 TG = str(ROOT / "bin" / "tg")
@@ -572,6 +573,18 @@ class TestRun(unittest.TestCase):
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(self._workers(), [])
+
+    def test_run_loop_first_tick_does_not_replay_old_hook_completions(self):
+        (Path(self.root) / "steps" / "auditor.md").write_text(
+            "---\nmodel: sonnet\nstep: audit\non_epic_close: true\n---\nstub auditor"
+        )
+        tid = self.store.create_task("audit: epic", step="audit", role="auditor")
+        self.store.close(tid, "done")
+        self.store._records[tid]["closed_at"] = "2020-01-01T00:00:00"
+        with patch("time.sleep", side_effect=KeyboardInterrupt):
+            rc, out, err = call(_cli_mod.cmd_run)
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn(tid, out)
 
 
 class TestRunSingletonLock(unittest.TestCase):

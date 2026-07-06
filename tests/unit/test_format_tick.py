@@ -8,7 +8,7 @@ _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 
 def _result(**kw):
     defaults = dict(swept=[], pruned=0, spawned=[], merged=[], abandoned=[], reworked=[],
-                    alive=0, max_agents=4, ready=0, inflight_count=0)
+                    hook_completed=[], alive=0, max_agents=4, ready=0, inflight_count=0)
     defaults.update(kw)
     return TickResponse(**defaults)
 
@@ -87,6 +87,40 @@ class TestFormatTick(unittest.TestCase):
         events = [l.split("  ")[1].strip() for l in event_lines]
         self.assertEqual(events.index("spawn"), 0)
         self.assertLess(events.index("merge"), events.index("sweep"))
+
+    def test_hook_completion_rendered_with_step_and_detail(self):
+        result = _result(spawned=["auditor"], hook_completed=[("audit", "audit.3", "no finding")])
+        lines, _ = _format_tick(result, None, _NOW)
+        spawn_lines = [l for l in lines if "spawn" in l]
+        self.assertEqual(len(spawn_lines), 1)
+        self.assertIn("auditor", spawn_lines[0])
+        audit_lines = [l for l in lines if "audit.3" in l]
+        self.assertEqual(len(audit_lines), 1)
+        self.assertRegex(audit_lines[0], r'^\d{2}:\d{2}:\d{2}\s+audit\s+audit\.3: no finding$')
+
+    def test_hook_completion_filed_finding_rendered(self):
+        result = _result(hook_completed=[("audit", "audit.4", "filed: fix flaky retry")])
+        lines, _ = _format_tick(result, None, _NOW)
+        self.assertTrue(any("filed:" in l and "audit.4" in l for l in lines))
+
+    def test_hook_completion_without_detail_renders_id_only(self):
+        result = _result(hook_completed=[("audit", "audit.5", "")])
+        lines, _ = _format_tick(result, None, _NOW)
+        self.assertTrue(any(l.endswith("audit.5") for l in lines))
+
+    def test_multiple_hook_completions_each_rendered(self):
+        result = _result(hook_completed=[
+            ("audit", "audit.1", "no finding"),
+            ("audit", "audit.2", "filed: x"),
+        ])
+        lines, _ = _format_tick(result, None, _NOW)
+        self.assertTrue(any("audit.1" in l for l in lines))
+        self.assertTrue(any("audit.2" in l for l in lines))
+
+    def test_no_hook_completions_renders_no_extra_lines(self):
+        result = _result()
+        lines, _ = _format_tick(result, None, _NOW)
+        self.assertEqual([l for l in lines if "state" not in l], [])
 
 
 if __name__ == "__main__":

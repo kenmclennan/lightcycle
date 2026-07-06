@@ -220,5 +220,35 @@ class TestHooks(unittest.TestCase):
         self.assertEqual(Flow.assemble(metas).hooks(), {})
 
 
+class TestHookSteps(unittest.TestCase):
+    def test_no_hooks_returns_empty(self):
+        flow = Flow.assemble(METAS)
+        self.assertEqual(flow.hook_steps(), [])
+
+    def test_known_hook_step_included(self):
+        metas = {"auditor": {"model": "sonnet", "step": "audit", "on_epic_close": True}}
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
+
+    def test_arbitrary_hook_name_included_generically(self):
+        metas = {"deployer": {"model": "sonnet", "step": "deploy", "on_deploy_green": True}}
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.hook_steps(), [("deploy", "deployer")])
+
+    def test_step_flagged_by_multiple_hooks_appears_once(self):
+        metas = {"auditor": {"model": "sonnet", "step": "audit",
+                              "on_epic_close": True, "on_retro_cadence": True}}
+        flow = Flow.assemble(metas)
+        self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
+
+    def test_multiple_hook_steps_sorted(self):
+        metas = {
+            "beta": {"model": "sonnet", "step": "zz-step", "on_epic_close": True},
+            "alpha": {"model": "sonnet", "step": "aa-step", "on_retro_cadence": True},
+        }
+        steps = Flow.assemble(metas).hook_steps()
+        self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
+
+
 if __name__ == "__main__":
     unittest.main()

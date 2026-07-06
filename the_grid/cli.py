@@ -62,6 +62,7 @@ from the_grid.application.flow import (
 from the_grid.application.pool import (
     AcquireRunLockUseCase,
     BreakerGateUseCase,
+    HookCompletionsUseCase,
     ListWorkersUseCase,
     MonitorPrsUseCase,
     ReleaseRunLockUseCase,
@@ -676,6 +677,9 @@ def _format_tick(result, prev_snapshot, now):
         lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
     for bid in result.swept:
         lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
+    for step, tid, detail in result.hook_completed:
+        msg = "%s: %s" % (tid, detail) if detail else tid
+        lines.append("%s  %-7s  %s" % (ts, step, msg))
     if result.breaker_opened:
         reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
         lines.append("%s  %-7s  %s" % (ts, "breaker", "opened until %s" % reset_ts))
@@ -715,6 +719,7 @@ def cmd_run(argv):
         )
         cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
         breaker_gate = BreakerGateUseCase(_container.workers, _container.fs, _container.breaker)
+        hook_completions = HookCompletionsUseCase(_container.store, flow_service)
         tick = TickUseCase(
             _container.store,
             _container.workers,
@@ -723,6 +728,7 @@ def cmd_run(argv):
             monitor=monitor,
             cadence_gate=cadence_gate,
             breaker_gate=breaker_gate,
+            hook_completions=hook_completions,
         )
         if a.once:
             now = time.time()
@@ -735,12 +741,14 @@ def cmd_run(argv):
         max_agents = _container.config.max_agents()
         print("tg run  poll=%ds  max-agents=%d" % (interval, max_agents))
         prev_snapshot = None
+        prev_now = time.time()
         while True:
             now = time.time()
-            result = tick.execute(TickInput(now=now))
+            result = tick.execute(TickInput(now=now, since=prev_now))
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
             for line in lines:
                 print(line)
+            prev_now = now
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\ntg run stopped")
