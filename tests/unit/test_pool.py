@@ -2,6 +2,7 @@ import unittest
 
 from the_grid.application.pool import (
     BreakerGateResponse,
+    HookCompletionsUseCase,
     ListWorkersUseCase,
     ResolveLogInput,
     ResolveLogUseCase,
@@ -9,8 +10,10 @@ from the_grid.application.pool import (
     TickInput,
     TickUseCase,
 )
+from the_grid.application.services.flow import FlowService
 from the_grid.application.work.close_story import CloseStoryInput, CloseStoryUseCase
 from the_grid.domain.pool import Breaker
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 
@@ -273,6 +276,28 @@ class TestTick(unittest.TestCase):
         ).execute(TickInput(now=1000.0))
         self.assertEqual(len(spawner.spawned), 2)
         self.assertFalse(result.breaker_open)
+
+    def test_hook_completions_surfaced_generically(self):
+        s = FakeStore()
+        flow_svc = FlowService(
+            FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_epic_close": True}}), s
+        )
+        tid = s.create_task("audit: epic", step="audit", role="auditor")
+        s.note(tid, "no finding")
+        s.close(tid, "done")
+        s._records[tid]["closed_at"] = "2026-01-01T12:00:00"
+        result = TickUseCase(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4),
+            hook_completions=HookCompletionsUseCase(s, flow_svc),
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.hook_completed, [("audit", tid, "no finding")])
+
+    def test_no_hook_completions_use_case_yields_empty(self):
+        s = FakeStore()
+        result = TickUseCase(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4)
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.hook_completed, [])
 
 
 if __name__ == "__main__":

@@ -1,4 +1,8 @@
 from the_grid.application.pool.breaker_gate import BreakerGateResponse, BreakerGateUseCase
+from the_grid.application.pool.hook_completions import (
+    HookCompletionsResponse,
+    HookCompletionsUseCase,
+)
 from the_grid.application.pool.list_workers import ListWorkersUseCase
 from the_grid.application.pool.monitor_prs import MonitorPrsUseCase
 from the_grid.application.pool.resolve_log import ResolveLogInput, ResolveLogUseCase
@@ -16,6 +20,8 @@ __all__ = [
     "AcquireRunLockUseCase",
     "BreakerGateResponse",
     "BreakerGateUseCase",
+    "HookCompletionsResponse",
+    "HookCompletionsUseCase",
     "ListWorkersUseCase",
     "MonitorPrsUseCase",
     "ReleaseRunLockUseCase",

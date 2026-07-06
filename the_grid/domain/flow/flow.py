@@ -107,6 +107,12 @@ class Flow:
     def retro_cadence_steps(self):
         return [(step, self._owner[step]) for step in sorted(self._retro_cadence) if step in self._owner]
 
+    def hook_steps(self):
+        steps = set()
+        for hook_steps in self._hooks.values():
+            steps.update(hook_steps)
+        return [(step, self._owner[step]) for step in sorted(steps) if step in self._owner]
+
     def hooks(self):
         return {hook: sorted(steps) for hook, steps in sorted(self._hooks.items())}
 

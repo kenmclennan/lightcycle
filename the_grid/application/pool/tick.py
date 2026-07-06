@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from the_grid.application.pool.sweep import SweepUseCase
 from the_grid.domain.pool import Breaker, PoolPlan, ReadyQueue, WorkerPool
@@ -8,6 +8,7 @@ from the_grid.domain.pool import Breaker, PoolPlan, ReadyQueue, WorkerPool
 @dataclass(frozen=True)
 class TickInput:
     now: float
+    since: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class TickResponse:
     reworked: List[str] = field(default_factory=list)
     conflicted: List[str] = field(default_factory=list)
     cadence_fired: List[str] = field(default_factory=list)
+    hook_completed: List[Tuple[str, str, str]] = field(default_factory=list)
     alive: int = 0
     max_agents: int = 0
     ready: int = 0
@@ -32,7 +34,8 @@ class TickResponse:
 
 class TickUseCase:
     def __init__(
-        self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None
+        self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
+        hook_completions=None,
     ):
         self._store = store
         self._workers = workers
@@ -42,6 +45,7 @@ class TickUseCase:
         self._monitor = monitor
         self._cadence_gate = cadence_gate
         self._breaker_gate = breaker_gate
+        self._hook_completions = hook_completions
 
     def execute(self, input: TickInput) -> TickResponse:
         monitor_result = self._monitor.execute() if self._monitor else None
@@ -51,6 +55,8 @@ class TickUseCase:
         conflicted = monitor_result.conflicted if monitor_result else []
         cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
         cadence_fired = cadence_result.fired if cadence_result else []
+        hook_result = self._hook_completions.execute(input.since) if self._hook_completions else None
+        hook_completed = hook_result.completed if hook_result else []
         breaker_result = self._breaker_gate.execute(input.now) if self._breaker_gate else None
         breaker = breaker_result.breaker if breaker_result else Breaker()
         swept = self._sweep.execute(input.now, self._config.max_boot_seconds())
@@ -80,6 +86,7 @@ class TickUseCase:
             reworked=reworked,
             conflicted=conflicted,
             cadence_fired=cadence_fired,
+            hook_completed=hook_completed,
             alive=alive_count,
             max_agents=max_agents,
             ready=ready_count,
