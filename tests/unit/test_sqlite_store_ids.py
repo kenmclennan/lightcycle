@@ -13,13 +13,14 @@ class TestSqliteStoreIds(unittest.TestCase):
 
     def test_child_id_nests_under_parent(self):
         s = make_sqlite_store(shortcode="GRID")
-        story = s.create_story("story")
+        epic = s.create_epic("epic")
+        story = s.create_story("story", epic=epic)
         child = s.create_task("child", parent=story)
         self.assertEqual(child, "%s.1" % story)
 
     def test_grandchild_id_nests_two_levels(self):
         s = make_sqlite_store(shortcode="GRID")
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         story = s.create_story("story", epic=epic)
         task = s.create_task("task", parent=story)
         self.assertEqual(story, "%s.1" % epic)
@@ -27,7 +28,8 @@ class TestSqliteStoreIds(unittest.TestCase):
 
     def test_second_child_of_same_parent_increments(self):
         s = make_sqlite_store(shortcode="GRID")
-        story = s.create_story("story")
+        epic = s.create_epic("epic")
+        story = s.create_story("story", epic=epic)
         first = s.create_task("first", parent=story)
         second = s.create_task("second", parent=story)
         self.assertEqual(first, "%s.1" % story)
@@ -35,7 +37,8 @@ class TestSqliteStoreIds(unittest.TestCase):
 
     def test_provided_id_is_adopted_when_free(self):
         s = make_sqlite_store(shortcode="GRID")
-        tid = s.create_story("spec-adopted", id="GRID-57")
+        epic = s.create_epic("epic")
+        tid = s.create_story("spec-adopted", epic=epic, id="GRID-57")
         self.assertEqual(tid, "GRID-57")
 
     def test_provided_id_rejected_when_taken(self):

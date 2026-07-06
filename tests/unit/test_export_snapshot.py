@@ -8,7 +8,8 @@ from the_grid.application.setup import ExportSnapshotUseCase
 class TestExportSnapshot(unittest.TestCase):
     def test_export_reproduces_store_contents(self):
         store = make_sqlite_store()
-        story = store.create_story("epic work")
+        epic = store.create_epic("epic")
+        story = store.create_story("epic work", epic=epic)
         store.add_artifact(story, "spec", "/specs/GRID-059.md")
         task = store.create_task("build it", step="build", role="coder", parent=story)
         store.note(task, "some notes")
@@ -20,7 +21,7 @@ class TestExportSnapshot(unittest.TestCase):
         response = ExportSnapshotUseCase(store).execute()
         rows = {json.loads(line)["id"]: json.loads(line) for line in response.lines}
 
-        self.assertEqual(set(rows), {story, task, blocker})
+        self.assertEqual(set(rows), {epic, story, task, blocker})
 
         story_row = rows[story]
         self.assertEqual(story_row["type"], "story")

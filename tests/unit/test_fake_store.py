@@ -93,7 +93,7 @@ class TestNotes(unittest.TestCase):
 class TestParentChildren(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.story = self.s.create_story("story: foo")
+        self.story = self.s.create_story("story: foo", epic=self.s.create_epic("epic"))
         self.task = self.s.create_task("build: foo", parent=self.story)
 
     def test_child_has_parent(self):
@@ -105,7 +105,7 @@ class TestParentChildren(unittest.TestCase):
         self.assertEqual(kids[0].id, self.task)
 
     def test_children_excludes_other_records(self):
-        other_story = self.s.create_story("story: bar")
+        other_story = self.s.create_story("story: bar", epic=self.s.create_epic("epic"))
         self.s.create_task("build: bar", parent=other_story)
         self.assertEqual(len(self.s.children(self.story)), 1)
 
@@ -182,7 +182,7 @@ class TestReady(unittest.TestCase):
         self.assertEqual(self.s.ready_tasks(), [])
 
     def test_stories_excluded_from_ready(self):
-        self.s.create_story("story: foo")
+        self.s.create_story("story: foo", epic=self.s.create_epic("epic"))
         self.assertEqual(self.s.ready_tasks(), [])
 
     def test_claim_ready_assigns_and_returns(self):
@@ -236,7 +236,7 @@ class TestListTasks(unittest.TestCase):
         self.assertEqual(got[0].claimed_by, "sp-1")
 
     def test_closed_stories_roundtrip(self):
-        sid = self.s.create_story("story: foo")
+        sid = self.s.create_story("story: foo", epic=self.s.create_epic("epic"))
         self.s.add_artifact(sid, "spec", "specs/foo.md")
         self.s.close(sid, "done")
         stories = self.s.closed_stories()
@@ -251,7 +251,7 @@ class TestListTasks(unittest.TestCase):
         self.assertEqual(self.s.closed_stories(), [])
 
     def test_closed_stories_excludes_open_stories(self):
-        self.s.create_story("story: open")
+        self.s.create_story("story: open", epic=self.s.create_epic("epic"))
         self.assertEqual(self.s.closed_stories(), [])
 
 

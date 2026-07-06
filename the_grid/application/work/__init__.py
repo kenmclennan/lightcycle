@@ -7,6 +7,7 @@ from the_grid.application.work.edit_task import EditTaskInput, EditTaskUseCase
 from the_grid.application.work.file_story import FileStoryInput, FileStoryUseCase
 from the_grid.application.work.inbox import InboxInput, InboxUseCase
 from the_grid.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+from the_grid.application.work.open_epic import OpenEpicInput, OpenEpicResponse, OpenEpicUseCase
 from the_grid.application.work.queue import QueueInput, QueueUseCase
 from the_grid.application.work.show_task import ShowTaskInput, ShowTaskUseCase
 from the_grid.application.work.status import StatusUseCase
@@ -31,6 +32,9 @@ __all__ = [
     "InboxUseCase",
     "LinkArtifactInput",
     "LinkArtifactUseCase",
+    "OpenEpicInput",
+    "OpenEpicResponse",
+    "OpenEpicUseCase",
     "QueueInput",
     "QueueUseCase",
     "ShowTaskInput",

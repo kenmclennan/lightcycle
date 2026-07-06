@@ -293,6 +293,8 @@ class FakeStore(StorePort):
             b["parent"] = parent
 
     def create_story(self, title, *, epic=None, project=None, goal=None):
+        if not epic:
+            raise ValueError("story requires an epic parent")
         b = self._new_record(
             title=title,
             type="story",
@@ -333,9 +335,7 @@ class FakeStore(StorePort):
         epics = [
             b
             for b in self._records.values()
-            if b.get("type") == "story"
-            and b.get("status") == "closed"
-            and b.get("parent") is None
+            if b.get("type") == "epic" and b.get("status") == "closed"
         ]
         epics.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
         return [record_to_task(b) for b in epics[:n]]
@@ -343,9 +343,7 @@ class FakeStore(StorePort):
     def epics_closed_since(self, since_date_str):
         result = []
         for b in self._records.values():
-            if b.get("type") != "story" or b.get("status") != "closed":
-                continue
-            if b.get("parent") is not None:
+            if b.get("type") != "epic" or b.get("status") != "closed":
                 continue
             if "retro-origin" in (b.get("labels") or []):
                 continue

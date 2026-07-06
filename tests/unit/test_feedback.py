@@ -31,7 +31,7 @@ def _add_reflection(store, task_id, feedback):
 class TestReflect(unittest.TestCase):
     def test_records_reflection_on_the_task_with_spec_hash(self):
         s = FakeStore()
-        story = s.create_story("st")
+        story = s.create_story("st", epic=s.create_epic("epic"))
         s.add_artifact(story, "spec", "/specs/x.md")
         k = s.create_task("build: x", step="build", role="coder", parent=story)
         fs = FakeFs(files={"/specs/x.md": b"spec body"})
@@ -53,7 +53,7 @@ class TestReflect(unittest.TestCase):
 class TestRetroEpicScope(unittest.TestCase):
     def test_gathers_feedback_and_signals(self):
         s = FakeStore()
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         story = s.create_story("st", epic=epic)
         k = s.create_task("build: x", step="build", role="coder", parent=story)
         _add_reflection(s, k, "fb1")
@@ -65,7 +65,7 @@ class TestRetroEpicScope(unittest.TestCase):
 
     def test_empty_when_no_reflections(self):
         s = FakeStore()
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         s.create_story("st", epic=epic)
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=epic))
         self.assertEqual(resp.reflection_count, 0)
@@ -73,7 +73,7 @@ class TestRetroEpicScope(unittest.TestCase):
 
     def test_subject_label_is_the_epic_id(self):
         s = FakeStore()
-        epic = s.create_story("epic")
+        epic = s.create_epic("epic")
         s.create_story("st", epic=epic)
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=epic))
         self.assertEqual(resp.subject, epic)
@@ -82,7 +82,7 @@ class TestRetroEpicScope(unittest.TestCase):
 class TestRetroStoryScope(unittest.TestCase):
     def test_story_scope_returns_single_row(self):
         s = FakeStore()
-        story = s.create_story("standalone story")
+        story = s.create_story("standalone story", epic=s.create_epic("epic"))
         k = s.create_task("build: x", step="build", role="coder", parent=story)
         _add_reflection(s, k, "story feedback")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=story))
@@ -94,7 +94,7 @@ class TestRetroStoryScope(unittest.TestCase):
 
     def test_story_scope_with_no_tasks(self):
         s = FakeStore()
-        story = s.create_story("empty story")
+        story = s.create_story("empty story", epic=s.create_epic("epic"))
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=story))
         self.assertEqual(resp.reflection_count, 0)
         self.assertEqual(len(resp.story_signals), 1)
@@ -102,7 +102,7 @@ class TestRetroStoryScope(unittest.TestCase):
 
     def test_story_with_rejected_task_tallies_signal(self):
         s = FakeStore()
-        story = s.create_story("story")
+        story = s.create_story("story", epic=s.create_epic("epic"))
         k = s.create_task("review: x", step="review", role="reviewer", parent=story)
         s.close(k, "rejected")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=story))
@@ -112,12 +112,13 @@ class TestRetroStoryScope(unittest.TestCase):
 class TestRetroSinceScope(unittest.TestCase):
     def test_since_aggregates_closed_tasks_across_stories(self):
         s = FakeStore()
-        story1 = s.create_story("story1")
+        epic = s.create_epic("epic")
+        story1 = s.create_story("story1", epic=epic)
         k1 = s.create_task("build: a", step="build", role="coder", parent=story1)
         s.close(k1, "done")
         _add_reflection(s, k1, "reflection from story1")
 
-        story2 = s.create_story("story2")
+        story2 = s.create_story("story2", epic=epic)
         k2 = s.create_task("build: b", step="build", role="coder", parent=story2)
         s.close(k2, "done")
         _add_reflection(s, k2, "reflection from story2")
@@ -131,7 +132,7 @@ class TestRetroSinceScope(unittest.TestCase):
 
     def test_since_excludes_open_tasks(self):
         s = FakeStore()
-        story = s.create_story("story")
+        story = s.create_story("story", epic=s.create_epic("epic"))
         k = s.create_task("build: x", step="build", role="coder", parent=story)
         _add_reflection(s, k, "not closed yet")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(since="2020-01-01"))
@@ -144,7 +145,8 @@ class TestRetroSinceScope(unittest.TestCase):
 
     def test_since_includes_epicless_story_task(self):
         s = FakeStore()
-        story = s.create_story("epicless story")
+        story = s.create_story("epicless story", epic=s.create_epic("epic"))
+        s._records[story]["parent"] = None
         k = s.create_task("build: x", role="coder", parent=story)
         s.close(k, "done")
         _add_reflection(s, k, "epicless fb")
@@ -154,7 +156,7 @@ class TestRetroSinceScope(unittest.TestCase):
 
 class TestRetroLastScope(unittest.TestCase):
     def _make_closed_epic(self, s, title):
-        epic = s.create_story(title)
+        epic = s.create_epic(title)
         story = s.create_story("child of %s" % title, epic=epic)
         k = s.create_task("task", role="coder", parent=story)
         _add_reflection(s, k, "fb from %s" % title)
@@ -196,7 +198,7 @@ class TestWorklog(unittest.TestCase):
 
     def test_lists_stories_closed_in_period(self):
         s = FakeStore()
-        sid = s.create_story("shipped story")
+        sid = s.create_story("shipped story", epic=s.create_epic("epic"))
         s.close(sid, "merged")
         today, tz = self._now()
         resp = WorklogUseCase(s).execute(WorklogInput(period_args=[], today=today, tz=tz))
@@ -204,7 +206,7 @@ class TestWorklog(unittest.TestCase):
 
     def test_empty_when_nothing_closed(self):
         s = FakeStore()
-        s.create_story("still open")
+        s.create_story("still open", epic=s.create_epic("epic"))
         today, tz = self._now()
         resp = WorklogUseCase(s).execute(WorklogInput(period_args=[], today=today, tz=tz))
         self.assertEqual(resp.entries, [])

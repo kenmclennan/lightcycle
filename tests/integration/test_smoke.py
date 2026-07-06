@@ -81,7 +81,11 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(shown["description"], "updated desc")
 
     def test_create_claim_done_advance_show(self):
-        r = _tg("file", "specs/smoke.md", "--step", "build", root=self.root)
+        r = _tg("epic", "smoke objective", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        epic_id = r.stdout.strip()
+
+        r = _tg("file", "specs/smoke.md", "--step", "build", "--epic", epic_id, root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
         r = _tg("claim", "coder", root=self.root)

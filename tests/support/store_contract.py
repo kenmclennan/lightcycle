@@ -105,12 +105,22 @@ class StoreContractBase:
 
     def test_story_artifacts_roundtrip(self):
         s = self.make_store()
-        sid = s.create_story("story: foo")
+        sid = s.create_story("story: foo", epic=s.create_epic("epic"))
         s.add_artifact(sid, "spec", "specs/foo.md")
         arts = s.story_artifacts(sid)
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].type, "spec")
         self.assertEqual(arts[0].value, "specs/foo.md")
+
+    def test_create_epic_creates_epic_typed_task(self):
+        s = self.make_store()
+        eid = s.create_epic("objective")
+        self.assertEqual(s.get_task(eid).type, "epic")
+
+    def test_create_story_without_epic_raises(self):
+        s = self.make_store()
+        with self.assertRaises(ValueError):
+            s.create_story("story: foo")
 
     def test_create_task_with_description(self):
         s = self.make_store()
@@ -146,7 +156,7 @@ class StoreContractBase:
 
     def test_edit_task_reparents(self):
         s = self.make_store()
-        epic = s.create_story("epic")
+        epic = s.create_story("epic", epic=s.create_epic("outer epic"))
         tid = s.create_task("a task")
         s.edit_task(tid, parent=epic)
         t = s.get_task(tid)
@@ -160,7 +170,7 @@ class StoreContractBase:
 
     def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
         s = self.make_store()
-        epic = s.create_story("epic")
+        epic = s.create_story("epic", epic=s.create_epic("outer epic"))
         tid = s.create_task("a task", parent=epic)
         s.edit_task(tid, title="renamed")
         t = s.get_task(tid)

@@ -25,8 +25,9 @@ autonomously - you never initiate a build, the pool polls the store for ready wo
    no spec shape (see the develop skill). If the work is big, the spec breaks into **phases**, each
    with a review checkpoint - one story per phase, from the single spec.
 3. **Review** - the human reviews the spec at the gate; approve, or send back with changes.
-4. **Build** - on approval you file a story per phase (`tg file --blocked-by` to order them); the
-   pool runs each (build -> review -> open-pr -> watch-pr), then hands `ready-merge`/`cleanup` to you.
+4. **Build** - on approval, open or choose the epic for the objective (`tg epic`), then file a story
+   per phase under it (`tg file --epic <id>`, `--blocked-by` to order them); the pool runs each
+   (build -> review -> open-pr -> watch-pr), then hands `ready-merge`/`cleanup` to you.
 
 You enter at capture/develop and gate at review and ready-merge; the middle runs itself.
 _(The planner agent and a separate plan step were removed - the breakdown into phases/stories is part
@@ -96,12 +97,16 @@ These are how you work, not suggestions:
 - The spec is whatever the human gives you - a file they wrote, or one you draft together if they
   ask. the-grid imposes no spec format; do not reshape what they hand you. Save it under the specs
   root and file it as-is. If you draft one, never invent facts or sources.
-- `tg file <spec> --step build --repo <name> [--epic/--project/--goal/--blocked-by]` creates a STORY
-  (spec attached) and its first task. `--repo` names the repo under projects/ (default: the engine
-  itself); `--blocked-by` gates it on another task. Attach more artifacts with `tg link`.
-- For multi-phase specs, file phase 1 first to get its task id (e.g. `myapp-abc`), then file
-  phase 2 with `tg file p2.md --step build --repo myapp --blocked-by myapp-abc` - the store
-  holds it until phase 1 closes.
+- Before filing, open an epic for the objective (`tg epic "<objective>" [--backlog <id>]`), or reuse
+  one already open for it. `tg file` has no path to a parentless story - `--epic` is required.
+- `tg file <spec> --step build --epic <id> [--repo/--project/--goal/--blocked-by]` creates a STORY
+  (spec attached) under that epic, and its first task. `--repo` names the repo under projects/
+  (default: the engine itself); `--blocked-by` gates it on another task. Attach more artifacts with
+  `tg link`.
+- For multi-phase specs, one epic holds every phase's story. File phase 1 first to get its task id
+  (e.g. `myapp-abc`), then file phase 2 with
+  `tg file p2.md --step build --epic <id> --repo myapp --blocked-by myapp-abc` - the store holds it
+  until phase 1 closes.
 - `tg add "<title>"` for a rough idea or reminder - it lands in the backlog, no spec or flow needed.
 
 ## Work the human-facing steps

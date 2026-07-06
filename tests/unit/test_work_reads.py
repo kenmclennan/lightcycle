@@ -55,7 +55,7 @@ class TestShowTask(unittest.TestCase):
 class TestTrace(unittest.TestCase):
     def test_assembles_story_artifacts_tasks_and_logs(self):
         s = FakeStore()
-        sid = s.create_story("st")
+        sid = s.create_story("st", epic=s.create_epic("epic"))
         s.add_artifact(sid, "spec", "specs/x.md")
         k = s.create_task("build: x", step="build", role="coder", parent=sid)
         workers = _Workers([{"role": "coder", "task": k, "log": "/l/k.log"}])
