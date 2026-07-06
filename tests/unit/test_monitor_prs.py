@@ -193,7 +193,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_merged_pr_closes_story_whose_live_task_is_upstream_of_ready_merge(self):
         url = "https://github.com/x/y/pull/40"
         store = FakeStore()
-        story = store.create_story("upstream feature")
+        story = store.create_story("upstream feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task(
             "build: upstream feature", step="build", role="coder", parent=story
@@ -212,7 +212,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_merged_pr_closes_story_whose_live_task_regressed_to_review(self):
         url = "https://github.com/x/y/pull/41"
         store = FakeStore()
-        story = store.create_story("regressed feature")
+        story = store.create_story("regressed feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task(
             "review: regressed feature", step="review", role="reviewer", parent=story
@@ -366,7 +366,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
     def test_closed_unmerged_pr_closes_story_whose_live_task_is_at_watch_pr(self):
         url = "https://github.com/x/y/pull/22"
         store = FakeStore()
-        story = store.create_story("watched feature")
+        story = store.create_story("watched feature", epic=store.create_epic("epic"))
         store.add_artifact(story, "pr", url)
         task = store.create_task(
             "watch-pr: watched feature", step="watch-pr", role="reviewer", parent=story

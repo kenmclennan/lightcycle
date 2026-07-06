@@ -188,7 +188,7 @@ class TestSweep(unittest.TestCase):
 
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
-        story = s.create_story("merged feature")
+        story = s.create_story("merged feature", epic=s.create_epic("epic"))
         task = s.create_task("build: merged feature", step="build", role="coder", parent=story)
         s.update_status(task, "in_progress")
         s.assign(task, "live-sp")
