@@ -1,13 +1,18 @@
+import os
+import sqlite3
+import tempfile
 import unittest
 
 from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.store_contract import StoreContractBase
+from the_grid.adapters.sqlite_store import SqliteStore
 from the_grid.application.work.status import StatusUseCase
+from the_grid.config import Config
 
 
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
-    def make_store(self):
-        return make_sqlite_store()
+    def make_store(self, now=None):
+        return make_sqlite_store(now=now)
 
 
 class TestSqliteStoreRoundtrips(unittest.TestCase):
@@ -125,6 +130,29 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         result_ids = {t.id for t in s.all_tasks()}
         for tid in created:
             self.assertIn(tid, result_ids)
+
+
+class TestSqliteStoreHistoryMigration(unittest.TestCase):
+    def test_legacy_history_rows_without_ts_column_read_back_as_unknown(self):
+        root = tempfile.mkdtemp()
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        config = Config(environ={"GRID_ROOT_OVERRIDE": root, "GRID_CONFIG": cfg_path})
+
+        conn = sqlite3.connect(os.path.join(root, ".grid.db"))
+        conn.execute(
+            "CREATE TABLE history (task_id TEXT NOT NULL, seq INTEGER NOT NULL, "
+            "status TEXT NOT NULL)"
+        )
+        conn.execute(
+            "INSERT INTO history (task_id, seq, status) VALUES ('legacy-1', 0, 'in-progress')"
+        )
+        conn.commit()
+        conn.close()
+
+        store = SqliteStore(config)
+        self.assertEqual(store.history("legacy-1"), [("in-progress", None)])
 
 
 if __name__ == "__main__":

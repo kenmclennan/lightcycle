@@ -5,8 +5,8 @@ from tests.support.store_contract import StoreContractBase
 
 
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
-    def make_store(self):
-        return make_sqlite_store()
+    def make_store(self, now=None):
+        return make_sqlite_store(now=now)
 
 
 if __name__ == "__main__":

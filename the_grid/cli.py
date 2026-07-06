@@ -908,7 +908,10 @@ def _print_retro(resp):
     print("\nPer-story signals:")
     for row in resp.story_signals:
         sig_str = "  ".join(_fmt_signal(k, row.signals[k]) for k in sorted(row.signals))
-        print("  %-20s  %s  (N=%d)" % (row.story.id, sig_str, row.reflections))
+        print(
+            "  %-20s  %s  (N=%d)  duration=%s"
+            % (row.story.id, sig_str, row.reflections, _fmt_duration(row.total_duration()))
+        )
 
 
 def _fmt_signal(name, by_model):
@@ -917,6 +920,17 @@ def _fmt_signal(name, by_model):
         return "%s=%d" % (name, total)
     breakdown = ",".join("%s:%d" % (m, by_model[m]) for m in sorted(by_model))
     return "%s=%d(%s)" % (name, total, breakdown)
+
+
+def _fmt_duration(seconds):
+    if seconds is None:
+        return "unknown"
+    total = int(seconds)
+    hours, rem = divmod(total, 3600)
+    minutes, _ = divmod(rem, 60)
+    if hours:
+        return "%dh%02dm" % (hours, minutes)
+    return "%dm" % minutes
 
 
 def cmd_retro(argv):
