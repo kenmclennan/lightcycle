@@ -10,14 +10,8 @@ specs/*.md
 .worktrees/
 .tg-run.pid
 
-# Beads / Dolt files (added by bd init)
-.dolt/
 *.db
-.beads-credential-key
-.beads/issues.jsonl
-.beads/interactions.jsonl
+.grid.db-shm
+.grid.db-wal
 
 .vscode/
-
-# Beads / Dolt files (added by bd init)
-.beads/proxieddb/
