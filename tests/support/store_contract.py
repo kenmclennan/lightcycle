@@ -54,6 +54,21 @@ class StoreContractBase:
         self.assertIn("alpha", notes)
         self.assertIn("beta", notes)
 
+    def test_set_notes_replaces_existing_notes(self):
+        s = self.make_store()
+        tid = s.create_task("t")
+        s.note(tid, "alpha")
+        s.set_notes(tid, "replacement")
+        notes = s.get_task(tid).notes
+        self.assertEqual(notes, "replacement")
+
+    def test_set_notes_empty_clears_notes(self):
+        s = self.make_store()
+        tid = s.create_task("t")
+        s.note(tid, "alpha")
+        s.set_notes(tid, "")
+        self.assertFalse(s.get_task(tid).notes)
+
     def test_task_without_deps_is_ready(self):
         s = self.make_store()
         tid = s.create_task("t", role="coder")

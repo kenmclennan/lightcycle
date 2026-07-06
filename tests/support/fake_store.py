@@ -178,6 +178,9 @@ class FakeStore(StorePort):
         existing = b.get("notes")
         b["notes"] = (existing + "\n" + text) if existing else text
 
+    def set_notes(self, tid, text):
+        self._get(tid)["notes"] = text or None
+
     def close(self, tid, reason):
         b = self._get(tid)
         b["status"] = "closed"

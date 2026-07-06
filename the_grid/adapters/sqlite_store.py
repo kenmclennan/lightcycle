@@ -325,6 +325,13 @@ class SqliteStore(StorePort):
         self._conn.execute("UPDATE tasks SET notes = ? WHERE id = ?", (combined, tid))
         self._conn.commit()
 
+    def set_notes(self, tid, text):
+        row = self._conn.execute("SELECT 1 FROM tasks WHERE id = ?", (tid,)).fetchone()
+        if row is None:
+            raise KeyError("task not found: %s" % tid)
+        self._conn.execute("UPDATE tasks SET notes = ? WHERE id = ?", (text or None, tid))
+        self._conn.commit()
+
     def close(self, tid, reason):
         self._conn.execute(
             "UPDATE tasks SET status = 'closed', close_reason = ?, closed_at = ? WHERE id = ?",

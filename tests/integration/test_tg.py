@@ -1241,6 +1241,16 @@ class TestUnblock(unittest.TestCase):
         self.assertEqual(t.role, "coder")
         self.assertIsNone(t.claimed_by)
 
+    def test_unblock_clears_needs_and_blocked_note(self):
+        b = self.store.create_task("build: t", step="build", role="coder")
+        self.store.claim_ready("coder")
+        call(_cli_mod.cmd_block, b, "--needs", "rebase first")
+        rc, out, err = call(_cli_mod.cmd_unblock, b)
+        self.assertEqual(rc, 0, err)
+        t = self.store.get_task(b)
+        self.assertIsNone(t.needs)
+        self.assertNotIn("BLOCKED:", t.notes or "")
+
     def test_unblock_refuses_human_step(self):
         (Path(self.root) / "steps" / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n"
