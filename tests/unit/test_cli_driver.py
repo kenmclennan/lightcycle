@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.cli import _compose_driver
+from lightcycle.cli import _compose_driver
 
 
 class TestComposeDriver(unittest.TestCase):

@@ -2,14 +2,14 @@ import os
 import tempfile
 import unittest
 
-from the_grid.adapters.lock import RunLockAdapter
+from lightcycle.adapters.lock import RunLockAdapter
 
 
 class FakeConfig:
     def __init__(self, root):
         self._root = root
 
-    def grid_root(self):
+    def engine_root(self):
         return self._root
 
     def data_root(self):
@@ -37,7 +37,7 @@ class TestRunLockAdapter(unittest.TestCase):
 
     def test_stale_lock_reclaimed(self):
         dead_pid = 999999
-        with open(os.path.join(self.root, ".tg-run.pid"), "w") as f:
+        with open(os.path.join(self.root, ".lc-run.pid"), "w") as f:
             f.write(str(dead_pid))
         acquired, holder_pid = self.lock.acquire()
         self.assertTrue(acquired)
@@ -50,10 +50,10 @@ class TestRunLockAdapter(unittest.TestCase):
         self.assertTrue(acquired)
 
     def test_release_without_ownership_leaves_other_holder_lock(self):
-        with open(os.path.join(self.root, ".tg-run.pid"), "w") as f:
+        with open(os.path.join(self.root, ".lc-run.pid"), "w") as f:
             f.write(str(os.getpid() + 1))
         self.lock.release()
-        self.assertTrue(os.path.exists(os.path.join(self.root, ".tg-run.pid")))
+        self.assertTrue(os.path.exists(os.path.join(self.root, ".lc-run.pid")))
 
 
 if __name__ == "__main__":

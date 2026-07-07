@@ -2,7 +2,7 @@ import json
 import unittest
 
 from tests.support.sqlite_store_factory import make_sqlite_store
-from the_grid.application.setup import ExportSnapshotUseCase
+from lightcycle.application.setup import ExportSnapshotUseCase
 
 
 class TestExportSnapshot(unittest.TestCase):

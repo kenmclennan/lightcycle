@@ -2,7 +2,7 @@ import datetime
 import json
 import unittest
 
-from the_grid.application.feedback import (
+from lightcycle.application.feedback import (
     ReflectInput,
     ReflectUseCase,
     RetroInput,
@@ -10,8 +10,8 @@ from the_grid.application.feedback import (
     WorklogInput,
     WorklogUseCase,
 )
-from the_grid.application.services.flow import FlowService
-from the_grid.domain.feedback import UNLABELED_MODEL
+from lightcycle.application.services.flow import FlowService
+from lightcycle.domain.feedback import UNLABELED_MODEL
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 

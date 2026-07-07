@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.domain.pool import PoolPlan, ReadyQueue
-from the_grid.domain.work import Task
+from lightcycle.domain.pool import PoolPlan, ReadyQueue
+from lightcycle.domain.work import Task
 
 
 def tasks(*roles):

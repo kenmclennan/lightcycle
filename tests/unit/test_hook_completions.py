@@ -1,8 +1,8 @@
 import datetime
 import unittest
 
-from the_grid.application.pool.hook_completions import HookCompletionsUseCase
-from the_grid.application.services.flow import FlowService
+from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
+from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 

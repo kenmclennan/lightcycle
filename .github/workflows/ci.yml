@@ -21,7 +21,7 @@ jobs:
           else
             files=""
           fi
-          if [ -n "$files" ] && ! echo "$files" | grep -qvE '\.md$' && ! echo "$files" | grep -qE '^(the_grid/|tests/)'; then
+          if [ -n "$files" ] && ! echo "$files" | grep -qvE '\.md$' && ! echo "$files" | grep -qE '^(lightcycle/|tests/)'; then
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
           else
             echo "docs_only=false" >> "$GITHUB_OUTPUT"

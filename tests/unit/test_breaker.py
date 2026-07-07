@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.pool import Breaker
+from lightcycle.domain.pool import Breaker
 
 
 class TestBreaker(unittest.TestCase):

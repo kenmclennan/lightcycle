@@ -1,6 +1,6 @@
-# the-grid methodology
+# lightcycle methodology
 
-the-grid is two things at once: an agent-pipeline **engine**, and a **methodology** for building
+lightcycle is two things at once: an agent-pipeline **engine**, and a **methodology** for building
 software with such a pipeline. This document is the methodology - the principles and the reasoning
 behind `driver.md` (the playbook) and `CLAUDE.md` (the conventions). It is a living document: update
 it as the method is discovered. The method is the product; the features only prove it.
@@ -23,15 +23,15 @@ that scatter attention** and leave a calmer, more focused experience - so the hu
 undivided, on the work that is worth a human. Almost every principle below is an instance of that:
 remove a source of friction, noise, or context-switching so focus can hold.
 
-## What `tg` is - and isn't
+## What `lc` is - and isn't
 
-`tg` is the **hub and the planning assistant**. It owns the **coordination**: capturing todos, the
+`lc` is the **hub and the planning assistant**. It owns the **coordination**: capturing todos, the
 workflow that turns a todo into a spec and carries it through build, and handing each artifact to the
 right surface for review and pulling the feedback back. It does **not** own the **craft**: writing the
 spec (delegated to the best spec-writer available - vanilla Claude or a skill, never an engine-imposed
 format) or the review itself (which happens on the artifact's natural surface - GitHub comments, an
-editor - not in a `tg`-rendered gate). `tg` is not a universal solver for agentic development; work
-with a better natural home lives there, and `tg` links out and pulls the feedback back. It conducts;
+editor - not in a `lc`-rendered gate). `lc` is not a universal solver for agentic development; work
+with a better natural home lives there, and `lc` links out and pulls the feedback back. It conducts;
 the work happens in the right places. _This boundary is what keeps the engine light and agnostic: it
 owns the moving-of-work, not the doing-of-work._
 
@@ -48,12 +48,12 @@ decisions in chat and nearly acted on a model (epics) we had never written down.
 
 ### Keep the engine agnostic; conventions go to the project
 
-The engine builds _any_ repo. So `tg` and `core` must hold only generic task/process primitives - no
+The engine builds _any_ repo. So `lc` and `core` must hold only generic task/process primitives - no
 hardcoded step names, required named artifacts, or per-workflow commands. The workflow is the user's,
 and it lives in editable step markdown composed from primitives; a project's specifics live in that
-project's `CLAUDE.md`, which the agnostic agents read. _Discovered via the `tg plan-add` trap: a
+project's `CLAUDE.md`, which the agnostic agents read. _Discovered via the `lc plan-add` trap: a
 command that baked a `build` step and a required `spec` into the engine; reverted in favour of the
-planner composing `tg file --blocked-by`._
+planner composing `lc file --blocked-by`._
 
 ### Substrate by hand; additive through the pipeline
 

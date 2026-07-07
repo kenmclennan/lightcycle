@@ -1,14 +1,14 @@
 import tempfile
 import unittest
 
-from the_grid.adapters.breaker import BreakerAdapter
+from lightcycle.adapters.breaker import BreakerAdapter
 
 
 class FakeConfig:
     def __init__(self, root):
         self._root = root
 
-    def grid_root(self):
+    def engine_root(self):
         return self._root
 
     def data_root(self):

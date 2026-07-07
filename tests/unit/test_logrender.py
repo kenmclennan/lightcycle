@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from the_grid.logrender import render_log_line
+from lightcycle.logrender import render_log_line
 
 
 class TestRenderLogLine(unittest.TestCase):

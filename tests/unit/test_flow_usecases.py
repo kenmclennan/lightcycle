@@ -2,9 +2,9 @@ import os
 import unittest
 from pathlib import Path
 
-from the_grid.adapters.fsio import parse_step, step_roles, workflow_text
-from the_grid.application.errors import UseCaseError
-from the_grid.application.flow import (
+from lightcycle.adapters.fsio import parse_step, step_roles, workflow_text
+from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow import (
     AdvanceInput,
     AdvanceTaskUseCase,
     BlockInput,
@@ -18,11 +18,11 @@ from the_grid.application.flow import (
     UnblockInput,
     UnblockTaskUseCase,
 )
-from the_grid.application.services.flow import FlowService
+from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
-_ROOT = str(Path(__file__).resolve().parents[2] / "the_grid" / "library")
+_ROOT = str(Path(__file__).resolve().parents[2] / "lightcycle" / "library")
 
 
 class _RealFs:

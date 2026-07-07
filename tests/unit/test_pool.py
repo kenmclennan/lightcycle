@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.application.pool import (
+from lightcycle.application.pool import (
     BreakerGateResponse,
     HookCompletionsUseCase,
     ListWorkersUseCase,
@@ -10,9 +10,9 @@ from the_grid.application.pool import (
     TickInput,
     TickUseCase,
 )
-from the_grid.application.services.flow import FlowService
-from the_grid.application.work.close_story import CloseStoryInput, CloseStoryUseCase
-from the_grid.domain.pool import Breaker
+from lightcycle.application.services.flow import FlowService
+from lightcycle.application.work.close_story import CloseStoryInput, CloseStoryUseCase
+from lightcycle.domain.pool import Breaker
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -77,7 +77,7 @@ class FakeConfig:
     def max_boot_seconds(self):
         return self._mb
 
-    def grid_root(self):
+    def engine_root(self):
         return self._root
 
     def data_root(self):

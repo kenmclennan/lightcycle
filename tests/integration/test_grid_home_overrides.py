@@ -6,13 +6,13 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TG = str(ROOT / "bin" / "tg")
+TG = str(ROOT / "bin" / "lc")
 
 
 def _env(home, xdg):
-    env = dict(os.environ, GRID_HOME=home, XDG_CONFIG_HOME=xdg)
-    env.pop("GRID_CONFIG", None)
-    env.pop("GRID_ROOT_OVERRIDE", None)
+    env = dict(os.environ, LC_HOME=home, XDG_CONFIG_HOME=xdg)
+    env.pop("LC_CONFIG", None)
+    env.pop("LC_ROOT_OVERRIDE", None)
     return env
 
 

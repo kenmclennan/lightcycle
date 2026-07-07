@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.work import Lane, Status
+from lightcycle.domain.work import Lane, Status
 
 
 class TestStatusLane(unittest.TestCase):

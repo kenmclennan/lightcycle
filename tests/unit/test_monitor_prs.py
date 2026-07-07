@@ -1,9 +1,9 @@
 import unittest
 
-from the_grid.application.flow import CompleteTaskUseCase
-from the_grid.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
+from lightcycle.application.flow import CompleteTaskUseCase
+from lightcycle.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
 from tests.support.fake_fs import flow_from_metas
-from the_grid.ports.github import Comment, GitHubEventsPort
+from lightcycle.ports.github import Comment, GitHubEventsPort
 from tests.support.fake_store import FakeStore
 
 
@@ -799,7 +799,7 @@ class FakeConfig:
     def max_boot_seconds(self):
         return 120
 
-    def grid_root(self):
+    def engine_root(self):
         return "/grid"
 
 

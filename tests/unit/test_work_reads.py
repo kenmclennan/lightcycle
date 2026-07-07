@@ -2,7 +2,7 @@ import datetime
 import time
 import unittest
 
-from the_grid.application.work import (
+from lightcycle.application.work import (
     ActiveTasksUseCase,
     BacklogInput,
     BacklogUseCase,
@@ -16,7 +16,7 @@ from the_grid.application.work import (
     TraceInput,
     TraceUseCase,
 )
-from the_grid.application.services.flow import FlowService
+from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 

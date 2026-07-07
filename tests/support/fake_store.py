@@ -2,8 +2,8 @@ import datetime
 import os
 import uuid
 
-from the_grid.ports.store import StorePort
-from the_grid.domain.work import Artifact, Status, Task, TaskView
+from lightcycle.ports.store import StorePort
+from lightcycle.domain.work import Artifact, Status, Task, TaskView
 
 
 def _new_id():
@@ -252,7 +252,7 @@ class FakeStore(StorePort):
         if not candidates:
             return None
         b = candidates[0]
-        b["assignee"] = os.environ.get("GRID_SPAWNID") or role
+        b["assignee"] = os.environ.get("LC_SPAWNID") or role
         b["status"] = "in_progress"
         self._record_history(b["id"], Status.IN_PROGRESS)
         return record_to_task(b)

@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec
-from the_grid.domain.work import Task
+from lightcycle.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec
+from lightcycle.domain.work import Task
 from tests.support.fake_fs import signals_from_metas
 
 

@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.work import TaskSpec
+from lightcycle.domain.work import TaskSpec
 
 
 class TestTaskSpec(unittest.TestCase):

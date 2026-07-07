@@ -1,13 +1,13 @@
 import unittest
 from pathlib import Path
 
-from the_grid.adapters.fsio import parse_step, step_roles, workflow_text
-from the_grid.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
-from the_grid.domain.flow import Flow
-from the_grid.domain.flow.graph import parse_graph
+from lightcycle.adapters.fsio import parse_step, step_roles, workflow_text
+from lightcycle.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
+from lightcycle.domain.flow import Flow
+from lightcycle.domain.flow.graph import parse_graph
 from tests.support.fake_fs import graph_text_from_metas
 
-_ROOT = str(Path(__file__).resolve().parents[2] / "the_grid" / "library")
+_ROOT = str(Path(__file__).resolve().parents[2] / "lightcycle" / "library")
 
 CONTRACT_METAS = {
     "coder": {

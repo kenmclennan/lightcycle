@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.pool import Worker, WorkerPool
+from lightcycle.domain.pool import Worker, WorkerPool
 
 
 def probe(alive_pids):

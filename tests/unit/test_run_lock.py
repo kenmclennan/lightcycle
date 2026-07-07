@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.application.pool import AcquireRunLockUseCase, ReleaseRunLockUseCase
+from lightcycle.application.pool import AcquireRunLockUseCase, ReleaseRunLockUseCase
 
 
 class FakeLock:

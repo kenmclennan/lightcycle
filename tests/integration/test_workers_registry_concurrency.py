@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from the_grid.adapters import workers as wk
+from lightcycle.adapters import workers as wk
 
 
 def _hammer(root, spawnid, task, iterations):

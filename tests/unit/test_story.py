@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.work import Artifact, Story
+from lightcycle.domain.work import Artifact, Story
 
 
 class TestStory(unittest.TestCase):

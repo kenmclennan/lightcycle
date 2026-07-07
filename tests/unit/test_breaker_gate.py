@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from tests.support.fake_fs import FakeFs
 
 _REJECTED = (

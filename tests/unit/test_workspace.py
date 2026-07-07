@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.workspace import Branch, Worktree
+from lightcycle.domain.workspace import Branch, Worktree
 
 
 class TestBranch(unittest.TestCase):

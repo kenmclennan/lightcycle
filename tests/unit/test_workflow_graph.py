@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.flow.graph import parse_graph
+from lightcycle.domain.flow.graph import parse_graph
 
 
 class TestWorkflowGraphParsing(unittest.TestCase):

@@ -1,7 +1,7 @@
 import pathlib
 import unittest
 
-DOMAIN = pathlib.Path(__file__).resolve().parents[2] / "the_grid" / "domain"
+DOMAIN = pathlib.Path(__file__).resolve().parents[2] / "lightcycle" / "domain"
 
 BD_MARKERS = ('"Issue"', "issue_type", "close_reason", "dependency_count")
 ALLOW = set()
