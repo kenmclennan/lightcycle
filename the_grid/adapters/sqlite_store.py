@@ -93,7 +93,8 @@ class SqliteStore(StorePort):
     def __init__(self, config, now=None):
         self._config = config
         self._now = now or (lambda: datetime.datetime.now().isoformat())
-        path = os.path.join(config.grid_root(), _DB_FILENAME)
+        path = os.path.join(config.data_root(), _DB_FILENAME)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         self._conn = sqlite3.connect(path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")

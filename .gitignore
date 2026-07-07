@@ -15,3 +15,6 @@ specs/*.md
 .grid.db-wal
 
 .vscode/
+
+dist/
+*.egg-info/

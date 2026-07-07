@@ -73,10 +73,15 @@ from the_grid.application.pool import (
     TickInput,
     TickUseCase,
 )
-from the_grid.application.setup import InitGridUseCase, InitProjectInput, InitProjectUseCase
+from the_grid.application.setup import (
+    InitGridUseCase,
+    InitProjectInput,
+    InitProjectUseCase,
+    migrate_legacy,
+)
 from the_grid.application.services.flow import FlowService
 from the_grid.application.services.worktree import WorktreeService
-from the_grid.config import ConfigError
+from the_grid.config import Config, ConfigError
 from the_grid.container import Container
 
 
@@ -124,6 +129,7 @@ COMMAND_GROUPS = [
         ("init", "[<project>]", "no arg: create the grid store + seed the HOME config (run once). "
          "<project>: scaffold that project's .grid/ (workflows, config with a shortcode)"),
         ("config", "[--edit]", "show or edit the grid config (projects + specs roots)"),
+        ("migrate", "", "one-time: move a legacy ~/.config config + in-repo store into ~/.grid"),
     ]),
     ("Start working", [
         ("run", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to GRID_MAX_AGENTS (default 4) workers from the ready queue"),
@@ -196,8 +202,23 @@ def print_help():
         print("")
 
 
+def cmd_migrate(argv):
+    argparse.ArgumentParser(prog="tg migrate").parse_args(argv)
+    resp = migrate_legacy(Config())
+    if resp.already:
+        print("already on the ~/.grid layout - nothing to migrate")
+    elif resp.nothing:
+        print("no legacy layout found - nothing to migrate")
+    else:
+        print("migrated into ~/.grid: %s (store backed up to %s)"
+              % (", ".join(resp.moved), resp.backup))
+    return 0
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "migrate":
+        return cmd_migrate(argv[1:])
     set_container(Container())
     if not argv or argv[0] in ("-h", "--help"):
         print_help()
@@ -789,7 +810,7 @@ def _compose_driver(base_body, skills):
 def cmd_driver(argv):
     if not require_store():
         return 1
-    root = _container.config.grid_root()
+    root = _container.config.data_root()
     seat = _container.fs.read_md("driver.md")
     if seat is None or not seat["meta"].get("model"):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")

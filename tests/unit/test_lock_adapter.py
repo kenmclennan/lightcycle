@@ -12,6 +12,12 @@ class FakeConfig:
     def grid_root(self):
         return self._root
 
+    def data_root(self):
+        return self._root
+
+    def library_root(self):
+        return self._root
+
 
 class TestRunLockAdapter(unittest.TestCase):
     def setUp(self):

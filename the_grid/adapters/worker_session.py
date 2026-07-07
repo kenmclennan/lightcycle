@@ -117,13 +117,13 @@ def run(root, role, spawnid, model, sysprompt, max_session_seconds):
 
 
 def main():
-    root = os.environ.get("GRID_ROOT_OVERRIDE")
     role = os.environ.get("GRID_ROLE")
     spawnid = os.environ.get("GRID_SPAWNID")
-    if not (root and role and spawnid):
-        sys.stderr.write("worker_session: GRID_ROOT_OVERRIDE, GRID_ROLE, GRID_SPAWNID required\n")
+    if not (role and spawnid):
+        sys.stderr.write("worker_session: GRID_ROLE, GRID_SPAWNID required\n")
         return 1
-    agent = fsio.parse_step(root, role)
+    config = Config()
+    agent = fsio.parse_step(config.library_root(), role)
     if agent is None:
         sys.stderr.write("worker_session: no agent definition for role %s\n" % role)
         return 1
@@ -131,8 +131,7 @@ def main():
     if not model:
         sys.stderr.write("worker_session: agent %s has no 'model' in frontmatter\n" % role)
         return 1
-    max_session_seconds = Config().max_session_seconds()
-    return run(root, role, spawnid, model, agent["body"], max_session_seconds)
+    return run(config.data_root(), role, spawnid, model, agent["body"], config.max_session_seconds())
 
 
 if __name__ == "__main__":

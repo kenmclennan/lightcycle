@@ -22,7 +22,7 @@ from the_grid.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
-_ROOT = str(Path(__file__).resolve().parents[2])
+_ROOT = str(Path(__file__).resolve().parents[2] / "the_grid" / "library")
 
 
 class _RealFs:

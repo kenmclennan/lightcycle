@@ -103,10 +103,10 @@ class WorkersAdapter(WorkersPort):
         self._config = config
 
     def workers_state(self):
-        return workers_state(self._config.grid_root())
+        return workers_state(self._config.data_root())
 
     def write_workers(self, workers):
-        return write_workers(self._config.grid_root(), workers)
+        return write_workers(self._config.data_root(), workers)
 
     def pid_alive(self, pid):
         return pid_alive(pid)
@@ -116,10 +116,10 @@ class WorkersAdapter(WorkersPort):
 
     def prune_workers(self, keep_dead=None):
         kd = self._config.worker_history() if keep_dead is None else keep_dead
-        return prune_workers(self._config.grid_root(), kd)
+        return prune_workers(self._config.data_root(), kd)
 
     def set_task(self, spawnid, task):
-        return set_task(self._config.grid_root(), spawnid, task)
+        return set_task(self._config.data_root(), spawnid, task)
 
     def mark_checked(self, spawnid):
-        return mark_checked(self._config.grid_root(), spawnid)
+        return mark_checked(self._config.data_root(), spawnid)

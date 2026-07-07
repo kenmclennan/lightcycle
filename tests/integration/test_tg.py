@@ -31,6 +31,8 @@ def run_tg(*args, root=None, config=None):
     env = dict(os.environ)
     if root:
         env["GRID_ROOT_OVERRIDE"] = root
+    else:
+        env["GRID_HOME"] = tempfile.mkdtemp()
     if config:
         env["GRID_CONFIG"] = config
     return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)

@@ -11,8 +11,8 @@ from the_grid.ports.spawner import SpawnerPort
 
 
 def spawn_worker(config, role):
-    root = config.grid_root()
-    agent = fsio.parse_step(root, role)
+    root = config.data_root()
+    agent = fsio.parse_step(config.library_root(), role)
     if agent is None:
         sys.stderr.write("no agent definition for role %s\n" % role)
         return None
@@ -24,7 +24,8 @@ def spawn_worker(config, role):
     log = os.path.join(root, "logs", "worker-%s-%s.log" % (role, spawnid))
     os.makedirs(os.path.dirname(log), exist_ok=True)
     logf = open(log, "a")
-    env = dict(config.base_env(), GRID_ROOT_OVERRIDE=root, GRID_SPAWNID=spawnid, GRID_ROLE=role)
+    env = dict(config.base_env(), GRID_HOME=root, GRID_LIBRARY=config.library_root(),
+               GRID_SPAWNID=spawnid, GRID_ROLE=role)
     pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
     override = config.spawn_cmd()
