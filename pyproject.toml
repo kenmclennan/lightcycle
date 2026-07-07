@@ -1,10 +1,23 @@
 [project]
 name = "the-grid"
 version = "0.1.0"
-description = "An agent-pipeline engine: tg fronts a beads-backed pipeline of ephemeral claude workers."
+description = "A workflow-agnostic agent-pipeline engine: tg fronts a pipeline of ephemeral claude workers."
 requires-python = ">=3.11"
 # Runtime: ZERO third-party dependencies. The shipped engine imports stdlib only.
 dependencies = []
+
+[project.scripts]
+tg = "the_grid.cli:main"
+the-grid = "the_grid.cli:main"
+
+# Build backend is build-time tooling (like uv/pytest), never imported by the engine.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Ship the whole package, including the default library (steps/workflows/driver.md).
+[tool.hatch.build.targets.wheel]
+packages = ["the_grid"]
 
 # Dev/test tooling only - never shipped, never imported by the engine.
 [dependency-groups]
@@ -15,8 +28,8 @@ dev = [
 ]
 
 [tool.uv]
-# Virtual project: uv manages the dev venv but does not build/install the engine
-# itself (it is found via pythonpath below), so there is no build backend to own.
+# uv manages the dev venv; the engine is found via pythonpath below for tests.
+# pipx/pip build+install it as a real package via the build-system above.
 package = false
 
 [tool.ruff]

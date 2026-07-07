@@ -57,18 +57,42 @@ class Config:
     def base_env(self):
         return dict(self._environ)
 
+    def _engine_root(self):
+        return str(Path(__file__).resolve().parents[1])
+
     def grid_root(self):
         override = self._env("GRID_ROOT_OVERRIDE")
         if override:
             return override
-        return str(Path(__file__).resolve().parents[1])
+        return self._engine_root()
+
+    def data_root(self):
+        override = self._env("GRID_ROOT_OVERRIDE") or self._env("GRID_HOME")
+        if override:
+            return override
+        return os.path.join(self._home(), ".grid")
+
+    def library_root(self):
+        override = self._env("GRID_ROOT_OVERRIDE") or self._env("GRID_LIBRARY")
+        if override:
+            return override
+        return str(Path(__file__).resolve().parent / "library")
+
+    def legacy_data_root(self):
+        return self._env("GRID_LEGACY_HOME") or self._engine_root()
+
+    def legacy_config_path(self):
+        base = self._env("XDG_CONFIG_HOME") or os.path.join(self._home(), ".config")
+        return os.path.join(base, "the-grid", "config")
 
     def config_path(self):
         override = self._env("GRID_CONFIG")
         if override:
             return override
-        base = self._env("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-        return os.path.join(base, "the-grid", "config")
+        new = os.path.join(self.data_root(), "config")
+        if not os.path.exists(new) and os.path.exists(self.legacy_config_path()):
+            return self.legacy_config_path()
+        return new
 
     def load_config(self):
         p = self.config_path()

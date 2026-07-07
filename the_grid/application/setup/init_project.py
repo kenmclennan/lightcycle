@@ -26,7 +26,7 @@ class InitProjectUseCase:
             raise UseCaseError("global config missing - run `tg init` first")
         if not self._fs.store_ready():
             raise UseCaseError("grid store not initialised - run `tg init` first")
-        if not os.path.isdir(os.path.join(self._config.grid_root(), "workflows")):
+        if not os.path.isdir(os.path.join(self._config.library_root(), "workflows")):
             raise UseCaseError("workflows library missing at the grid root - run `tg init` first")
 
     def execute(self, input: InitProjectInput) -> InitProjectResponse:

@@ -21,7 +21,7 @@ class ResolveLogUseCase:
     def execute(self, input: ResolveLogInput) -> ResolveLogResponse:
         if input.target == "run":
             return ResolveLogResponse(
-                path=os.path.join(self._config.grid_root(), "logs", "run.log")
+                path=os.path.join(self._config.data_root(), "logs", "run.log")
             )
         for w in reversed(self._workers.workers_state()):
             if w.get("task") == input.target or w.get("role") == input.target:

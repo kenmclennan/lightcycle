@@ -7,7 +7,7 @@ from the_grid.domain.flow import Flow
 from the_grid.domain.flow.graph import parse_graph
 from tests.support.fake_fs import graph_text_from_metas
 
-_ROOT = str(Path(__file__).resolve().parents[2])
+_ROOT = str(Path(__file__).resolve().parents[2] / "the_grid" / "library")
 
 CONTRACT_METAS = {
     "coder": {

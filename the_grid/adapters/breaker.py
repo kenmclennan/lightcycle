@@ -29,7 +29,7 @@ class BreakerAdapter(BreakerPort):
         self._config = config
 
     def load(self):
-        return load(self._config.grid_root())
+        return load(self._config.data_root())
 
     def save(self, state):
-        return save(self._config.grid_root(), state)
+        return save(self._config.data_root(), state)

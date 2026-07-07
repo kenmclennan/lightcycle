@@ -51,7 +51,7 @@ class RunLockAdapter(RunLockPort):
         self._config = config
 
     def acquire(self):
-        return acquire(self._config.grid_root())
+        return acquire(self._config.data_root())
 
     def release(self):
-        release(self._config.grid_root())
+        release(self._config.data_root())

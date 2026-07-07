@@ -80,22 +80,22 @@ class FsAdapter(FsPort):
         self._config = config
 
     def step_roles(self):
-        return step_roles(self._config.grid_root())
+        return step_roles(self._config.library_root())
 
     def read_md(self, relpath):
-        return read_md(self._config.grid_root(), relpath)
+        return read_md(self._config.library_root(), relpath)
 
     def parse_step(self, role):
-        return parse_step(self._config.grid_root(), role)
+        return parse_step(self._config.library_root(), role)
 
     def workflow_text(self, name):
-        return workflow_text(self._config.grid_root(), name)
+        return workflow_text(self._config.library_root(), name)
 
     def worktrees_dir(self):
-        return worktrees_dir(self._config.grid_root())
+        return worktrees_dir(self._config.data_root())
 
     def store_ready(self):
-        return store_ready(self._config.grid_root())
+        return store_ready(self._config.data_root())
 
     def read_bytes(self, path):
         return read_bytes(path)
@@ -104,7 +104,7 @@ class FsAdapter(FsPort):
         return list_dir(path)
 
     def ensure_logs_dir(self):
-        return ensure_logs_dir(self._config.grid_root())
+        return ensure_logs_dir(self._config.data_root())
 
     def ensure_worktrees_ignored(self):
-        return ensure_worktrees_ignored(self._config.grid_root())
+        return ensure_worktrees_ignored(self._config.data_root())
