@@ -6,7 +6,7 @@ from lightcycle.domain.flow.graph import parse_graph
 
 
 @dataclass
-class FakeTask:
+class FakeNode:
     step: str
     outcome: str
     model: str = "sonnet"
@@ -24,13 +24,13 @@ class TestSignalsFromGraph(unittest.TestCase):
         self.signals = Signals.from_graph(graph)
 
     def test_exact_outcome_tally_by_step(self):
-        tasks = [
-            FakeTask("review", "rejected"),
-            FakeTask("review", "done"),
-            FakeTask("build", "rejected"),
+        steps = [
+            FakeNode("review", "rejected"),
+            FakeNode("review", "done"),
+            FakeNode("build", "rejected"),
         ]
-        self.assertEqual(self.signals.tally(tasks)["review_rounds"], {"sonnet": 1})
+        self.assertEqual(self.signals.tally(steps)["review_rounds"], {"sonnet": 1})
 
     def test_contains_match_for_tilde_declaration(self):
-        tasks = [FakeTask("open-pr", "had-a-conflict-mid-run")]
-        self.assertEqual(self.signals.tally(tasks)["conflicts"], {"sonnet": 1})
+        steps = [FakeNode("open-pr", "had-a-conflict-mid-run")]
+        self.assertEqual(self.signals.tally(steps)["conflicts"], {"sonnet": 1})

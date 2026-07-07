@@ -25,7 +25,7 @@ hooks:
   pr_conflict           ready-merge  conflicted
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
-  epic_close            audit
+  theme_close            audit
   retro_cadence         audit
 """
 
@@ -65,7 +65,7 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertEqual(self.flow.pr_conflict_escalate("ready-merge"), "gave-up")
 
     def test_lifecycle_hook_steps(self):
-        self.assertEqual(self.flow.epic_close_steps(), [("audit", "auditor")])
+        self.assertEqual(self.flow.theme_close_steps(), [("audit", "auditor")])
         self.assertEqual(self.flow.retro_cadence_steps(), [("audit", "auditor")])
 
     def test_bare_terminal_has_no_owner_and_routes_to_human(self):

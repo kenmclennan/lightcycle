@@ -19,22 +19,22 @@ def svc(store):
 
 class TestWorkflowFor(unittest.TestCase):
     def _task_under(self, store, *, epic_workflow=None, story_workflow=None):
-        epic = store.create_epic("e", workflow=epic_workflow)
-        story = store.create_story("st", epic=epic, workflow=story_workflow)
-        tid = store.create_task("build: x", step="build", parent=story)
-        return store.get_task(tid)
+        theme = store.create_theme("e", workflow=epic_workflow)
+        item = store.create_item("st", theme=theme, workflow=story_workflow)
+        tid = store.create_step("build: x", step="build", parent=item)
+        return store.get_node(tid)
 
     def test_epic_workflow_inherited_by_its_tasks(self):
         s = FakeStore()
-        task = self._task_under(s, epic_workflow="poc")
-        self.assertEqual(svc(s).workflow_for(task), "poc")
+        step = self._task_under(s, epic_workflow="poc")
+        self.assertEqual(svc(s).workflow_for(step), "poc")
 
     def test_story_override_wins_over_epic(self):
         s = FakeStore()
-        task = self._task_under(s, epic_workflow="standard", story_workflow="gherkin")
-        self.assertEqual(svc(s).workflow_for(task), "gherkin")
+        step = self._task_under(s, epic_workflow="standard", story_workflow="gherkin")
+        self.assertEqual(svc(s).workflow_for(step), "gherkin")
 
     def test_unset_falls_back_to_default(self):
         s = FakeStore()
-        task = self._task_under(s)
-        self.assertEqual(svc(s).workflow_for(task), "standard")
+        step = self._task_under(s)
+        self.assertEqual(svc(s).workflow_for(step), "standard")

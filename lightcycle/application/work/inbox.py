@@ -2,8 +2,8 @@ import datetime
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from lightcycle.application.work.human_task_row import HumanTaskRow
-from lightcycle.domain.work import TaskQueue
+from lightcycle.application.work.human_node_row import HumanNodeRow
+from lightcycle.domain.work import NodeQueue
 from lightcycle.domain.work.status import Status
 
 _QUIESCENCE_SECONDS = 3600
@@ -19,12 +19,12 @@ class InboxInput:
 class CandidateEpic:
     id: str
     title: str
-    closed_story_count: int
+    closed_item_count: int
 
 
 @dataclass(frozen=True)
 class InboxResponse:
-    rows: List[HumanTaskRow]
+    rows: List[HumanNodeRow]
     candidate_epics: List[CandidateEpic] = field(default_factory=list)
 
 
@@ -34,32 +34,32 @@ class InboxUseCase:
         self._flow = flow
 
     def execute(self, input: InboxInput) -> InboxResponse:
-        rows = TaskQueue(self._store.all_tasks()).for_human(
+        rows = NodeQueue(self._store.all_nodes()).for_human(
             self._flow.load_flow(), {"action", "blocked", "triage"}, input.n)
         return InboxResponse(
-            rows=[HumanTaskRow(kind=k, outcomes=o, task=t) for (k, o), t in rows],
+            rows=[HumanNodeRow(kind=k, outcomes=o, step=t) for (k, o), t in rows],
             candidate_epics=self._candidate_epics(input.now),
         )
 
     def _candidate_epics(self, now: float) -> List[CandidateEpic]:
         candidates = []
-        for t in self._store.all_tasks():
-            if t.type != "epic" or t.status == Status.DONE:
+        for t in self._store.all_nodes():
+            if t.type != "theme" or t.status == Status.DONE:
                 continue
             children = self._store.children(t.id)
-            stories = [c for c in children if c.type == "story"]
-            if not stories or any(c.status != Status.DONE for c in stories):
+            items = [c for c in children if c.type == "item"]
+            if not items or any(c.status != Status.DONE for c in items):
                 continue
-            if self._recently_settled(stories, now):
+            if self._recently_settled(items, now):
                 continue
             candidates.append(
-                CandidateEpic(id=t.id, title=t.title, closed_story_count=len(stories))
+                CandidateEpic(id=t.id, title=t.title, closed_item_count=len(items))
             )
         return candidates
 
     @staticmethod
-    def _recently_settled(stories, now) -> bool:
-        closures = [s.closed_at for s in stories if s.closed_at]
+    def _recently_settled(items, now) -> bool:
+        closures = [s.closed_at for s in items if s.closed_at]
         if not closures:
             return False
         latest = max(_epoch(c) for c in closures)

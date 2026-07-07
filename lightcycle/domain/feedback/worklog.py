@@ -2,8 +2,8 @@ import datetime
 
 
 class Worklog:
-    def __init__(self, stories):
-        self._stories = stories
+    def __init__(self, items):
+        self._stories = items
 
     def entries(self, period, tz):
         result = []

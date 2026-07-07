@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import List
 
-from lightcycle.application.flow.complete_task import CompleteInput
-from lightcycle.application.work.close_story import CloseStoryInput, CloseStoryUseCase
+from lightcycle.application.flow.complete_step import CompleteInput
+from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.work.status import Status
 
 _REWORK_MARKER = "/rework"
@@ -43,31 +43,31 @@ class MonitorPrsUseCase:
 
     def execute(self) -> MonitorPrsResponse:
         merged, abandoned, reworked, conflicted = [], [], [], []
-        close = CloseStoryUseCase(self._store, self._worktrees)
+        close = CloseItemUseCase(self._store, self._worktrees)
         merge_outcome = self._flow.terminal_merge_outcome()
         close_outcome = self._flow.terminal_close_outcome()
-        for story in self._store.all_tasks():
-            if story.type != "story":
+        for item in self._store.all_nodes():
+            if item.type != "item":
                 continue
-            pr = next((a for a in self._store.story_artifacts(story.id) if a.type == "pr"), None)
+            pr = next((a for a in self._store.item_artifacts(item.id) if a.type == "pr"), None)
             if pr is None:
                 continue
             if merge_outcome and self._github.is_merged(pr.value):
-                close.execute(CloseStoryInput(story=story.id, reason=merge_outcome))
-                merged.append(story.id)
+                close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
+                merged.append(item.id)
             elif close_outcome and self._github.is_closed_unmerged(pr.value):
-                close.execute(CloseStoryInput(story=story.id, reason=close_outcome))
-                abandoned.append(story.id)
-        for task in self._store.all_tasks():
-            if task.type != "task" or task.status == Status.DONE:
+                close.execute(CloseItemInput(item=item.id, reason=close_outcome))
+                abandoned.append(item.id)
+        for step in self._store.all_nodes():
+            if step.type != "step" or step.status == Status.DONE:
                 continue
-            rework_outcome = self._flow.pr_rework_outcome(task.step)
-            conflict_outcome = self._flow.pr_conflict_outcome(task.step)
+            rework_outcome = self._flow.pr_rework_outcome(step.step)
+            conflict_outcome = self._flow.pr_conflict_outcome(step.step)
             if rework_outcome is None and conflict_outcome is None:
                 continue
-            if not task.parent:
+            if not step.parent:
                 continue
-            pr = next((a for a in self._store.story_artifacts(task.parent) if a.type == "pr"), None)
+            pr = next((a for a in self._store.item_artifacts(step.parent) if a.type == "pr"), None)
             if pr is None:
                 continue
             advanced = False
@@ -79,22 +79,22 @@ class MonitorPrsUseCase:
                 if any(_REWORK_MARKER in c.body for c in top_level):
                     guidance = _format_guidance(human)
                     self._complete.execute(
-                        CompleteInput(task=task.id, outcome=rework_outcome, note=guidance or None)
+                        CompleteInput(step=step.id, outcome=rework_outcome, note=guidance or None)
                     )
-                    reworked.append(task.parent)
+                    reworked.append(step.parent)
                     advanced = True
             if not advanced and conflict_outcome and self._github.is_conflicted(pr.value):
-                cap = self._flow.pr_conflict_cap(task.step)
-                esc = self._flow.pr_conflict_escalate(task.step)
+                cap = self._flow.pr_conflict_cap(step.step)
+                esc = self._flow.pr_conflict_escalate(step.step)
                 if cap is not None and esc:
-                    prior = sum(1 for t in self._store.tasks_at_step(task.step)
-                                if t.parent == task.parent
+                    prior = sum(1 for t in self._store.steps_at_step(step.step)
+                                if t.parent == step.parent
                                 and t.status == Status.DONE and t.outcome == conflict_outcome)
                     outcome = esc if prior >= cap else conflict_outcome
                 else:
                     outcome = conflict_outcome
-                self._complete.execute(CompleteInput(task=task.id, outcome=outcome))
-                conflicted.append(task.parent)
+                self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
+                conflicted.append(step.parent)
         return MonitorPrsResponse(
             merged=merged, abandoned=abandoned, reworked=reworked, conflicted=conflicted
         )

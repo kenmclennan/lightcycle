@@ -4,10 +4,10 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Worktree:
-    story: str
+    item: str
 
     def path_in(self, worktrees_dir: str) -> str:
-        return os.path.join(worktrees_dir, self.story)
+        return os.path.join(worktrees_dir, self.item)
 
     @staticmethod
     def is_lock_contention(stderr: str) -> bool:

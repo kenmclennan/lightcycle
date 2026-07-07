@@ -1,13 +1,13 @@
 import unittest
 
 from lightcycle.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec
-from lightcycle.domain.work import Task
+from lightcycle.domain.work import Node
 from tests.support.fake_fs import signals_from_metas
 
 
 def tk(**kw):
     kw.setdefault("id", "t")
-    return Task(**kw)
+    return Node(**kw)
 
 
 class TestSignalSpec(unittest.TestCase):
@@ -44,32 +44,32 @@ class TestSignals(unittest.TestCase):
 
     def test_from_metas_reads_declarations(self):
         signals = signals_from_metas(self.METAS)
-        tasks = [
+        steps = [
             tk(id="t1", step="review", outcome="rejected", model="sonnet"),
             tk(id="t2", step="review", outcome="done", model="sonnet"),
             tk(id="t3", step="open-pr", outcome="conflict-rebase", model="sonnet"),
         ]
         self.assertEqual(
-            signals.tally(tasks),
+            signals.tally(steps),
             {"review_rounds": {"sonnet": 1}, "conflicts": {"sonnet": 1}},
         )
 
     def test_tally_buckets_by_task_model(self):
         signals = signals_from_metas(self.METAS)
-        tasks = [
+        steps = [
             tk(id="t1", step="review", outcome="rejected", model="opus"),
             tk(id="t2", step="review", outcome="rejected", model="sonnet"),
             tk(id="t3", step="review", outcome="rejected", model="sonnet"),
         ]
         self.assertEqual(
-            signals.tally(tasks), {"review_rounds": {"opus": 1, "sonnet": 2}, "conflicts": {}}
+            signals.tally(steps), {"review_rounds": {"opus": 1, "sonnet": 2}, "conflicts": {}}
         )
 
     def test_tally_labels_missing_model_as_unlabeled(self):
         signals = signals_from_metas(self.METAS)
-        tasks = [tk(id="t1", step="review", outcome="rejected")]
+        steps = [tk(id="t1", step="review", outcome="rejected")]
         self.assertEqual(
-            signals.tally(tasks), {"review_rounds": {UNLABELED_MODEL: 1}, "conflicts": {}}
+            signals.tally(steps), {"review_rounds": {UNLABELED_MODEL: 1}, "conflicts": {}}
         )
 
     def test_tally_reports_empty_for_declared_but_unmatched(self):
@@ -88,7 +88,7 @@ class TestSignals(unittest.TestCase):
             "watcher": {"step": "watch-pr", "signals": {"resets": "ci-failed"}},
             "merger": {"step": "ready-merge", "signals": {"resets": "changes"}},
         }
-        tasks = [
+        steps = [
             tk(id="a", step="review", outcome="rejected", model="opus"),
             tk(id="b", step="watch-pr", outcome="ci-failed", model="sonnet"),
             tk(id="c", step="ready-merge", outcome="changes", model="sonnet"),
@@ -96,31 +96,31 @@ class TestSignals(unittest.TestCase):
             tk(id="e", step="review", outcome="done", model="opus"),
         ]
         self.assertEqual(
-            signals_from_metas(metas).tally(tasks), {"resets": {"opus": 1, "sonnet": 3}}
+            signals_from_metas(metas).tally(steps), {"resets": {"opus": 1, "sonnet": 3}}
         )
 
 
 class TestRetro(unittest.TestCase):
     def test_collects_feedback_with_task_ids(self):
         refs = [
-            Reflection(task="t1", feedback="pytest not found"),
-            Reflection(task="t2", feedback="spec was thin on error cases"),
+            Reflection(step="t1", feedback="pytest not found"),
+            Reflection(step="t2", feedback="spec was thin on error cases"),
         ]
         self.assertEqual(
             Retro(refs).feedback(),
             [
-                {"task": "t1", "feedback": "pytest not found"},
-                {"task": "t2", "feedback": "spec was thin on error cases"},
+                {"step": "t1", "feedback": "pytest not found"},
+                {"step": "t2", "feedback": "spec was thin on error cases"},
             ],
         )
 
     def test_skips_empty_and_whitespace_feedback(self):
         refs = [
-            Reflection(task="t1", feedback=""),
-            Reflection(task="t2", feedback="   "),
-            Reflection(task="t3", feedback="real feedback"),
+            Reflection(step="t1", feedback=""),
+            Reflection(step="t2", feedback="   "),
+            Reflection(step="t3", feedback="real feedback"),
         ]
-        self.assertEqual([g["task"] for g in Retro(refs).feedback()], ["t3"])
+        self.assertEqual([g["step"] for g in Retro(refs).feedback()], ["t3"])
 
     def test_empty_reflections(self):
         self.assertEqual(Retro([]).feedback(), [])

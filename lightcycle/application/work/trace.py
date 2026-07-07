@@ -1,16 +1,16 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
-from lightcycle.domain.work import Artifact, Task
+from lightcycle.domain.work import Artifact, Node
 
 
 @dataclass(frozen=True)
 class TraceInput:
-    story: str
+    item: str
 
 
 @dataclass(frozen=True)
-class TraceTask:
+class TraceNode:
     id: str
     step: Optional[str]
     status: str
@@ -22,15 +22,15 @@ class TraceTask:
 
 @dataclass(frozen=True)
 class TraceResponse:
-    story: Task
+    item: Node
     artifacts: List[Artifact]
-    tasks: List[TraceTask]
+    steps: List[TraceNode]
 
     def as_dict(self):
         return {
-            "story": {"id": self.story.id, "title": self.story.title, "status": self.story.status},
+            "item": {"id": self.item.id, "title": self.item.title, "status": self.item.status},
             "artifacts": [a.as_dict() for a in self.artifacts],
-            "tasks": [t.as_dict() for t in self.tasks],
+            "steps": [t.as_dict() for t in self.steps],
         }
 
 
@@ -39,17 +39,17 @@ class TraceUseCase:
         self._store = store
         self._workers = workers
 
-    def _log_for_task(self, tid):
+    def _log_for_step(self, tid):
         for w in reversed(self._workers.workers_state()):
-            if w.get("task") == tid:
+            if w.get("step") == tid:
                 return w.get("log")
         return None
 
     def execute(self, input: TraceInput) -> TraceResponse:
-        story = self._store.get_task(input.story)
-        artifacts = self._store.story_artifacts(input.story)
-        tasks = [
-            TraceTask(id=kt.id, step=kt.step, status=kt.status, log=self._log_for_task(kt.id))
-            for kt in self._store.children(input.story)
+        item = self._store.get_node(input.item)
+        artifacts = self._store.item_artifacts(input.item)
+        steps = [
+            TraceNode(id=kt.id, step=kt.step, status=kt.status, log=self._log_for_step(kt.id))
+            for kt in self._store.children(input.item)
         ]
-        return TraceResponse(story=story, artifacts=artifacts, tasks=tasks)
+        return TraceResponse(item=item, artifacts=artifacts, steps=steps)

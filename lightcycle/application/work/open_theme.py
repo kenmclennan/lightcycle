@@ -5,7 +5,7 @@ from lightcycle.application.errors import UseCaseError
 
 
 @dataclass(frozen=True)
-class OpenEpicInput:
+class OpenThemeInput:
     objective: str
     backlog: Optional[str] = None
     project: Optional[str] = None
@@ -13,23 +13,23 @@ class OpenEpicInput:
 
 
 @dataclass(frozen=True)
-class OpenEpicResponse:
-    epic: str
+class OpenThemeResponse:
+    theme: str
 
 
-class OpenEpicUseCase:
+class OpenThemeUseCase:
     def __init__(self, store):
         self._store = store
 
-    def execute(self, input: OpenEpicInput) -> OpenEpicResponse:
+    def execute(self, input: OpenThemeInput) -> OpenThemeResponse:
         if input.backlog:
             try:
-                self._store.get_task(input.backlog)
+                self._store.get_node(input.backlog)
             except KeyError:
                 raise UseCaseError("unknown backlog item '%s'" % input.backlog)
-        epic = self._store.create_epic(
+        theme = self._store.create_theme(
             input.objective, project=input.project, workflow=input.workflow
         )
         if input.backlog:
-            self._store.add_artifact(epic, "backlog", input.backlog)
-        return OpenEpicResponse(epic=epic)
+            self._store.add_artifact(theme, "backlog", input.backlog)
+        return OpenThemeResponse(theme=theme)

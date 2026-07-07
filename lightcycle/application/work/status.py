@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import Dict, List
 
-from lightcycle.domain.work import Task, TaskQueue
+from lightcycle.domain.work import Node, NodeQueue
 
 
 @dataclass(frozen=True)
 class StatusResponse:
-    lanes: Dict[str, List[Task]]
+    lanes: Dict[str, List[Node]]
 
 
 class StatusUseCase:
@@ -14,5 +14,5 @@ class StatusUseCase:
         self._store = store
 
     def execute(self) -> StatusResponse:
-        ready_ids = {t.id for t in self._store.ready_tasks()}
-        return StatusResponse(lanes=TaskQueue(self._store.all_tasks()).by_lane(ready_ids))
+        ready_ids = {t.id for t in self._store.ready_steps()}
+        return StatusResponse(lanes=NodeQueue(self._store.all_nodes()).by_lane(ready_ids))

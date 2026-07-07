@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 
 @dataclass(frozen=True)
-class TaskSpec:
+class NodeSpec:
     title: str
     step: Optional[str] = None
     role: Optional[str] = None

@@ -1,23 +1,23 @@
 import unittest
 
 from lightcycle.domain.pool import PoolPlan, ReadyQueue
-from lightcycle.domain.work import Task
+from lightcycle.domain.work import Node
 
 
-def tasks(*roles):
-    return [Task(id="t-%d" % i, role=r) for i, r in enumerate(roles)]
+def steps(*roles):
+    return [Node(id="t-%d" % i, role=r) for i, r in enumerate(roles)]
 
 
 class TestReadyQueue(unittest.TestCase):
     def test_roles_keeps_repeats_and_skips_human(self):
         self.assertEqual(
-            ReadyQueue(tasks("coder", "coder", "human", "reviewer")).roles(),
+            ReadyQueue(steps("coder", "coder", "human", "reviewer")).roles(),
             ["coder", "coder", "reviewer"],
         )
 
     def test_distinct_roles_dedupes_and_skips_human(self):
         self.assertEqual(
-            ReadyQueue(tasks("coder", "coder", "human", "reviewer")).distinct_roles(),
+            ReadyQueue(steps("coder", "coder", "human", "reviewer")).distinct_roles(),
             ["coder", "reviewer"],
         )
 

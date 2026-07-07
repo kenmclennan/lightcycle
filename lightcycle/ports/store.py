@@ -3,27 +3,27 @@ from abc import ABC, abstractmethod
 
 class StorePort(ABC):
     @abstractmethod
-    def story_artifacts(self, story_id):
+    def item_artifacts(self, item_id):
         pass
 
     @abstractmethod
-    def add_artifact(self, story_id, atype, value, label=None):
+    def add_artifact(self, item_id, atype, value, label=None):
         pass
 
     @abstractmethod
-    def all_tasks(self):
+    def all_nodes(self):
         pass
 
     @abstractmethod
-    def get_task(self, tid):
+    def get_node(self, tid):
         pass
 
     @abstractmethod
-    def task_view(self, tid):
+    def node_view(self, tid):
         pass
 
     @abstractmethod
-    def present_types(self, task):
+    def present_types(self, step):
         pass
 
     @abstractmethod
@@ -35,7 +35,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def closed_stories(self):
+    def closed_items(self):
         pass
 
     @abstractmethod
@@ -83,11 +83,11 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def dep_add(self, task_id, blocked_by):
+    def dep_add(self, node_id, blocked_by):
         pass
 
     @abstractmethod
-    def ready_tasks(self):
+    def ready_steps(self):
         pass
 
     @abstractmethod
@@ -95,28 +95,28 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
+    def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):
         pass
 
     @abstractmethod
-    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
+    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
         pass
 
     @abstractmethod
-    def create_story(self, title, *, epic=None, project=None, goal=None, workflow=None):
+    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None):
         pass
 
     @abstractmethod
-    def create_epic(self, title, *, project=None, goal=None, workflow=None):
+    def create_theme(self, title, *, project=None, goal=None, workflow=None):
         pass
 
     @abstractmethod
-    def children(self, story_id):
+    def children(self, item_id):
         pass
 
     @abstractmethod
-    def claimed_tasks(self):
+    def claimed_steps(self):
         pass
 
     @abstractmethod
@@ -124,7 +124,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def tasks_closed_since(self, since_date):
+    def nodes_closed_since(self, since_date):
         pass
 
     @abstractmethod
@@ -132,11 +132,11 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def epics_closed_since(self, since_date_str):
+    def themes_closed_since(self, since_date_str):
         pass
 
     @abstractmethod
-    def tasks_at_step(self, step):
+    def steps_at_step(self, step):
         pass
 
     @abstractmethod

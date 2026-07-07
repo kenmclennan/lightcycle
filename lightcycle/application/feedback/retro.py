@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from lightcycle.domain import feedback as cfeedback
-from lightcycle.domain.work import Task
+from lightcycle.domain.work import Node
 
 
 @dataclass(frozen=True)
@@ -15,13 +15,13 @@ class RetroInput:
 
 @dataclass(frozen=True)
 class FeedbackItem:
-    task: str
+    step: str
     text: str
 
 
 @dataclass(frozen=True)
-class StorySignals:
-    story: Task
+class ItemSignals:
+    item: Node
     signals: Dict[str, Dict[str, int]]
     reflections: int
     durations: Dict[str, Optional[float]] = field(default_factory=dict)
@@ -36,7 +36,7 @@ class RetroResponse:
     subject: str
     reflection_count: int
     feedback: List[FeedbackItem]
-    story_signals: List[StorySignals]
+    item_signals: List[ItemSignals]
 
 
 class RetroUseCase:
@@ -44,9 +44,9 @@ class RetroUseCase:
         self._store = store
         self._flow = flow
 
-    def _reflections_of(self, task_id):
+    def _reflections_of(self, node_id):
         out = []
-        for art in self._store.story_artifacts(task_id):
+        for art in self._store.item_artifacts(node_id):
             if art.type == "reflection":
                 try:
                     out.append(cfeedback.Reflection.from_dict(json.loads(art.value)))
@@ -54,36 +54,36 @@ class RetroUseCase:
                     pass
         return out
 
-    def _durations_of(self, tasks):
+    def _durations_of(self, steps):
         result = {}
-        for t in tasks:
+        for t in steps:
             elapsed = cfeedback.Duration(self._store.history(t.id)).elapsed()
             result[t.id] = elapsed.total_seconds() if elapsed is not None else None
         return result
 
-    def _collect_story_row(self, story, signals):
-        children = self._store.children(story.id)
-        tasks = [c for c in children if c.type == "task"]
+    def _collect_item_row(self, item, signals):
+        children = self._store.children(item.id)
+        steps = [c for c in children if c.type == "step"]
         refs = []
-        for t in tasks:
+        for t in steps:
             refs.extend(self._reflections_of(t.id))
-        row = StorySignals(
-            story=story, signals=signals.tally(tasks), reflections=len(refs),
-            durations=self._durations_of(tasks),
+        row = ItemSignals(
+            item=item, signals=signals.tally(steps), reflections=len(refs),
+            durations=self._durations_of(steps),
         )
         return row, refs
 
-    def _epic_scope(self, subject_id, signals):
+    def _theme_scope(self, subject_id, signals):
         children = self._store.children(subject_id)
-        stories = [c for c in children if c.type == "story"]
+        items = [c for c in children if c.type == "item"]
         all_refs = []
         rows = []
-        for story in stories:
-            row, refs = self._collect_story_row(story, signals)
+        for item in items:
+            row, refs = self._collect_item_row(item, signals)
             rows.append(row)
             all_refs.extend(refs)
         for child in children:
-            if child.type != "story":
+            if child.type != "item":
                 all_refs.extend(self._reflections_of(child.id))
         return rows, all_refs
 
@@ -92,56 +92,56 @@ class RetroUseCase:
 
         if input.subject is not None:
             children = self._store.children(input.subject)
-            if any(c.type == "story" for c in children):
-                rows, all_refs = self._epic_scope(input.subject, signals)
+            if any(c.type == "item" for c in children):
+                rows, all_refs = self._theme_scope(input.subject, signals)
             else:
-                subject = self._store.get_task(input.subject)
-                row, refs = self._collect_story_row(subject, signals)
+                subject = self._store.get_node(input.subject)
+                row, refs = self._collect_item_row(subject, signals)
                 rows = [row]
                 all_refs = list(refs)
             label = input.subject
 
         elif input.since is not None:
-            tasks = self._store.tasks_closed_since(input.since)
-            story_groups = {}
-            orphan_tasks = []
-            for task in tasks:
-                if task.parent:
-                    story_groups.setdefault(task.parent, []).append(task)
+            steps = self._store.nodes_closed_since(input.since)
+            item_groups = {}
+            orphan_steps = []
+            for step in steps:
+                if step.parent:
+                    item_groups.setdefault(step.parent, []).append(step)
                 else:
-                    orphan_tasks.append(task)
+                    orphan_steps.append(step)
             all_refs = []
             rows = []
-            for story_id, story_tasks in story_groups.items():
+            for item_id, item_steps in item_groups.items():
                 refs = []
-                for t in story_tasks:
+                for t in item_steps:
                     refs.extend(self._reflections_of(t.id))
                 all_refs.extend(refs)
-                story = self._store.get_task(story_id)
+                item = self._store.get_node(item_id)
                 rows.append(
-                    StorySignals(
-                        story=story, signals=signals.tally(story_tasks), reflections=len(refs),
-                        durations=self._durations_of(story_tasks),
+                    ItemSignals(
+                        item=item, signals=signals.tally(item_steps), reflections=len(refs),
+                        durations=self._durations_of(item_steps),
                     )
                 )
-            for task in orphan_tasks:
-                all_refs.extend(self._reflections_of(task.id))
+            for step in orphan_steps:
+                all_refs.extend(self._reflections_of(step.id))
             label = "since:%s" % input.since
 
         else:
-            epics = self._store.last_n_closed_epics(input.last)
+            themes = self._store.last_n_closed_epics(input.last)
             all_refs = []
             rows = []
-            for epic in epics:
-                epic_rows, epic_refs = self._epic_scope(epic.id, signals)
+            for theme in themes:
+                epic_rows, epic_refs = self._theme_scope(theme.id, signals)
                 rows.extend(epic_rows)
                 all_refs.extend(epic_refs)
             label = "last:%d" % input.last
 
         feedback = [
-            FeedbackItem(task=f["task"], text=f["feedback"])
+            FeedbackItem(step=f["step"], text=f["feedback"])
             for f in cfeedback.Retro(all_refs).feedback()
         ]
         return RetroResponse(
-            subject=label, reflection_count=len(all_refs), feedback=feedback, story_signals=rows
+            subject=label, reflection_count=len(all_refs), feedback=feedback, item_signals=rows
         )

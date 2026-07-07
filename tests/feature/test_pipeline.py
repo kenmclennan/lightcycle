@@ -30,32 +30,32 @@ def _flow(ctx):
     ctx["h"] = Harness(["coder", "reviewer"])
 
 
-@given(parsers.parse('the story "{spec}" is filed at step "{step}"'))
+@given(parsers.parse('the item "{spec}" is filed at step "{step}"'))
 def _filed(ctx, spec, step):
-    rc, epic, err = ctx["h"].run("epic", "objective for %s" % spec)
+    rc, theme, err = ctx["h"].run("theme", "objective for %s" % spec)
     assert rc == 0, err
-    rc, out, err = ctx["h"].run("file", spec, "--step", step, "--epic", epic.strip())
+    rc, out, err = ctx["h"].run("file", spec, "--step", step, "--theme", theme.strip())
     assert rc == 0, err
-    ctx["story"] = out.strip()
+    ctx["item"] = out.strip()
 
 
-@given("the coder has claimed the build task")
+@given("the coder has claimed the build step")
 def _has_claimed(ctx):
     rc, out, err = ctx["h"].run("claim", "coder")
     assert rc == 0, err
     ctx["claimed"] = json.loads(out)
 
 
-@when(parsers.parse('I file the story "{spec}" at step "{step}"'))
+@when(parsers.parse('I file the item "{spec}" at step "{step}"'))
 def _file(ctx, spec, step):
-    rc, epic, err = ctx["h"].run("epic", "objective for %s" % spec)
+    rc, theme, err = ctx["h"].run("theme", "objective for %s" % spec)
     assert rc == 0, err
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run(
-        "file", spec, "--step", step, "--epic", epic.strip()
+        "file", spec, "--step", step, "--theme", theme.strip()
     )
 
 
-@when("the coder claims the next task")
+@when("the coder claims the next step")
 def _claim(ctx):
     rc, out, err = ctx["h"].run("claim", "coder")
     assert rc == 0, err
@@ -67,17 +67,17 @@ def _complete(ctx, outcome):
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("done", ctx["claimed"]["id"], outcome)
 
 
-@then(parsers.parse("there is one ready task for the {role}"))
+@then(parsers.parse("there is one ready step for the {role}"))
 def _one_ready(ctx, role):
-    assert len(ctx["h"].ready_tasks(role)) == 1
+    assert len(ctx["h"].ready_steps(role)) == 1
 
 
-@then(parsers.parse("there are no ready tasks for the {role}"))
+@then(parsers.parse("there are no ready steps for the {role}"))
 def _no_ready(ctx, role):
-    assert ctx["h"].ready_tasks(role) == []
+    assert ctx["h"].ready_steps(role) == []
 
 
-@then("the claimed task is in progress")
+@then("the claimed step is in progress")
 def _in_progress(ctx):
     assert ctx["claimed"]["status"] == "in-progress"
 

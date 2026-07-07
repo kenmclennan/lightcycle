@@ -45,7 +45,7 @@ class TestFlowService(unittest.TestCase):
 
     def test_ready_roles_from_store(self):
         store = FakeStore()
-        store.create_task("b", step="build", role="coder")
+        store.create_step("b", step="build", role="coder")
         self.assertIn("coder", svc(store).ready_roles())
 
 

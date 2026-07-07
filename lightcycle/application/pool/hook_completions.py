@@ -25,10 +25,10 @@ class HookCompletionsUseCase:
         flow = self._flow_service.load_flow()
         completed = []
         for step, _role in flow.hook_steps():
-            for task in self._store.tasks_at_step(step):
-                if task.status != Status.DONE or not task.closed_at:
+            for node in self._store.steps_at_step(step):
+                if node.status != Status.DONE or not node.closed_at:
                     continue
-                if since_iso is not None and task.closed_at <= since_iso:
+                if since_iso is not None and node.closed_at <= since_iso:
                     continue
-                completed.append((step, task.id, task.notes or task.outcome or ""))
+                completed.append((step, node.id, node.notes or node.outcome or ""))
         return HookCompletionsResponse(completed=completed)

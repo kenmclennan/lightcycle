@@ -23,7 +23,7 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
-    def set_task(self, spawnid, task):
+    def set_step(self, spawnid, step):
         pass
 
     @abstractmethod

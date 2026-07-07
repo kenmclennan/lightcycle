@@ -6,7 +6,7 @@ from lightcycle.domain.work.status import Status
 
 
 @dataclass
-class Task:
+class Node:
     id: str
     title: str = ""
     type: Optional[str] = None
@@ -23,7 +23,7 @@ class Task:
     deps: int = 0
     notes: Optional[str] = None
     claimed_by: Optional[str] = None
-    epic: Optional[str] = None
+    theme: Optional[str] = None
     since: Optional[str] = None
     fired_at: Optional[str] = None
     closed_at: Optional[str] = None
@@ -53,7 +53,7 @@ class Task:
             "artifacts": [a.as_dict() for a in self.artifacts],
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
-            "notes": self.notes, "epic": self.epic, "attention": self.attention,
+            "notes": self.notes, "theme": self.theme, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
             "model": self.model,
         }

@@ -25,8 +25,8 @@ class WorkerPool:
                 counts[w.role] = counts.get(w.role, 0) + 1
         return counts
 
-    def covered_tasks(self, probe):
-        return {w.task for w in self.alive(probe) if w.task}
+    def covered_steps(self, probe):
+        return {w.step for w in self.alive(probe) if w.step}
 
     def any_booting(self, probe, now, max_boot):
         return any(w.is_booting(now, max_boot) for w in self.alive(probe))
@@ -37,7 +37,7 @@ class WorkerPool:
             for w in self.alive(probe)
             if w.spawnid
             and not w.is_booting(now, max_boot)
-            and (w.task is None or w.task not in claimed_ids)
+            and (w.step is None or w.step not in claimed_ids)
         ]
 
     def dead_unchecked(self, probe):

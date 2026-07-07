@@ -70,7 +70,7 @@ class TickUseCase:
             slots = min(slots, cap)
         inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
         inflight_total = sum(inflight_dict.values())
-        ready_roles = ReadyQueue(self._store.ready_tasks()).roles()
+        ready_roles = ReadyQueue(self._store.ready_steps()).roles()
         ready_count = len(ready_roles)
         spawned = []
         if slots > 0:

@@ -7,7 +7,7 @@ class Worker:
     spawnid: Optional[str] = None
     pid: Optional[int] = None
     role: Optional[str] = None
-    task: Optional[str] = None
+    step: Optional[str] = None
     started: float = 0
     log: Optional[str] = None
     checked: bool = False
@@ -18,7 +18,7 @@ class Worker:
             spawnid=d.get("spawnid"),
             pid=d.get("pid"),
             role=d.get("role"),
-            task=d.get("task"),
+            step=d.get("step"),
             started=d.get("started", 0),
             log=d.get("log"),
             checked=bool(d.get("checked", False)),
@@ -28,4 +28,4 @@ class Worker:
         return bool(probe(self.pid if self.pid is not None else -1))
 
     def is_booting(self, now, max_boot):
-        return self.task is None and (now - self.started) < max_boot
+        return self.step is None and (now - self.started) < max_boot

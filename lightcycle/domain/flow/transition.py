@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from lightcycle.domain.work import TaskSpec
+from lightcycle.domain.work import NodeSpec
 
 
 @dataclass(frozen=True)
@@ -11,14 +11,14 @@ class Transition:
     to_step: str
     to_role: str
 
-    def next_task_spec(self, task) -> TaskSpec:
-        title = re.sub(r"^[a-z-]+:\s*", "", task.title)
-        return TaskSpec(
+    def next_step_spec(self, step) -> NodeSpec:
+        title = re.sub(r"^[a-z-]+:\s*", "", step.title)
+        return NodeSpec(
             title="%s: %s" % (self.to_step, title),
             step=self.to_step,
             role=self.to_role,
-            parent=task.parent,
-            deps=(task.id,),
+            parent=step.parent,
+            deps=(step.id,),
         )
 
     def forward_note(self, text: str) -> str:

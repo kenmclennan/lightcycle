@@ -18,29 +18,29 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.application.work import (
-    ActiveTasksUseCase,
-    AddTaskInput,
-    AddTaskUseCase,
+    ActiveStepsUseCase,
+    AddItemInput,
+    AddItemUseCase,
     BacklogInput,
     BacklogUseCase,
-    CloseEpicInput,
-    CloseEpicUseCase,
-    CloseStoryInput,
-    CloseStoryUseCase,
-    EditTaskInput,
-    EditTaskUseCase,
-    FileStoryInput,
-    FileStoryUseCase,
+    CloseThemeInput,
+    CloseThemeUseCase,
+    CloseItemInput,
+    CloseItemUseCase,
+    EditNodeInput,
+    EditNodeUseCase,
+    FileItemInput,
+    FileItemUseCase,
     InboxInput,
     InboxUseCase,
     LinkArtifactInput,
     LinkArtifactUseCase,
-    OpenEpicInput,
-    OpenEpicUseCase,
+    OpenThemeInput,
+    OpenThemeUseCase,
     QueueInput,
     QueueUseCase,
-    ShowTaskInput,
-    ShowTaskUseCase,
+    ShowNodeInput,
+    ShowNodeUseCase,
     StatusUseCase,
     TraceInput,
     TraceUseCase,
@@ -48,17 +48,17 @@ from lightcycle.application.work import (
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow import (
     AdvanceInput,
-    AdvanceTaskUseCase,
+    AdvanceStepUseCase,
     BlockInput,
-    BlockTaskUseCase,
+    BlockStepUseCase,
     ClaimInput,
-    ClaimTaskUseCase,
+    ClaimStepUseCase,
     CompleteInput,
-    CompleteTaskUseCase,
+    CompleteStepUseCase,
     FlowCheckInput,
     FlowCheckUseCase,
     UnblockInput,
-    UnblockTaskUseCase,
+    UnblockStepUseCase,
 )
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
@@ -140,45 +140,45 @@ COMMAND_GROUPS = [
         ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),
         ("inbox", "[N]", "what needs you now: gates to clear and agents waiting on you"),
         ("backlog", "[N]", "backlog items to develop later (todo)"),
-        ("active", "", "tasks a worker is running right now"),
-        ("queue", "[N]", "the next N ready/blocked agent tasks"),
+        ("active", "", "steps a worker is running right now"),
+        ("queue", "[N]", "the next N ready/blocked agent steps"),
         ("ps", "[--all] [--json]", "running workers (alive only; --all includes dead)"),
-        ("logs", "<task|role|run> [-f]", "tail a worker's or the loop's log"),
-        ("show", "<id>", "one task or story as JSON (artifacts, resume-state)"),
-        ("trace", "<story> [--json]", "a story end to end: artifacts + child tasks + logs"),
+        ("logs", "<step|role|run> [-f]", "tail a worker's or the loop's log"),
+        ("show", "<id>", "one step or item as JSON (artifacts, resume-state)"),
+        ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
         ("flow", "[--json]", "print and check the assembled flow (steps, routes, contracts, composition)"),
-        ("worklog", "[start] [end]", "stories shipped in a period (today, yesterday, YYYY-MM-DD)"),
+        ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
     ]),
     ("Drive work in", [
-        ("epic", '"<objective>" [--workflow <w>] [--backlog <id>] [--project <p>]',
-         "open an epic: the objective container a story files under (--workflow sets its pipeline)"),
-        ("file", "<spec> --epic <id> [--step <s>] [--workflow <w>] [--repo/--project/--goal/--blocked-by]",
-         "create a story from a spec + its first task (step/workflow default to the epic's)"),
-        ("link", "<story> <type> <value> [--label]", "attach an artifact to a story"),
-        ("add", '"<title>" [--description/--goal/--project/--inbox]', "create a standalone human task (no spec/flow); --inbox surfaces it in lc inbox immediately"),
-        ("edit", "<id> [--title/--description/--goal/--project/--parent]", "update a task's fields"),
-        ("close", "<story> <reason>",
-         "close a story + its tasks, remove the worktree, delete the merged branch"),
+        ("theme", '"<objective>" [--workflow <w>] [--backlog <id>] [--project <p>]',
+         "open a theme: the objective container an item files under (--workflow sets its pipeline)"),
+        ("file", "<spec> --theme <id> [--step <s>] [--workflow <w>] [--repo/--project/--goal/--blocked-by]",
+         "create an item from a spec + its first step (step/workflow default to the theme's)"),
+        ("link", "<item> <type> <value> [--label]", "attach an artifact to an item"),
+        ("add", '"<title>" [--description/--goal/--project/--inbox]', "create a standalone human step (no spec/flow); --inbox surfaces it in lc inbox immediately"),
+        ("edit", "<id> [--title/--description/--goal/--project/--parent]", "update a step's fields"),
+        ("close", "<item> <reason>",
+         "close an item + its steps, remove the worktree, delete the merged branch"),
     ]),
     ("Agent verbs (workers call these)", [
-        ("claim", "<role>", "atomically claim the next ready task for a role"),
-        ("done", "<id> <outcome> [--note \"<text>\"]", "close a task with a flow outcome and advance the chain"),
+        ("claim", "<role>", "atomically claim the next ready step for a role"),
+        ("done", "<id> <outcome> [--note \"<text>\"]", "close a step with a flow outcome and advance the chain"),
         ("block", "<id> --needs ... [--branch/--pr/--reason/--tried]",
          "escalate to a human with resume-state"),
-        ("unblock", "<id>", "flip a blocked task back to its agent role so it re-claims and retries"),
-        ("reflect", '<task> [--feedback "text"]',
-         "record freeform feedback on the story for the retro (call before lc done)"),
-        ("label", "<id> <label>", "add a label to a task"),
+        ("unblock", "<id>", "flip a blocked step back to its agent role so it re-claims and retries"),
+        ("reflect", '<step> [--feedback "text"]',
+         "record freeform feedback on the item for the retro (call before lc done)"),
+        ("label", "<id> <label>", "add a label to a step"),
     ]),
     ("Feedback loop", [
-        ("retro", "<epic>", "gather child feedback + objective signals into a read digest"),
+        ("retro", "<theme>", "gather child feedback + objective signals into a read digest"),
     ]),
     ("Maintenance", [
-        ("sweep", "", "reclaim orphaned task claims and prune dead worker entries (kept: LC_WORKER_HISTORY, default 20)"),
+        ("sweep", "", "reclaim orphaned step claims and prune dead worker entries (kept: LC_WORKER_HISTORY, default 20)"),
     ]),
     ("Plumbing (the loop uses these)", [
-        ("advance", "<id> <outcome>", "create the next task for an outcome without closing"),
-        ("ready-roles", "", "list roles that have a ready task"),
+        ("advance", "<id> <outcome>", "create the next step for an outcome without closing"),
+        ("ready-roles", "", "list roles that have a ready step"),
         ("spawn", "<role>", "spawn one worker for a role"),
         ("specs-dir", "", "print the resolved specs directory (absolute path)"),
     ]),
@@ -239,7 +239,7 @@ def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="lc show")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    view = ShowTaskUseCase(_container.store).execute(ShowTaskInput(task=a.id)).view
+    view = ShowNodeUseCase(_container.store).execute(ShowNodeInput(step=a.id)).view
     print(json.dumps(view.as_dict(), indent=2))
     return 0
 
@@ -248,7 +248,7 @@ def cmd_claim(argv):
     ap = argparse.ArgumentParser(prog="lc claim")
     ap.add_argument("role")
     a = ap.parse_args(argv)
-    resp = ClaimTaskUseCase(
+    resp = ClaimStepUseCase(
         _container.store, _flow(), _worktrees(), _container.workers, _container.config
     ).execute(ClaimInput(role=a.role))
     if resp is None:
@@ -284,8 +284,8 @@ def cmd_ps(argv):
     else:
         for w in rows:
             print(
-                "  %-11s task=%-18s pid=%s %s"
-                % (w["role"], w.get("task") or "-", w["pid"], "alive" if w["alive"] else "dead")
+                "  %-11s step=%-18s pid=%s %s"
+                % (w["role"], w.get("step") or "-", w["pid"], "alive" if w["alive"] else "dead")
             )
     return 0
 
@@ -331,11 +331,11 @@ def cmd_advance(argv):
     ap.add_argument("id")
     ap.add_argument("outcome")
     a = ap.parse_args(argv)
-    resp = AdvanceTaskUseCase(_container.store, _flow()).execute(
-        AdvanceInput(task=a.id, outcome=a.outcome)
+    resp = AdvanceStepUseCase(_container.store, _flow()).execute(
+        AdvanceInput(step=a.id, outcome=a.outcome)
     )
-    if resp.next_task:
-        print(resp.next_task)
+    if resp.next_step:
+        print(resp.next_step)
     return 0
 
 
@@ -423,19 +423,19 @@ def cmd_done(argv):
     ap.add_argument("id")
     ap.add_argument("outcome")
     ap.add_argument(
-        "--note", nargs="+", help="a note to forward to the next task; unquoted multi-word is fine"
+        "--note", nargs="+", help="a note to forward to the next step; unquoted multi-word is fine"
     )
     a = ap.parse_args(argv)
     note = " ".join(a.note) if a.note else None
     try:
-        resp = CompleteTaskUseCase(_container.store, _flow()).execute(
-            CompleteInput(task=a.id, outcome=a.outcome, note=note)
+        resp = CompleteStepUseCase(_container.store, _flow()).execute(
+            CompleteInput(step=a.id, outcome=a.outcome, note=note)
         )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    if resp.next_task:
-        print(resp.next_task)
+    if resp.next_step:
+        print(resp.next_step)
     return 0
 
 
@@ -448,9 +448,9 @@ def cmd_block(argv):
     if not a.needs:
         sys.stderr.write("lc block requires --needs (what the human must decide/provide)\n")
         return 2
-    BlockTaskUseCase(_container.store).execute(
+    BlockStepUseCase(_container.store).execute(
         BlockInput(
-            task=a.id, needs=a.needs, branch=a.branch, pr=a.pr, reason=a.reason, tried=a.tried
+            step=a.id, needs=a.needs, branch=a.branch, pr=a.pr, reason=a.reason, tried=a.tried
         )
     )
     print("blocked -> human")
@@ -462,7 +462,7 @@ def cmd_unblock(argv):
     ap.add_argument("id")
     a = ap.parse_args(argv)
     try:
-        resp = UnblockTaskUseCase(_container.store, _flow()).execute(UnblockInput(task=a.id))
+        resp = UnblockStepUseCase(_container.store, _flow()).execute(UnblockInput(step=a.id))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -472,27 +472,27 @@ def cmd_unblock(argv):
 
 def cmd_close(argv):
     ap = argparse.ArgumentParser(prog="lc close")
-    ap.add_argument("story")
+    ap.add_argument("item")
     ap.add_argument("reason")
     a = ap.parse_args(argv)
-    children = _container.store.children(a.story)
-    is_epic = _container.store.get_task(a.story).type == "epic" or any(
-        c.type == "story" for c in children
+    children = _container.store.children(a.item)
+    is_epic = _container.store.get_node(a.item).type == "theme" or any(
+        c.type == "item" for c in children
     )
     try:
         if is_epic:
-            resp = CloseEpicUseCase(_container.store, _flow()).execute(
-                CloseEpicInput(epic=a.story, reason=a.reason)
+            resp = CloseThemeUseCase(_container.store, _flow()).execute(
+                CloseThemeInput(theme=a.item, reason=a.reason)
             )
         else:
-            CloseStoryUseCase(_container.store, _worktrees()).execute(
-                CloseStoryInput(story=a.story, reason=a.reason)
+            CloseItemUseCase(_container.store, _worktrees()).execute(
+                CloseItemInput(item=a.item, reason=a.reason)
             )
             resp = None
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    print("closed %s (%s)" % (a.story, a.reason))
+    print("closed %s (%s)" % (a.item, a.reason))
     if resp is not None:
         _print_retro(resp.retro)
     return 0
@@ -500,32 +500,32 @@ def cmd_close(argv):
 
 def cmd_link(argv):
     ap = argparse.ArgumentParser(prog="lc link")
-    ap.add_argument("story")
+    ap.add_argument("item")
     ap.add_argument("type")
     ap.add_argument("value")
     ap.add_argument("--label")
     a = ap.parse_args(argv)
     LinkArtifactUseCase(_container.store).execute(
-        LinkArtifactInput(story=a.story, atype=a.type, value=a.value, label=a.label)
+        LinkArtifactInput(item=a.item, atype=a.type, value=a.value, label=a.label)
     )
     return 0
 
 
 def cmd_trace(argv):
     ap = argparse.ArgumentParser(prog="lc trace")
-    ap.add_argument("story")
+    ap.add_argument("item")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    resp = TraceUseCase(_container.store, _container.workers).execute(TraceInput(story=a.story))
+    resp = TraceUseCase(_container.store, _container.workers).execute(TraceInput(item=a.item))
     if a.json:
         print(json.dumps(resp.as_dict(), indent=2))
     else:
-        print("story %s  %s  [%s]" % (resp.story.id, resp.story.title, resp.story.status))
+        print("item %s  %s  [%s]" % (resp.item.id, resp.item.title, resp.item.status))
         for art in resp.artifacts:
             print("  artifact %s: %s" % (art.type, art.value))
-        for t in resp.tasks:
+        for t in resp.steps:
             log = "  log:" + t.log if t.log else ""
-            print("  task %s  %s  [%s]%s" % (t.id, t.step or "-", t.status, log))
+            print("  step %s  %s  [%s]%s" % (t.id, t.step or "-", t.status, log))
     return 0
 
 
@@ -559,17 +559,17 @@ def cmd_inbox(argv):
     a = ap.parse_args(argv)
     resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(now=time.time(), n=a.n))
     for row in resp.rows:
-        _print_human_row(row.kind, row.task)
+        _print_human_row(row.kind, row.step)
     if resp.candidate_epics:
-        print("close-candidate epics:")
+        print("close-candidate themes:")
         for e in resp.candidate_epics:
             print(
                 "  %s  %s (%d %s closed)  -- lc close %s <reason>"
                 % (
                     e.id,
                     e.title,
-                    e.closed_story_count,
-                    "story" if e.closed_story_count == 1 else "stories",
+                    e.closed_item_count,
+                    "item" if e.closed_item_count == 1 else "items",
                     e.id,
                 )
             )
@@ -581,12 +581,12 @@ def cmd_backlog(argv):
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
     for row in BacklogUseCase(_container.store, _flow()).execute(BacklogInput(n=a.n)).rows:
-        _print_human_row(row.kind, row.task, show_description=True)
+        _print_human_row(row.kind, row.step, show_description=True)
     return 0
 
 
 def cmd_active(argv):
-    for t in ActiveTasksUseCase(_container.store).execute().tasks:
+    for t in ActiveStepsUseCase(_container.store).execute().steps:
         print("  %s  %s" % (t.id, t.title))
     return 0
 
@@ -595,35 +595,35 @@ def cmd_queue(argv):
     ap = argparse.ArgumentParser(prog="lc queue")
     ap.add_argument("n", nargs="?", type=int, default=10)
     a = ap.parse_args(argv)
-    for t in QueueUseCase(_container.store).execute(QueueInput(n=a.n)).tasks:
+    for t in QueueUseCase(_container.store).execute(QueueInput(n=a.n)).steps:
         print("  %-8s %s  %s" % (t.status, t.id, t.title))
     return 0
 
 
-def cmd_epic(argv):
-    ap = argparse.ArgumentParser(prog="lc epic")
+def cmd_theme(argv):
+    ap = argparse.ArgumentParser(prog="lc theme")
     ap.add_argument("objective")
     ap.add_argument("--backlog")
     ap.add_argument("--project")
     ap.add_argument("--workflow")
     a = ap.parse_args(argv)
     try:
-        resp = OpenEpicUseCase(_container.store).execute(
-            OpenEpicInput(
+        resp = OpenThemeUseCase(_container.store).execute(
+            OpenThemeInput(
                 objective=a.objective, backlog=a.backlog, project=a.project, workflow=a.workflow
             )
         )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    print(resp.epic)
+    print(resp.theme)
     return 0
 
 
 def cmd_file(argv):
     ap = argparse.ArgumentParser(prog="lc file")
     ap.add_argument("spec")
-    ap.add_argument("--epic", required=True)
+    ap.add_argument("--theme", required=True)
     ap.add_argument("--step")
     ap.add_argument("--workflow")
     ap.add_argument("--project")
@@ -632,14 +632,14 @@ def cmd_file(argv):
     ap.add_argument("--blocked-by", action="append", dest="blocked_by", metavar="ID")
     a = ap.parse_args(argv)
     try:
-        resp = FileStoryUseCase(
+        resp = FileItemUseCase(
             _container.store, _flow(), _container.git, _container.fs, _container.config
         ).execute(
-            FileStoryInput(
+            FileItemInput(
                 spec=a.spec,
                 step=a.step,
                 workflow=a.workflow,
-                epic=a.epic,
+                theme=a.theme,
                 project=a.project,
                 goal=a.goal,
                 repo=a.repo,
@@ -649,7 +649,7 @@ def cmd_file(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    print(resp.story)
+    print(resp.item)
     return 0
 
 
@@ -661,10 +661,10 @@ def cmd_add(argv):
     ap.add_argument("--description")
     ap.add_argument("--inbox", action="store_true", dest="attention")
     a = ap.parse_args(argv)
-    resp = AddTaskUseCase(_container.store).execute(
-        AddTaskInput(title=a.title, goal=a.goal, project=a.project, description=a.description,
+    resp = AddItemUseCase(_container.store).execute(
+        AddItemInput(title=a.title, goal=a.goal, project=a.project, description=a.description,
                      attention=a.attention))
-    print(resp.task)
+    print(resp.step)
     return 0
 
 
@@ -677,9 +677,9 @@ def cmd_edit(argv):
     ap.add_argument("--project")
     ap.add_argument("--parent")
     a = ap.parse_args(argv)
-    EditTaskUseCase(_container.store).execute(
-        EditTaskInput(
-            task=a.id,
+    EditNodeUseCase(_container.store).execute(
+        EditNodeInput(
+            step=a.id,
             title=a.title,
             description=a.description,
             goal=a.goal,
@@ -741,7 +741,7 @@ def cmd_start(argv):
     try:
         flow_service = _flow()
         flow = flow_service.load_flow()
-        complete = CompleteTaskUseCase(_container.store, flow_service)
+        complete = CompleteStepUseCase(_container.store, flow_service)
         monitor = MonitorPrsUseCase(
             _container.store, _container.github, _worktrees(), flow, complete
         )
@@ -914,7 +914,7 @@ def cmd_reflect(argv):
     )
     a = ap.parse_args(argv)
     ReflectUseCase(_container.store, _container.fs).execute(
-        ReflectInput(task=a.id, feedback=a.feedback)
+        ReflectInput(step=a.id, feedback=a.feedback)
     )
     print("reflected")
     return 0
@@ -934,7 +934,7 @@ def cmd_worklog(argv):
         WorklogInput(period_args=args, today=today, tz=tz)
     )
     if not resp.entries:
-        print("no stories shipped in that period")
+        print("no items shipped in that period")
         return 0
     for e in resp.entries:
         pr = "  %s" % e.pr if e.pr else ""
@@ -947,15 +947,15 @@ def _print_retro(resp):
     if resp.feedback:
         print("\nFeedback (read it; an analyser agent can later):")
         for item in resp.feedback:
-            print("  [%s] %s" % (item.task, item.text))
+            print("  [%s] %s" % (item.step, item.text))
     elif resp.reflection_count == 0:
         print("no reflections yet - agents call `lc reflect --feedback` before `lc done`")
-    print("\nPer-story signals:")
-    for row in resp.story_signals:
+    print("\nPer-item signals:")
+    for row in resp.item_signals:
         sig_str = "  ".join(_fmt_signal(k, row.signals[k]) for k in sorted(row.signals))
         print(
             "  %-20s  %s  (N=%d)  duration=%s"
-            % (row.story.id, sig_str, row.reflections, _fmt_duration(row.total_duration()))
+            % (row.item.id, sig_str, row.reflections, _fmt_duration(row.total_duration()))
         )
 
 
@@ -980,9 +980,9 @@ def _fmt_duration(seconds):
 
 def cmd_retro(argv):
     ap = argparse.ArgumentParser(prog="lc retro")
-    ap.add_argument("id", nargs="?", default=None, help="story or epic id")
-    ap.add_argument("--since", metavar="YYYY-MM-DD", help="aggregate tasks closed on/after date")
-    ap.add_argument("--last", type=int, metavar="N", help="aggregate last N closed epics")
+    ap.add_argument("id", nargs="?", default=None, help="item or theme id")
+    ap.add_argument("--since", metavar="YYYY-MM-DD", help="aggregate steps closed on/after date")
+    ap.add_argument("--last", type=int, metavar="N", help="aggregate last N closed themes")
     a = ap.parse_args(argv)
 
     flags = [a.id is not None, a.since is not None, a.last is not None]

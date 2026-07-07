@@ -15,10 +15,10 @@ class SignalSpec:
             return cls(name=name, step=step, outcome=decl[1:], match="contains")
         return cls(name=name, step=step, outcome=decl)
 
-    def matches(self, task) -> bool:
-        if task.step != self.step:
+    def matches(self, step) -> bool:
+        if step.step != self.step:
             return False
-        outcome = task.outcome or ""
+        outcome = step.outcome or ""
         if self.match == "contains":
             return self.outcome in outcome
         return outcome == self.outcome
@@ -39,11 +39,11 @@ class Signals:
                 specs.append(SignalSpec.parse(name, step, decl))
         return cls(specs)
 
-    def tally(self, tasks):
+    def tally(self, steps):
         totals = {spec.name: {} for spec in self._specs}
         for spec in self._specs:
             by_model = totals[spec.name]
-            for t in tasks:
+            for t in steps:
                 if not spec.matches(t):
                     continue
                 model = t.model or UNLABELED_MODEL

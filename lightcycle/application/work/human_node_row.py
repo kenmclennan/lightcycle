@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import List
 
-from lightcycle.domain.work import Task
+from lightcycle.domain.work import Node
 
 
 @dataclass(frozen=True)
-class HumanTaskRow:
+class HumanNodeRow:
     kind: str
     outcomes: List[str]
-    task: Task
+    step: Node

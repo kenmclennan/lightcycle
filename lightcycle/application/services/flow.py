@@ -18,15 +18,15 @@ class FlowService:
     def _default_name(self):
         return self._config.default_workflow() if self._config is not None else None
 
-    def _walk(self, task):
-        cur, seen = task, set()
+    def _walk(self, step):
+        cur, seen = step, set()
         while cur is not None and cur.id not in seen:
             yield cur
             seen.add(cur.id)
-            cur = self._store.get_task(cur.parent) if cur.parent else None
+            cur = self._store.get_node(cur.parent) if cur.parent else None
 
-    def workflow_for(self, task):
-        nodes = list(self._walk(task))
+    def workflow_for(self, step):
+        nodes = list(self._walk(step))
         for node in nodes:
             if node.workflow:
                 return node.workflow
@@ -34,8 +34,8 @@ class FlowService:
             return self._config.default_workflow_for(getattr(nodes[-1], "project", None))
         return None
 
-    def project_for(self, task):
-        for node in self._walk(task):
+    def project_for(self, step):
+        for node in self._walk(step):
             if getattr(node, "project", None):
                 return node.project
         return None
@@ -64,4 +64,4 @@ class FlowService:
         return self.load_flow(name, project).outcomes_for(step)
 
     def ready_roles(self):
-        return ReadyQueue(self._store.ready_tasks()).distinct_roles()
+        return ReadyQueue(self._store.ready_steps()).distinct_roles()

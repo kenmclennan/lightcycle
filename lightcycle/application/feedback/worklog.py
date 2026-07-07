@@ -31,7 +31,7 @@ class WorklogUseCase:
 
     def execute(self, input: WorklogInput) -> WorklogResponse:
         period = cfeedback.Period.resolve(input.period_args, input.today)
-        rows = cfeedback.Worklog(self._store.closed_stories()).entries(period, input.tz)
+        rows = cfeedback.Worklog(self._store.closed_items()).entries(period, input.tz)
         return WorklogResponse(
             entries=[
                 WorklogEntry(id=r["id"], title=r["title"], outcome=r["outcome"], pr=r["pr"])

@@ -1,7 +1,7 @@
 import unittest
 
 from tests.support.fake_fs import flow_from_metas
-from lightcycle.domain.work import Task, TaskQueue
+from lightcycle.domain.work import Node, NodeQueue
 
 FLOW = flow_from_metas(
     {
@@ -12,7 +12,7 @@ FLOW = flow_from_metas(
 
 
 def tk(id="t", **kw):
-    return Task(id=id, **kw)
+    return Node(id=id, **kw)
 
 
 class TestClassifyForHuman(unittest.TestCase):
@@ -32,7 +32,7 @@ class TestClassifyForHuman(unittest.TestCase):
 
 class TestByLaneAndByStatus(unittest.TestCase):
     def test_by_lane_groups_statuses_into_lanes(self):
-        q = TaskQueue(
+        q = NodeQueue(
             [
                 tk(id="d", status="done"),
                 tk(id="a", status="in-progress"),
@@ -49,21 +49,21 @@ class TestByLaneAndByStatus(unittest.TestCase):
         self.assertEqual([t.id for t in lanes["blocked"]], ["b"])
 
     def test_by_status(self):
-        q = TaskQueue([tk(status="ready"), tk(status="done")])
+        q = NodeQueue([tk(status="ready"), tk(status="done")])
         self.assertEqual(len(q.by_status("ready")), 1)
 
 
 class TestForHuman(unittest.TestCase):
-    def _queue(self, tasks=None):
-        tasks = tasks or [
+    def _queue(self, steps=None):
+        steps = steps or [
             tk(id="a-1", status="needs-human", step=None),
             tk(id="a-2", status="needs-human", step="ready-merge"),
             tk(id="a-3", status="needs-human", step="build"),
         ]
-        return TaskQueue(tasks)
+        return NodeQueue(steps)
 
     def test_only_needs_human_tasks_are_considered(self):
-        q = TaskQueue(
+        q = NodeQueue(
             [tk(id="r", status="ready", step=None), tk(id="h", status="needs-human", step=None)]
         )
         rows = q.for_human(FLOW, {"todo"})

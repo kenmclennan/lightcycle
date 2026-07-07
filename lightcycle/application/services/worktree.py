@@ -2,7 +2,7 @@ import os
 import sys
 import time
 
-from lightcycle.domain.work import Story
+from lightcycle.domain.work import Item
 from lightcycle.domain.workspace import Branch, Worktree
 
 
@@ -13,42 +13,42 @@ class WorktreeService:
         self._fs = fs
         self._config = config
 
-    def _story(self, story):
-        return Story(story, tuple(self._store.story_artifacts(story)))
+    def _item(self, item):
+        return Item(item, tuple(self._store.item_artifacts(item)))
 
-    def story_repo(self, story):
-        return self._story(story).repo(os.path.basename(self._config.engine_root()))
+    def item_repo(self, item):
+        return self._item(item).repo(os.path.basename(self._config.engine_root()))
 
-    def target_repo(self, story):
-        return os.path.join(self._config.projects_root(), self.story_repo(story))
+    def target_repo(self, item):
+        return os.path.join(self._config.projects_root(), self.item_repo(item))
 
-    def worktree_path(self, story):
-        return Worktree(story).path_in(self._fs.worktrees_dir())
+    def worktree_path(self, item):
+        return Worktree(item).path_in(self._fs.worktrees_dir())
 
-    def story_branch(self, story):
-        return self._story(story).branch()
+    def item_branch(self, item):
+        return self._item(item).branch()
 
-    def _branch_for(self, story):
+    def _branch_for(self, item):
         return (
-            self.story_branch(story)
+            self.item_branch(item)
             or Branch.for_feature(
-                self._store.get_task(story).title, self._config.branch_prefix()
+                self._store.get_node(item).title, self._config.branch_prefix()
             ).name
         )
 
-    def _ensure_branch_artifact(self, story, branch):
-        if any(a.type == "branch" for a in self._store.story_artifacts(story)):
+    def _ensure_branch_artifact(self, item, branch):
+        if any(a.type == "branch" for a in self._store.item_artifacts(item)):
             return
-        self._store.add_artifact(story, "branch", branch)
+        self._store.add_artifact(item, "branch", branch)
 
-    def ensure(self, story):
-        target = self.target_repo(story)
+    def ensure(self, item):
+        target = self.target_repo(item)
         if not self._git.is_git_repo(target):
             return None
-        branch = self._branch_for(story)
-        path = self.worktree_path(story)
+        branch = self._branch_for(item)
+        path = self.worktree_path(item)
         if self._git.worktree_registered(target, path) and os.path.isdir(path):
-            self._ensure_branch_artifact(story, branch)
+            self._ensure_branch_artifact(item, branch)
             return path
         is_new_branch = not self._git.branch_exists(target, branch)
         if is_new_branch:
@@ -76,14 +76,14 @@ class WorktreeService:
             self._git.git(target, "config", "branch.%s.remote" % branch, "origin")
             self._git.git(target, "config", "branch.%s.merge" % branch,
                           "refs/heads/%s" % branch)
-        self._ensure_branch_artifact(story, branch)
+        self._ensure_branch_artifact(item, branch)
         return path
 
-    def remove(self, story):
-        target = self.target_repo(story)
+    def remove(self, item):
+        target = self.target_repo(item)
         if not self._git.is_git_repo(target):
             return
-        branch = self._branch_for(story)
-        self._git.remove_worktree(target, self.worktree_path(story))
+        branch = self._branch_for(item)
+        self._git.remove_worktree(target, self.worktree_path(item))
         self._git.delete_branch(target, branch)
         self._git.delete_remote_branch(target, branch)
