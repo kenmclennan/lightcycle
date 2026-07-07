@@ -39,5 +39,9 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def ensure_override_dirs(self):
+        pass
+
+    @abstractmethod
     def ensure_worktrees_ignored(self):
         pass

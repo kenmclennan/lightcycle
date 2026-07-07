@@ -123,7 +123,7 @@ def main():
         sys.stderr.write("worker_session: GRID_ROLE, GRID_SPAWNID required\n")
         return 1
     config = Config()
-    agent = fsio.parse_step(config.library_root(), role)
+    agent = fsio.parse_step([config.data_root(), config.library_root()], role)
     if agent is None:
         sys.stderr.write("worker_session: no agent definition for role %s\n" % role)
         return 1

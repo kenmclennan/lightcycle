@@ -88,7 +88,10 @@ builds itself.
   everything that is _yours_: `config`, the store, `logs/`, `worktrees/`, and any
   step/workflow overrides - independent of the engine, so upgrades never touch it (found
   by default, or `$GRID_HOME`). **`projects/`** holds your repos. A step or workflow name
-  resolves project `.grid/` -> `~/.grid/` -> engine default.
+  resolves **`~/.grid/{steps,workflows}` (your overrides) -> the engine default** - drop a
+  `~/.grid/steps/coder.md` to change the coder for all your projects, and it survives engine
+  upgrades. `tg init` scaffolds the (empty) override dirs. (A per-project `.grid/` file layer
+  on top is a planned follow-up.)
 - **The config names where your work lives.** `~/.grid/config` (or `$GRID_CONFIG`) names
   `projects` (the dir whose named subdirs are repos; default `~/workspace/projects`) and
   `specs` (base for relative spec paths; default `~/workspace/specs`), plus the global
@@ -170,8 +173,9 @@ Resolution order for a task: **story override -> epic workflow -> the project's
 `.grid/config` `default-workflow` -> the global `default-workflow`**. Because it's
 resolved per task, two epics can run different workflows concurrently.
 
-**Where workflows resolve from.** The engine ships a central library in `workflows/`;
-a project may shadow a name (or add its own) in `projects/<name>/.grid/workflows/`.
+**Where workflows resolve from.** The engine ships default graphs in its packaged
+library; you shadow a name (or add your own) in `~/.grid/workflows/` (a per-project
+`.grid/workflows/` layer is a planned follow-up).
 A variant step is just another named file the graph points a stage at
 (`build -> coder-gherkin`) - no step is ever forked in place.
 
