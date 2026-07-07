@@ -1,7 +1,7 @@
 import unittest
 
 from tests.support.fake_fs import flow_from_metas
-from the_grid.domain.work import Task, TaskQueue
+from lightcycle.domain.work import Task, TaskQueue
 
 FLOW = flow_from_metas(
     {

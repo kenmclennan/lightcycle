@@ -1,8 +1,8 @@
 import datetime
 import unittest
 
-from the_grid.domain.feedback import Period, Worklog
-from the_grid.domain.work import Artifact
+from lightcycle.domain.feedback import Period, Worklog
+from lightcycle.domain.work import Artifact
 
 TODAY = datetime.date(2026, 6, 27)
 YESTERDAY = datetime.date(2026, 6, 26)

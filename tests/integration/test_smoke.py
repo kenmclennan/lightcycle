@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TG = str(ROOT / "bin" / "tg")
+TG = str(ROOT / "bin" / "lc")
 
 _CODER_STEP = """\
 ---
@@ -32,12 +32,12 @@ stub
 
 def _tg(*args, root):
     env = dict(os.environ)
-    env["GRID_ROOT_OVERRIDE"] = root
-    env["GRID_CONFIG"] = os.path.join(root, "grid.config")
+    env["LC_ROOT_OVERRIDE"] = root
+    env["LC_CONFIG"] = os.path.join(root, "grid.config")
     return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
 
 
-def _grid_root():
+def _engine_root():
     d = tempfile.mkdtemp()
     subprocess.run(["git", "init", "-q"], cwd=d, check=True)
     return d
@@ -46,7 +46,7 @@ def _grid_root():
 class SmokeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.root = _grid_root()
+        cls.root = _engine_root()
         steps = Path(cls.root) / "steps"
         steps.mkdir()
         (steps / "coder.md").write_text(_CODER_STEP)

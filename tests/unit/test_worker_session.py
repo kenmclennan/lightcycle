@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.pool.worker_session import (
+from lightcycle.domain.pool.worker_session import (
     CLOSE,
     NUDGE,
     SessionPolicy,
@@ -11,8 +11,8 @@ from the_grid.domain.pool.worker_session import (
 class TestTerminalCommand(unittest.TestCase):
     def test_tg_done_is_terminal(self):
         self.assertTrue(is_terminal_command("tg done abc.1 done"))
-        self.assertTrue(is_terminal_command("bin/tg done abc.1 rejected"))
-        self.assertTrue(is_terminal_command("./bin/tg block xyz --needs foo"))
+        self.assertTrue(is_terminal_command("bin/lc done abc.1 rejected"))
+        self.assertTrue(is_terminal_command("./bin/lc block xyz --needs foo"))
 
     def test_non_terminal_tg_commands(self):
         self.assertFalse(is_terminal_command("tg claim coder"))

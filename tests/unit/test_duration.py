@@ -1,8 +1,8 @@
 import datetime
 import unittest
 
-from the_grid.domain.feedback import Duration
-from the_grid.domain.work import Status
+from lightcycle.domain.feedback import Duration
+from lightcycle.domain.work import Status
 
 
 class TestDuration(unittest.TestCase):

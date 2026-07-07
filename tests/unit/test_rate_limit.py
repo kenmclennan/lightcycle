@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.pool import parse_rate_limit_event
+from lightcycle.domain.pool import parse_rate_limit_event
 
 
 class TestParseRateLimitEvent(unittest.TestCase):

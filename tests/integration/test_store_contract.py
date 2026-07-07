@@ -5,9 +5,9 @@ import unittest
 
 from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.store_contract import StoreContractBase
-from the_grid.adapters.sqlite_store import SqliteStore
-from the_grid.application.work.status import StatusUseCase
-from the_grid.config import Config
+from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.application.work.status import StatusUseCase
+from lightcycle.config import Config
 
 
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
@@ -138,9 +138,9 @@ class TestSqliteStoreHistoryMigration(unittest.TestCase):
         cfg_path = os.path.join(root, "config")
         with open(cfg_path, "w") as f:
             f.write("shortcode: GRID\n")
-        config = Config(environ={"GRID_ROOT_OVERRIDE": root, "GRID_CONFIG": cfg_path})
+        config = Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": cfg_path})
 
-        conn = sqlite3.connect(os.path.join(root, ".grid.db"))
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
         conn.execute(
             "CREATE TABLE history (task_id TEXT NOT NULL, seq INTEGER NOT NULL, "
             "status TEXT NOT NULL)"

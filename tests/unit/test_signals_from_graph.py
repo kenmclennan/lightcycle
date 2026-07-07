@@ -1,8 +1,8 @@
 import unittest
 from dataclasses import dataclass
 
-from the_grid.domain.feedback.signal import Signals
-from the_grid.domain.flow.graph import parse_graph
+from lightcycle.domain.feedback.signal import Signals
+from lightcycle.domain.flow.graph import parse_graph
 
 
 @dataclass

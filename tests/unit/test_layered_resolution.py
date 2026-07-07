@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from the_grid.adapters.fsio import FsAdapter
+from lightcycle.adapters.fsio import FsAdapter
 
 
 class _Cfg:
@@ -32,7 +32,7 @@ def _layers():
 
 def _layers_with_project(project="myapp"):
     data, lib, projects = tempfile.mkdtemp(), tempfile.mkdtemp(), tempfile.mkdtemp()
-    pgrid = os.path.join(projects, project, ".grid")
+    pgrid = os.path.join(projects, project, ".lightcycle")
     for base in (data, lib, pgrid):
         os.makedirs(os.path.join(base, "steps"))
         os.makedirs(os.path.join(base, "workflows"))

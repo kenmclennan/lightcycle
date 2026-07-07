@@ -4,7 +4,7 @@ import os
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-import the_grid.cli as cli
+import lightcycle.cli as cli
 from tests.support.harness import Harness
 
 scenarios("pipeline.feature")

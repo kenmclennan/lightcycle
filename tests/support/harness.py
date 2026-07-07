@@ -4,8 +4,8 @@ import tempfile
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-import the_grid.cli as cli
-from the_grid.container import Container
+import lightcycle.cli as cli
+from lightcycle.container import Container
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
@@ -43,8 +43,8 @@ def _write_config(root):
 class Harness:
     def __init__(self, roles):
         self.root = tempfile.mkdtemp()
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        os.environ["GRID_CONFIG"] = _write_config(self.root)
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_CONFIG"] = _write_config(self.root)
         _write_steps(self.root, roles)
         self.store = FakeStore()
         cli.set_container(Container(store=self.store))

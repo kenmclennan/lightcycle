@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from the_grid.config import Config, ConfigError
+from lightcycle.config import Config, ConfigError
 
 HOME = os.path.expanduser("~")
 
@@ -15,9 +15,9 @@ def _cfg(environ=None, **filevals):
         Path(p).write_text(
             "".join("%s: %s\n" % (k.replace("_", "-"), v) for k, v in filevals.items())
         )
-        env["GRID_CONFIG"] = p
+        env["LC_CONFIG"] = p
     else:
-        env.setdefault("GRID_CONFIG", os.path.join(tempfile.mkdtemp(), "absent"))
+        env.setdefault("LC_CONFIG", os.path.join(tempfile.mkdtemp(), "absent"))
     return Config(environ=env)
 
 
@@ -73,10 +73,10 @@ class TestMaxAgents(unittest.TestCase):
         self.assertEqual(_cfg(max_agents="6").max_agents(), 6)
 
     def test_env_override_wins(self):
-        self.assertEqual(_cfg({"GRID_MAX_AGENTS": "2"}, max_agents="6").max_agents(), 2)
+        self.assertEqual(_cfg({"LC_MAX_AGENTS": "2"}, max_agents="6").max_agents(), 2)
 
     def test_env_override_without_config_key(self):
-        self.assertEqual(_cfg({"GRID_MAX_AGENTS": "7"}).max_agents(), 7)
+        self.assertEqual(_cfg({"LC_MAX_AGENTS": "7"}).max_agents(), 7)
 
     def test_malformed_config_fails_fast(self):
         with self.assertRaises(ConfigError):
@@ -84,7 +84,7 @@ class TestMaxAgents(unittest.TestCase):
 
     def test_malformed_env_fails_fast(self):
         with self.assertRaises(ConfigError):
-            _cfg({"GRID_MAX_AGENTS": "lots"}).max_agents()
+            _cfg({"LC_MAX_AGENTS": "lots"}).max_agents()
 
 
 class TestTunables(unittest.TestCase):
@@ -117,26 +117,26 @@ class TestTunables(unittest.TestCase):
             _cfg().editor()
 
     def test_env_overrides(self):
-        c = self._full_cfg({"GRID_WORKTREE_RETRIES": "3", "GRID_POLL_SECONDS": "1",
+        c = self._full_cfg({"LC_WORKTREE_RETRIES": "3", "LC_POLL_SECONDS": "1",
                             "EDITOR": "nano"})
         self.assertEqual(c.worktree_retries(), 3)
         self.assertEqual(c.poll_seconds(), 1)
         self.assertEqual(c.editor(), "nano")
 
     def test_env_override_without_config_key(self):
-        self.assertEqual(_cfg({"GRID_WORKER_HISTORY": "10"}).worker_history(), 10)
+        self.assertEqual(_cfg({"LC_WORKER_HISTORY": "10"}).worker_history(), 10)
         self.assertEqual(_cfg({"EDITOR": "emacs"}).editor(), "emacs")
 
     def test_malformed_tunable_fails_fast(self):
         with self.assertRaises(ConfigError):
-            _cfg({"GRID_POLL_SECONDS": "soon"}).poll_seconds()
+            _cfg({"LC_POLL_SECONDS": "soon"}).poll_seconds()
 
 
 class TestEnsureConfig(unittest.TestCase):
     def test_creates_all_keys_when_absent(self):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
-        c = Config(environ={"GRID_CONFIG": p})
+        c = Config(environ={"LC_CONFIG": p})
         result = c.ensure_config()
         self.assertTrue(result)
         text = Path(p).read_text()
@@ -153,7 +153,7 @@ class TestEnsureConfig(unittest.TestCase):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
         Path(p).write_text("projects: /p\nspecs: /s\n")
-        c = Config(environ={"GRID_CONFIG": p})
+        c = Config(environ={"LC_CONFIG": p})
         result = c.ensure_config()
         self.assertTrue(result)
         text = Path(p).read_text()
@@ -165,7 +165,7 @@ class TestEnsureConfig(unittest.TestCase):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
         Path(p).write_text("projects: /p\nspecs: /s\nmax-agents: 8\n")
-        c = Config(environ={"GRID_CONFIG": p})
+        c = Config(environ={"LC_CONFIG": p})
         c.ensure_config()
         cfg = c.load_config()
         self.assertEqual(cfg["max-agents"], "8")
@@ -182,7 +182,7 @@ class TestEnsureConfig(unittest.TestCase):
             "retro-interval-days: 7\nretro-min-epics: 3\n"
         )
         Path(p).write_text(all_keys)
-        c = Config(environ={"GRID_CONFIG": p})
+        c = Config(environ={"LC_CONFIG": p})
         result = c.ensure_config()
         self.assertFalse(result)
 
@@ -192,7 +192,7 @@ class TestSpawnProtocol(unittest.TestCase):
         self.assertIsNone(_cfg().spawn_id())
 
     def test_spawn_id_and_cmd_read_from_env(self):
-        c = _cfg({"GRID_SPAWNID": "abc123", "GRID_SPAWN_CMD": "echo hi"})
+        c = _cfg({"LC_SPAWNID": "abc123", "LC_SPAWN_CMD": "echo hi"})
         self.assertEqual(c.spawn_id(), "abc123")
         self.assertEqual(c.spawn_cmd(), "echo hi")
 
@@ -212,13 +212,13 @@ class TestRetroCadenceConfig(unittest.TestCase):
 
     def test_env_override_wins(self):
         self.assertEqual(
-            _cfg({"GRID_RETRO_INTERVAL_DAYS": "21"}, retro_interval_days="14").retro_interval_days(), 21)
+            _cfg({"LC_RETRO_INTERVAL_DAYS": "21"}, retro_interval_days="14").retro_interval_days(), 21)
         self.assertEqual(
-            _cfg({"GRID_RETRO_MIN_EPICS": "10"}, retro_min_epics="5").retro_min_epics(), 10)
+            _cfg({"LC_RETRO_MIN_EPICS": "10"}, retro_min_epics="5").retro_min_epics(), 10)
 
     def test_env_override_without_config_key(self):
-        self.assertEqual(_cfg({"GRID_RETRO_INTERVAL_DAYS": "7"}).retro_interval_days(), 7)
-        self.assertEqual(_cfg({"GRID_RETRO_MIN_EPICS": "3"}).retro_min_epics(), 3)
+        self.assertEqual(_cfg({"LC_RETRO_INTERVAL_DAYS": "7"}).retro_interval_days(), 7)
+        self.assertEqual(_cfg({"LC_RETRO_MIN_EPICS": "3"}).retro_min_epics(), 3)
 
     def test_malformed_config_fails_fast(self):
         with self.assertRaises(ConfigError):
@@ -228,8 +228,8 @@ class TestRetroCadenceConfig(unittest.TestCase):
 
 
 class TestGridRootAndEnv(unittest.TestCase):
-    def test_grid_root_override(self):
-        self.assertEqual(_cfg({"GRID_ROOT_OVERRIDE": "/tmp/grid"}).grid_root(), "/tmp/grid")
+    def test_engine_root_override(self):
+        self.assertEqual(_cfg({"LC_ROOT_OVERRIDE": "/tmp/grid"}).engine_root(), "/tmp/grid")
 
     def test_base_env_is_a_copy(self):
         c = _cfg({"FOO": "bar"})

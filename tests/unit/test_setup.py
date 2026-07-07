@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.application.setup import InitGridUseCase
+from lightcycle.application.setup import InitGridUseCase
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -13,7 +13,7 @@ class FakeConfig:
         return self._created
 
     def config_path(self):
-        return "/cfg/the-grid/config"
+        return "/cfg/lightcycle/config"
 
 
 class TestInitGrid(unittest.TestCase):
@@ -21,7 +21,7 @@ class TestInitGrid(unittest.TestCase):
         r = InitGridUseCase(FakeStore(), FakeFs(), FakeConfig(created=True)).execute()
         self.assertTrue(r.existed)
         self.assertTrue(r.created)
-        self.assertEqual(r.config_path, "/cfg/the-grid/config")
+        self.assertEqual(r.config_path, "/cfg/lightcycle/config")
 
     def test_created_false_when_config_present(self):
         r = InitGridUseCase(FakeStore(), FakeFs(), FakeConfig(created=False)).execute()

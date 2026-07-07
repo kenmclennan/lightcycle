@@ -2,8 +2,8 @@
 import datetime
 import unittest
 
-from the_grid.application.pool.retro_cadence import RetroCadenceUseCase
-from the_grid.application.services.flow import FlowService
+from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
+from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 

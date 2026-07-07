@@ -1,14 +1,14 @@
 [project]
-name = "the-grid"
+name = "lightcycle"
 version = "0.1.0"
-description = "A workflow-agnostic agent-pipeline engine: tg fronts a pipeline of ephemeral claude workers."
+description = "A workflow-agnostic agent-pipeline engine: lc fronts a pipeline of ephemeral claude workers."
 requires-python = ">=3.11"
 # Runtime: ZERO third-party dependencies. The shipped engine imports stdlib only.
 dependencies = []
 
 [project.scripts]
-tg = "the_grid.cli:main"
-the-grid = "the_grid.cli:main"
+lc = "lightcycle.cli:main"
+lightcycle = "lightcycle.cli:main"
 
 # Build backend is build-time tooling (like uv/pytest), never imported by the engine.
 [build-system]
@@ -17,7 +17,7 @@ build-backend = "hatchling.build"
 
 # Ship the whole package, including the default library (steps/workflows/driver.md).
 [tool.hatch.build.targets.wheel]
-packages = ["the_grid"]
+packages = ["lightcycle"]
 
 # Dev/test tooling only - never shipped, never imported by the engine.
 [dependency-groups]

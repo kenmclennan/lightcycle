@@ -1,8 +1,8 @@
 import unittest
 
-from the_grid.domain.flow import Flow, Transition
-from the_grid.domain.flow.graph import parse_graph
-from the_grid.domain.work import Task
+from lightcycle.domain.flow import Flow, Transition
+from lightcycle.domain.flow.graph import parse_graph
+from lightcycle.domain.work import Task
 from tests.support.fake_fs import graph_text_from_metas
 
 

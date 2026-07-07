@@ -1,8 +1,8 @@
 import json
 import unittest
 
-from the_grid.application.errors import UseCaseError
-from the_grid.application.work import (
+from lightcycle.application.errors import UseCaseError
+from lightcycle.application.work import (
     AddTaskInput,
     AddTaskUseCase,
     CloseEpicInput,
@@ -16,8 +16,8 @@ from the_grid.application.work import (
     LinkArtifactInput,
     LinkArtifactUseCase,
 )
-from the_grid.application.services.flow import FlowService
-from the_grid.application.services.worktree import WorktreeService
+from lightcycle.application.services.flow import FlowService
+from lightcycle.application.services.worktree import WorktreeService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -49,7 +49,7 @@ class FakeConfig:
     def projects_root(self):
         return self._projects
 
-    def grid_root(self):
+    def engine_root(self):
         return self._projects
 
 

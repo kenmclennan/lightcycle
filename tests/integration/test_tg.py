@@ -12,29 +12,29 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-TG = str(ROOT / "bin" / "tg")
+TG = str(ROOT / "bin" / "lc")
 
 sys.path.insert(0, str(ROOT))
-import the_grid.cli as _cli_mod
+import lightcycle.cli as _cli_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
-from the_grid.adapters.gitio import GitAdapter
-from the_grid.application.services.flow import FlowService
-from the_grid.application.services.worktree import WorktreeService
-from the_grid.domain.work import Artifact
+from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.application.services.flow import FlowService
+from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.domain.work import Artifact
 
 _ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
-os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 
 
 def run_tg(*args, root=None, config=None):
     env = dict(os.environ)
     if root:
-        env["GRID_ROOT_OVERRIDE"] = root
+        env["LC_ROOT_OVERRIDE"] = root
     else:
-        env["GRID_HOME"] = tempfile.mkdtemp()
+        env["LC_HOME"] = tempfile.mkdtemp()
     if config:
-        env["GRID_CONFIG"] = config
+        env["LC_CONFIG"] = config
     return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
 
 
@@ -122,7 +122,7 @@ def write_workflow(root, metas, name="standard", entry=None):
 
 
 def write_workflow_from_steps(root, name="standard"):
-    from the_grid.adapters import frontmatter
+    from lightcycle.adapters import frontmatter
 
     metas = {}
     for f in sorted((Path(root) / "steps").glob("*.md")):
@@ -209,8 +209,8 @@ def call(fn, *args):
 
 def _fake_setUp(test, *, steps=False, contract_steps=False):
     test.root = tempfile.mkdtemp()
-    os.environ["GRID_ROOT_OVERRIDE"] = test.root
-    os.environ["GRID_CONFIG"] = write_config(projects=test.root, specs=test.root)
+    os.environ["LC_ROOT_OVERRIDE"] = test.root
+    os.environ["LC_CONFIG"] = write_config(projects=test.root, specs=test.root)
     write_workflow(test.root, {})
     if steps:
         write_steps(test.root)
@@ -220,15 +220,15 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     test._orig = _cli_mod._container
     _cli_mod.set_container(_cli_mod.Container(store=test.store))
     test.addCleanup(lambda: _cli_mod.set_container(test._orig))
-    test.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
-    test.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
+    test.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+    test.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
 
 class TestSkeleton(unittest.TestCase):
     def test_help_lists_subcommands(self):
         r = run_tg("--help")
         self.assertEqual(r.returncode, 0, r.stderr)
-        for verb in ("status", "claim", "done", "block", "run", "sweep"):
+        for verb in ("status", "claim", "done", "block", "start", "sweep"):
             self.assertIn(verb, r.stdout)
 
     def test_unknown_subcommand_exits_2(self):
@@ -303,15 +303,15 @@ class TestClaim(unittest.TestCase):
 
     def test_claim_assigns_worker_spawnid(self):
         b = self.store.create_task("build: y", step="build", role="coder")
-        old = os.environ.get("GRID_SPAWNID")
-        os.environ["GRID_SPAWNID"] = "spawn-xyz"
+        old = os.environ.get("LC_SPAWNID")
+        os.environ["LC_SPAWNID"] = "spawn-xyz"
         try:
             call(_cli_mod.cmd_claim, "coder")
         finally:
             if old is None:
-                os.environ.pop("GRID_SPAWNID", None)
+                os.environ.pop("LC_SPAWNID", None)
             else:
-                os.environ["GRID_SPAWNID"] = old
+                os.environ["LC_SPAWNID"] = old
         self.assertEqual(self.store.get_task(b).claimed_by, "spawn-xyz")
 
 
@@ -418,7 +418,7 @@ class TestSweep(unittest.TestCase):
 
 class TestWorkersAdapterEffects(unittest.TestCase):
     def test_pid_alive_and_kill_hit_a_real_process_never_the_test(self):
-        from the_grid.adapters import workers as workers_adapter
+        from lightcycle.adapters import workers as workers_adapter
 
         alive = subprocess.Popen(["sleep", "300"])
         self.addCleanup(lambda: alive.poll() is None and alive.kill())
@@ -444,7 +444,7 @@ class TestSpawn(unittest.TestCase):
             )
 
     def test_spawn_records_worker_log_and_lists_in_ps(self):
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root, GRID_SPAWN_CMD="echo started >> {log}")
+        env = dict(os.environ, LC_ROOT_OVERRIDE=self.root, LC_SPAWN_CMD="echo started >> {log}")
         r = subprocess.run(
             [sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env
         )
@@ -469,7 +469,7 @@ class TestPs(unittest.TestCase):
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(workers))
 
     def _run_ps(self, *args):
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root)
+        env = dict(os.environ, LC_ROOT_OVERRIDE=self.root)
         return subprocess.run(
             [sys.executable, TG, "ps", *args, "--json"], capture_output=True, text=True, env=env
         )
@@ -510,25 +510,25 @@ class TestRun(unittest.TestCase):
         self.root = tempfile.mkdtemp()
         for d in ("steps", "logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
-        (Path(self.root) / ".grid.db").touch()
+        (Path(self.root) / "store.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
         write_workflow_from_steps(self.root)
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
-        os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
+        os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
-        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
-        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
     def _run_once(self):
-        return call(_cli_mod.cmd_run, "--once")
+        return call(_cli_mod.cmd_start, "--once")
 
     def _workers(self):
         return json.loads((Path(self.root) / "logs" / "workers.json").read_text())
@@ -568,8 +568,8 @@ class TestRun(unittest.TestCase):
     def test_run_pool_respects_max_agents_env(self):
         for i in range(5):
             self.store.create_task("build: %d" % i, step="build", role="coder")
-        os.environ["GRID_MAX_AGENTS"] = "2"
-        self.addCleanup(lambda: os.environ.pop("GRID_MAX_AGENTS", None))
+        os.environ["LC_MAX_AGENTS"] = "2"
+        self.addCleanup(lambda: os.environ.pop("LC_MAX_AGENTS", None))
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 2)
@@ -612,7 +612,7 @@ class TestRun(unittest.TestCase):
         self.store.close(tid, "done")
         self.store._records[tid]["closed_at"] = "2020-01-01T00:00:00"
         with patch("time.sleep", side_effect=KeyboardInterrupt):
-            rc, out, err = call(_cli_mod.cmd_run)
+            rc, out, err = call(_cli_mod.cmd_start)
         self.assertEqual(rc, 0, err)
         self.assertNotIn(tid, out)
 
@@ -622,28 +622,28 @@ class TestRunSingletonLock(unittest.TestCase):
         self.root = tempfile.mkdtemp()
         for d in ("steps", "logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
-        (Path(self.root) / ".grid.db").touch()
+        (Path(self.root) / "store.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
             (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
         write_workflow_from_steps(self.root)
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
-        os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
+        os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
-        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
-        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
     def _run_once(self):
-        return call(_cli_mod.cmd_run, "--once")
+        return call(_cli_mod.cmd_start, "--once")
 
     def _lock_path(self):
-        return Path(self.root) / ".tg-run.pid"
+        return Path(self.root) / ".lc-run.pid"
 
     def test_second_start_refused_while_holder_alive(self):
         self._lock_path().write_text(str(os.getpid()))
@@ -985,15 +985,15 @@ class TestFileStep(unittest.TestCase):
         self.assertEqual(kid.role, "coder")
 
     def test_spawn_uses_frontmatter_model(self):
-        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
-        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
+        os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
+        self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
         rc, _, err = call(_cli_mod.cmd_spawn, "coder")
         self.assertEqual(rc, 0, err)
 
     def test_spawn_refuses_when_model_missing(self):
         (Path(self.root) / "steps" / "reviewer.md").write_text("no frontmatter here")
-        os.environ["GRID_SPAWN_CMD"] = "echo x >> {log}"
-        self.addCleanup(lambda: os.environ.pop("GRID_SPAWN_CMD", None))
+        os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
+        self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
         rc, _, err = call(_cli_mod.cmd_spawn, "reviewer")
         self.assertEqual(rc, 1)
         self.assertIn("model", err)
@@ -1072,8 +1072,8 @@ class TestPruneWorkers(unittest.TestCase):
 
     def setUp(self):
         self.wfile = Path(self.root) / "logs" / "workers.json"
-        os.environ["GRID_CONFIG"] = write_config(projects=self.root, specs=self.root)
-        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
+        os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
     def _dead_pid(self):
         p = subprocess.Popen(["true"])
@@ -1084,9 +1084,9 @@ class TestPruneWorkers(unittest.TestCase):
         self.wfile.write_text(json.dumps(workers))
 
     def _sweep(self, history=None):
-        env = dict(os.environ, GRID_ROOT_OVERRIDE=self.root)
+        env = dict(os.environ, LC_ROOT_OVERRIDE=self.root)
         if history is not None:
-            env["GRID_WORKER_HISTORY"] = str(history)
+            env["LC_WORKER_HISTORY"] = str(history)
         return subprocess.run(
             [sys.executable, TG, "sweep"], capture_output=True, text=True, env=env
         )
@@ -1138,13 +1138,13 @@ class TestInitAndStoreGuard(unittest.TestCase):
         cfg = self._cfg(d)
         r = run_tg("init", root=d, config=cfg)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(os.path.exists(os.path.join(d, ".grid.db")))
+        self.assertTrue(os.path.exists(os.path.join(d, "store.db")))
         r2 = run_tg("init", root=d, config=cfg)
         self.assertEqual(r2.returncode, 0, r2.stderr)
 
     def test_run_without_store_errors(self):
         d = self._bare()
-        r = run_tg("run", "--once", root=d)
+        r = run_tg("start", "--once", root=d)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("init", r.stderr)
 
@@ -1171,18 +1171,18 @@ class TestWorktree(unittest.TestCase):
         write_steps(cls.root)
 
     def setUp(self):
-        os.environ["GRID_CONFIG"] = write_config(
+        os.environ["LC_CONFIG"] = write_config(
             projects=os.path.dirname(self.root), specs=self.root
         )
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
 
     def tearDown(self):
-        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+        os.environ["LC_CONFIG"] = _ABSENT_CONFIG
         _reset_git_repo(self.root)
 
     def _branch_of(self, path):
@@ -1255,16 +1255,16 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         self.root = os.path.join(parent, "engine")
         subprocess.run(["git", "init", "-q", self.root], check=True)
         write_steps(self.root)
-        os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_CONFIG"] = write_config(projects=parent, specs=self.root)
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
 
     def tearDown(self):
-        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+        os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 
     def test_claim_omits_workspace_without_origin(self):
         self.store.create_task("build: t", step="build", role="coder")
@@ -1283,16 +1283,16 @@ class TestNamedRepo(unittest.TestCase):
         cls.app = make_repo(cls.projects, "app")
 
     def setUp(self):
-        os.environ["GRID_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
-        os.environ["GRID_ROOT_OVERRIDE"] = self.engine
+        os.environ["LC_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
+        os.environ["LC_ROOT_OVERRIDE"] = self.engine
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
 
     def tearDown(self):
-        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+        os.environ["LC_CONFIG"] = _ABSENT_CONFIG
         _reset_git_repo(self.engine)
         _reset_git_repo(self.app)
 
@@ -1403,16 +1403,16 @@ class TestCloseWorktree(unittest.TestCase):
         parent = tempfile.mkdtemp()
         self.root = make_repo(parent, "engine")
         write_steps(self.root)
-        os.environ["GRID_CONFIG"] = write_config(projects=parent, specs=self.root)
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_CONFIG"] = write_config(projects=parent, specs=self.root)
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
 
     def tearDown(self):
-        os.environ["GRID_CONFIG"] = _ABSENT_CONFIG
+        os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 
     def _has_branch(self, repo, branch):
         return (
@@ -1487,14 +1487,14 @@ class TestConfig(unittest.TestCase):
         self.root = tempfile.mkdtemp()
         self.dir = tempfile.mkdtemp()
         self.cfg = os.path.join(self.dir, "config")
-        os.environ["GRID_ROOT_OVERRIDE"] = self.root
-        os.environ["GRID_CONFIG"] = self.cfg
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_CONFIG"] = self.cfg
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("GRID_ROOT_OVERRIDE", None))
-        self.addCleanup(lambda: os.environ.__setitem__("GRID_CONFIG", _ABSENT_CONFIG))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
     def test_config_prints_path_and_unset_roots(self):
         rc, out, err = call(_cli_mod.cmd_config)
@@ -1935,7 +1935,7 @@ class TestWorktreePushTarget(unittest.TestCase):
             def projects_root(self):
                 return parent
 
-            def grid_root(self):
+            def engine_root(self):
                 return parent
 
             def worktree_retries(self):
@@ -2073,7 +2073,7 @@ class TestWorkflowSelection(unittest.TestCase):
 class TestProjectWorkflowOverride(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, steps=True)
-        pdir = Path(self.root) / "myapp" / ".grid" / "workflows"
+        pdir = Path(self.root) / "myapp" / ".lightcycle" / "workflows"
         pdir.mkdir(parents=True)
         (pdir / "standard.md").write_text("entry: build\n\nnodes:\n  build  coder\n")
 

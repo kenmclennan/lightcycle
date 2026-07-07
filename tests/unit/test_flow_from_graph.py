@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.domain.flow import Flow
-from the_grid.domain.flow.graph import parse_graph
+from lightcycle.domain.flow import Flow
+from lightcycle.domain.flow.graph import parse_graph
 
 GRAPH_TEXT = """
 entry: build

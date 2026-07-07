@@ -1,6 +1,6 @@
 import unittest
 
-from the_grid.domain.feedback import Reflection
+from lightcycle.domain.feedback import Reflection
 
 
 class TestReflectionVO(unittest.TestCase):

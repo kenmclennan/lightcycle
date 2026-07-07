@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.application.pool.tick import TickResponse
-from the_grid.cli import _format_tick
+from lightcycle.application.pool.tick import TickResponse
+from lightcycle.cli import _format_tick
 
 _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 

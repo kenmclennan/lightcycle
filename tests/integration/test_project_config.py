@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from the_grid.adapters.sqlite_store import SqliteStore
-from the_grid.config import Config
+from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.config import Config
 
 
 def _config():
@@ -14,12 +14,12 @@ def _config():
         "projects: %s\nspecs: %s\nshortcode: tg\ndefault-workflow: standard\n"
         % (projects, projects)
     )
-    config = Config(environ={"GRID_ROOT_OVERRIDE": root, "GRID_CONFIG": str(cfg)})
+    config = Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": str(cfg)})
     return config, projects
 
 
 def _project(projects, name, body):
-    d = Path(projects) / name / ".grid"
+    d = Path(projects) / name / ".lightcycle"
     d.mkdir(parents=True)
     (d / "config").write_text(body)
 

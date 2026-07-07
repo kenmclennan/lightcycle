@@ -1,13 +1,13 @@
 def flow_from_metas(metas):
-    from the_grid.domain.flow import Flow
-    from the_grid.domain.flow.graph import parse_graph
+    from lightcycle.domain.flow import Flow
+    from lightcycle.domain.flow.graph import parse_graph
 
     return Flow.from_graph(parse_graph(graph_text_from_metas(metas)), metas)
 
 
 def signals_from_metas(metas):
-    from the_grid.domain.feedback.signal import Signals
-    from the_grid.domain.flow.graph import parse_graph
+    from lightcycle.domain.feedback.signal import Signals
+    from lightcycle.domain.flow.graph import parse_graph
 
     return Signals.from_graph(parse_graph(graph_text_from_metas(metas)))
 

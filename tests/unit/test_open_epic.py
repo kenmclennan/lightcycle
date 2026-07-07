@@ -1,7 +1,7 @@
 import unittest
 
-from the_grid.application.errors import UseCaseError
-from the_grid.application.work import OpenEpicInput, OpenEpicUseCase
+from lightcycle.application.errors import UseCaseError
+from lightcycle.application.work import OpenEpicInput, OpenEpicUseCase
 from tests.support.fake_store import FakeStore
 
 

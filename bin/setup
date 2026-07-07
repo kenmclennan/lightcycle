@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Provision a fresh checkout to a runnable state: check prerequisites, install the
-# dev environment, initialise the grid store, and verify. Idempotent - safe to re-run.
+# dev environment, initialise the lightcycle store, and verify. Idempotent - safe to re-run.
 #
 # The engine itself runs on system python3 with zero runtime deps; uv/pytest are
-# dev-only (for the tests). So `bin/tg` works without the venv; the venv is for
+# dev-only (for the tests). So `bin/lc` works without the venv; the venv is for
 # `bash tests/run.sh`.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -20,10 +20,10 @@ echo "ok: python3, uv, git"
 say "Installing the dev environment (uv sync)"
 uv sync
 
-say "Initialising the grid store"
-./bin/tg init
+say "Initialising the lightcycle store"
+./bin/lc init
 
 say "Verifying (fast unit suite)"
 uv run pytest tests/unit -q
 
-say "Ready. Run 'bash tests/run.sh' for the full suite, or './bin/tg driver' to start working."
+say "Ready. Run 'bash tests/run.sh' for the full suite, or './bin/lc driver' to start working."
