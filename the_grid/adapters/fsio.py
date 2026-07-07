@@ -97,20 +97,25 @@ class FsAdapter(FsPort):
     def __init__(self, config):
         self._config = config
 
-    def _search(self):
-        return [self._config.data_root(), self._config.library_root()]
+    def _search(self, project=None):
+        roots = []
+        if project:
+            roots.append(os.path.join(self._config.projects_root(), project, ".grid"))
+        roots.append(self._config.data_root())
+        roots.append(self._config.library_root())
+        return roots
 
-    def step_roles(self):
-        return step_roles(self._search())
+    def step_roles(self, project=None):
+        return step_roles(self._search(project))
 
-    def read_md(self, relpath):
-        return read_md(self._search(), relpath)
+    def read_md(self, relpath, project=None):
+        return read_md(self._search(project), relpath)
 
-    def parse_step(self, role):
-        return parse_step(self._search(), role)
+    def parse_step(self, role, project=None):
+        return parse_step(self._search(project), role)
 
-    def workflow_text(self, name):
-        return workflow_text(self._search(), name)
+    def workflow_text(self, name, project=None):
+        return workflow_text(self._search(project), name)
 
     def worktrees_dir(self):
         return worktrees_dir(self._config.data_root())

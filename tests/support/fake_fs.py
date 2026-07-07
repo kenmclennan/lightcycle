@@ -54,20 +54,20 @@ class FakeFs:
         self._dirs = dirs or {}
         self._workflow = workflow
 
-    def workflow_text(self, name):
+    def workflow_text(self, name, project=None):
         if self._workflow is not None:
             return self._workflow
         return graph_text_from_metas(self._metas)
 
-    def step_roles(self):
+    def step_roles(self, project=None):
         return sorted(self._metas)
 
-    def parse_step(self, role):
+    def parse_step(self, role, project=None):
         if role not in self._metas:
             return None
         return {"meta": self._metas[role] or {}, "body": "", "path": role}
 
-    def read_md(self, relpath):
+    def read_md(self, relpath, project=None):
         return None
 
     def worktrees_dir(self):
