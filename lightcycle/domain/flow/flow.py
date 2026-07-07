@@ -9,7 +9,7 @@ class Flow:
         pr_merge,
         pr_close,
         pr_rework,
-        epic_close=None,
+        theme_close=None,
         retro_cadence=None,
         hooks=None,
         pr_conflict=None,
@@ -21,7 +21,7 @@ class Flow:
         self._pr_merge = pr_merge
         self._pr_close = pr_close
         self._pr_rework = pr_rework
-        self._epic_close = epic_close or set()
+        self._theme_close = theme_close or set()
         self._retro_cadence = retro_cadence or set()
         self._hooks = hooks or {}
         self._pr_conflict = pr_conflict or {}
@@ -53,7 +53,7 @@ class Flow:
 
         pr_merge, pr_close, pr_rework = {}, {}, {}
         pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
-        epic_close, retro_cadence, hooks = set(), set(), {}
+        theme_close, retro_cadence, hooks = set(), set(), {}
         outcome_hooks = {
             "pr_merge": pr_merge,
             "pr_close": pr_close,
@@ -68,15 +68,15 @@ class Flow:
         cap_stage = graph.hook_stage("pr_conflict_cap")
         if cap_stage:
             pr_conflict_cap[cap_stage] = int(graph.hook_value("pr_conflict_cap"))
-        if graph.hook_stage("epic_close"):
-            epic_close.add(graph.hook_stage("epic_close"))
+        if graph.hook_stage("theme_close"):
+            theme_close.add(graph.hook_stage("theme_close"))
         if graph.hook_stage("retro_cadence"):
             retro_cadence.add(graph.hook_stage("retro_cadence"))
         for name, toks in graph.hooks.items():
             if toks:
                 hooks.setdefault("on_" + name, set()).add(toks[0])
 
-        return cls(owner, routes, pr_merge, pr_close, pr_rework, epic_close, retro_cadence, hooks,
+        return cls(owner, routes, pr_merge, pr_close, pr_rework, theme_close, retro_cadence, hooks,
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate)
 
     def owner_of(self, step):
@@ -109,9 +109,9 @@ class Flow:
     def pr_conflict_escalate(self, step):
         return self._pr_conflict_escalate.get(step)
 
-    def epic_close_steps(self):
+    def theme_close_steps(self):
         return [
-            (step, self._owner[step]) for step in sorted(self._epic_close) if step in self._owner
+            (step, self._owner[step]) for step in sorted(self._theme_close) if step in self._owner
         ]
 
     def retro_cadence_steps(self):

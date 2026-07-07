@@ -66,7 +66,7 @@ class SmokeTest(unittest.TestCase):
         )
 
     def test_add_with_description_and_edit(self):
-        r = _tg("add", "my task", "--description", "detail here", root=self.root)
+        r = _tg("add", "my step", "--description", "detail here", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         tid = r.stdout.strip()
 
@@ -87,23 +87,23 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(shown["description"], "updated desc")
 
     def test_create_claim_done_advance_show(self):
-        r = _tg("epic", "smoke objective", root=self.root)
+        r = _tg("theme", "smoke objective", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         epic_id = r.stdout.strip()
 
-        r = _tg("file", "specs/smoke.md", "--step", "build", "--epic", epic_id, root=self.root)
+        r = _tg("file", "specs/smoke.md", "--step", "build", "--theme", epic_id, root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
         r = _tg("claim", "coder", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
-        task = json.loads(r.stdout)
-        self.assertEqual(task["status"], "in-progress")
-        build_id = task["id"]
+        step = json.loads(r.stdout)
+        self.assertEqual(step["status"], "in-progress")
+        build_id = step["id"]
 
         r = _tg("done", build_id, "done", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         review_id = r.stdout.strip()
-        self.assertTrue(review_id, "tg done should print the next task id")
+        self.assertTrue(review_id, "tg done should print the next step id")
 
         r = _tg("show", review_id, root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)

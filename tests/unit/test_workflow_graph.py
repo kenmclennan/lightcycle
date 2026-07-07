@@ -38,13 +38,13 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "hooks:\n"
             "  pr_merge       ready-merge  merged\n"
             "  pr_conflict_cap  ready-merge  3\n"
-            "  epic_close     audit\n"
+            "  theme_close     audit\n"
         )
         self.assertEqual(graph.hook_stage("pr_merge"), "ready-merge")
         self.assertEqual(graph.hook_value("pr_merge"), "merged")
         self.assertEqual(graph.hook_value("pr_conflict_cap"), "3")
-        self.assertEqual(graph.hook_stage("epic_close"), "audit")
-        self.assertIsNone(graph.hook_value("epic_close"))
+        self.assertEqual(graph.hook_stage("theme_close"), "audit")
+        self.assertIsNone(graph.hook_value("theme_close"))
         self.assertIsNone(graph.hook_stage("pr_close"))
 
     def test_parses_signals_by_stage(self):

@@ -3,7 +3,7 @@ from typing import Optional
 
 
 @dataclass(frozen=True)
-class AddTaskInput:
+class AddItemInput:
     title: str
     goal: Optional[str] = None
     project: Optional[str] = None
@@ -12,15 +12,15 @@ class AddTaskInput:
 
 
 @dataclass(frozen=True)
-class AddTaskResponse:
-    task: str
+class AddItemResponse:
+    step: str
 
 
-class AddTaskUseCase:
+class AddItemUseCase:
     def __init__(self, store):
         self._store = store
 
-    def execute(self, input: AddTaskInput) -> AddTaskResponse:
-        return AddTaskResponse(task=self._store.create_task(
+    def execute(self, input: AddItemInput) -> AddItemResponse:
+        return AddItemResponse(step=self._store.create_step(
             input.title, role="human", project=input.project, goal=input.goal,
             description=input.description, attention=input.attention))

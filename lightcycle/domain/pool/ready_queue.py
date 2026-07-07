@@ -1,9 +1,9 @@
 class ReadyQueue:
-    def __init__(self, tasks):
-        self._tasks = list(tasks)
+    def __init__(self, steps):
+        self._steps = list(steps)
 
     def roles(self):
-        return [t.role for t in self._tasks if t.role and t.role != "human"]
+        return [t.role for t in self._steps if t.role and t.role != "human"]
 
     def distinct_roles(self):
         out = []

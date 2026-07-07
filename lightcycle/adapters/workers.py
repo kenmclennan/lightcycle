@@ -80,12 +80,12 @@ def prune_workers(root, keep_dead):
         return n_drop
 
 
-def set_task(root, spawnid, task):
+def set_step(root, spawnid, step):
     with registry_lock(root):
         workers = workers_state(root)
         for w in workers:
             if w.get("spawnid") == spawnid:
-                w["task"] = task
+                w["step"] = step
         write_workers(root, workers)
 
 
@@ -118,8 +118,8 @@ class WorkersAdapter(WorkersPort):
         kd = self._config.worker_history() if keep_dead is None else keep_dead
         return prune_workers(self._config.data_root(), kd)
 
-    def set_task(self, spawnid, task):
-        return set_task(self._config.data_root(), spawnid, task)
+    def set_step(self, spawnid, step):
+        return set_step(self._config.data_root(), spawnid, step)
 
     def mark_checked(self, spawnid):
         return mark_checked(self._config.data_root(), spawnid)

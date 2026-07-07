@@ -25,10 +25,10 @@ class SessionPolicy:
         if claimed:
             self._claimed = True
 
-    def on_result(self, has_open_task):
+    def on_result(self, has_open_step):
         if self._terminal:
             return CLOSE
-        if not has_open_task and not self._claimed:
+        if not has_open_step and not self._claimed:
             return CLOSE
         self._nudges += 1
         return NUDGE

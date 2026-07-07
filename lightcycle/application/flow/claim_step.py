@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.domain.contracts import StepContract
-from lightcycle.domain.work import TaskView
+from lightcycle.domain.work import NodeView
 
 
 @dataclass(frozen=True)
@@ -13,13 +13,13 @@ class ClaimInput:
 
 @dataclass(frozen=True)
 class ClaimResponse:
-    view: TaskView
+    view: NodeView
     workspace: Optional[str] = None
     branch: Optional[str] = None
     spec_path: Optional[str] = None
 
 
-class ClaimTaskUseCase:
+class ClaimStepUseCase:
     def __init__(self, store, flow, worktrees, workers, config):
         self._store = store
         self._flow = flow
@@ -46,12 +46,12 @@ class ClaimTaskUseCase:
             self._store.set_model(t.id, model)
         spawnid = self._config.spawn_id()
         if spawnid:
-            self._workers.set_task(spawnid, t.id)
-        view = self._store.task_view(t.id)
-        story = t.parent or t.id
-        ws = self._worktrees.ensure(story)
-        branch = self._worktrees.story_branch(story)
-        spec = next((a.value for a in view.story_artifacts if a.type == "spec"), None)
+            self._workers.set_step(spawnid, t.id)
+        view = self._store.node_view(t.id)
+        item = t.parent or t.id
+        ws = self._worktrees.ensure(item)
+        branch = self._worktrees.item_branch(item)
+        spec = next((a.value for a in view.item_artifacts if a.type == "spec"), None)
         spec_path = None
         if spec:
             spec_path = (

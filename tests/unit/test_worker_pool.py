@@ -10,10 +10,10 @@ def probe(alive_pids):
 class TestWorker(unittest.TestCase):
     def test_from_state_reads_the_registry_dict(self):
         w = Worker.from_state(
-            {"spawnid": "sp-1", "pid": 42, "role": "coder", "task": "b-1", "started": 100}
+            {"spawnid": "sp-1", "pid": 42, "role": "coder", "step": "b-1", "started": 100}
         )
         self.assertEqual(
-            (w.spawnid, w.pid, w.role, w.task, w.started), ("sp-1", 42, "coder", "b-1", 100)
+            (w.spawnid, w.pid, w.role, w.step, w.started), ("sp-1", 42, "coder", "b-1", 100)
         )
 
     def test_from_state_reads_log_and_checked(self):
@@ -30,22 +30,22 @@ class TestWorker(unittest.TestCase):
         self.assertFalse(w.is_alive(probe(set())))
 
     def test_is_booting_when_unclaimed_within_window(self):
-        self.assertTrue(Worker(task=None, started=100).is_booting(now=150, max_boot=120))
+        self.assertTrue(Worker(step=None, started=100).is_booting(now=150, max_boot=120))
 
     def test_not_booting_once_claimed(self):
-        self.assertFalse(Worker(task="b-1", started=100).is_booting(now=150, max_boot=120))
+        self.assertFalse(Worker(step="b-1", started=100).is_booting(now=150, max_boot=120))
 
     def test_not_booting_past_the_window(self):
-        self.assertFalse(Worker(task=None, started=100).is_booting(now=300, max_boot=120))
+        self.assertFalse(Worker(step=None, started=100).is_booting(now=300, max_boot=120))
 
 
 class TestWorkerPool(unittest.TestCase):
     def _pool(self):
         return WorkerPool.from_state(
             [
-                {"spawnid": "live", "pid": 1, "role": "coder", "task": None, "started": 100},
-                {"spawnid": "dead", "pid": 2, "role": "coder", "task": None, "started": 100},
-                {"spawnid": "busy", "pid": 3, "role": "reviewer", "task": "b-9", "started": 100},
+                {"spawnid": "live", "pid": 1, "role": "coder", "step": None, "started": 100},
+                {"spawnid": "dead", "pid": 2, "role": "coder", "step": None, "started": 100},
+                {"spawnid": "busy", "pid": 3, "role": "reviewer", "step": "b-9", "started": 100},
             ]
         )
 

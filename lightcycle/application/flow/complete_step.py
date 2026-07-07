@@ -2,30 +2,30 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.flow.advance_task import AdvanceInput, AdvanceTaskUseCase
+from lightcycle.application.flow.advance_step import AdvanceInput, AdvanceStepUseCase
 from lightcycle.domain.contracts import StepContract
 
 
 @dataclass(frozen=True)
 class CompleteInput:
-    task: str
+    step: str
     outcome: str
     note: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class CompleteResponse:
-    next_task: Optional[str]
+    next_step: Optional[str]
 
 
-class CompleteTaskUseCase:
+class CompleteStepUseCase:
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
-        self._advance = AdvanceTaskUseCase(store, flow)
+        self._advance = AdvanceStepUseCase(store, flow)
 
     def execute(self, input: CompleteInput) -> CompleteResponse:
-        t = self._store.get_task(input.task)
+        t = self._store.get_node(input.step)
         name = self._flow.workflow_for(t)
         project = self._flow.project_for(t)
         transition = self._flow.flow_next(t.step, input.outcome, name, project)
@@ -46,15 +46,15 @@ class CompleteTaskUseCase:
         )
         if missing:
             raise UseCaseError(
-                "cannot close %s: step '%s' must produce %s; none on the story. "
-                "lc link the artifact first." % (input.task, t.step, ", ".join(sorted(missing)))
+                "cannot close %s: step '%s' must produce %s; none on the item. "
+                "lc link the artifact first." % (input.step, t.step, ", ".join(sorted(missing)))
             )
-        self._store.note(input.task, "outcome: %s" % input.outcome)
-        self._store.close(input.task, input.outcome)
-        new = self._advance.execute(AdvanceInput(task=input.task, outcome=input.outcome)).next_task
+        self._store.note(input.step, "outcome: %s" % input.outcome)
+        self._store.close(input.step, input.outcome)
+        new = self._advance.execute(AdvanceInput(step=input.step, outcome=input.outcome)).next_step
         if input.note:
             if transition:
-                self._store.note(new if new else input.task, transition.forward_note(input.note))
+                self._store.note(new if new else input.step, transition.forward_note(input.note))
             else:
-                self._store.note(input.task, input.note)
-        return CompleteResponse(next_task=new)
+                self._store.note(input.step, input.note)
+        return CompleteResponse(next_step=new)

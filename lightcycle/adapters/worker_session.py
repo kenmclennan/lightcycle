@@ -10,9 +10,9 @@ from lightcycle.adapters.workers import workers_state
 from lightcycle.config import Config
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 
-KICKOFF = ("You are the %s. Claim your next task and complete it per your role instructions, "
+KICKOFF = ("You are the %s. Claim your next step and complete it per your role instructions, "
            "then exit.")
-NUDGE_TEXT = ("Your previous turn ended but your task is not resolved yet. Continue and finish it, "
+NUDGE_TEXT = ("Your previous turn ended but your step is not resolved yet. Continue and finish it, "
               "reach your terminal lc outcome, then exit.")
 EXIT_GRACE_SECONDS = 20
 
@@ -22,10 +22,10 @@ def user_message(text):
                        "message": {"role": "user", "content": [{"type": "text", "text": text}]}})
 
 
-def has_open_task(root, spawnid):
+def has_open_step(root, spawnid):
     for e in workers_state(root):
         if e.get("spawnid") == spawnid:
-            return e.get("task") is not None
+            return e.get("step") is not None
     return False
 
 
@@ -90,9 +90,9 @@ def run(root, role, spawnid, model, sysprompt, max_session_seconds):
             pending = counters["results"] > processed
             processed = counters["results"]
         if pending:
-            open_task = has_open_task(root, spawnid)
-            policy.observe_claimed(open_task)
-            decision = policy.on_result(open_task)
+            open_step = has_open_step(root, spawnid)
+            policy.observe_claimed(open_step)
+            decision = policy.on_result(open_step)
             if decision == CLOSE:
                 try:
                     proc.stdin.close()

@@ -1,17 +1,17 @@
 import unittest
 
-from lightcycle.domain.work import TaskSpec
+from lightcycle.domain.work import NodeSpec
 
 
-class TestTaskSpec(unittest.TestCase):
+class TestNodeSpec(unittest.TestCase):
     def test_defaults_are_empty(self):
-        spec = TaskSpec(title="build: x")
+        spec = NodeSpec(title="build: x")
         self.assertEqual(spec.deps, ())
         self.assertIsNone(spec.step)
         self.assertIsNone(spec.parent)
 
     def test_as_kwargs_names_every_create_task_arg(self):
-        spec = TaskSpec(
+        spec = NodeSpec(
             title="review: x",
             step="review",
             role="reviewer",
@@ -34,7 +34,7 @@ class TestTaskSpec(unittest.TestCase):
         )
 
     def test_is_frozen(self):
-        spec = TaskSpec(title="x")
+        spec = NodeSpec(title="x")
         with self.assertRaises(Exception):
             spec.title = "y"
 

@@ -5,11 +5,11 @@ from lightcycle.domain.feedback import Reflection
 
 class TestReflectionVO(unittest.TestCase):
     def test_from_dict_as_dict_round_trip(self):
-        d = {"task": "t-1", "feedback": "fb", "spec_hash": "aabbccdd"}
+        d = {"step": "t-1", "feedback": "fb", "spec_hash": "aabbccdd"}
         self.assertEqual(Reflection.from_dict(d).as_dict(), d)
 
     def test_from_dict_tolerates_missing_fields(self):
-        r = Reflection.from_dict({"task": "t-1"})
+        r = Reflection.from_dict({"step": "t-1"})
         self.assertEqual(r.feedback, "")
         self.assertEqual(r.spec_hash, "unknown")
 
@@ -31,20 +31,20 @@ class TestSpecHashOf(unittest.TestCase):
 class TestCreate(unittest.TestCase):
     def test_carries_feedback(self):
         r = Reflection.create(
-            "task-1", feedback="pytest not found; used bash tests/run.sh", spec_hash="abc12345"
+            "step-1", feedback="pytest not found; used bash tests/run.sh", spec_hash="abc12345"
         )
-        self.assertEqual(r.task, "task-1")
+        self.assertEqual(r.step, "step-1")
         self.assertEqual(r.feedback, "pytest not found; used bash tests/run.sh")
         self.assertEqual(r.spec_hash, "abc12345")
 
     def test_defaults(self):
-        r = Reflection.create("task-1")
+        r = Reflection.create("step-1")
         self.assertEqual(r.feedback, "")
         self.assertEqual(r.spec_hash, "unknown")
 
     def test_json_shape_stable(self):
         r = Reflection.create("t", feedback="x", spec_hash="aabbccdd")
-        self.assertEqual(set(r.as_dict()), {"task", "feedback", "spec_hash"})
+        self.assertEqual(set(r.as_dict()), {"step", "feedback", "spec_hash"})
 
 
 if __name__ == "__main__":

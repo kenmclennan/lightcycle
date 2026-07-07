@@ -4,7 +4,7 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class LinkArtifactInput:
-    story: str
+    item: str
     atype: str
     value: str
     label: Optional[str] = None
@@ -15,4 +15,4 @@ class LinkArtifactUseCase:
         self._store = store
 
     def execute(self, input: LinkArtifactInput) -> None:
-        self._store.add_artifact(input.story, input.atype, input.value, input.label)
+        self._store.add_artifact(input.item, input.atype, input.value, input.label)

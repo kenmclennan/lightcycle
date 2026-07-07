@@ -6,12 +6,12 @@ from tests.support.fake_store import FakeStore
 class TestLabels(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_task("build: thing", step="build", role="coder")
+        self.tid = self.s.create_step("build: thing", step="build", role="coder")
 
     def test_step_and_role_split_into_separate_labels(self):
-        task = self.s.get_task(self.tid)
-        self.assertEqual(task.role, "coder")
-        self.assertEqual(task.step, "build")
+        step = self.s.get_node(self.tid)
+        self.assertEqual(step.role, "coder")
+        self.assertEqual(step.step, "build")
 
     def test_label_add_roundtrip(self):
         self.s.label_add(self.tid, "priority:high")
@@ -29,26 +29,26 @@ class TestLabels(unittest.TestCase):
         self.assertEqual(self.s._records[self.tid]["labels"].count("tag:x"), 1)
 
     def test_structured_attrs_encoded_on_create_task(self):
-        tid = self.s.create_task("build: y", role="reviewer", project="foo", goal="ship")
-        task = self.s.get_task(tid)
-        self.assertEqual(task.project, "foo")
-        self.assertEqual(task.goal, "ship")
-        self.assertEqual(task.role, "reviewer")
+        tid = self.s.create_step("build: y", role="reviewer", project="foo", goal="ship")
+        step = self.s.get_node(tid)
+        self.assertEqual(step.project, "foo")
+        self.assertEqual(step.goal, "ship")
+        self.assertEqual(step.role, "reviewer")
 
 
 class TestAssignee(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_task("build: thing", role="coder")
+        self.tid = self.s.create_step("build: thing", role="coder")
 
     def test_assign_sets_in_progress(self):
         self.s.assign(self.tid, "worker-1")
-        self.assertEqual(self.s.get_task(self.tid).status, "in-progress")
+        self.assertEqual(self.s.get_node(self.tid).status, "in-progress")
 
     def test_assign_empty_string_clears(self):
         self.s.assign(self.tid, "worker-1")
         self.s.assign(self.tid, "")
-        self.assertEqual(self.s.get_task(self.tid).status, "ready")
+        self.assertEqual(self.s.get_node(self.tid).status, "ready")
 
     def test_assign_none_clears(self):
         self.s.assign(self.tid, "worker-1")
@@ -59,33 +59,33 @@ class TestAssignee(unittest.TestCase):
 class TestClose(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_task("build: thing", role="coder")
+        self.tid = self.s.create_step("build: thing", role="coder")
 
     def test_close_sets_done_status(self):
         self.s.close(self.tid, "done")
-        self.assertEqual(self.s.get_task(self.tid).status, "done")
+        self.assertEqual(self.s.get_node(self.tid).status, "done")
 
     def test_outcome_roundtrip(self):
         self.s.close(self.tid, "rejected")
-        self.assertEqual(self.s.get_task(self.tid).outcome, "rejected")
+        self.assertEqual(self.s.get_node(self.tid).outcome, "rejected")
 
 
 class TestNotes(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_task("build: thing")
+        self.tid = self.s.create_step("build: thing")
 
     def test_note_absent_initially(self):
-        self.assertIsNone(self.s.get_task(self.tid).notes)
+        self.assertIsNone(self.s.get_node(self.tid).notes)
 
     def test_note_roundtrip(self):
         self.s.note(self.tid, "from review (done): lgtm")
-        self.assertEqual(self.s.get_task(self.tid).notes, "from review (done): lgtm")
+        self.assertEqual(self.s.get_node(self.tid).notes, "from review (done): lgtm")
 
     def test_multiple_notes_appended(self):
         self.s.note(self.tid, "first")
         self.s.note(self.tid, "second")
-        notes = self.s.get_task(self.tid).notes
+        notes = self.s.get_node(self.tid).notes
         self.assertIn("first", notes)
         self.assertIn("second", notes)
 
@@ -93,43 +93,43 @@ class TestNotes(unittest.TestCase):
 class TestParentChildren(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.story = self.s.create_story("story: foo", epic=self.s.create_epic("epic"))
-        self.task = self.s.create_task("build: foo", parent=self.story)
+        self.item = self.s.create_item("item: foo", theme=self.s.create_theme("theme"))
+        self.step = self.s.create_step("build: foo", parent=self.item)
 
     def test_child_has_parent(self):
-        self.assertEqual(self.s.get_task(self.task).parent, self.story)
+        self.assertEqual(self.s.get_node(self.step).parent, self.item)
 
     def test_children_returns_child_task(self):
-        kids = self.s.children(self.story)
+        kids = self.s.children(self.item)
         self.assertEqual(len(kids), 1)
-        self.assertEqual(kids[0].id, self.task)
+        self.assertEqual(kids[0].id, self.step)
 
     def test_children_excludes_other_records(self):
-        other_story = self.s.create_story("story: bar", epic=self.s.create_epic("epic"))
-        self.s.create_task("build: bar", parent=other_story)
-        self.assertEqual(len(self.s.children(self.story)), 1)
+        other_story = self.s.create_item("item: bar", theme=self.s.create_theme("theme"))
+        self.s.create_step("build: bar", parent=other_story)
+        self.assertEqual(len(self.s.children(self.item)), 1)
 
     def test_story_artifacts_roundtrip(self):
-        self.s.add_artifact(self.story, "spec", "specs/foo.md")
-        artifacts = self.s.story_artifacts(self.story)
+        self.s.add_artifact(self.item, "spec", "specs/foo.md")
+        artifacts = self.s.item_artifacts(self.item)
         self.assertEqual(len(artifacts), 1)
         self.assertEqual(artifacts[0].type, "spec")
         self.assertEqual(artifacts[0].value, "specs/foo.md")
 
     def test_add_artifact_with_label(self):
-        self.s.add_artifact(self.story, "branch", "feat/foo", label="main branch")
-        artifacts = self.s.story_artifacts(self.story)
+        self.s.add_artifact(self.item, "branch", "feat/foo", label="main branch")
+        artifacts = self.s.item_artifacts(self.item)
         self.assertEqual(artifacts[0].label, "main branch")
 
     def test_task_view_inherits_story_artifacts(self):
-        self.s.add_artifact(self.story, "branch", "feat/foo")
-        view = self.s.task_view(self.task)
-        self.assertTrue(any(a.type == "branch" for a in view.story_artifacts))
+        self.s.add_artifact(self.item, "branch", "feat/foo")
+        view = self.s.node_view(self.step)
+        self.assertTrue(any(a.type == "branch" for a in view.item_artifacts))
 
     def test_task_view_without_parent_uses_own_artifacts(self):
-        orphan = self.s.create_task("build: orphan")
-        view = self.s.task_view(orphan)
-        self.assertEqual(view.story_artifacts, [])
+        orphan = self.s.create_step("build: orphan")
+        view = self.s.node_view(orphan)
+        self.assertEqual(view.item_artifacts, [])
 
 
 class TestReady(unittest.TestCase):
@@ -137,67 +137,67 @@ class TestReady(unittest.TestCase):
         self.s = FakeStore()
 
     def test_task_without_deps_is_ready(self):
-        tid = self.s.create_task("build: thing", role="coder")
-        ready = self.s.ready_tasks()
+        tid = self.s.create_step("build: thing", role="coder")
+        ready = self.s.ready_steps()
         self.assertEqual(len(ready), 1)
         self.assertEqual(ready[0].id, tid)
 
     def test_task_with_open_dep_is_not_ready(self):
-        blocker = self.s.create_task("build: dep", role="coder")
-        blocked = self.s.create_task("build: thing", role="coder")
+        blocker = self.s.create_step("build: dep", role="coder")
+        blocked = self.s.create_step("build: thing", role="coder")
         self.s.dep_add(blocked, blocker)
-        ready_ids = [t.id for t in self.s.ready_tasks()]
+        ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertIn(blocker, ready_ids)
         self.assertNotIn(blocked, ready_ids)
 
     def test_closing_dep_makes_task_ready(self):
-        blocker = self.s.create_task("build: dep", role="coder")
-        blocked = self.s.create_task("build: thing", role="coder")
+        blocker = self.s.create_step("build: dep", role="coder")
+        blocked = self.s.create_step("build: thing", role="coder")
         self.s.dep_add(blocked, blocker)
         self.s.close(blocker, "done")
-        ready_ids = [t.id for t in self.s.ready_tasks()]
+        ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
     def test_task_with_two_deps_needs_both_closed(self):
-        dep1 = self.s.create_task("build: dep1", role="coder")
-        dep2 = self.s.create_task("build: dep2", role="coder")
-        blocked = self.s.create_task("build: thing", role="coder")
+        dep1 = self.s.create_step("build: dep1", role="coder")
+        dep2 = self.s.create_step("build: dep2", role="coder")
+        blocked = self.s.create_step("build: thing", role="coder")
         self.s.dep_add(blocked, dep1)
         self.s.dep_add(blocked, dep2)
         self.s.close(dep1, "done")
-        ready_ids = [t.id for t in self.s.ready_tasks()]
+        ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertNotIn(blocked, ready_ids)
         self.s.close(dep2, "done")
-        ready_ids = [t.id for t in self.s.ready_tasks()]
+        ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
     def test_claimed_task_not_in_ready(self):
-        tid = self.s.create_task("build: thing", role="coder")
+        tid = self.s.create_step("build: thing", role="coder")
         self.s.assign(tid, "worker-1")
-        self.assertEqual(self.s.ready_tasks(), [])
+        self.assertEqual(self.s.ready_steps(), [])
 
     def test_closed_task_not_in_ready(self):
-        tid = self.s.create_task("build: thing", role="coder")
+        tid = self.s.create_step("build: thing", role="coder")
         self.s.close(tid, "done")
-        self.assertEqual(self.s.ready_tasks(), [])
+        self.assertEqual(self.s.ready_steps(), [])
 
     def test_stories_excluded_from_ready(self):
-        self.s.create_story("story: foo", epic=self.s.create_epic("epic"))
-        self.assertEqual(self.s.ready_tasks(), [])
+        self.s.create_item("item: foo", theme=self.s.create_theme("theme"))
+        self.assertEqual(self.s.ready_steps(), [])
 
     def test_claim_ready_assigns_and_returns(self):
-        tid = self.s.create_task("build: thing", role="coder")
+        tid = self.s.create_step("build: thing", role="coder")
         result = self.s.claim_ready("coder")
         self.assertEqual(result.id, tid)
         self.assertEqual(result.status, "in-progress")
 
     def test_claim_ready_task_no_longer_in_ready(self):
-        self.s.create_task("build: thing", role="coder")
+        self.s.create_step("build: thing", role="coder")
         self.s.claim_ready("coder")
-        self.assertEqual(self.s.ready_tasks(), [])
+        self.assertEqual(self.s.ready_steps(), [])
 
     def test_claim_ready_wrong_role_returns_none(self):
-        self.s.create_task("build: thing", role="reviewer")
+        self.s.create_step("build: thing", role="reviewer")
         self.assertIsNone(self.s.claim_ready("coder"))
 
     def test_claim_ready_no_tasks_returns_none(self):
@@ -207,69 +207,69 @@ class TestReady(unittest.TestCase):
 class TestMetadata(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_task("build: thing")
+        self.tid = self.s.create_step("build: thing")
 
     def test_update_metadata_roundtrip(self):
         self.s.update_metadata(self.tid, {"needs": "a spec"})
-        task = self.s.get_task(self.tid)
-        self.assertEqual(task.needs, "a spec")
+        step = self.s.get_node(self.tid)
+        self.assertEqual(step.needs, "a spec")
 
     def test_update_metadata_replaces(self):
         self.s.update_metadata(self.tid, {"needs": "old"})
         self.s.update_metadata(self.tid, {"artifacts": [{"type": "spec", "value": "s.md"}]})
-        task = self.s.get_task(self.tid)
-        self.assertIsNone(task.needs)
-        self.assertEqual(len(task.artifacts), 1)
+        step = self.s.get_node(self.tid)
+        self.assertIsNone(step.needs)
+        self.assertEqual(len(step.artifacts), 1)
 
 
-class TestListTasks(unittest.TestCase):
+class TestListNodes(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
 
     def test_claimed_tasks_are_in_progress_with_claimer(self):
-        claimed = self.s.create_task("build: a", role="coder")
-        self.s.create_task("build: b", role="coder")
+        claimed = self.s.create_step("build: a", role="coder")
+        self.s.create_step("build: b", role="coder")
         self.s.update_status(claimed, "in_progress")
         self.s.assign(claimed, "sp-1")
-        got = self.s.claimed_tasks()
+        got = self.s.claimed_steps()
         self.assertEqual([t.id for t in got], [claimed])
         self.assertEqual(got[0].claimed_by, "sp-1")
 
     def test_closed_stories_roundtrip(self):
-        sid = self.s.create_story("story: foo", epic=self.s.create_epic("epic"))
+        sid = self.s.create_item("item: foo", theme=self.s.create_theme("theme"))
         self.s.add_artifact(sid, "spec", "specs/foo.md")
         self.s.close(sid, "done")
-        stories = self.s.closed_stories()
-        self.assertEqual(len(stories), 1)
-        self.assertEqual(stories[0]["id"], sid)
-        self.assertEqual(stories[0]["outcome"], "done")
-        self.assertEqual(len(stories[0]["artifacts"]), 1)
+        items = self.s.closed_items()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], sid)
+        self.assertEqual(items[0]["outcome"], "done")
+        self.assertEqual(len(items[0]["artifacts"]), 1)
 
     def test_closed_stories_excludes_tasks(self):
-        tid = self.s.create_task("build: thing")
+        tid = self.s.create_step("build: thing")
         self.s.close(tid, "done")
-        self.assertEqual(self.s.closed_stories(), [])
+        self.assertEqual(self.s.closed_items(), [])
 
     def test_closed_stories_excludes_open_stories(self):
-        self.s.create_story("story: open", epic=self.s.create_epic("epic"))
-        self.assertEqual(self.s.closed_stories(), [])
+        self.s.create_item("item: open", theme=self.s.create_theme("theme"))
+        self.assertEqual(self.s.closed_items(), [])
 
 
 class TestRouteToHuman(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_task("build: thing", step="build", role="coder")
+        self.tid = self.s.create_step("build: thing", step="build", role="coder")
 
     def test_routes_to_human(self):
         self.s.route_to_human(self.tid, "needs review")
-        task = self.s.get_task(self.tid)
-        self.assertEqual(task.role, "human")
-        self.assertEqual(task.status, "needs-human")
+        step = self.s.get_node(self.tid)
+        self.assertEqual(step.role, "human")
+        self.assertEqual(step.status, "needs-human")
         self.assertIsNone(self.s._records[self.tid]["assignee"])
 
     def test_route_adds_note(self):
         self.s.route_to_human(self.tid, "needs review")
-        self.assertIn("needs review", self.s.get_task(self.tid).notes)
+        self.assertIn("needs review", self.s.get_node(self.tid).notes)
 
     def test_route_removes_old_for_label(self):
         self.s.route_to_human(self.tid, "blocked")
@@ -283,7 +283,7 @@ class TestNoSubprocess(unittest.TestCase):
         from tests.support.fake_store import FakeStore as FS
 
         s = FS()
-        tid = s.create_task("build: thing", role="coder")
+        tid = s.create_step("build: thing", role="coder")
         s.note(tid, "hello")
         s.close(tid, "done")
 

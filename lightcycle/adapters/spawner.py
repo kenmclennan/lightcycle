@@ -42,7 +42,7 @@ def spawn_worker(config, role):
             "role": role,
             "pid": proc.pid,
             "log": log,
-            "task": None,
+            "step": None,
             "started": time.time(),
         },
     )

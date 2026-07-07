@@ -28,26 +28,26 @@ class TestProjectShortcode(unittest.TestCase):
     def test_epic_id_uses_the_projects_shortcode(self):
         config, projects = _config()
         _project(projects, "horde", "shortcode: HORDE\n")
-        eid = SqliteStore(config).create_epic("x", project="horde")
+        eid = SqliteStore(config).create_theme("x", project="horde")
         self.assertTrue(eid.startswith("HORDE-"), eid)
 
     def test_epic_without_project_config_uses_global_shortcode(self):
         config, projects = _config()
-        eid = SqliteStore(config).create_epic("y", project="plain")
+        eid = SqliteStore(config).create_theme("y", project="plain")
         self.assertTrue(eid.startswith("tg-"), eid)
 
     def test_no_project_uses_global_shortcode(self):
         config, _ = _config()
-        eid = SqliteStore(config).create_epic("z")
+        eid = SqliteStore(config).create_theme("z")
         self.assertTrue(eid.startswith("tg-"), eid)
 
     def test_stories_nest_under_the_epic_id(self):
         config, projects = _config()
         _project(projects, "horde", "shortcode: HORDE\n")
         store = SqliteStore(config)
-        epic = store.create_epic("x", project="horde")
-        story = store.create_story("s", epic=epic)
-        self.assertTrue(story.startswith(epic + "."), story)
+        theme = store.create_theme("x", project="horde")
+        item = store.create_item("s", theme=theme)
+        self.assertTrue(item.startswith(theme + "."), item)
 
 
 class TestProjectDefaultWorkflow(unittest.TestCase):

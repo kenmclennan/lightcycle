@@ -2,13 +2,13 @@ import datetime
 import os
 import sqlite3
 
-from lightcycle.domain.work import Artifact, Status, Task, TaskView
+from lightcycle.domain.work import Artifact, Status, Node, NodeView
 from lightcycle.ports.store import StorePort
 
 _DB_FILENAME = "store.db"
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS tasks (
+CREATE TABLE IF NOT EXISTS nodes (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
@@ -27,31 +27,31 @@ CREATE TABLE IF NOT EXISTS tasks (
     closed_at TEXT,
     created_at TEXT,
     attention INTEGER NOT NULL DEFAULT 0,
-    epic TEXT,
+    theme TEXT,
     needs TEXT,
     model TEXT,
     workflow TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent);
+CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
+CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent);
 
 CREATE TABLE IF NOT EXISTS deps (
-    task_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
     blocked_by TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_deps_task_id ON deps(task_id);
+CREATE INDEX IF NOT EXISTS idx_deps_task_id ON deps(node_id);
 
 CREATE TABLE IF NOT EXISTS artifacts (
-    story_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
     atype TEXT NOT NULL,
     value TEXT NOT NULL,
     label TEXT
 );
 
 CREATE TABLE IF NOT EXISTS labels (
-    task_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
     label TEXT NOT NULL
 );
 
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS counters (
 );
 
 CREATE TABLE IF NOT EXISTS history (
-    task_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
     seq INTEGER NOT NULL,
     status TEXT NOT NULL,
     ts TEXT
@@ -71,10 +71,10 @@ CREATE TABLE IF NOT EXISTS history (
 _COLUMNS = (
     "id", "type", "title", "status", "step", "role", "parent", "project", "goal",
     "description", "notes", "close_reason", "assignee", "since", "fired_at",
-    "closed_at", "attention", "epic", "needs", "model", "workflow",
+    "closed_at", "attention", "theme", "needs", "model", "workflow",
 )
 
-_METADATA_COLUMNS = ("epic", "needs", "since", "fired_at", "workflow")
+_METADATA_COLUMNS = ("theme", "needs", "since", "fired_at", "workflow")
 
 _LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
 
@@ -100,7 +100,7 @@ class SqliteStore(StorePort):
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
         self._migrate_history_ts()
-        self._migrate_tasks_workflow()
+        self._migrate_nodes_workflow()
         self._conn.commit()
 
     def _migrate_history_ts(self):
@@ -108,14 +108,14 @@ class SqliteStore(StorePort):
         if "ts" not in cols:
             self._conn.execute("ALTER TABLE history ADD COLUMN ts TEXT")
 
-    def _migrate_tasks_workflow(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(tasks)").fetchall()}
+    def _migrate_nodes_workflow(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
         if "workflow" not in cols:
-            self._conn.execute("ALTER TABLE tasks ADD COLUMN workflow TEXT")
+            self._conn.execute("ALTER TABLE nodes ADD COLUMN workflow TEXT")
 
-    def _row_to_task(self, row, artifacts, deps):
+    def _row_to_node(self, row, artifacts, deps):
         d = dict(zip(_COLUMNS, row))
-        return Task(
+        return Node(
             id=d["id"],
             title=d["title"],
             type=d["type"],
@@ -132,7 +132,7 @@ class SqliteStore(StorePort):
             deps=deps,
             notes=d["notes"],
             claimed_by=d["assignee"],
-            epic=d["epic"],
+            theme=d["theme"],
             since=d["since"],
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
@@ -141,44 +141,44 @@ class SqliteStore(StorePort):
             workflow=d["workflow"],
         )
 
-    def _rows_to_tasks(self, rows):
+    def _rows_to_nodes(self, rows):
         if not rows:
             return []
         ids = [r[0] for r in rows]
         placeholders = ", ".join("?" * len(ids))
 
         artifacts_by_id = {}
-        for story_id, atype, value, label in self._conn.execute(
-            "SELECT story_id, atype, value, label FROM artifacts "
-            "WHERE story_id IN (%s) ORDER BY rowid" % placeholders,
+        for item_id, atype, value, label in self._conn.execute(
+            "SELECT item_id, atype, value, label FROM artifacts "
+            "WHERE item_id IN (%s) ORDER BY rowid" % placeholders,
             ids,
         ).fetchall():
-            artifacts_by_id.setdefault(story_id, []).append(
+            artifacts_by_id.setdefault(item_id, []).append(
                 Artifact(type=atype, value=value, label=label)
             )
 
         deps_by_id = dict(
             self._conn.execute(
-                "SELECT d.task_id, COUNT(*) FROM deps d JOIN tasks t ON t.id = d.blocked_by "
-                "WHERE t.status != 'closed' AND d.task_id IN (%s) GROUP BY d.task_id"
+                "SELECT d.node_id, COUNT(*) FROM deps d JOIN nodes t ON t.id = d.blocked_by "
+                "WHERE t.status != 'closed' AND d.node_id IN (%s) GROUP BY d.node_id"
                 % placeholders,
                 ids,
             ).fetchall()
         )
 
         return [
-            self._row_to_task(row, artifacts_by_id.get(row[0], []), deps_by_id.get(row[0], 0))
+            self._row_to_node(row, artifacts_by_id.get(row[0], []), deps_by_id.get(row[0], 0))
             for row in rows
         ]
 
     def _select(self, where, params=(), suffix=""):
-        sql = "SELECT %s FROM tasks" % ", ".join(_COLUMNS)
+        sql = "SELECT %s FROM nodes" % ", ".join(_COLUMNS)
         if where:
             sql += " WHERE " + where
         if suffix:
             sql += " " + suffix
         rows = self._conn.execute(sql, params).fetchall()
-        return self._rows_to_tasks(rows)
+        return self._rows_to_nodes(rows)
 
     def _mint_id(self, parent, shortcode=None):
         prefix = shortcode or self.shortcode()
@@ -200,7 +200,7 @@ class SqliteStore(StorePort):
         if explicit_id is None:
             return self._mint_id(parent, shortcode)
         exists = self._conn.execute(
-            "SELECT 1 FROM tasks WHERE id = ?", (explicit_id,)
+            "SELECT 1 FROM nodes WHERE id = ?", (explicit_id,)
         ).fetchone()
         if exists:
             raise ValueError("id already in use: %s" % explicit_id)
@@ -209,63 +209,63 @@ class SqliteStore(StorePort):
     def _apply_label(self, tid, label, value):
         if label == "attention":
             self._conn.execute(
-                "UPDATE tasks SET attention = ? WHERE id = ?", (1 if value else 0, tid)
+                "UPDATE nodes SET attention = ? WHERE id = ?", (1 if value else 0, tid)
             )
             return True
         prefix, sep, val = label.partition(":")
         column = _LABEL_COLUMNS.get(prefix) if sep else None
         if column:
             self._conn.execute(
-                "UPDATE tasks SET %s = ? WHERE id = ?" % column, (val if value else None, tid)
+                "UPDATE nodes SET %s = ? WHERE id = ?" % column, (val if value else None, tid)
             )
             return True
         return False
 
     def _record_history(self, tid, status):
         row = self._conn.execute(
-            "SELECT COALESCE(MAX(seq), -1) FROM history WHERE task_id = ?", (tid,)
+            "SELECT COALESCE(MAX(seq), -1) FROM history WHERE node_id = ?", (tid,)
         ).fetchone()
         self._conn.execute(
-            "INSERT INTO history (task_id, seq, status, ts) VALUES (?, ?, ?, ?)",
+            "INSERT INTO history (node_id, seq, status, ts) VALUES (?, ?, ?, ?)",
             (tid, row[0] + 1, str(status), self._now()),
         )
 
-    def story_artifacts(self, story_id):
+    def item_artifacts(self, item_id):
         rows = self._conn.execute(
-            "SELECT atype, value, label FROM artifacts WHERE story_id = ? ORDER BY rowid",
-            (story_id,),
+            "SELECT atype, value, label FROM artifacts WHERE item_id = ? ORDER BY rowid",
+            (item_id,),
         ).fetchall()
         return [Artifact(type=r[0], value=r[1], label=r[2]) for r in rows]
 
-    def add_artifact(self, story_id, atype, value, label=None):
+    def add_artifact(self, item_id, atype, value, label=None):
         self._conn.execute(
-            "INSERT INTO artifacts (story_id, atype, value, label) VALUES (?, ?, ?, ?)",
-            (story_id, atype, value, label),
+            "INSERT INTO artifacts (item_id, atype, value, label) VALUES (?, ?, ?, ?)",
+            (item_id, atype, value, label),
         )
         self._conn.commit()
 
-    def all_tasks(self):
+    def all_nodes(self):
         return self._select("status != 'closed'")
 
-    def get_task(self, tid):
+    def get_node(self, tid):
         row = self._conn.execute(
-            "SELECT %s FROM tasks WHERE id = ?" % ", ".join(_COLUMNS), (tid,)
+            "SELECT %s FROM nodes WHERE id = ?" % ", ".join(_COLUMNS), (tid,)
         ).fetchone()
         if row is None:
-            raise KeyError("task not found: %s" % tid)
-        return self._rows_to_tasks([row])[0]
+            raise KeyError("step not found: %s" % tid)
+        return self._rows_to_nodes([row])[0]
 
-    def task_view(self, tid):
-        t = self.get_task(tid)
-        arts = self.story_artifacts(t.parent) if t.parent else t.artifacts
-        return TaskView(task=t, story_artifacts=list(arts))
+    def node_view(self, tid):
+        t = self.get_node(tid)
+        arts = self.item_artifacts(t.parent) if t.parent else t.artifacts
+        return NodeView(step=t, item_artifacts=list(arts))
 
-    def present_types(self, task):
-        story = task.parent or task.id
-        return {a.type for a in self.story_artifacts(story)}
+    def present_types(self, step):
+        item = step.parent or step.id
+        return {a.type for a in self.item_artifacts(item)}
 
     def reassign(self, tid, role):
-        cur = self.get_task(tid).role
+        cur = self.get_node(tid).role
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
@@ -276,10 +276,10 @@ class SqliteStore(StorePort):
         self.note(tid, note)
         self.reassign(tid, "human")
 
-    def closed_stories(self):
+    def closed_items(self):
         rows = self._conn.execute(
-            "SELECT id, title, closed_at, close_reason FROM tasks "
-            "WHERE type = 'story' AND status = 'closed'"
+            "SELECT id, title, closed_at, close_reason FROM nodes "
+            "WHERE type = 'item' AND status = 'closed'"
         ).fetchall()
         return [
             {
@@ -287,7 +287,7 @@ class SqliteStore(StorePort):
                 "title": r[1],
                 "closed_at": r[2],
                 "outcome": r[3],
-                "artifacts": self.story_artifacts(r[0]),
+                "artifacts": self.item_artifacts(r[0]),
             }
             for r in rows
         ]
@@ -298,21 +298,21 @@ class SqliteStore(StorePort):
     def export_rows(self):
         export_columns = _COLUMNS + ("created_at",)
         rows = self._conn.execute(
-            "SELECT %s FROM tasks ORDER BY rowid" % ", ".join(export_columns)
+            "SELECT %s FROM nodes ORDER BY rowid" % ", ".join(export_columns)
         ).fetchall()
         result = []
         for row in rows:
             d = dict(zip(export_columns, row))
             tid = d["id"]
-            artifacts = self.story_artifacts(tid)
+            artifacts = self.item_artifacts(tid)
             blocked_by = [
                 r[0] for r in self._conn.execute(
-                    "SELECT blocked_by FROM deps WHERE task_id = ?", (tid,)
+                    "SELECT blocked_by FROM deps WHERE node_id = ?", (tid,)
                 ).fetchall()
             ]
             labels = [
                 r[0] for r in self._conn.execute(
-                    "SELECT label FROM labels WHERE task_id = ?", (tid,)
+                    "SELECT label FROM labels WHERE node_id = ?", (tid,)
                 ).fetchall()
             ]
             result.append({
@@ -320,7 +320,7 @@ class SqliteStore(StorePort):
                 "parent": d["parent"], "role": d["role"], "step": d["step"],
                 "project": d["project"], "goal": d["goal"], "attention": bool(d["attention"]),
                 "description": d["description"], "notes": d["notes"],
-                "close_reason": d["close_reason"], "assignee": d["assignee"], "epic": d["epic"],
+                "close_reason": d["close_reason"], "assignee": d["assignee"], "theme": d["theme"],
                 "needs": d["needs"], "artifacts": [a.as_dict() for a in artifacts],
                 "blocked_by": blocked_by, "labels": labels, "since": d["since"],
                 "fired_at": d["fired_at"], "closed_at": d["closed_at"],
@@ -336,23 +336,23 @@ class SqliteStore(StorePort):
         self.assign(tid, "")
 
     def note(self, tid, text):
-        row = self._conn.execute("SELECT notes FROM tasks WHERE id = ?", (tid,)).fetchone()
+        row = self._conn.execute("SELECT notes FROM nodes WHERE id = ?", (tid,)).fetchone()
         if row is None:
-            raise KeyError("task not found: %s" % tid)
+            raise KeyError("step not found: %s" % tid)
         combined = (row[0] + "\n" + text) if row[0] else text
-        self._conn.execute("UPDATE tasks SET notes = ? WHERE id = ?", (combined, tid))
+        self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (combined, tid))
         self._conn.commit()
 
     def set_notes(self, tid, text):
-        row = self._conn.execute("SELECT 1 FROM tasks WHERE id = ?", (tid,)).fetchone()
+        row = self._conn.execute("SELECT 1 FROM nodes WHERE id = ?", (tid,)).fetchone()
         if row is None:
-            raise KeyError("task not found: %s" % tid)
-        self._conn.execute("UPDATE tasks SET notes = ? WHERE id = ?", (text or None, tid))
+            raise KeyError("step not found: %s" % tid)
+        self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (text or None, tid))
         self._conn.commit()
 
     def close(self, tid, reason):
         self._conn.execute(
-            "UPDATE tasks SET status = 'closed', close_reason = ?, closed_at = ? WHERE id = ?",
+            "UPDATE nodes SET status = 'closed', close_reason = ?, closed_at = ? WHERE id = ?",
             (reason, datetime.datetime.now().isoformat(), tid),
         )
         self._record_history(tid, Status.DONE)
@@ -364,67 +364,67 @@ class SqliteStore(StorePort):
             return
         set_clause = ", ".join("%s = ?" % k for k in updates)
         self._conn.execute(
-            "UPDATE tasks SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
+            "UPDATE nodes SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
         )
         self._conn.commit()
 
     def set_model(self, tid, model):
-        self._conn.execute("UPDATE tasks SET model = ? WHERE id = ?", (model, tid))
+        self._conn.execute("UPDATE nodes SET model = ? WHERE id = ?", (model, tid))
         self._conn.commit()
 
     def label_add(self, tid, label):
         if not self._apply_label(tid, label, True):
             exists = self._conn.execute(
-                "SELECT 1 FROM labels WHERE task_id = ? AND label = ?", (tid, label)
+                "SELECT 1 FROM labels WHERE node_id = ? AND label = ?", (tid, label)
             ).fetchone()
             if not exists:
                 self._conn.execute(
-                    "INSERT INTO labels (task_id, label) VALUES (?, ?)", (tid, label)
+                    "INSERT INTO labels (node_id, label) VALUES (?, ?)", (tid, label)
                 )
         self._conn.commit()
 
     def label_remove(self, tid, label):
         if not self._apply_label(tid, label, False):
             self._conn.execute(
-                "DELETE FROM labels WHERE task_id = ? AND label = ?", (tid, label)
+                "DELETE FROM labels WHERE node_id = ? AND label = ?", (tid, label)
             )
         self._conn.commit()
 
     def update_status(self, tid, status):
-        self._conn.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, tid))
+        self._conn.execute("UPDATE nodes SET status = ? WHERE id = ?", (status, tid))
         self._record_history(tid, status)
         self._conn.commit()
 
     def assign(self, tid, assignee):
         self._conn.execute(
-            "UPDATE tasks SET assignee = ? WHERE id = ?", (assignee or None, tid)
+            "UPDATE nodes SET assignee = ? WHERE id = ?", (assignee or None, tid)
         )
         self._conn.commit()
 
-    def dep_add(self, task_id, blocked_by):
+    def dep_add(self, node_id, blocked_by):
         exists = self._conn.execute(
-            "SELECT 1 FROM deps WHERE task_id = ? AND blocked_by = ?", (task_id, blocked_by)
+            "SELECT 1 FROM deps WHERE node_id = ? AND blocked_by = ?", (node_id, blocked_by)
         ).fetchone()
         if not exists:
             self._conn.execute(
-                "INSERT INTO deps (task_id, blocked_by) VALUES (?, ?)", (task_id, blocked_by)
+                "INSERT INTO deps (node_id, blocked_by) VALUES (?, ?)", (node_id, blocked_by)
             )
             self._conn.commit()
 
-    def ready_tasks(self):
+    def ready_steps(self):
         return self._select(
-            "type = 'task' AND status = 'open' AND assignee IS NULL AND NOT EXISTS ("
-            "  SELECT 1 FROM deps d JOIN tasks b ON b.id = d.blocked_by "
-            "  WHERE d.task_id = tasks.id AND b.status != 'closed'"
+            "type = 'step' AND status = 'open' AND assignee IS NULL AND NOT EXISTS ("
+            "  SELECT 1 FROM deps d JOIN nodes b ON b.id = d.blocked_by "
+            "  WHERE d.node_id = nodes.id AND b.status != 'closed'"
             ")"
         )
 
     def claim_ready(self, role):
         row = self._conn.execute(
-            "SELECT id FROM tasks WHERE type = 'task' AND status = 'open' "
+            "SELECT id FROM nodes WHERE type = 'step' AND status = 'open' "
             "AND assignee IS NULL AND role = ? AND NOT EXISTS ("
-            "  SELECT 1 FROM deps d JOIN tasks b ON b.id = d.blocked_by "
-            "  WHERE d.task_id = tasks.id AND b.status != 'closed'"
+            "  SELECT 1 FROM deps d JOIN nodes b ON b.id = d.blocked_by "
+            "  WHERE d.node_id = nodes.id AND b.status != 'closed'"
             ") LIMIT 1",
             (role,),
         ).fetchone()
@@ -433,18 +433,18 @@ class SqliteStore(StorePort):
         tid = row[0]
         assignee = self._config.spawn_id() or role
         self._conn.execute(
-            "UPDATE tasks SET assignee = ?, status = 'in_progress' WHERE id = ?", (assignee, tid)
+            "UPDATE nodes SET assignee = ?, status = 'in_progress' WHERE id = ?", (assignee, tid)
         )
         self._record_history(tid, Status.IN_PROGRESS)
         self._conn.commit()
-        return self.get_task(tid)
+        return self.get_node(tid)
 
-    def create_task(self, title, *, step=None, role=None, parent=None, deps=None,
+    def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False, id=None):
         tid = self._mint_or_adopt(id, parent)
         self._conn.execute(
-            "INSERT INTO tasks (id, type, title, status, step, role, parent, project, goal, "
-            "description, attention, created_at) VALUES (?, 'task', ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO nodes (id, type, title, status, step, role, parent, project, goal, "
+            "description, attention, created_at) VALUES (?, 'step', ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)",
             (tid, title, step, role, parent, project, goal, description,
              1 if attention else 0, datetime.datetime.now().isoformat()),
         )
@@ -454,7 +454,7 @@ class SqliteStore(StorePort):
                 self.dep_add(tid, dep)
         return tid
 
-    def edit_task(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
+    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
         updates = {}
         if title is not None:
             updates["title"] = title
@@ -470,72 +470,72 @@ class SqliteStore(StorePort):
             return
         set_clause = ", ".join("%s = ?" % k for k in updates)
         self._conn.execute(
-            "UPDATE tasks SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
+            "UPDATE nodes SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
         )
         self._conn.commit()
 
-    def create_story(self, title, *, epic=None, project=None, goal=None, workflow=None, id=None):
-        if not epic:
-            raise ValueError("story requires an epic parent")
-        tid = self._mint_or_adopt(id, epic)
+    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
+        if not theme:
+            raise ValueError("item requires a theme parent")
+        tid = self._mint_or_adopt(id, theme)
         self._conn.execute(
-            "INSERT INTO tasks (id, type, title, status, parent, project, goal, workflow, "
-            "created_at) VALUES (?, 'story', ?, 'open', ?, ?, ?, ?, ?)",
-            (tid, title, epic, project, goal, workflow, datetime.datetime.now().isoformat()),
+            "INSERT INTO nodes (id, type, title, status, parent, project, goal, workflow, "
+            "created_at) VALUES (?, 'item', ?, 'open', ?, ?, ?, ?, ?)",
+            (tid, title, theme, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
         return tid
 
-    def create_epic(self, title, *, project=None, goal=None, workflow=None, id=None):
+    def create_theme(self, title, *, project=None, goal=None, workflow=None, id=None):
         tid = self._mint_or_adopt(id, None, shortcode=self._config.shortcode_for(project))
         self._conn.execute(
-            "INSERT INTO tasks (id, type, title, status, project, goal, workflow, created_at) "
-            "VALUES (?, 'epic', ?, 'open', ?, ?, ?, ?)",
+            "INSERT INTO nodes (id, type, title, status, project, goal, workflow, created_at) "
+            "VALUES (?, 'theme', ?, 'open', ?, ?, ?, ?)",
             (tid, title, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
         return tid
 
-    def children(self, story_id):
-        return self._select("parent = ?", (story_id,))
+    def children(self, item_id):
+        return self._select("parent = ?", (item_id,))
 
-    def claimed_tasks(self):
+    def claimed_steps(self):
         return self._select("status = 'in_progress'")
 
     def history(self, tid):
         rows = self._conn.execute(
-            "SELECT status, ts FROM history WHERE task_id = ? ORDER BY seq ASC", (tid,)
+            "SELECT status, ts FROM history WHERE node_id = ? ORDER BY seq ASC", (tid,)
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
-    def tasks_closed_since(self, since_date):
+    def nodes_closed_since(self, since_date):
         return self._select(
-            "type = 'task' AND status = 'closed' AND substr(closed_at, 1, 10) >= ?",
+            "type = 'step' AND status = 'closed' AND substr(closed_at, 1, 10) >= ?",
             (since_date,),
         )
 
     def last_n_closed_epics(self, n):
         return self._select(
-            "type = 'epic' AND status = 'closed'",
+            "type = 'theme' AND status = 'closed'",
             params=(n,),
             suffix="ORDER BY closed_at DESC LIMIT ?",
         )
 
-    def epics_closed_since(self, since_date_str):
+    def themes_closed_since(self, since_date_str):
         return self._select(
-            "type = 'epic' AND status = 'closed' "
+            "type = 'theme' AND status = 'closed' "
             "AND substr(closed_at, 1, 10) >= ? "
-            "AND id NOT IN (SELECT task_id FROM labels WHERE label = 'retro-origin')",
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin')",
             (since_date_str,),
         )
 
-    def tasks_at_step(self, step):
-        return self._select("type = 'task' AND step = ?", (step,))
+    def steps_at_step(self, step):
+        return self._select("type = 'step' AND step = ?", (step,))
 
     def delete(self, tid):
-        self._conn.execute("DELETE FROM tasks WHERE id = ?", (tid,))
-        self._conn.execute("DELETE FROM deps WHERE task_id = ? OR blocked_by = ?", (tid, tid))
-        self._conn.execute("DELETE FROM artifacts WHERE story_id = ?", (tid,))
-        self._conn.execute("DELETE FROM labels WHERE task_id = ?", (tid,))
-        self._conn.execute("DELETE FROM history WHERE task_id = ?", (tid,))
+        self._conn.execute("DELETE FROM nodes WHERE id = ?", (tid,))
+        self._conn.execute("DELETE FROM deps WHERE node_id = ? OR blocked_by = ?", (tid, tid))
+        self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))
+        self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))
+        self._conn.execute("DELETE FROM history WHERE node_id = ?", (tid,))
         self._conn.commit()

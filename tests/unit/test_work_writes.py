@@ -3,16 +3,16 @@ import unittest
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work import (
-    AddTaskInput,
-    AddTaskUseCase,
-    CloseEpicInput,
-    CloseEpicUseCase,
-    CloseStoryInput,
-    CloseStoryUseCase,
-    EditTaskInput,
-    EditTaskUseCase,
-    FileStoryInput,
-    FileStoryUseCase,
+    AddItemInput,
+    AddItemUseCase,
+    CloseThemeInput,
+    CloseThemeUseCase,
+    CloseItemInput,
+    CloseItemUseCase,
+    EditNodeInput,
+    EditNodeUseCase,
+    FileItemInput,
+    FileItemUseCase,
     LinkArtifactInput,
     LinkArtifactUseCase,
 )
@@ -28,9 +28,9 @@ def _epic_flow(store):
     return FlowService(FakeFs(), store)
 
 
-def _add_reflection(store, task_id, feedback):
+def _add_reflection(store, node_id, feedback):
     store.add_artifact(
-        task_id, "reflection", json.dumps({"task": task_id, "feedback": feedback, "spec_hash": "h"})
+        node_id, "reflection", json.dumps({"step": node_id, "feedback": feedback, "spec_hash": "h"})
     )
 
 
@@ -75,56 +75,56 @@ class FakeWorktrees:
     def __init__(self):
         self.removed = []
 
-    def remove(self, story):
-        self.removed.append(story)
+    def remove(self, item):
+        self.removed.append(item)
 
 
 class TestAddTask(unittest.TestCase):
     def test_creates_human_task_with_labels(self):
         s = FakeStore()
-        resp = AddTaskUseCase(s).execute(AddTaskInput(title="do a thing", goal="g1", project="p1"))
-        t = s.get_task(resp.task)
+        resp = AddItemUseCase(s).execute(AddItemInput(title="do a thing", goal="g1", project="p1"))
+        t = s.get_node(resp.step)
         self.assertEqual(t.status, "needs-human")
         self.assertEqual(t.goal, "g1")
         self.assertEqual(t.project, "p1")
 
     def test_creates_task_with_description(self):
         s = FakeStore()
-        resp = AddTaskUseCase(s).execute(
-            AddTaskInput(title="my task", description="detailed notes")
+        resp = AddItemUseCase(s).execute(
+            AddItemInput(title="my step", description="detailed notes")
         )
-        t = s.get_task(resp.task)
+        t = s.get_node(resp.step)
         self.assertEqual(t.description, "detailed notes")
 
     def test_creates_task_without_description(self):
         s = FakeStore()
-        resp = AddTaskUseCase(s).execute(AddTaskInput(title="plain task"))
-        t = s.get_task(resp.task)
+        resp = AddItemUseCase(s).execute(AddItemInput(title="plain step"))
+        t = s.get_node(resp.step)
         self.assertIsNone(t.description)
 
 
-class TestEditTask(unittest.TestCase):
+class TestEditNode(unittest.TestCase):
     def test_edits_title_and_description(self):
         s = FakeStore()
-        tid = s.create_task("old title", role="human", description="old")
-        EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="new title", description="new"))
-        t = s.get_task(tid)
+        tid = s.create_step("old title", role="human", description="old")
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title", description="new"))
+        t = s.get_node(tid)
         self.assertEqual(t.title, "new title")
         self.assertEqual(t.description, "new")
 
     def test_edits_goal_and_project(self):
         s = FakeStore()
-        tid = s.create_task("t", role="human", goal="g1", project="p1")
-        EditTaskUseCase(s).execute(EditTaskInput(task=tid, goal="g2", project="p2"))
-        t = s.get_task(tid)
+        tid = s.create_step("t", role="human", goal="g1", project="p1")
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, goal="g2", project="p2"))
+        t = s.get_node(tid)
         self.assertEqual(t.goal, "g2")
         self.assertEqual(t.project, "p2")
 
     def test_unspecified_fields_unchanged(self):
         s = FakeStore()
-        tid = s.create_task("keep title", role="human", description="keep desc", goal="g1")
-        EditTaskUseCase(s).execute(EditTaskInput(task=tid, project="p1"))
-        t = s.get_task(tid)
+        tid = s.create_step("keep title", role="human", description="keep desc", goal="g1")
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, project="p1"))
+        t = s.get_node(tid)
         self.assertEqual(t.title, "keep title")
         self.assertEqual(t.description, "keep desc")
         self.assertEqual(t.goal, "g1")
@@ -132,137 +132,137 @@ class TestEditTask(unittest.TestCase):
 
     def test_edits_parent_alone(self):
         s = FakeStore()
-        epic = s.create_epic("my epic")
-        tid = s.create_task("a task", role="human")
-        EditTaskUseCase(s).execute(EditTaskInput(task=tid, parent=epic))
-        t = s.get_task(tid)
-        self.assertEqual(t.parent, epic)
+        theme = s.create_theme("my theme")
+        tid = s.create_step("a step", role="human")
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, parent=theme))
+        t = s.get_node(tid)
+        self.assertEqual(t.parent, theme)
 
     def test_edits_parent_and_title_together(self):
         s = FakeStore()
-        epic = s.create_epic("my epic")
-        tid = s.create_task("old title", role="human")
-        EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="new title", parent=epic))
-        t = s.get_task(tid)
+        theme = s.create_theme("my theme")
+        tid = s.create_step("old title", role="human")
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title", parent=theme))
+        t = s.get_node(tid)
         self.assertEqual(t.title, "new title")
-        self.assertEqual(t.parent, epic)
+        self.assertEqual(t.parent, theme)
 
     def test_omitting_parent_leaves_parentage_unchanged(self):
         s = FakeStore()
-        epic = s.create_epic("my epic")
-        tid = s.create_task("a task", role="human", parent=epic)
-        EditTaskUseCase(s).execute(EditTaskInput(task=tid, title="renamed"))
-        t = s.get_task(tid)
-        self.assertEqual(t.parent, epic)
+        theme = s.create_theme("my theme")
+        tid = s.create_step("a step", role="human", parent=theme)
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="renamed"))
+        t = s.get_node(tid)
+        self.assertEqual(t.parent, theme)
 
 
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
         s = FakeStore()
-        sid = s.create_story("st", epic=s.create_epic("epic"))
+        sid = s.create_item("st", theme=s.create_theme("theme"))
         LinkArtifactUseCase(s).execute(
-            LinkArtifactInput(story=sid, atype="pr", value="http://x/1", label="PR 1")
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/1", label="PR 1")
         )
-        arts = s.story_artifacts(sid)
+        arts = s.item_artifacts(sid)
         self.assertEqual(arts[0].type, "pr")
         self.assertEqual(arts[0].value, "http://x/1")
         self.assertEqual(arts[0].label, "PR 1")
 
 
-class TestCloseStory(unittest.TestCase):
+class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):
         s = FakeStore()
-        sid = s.create_story("st", epic=s.create_epic("epic"))
-        k = s.create_task("build: x", step="build", role="coder", parent=sid)
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        k = s.create_step("build: x", step="build", role="coder", parent=sid)
         wt = FakeWorktrees()
-        CloseStoryUseCase(s, wt).execute(CloseStoryInput(story=sid, reason="merged"))
-        self.assertEqual(s.get_task(sid).status, "done")
-        self.assertEqual(s.get_task(k).status, "done")
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
+        self.assertEqual(s.get_node(sid).status, "done")
+        self.assertEqual(s.get_node(k).status, "done")
         self.assertEqual(wt.removed, [sid])
 
 
 class TestCloseEpic(unittest.TestCase):
     def test_closes_epic_when_all_children_closed(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
-        child = s.create_story("story", epic=epic)
+        theme = s.create_theme("theme")
+        child = s.create_item("item", theme=theme)
         s.close(child, "merged")
-        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        self.assertEqual(s.get_task(epic).status, "done")
+        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        self.assertEqual(s.get_node(theme).status, "done")
 
     def test_refuses_with_open_child_and_names_it(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
-        child = s.create_story("story", epic=epic)
+        theme = s.create_theme("theme")
+        child = s.create_item("item", theme=theme)
         with self.assertRaises(UseCaseError) as ctx:
-            CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+            CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertIn(child, str(ctx.exception))
-        self.assertEqual(s.get_task(epic).status, "ready")
+        self.assertEqual(s.get_node(theme).status, "ready")
 
     def test_refuses_leaves_epic_open_with_mixed_children(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
-        closed = s.create_story("done story", epic=epic)
-        open_ = s.create_story("open story", epic=epic)
+        theme = s.create_theme("theme")
+        closed = s.create_item("done item", theme=theme)
+        open_ = s.create_item("open item", theme=theme)
         s.close(closed, "merged")
         with self.assertRaises(UseCaseError) as ctx:
-            CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+            CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertIn(open_, str(ctx.exception))
         self.assertNotIn(closed, str(ctx.exception))
-        self.assertEqual(s.get_task(epic).status, "ready")
+        self.assertEqual(s.get_node(theme).status, "ready")
 
 
 class TestCloseEpicBacklogResolution(unittest.TestCase):
-    def test_closes_linked_backlog_item_on_epic_close(self):
+    def test_closes_linked_backlog_item_on_theme_close(self):
         s = FakeStore()
-        backlog = s.create_task("a backlog item", role="human")
-        epic = s.create_epic("my epic")
-        s.add_artifact(epic, "backlog", backlog)
-        child = s.create_story("story", epic=epic)
+        backlog = s.create_step("a backlog item", role="human")
+        theme = s.create_theme("my theme")
+        s.add_artifact(theme, "backlog", backlog)
+        child = s.create_item("item", theme=theme)
         s.close(child, "merged")
-        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        self.assertEqual(s.get_task(backlog).status, "done")
+        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        self.assertEqual(s.get_node(backlog).status, "done")
 
     def test_no_backlog_link_is_a_no_op(self):
         s = FakeStore()
-        epic = s.create_epic("my epic")
-        child = s.create_story("story", epic=epic)
+        theme = s.create_theme("my theme")
+        child = s.create_item("item", theme=theme)
         s.close(child, "merged")
-        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        self.assertEqual(s.get_task(epic).status, "done")
+        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        self.assertEqual(s.get_node(theme).status, "done")
 
 
 class TestCloseEpicWithRetro(unittest.TestCase):
     def _setup(self, feedback=None):
         s = FakeStore()
-        epic = s.create_epic("my epic")
-        story = s.create_story("child story", epic=epic)
-        task = s.create_task("build: x", step="build", role="coder", parent=story)
+        theme = s.create_theme("my theme")
+        item = s.create_item("child item", theme=theme)
+        step = s.create_step("build: x", step="build", role="coder", parent=item)
         if feedback:
-            _add_reflection(s, task, feedback)
-        s.close(story, "merged")
-        return s, epic
+            _add_reflection(s, step, feedback)
+        s.close(item, "merged")
+        return s, theme
 
     def test_retro_included_in_response(self):
-        s, epic = self._setup(feedback="useful feedback")
-        resp = CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
+        s, theme = self._setup(feedback="useful feedback")
+        resp = CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertEqual(resp.retro.reflection_count, 1)
         self.assertEqual(resp.retro.feedback[0].text, "useful feedback")
-        self.assertEqual(len(resp.retro.story_signals), 1)
+        self.assertEqual(len(resp.retro.item_signals), 1)
 
     def test_retro_digest_recorded_as_artifact_on_epic(self):
-        s, epic = self._setup(feedback="spec was thin")
-        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        arts = s.story_artifacts(epic)
+        s, theme = self._setup(feedback="spec was thin")
+        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        arts = s.item_artifacts(theme)
         retro_arts = [a for a in arts if a.type == "retro"]
         self.assertEqual(len(retro_arts), 1)
         digest = json.loads(retro_arts[0].value)
         self.assertIn("feedback", digest)
-        self.assertIn("story_signals", digest)
+        self.assertIn("item_signals", digest)
         self.assertEqual(digest["feedback"][0]["text"], "spec was thin")
 
-    def test_epic_closed_before_retro_digest_is_stored(self):
-        s, epic = self._setup()
+    def test_theme_closed_before_retro_digest_is_stored(self):
+        s, theme = self._setup()
         call_order = []
         orig_close = s.close
         orig_add = s.add_artifact
@@ -277,130 +277,130 @@ class TestCloseEpicWithRetro(unittest.TestCase):
 
         s.close = tracking_close
         s.add_artifact = tracking_add
-        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        close_idx = next(i for i, e in enumerate(call_order) if e == ("close", epic))
+        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        close_idx = next(i for i, e in enumerate(call_order) if e == ("close", theme))
         retro_idx = next(
-            i for i, e in enumerate(call_order) if len(e) >= 3 and e[1] == epic and e[2] == "retro"
+            i for i, e in enumerate(call_order) if len(e) >= 3 and e[1] == theme and e[2] == "retro"
         )
         self.assertLess(close_idx, retro_idx)
 
     def test_empty_reflections_still_records_artifact(self):
-        s, epic = self._setup()
-        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        arts = [a for a in s.story_artifacts(epic) if a.type == "retro"]
+        s, theme = self._setup()
+        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        arts = [a for a in s.item_artifacts(theme) if a.type == "retro"]
         self.assertEqual(len(arts), 1)
         digest = json.loads(arts[0].value)
         self.assertEqual(digest["feedback"], [])
 
     def test_refusal_skips_retro_and_leaves_no_artifact(self):
         s = FakeStore()
-        epic = s.create_epic("my epic")
-        s.create_story("open story", epic=epic)
+        theme = s.create_theme("my theme")
+        s.create_item("open item", theme=theme)
         with self.assertRaises(UseCaseError):
-            CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        self.assertEqual([a for a in s.story_artifacts(epic) if a.type == "retro"], [])
+            CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        self.assertEqual([a for a in s.item_artifacts(theme) if a.type == "retro"], [])
 
 
 class TestCloseEpicOnEpicClose(unittest.TestCase):
     def _setup(self):
         s = FakeStore()
-        epic = s.create_epic("my epic")
-        child = s.create_story("child story", epic=epic)
+        theme = s.create_theme("my theme")
+        child = s.create_item("child item", theme=theme)
         s.close(child, "merged")
-        return s, epic
+        return s, theme
 
-    def _flow_with_on_epic_close(self, store, step="process-check", role="checker"):
-        metas = {role: {"model": "sonnet", "step": step, "on_epic_close": True}}
+    def _flow_with_on_theme_close(self, store, step="process-check", role="checker"):
+        metas = {role: {"model": "sonnet", "step": step, "on_theme_close": True}}
         return FlowService(FakeFs(metas), store)
 
-    def test_creates_task_at_on_epic_close_step(self):
-        s, epic = self._setup()
-        flow = self._flow_with_on_epic_close(s)
-        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
-        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
-        self.assertEqual(len(tasks), 1)
-        self.assertEqual(tasks[0].step, "process-check")
-        self.assertEqual(tasks[0].role, "checker")
+    def test_creates_task_at_on_theme_close_step(self):
+        s, theme = self._setup()
+        flow = self._flow_with_on_theme_close(s)
+        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
+        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(steps[0].step, "process-check")
+        self.assertEqual(steps[0].role, "checker")
 
     def test_epic_id_in_metadata_not_parent(self):
-        s, epic = self._setup()
-        flow = self._flow_with_on_epic_close(s)
-        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
-        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
-        self.assertEqual(len(tasks), 1)
-        self.assertIsNone(tasks[0].parent)
+        s, theme = self._setup()
+        flow = self._flow_with_on_theme_close(s)
+        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
+        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
+        self.assertEqual(len(steps), 1)
+        self.assertIsNone(steps[0].parent)
 
     def test_task_title_contains_step_and_epic_title(self):
-        s, epic = self._setup()
-        flow = self._flow_with_on_epic_close(s)
-        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
-        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
-        self.assertEqual(tasks[0].title, "process-check: my epic")
+        s, theme = self._setup()
+        flow = self._flow_with_on_theme_close(s)
+        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
+        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
+        self.assertEqual(steps[0].title, "process-check: my theme")
 
     def test_agnostic_arbitrary_step_name_not_audit(self):
-        s, epic = self._setup()
-        flow = self._flow_with_on_epic_close(s, step="scrutinise", role="scrutiniser")
-        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
-        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
-        self.assertEqual(len(tasks), 1)
-        self.assertEqual(tasks[0].step, "scrutinise")
+        s, theme = self._setup()
+        flow = self._flow_with_on_theme_close(s, step="scrutinise", role="scrutiniser")
+        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
+        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(steps[0].step, "scrutinise")
 
-    def test_no_on_epic_close_step_no_task_created(self):
-        s, epic = self._setup()
-        CloseEpicUseCase(s, _epic_flow(s)).execute(CloseEpicInput(epic=epic, reason="done"))
-        tasks = [t for t in s.all_tasks() if t.type == "task" and t.epic == epic]
-        self.assertEqual(tasks, [])
+    def test_no_on_theme_close_step_no_task_created(self):
+        s, theme = self._setup()
+        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
+        self.assertEqual(steps, [])
 
     def test_closed_epic_is_not_a_close_candidate(self):
-        s, epic = self._setup()
-        flow = self._flow_with_on_epic_close(s)
-        CloseEpicUseCase(s, flow).execute(CloseEpicInput(epic=epic, reason="done"))
+        s, theme = self._setup()
+        flow = self._flow_with_on_theme_close(s)
+        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
         open_tasks = [
-            t for t in s.all_tasks() if t.type == "task" and t.epic == epic and t.status != "done"
+            t for t in s.all_nodes() if t.type == "step" and t.theme == theme and t.status != "done"
         ]
         self.assertEqual(len(open_tasks), 1)
-        self.assertEqual(s.get_task(epic).status, "done")
+        self.assertEqual(s.get_node(theme).status, "done")
 
 
-class TestWorktreeServiceStoryBranch(unittest.TestCase):
+class TestWorktreeServiceItemBranch(unittest.TestCase):
     def test_none_then_branch_artifact(self):
         s = FakeStore()
-        sid = s.create_story("st", epic=s.create_epic("epic"))
+        sid = s.create_item("st", theme=s.create_theme("theme"))
         svc = WorktreeService(s, None, None, None)
-        self.assertIsNone(svc.story_branch(sid))
+        self.assertIsNone(svc.item_branch(sid))
         s.add_artifact(sid, "branch", "feat/x")
-        self.assertEqual(svc.story_branch(sid), "feat/x")
+        self.assertEqual(svc.item_branch(sid), "feat/x")
 
 
-class TestFileStory(unittest.TestCase):
+class TestFileItem(unittest.TestCase):
     def _file(self, store, repo=None):
         fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
         flow = FlowService(fs, store)
         git = FakeGit(repos={"/projects/app"})
-        epic = store.create_epic("epic")
+        theme = store.create_theme("theme")
         return (
-            FileStoryUseCase(store, flow, git, fs, FakeConfig("/projects"))
-            .execute(FileStoryInput(spec="specs/x.md", step="build", epic=epic, repo=repo))
-            .story
+            FileItemUseCase(store, flow, git, fs, FakeConfig("/projects"))
+            .execute(FileItemInput(spec="specs/x.md", step="build", theme=theme, repo=repo))
+            .item
         )
 
     def test_creates_story_with_spec_and_task(self):
         s = FakeStore()
-        story = self._file(s)
-        self.assertIn("spec", [a.type for a in s.story_artifacts(story)])
-        self.assertEqual(len(s.children(story)), 1)
+        item = self._file(s)
+        self.assertIn("spec", [a.type for a in s.item_artifacts(item)])
+        self.assertEqual(len(s.children(item)), 1)
 
     def test_records_repo_artifact_for_known_repo(self):
         s = FakeStore()
-        story = self._file(s, repo="app")
-        self.assertIn("repo", [a.type for a in s.story_artifacts(story)])
+        item = self._file(s, repo="app")
+        self.assertIn("repo", [a.type for a in s.item_artifacts(item)])
 
     def test_unknown_step_raises(self):
         s = FakeStore()
         fs = FakeFs(metas=METAS)
         with self.assertRaises(UseCaseError):
-            FileStoryUseCase(s, FlowService(fs, s), FakeGit(), fs, FakeConfig()).execute(
-                FileStoryInput(spec="specs/x.md", step="nonexistent", epic=s.create_epic("epic"))
+            FileItemUseCase(s, FlowService(fs, s), FakeGit(), fs, FakeConfig()).execute(
+                FileItemInput(spec="specs/x.md", step="nonexistent", theme=s.create_theme("theme"))
             )
 
     def test_unknown_repo_raises_with_available(self):
@@ -411,34 +411,34 @@ class TestFileStory(unittest.TestCase):
 
     def _use_case(self, store):
         fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
-        return FileStoryUseCase(store, FlowService(fs, store), FakeGit(), fs, FakeConfig("/projects"))
+        return FileItemUseCase(store, FlowService(fs, store), FakeGit(), fs, FakeConfig("/projects"))
 
     def test_missing_epic_raises(self):
         s = FakeStore()
         with self.assertRaises(UseCaseError):
-            self._use_case(s).execute(FileStoryInput(spec="specs/x.md", step="build", epic=None))
+            self._use_case(s).execute(FileItemInput(spec="specs/x.md", step="build", theme=None))
 
     def test_unknown_epic_raises(self):
         s = FakeStore()
         with self.assertRaises(UseCaseError):
             self._use_case(s).execute(
-                FileStoryInput(spec="specs/x.md", step="build", epic="does-not-exist")
+                FileItemInput(spec="specs/x.md", step="build", theme="does-not-exist")
             )
 
     def test_non_epic_parent_raises(self):
         s = FakeStore()
-        not_an_epic = s.create_task("just a task", role="human")
+        not_an_epic = s.create_step("just a step", role="human")
         with self.assertRaises(UseCaseError):
             self._use_case(s).execute(
-                FileStoryInput(spec="specs/x.md", step="build", epic=not_an_epic)
+                FileItemInput(spec="specs/x.md", step="build", theme=not_an_epic)
             )
 
     def test_closed_epic_raises(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
-        s.close(epic, "done")
+        theme = s.create_theme("theme")
+        s.close(theme, "done")
         with self.assertRaises(UseCaseError):
-            self._use_case(s).execute(FileStoryInput(spec="specs/x.md", step="build", epic=epic))
+            self._use_case(s).execute(FileItemInput(spec="specs/x.md", step="build", theme=theme))
 
     def test_available_repos_includes_nested_repo(self):
         fs = FakeFs(
@@ -449,7 +449,7 @@ class TestFileStory(unittest.TestCase):
             },
         )
         git = FakeGit(repos={"/projects/app", "/projects/group/svc"})
-        use_case = FileStoryUseCase(
+        use_case = FileItemUseCase(
             FakeStore(), FlowService(fs, FakeStore()), git, fs, FakeConfig("/projects")
         )
         self.assertEqual(use_case._available_repos(), ["app", "group/svc"])
@@ -464,85 +464,85 @@ class TestFileStory(unittest.TestCase):
         )
         s = FakeStore()
         git = FakeGit(repos={"/projects/app", "/projects/group/svc"})
-        epic = s.create_epic("epic")
-        story = (
-            FileStoryUseCase(s, FlowService(fs, s), git, fs, FakeConfig("/projects"))
-            .execute(FileStoryInput(spec="specs/x.md", step="build", epic=epic, repo="group/svc"))
-            .story
+        theme = s.create_theme("theme")
+        item = (
+            FileItemUseCase(s, FlowService(fs, s), git, fs, FakeConfig("/projects"))
+            .execute(FileItemInput(spec="specs/x.md", step="build", theme=theme, repo="group/svc"))
+            .item
         )
-        self.assertIn("repo", [a.type for a in s.story_artifacts(story)])
+        self.assertIn("repo", [a.type for a in s.item_artifacts(item)])
 
 
-class TestFileStoryAtomicity(unittest.TestCase):
-    def _file(self, store, epic, repo=None, blocked_by=None):
+class TestFileItemAtomicity(unittest.TestCase):
+    def _file(self, store, theme, repo=None, blocked_by=None):
         fs = FakeFs(metas=METAS, dirs={"/projects": ["app", "lib"]})
         flow = FlowService(fs, store)
         git = FakeGit(repos={"/projects/app"})
-        return FileStoryUseCase(store, flow, git, fs, FakeConfig("/projects")).execute(
-            FileStoryInput(spec="specs/x.md", step="build", epic=epic, repo=repo, blocked_by=blocked_by)
+        return FileItemUseCase(store, flow, git, fs, FakeConfig("/projects")).execute(
+            FileItemInput(spec="specs/x.md", step="build", theme=theme, repo=repo, blocked_by=blocked_by)
         )
 
     def test_spec_artifact_failure_leaves_no_story(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
+        theme = s.create_theme("theme")
 
-        def boom(story_id, atype, value, label=None):
+        def boom(item_id, atype, value, label=None):
             raise RuntimeError("boom")
 
         s.add_artifact = boom
         with self.assertRaises(RuntimeError):
-            self._file(s, epic)
-        remaining = {k: v for k, v in s._records.items() if k != epic}
+            self._file(s, theme)
+        remaining = {k: v for k, v in s._records.items() if k != theme}
         self.assertEqual(remaining, {})
 
     def test_repo_artifact_failure_leaves_no_story(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
+        theme = s.create_theme("theme")
         orig_add_artifact = s.add_artifact
 
-        def maybe_boom(story_id, atype, value, label=None):
+        def maybe_boom(item_id, atype, value, label=None):
             if atype == "repo":
                 raise RuntimeError("boom")
-            return orig_add_artifact(story_id, atype, value, label)
+            return orig_add_artifact(item_id, atype, value, label)
 
         s.add_artifact = maybe_boom
         with self.assertRaises(RuntimeError):
-            self._file(s, epic, repo="app")
-        remaining = {k: v for k, v in s._records.items() if k != epic}
+            self._file(s, theme, repo="app")
+        remaining = {k: v for k, v in s._records.items() if k != theme}
         self.assertEqual(remaining, {})
 
     def test_task_creation_failure_leaves_no_story(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
+        theme = s.create_theme("theme")
 
         def boom(*args, **kwargs):
             raise RuntimeError("boom")
 
-        s.create_task = boom
+        s.create_step = boom
         with self.assertRaises(RuntimeError):
-            self._file(s, epic)
-        remaining = {k: v for k, v in s._records.items() if k != epic}
+            self._file(s, theme)
+        remaining = {k: v for k, v in s._records.items() if k != theme}
         self.assertEqual(remaining, {})
 
     def test_dep_add_failure_leaves_no_story_or_task(self):
         s = FakeStore()
-        epic = s.create_epic("epic")
-        blocker = s.create_task("blocker task", role="coder")
+        theme = s.create_theme("theme")
+        blocker = s.create_step("blocker step", role="coder")
 
-        def boom(task_id, blocked_by):
+        def boom(node_id, blocked_by):
             raise RuntimeError("boom")
 
         s.dep_add = boom
         with self.assertRaises(RuntimeError):
-            self._file(s, epic, blocked_by=[blocker])
-        remaining = {k: v for k, v in s._records.items() if k not in (blocker, epic)}
+            self._file(s, theme, blocked_by=[blocker])
+        remaining = {k: v for k, v in s._records.items() if k not in (blocker, theme)}
         self.assertEqual(remaining, {})
 
 
 class TestWorktreeServiceRemove(unittest.TestCase):
     def test_remove_requests_remote_branch_delete(self):
         s = FakeStore()
-        sid = s.create_story("my story", epic=s.create_epic("epic"))
+        sid = s.create_item("my item", theme=s.create_theme("theme"))
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
         git = FakeGitRemove(repos={"/projects/app"})
@@ -552,7 +552,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
 
     def test_remove_skips_remote_delete_when_not_git_repo(self):
         s = FakeStore()
-        sid = s.create_story("my story", epic=s.create_epic("epic"))
+        sid = s.create_item("my item", theme=s.create_theme("theme"))
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
         git = FakeGitRemove(repos=set())

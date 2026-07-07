@@ -4,7 +4,7 @@ class Retro:
 
     def feedback(self):
         return [
-            {"task": r.task, "feedback": r.feedback}
+            {"step": r.step, "feedback": r.feedback}
             for r in self._reflections
             if (r.feedback or "").strip()
         ]

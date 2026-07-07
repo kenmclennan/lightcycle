@@ -1,13 +1,13 @@
 from lightcycle.domain.work.artifact import Artifact
 from lightcycle.domain.work.lane import Lane
 from lightcycle.domain.work.status import Status
-from lightcycle.domain.work.story import Story
-from lightcycle.domain.work.task import Task
-from lightcycle.domain.work.task_queue import TaskQueue
-from lightcycle.domain.work.task_spec import TaskSpec
-from lightcycle.domain.work.task_view import TaskView
+from lightcycle.domain.work.item import Item
+from lightcycle.domain.work.node import Node
+from lightcycle.domain.work.node_queue import NodeQueue
+from lightcycle.domain.work.node_spec import NodeSpec
+from lightcycle.domain.work.node_view import NodeView
 
 __all__ = [
-    "Artifact", "Lane", "Status", "Story", "Task", "TaskQueue",
-    "TaskSpec", "TaskView",
+    "Artifact", "Lane", "Status", "Item", "Node", "NodeQueue",
+    "NodeSpec", "NodeView",
 ]

@@ -7,14 +7,14 @@ from pathlib import Path
 from lightcycle.adapters import workers as wk
 
 
-def _hammer(root, spawnid, task, iterations):
+def _hammer(root, spawnid, step, iterations):
     for _ in range(iterations):
-        wk.set_task(root, spawnid, task)
+        wk.set_step(root, spawnid, step)
 
 
-def _hammer_set_task(root, spawnid, task, iterations):
+def _hammer_set_task(root, spawnid, step, iterations):
     for _ in range(iterations):
-        wk.set_task(root, spawnid, task)
+        wk.set_step(root, spawnid, step)
 
 
 def _hammer_mark_checked(root, spawnid, iterations):
@@ -28,7 +28,7 @@ class TestRegistryConcurrency(unittest.TestCase):
         (Path(root) / "logs").mkdir()
         n = 12
         wk.write_workers(
-            root, [{"spawnid": "w%d" % i, "role": "coder", "pid": 1, "task": None} for i in range(n)]
+            root, [{"spawnid": "w%d" % i, "role": "coder", "pid": 1, "step": None} for i in range(n)]
         )
 
         procs = [
@@ -40,10 +40,10 @@ class TestRegistryConcurrency(unittest.TestCase):
         for p in procs:
             p.join()
 
-        final = {w["spawnid"]: w["task"] for w in json.loads((Path(root) / "logs" / "workers.json").read_text())}
+        final = {w["spawnid"]: w["step"] for w in json.loads((Path(root) / "logs" / "workers.json").read_text())}
         self.assertEqual(len(final), n)
         for i in range(n):
-            self.assertEqual(final["w%d" % i], "t%d" % i, "worker w%d lost its task (registry race)" % i)
+            self.assertEqual(final["w%d" % i], "t%d" % i, "worker w%d lost its step (registry race)" % i)
 
     def test_concurrent_mark_checked_and_set_task_never_lose_updates(self):
         root = tempfile.mkdtemp()
@@ -51,7 +51,7 @@ class TestRegistryConcurrency(unittest.TestCase):
         n = 12
         wk.write_workers(
             root,
-            [{"spawnid": "w%d" % i, "role": "coder", "pid": 1, "task": None, "checked": False} for i in range(n)],
+            [{"spawnid": "w%d" % i, "role": "coder", "pid": 1, "step": None, "checked": False} for i in range(n)],
         )
 
         procs = []
@@ -68,7 +68,7 @@ class TestRegistryConcurrency(unittest.TestCase):
         self.assertEqual(len(final), n)
         for i in range(n):
             spawnid = "w%d" % i
-            self.assertEqual(final[spawnid]["task"], "t%d" % i, "worker %s lost its task (registry race)" % spawnid)
+            self.assertEqual(final[spawnid]["step"], "t%d" % i, "worker %s lost its step (registry race)" % spawnid)
             self.assertTrue(final[spawnid]["checked"], "worker %s lost its checked flag (registry race)" % spawnid)
 
 

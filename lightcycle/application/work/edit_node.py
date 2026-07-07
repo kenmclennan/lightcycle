@@ -3,8 +3,8 @@ from typing import Optional
 
 
 @dataclass(frozen=True)
-class EditTaskInput:
-    task: str
+class EditNodeInput:
+    step: str
     title: Optional[str] = None
     description: Optional[str] = None
     goal: Optional[str] = None
@@ -13,21 +13,21 @@ class EditTaskInput:
 
 
 @dataclass(frozen=True)
-class EditTaskResponse:
+class EditNodeResponse:
     pass
 
 
-class EditTaskUseCase:
+class EditNodeUseCase:
     def __init__(self, store):
         self._store = store
 
-    def execute(self, input: EditTaskInput) -> EditTaskResponse:
-        self._store.edit_task(
-            input.task,
+    def execute(self, input: EditNodeInput) -> EditNodeResponse:
+        self._store.edit_node(
+            input.step,
             title=input.title,
             description=input.description,
             goal=input.goal,
             project=input.project,
             parent=input.parent,
         )
-        return EditTaskResponse()
+        return EditNodeResponse()

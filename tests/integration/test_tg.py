@@ -263,18 +263,18 @@ class TestModel(unittest.TestCase):
         _fake_setUp(self)
 
     def test_task_mapping_and_status(self):
-        bid = self.store.create_task("build: thing", step="build", role="coder")
+        bid = self.store.create_step("build: thing", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_show, bid)
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["role"], "coder")
         self.assertEqual(t["step"], "build")
-        self.assertEqual(t["type"], "task")
+        self.assertEqual(t["type"], "step")
         self.assertEqual(t["status"], "ready")
 
     def test_status_lanes_json(self):
-        h = self.store.create_task("spec: x", step="spec", role="human")
-        c = self.store.create_task("build: y", step="build", role="coder")
+        h = self.store.create_step("spec: x", step="spec", role="human")
+        c = self.store.create_step("build: y", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_status, "--json")
         self.assertEqual(rc, 0, err)
         s = json.loads(out)
@@ -287,7 +287,7 @@ class TestClaim(unittest.TestCase):
         _fake_setUp(self)
 
     def test_claim_returns_and_marks_in_progress(self):
-        c = self.store.create_task("build: y", step="build", role="coder")
+        c = self.store.create_step("build: y", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
@@ -297,12 +297,12 @@ class TestClaim(unittest.TestCase):
         self.assertEqual(out2.strip(), "")
 
     def test_claim_ignores_human(self):
-        self.store.create_task("spec: x", step="spec", role="human")
+        self.store.create_step("spec: x", step="spec", role="human")
         rc, out, _ = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(out.strip(), "")
 
     def test_claim_assigns_worker_spawnid(self):
-        b = self.store.create_task("build: y", step="build", role="coder")
+        b = self.store.create_step("build: y", step="build", role="coder")
         old = os.environ.get("LC_SPAWNID")
         os.environ["LC_SPAWNID"] = "spawn-xyz"
         try:
@@ -312,7 +312,7 @@ class TestClaim(unittest.TestCase):
                 os.environ.pop("LC_SPAWNID", None)
             else:
                 os.environ["LC_SPAWNID"] = old
-        self.assertEqual(self.store.get_task(b).claimed_by, "spawn-xyz")
+        self.assertEqual(self.store.get_node(b).claimed_by, "spawn-xyz")
 
 
 class TestFlow(unittest.TestCase):
@@ -320,7 +320,7 @@ class TestFlow(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_advance_creates_next_step(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         self.store.close(b, "done")
         rc, out, err = call(_cli_mod.cmd_advance, b, "done")
         self.assertEqual(rc, 0, err)
@@ -332,7 +332,7 @@ class TestFlow(unittest.TestCase):
         self.assertEqual(nt["step"], "review")
 
     def test_ready_roles(self):
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         rc, out, _ = call(_cli_mod.cmd_ready_roles)
         self.assertIn("coder", out.split())
 
@@ -342,43 +342,43 @@ class TestDoneBlock(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_done_closes_and_advances(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
-        self.assertEqual(self.store.get_task(b).status, "done")
+        self.assertEqual(self.store.get_node(b).status, "done")
 
     def test_done_unknown_outcome_errors_without_closing(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "banana")
         self.assertEqual(rc, 1)
-        self.assertEqual(self.store.get_task(b).status, "ready")
+        self.assertEqual(self.store.get_node(b).status, "ready")
 
     def test_block_writes_metadata_and_routes_human(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_block, b, "--branch", "grid/x", "--needs", "confirm aud")
         self.assertEqual(rc, 0, err)
-        task = self.store.get_task(b)
-        self.assertEqual(task.needs, "confirm aud")
-        self.assertEqual(task.role, "human")
+        step = self.store.get_node(b)
+        self.assertEqual(step.needs, "confirm aud")
+        self.assertEqual(step.role, "human")
         self.assertEqual(self.store._records[b]["metadata"]["branch"], "grid/x")
 
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
         rc, out, err = call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         self.assertEqual(rc, 0, err)
-        self.assertIsNone(self.store.get_task(b).claimed_by)
+        self.assertIsNone(self.store.get_node(b).claimed_by)
         rc2, inbox_out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn(b, inbox_out)
 
     def test_done_note_forwards_to_next_task(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix the coverage")
         self.assertEqual(rc, 0, err)
         new = out.strip()
         self.assertTrue(new)
-        notes = self.store.get_task(new).notes or ""
+        notes = self.store.get_node(new).notes or ""
         self.assertIn("from build (done):", notes)
         self.assertIn("fix the coverage", notes)
         rc2, shown_out, _ = call(_cli_mod.cmd_show, new)
@@ -386,18 +386,18 @@ class TestDoneBlock(unittest.TestCase):
         self.assertIn("fix the coverage", shown.get("notes") or "")
 
     def test_done_without_note_unchanged(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         new = out.strip()
         self.assertTrue(new)
-        self.assertNotIn("from build", self.store.get_task(new).notes or "")
+        self.assertNotIn("from build", self.store.get_node(new).notes or "")
 
     def test_done_note_accepts_unquoted_multiword(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix", "the", "flaky", "test")
         self.assertEqual(rc, 0, err)
-        notes = self.store.get_task(out.strip()).notes or ""
+        notes = self.store.get_node(out.strip()).notes or ""
         self.assertIn("fix the flaky test", notes)
 
 
@@ -407,13 +407,13 @@ class TestSweep(unittest.TestCase):
         (Path(self.root) / "logs").mkdir(exist_ok=True)
 
     def test_sweep_releases_orphaned_claim(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
-        task = self.store.get_task(b)
-        self.assertEqual(task.status, "ready")
-        self.assertIsNone(task.claimed_by)
+        step = self.store.get_node(b)
+        self.assertEqual(step.status, "ready")
+        self.assertIsNone(step.claimed_by)
 
 
 class TestWorkersAdapterEffects(unittest.TestCase):
@@ -479,8 +479,8 @@ class TestPs(unittest.TestCase):
         dead.wait()
         self._write_workers(
             [
-                {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
-                {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
+                {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "step": "t1"},
+                {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "step": "t2"},
             ]
         )
         r = self._run_ps()
@@ -494,8 +494,8 @@ class TestPs(unittest.TestCase):
         dead.wait()
         self._write_workers(
             [
-                {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "task": "t1"},
-                {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "task": "t2"},
+                {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "step": "t1"},
+                {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "step": "t2"},
             ]
         )
         r = self._run_ps("--all")
@@ -537,20 +537,20 @@ class TestRun(unittest.TestCase):
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps([w]))
 
     def test_run_once_spawns_for_ready_role(self):
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertTrue(any(w["role"] == "coder" for w in self._workers()))
 
     def test_queue_lists_ready(self):
-        c = self.store.create_task("build: y", step="build", role="coder")
+        c = self.store.create_step("build: y", step="build", role="coder")
         rc, out, _ = call(_cli_mod.cmd_queue, "5")
         self.assertIn(c, out)
 
     def test_run_skips_role_with_inflight_worker(self):
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         self._preset_worker(
-            spawnid="boot", role="coder", pid=os.getpid(), log="x", task=None, started=time.time()
+            spawnid="boot", role="coder", pid=os.getpid(), log="x", step=None, started=time.time()
         )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
@@ -558,16 +558,16 @@ class TestRun(unittest.TestCase):
 
     def test_run_pool_fills_up_to_max_agents(self):
         for i in range(7):
-            self.store.create_task("build: %d" % i, step="build", role="coder")
+            self.store.create_step("build: %d" % i, step="build", role="coder")
         for i in range(3):
-            self.store.create_task("review: %d" % i, step="review", role="reviewer")
+            self.store.create_step("review: %d" % i, step="review", role="reviewer")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 5)
 
     def test_run_pool_respects_max_agents_env(self):
         for i in range(5):
-            self.store.create_task("build: %d" % i, step="build", role="coder")
+            self.store.create_step("build: %d" % i, step="build", role="coder")
         os.environ["LC_MAX_AGENTS"] = "2"
         self.addCleanup(lambda: os.environ.pop("LC_MAX_AGENTS", None))
         rc, _, err = self._run_once()
@@ -578,7 +578,7 @@ class TestRun(unittest.TestCase):
         return json.loads((Path(self.root) / "logs" / "breaker.json").read_text())
 
     def test_run_opens_breaker_on_a_rejected_rate_limit_event_and_stops_spawning(self):
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         log_path = Path(self.root) / "logs" / "worker-coder-dead.log"
         log_path.write_text(
             '{"type":"rate_limit_event","rate_limit_info":'
@@ -587,7 +587,7 @@ class TestRun(unittest.TestCase):
         dead = subprocess.Popen(["true"])
         dead.wait()
         self._preset_worker(
-            spawnid="dead", role="coder", pid=dead.pid, log=str(log_path), task=None, started=0
+            spawnid="dead", role="coder", pid=dead.pid, log=str(log_path), step=None, started=0
         )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
@@ -595,7 +595,7 @@ class TestRun(unittest.TestCase):
         self.assertEqual(len(self._workers()), 1)
 
     def test_run_spawns_nothing_while_breaker_open_pre_reset(self):
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         (Path(self.root) / "logs" / "workers.json").write_text("[]")
         (Path(self.root) / "logs" / "breaker.json").write_text(
             json.dumps({"open": True, "reset_at": time.time() + 9999})
@@ -606,9 +606,9 @@ class TestRun(unittest.TestCase):
 
     def test_run_loop_first_tick_does_not_replay_old_hook_completions(self):
         (Path(self.root) / "steps" / "auditor.md").write_text(
-            "---\nmodel: sonnet\nstep: audit\non_epic_close: true\n---\nstub auditor"
+            "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
         )
-        tid = self.store.create_task("audit: epic", step="audit", role="auditor")
+        tid = self.store.create_step("audit: theme", step="audit", role="auditor")
         self.store.close(tid, "done")
         self.store._records[tid]["closed_at"] = "2020-01-01T00:00:00"
         with patch("time.sleep", side_effect=KeyboardInterrupt):
@@ -662,7 +662,7 @@ class TestRunSingletonLock(unittest.TestCase):
         dead = subprocess.Popen(["true"])
         dead.wait()
         self._lock_path().write_text(str(dead.pid))
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
@@ -698,10 +698,10 @@ class TestArtifacts(unittest.TestCase):
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
 
     def test_add_and_read_artifacts_append(self):
-        sid = self.store.create_story("story s", epic=self.store.create_epic("epic"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
         self.store.add_artifact(sid, "spec", "specs/X.md")
         self.store.add_artifact(sid, "pr", "https://gh/9", "PR 9")
-        arts = self.store.story_artifacts(sid)
+        arts = self.store.item_artifacts(sid)
         self.assertEqual(len(arts), 2)
         self.assertEqual(arts[0].type, "spec")
         self.assertEqual(arts[1].type, "pr")
@@ -735,10 +735,10 @@ class TestLink(unittest.TestCase):
         _fake_setUp(self)
 
     def test_link_appends_artifact(self):
-        sid = self.store.create_story("story s", epic=self.store.create_epic("epic"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
         rc, out, err = call(_cli_mod.cmd_link, sid, "pr", "https://gh/9", "--label", "PR 9")
         self.assertEqual(rc, 0, err)
-        arts = self.store.story_artifacts(sid)
+        arts = self.store.item_artifacts(sid)
         self.assertEqual(arts[0].type, "pr")
         self.assertEqual(arts[0].value, "https://gh/9")
         self.assertEqual(arts[0].label, "PR 9")
@@ -749,15 +749,15 @@ class TestModelV2(unittest.TestCase):
         _fake_setUp(self)
 
     def test_task_exposes_type_parent_and_parent_artifacts(self):
-        epic = self.store.create_epic("epic e")
-        story = self.store.create_story("story s", epic=epic)
-        self.store.update_metadata(story, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
-        task = self.store.create_task("build: b", step="build", role="coder", parent=story)
-        rc, out, _ = call(_cli_mod.cmd_show, task)
+        theme = self.store.create_theme("theme e")
+        item = self.store.create_item("item s", theme=theme)
+        self.store.update_metadata(item, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
+        step = self.store.create_step("build: b", step="build", role="coder", parent=item)
+        rc, out, _ = call(_cli_mod.cmd_show, step)
         v = json.loads(out)
-        self.assertEqual(v["type"], "task")
-        self.assertEqual(v["parent"], story)
-        self.assertEqual(v["story_artifacts"][0]["value"], "specs/X.md")
+        self.assertEqual(v["type"], "step")
+        self.assertEqual(v["parent"], item)
+        self.assertEqual(v["item_artifacts"][0]["value"], "specs/X.md")
 
 
 class TestEpicCommand(unittest.TestCase):
@@ -765,39 +765,39 @@ class TestEpicCommand(unittest.TestCase):
         _fake_setUp(self)
 
     def test_epic_creates_epic_and_prints_id(self):
-        rc, out, err = call(_cli_mod.cmd_epic, "ship the thing")
+        rc, out, err = call(_cli_mod.cmd_theme, "ship the thing")
         self.assertEqual(rc, 0, err)
         eid = out.strip()
         self.assertTrue(eid)
-        self.assertEqual(self.store.get_task(eid).type, "epic")
+        self.assertEqual(self.store.get_node(eid).type, "theme")
 
     def test_epic_links_backlog(self):
         rc, out, _ = call(_cli_mod.cmd_add, "a backlog item")
         backlog = out.strip()
-        rc2, out2, err2 = call(_cli_mod.cmd_epic, "ship the thing", "--backlog", backlog)
+        rc2, out2, err2 = call(_cli_mod.cmd_theme, "ship the thing", "--backlog", backlog)
         self.assertEqual(rc2, 0, err2)
         eid = out2.strip()
-        arts = self.store.story_artifacts(eid)
+        arts = self.store.item_artifacts(eid)
         self.assertEqual([(a.type, a.value) for a in arts], [("backlog", backlog)])
 
     def test_epic_unknown_backlog_errors(self):
-        rc, _, err = call(_cli_mod.cmd_epic, "ship the thing", "--backlog", "does-not-exist")
+        rc, _, err = call(_cli_mod.cmd_theme, "ship the thing", "--backlog", "does-not-exist")
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
 
 
-class TestFileStory(unittest.TestCase):
+class TestFileItem(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, steps=True)
 
     def test_file_creates_story_with_spec_and_build_task(self):
-        epic = self.store.create_epic("epic")
-        rc, out, err = call(_cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build", "--theme", theme)
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         self.assertTrue(sid)
-        self.assertEqual(self.store.get_task(sid).type, "story")
-        self.assertEqual(self.store.story_artifacts(sid)[0].value, "specs/HSS-435.md")
+        self.assertEqual(self.store.get_node(sid).type, "item")
+        self.assertEqual(self.store.item_artifacts(sid)[0].value, "specs/HSS-435.md")
         kids = self.store.children(sid)
         self.assertEqual(len(kids), 1)
         rc2, out2, _ = call(_cli_mod.cmd_show, kids[0].id)
@@ -805,14 +805,14 @@ class TestFileStory(unittest.TestCase):
 
     def test_file_requires_valid_epic(self):
         rc, _, err = call(
-            _cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build", "--epic", "does-not-exist"
+            _cli_mod.cmd_file, "specs/HSS-435.md", "--step", "build", "--theme", "does-not-exist"
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
 
     def test_advance_parents_next_task_to_same_story(self):
-        epic = self.store.create_epic("epic")
-        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         build = self.store.children(sid)[0].id
         self.store.close(build, "done")
@@ -822,7 +822,7 @@ class TestFileStory(unittest.TestCase):
         nt = json.loads(out3)
         self.assertEqual(nt["parent"], sid)
         self.assertEqual(nt["step"], "review")
-        self.assertEqual(nt["story_artifacts"][0]["value"], "specs/X.md")
+        self.assertEqual(nt["item_artifacts"][0]["value"], "specs/X.md")
 
 
 class TestFileBlockedBy(unittest.TestCase):
@@ -830,21 +830,21 @@ class TestFileBlockedBy(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_blocked_by_creates_dependency_on_first_task(self):
-        epic = self.store.create_epic("epic")
-        gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
+        theme = self.store.create_theme("theme")
+        gate = self.store.create_step("review-plan: foo", step="review-plan", role="human")
         rc, out, err = call(
-            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic, "--blocked-by", gate
+            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme, "--blocked-by", gate
         )
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         self.assertTrue(sid)
-        task_id = self.store.children(sid)[0].id
-        self.assertIn(gate, self.store._deps.get(task_id, set()))
+        node_id = self.store.children(sid)[0].id
+        self.assertIn(gate, self.store._deps.get(node_id, set()))
 
     def test_blocked_task_not_claimable_until_gate_closes(self):
-        epic = self.store.create_epic("epic")
-        gate = self.store.create_task("review-plan: foo", step="review-plan", role="human")
-        call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic, "--blocked-by", gate)
+        theme = self.store.create_theme("theme")
+        gate = self.store.create_step("review-plan: foo", step="review-plan", role="human")
+        call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme, "--blocked-by", gate)
         rc, out, _ = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(out.strip(), "")
         self.store.close(gate, "approved")
@@ -852,24 +852,24 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertTrue(out2.strip())
 
     def test_multiple_blocked_by_ids(self):
-        epic = self.store.create_epic("epic")
-        gate1 = self.store.create_task("gate1", role="human")
-        gate2 = self.store.create_task("gate2", role="human")
+        theme = self.store.create_theme("theme")
+        gate1 = self.store.create_step("gate1", role="human")
+        gate2 = self.store.create_step("gate2", role="human")
         rc, out, _ = call(
             _cli_mod.cmd_file,
             "specs/X.md",
             "--step",
             "build",
-            "--epic",
-            epic,
+            "--theme",
+            theme,
             "--blocked-by",
             gate1,
             "--blocked-by",
             gate2,
         )
         sid = out.strip()
-        task_id = self.store.children(sid)[0].id
-        blocker_ids = self.store._deps.get(task_id, set())
+        node_id = self.store.children(sid)[0].id
+        blocker_ids = self.store._deps.get(node_id, set())
         self.assertIn(gate1, blocker_ids)
         self.assertIn(gate2, blocker_ids)
 
@@ -879,12 +879,12 @@ class TestClaimArtifacts(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_claim_surfaces_story_artifacts(self):
-        epic = self.store.create_epic("epic")
-        call(_cli_mod.cmd_file, "specs/Y.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        call(_cli_mod.cmd_file, "specs/Y.md", "--step", "build", "--theme", theme)
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
-        self.assertEqual(t["story_artifacts"][0]["value"], "specs/Y.md")
+        self.assertEqual(t["item_artifacts"][0]["value"], "specs/Y.md")
 
     def test_set_is_gone(self):
         r = run_tg("set", "x", "--pr", "y")
@@ -896,16 +896,16 @@ class TestTrace(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_trace_shows_story_artifacts_and_tasks(self):
-        epic = self.store.create_epic("epic")
-        rc, out, err = call(_cli_mod.cmd_file, "specs/Z.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/Z.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         rc2, out2, err2 = call(_cli_mod.cmd_trace, sid, "--json")
         self.assertEqual(rc2, 0, err2)
         tr = json.loads(out2)
-        self.assertEqual(tr["story"]["id"], sid)
+        self.assertEqual(tr["item"]["id"], sid)
         self.assertEqual(tr["artifacts"][0]["value"], "specs/Z.md")
-        self.assertEqual(len(tr["tasks"]), 1)
-        self.assertEqual(tr["tasks"][0]["step"], "build")
+        self.assertEqual(len(tr["steps"]), 1)
+        self.assertEqual(tr["steps"][0]["step"], "build")
 
 
 class TestAgentFrontmatter(unittest.TestCase):
@@ -972,15 +972,15 @@ class TestFileStep(unittest.TestCase):
         self.assertEqual(rc, 2)
 
     def test_file_rejects_unknown_step(self):
-        epic = self.store.create_epic("epic")
-        rc, _, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "bogus", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, _, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "bogus", "--theme", theme)
         self.assertNotEqual(rc, 0)
         self.assertIn("bogus", err)
 
     def test_file_starts_at_given_step(self):
-        epic = self.store.create_epic("epic")
-        _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
-        kid = self.store.get_task(self.store.children(out.strip())[0].id)
+        theme = self.store.create_theme("theme")
+        _, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme)
+        kid = self.store.get_node(self.store.children(out.strip())[0].id)
         self.assertEqual(kid.step, "build")
         self.assertEqual(kid.role, "coder")
 
@@ -1004,17 +1004,17 @@ class TestArtifactContracts(unittest.TestCase):
         _fake_setUp(self, contract_steps=True)
 
     def test_claim_escalates_when_required_input_missing(self):
-        b = self.store.create_task("build: x", step="build", role="coder")
+        b = self.store.create_step("build: x", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.strip(), "")
-        task = self.store.get_task(b)
-        self.assertEqual(task.role, "human")
-        self.assertEqual(task.status, "needs-human")
+        step = self.store.get_node(b)
+        self.assertEqual(step.role, "human")
+        self.assertEqual(step.status, "needs-human")
 
     def test_claim_proceeds_when_inputs_present(self):
-        epic = self.store.create_epic("epic")
-        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         rc2, out2, err2 = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc2, 0, err2)
@@ -1023,28 +1023,28 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(t["parent"], sid)
 
     def test_done_refused_when_required_output_missing(self):
-        epic = self.store.create_epic("epic")
-        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
-        task = self.store.children(sid)[0].id
-        rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
+        step = self.store.children(sid)[0].id
+        rc2, out2, err2 = call(_cli_mod.cmd_done, step, "done")
         self.assertEqual(rc2, 1)
         self.assertIn("branch", err2)
-        self.assertEqual(self.store.get_task(task).status, "ready")
+        self.assertEqual(self.store.get_node(step).status, "ready")
 
     def test_done_succeeds_when_output_present(self):
-        epic = self.store.create_epic("epic")
-        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
-        task = self.store.children(sid)[0].id
+        step = self.store.children(sid)[0].id
         call(_cli_mod.cmd_link, sid, "branch", "grid/x")
-        rc2, out2, err2 = call(_cli_mod.cmd_done, task, "done")
+        rc2, out2, err2 = call(_cli_mod.cmd_done, step, "done")
         self.assertEqual(rc2, 0, err2)
-        self.assertEqual(self.store.get_task(task).status, "done")
+        self.assertEqual(self.store.get_node(step).status, "done")
 
     def test_file_rejects_non_entry_step(self):
-        epic = self.store.create_epic("epic")
-        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "review", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        rc, out, err = call(_cli_mod.cmd_file, "specs/X.md", "--step", "review", "--theme", theme)
         self.assertEqual(rc, 1)
         self.assertIn("branch", err)
 
@@ -1100,10 +1100,10 @@ class TestPruneWorkers(unittest.TestCase):
                     "role": "coder",
                     "pid": os.getpid(),
                     "log": "x",
-                    "task": None,
+                    "step": None,
                     "started": time.time(),
                 },
-                {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "task": None},
+                {"spawnid": "b", "role": "coder", "pid": dead, "log": "y", "step": None},
             ]
         )
         r = self._sweep(history=0)
@@ -1115,7 +1115,7 @@ class TestPruneWorkers(unittest.TestCase):
         dead = self._dead_pid()
         self._write(
             [
-                {"spawnid": "d%d" % i, "role": "coder", "pid": dead, "log": "l", "task": None}
+                {"spawnid": "d%d" % i, "role": "coder", "pid": dead, "log": "l", "step": None}
                 for i in range(3)
             ]
         )
@@ -1158,7 +1158,7 @@ class TestContractsOptional(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_done_without_contract_needs_no_artifacts(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
 
@@ -1189,8 +1189,8 @@ class TestWorktree(unittest.TestCase):
         return git_in(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
 
     def _file(self):
-        epic = self.store.create_epic("epic")
-        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build", "--theme", theme)
         return out.strip()
 
     def test_claim_returns_isolated_workspace(self):
@@ -1224,7 +1224,7 @@ class TestWorktree(unittest.TestCase):
     def test_branch_artifact_autolinked_on_claim(self):
         sid = self._file()
         call(_cli_mod.cmd_claim, "coder")
-        arts = self.store.story_artifacts(sid)
+        arts = self.store.item_artifacts(sid)
         branches = [a for a in arts if a.type == "branch"]
         self.assertEqual(len(branches), 1)
         self.assertEqual(branches[0].value, "feat/w")
@@ -1267,7 +1267,7 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 
     def test_claim_omits_workspace_without_origin(self):
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         _, out, _ = call(_cli_mod.cmd_claim, "coder")
         t = json.loads(out)
         self.assertEqual(t["status"], "in-progress")
@@ -1306,8 +1306,8 @@ class TestNamedRepo(unittest.TestCase):
         )
 
     def _claim(self, repo=None):
-        epic = self.store.create_epic("epic")
-        args = ["specs/X.md", "--step", "build", "--epic", epic]
+        theme = self.store.create_theme("theme")
+        args = ["specs/X.md", "--step", "build", "--theme", theme]
         if repo:
             args += ["--repo", repo]
         call(_cli_mod.cmd_file, *args)
@@ -1337,30 +1337,30 @@ class TestNamedRepo(unittest.TestCase):
         self.assertTrue(view["spec_path"].startswith(self.engine))
 
     def test_file_stores_single_repo_artifact(self):
-        epic = self.store.create_epic("epic")
+        theme = self.store.create_theme("theme")
         _, out, _ = call(
-            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--epic", epic, "--repo", "app"
+            _cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme, "--repo", "app"
         )
-        arts = self.store.story_artifacts(out.strip())
+        arts = self.store.item_artifacts(out.strip())
         repos = [a.value for a in arts if a.type == "repo"]
         self.assertEqual(repos, ["app"])
 
     def test_file_rejects_unknown_repo(self):
-        epic = self.store.create_epic("epic")
-        before = len(self.store.all_tasks())
+        theme = self.store.create_theme("theme")
+        before = len(self.store.all_nodes())
         rc, out, err = call(
             _cli_mod.cmd_file,
             "specs/X.md",
             "--step",
             "build",
-            "--epic",
-            epic,
+            "--theme",
+            theme,
             "--repo",
             "does-not-exist",
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
-        self.assertEqual(len(self.store.all_tasks()), before)
+        self.assertEqual(len(self.store.all_nodes()), before)
 
 
 class TestUnblock(unittest.TestCase):
@@ -1368,23 +1368,23 @@ class TestUnblock(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_unblock_returns_blocked_task_to_agent_role(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
         call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         rc, out, err = call(_cli_mod.cmd_unblock, b)
         self.assertEqual(rc, 0, err)
-        t = self.store.get_task(b)
+        t = self.store.get_node(b)
         self.assertEqual(t.status, "ready")
         self.assertEqual(t.role, "coder")
         self.assertIsNone(t.claimed_by)
 
     def test_unblock_clears_needs_and_blocked_note(self):
-        b = self.store.create_task("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
         call(_cli_mod.cmd_block, b, "--needs", "rebase first")
         rc, out, err = call(_cli_mod.cmd_unblock, b)
         self.assertEqual(rc, 0, err)
-        t = self.store.get_task(b)
+        t = self.store.get_node(b)
         self.assertIsNone(t.needs)
         self.assertNotIn("BLOCKED:", t.notes or "")
 
@@ -1392,7 +1392,7 @@ class TestUnblock(unittest.TestCase):
         (Path(self.root) / "steps" / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n"
         )
-        b = self.store.create_task("ready-merge: t", step="ready-merge", role="human")
+        b = self.store.create_step("ready-merge: t", step="ready-merge", role="human")
         rc, out, err = call(_cli_mod.cmd_unblock, b)
         self.assertEqual(rc, 1)
         self.assertIn("ready-merge", err)
@@ -1424,8 +1424,8 @@ class TestCloseWorktree(unittest.TestCase):
         )
 
     def test_close_closes_story_and_tasks_and_removes_worktree(self):
-        epic = self.store.create_epic("epic")
-        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build", "--epic", epic)
+        theme = self.store.create_theme("theme")
+        _, out, _ = call(_cli_mod.cmd_file, "specs/W.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         _, cout, _ = call(_cli_mod.cmd_claim, "coder")
         ws = json.loads(cout)["workspace"]
@@ -1433,8 +1433,8 @@ class TestCloseWorktree(unittest.TestCase):
         build = self.store.children(sid)[0].id
         rc, _, err = call(_cli_mod.cmd_close, sid, "merged")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store.get_task(sid).status, "done")
-        self.assertEqual(self.store.get_task(build).status, "done")
+        self.assertEqual(self.store.get_node(sid).status, "done")
+        self.assertEqual(self.store.get_node(build).status, "done")
         self.assertFalse(os.path.isdir(ws))
         self.assertFalse(self._has_branch(self.root, "feat/w"))
 
@@ -1443,40 +1443,40 @@ class TestClose(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, steps=True)
 
-    def test_close_epic_closes_when_all_stories_closed(self):
-        epic = self.store.create_epic("epic e")
-        child = self.store.create_story("story s", epic=epic)
+    def test_close_theme_closes_when_all_stories_closed(self):
+        theme = self.store.create_theme("theme e")
+        child = self.store.create_item("item s", theme=theme)
         self.store.close(child, "merged")
-        rc, out, err = call(_cli_mod.cmd_close, epic, "done")
+        rc, out, err = call(_cli_mod.cmd_close, theme, "done")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store.get_task(epic).status, "done")
+        self.assertEqual(self.store.get_node(theme).status, "done")
 
     def test_close_epic_refuses_with_open_story(self):
-        epic = self.store.create_epic("epic e")
-        child = self.store.create_story("story s", epic=epic)
-        rc, _, err = call(_cli_mod.cmd_close, epic, "done")
+        theme = self.store.create_theme("theme e")
+        child = self.store.create_item("item s", theme=theme)
+        rc, _, err = call(_cli_mod.cmd_close, theme, "done")
         self.assertEqual(rc, 1)
         self.assertIn(child, err)
-        self.assertEqual(self.store.get_task(epic).status, "ready")
+        self.assertEqual(self.store.get_node(theme).status, "ready")
 
     def test_close_epic_refuses_does_not_cascade_close_open_stories(self):
-        epic = self.store.create_epic("epic e")
-        child = self.store.create_story("story s", epic=epic)
-        call(_cli_mod.cmd_close, epic, "done")
-        self.assertEqual(self.store.get_task(child).status, "ready")
+        theme = self.store.create_theme("theme e")
+        child = self.store.create_item("item s", theme=theme)
+        call(_cli_mod.cmd_close, theme, "done")
+        self.assertEqual(self.store.get_node(child).status, "ready")
 
     def test_close_epic_retro_artifact_surfaces_task_and_story_duration(self):
-        epic = self.store.create_epic("epic e")
-        child = self.store.create_story("story s", epic=epic)
-        tid = self.store.create_task("build: t", step="build", role="coder", parent=child)
+        theme = self.store.create_theme("theme e")
+        child = self.store.create_item("item s", theme=theme)
+        tid = self.store.create_step("build: t", step="build", role="coder", parent=child)
         claimed = self.store.claim_ready("coder")
         self.store.close(claimed.id, "done")
         self.store.close(child, "merged")
-        rc, out, err = call(_cli_mod.cmd_close, epic, "done")
+        rc, out, err = call(_cli_mod.cmd_close, theme, "done")
         self.assertEqual(rc, 0, err)
-        artifact = next(a for a in self.store.story_artifacts(epic) if a.type == "retro")
+        artifact = next(a for a in self.store.item_artifacts(theme) if a.type == "retro")
         digest = json.loads(artifact.value)
-        row = next(s for s in digest["story_signals"] if s["story"] == child)
+        row = next(s for s in digest["item_signals"] if s["item"] == child)
         self.assertIn(tid, row["durations"])
         self.assertIsNotNone(row["durations"][tid])
         self.assertIsNotNone(row["duration"])
@@ -1547,7 +1547,7 @@ class TestLogRender(unittest.TestCase):
                         {
                             "type": "assistant",
                             "message": {
-                                "content": [{"type": "text", "text": "Claiming the task."}]
+                                "content": [{"type": "text", "text": "Claiming the step."}]
                             },
                         }
                     ),
@@ -1578,7 +1578,7 @@ class TestLogRender(unittest.TestCase):
                         "role": "coder",
                         "pid": os.getpid(),
                         "log": str(self.log),
-                        "task": None,
+                        "step": None,
                         "started": time.time(),
                     }
                 ]
@@ -1588,7 +1588,7 @@ class TestLogRender(unittest.TestCase):
     def test_logs_renders_stream_json(self):
         rc, out, err = call(_cli_mod.cmd_logs, "coder")
         self.assertEqual(rc, 0, err)
-        self.assertIn("Claiming the task.", out)
+        self.assertIn("Claiming the step.", out)
         self.assertIn("$ tg claim coder", out)
         self.assertIn("done; banner fixed", out)
         self.assertNotIn('"type"', out)
@@ -1609,8 +1609,8 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_inbox_shows_action_and_blocked_only(self):
         call(_cli_mod.cmd_add, "a seed")
-        self.store.create_task("merge: z", step="ready-merge", role="human")
-        self.store.create_task("build: q", step="build", role="human")
+        self.store.create_step("merge: z", step="ready-merge", role="human")
+        self.store.create_step("build: q", step="build", role="human")
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("[action]", out)
         self.assertIn("[blocked]", out)
@@ -1619,16 +1619,16 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_backlog_shows_todo_only(self):
         call(_cli_mod.cmd_add, "a seed")
-        self.store.create_task("merge: z", step="ready-merge", role="human")
+        self.store.create_step("merge: z", step="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_backlog)
         self.assertIn("[todo]", out)
         self.assertIn("a seed", out)
         self.assertNotIn("[action]", out)
 
     def test_inbox_limit_n(self):
-        self.store.create_task("merge: p", step="ready-merge", role="human")
-        self.store.create_task("merge: q", step="ready-merge", role="human")
-        self.store.create_task("merge: r", step="ready-merge", role="human")
+        self.store.create_step("merge: p", step="ready-merge", role="human")
+        self.store.create_step("merge: q", step="ready-merge", role="human")
+        self.store.create_step("merge: r", step="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_inbox, "1")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 1)
 
@@ -1640,7 +1640,7 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
 
     def test_inbox_shows_plan_doc_for_gate_task(self):
-        tid = self.store.create_task("merge: gate", step="ready-merge", role="human")
+        tid = self.store.create_step("merge: gate", step="ready-merge", role="human")
         self.store.add_artifact(tid, "plan-doc", "/docs/plan.md")
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("plan:/docs/plan.md", out)
@@ -1651,11 +1651,11 @@ class TestReflect(unittest.TestCase):
         _fake_setUp(self)
 
     def _file_story(self, spec_path=None):
-        sid = self.store.create_story("feat", epic=self.store.create_epic("epic"))
+        sid = self.store.create_item("feat", theme=self.store.create_theme("theme"))
         self.store.update_metadata(
             sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]}
         )
-        tid = self.store.create_task("build: feat", step="build", role="coder", parent=sid)
+        tid = self.store.create_step("build: feat", step="build", role="coder", parent=sid)
         return sid, tid
 
     def test_reflect_stores_feedback_on_task(self):
@@ -1666,19 +1666,19 @@ class TestReflect(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("reflected", out)
         self.assertEqual(
-            self.store.story_artifacts(sid), [Artifact(type="spec", value="/tmp/no-spec.md")]
+            self.store.item_artifacts(sid), [Artifact(type="spec", value="/tmp/no-spec.md")]
         )
-        refs = [a for a in self.store.story_artifacts(tid) if a.type == "reflection"]
+        refs = [a for a in self.store.item_artifacts(tid) if a.type == "reflection"]
         self.assertEqual(len(refs), 1)
         data = json.loads(refs[0].value)
         self.assertEqual(data["feedback"], "pytest not found; spec thin on errors")
-        self.assertEqual(data["task"], tid)
+        self.assertEqual(data["step"], tid)
 
     def test_reflect_multiple_calls_append(self):
         sid, tid = self._file_story()
         call(_cli_mod.cmd_reflect, tid, "--feedback", "first")
         call(_cli_mod.cmd_reflect, tid, "--feedback", "second")
-        refs = [a for a in self.store.story_artifacts(tid) if a.type == "reflection"]
+        refs = [a for a in self.store.item_artifacts(tid) if a.type == "reflection"]
         self.assertEqual(len(refs), 2)
 
     def test_reflect_stamps_spec_hash(self):
@@ -1691,7 +1691,7 @@ class TestReflect(unittest.TestCase):
         self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
         call(_cli_mod.cmd_reflect, tid, "--feedback", "ok")
         data = json.loads(
-            next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value
+            next(a for a in self.store.item_artifacts(tid) if a.type == "reflection").value
         )
         self.assertNotEqual(data["spec_hash"], "unknown")
         self.assertEqual(len(data["spec_hash"]), 8)
@@ -1701,7 +1701,7 @@ class TestReflect(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_reflect, tid)
         self.assertEqual(rc, 0, err)
         data = json.loads(
-            next(a for a in self.store.story_artifacts(tid) if a.type == "reflection").value
+            next(a for a in self.store.item_artifacts(tid) if a.type == "reflection").value
         )
         self.assertEqual(data["feedback"], "")
 
@@ -1711,68 +1711,68 @@ class TestRetro(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def _make_epic_with_story(self, sid=None):
-        epic = self.store.create_epic("epic-1")
+        theme = self.store.create_theme("theme-1")
         if sid is None:
-            sid = self.store.create_story("story-1", epic=epic)
-        return epic, sid
+            sid = self.store.create_item("item-1", theme=theme)
+        return theme, sid
 
     def test_retro_no_reflections(self):
-        epic, _ = self._make_epic_with_story()
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        theme, _ = self._make_epic_with_story()
+        rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("N=0", out)
         self.assertIn("no reflections yet", out)
-        self.assertIn("Per-story signals", out)
+        self.assertIn("Per-item signals", out)
 
     def test_retro_shows_feedback(self):
-        epic, sid = self._make_epic_with_story()
-        tid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        theme, sid = self._make_epic_with_story()
+        tid = self.store.create_step("build: s", step="build", role="coder", parent=sid)
         call(_cli_mod.cmd_reflect, tid, "--feedback", "edge case coverage was thin")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("N=1", out)
         self.assertIn("Feedback", out)
         self.assertIn("edge case coverage was thin", out)
 
     def test_retro_surfaces_epic_level_feedback(self):
-        epic, _ = self._make_epic_with_story()
-        ptid = self.store.create_task("plan: e", step="plan", role="planner", parent=epic)
+        theme, _ = self._make_epic_with_story()
+        ptid = self.store.create_step("plan: e", step="plan", role="planner", parent=theme)
         call(_cli_mod.cmd_reflect, ptid, "--feedback", "brief was thin on dep ordering")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("brief was thin on dep ordering", out)
 
     def test_retro_signals_review_rounds(self):
-        epic, sid = self._make_epic_with_story()
-        self.store.create_task("review: s", step="review", role="reviewer", parent=sid)
-        rtid = self.store.create_task("review: s2", step="review", role="reviewer", parent=sid)
+        theme, sid = self._make_epic_with_story()
+        self.store.create_step("review: s", step="review", role="reviewer", parent=sid)
+        rtid = self.store.create_step("review: s2", step="review", role="reviewer", parent=sid)
         self.store.close(rtid, "rejected")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("review_rounds=1", out)
 
     def test_retro_signals_conflict(self):
-        epic, sid = self._make_epic_with_story()
-        pr_tid = self.store.create_task("open-pr: s", step="open-pr", role="pr-watcher", parent=sid)
+        theme, sid = self._make_epic_with_story()
+        pr_tid = self.store.create_step("open-pr: s", step="open-pr", role="pr-watcher", parent=sid)
         self.store.close(pr_tid, "conflict-rebase")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("conflicts=1", out)
 
     def test_retro_shows_story_duration_for_claimed_and_closed_task(self):
-        epic, sid = self._make_epic_with_story()
-        self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        theme, sid = self._make_epic_with_story()
+        self.store.create_step("build: s", step="build", role="coder", parent=sid)
         claimed = self.store.claim_ready("coder")
         self.store.close(claimed.id, "done")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertRegex(out, r"duration=\d")
 
     def test_retro_shows_unknown_duration_when_task_never_claimed(self):
-        epic, sid = self._make_epic_with_story()
-        tid = self.store.create_task("build: s", step="build", role="coder", parent=sid)
+        theme, sid = self._make_epic_with_story()
+        tid = self.store.create_step("build: s", step="build", role="coder", parent=sid)
         self.store.close(tid, "done")
-        rc, out, err = call(_cli_mod.cmd_retro, epic)
+        rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("duration=unknown", out)
 
@@ -1782,7 +1782,7 @@ class TestWorklog(unittest.TestCase):
         _fake_setUp(self)
 
     def _close_story(self, title="feat: shipped-thing", reason="merged"):
-        sid = self.store.create_story(title, epic=self.store.create_epic("epic"))
+        sid = self.store.create_item(title, theme=self.store.create_theme("theme"))
         self.store.close(sid, reason)
         return sid
 
@@ -1803,7 +1803,7 @@ class TestWorklog(unittest.TestCase):
         self._close_story()
         rc, out, err = call(_cli_mod.cmd_worklog, "yesterday")
         self.assertEqual(rc, 0, err)
-        self.assertIn("no stories", out)
+        self.assertIn("no items", out)
 
     def test_worklog_two_arg_range_includes_today(self):
         import datetime
@@ -1818,7 +1818,7 @@ class TestWorklog(unittest.TestCase):
     def test_worklog_empty_period_prints_no_stories_message(self):
         rc, out, err = call(_cli_mod.cmd_worklog, "2020-01-01")
         self.assertEqual(rc, 0, err)
-        self.assertIn("no stories", out)
+        self.assertIn("no items", out)
 
     def test_worklog_shows_pr_link_when_present(self):
         sid = self._close_story()
@@ -1837,10 +1837,10 @@ class TestWorklog(unittest.TestCase):
         self.assertNotIn("https://", out)
 
     def test_worklog_excludes_tasks(self):
-        self.store.create_task("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_worklog)
         self.assertEqual(rc, 0, err)
-        self.assertIn("no stories", out)
+        self.assertIn("no items", out)
 
     def test_worklog_shows_title_and_outcome(self):
         self._close_story(title="shipped-thing", reason="done")
@@ -1854,14 +1854,14 @@ class TestWorklog(unittest.TestCase):
         self.assertIn("worklog", r.stdout)
 
 
-class TestCadenceTaskDTO(unittest.TestCase):
+class TestCadenceStepDTO(unittest.TestCase):
     """Verifies that the CLI DTO emitted by tg show / tg claim includes 'since'."""
 
     def setUp(self):
         _fake_setUp(self)
 
     def test_show_cadence_task_includes_since(self):
-        tid = self.store.create_task("trend: window", step="audit", role="auditor")
+        tid = self.store.create_step("trend: window", step="audit", role="auditor")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
@@ -1870,7 +1870,7 @@ class TestCadenceTaskDTO(unittest.TestCase):
         self.assertEqual(d["fired_at"], "2026-01-01")
 
     def test_claim_cadence_task_includes_since(self):
-        tid = self.store.create_task("trend: window", step="audit", role="auditor")
+        tid = self.store.create_step("trend: window", step="audit", role="auditor")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
         rc, out, err = call(_cli_mod.cmd_claim, "auditor")
         self.assertEqual(rc, 0, err)
@@ -1880,17 +1880,17 @@ class TestCadenceTaskDTO(unittest.TestCase):
         self.assertEqual(d["fired_at"], "2026-01-01")
 
 
-class TestTaskDTOReadSurface(unittest.TestCase):
+class TestNodeDTOReadSurface(unittest.TestCase):
     AGENT_CONSUMED_FIELDS = (
         "id", "parent", "step", "status", "artifacts", "description",
-        "notes", "epic", "since", "fired_at", "closed_at", "attention",
+        "notes", "theme", "since", "fired_at", "closed_at", "attention",
     )
 
     def setUp(self):
         _fake_setUp(self)
 
     def _make_task(self):
-        tid = self.store.create_task("build: t", step="build", role="coder")
+        tid = self.store.create_step("build: t", step="build", role="coder")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
         return tid
 
@@ -1952,7 +1952,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 
     def _make_store(self, branch="feat/my-feat"):
         store = FakeStore()
-        sid = store.create_story("my-feat", epic=store.create_epic("epic"))
+        sid = store.create_item("my-feat", theme=store.create_theme("theme"))
         store.add_artifact(sid, "repo", "app")
         store.add_artifact(sid, "branch", branch)
         return store, sid
@@ -2024,20 +2024,20 @@ class TestWorkflowSelection(unittest.TestCase):
         )
 
     def _epic(self, *args):
-        _, out, err = call(_cli_mod.cmd_epic, *args)
+        _, out, err = call(_cli_mod.cmd_theme, *args)
         return out.strip()
 
-    def _file(self, spec, epic, *args):
-        _, out, err = call(_cli_mod.cmd_file, spec, "--epic", epic, *args)
+    def _file(self, spec, theme, *args):
+        _, out, err = call(_cli_mod.cmd_file, spec, "--theme", theme, *args)
         return out.strip()
 
-    def _build_task(self, story):
+    def _build_task(self, item):
         return next(
-            t for t in self.store.all_tasks() if t.parent == story and t.step == "build"
+            t for t in self.store.all_nodes() if t.parent == item and t.step == "build"
         )
 
-    def _open_successor_steps(self, story):
-        return {t.step for t in self.store.all_tasks() if t.parent == story and t.step != "build"}
+    def _open_successor_steps(self, item):
+        return {t.step for t in self.store.all_nodes() if t.parent == item and t.step != "build"}
 
     def test_two_epics_route_by_their_own_workflow(self):
         std_epic = self._epic("standard objective")
@@ -2052,22 +2052,22 @@ class TestWorkflowSelection(unittest.TestCase):
         self.assertEqual(self._open_successor_steps(solo_story), set())
 
     def test_file_derives_entry_step_from_the_workflow(self):
-        epic = self._epic("obj")
-        story = self._file("A.md", epic)
-        self.assertEqual(self._build_task(story).step, "build")
+        theme = self._epic("obj")
+        item = self._file("A.md", theme)
+        self.assertEqual(self._build_task(item).step, "build")
 
     def test_epic_workflow_is_inherited_without_stamping_the_story(self):
-        epic = self._epic("obj", "--workflow", "solo")
-        story = self._file("A.md", epic)
-        self.assertEqual(self.store.get_task(epic).workflow, "solo")
-        self.assertIsNone(self.store.get_task(story).workflow)
+        theme = self._epic("obj", "--workflow", "solo")
+        item = self._file("A.md", theme)
+        self.assertEqual(self.store.get_node(theme).workflow, "solo")
+        self.assertIsNone(self.store.get_node(item).workflow)
 
     def test_story_can_override_the_epic_workflow(self):
-        epic = self._epic("obj")
-        story = self._file("A.md", epic, "--workflow", "solo")
-        self.assertEqual(self.store.get_task(story).workflow, "solo")
-        call(_cli_mod.cmd_done, self._build_task(story).id, "done")
-        self.assertEqual(self._open_successor_steps(story), set())
+        theme = self._epic("obj")
+        item = self._file("A.md", theme, "--workflow", "solo")
+        self.assertEqual(self.store.get_node(item).workflow, "solo")
+        call(_cli_mod.cmd_done, self._build_task(item).id, "done")
+        self.assertEqual(self._open_successor_steps(item), set())
 
 
 class TestProjectWorkflowOverride(unittest.TestCase):
@@ -2077,25 +2077,25 @@ class TestProjectWorkflowOverride(unittest.TestCase):
         pdir.mkdir(parents=True)
         (pdir / "standard.md").write_text("entry: build\n\nnodes:\n  build  coder\n")
 
-    def _build_task(self, story):
+    def _build_task(self, item):
         return next(
-            t for t in self.store.all_tasks() if t.parent == story and t.step == "build"
+            t for t in self.store.all_nodes() if t.parent == item and t.step == "build"
         )
 
-    def _successors(self, story):
-        return {t.step for t in self.store.all_tasks() if t.parent == story and t.step != "build"}
+    def _successors(self, item):
+        return {t.step for t in self.store.all_nodes() if t.parent == item and t.step != "build"}
 
     def test_a_project_grid_workflow_shadows_the_default_for_that_project(self):
-        epic = call(_cli_mod.cmd_epic, "obj")[1].strip()
-        story = call(_cli_mod.cmd_file, "A.md", "--epic", epic, "--project", "myapp")[1].strip()
-        call(_cli_mod.cmd_done, self._build_task(story).id, "done")
-        self.assertEqual(self._successors(story), set())
+        theme = call(_cli_mod.cmd_theme, "obj")[1].strip()
+        item = call(_cli_mod.cmd_file, "A.md", "--theme", theme, "--project", "myapp")[1].strip()
+        call(_cli_mod.cmd_done, self._build_task(item).id, "done")
+        self.assertEqual(self._successors(item), set())
 
     def test_a_story_without_that_project_uses_the_default(self):
-        epic = call(_cli_mod.cmd_epic, "obj2")[1].strip()
-        story = call(_cli_mod.cmd_file, "B.md", "--epic", epic)[1].strip()
-        call(_cli_mod.cmd_done, self._build_task(story).id, "done")
-        self.assertIn("review", self._successors(story))
+        theme = call(_cli_mod.cmd_theme, "obj2")[1].strip()
+        item = call(_cli_mod.cmd_file, "B.md", "--theme", theme)[1].strip()
+        call(_cli_mod.cmd_done, self._build_task(item).id, "done")
+        self.assertIn("review", self._successors(item))
 
 
 if __name__ == "__main__":

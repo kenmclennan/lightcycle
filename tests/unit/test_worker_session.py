@@ -29,25 +29,25 @@ class TestSessionPolicy(unittest.TestCase):
         p = SessionPolicy()
         p.observe_claimed(True)
         p.observe_command("tg done abc.1 done")
-        self.assertEqual(p.on_result(has_open_task=True), CLOSE)
+        self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
     def test_no_work_exit_closes(self):
         p = SessionPolicy()
-        self.assertEqual(p.on_result(has_open_task=False), CLOSE)
+        self.assertEqual(p.on_result(has_open_step=False), CLOSE)
 
     def test_unresolved_task_nudges_indefinitely_never_closes_a_working_worker(self):
         p = SessionPolicy()
         p.observe_claimed(True)
         for _ in range(20):
-            self.assertEqual(p.on_result(has_open_task=True), NUDGE)
+            self.assertEqual(p.on_result(has_open_step=True), NUDGE)
         self.assertEqual(p.nudges, 20)
 
     def test_terminal_overrides_nudge(self):
         p = SessionPolicy()
         p.observe_claimed(True)
-        self.assertEqual(p.on_result(has_open_task=True), NUDGE)
+        self.assertEqual(p.on_result(has_open_step=True), NUDGE)
         p.observe_command("tg block abc.1 --needs x")
-        self.assertEqual(p.on_result(has_open_task=True), CLOSE)
+        self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
 
 if __name__ == "__main__":

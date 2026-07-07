@@ -5,7 +5,7 @@ from lightcycle.domain.work.artifact import Artifact
 
 
 @dataclass(frozen=True)
-class Story:
+class Item:
     id: str
     artifacts: Tuple[Artifact, ...] = ()
 

@@ -4,7 +4,7 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class BlockInput:
-    task: str
+    step: str
     needs: str
     branch: Optional[str] = None
     pr: Optional[str] = None
@@ -12,7 +12,7 @@ class BlockInput:
     tried: Optional[str] = None
 
 
-class BlockTaskUseCase:
+class BlockStepUseCase:
     def __init__(self, store):
         self._store = store
 
@@ -27,5 +27,5 @@ class BlockTaskUseCase:
         ):
             if v:
                 resume[k] = v
-        self._store.update_metadata(input.task, resume)
-        self._store.route_to_human(input.task, "BLOCKED: %s" % input.needs)
+        self._store.update_metadata(input.step, resume)
+        self._store.route_to_human(input.step, "BLOCKED: %s" % input.needs)

@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.domain.flow import Flow, Transition
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.work import Task
+from lightcycle.domain.work import Node
 from tests.support.fake_fs import graph_text_from_metas
 
 
@@ -94,7 +94,7 @@ class TestTransition(unittest.TestCase):
         return Transition(from_step=from_step, outcome=outcome, to_step=to_step, to_role=to_role)
 
     def test_next_task_spec_strips_step_prefix_and_keeps_deps(self):
-        spec = self._t().next_task_spec(Task(id="t-1", title="build: make the thing"))
+        spec = self._t().next_step_spec(Node(id="t-1", title="build: make the thing"))
         self.assertEqual(spec.title, "review: make the thing")
         self.assertEqual(spec.step, "review")
         self.assertEqual(spec.role, "reviewer")
@@ -102,11 +102,11 @@ class TestTransition(unittest.TestCase):
         self.assertEqual(spec.deps, ("t-1",))
 
     def test_next_task_spec_includes_parent_when_present(self):
-        spec = self._t().next_task_spec(Task(id="t-1", title="build: x", parent="s-9"))
+        spec = self._t().next_step_spec(Node(id="t-1", title="build: x", parent="s-9"))
         self.assertEqual(spec.parent, "s-9")
 
     def test_next_task_spec_as_kwargs_matches_create_task(self):
-        kw = self._t().next_task_spec(Task(id="t-1", title="build: x", parent="s-9")).as_kwargs()
+        kw = self._t().next_step_spec(Node(id="t-1", title="build: x", parent="s-9")).as_kwargs()
         self.assertEqual(
             kw,
             {
@@ -133,22 +133,22 @@ class TestTransition(unittest.TestCase):
 
 
 class TestEpicClose(unittest.TestCase):
-    def test_no_on_epic_close_returns_empty(self):
+    def test_no_on_theme_close_returns_empty(self):
         flow = mkflow(METAS)
-        self.assertEqual(flow.epic_close_steps(), [])
+        self.assertEqual(flow.theme_close_steps(), [])
 
-    def test_step_declaring_on_epic_close_is_returned(self):
+    def test_step_declaring_on_theme_close_is_returned(self):
         metas = {
-            "inspector": {"model": "sonnet", "step": "inspect", "on_epic_close": True},
+            "inspector": {"model": "sonnet", "step": "inspect", "on_theme_close": True},
             "coder": {"model": "sonnet", "step": "build"},
         }
         flow = mkflow(metas)
-        self.assertEqual(flow.epic_close_steps(), [("inspect", "inspector")])
+        self.assertEqual(flow.theme_close_steps(), [("inspect", "inspector")])
 
     def test_agnostic_arbitrary_step_name(self):
-        metas = {"checker": {"model": "haiku", "step": "check-it", "on_epic_close": True}}
+        metas = {"checker": {"model": "haiku", "step": "check-it", "on_theme_close": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.epic_close_steps(), [("check-it", "checker")])
+        self.assertEqual(flow.theme_close_steps(), [("check-it", "checker")])
 
 
 class TestRetroCadence(unittest.TestCase):
@@ -170,11 +170,11 @@ class TestRetroCadence(unittest.TestCase):
         self.assertEqual(flow.retro_cadence_steps(), [("check-trends", "checker")])
 
 
-    def test_step_can_declare_both_epic_close_and_retro_cadence(self):
+    def test_step_can_declare_both_theme_close_and_retro_cadence(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
-                              "on_epic_close": True, "on_retro_cadence": True}}
+                              "on_theme_close": True, "on_retro_cadence": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.epic_close_steps(), [("audit", "auditor")])
+        self.assertEqual(flow.theme_close_steps(), [("audit", "auditor")])
         self.assertEqual(flow.retro_cadence_steps(), [("audit", "auditor")])
 
 
@@ -196,9 +196,9 @@ class TestHooks(unittest.TestCase):
         self.assertIn("on_event_b", hooks)
 
     def test_known_hooks_also_appear_generically(self):
-        metas = {"inspector": {"model": "sonnet", "step": "inspect", "on_epic_close": True}}
+        metas = {"inspector": {"model": "sonnet", "step": "inspect", "on_theme_close": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.hooks().get("on_epic_close"), ["inspect"])
+        self.assertEqual(flow.hooks().get("on_theme_close"), ["inspect"])
 
     def test_falsy_hook_value_not_included(self):
         metas = {"role": {"model": "sonnet", "step": "s", "on_event": False}}
@@ -211,7 +211,7 @@ class TestHookSteps(unittest.TestCase):
         self.assertEqual(flow.hook_steps(), [])
 
     def test_known_hook_step_included(self):
-        metas = {"auditor": {"model": "sonnet", "step": "audit", "on_epic_close": True}}
+        metas = {"auditor": {"model": "sonnet", "step": "audit", "on_theme_close": True}}
         flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
 
@@ -222,13 +222,13 @@ class TestHookSteps(unittest.TestCase):
 
     def test_step_flagged_by_multiple_hooks_appears_once(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
-                              "on_epic_close": True, "on_retro_cadence": True}}
+                              "on_theme_close": True, "on_retro_cadence": True}}
         flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
 
     def test_multiple_hook_steps_sorted(self):
         metas = {
-            "beta": {"model": "sonnet", "step": "zz-step", "on_epic_close": True},
+            "beta": {"model": "sonnet", "step": "zz-step", "on_theme_close": True},
             "alpha": {"model": "sonnet", "step": "aa-step", "on_retro_cadence": True},
         }
         steps = mkflow(metas).hook_steps()

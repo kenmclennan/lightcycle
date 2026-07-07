@@ -2,16 +2,16 @@ from lightcycle.domain.work.lane import Lane
 from lightcycle.domain.work.status import Status
 
 
-class TaskQueue:
-    def __init__(self, tasks):
-        self._tasks = list(tasks)
+class NodeQueue:
+    def __init__(self, steps):
+        self._steps = list(steps)
 
     def by_status(self, status):
-        return [t for t in self._tasks if t.status == status]
+        return [t for t in self._steps if t.status == status]
 
     def by_lane(self, ready_ids):
         lanes = {lane.value: [] for lane in Lane}
-        for t in self._tasks:
+        for t in self._steps:
             lane = Status(t.status).lane
             if lane is Lane.QUEUE and t.id not in ready_ids:
                 lane = Lane.BLOCKED

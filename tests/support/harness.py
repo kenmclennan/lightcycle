@@ -59,5 +59,5 @@ class Harness:
             rc = e.code if isinstance(e.code, int) else 1
         return rc, out.getvalue(), err.getvalue()
 
-    def ready_tasks(self, role):
-        return [t for t in self.store.all_tasks() if t.status == "ready" and t.role == role]
+    def ready_steps(self, role):
+        return [t for t in self.store.all_nodes() if t.status == "ready" and t.role == role]

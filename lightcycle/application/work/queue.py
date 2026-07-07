@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-from lightcycle.domain.work import Task, TaskQueue
+from lightcycle.domain.work import Node, NodeQueue
 
 
 @dataclass(frozen=True)
@@ -11,7 +11,7 @@ class QueueInput:
 
 @dataclass(frozen=True)
 class QueueResponse:
-    tasks: List[Task]
+    steps: List[Node]
 
 
 class QueueUseCase:
@@ -19,6 +19,6 @@ class QueueUseCase:
         self._store = store
 
     def execute(self, input: QueueInput) -> QueueResponse:
-        ready_ids = {t.id for t in self._store.ready_tasks()}
-        lanes = TaskQueue(self._store.all_tasks()).by_lane(ready_ids)
-        return QueueResponse(tasks=(lanes["queue"] + lanes["blocked"])[: input.n])
+        ready_ids = {t.id for t in self._store.ready_steps()}
+        lanes = NodeQueue(self._store.all_nodes()).by_lane(ready_ids)
+        return QueueResponse(steps=(lanes["queue"] + lanes["blocked"])[: input.n])

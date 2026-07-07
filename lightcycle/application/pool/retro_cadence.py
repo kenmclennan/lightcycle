@@ -43,11 +43,11 @@ class RetroCadenceUseCase:
             elapsed = _days_between(now_date, reference)
             if elapsed < interval_days:
                 continue
-            epics = self._store.epics_closed_since(reference)
-            if len(epics) < min_epics:
+            themes = self._store.themes_closed_since(reference)
+            if len(themes) < min_epics:
                 continue
-            tid = self._store.create_task(
-                "%s: cross-epic trend audit" % step, step=step, role=role)
+            tid = self._store.create_step(
+                "%s: cross-theme trend audit" % step, step=step, role=role)
             self._store.update_metadata(tid, {"since": reference, "fired_at": now_date})
             fired.append(tid)
 
@@ -55,16 +55,16 @@ class RetroCadenceUseCase:
 
     def _last_fire_reference(self, step) -> Optional[str]:
         max_fired_at = None
-        for task in self._store.tasks_at_step(step):
-            if task.fired_at and (max_fired_at is None or task.fired_at > max_fired_at):
-                max_fired_at = task.fired_at
+        for step in self._store.steps_at_step(step):
+            if step.fired_at and (max_fired_at is None or step.fired_at > max_fired_at):
+                max_fired_at = step.fired_at
         if max_fired_at:
             return max_fired_at
         return self._oldest_closed_epic_date()
 
     def _oldest_closed_epic_date(self) -> Optional[str]:
-        epics = self._store.last_n_closed_epics(1000)
-        if not epics:
+        themes = self._store.last_n_closed_epics(1000)
+        if not themes:
             return None
-        dates = [e.closed_at[:10] for e in epics if e.closed_at]
+        dates = [e.closed_at[:10] for e in themes if e.closed_at]
         return min(dates) if dates else None
