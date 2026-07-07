@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#
+# DEV-ONLY - not part of the shipped tool.
+#
+# Install the CURRENT checkout as your running the-grid engine, via pipx. This is
+# how the-grid ships itself on a dev machine: the engine you *run* (pipx-installed)
+# and the source you *develop* (this checkout) are separate, so the running engine
+# stays stable while you change its source.
+#
+#   dogfood a change:   python -m the_grid.cli <cmd>     (or ./bin/tg <cmd>)
+#   ship it:            branch -> PR -> merge, then
+#                       git checkout main && git pull && bin/promote-engine
+#   rollback:           git checkout <previous-ref> && bin/promote-engine
+#
+# A normal user of the-grid never runs this - they `pipx install`/`pipx upgrade`.
+#
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+ref="$(git rev-parse --short HEAD)"
+branch="$(git rev-parse --abbrev-ref HEAD)"
+echo "promoting running engine <- checkout @ ${ref} (${branch})"
+pipx install --force .
+echo "done - 'tg' now runs ${ref}. rollback: git checkout <prev-ref> && bin/promote-engine"
