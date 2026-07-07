@@ -32,6 +32,28 @@ class TestRenderBanner(unittest.TestCase):
         out = render_banner("aaa\n\n", color=False)
         self.assertEqual(out, "aaa")
 
+    def test_width_center_crops_a_wide_line(self):
+        out = render_banner("abcdefgh", color=False, width=4)
+        self.assertEqual(out, "cdef")
+
+    def test_width_leaves_lines_that_fit_untouched(self):
+        out = render_banner("abc", color=False, width=10)
+        self.assertEqual(out, "abc")
+
+    def test_center_crop_uses_one_shared_window_so_art_stays_aligned(self):
+        out = render_banner("aaaaaaaa\nbbbb", color=False, width=4)
+        self.assertEqual(out, "aaaa\nbb")
+
+    def test_none_width_never_crops(self):
+        out = render_banner("abcdefgh", color=False, width=None)
+        self.assertEqual(out, "abcdefgh")
+
+    def test_width_crops_before_coloring_so_no_overflow(self):
+        out = render_banner("abcdefgh", color=True, width=4)
+        self.assertIn("38;2;", out)
+        self.assertIn("cdef", out)
+        self.assertNotIn("abcd", out)
+
 
 if __name__ == "__main__":
     unittest.main()
