@@ -18,6 +18,7 @@ class InitGridUseCase:
         existed = self._fs.store_ready()
         self._store.ensure_store()
         self._fs.ensure_logs_dir()
+        self._fs.ensure_override_dirs()
         created = self._config.ensure_config()
         return InitGridResponse(
             existed=existed, created=created, config_path=self._config.config_path()

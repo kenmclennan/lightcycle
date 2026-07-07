@@ -12,7 +12,7 @@ from the_grid.ports.spawner import SpawnerPort
 
 def spawn_worker(config, role):
     root = config.data_root()
-    agent = fsio.parse_step(config.library_root(), role)
+    agent = fsio.parse_step([config.data_root(), config.library_root()], role)
     if agent is None:
         sys.stderr.write("no agent definition for role %s\n" % role)
         return None
