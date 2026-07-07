@@ -26,13 +26,13 @@ _ROOT = str(Path(__file__).resolve().parents[2] / "the_grid" / "library")
 
 
 class _RealFs:
-    def step_roles(self):
+    def step_roles(self, project=None):
         return step_roles(_ROOT)
 
-    def parse_step(self, role):
+    def parse_step(self, role, project=None):
         return parse_step(_ROOT, role)
 
-    def workflow_text(self, name):
+    def workflow_text(self, name, project=None):
         return workflow_text(_ROOT, name)
 
 

@@ -7,15 +7,19 @@ from the_grid.adapters.fsio import FsAdapter
 
 
 class _Cfg:
-    def __init__(self, data, lib):
+    def __init__(self, data, lib, projects=None):
         self._data = data
         self._lib = lib
+        self._projects = projects
 
     def data_root(self):
         return self._data
 
     def library_root(self):
         return self._lib
+
+    def projects_root(self):
+        return self._projects
 
 
 def _layers():
@@ -24,6 +28,15 @@ def _layers():
         os.makedirs(os.path.join(base, "steps"))
         os.makedirs(os.path.join(base, "workflows"))
     return FsAdapter(_Cfg(data, lib)), Path(data), Path(lib)
+
+
+def _layers_with_project(project="myapp"):
+    data, lib, projects = tempfile.mkdtemp(), tempfile.mkdtemp(), tempfile.mkdtemp()
+    pgrid = os.path.join(projects, project, ".grid")
+    for base in (data, lib, pgrid):
+        os.makedirs(os.path.join(base, "steps"))
+        os.makedirs(os.path.join(base, "workflows"))
+    return FsAdapter(_Cfg(data, lib, projects)), Path(data), Path(lib), Path(pgrid)
 
 
 class TestLayeredResolution(unittest.TestCase):
@@ -57,3 +70,30 @@ class TestLayeredResolution(unittest.TestCase):
         (lib / "driver.md").write_text("---\nmodel: opus\n---\ndefault seat")
         (data / "driver.md").write_text("---\nmodel: opus\n---\nmy seat")
         self.assertEqual(fs.read_md("driver.md")["body"], "my seat")
+
+
+class TestProjectLayer(unittest.TestCase):
+    def test_project_step_shadows_home_and_default(self):
+        fs, data, lib, pgrid = _layers_with_project()
+        (lib / "steps" / "coder.md").write_text("---\nmodel: sonnet\n---\ndefault")
+        (data / "steps" / "coder.md").write_text("---\nmodel: sonnet\n---\nhome")
+        (pgrid / "steps" / "coder.md").write_text("---\nmodel: sonnet\n---\nproject")
+        self.assertEqual(fs.parse_step("coder", "myapp")["body"], "project")
+
+    def test_home_wins_when_no_project_given(self):
+        fs, data, lib, pgrid = _layers_with_project()
+        (data / "steps" / "coder.md").write_text("---\nmodel: sonnet\n---\nhome")
+        (pgrid / "steps" / "coder.md").write_text("---\nmodel: sonnet\n---\nproject")
+        self.assertEqual(fs.parse_step("coder")["body"], "home")
+
+    def test_project_workflow_shadows_home_and_default(self):
+        fs, data, lib, pgrid = _layers_with_project()
+        (lib / "workflows" / "standard.md").write_text("entry: build\n")
+        (data / "workflows" / "standard.md").write_text("entry: home\n")
+        (pgrid / "workflows" / "standard.md").write_text("entry: project\n")
+        self.assertIn("entry: project", fs.workflow_text("standard", "myapp"))
+
+    def test_falls_through_to_home_then_default_for_a_project(self):
+        fs, data, lib, pgrid = _layers_with_project()
+        (lib / "workflows" / "poc.md").write_text("entry: build\n")
+        self.assertIn("entry: build", fs.workflow_text("poc", "myapp"))

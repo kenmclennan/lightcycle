@@ -71,17 +71,18 @@ class FileStoryUseCase:
     def execute(self, input: FileStoryInput) -> FileStoryResponse:
         epic = self._require_open_epic(input.epic)
         workflow = input.workflow or self._flow.workflow_for(epic)
-        step = input.step or self._flow.load_graph(workflow).entry
-        flow = self._flow.load_flow(workflow)
+        project = input.project or self._flow.project_for(epic)
+        step = input.step or self._flow.load_graph(workflow, project).entry
+        flow = self._flow.load_flow(workflow, project)
         role = flow.owner_of(step)
         if not role:
             raise UseCaseError(
                 "unknown step '%s' in workflow '%s'; owned steps: %s"
                 % (step, workflow, ", ".join(flow.steps()) or "(none)")
             )
-        unmet = StepContract.from_meta(self._flow.meta_for_step(step, workflow)).missing_inputs(
-            FILE_PROVIDES
-        )
+        unmet = StepContract.from_meta(
+            self._flow.meta_for_step(step, workflow, project)
+        ).missing_inputs(FILE_PROVIDES)
         if unmet:
             raise UseCaseError(
                 "step '%s' requires %s; a filed story only carries a spec. "

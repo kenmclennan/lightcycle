@@ -2070,5 +2070,33 @@ class TestWorkflowSelection(unittest.TestCase):
         self.assertEqual(self._open_successor_steps(story), set())
 
 
+class TestProjectWorkflowOverride(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self, steps=True)
+        pdir = Path(self.root) / "myapp" / ".grid" / "workflows"
+        pdir.mkdir(parents=True)
+        (pdir / "standard.md").write_text("entry: build\n\nnodes:\n  build  coder\n")
+
+    def _build_task(self, story):
+        return next(
+            t for t in self.store.all_tasks() if t.parent == story and t.step == "build"
+        )
+
+    def _successors(self, story):
+        return {t.step for t in self.store.all_tasks() if t.parent == story and t.step != "build"}
+
+    def test_a_project_grid_workflow_shadows_the_default_for_that_project(self):
+        epic = call(_cli_mod.cmd_epic, "obj")[1].strip()
+        story = call(_cli_mod.cmd_file, "A.md", "--epic", epic, "--project", "myapp")[1].strip()
+        call(_cli_mod.cmd_done, self._build_task(story).id, "done")
+        self.assertEqual(self._successors(story), set())
+
+    def test_a_story_without_that_project_uses_the_default(self):
+        epic = call(_cli_mod.cmd_epic, "obj2")[1].strip()
+        story = call(_cli_mod.cmd_file, "B.md", "--epic", epic)[1].strip()
+        call(_cli_mod.cmd_done, self._build_task(story).id, "done")
+        self.assertIn("review", self._successors(story))
+
+
 if __name__ == "__main__":
     unittest.main()

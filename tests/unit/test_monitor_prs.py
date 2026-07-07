@@ -14,13 +14,16 @@ class _FlowAdapter:
     def workflow_for(self, task):
         return None
 
-    def flow_next(self, step, outcome, name=None):
+    def project_for(self, task):
+        return None
+
+    def flow_next(self, step, outcome, name=None, project=None):
         return self._flow.next(step, outcome)
 
-    def outcomes_for(self, step, name=None):
+    def outcomes_for(self, step, name=None, project=None):
         return self._flow.outcomes_for(step)
 
-    def meta_for_step(self, step, name=None):
+    def meta_for_step(self, step, name=None, project=None):
         return {}
 
 
