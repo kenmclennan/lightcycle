@@ -57,7 +57,7 @@ def write_config(projects=None, specs=None):
         "worker-history: 20",
         "editor: vi",
         "retro-interval-days: 7",
-        "retro-min-epics: 3",
+        "retro-min-items: 3",
     ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p

@@ -494,9 +494,9 @@ def cmd_inbox(argv):
     resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(now=time.time(), n=a.n))
     for row in resp.rows:
         _print_human_row(row.kind, row.step)
-    if resp.candidate_epics:
+    if resp.candidate_themes:
         print("close-candidate themes:")
-        for e in resp.candidate_epics:
+        for e in resp.candidate_themes:
             print(
                 "  %s  %s (%d %s closed)  -- lc close %s <reason>"
                 % (

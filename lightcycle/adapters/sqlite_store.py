@@ -519,19 +519,26 @@ class SqliteStore(StorePort):
             (since_date,),
         )
 
-    def last_n_closed_epics(self, n):
+    def last_n_closed_themes(self, n):
         return self._select(
             "type = 'theme' AND status = 'closed'",
             params=(n,),
             suffix="ORDER BY closed_at DESC LIMIT ?",
         )
 
-    def themes_closed_since(self, since_date_str):
+
+    def items_closed_since(self, since_date):
         return self._select(
-            "type = 'theme' AND status = 'closed' "
-            "AND substr(closed_at, 1, 10) >= ? "
+            "type = 'item' AND status = 'closed' AND substr(closed_at, 1, 10) >= ? "
             "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin')",
-            (since_date_str,),
+            (since_date,),
+        )
+
+    def last_n_closed_items(self, n):
+        return self._select(
+            "type = 'item' AND status = 'closed'",
+            params=(n,),
+            suffix="ORDER BY closed_at DESC LIMIT ?",
         )
 
     def steps_at_step(self, step):

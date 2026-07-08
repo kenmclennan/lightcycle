@@ -16,7 +16,7 @@ class InboxInput:
 
 
 @dataclass(frozen=True)
-class CandidateEpic:
+class CandidateTheme:
     id: str
     title: str
     closed_item_count: int
@@ -25,7 +25,7 @@ class CandidateEpic:
 @dataclass(frozen=True)
 class InboxResponse:
     rows: List[HumanNodeRow]
-    candidate_epics: List[CandidateEpic] = field(default_factory=list)
+    candidate_themes: List[CandidateTheme] = field(default_factory=list)
 
 
 class InboxUseCase:
@@ -38,10 +38,10 @@ class InboxUseCase:
             self._flow.load_flow(), {"action", "blocked", "triage"}, input.n)
         return InboxResponse(
             rows=[HumanNodeRow(kind=k, outcomes=o, step=t) for (k, o), t in rows],
-            candidate_epics=self._candidate_epics(input.now),
+            candidate_themes=self._candidate_themes(input.now),
         )
 
-    def _candidate_epics(self, now: float) -> List[CandidateEpic]:
+    def _candidate_themes(self, now: float) -> List[CandidateTheme]:
         candidates = []
         for t in self._store.all_nodes():
             if t.type != "theme" or t.status == Status.DONE:
@@ -53,7 +53,7 @@ class InboxUseCase:
             if self._recently_settled(items, now):
                 continue
             candidates.append(
-                CandidateEpic(id=t.id, title=t.title, closed_item_count=len(items))
+                CandidateTheme(id=t.id, title=t.title, closed_item_count=len(items))
             )
         return candidates
 

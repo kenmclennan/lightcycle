@@ -56,15 +56,4 @@ class CloseThemeUseCase:
             }
         )
         self._store.add_artifact(input.theme, "retro", digest)
-        theme = self._store.get_node(input.theme)
-        flow = self._flow.load_flow(
-            self._flow.workflow_for(theme), self._flow.project_for(theme)
-        )
-        for step, role in flow.theme_close_steps():
-            tid = self._store.create_step(
-                "%s: %s" % (step, theme.title),
-                step=step,
-                role=role,
-            )
-            self._store.update_metadata(tid, {"theme": input.theme})
         return CloseThemeResponse(retro=retro)

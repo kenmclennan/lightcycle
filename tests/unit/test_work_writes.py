@@ -299,67 +299,6 @@ class TestCloseEpicWithRetro(unittest.TestCase):
         self.assertEqual([a for a in s.item_artifacts(theme) if a.type == "retro"], [])
 
 
-class TestCloseEpicOnEpicClose(unittest.TestCase):
-    def _setup(self):
-        s = FakeStore()
-        theme = s.create_theme("my theme")
-        child = s.create_item("child item", theme=theme)
-        s.close(child, "merged")
-        return s, theme
-
-    def _flow_with_on_theme_close(self, store, step="process-check", role="checker"):
-        metas = {role: {"model": "sonnet", "step": step, "on_theme_close": True}}
-        return FlowService(FakeFs(metas), store)
-
-    def test_creates_task_at_on_theme_close_step(self):
-        s, theme = self._setup()
-        flow = self._flow_with_on_theme_close(s)
-        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
-        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
-        self.assertEqual(len(steps), 1)
-        self.assertEqual(steps[0].step, "process-check")
-        self.assertEqual(steps[0].role, "checker")
-
-    def test_epic_id_in_metadata_not_parent(self):
-        s, theme = self._setup()
-        flow = self._flow_with_on_theme_close(s)
-        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
-        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
-        self.assertEqual(len(steps), 1)
-        self.assertIsNone(steps[0].parent)
-
-    def test_task_title_contains_step_and_epic_title(self):
-        s, theme = self._setup()
-        flow = self._flow_with_on_theme_close(s)
-        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
-        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
-        self.assertEqual(steps[0].title, "process-check: my theme")
-
-    def test_agnostic_arbitrary_step_name_not_audit(self):
-        s, theme = self._setup()
-        flow = self._flow_with_on_theme_close(s, step="scrutinise", role="scrutiniser")
-        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
-        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
-        self.assertEqual(len(steps), 1)
-        self.assertEqual(steps[0].step, "scrutinise")
-
-    def test_no_on_theme_close_step_no_task_created(self):
-        s, theme = self._setup()
-        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
-        steps = [t for t in s.all_nodes() if t.type == "step" and t.theme == theme]
-        self.assertEqual(steps, [])
-
-    def test_closed_epic_is_not_a_close_candidate(self):
-        s, theme = self._setup()
-        flow = self._flow_with_on_theme_close(s)
-        CloseThemeUseCase(s, flow).execute(CloseThemeInput(theme=theme, reason="done"))
-        open_tasks = [
-            t for t in s.all_nodes() if t.type == "step" and t.theme == theme and t.status != "done"
-        ]
-        self.assertEqual(len(open_tasks), 1)
-        self.assertEqual(s.get_node(theme).status, "done")
-
-
 class TestWorktreeServiceItemBranch(unittest.TestCase):
     def test_none_then_branch_artifact(self):
         s = FakeStore()

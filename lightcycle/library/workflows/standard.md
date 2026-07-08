@@ -36,7 +36,6 @@ hooks:
   pr_conflict           ready-merge  conflicted
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
-  theme_close            audit
   retro_cadence         audit
 
 signals:

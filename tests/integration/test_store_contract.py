@@ -104,13 +104,13 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         s.close(epic1, "merged")
         epic2 = s.create_theme("epic2")
         s.close(epic2, "merged")
-        results = s.last_n_closed_epics(1)
+        results = s.last_n_closed_themes(1)
         self.assertEqual(len(results), 1)
 
     def test_last_n_closed_epics_excludes_open_epics(self):
         s = self._store()
         s.create_theme("open theme")
-        results = s.last_n_closed_epics(10)
+        results = s.last_n_closed_themes(10)
         self.assertEqual(results, [])
 
     def test_last_n_closed_epics_excludes_nested_stories(self):
@@ -119,7 +119,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         child = s.create_item("child item", theme=theme)
         s.close(theme, "merged")
         s.close(child, "merged")
-        results = s.last_n_closed_epics(10)
+        results = s.last_n_closed_themes(10)
         result_ids = [t.id for t in results]
         self.assertIn(theme, result_ids)
         self.assertNotIn(child, result_ids)
