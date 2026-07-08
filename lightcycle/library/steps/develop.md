@@ -19,7 +19,7 @@ invent intent.
    (`npx prettier --write`). If the work is big, the spec may break into phases, each with a
    review checkpoint - one story per phase, from the single spec. Run `lc specs-dir` to get the
    configured specs directory, then write the spec to `<specs-dir>/<name>.md`.
-4. `lc link TASK spec <path>` to attach it.
+4. `lc attach TASK spec <path>` to attach it.
 5. `lc done TASK drafted` (-> review-plan), which surfaces the spec in the human's inbox to review.
 
 No emdashes.

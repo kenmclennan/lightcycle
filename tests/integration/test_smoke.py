@@ -66,7 +66,7 @@ class SmokeTest(unittest.TestCase):
         )
 
     def test_add_with_description_and_edit(self):
-        r = _tg("add", "my step", "--description", "detail here", root=self.root)
+        r = _tg("new", "item", "my step", "--description", "detail here", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         tid = r.stdout.strip()
 
@@ -76,7 +76,7 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(shown["description"], "detail here")
 
         r = _tg(
-            "edit", tid, "--title", "updated title", "--description", "updated desc", root=self.root
+            "set", tid, "--title", "updated title", "--description", "updated desc", root=self.root
         )
         self.assertEqual(r.returncode, 0, r.stderr)
 
@@ -87,7 +87,7 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(shown["description"], "updated desc")
 
     def test_create_claim_done_advance_show(self):
-        r = _tg("theme", "smoke objective", root=self.root)
+        r = _tg("new", "theme", "smoke objective", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         epic_id = r.stdout.strip()
 

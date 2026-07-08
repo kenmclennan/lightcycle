@@ -23,7 +23,7 @@ cadence (trend lens). Check your task metadata to see which applies.
    for trend analysis later.
 4. If the bar is met, file one process-bug item:
    `lc add --inbox "<concise title>" --description "<finding: what was wrong> | <recommendation: what to change>"`
-   Label it: `lc label <task-id> retro-origin`
+   Label it: `lc set <task-id> --label retro-origin`
    Then: `lc done TASK done --note "filed: <title>"`.
 5. If the bar is not met: `lc done TASK done --note "no finding"`. Do not file noise.
 
@@ -41,6 +41,6 @@ cadence (trend lens). Check your task metadata to see which applies.
    (c) it is **actionable now** - a concrete recommendation exists.
 5. If the bar is met, file ONE retro item:
    `lc add "<concise title>" --description "<analysis: what keeps recurring> | <epics drawn from: list> | <recommendation: what to change>"`
-   Label it: `lc label <task-id> retro-origin`
+   Label it: `lc set <task-id> --label retro-origin`
    Then: `lc done TASK done --note "filed: <title>"`.
 6. If no trend meets the bar: `lc done TASK done --note "no trend found"`. Do not file noise.

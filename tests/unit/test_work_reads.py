@@ -114,7 +114,7 @@ class TestQueue(unittest.TestCase):
 class TestInboxBacklog(unittest.TestCase):
     def _store(self):
         s = FakeStore()
-        self.todo = s.create_step("todo item", role="human")
+        self.todo = s.create_item("todo item")
         self.gate = s.create_step("a gate", step="review", role="human")
         return s
 
