@@ -100,7 +100,8 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
+    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
+                  parent=None, workflow=None, state=None):
         pass
 
     @abstractmethod

@@ -65,7 +65,8 @@ def record_to_node(record):
         notes=record.get("notes"),
         claimed_by=record.get("assignee"),
         workflow=record.get("workflow"),
-        theme=meta.get("theme"),
+        theme=record.get("parent") if record.get("type") == "item" else meta.get("theme"),
+        state=meta.get("state"),
         since=meta.get("since"),
         fired_at=meta.get("fired_at"),
         closed_at=record.get("closed_at"),
@@ -278,7 +279,8 @@ class FakeStore(StorePort):
                 self.dep_add(tid, dep)
         return tid
 
-    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
+    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
+                  parent=None, workflow=None, state=None):
         b = self._get(tid)
         if title is not None:
             b["title"] = title
@@ -298,16 +300,21 @@ class FakeStore(StorePort):
                 self.label_add(tid, "project:%s" % project)
         if parent is not None:
             b["parent"] = parent
+        if workflow is not None:
+            b["workflow"] = workflow
+        if state is not None:
+            meta = dict(b.get("metadata") or {})
+            meta["state"] = state
+            b["metadata"] = meta
 
     def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None):
-        if not theme:
-            raise ValueError("item requires a theme parent")
         b = self._new_record(
             title=title,
             type="item",
             parent=theme,
             labels=labels_for(project=project, goal=goal),
             workflow=workflow,
+            metadata={"state": "todo"},
         )
         tid = b["id"]
         self._records[tid] = b

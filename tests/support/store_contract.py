@@ -117,10 +117,12 @@ class StoreContractBase:
         eid = s.create_theme("objective")
         self.assertEqual(s.get_node(eid).type, "theme")
 
-    def test_create_story_without_epic_raises(self):
+    def test_create_item_without_a_theme_is_an_untethered_todo(self):
         s = self.make_store()
-        with self.assertRaises(ValueError):
-            s.create_item("item: foo")
+        tid = s.create_item("item: foo")
+        node = s.get_node(tid)
+        self.assertIsNone(node.theme)
+        self.assertEqual(node.state, "todo")
 
     def test_create_task_with_description(self):
         s = self.make_store()

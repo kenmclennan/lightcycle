@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     theme TEXT,
     needs TEXT,
     model TEXT,
-    workflow TEXT
+    workflow TEXT,
+    state TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
@@ -71,7 +72,7 @@ CREATE TABLE IF NOT EXISTS history (
 _COLUMNS = (
     "id", "type", "title", "status", "step", "role", "parent", "project", "goal",
     "description", "notes", "close_reason", "assignee", "since", "fired_at",
-    "closed_at", "attention", "theme", "needs", "model", "workflow",
+    "closed_at", "attention", "theme", "needs", "model", "workflow", "state",
 )
 
 _METADATA_COLUMNS = ("theme", "needs", "since", "fired_at", "workflow")
@@ -132,13 +133,14 @@ class SqliteStore(StorePort):
             deps=deps,
             notes=d["notes"],
             claimed_by=d["assignee"],
-            theme=d["theme"],
+            theme=d["parent"] if d["type"] == "item" else d["theme"],
             since=d["since"],
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
             attention=bool(d["attention"]),
             model=d["model"],
             workflow=d["workflow"],
+            state=d["state"],
         )
 
     def _rows_to_nodes(self, rows):
@@ -454,7 +456,8 @@ class SqliteStore(StorePort):
                 self.dep_add(tid, dep)
         return tid
 
-    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None, parent=None):
+    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
+                  parent=None, workflow=None, state=None):
         updates = {}
         if title is not None:
             updates["title"] = title
@@ -466,6 +469,10 @@ class SqliteStore(StorePort):
             updates["project"] = project
         if parent is not None:
             updates["parent"] = parent
+        if workflow is not None:
+            updates["workflow"] = workflow
+        if state is not None:
+            updates["state"] = state
         if not updates:
             return
         set_clause = ", ".join("%s = ?" % k for k in updates)
@@ -475,12 +482,10 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
-        if not theme:
-            raise ValueError("item requires a theme parent")
         tid = self._mint_or_adopt(id, theme)
         self._conn.execute(
             "INSERT INTO nodes (id, type, title, status, parent, project, goal, workflow, "
-            "created_at) VALUES (?, 'item', ?, 'open', ?, ?, ?, ?, ?)",
+            "state, created_at) VALUES (?, 'item', ?, 'open', ?, ?, ?, ?, 'todo', ?)",
             (tid, title, theme, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
