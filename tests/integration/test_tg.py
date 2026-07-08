@@ -886,11 +886,6 @@ class TestClaimArtifacts(unittest.TestCase):
         t = json.loads(out)
         self.assertEqual(t["item_artifacts"][0]["value"], "specs/Y.md")
 
-    def test_set_is_gone(self):
-        r = run_tg("set", "x", "--pr", "y")
-        self.assertEqual(r.returncode, 2)
-
-
 class TestTrace(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, steps=True)

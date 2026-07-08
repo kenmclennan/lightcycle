@@ -30,6 +30,7 @@ class Node:
     attention: bool = False
     model: Optional[str] = None
     workflow: Optional[str] = None
+    state: Optional[str] = None
 
     def classify_for_human(self, flow):
         if not self.step:
@@ -55,5 +56,5 @@ class Node:
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "notes": self.notes, "theme": self.theme, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
-            "model": self.model,
+            "model": self.model, "state": self.state,
         }

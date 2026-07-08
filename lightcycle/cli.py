@@ -17,6 +17,7 @@ from lightcycle.application.feedback import (
     WorklogInput,
     WorklogUseCase,
 )
+from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work import (
     ActiveStepsUseCase,
     AddItemInput,
@@ -148,6 +149,15 @@ COMMAND_GROUPS = [
         ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
         ("flow", "[--json]", "print and check the assembled flow (steps, routes, contracts, composition)"),
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
+    ]),
+    ("Node primitives", [
+        ("new", "<type> \"title\" [--parent/--workflow/--goal/--project]",
+         "create a node; <type> is theme|item|step"),
+        ("set", "<id> [--parent/--state/--workflow/--title/--goal/--desc/--label]",
+         "update a node; --parent moves it; --state active activates an item (files the entry step)"),
+        ("rm", "<id>", "delete a node"),
+        ("attach", "<id> <type> <value> [--label]", "attach an artifact"),
+        ("dep", "<id> --needs <id>", "link one node as a blocker of another"),
     ]),
     ("Drive work in", [
         ("theme", '"<objective>" [--workflow <w>] [--backlog <id>] [--project <p>]',
@@ -650,6 +660,95 @@ def cmd_file(argv):
         sys.stderr.write("%s\n" % e)
         return 1
     print(resp.item)
+    return 0
+
+
+_NODE_TYPES = ("theme", "item", "step")
+
+
+def cmd_new(argv):
+    ap = argparse.ArgumentParser(prog="lc new")
+    ap.add_argument("type")
+    ap.add_argument("title")
+    ap.add_argument("--parent")
+    ap.add_argument("--workflow")
+    ap.add_argument("--project")
+    ap.add_argument("--goal")
+    a = ap.parse_args(argv)
+    if a.type not in _NODE_TYPES:
+        sys.stderr.write(
+            "unknown type '%s'; expected theme | item | step (theme > item > step)\n" % a.type
+        )
+        return 2
+    if a.type == "theme":
+        try:
+            resp = OpenThemeUseCase(_container.store).execute(
+                OpenThemeInput(objective=a.title, project=a.project, workflow=a.workflow)
+            )
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        print(resp.theme)
+    elif a.type == "item":
+        print(_container.store.create_item(
+            a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow))
+    else:
+        print(_container.store.create_step(
+            a.title, parent=a.parent, project=a.project, goal=a.goal))
+    return 0
+
+
+def cmd_set(argv):
+    ap = argparse.ArgumentParser(prog="lc set")
+    for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label"):
+        ap.add_argument("--%s" % opt)
+    ap.add_argument("id")
+    a = ap.parse_args(argv)
+    if a.state == "active":
+        try:
+            resp = ActivateItemUseCase(_container.store, _flow()).execute(
+                ActivateItemInput(item=a.id, workflow=a.workflow, theme=a.parent)
+            )
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        print(resp.step)
+        return 0
+    if a.label:
+        _container.store.label_add(a.id, a.label)
+    _container.store.edit_node(
+        a.id, title=a.title, description=a.description, goal=a.goal,
+        project=a.project, parent=a.parent, workflow=a.workflow, state=a.state)
+    return 0
+
+
+def cmd_attach(argv):
+    ap = argparse.ArgumentParser(prog="lc attach")
+    ap.add_argument("id")
+    ap.add_argument("type")
+    ap.add_argument("value")
+    ap.add_argument("--label")
+    a = ap.parse_args(argv)
+    LinkArtifactUseCase(_container.store).execute(
+        LinkArtifactInput(item=a.id, atype=a.type, value=a.value, label=a.label)
+    )
+    return 0
+
+
+def cmd_dep(argv):
+    ap = argparse.ArgumentParser(prog="lc dep")
+    ap.add_argument("id")
+    ap.add_argument("--needs", required=True)
+    a = ap.parse_args(argv)
+    _container.store.dep_add(a.id, a.needs)
+    return 0
+
+
+def cmd_rm(argv):
+    ap = argparse.ArgumentParser(prog="lc rm")
+    ap.add_argument("id")
+    a = ap.parse_args(argv)
+    _container.store.delete(a.id)
     return 0
 
 
