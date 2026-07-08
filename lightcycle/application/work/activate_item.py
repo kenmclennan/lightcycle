@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.contracts import StepContract
 
 
 @dataclass(frozen=True)
@@ -9,6 +10,7 @@ class ActivateItemInput:
     item: str
     workflow: Optional[str] = None
     theme: Optional[str] = None
+    step: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -32,15 +34,25 @@ class ActivateItemUseCase:
             node = self._store.get_node(input.item)
         workflow = input.workflow or self._flow.workflow_for(node)
         project = self._flow.project_for(node)
-        entry = self._flow.load_graph(workflow, project).entry
+        step_name = input.step or self._flow.load_graph(workflow, project).entry
         flow = self._flow.load_flow(workflow, project)
-        role = flow.owner_of(entry)
+        role = flow.owner_of(step_name)
         if not role:
             raise UseCaseError(
-                "entry step '%s' in workflow '%s' has no owner" % (entry, workflow)
+                "step '%s' is not owned in workflow '%s'; owned steps: %s"
+                % (step_name, workflow, ", ".join(flow.steps()) or "(none)")
             )
-        self._store.edit_node(input.item, workflow=workflow, state="active")
+        present = {a.type for a in self._store.item_artifacts(input.item)}
+        unmet = StepContract.from_meta(
+            self._flow.meta_for_step(step_name, workflow, project)
+        ).missing_inputs(present)
+        if unmet:
+            raise UseCaseError(
+                "step '%s' requires %s; attach them before activating"
+                % (step_name, ", ".join(sorted(unmet)))
+            )
+        self._store.edit_node(input.item, workflow=input.workflow, state="active")
         step = self._store.create_step(
-            "%s: %s" % (entry, node.title), step=entry, role=role, parent=input.item
+            "%s: %s" % (step_name, node.title), step=step_name, role=role, parent=input.item
         )
         return ActivateItemResponse(step=step)

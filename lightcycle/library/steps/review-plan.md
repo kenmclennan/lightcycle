@@ -8,7 +8,7 @@ nothing downstream runs until you close it.
 2. Walk the human through the decisions, the decomposition, and the risks - not the prose. Answer
    their questions about any detail; surface the soft spots rather than defending the plan.
 3. On their verdict:
-   - Approve -> `lc close TASK approved` (closes the gate; in the planner flow this unblocks the children).
+   - Approve -> `lc done TASK approved` (closes the gate; in the planner flow this unblocks the children).
    - Changes -> `lc done TASK changes` (-> develop) with a note saying exactly what to revise.
 
 The human makes the call; you assist and do the bookkeeping. No emdashes.

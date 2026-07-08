@@ -34,9 +34,14 @@ def _flow(ctx):
 def _filed(ctx, spec, step):
     rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec)
     assert rc == 0, err
-    rc, out, err = ctx["h"].run("file", spec, "--step", step, "--theme", theme.strip())
+    title = os.path.splitext(os.path.basename(spec))[0]
+    rc, item, err = ctx["h"].run("new", "item", title, "--parent", theme.strip())
     assert rc == 0, err
-    ctx["item"] = out.strip()
+    item = item.strip()
+    ctx["h"].run("attach", item, "spec", spec)
+    rc, _out, err = ctx["h"].run("set", item, "--state", "active", "--step", step)
+    assert rc == 0, err
+    ctx["item"] = item
 
 
 @given("the coder has claimed the build step")
@@ -50,8 +55,13 @@ def _has_claimed(ctx):
 def _file(ctx, spec, step):
     rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec)
     assert rc == 0, err
+    title = os.path.splitext(os.path.basename(spec))[0]
+    rc, item, err = ctx["h"].run("new", "item", title, "--parent", theme.strip())
+    assert rc == 0, err
+    item = item.strip()
+    ctx["h"].run("attach", item, "spec", spec)
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run(
-        "file", spec, "--step", step, "--theme", theme.strip()
+        "set", item, "--state", "active", "--step", step
     )
 
 

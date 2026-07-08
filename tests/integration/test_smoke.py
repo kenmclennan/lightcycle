@@ -91,7 +91,12 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         epic_id = r.stdout.strip()
 
-        r = _tg("file", "specs/smoke.md", "--step", "build", "--theme", epic_id, root=self.root)
+        r = _tg("new", "item", "smoke", "--parent", epic_id, root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item_id = r.stdout.strip()
+        r = _tg("attach", item_id, "spec", "specs/smoke.md", root=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = _tg("set", item_id, "--state", "active", "--step", "build", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
         r = _tg("claim", "coder", root=self.root)
