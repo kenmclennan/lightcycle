@@ -15,6 +15,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def all_steps(self):
+        pass
+
+    @abstractmethod
     def get_node(self, tid):
         pass
 

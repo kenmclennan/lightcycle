@@ -15,5 +15,5 @@ class ActiveStepsUseCase:
 
     def execute(self) -> ActiveStepsResponse:
         return ActiveStepsResponse(
-            steps=NodeQueue(self._store.all_nodes()).by_status("in-progress")
+            steps=NodeQueue(self._store.all_steps()).by_status("in-progress")
         )
