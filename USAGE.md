@@ -23,12 +23,12 @@ lc status              # inbox / active / queue / blocked
 lc inbox               # what needs YOU now (gates + blocks)
 lc backlog             # backlog items to develop later
 lc active              # what agents are working now
-lc queue 10            # next 10 upcoming agent tasks
-lc ps                  # running workers: role, task, pid, alive/dead
+lc queue 10            # next 10 upcoming agent steps
+lc ps                  # running workers: role, step, pid, alive/dead
 lc logs run -f         # tail the run-loop
-lc logs <task> -f      # tail the worker on a task
+lc logs <step> -f      # tail the worker on a step
 lc logs coder -f       # tail the most recent coder
-lc show <task>         # one task incl. resume-state (for escalations)
+lc show <step>         # one step incl. resume-state (for escalations)
 ```
 
 ## Drive work in
@@ -36,7 +36,7 @@ lc show <task>         # one task incl. resume-state (for escalations)
 In the driver, shape a spec with the human, then:
 
 ```bash
-lc file specs/<id>.md --step build  # enters it into the pipeline at the build step
+lc new item "<title>" --parent <theme>  # then: lc attach <item> spec <path>; lc set <item> --state active
 ```
 
 The run-loop spawns a coder within a tick; it claims, builds, and exits, then the
@@ -46,7 +46,7 @@ merge) show up in `lc inbox`.
 ## Recover after a kill
 
 ```bash
-lc sweep   # release any orphaned claims (dead worker -> task reclaimable)
+lc sweep   # release any orphaned claims (dead worker -> step reclaimable)
 ```
 
 The run-loop runs this each tick, so dead workers self-heal. Kill-and-restart is a

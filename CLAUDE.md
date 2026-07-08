@@ -8,8 +8,8 @@ and decisions) and the craft lives here.
 
 Dependencies point inward; the domain depends on nothing.
 
-- `lightcycle/domain/` - the typed, IO-free model: entities (`Task`) and value objects (`Status`),
-  plus the pure logic (flow assembly, artifact contracts, task projections/buckets, retro signals,
+- `lightcycle/domain/` - the typed, IO-free model: entities (`Node`) and value objects (`Status`),
+  plus the pure logic (flow assembly, artifact contracts, node projections/buckets, retro signals,
   worklog, workspace). **Stdlib only, no IO**: no subprocess, filesystem, network, env, and no
   ambient `time`/`uuid`/`random` (pass those in as explicit inputs). Unit-tests in milliseconds.
 - `lightcycle/ports/` - the abstract interfaces (`StorePort`, `GitPort`, `FsPort`, `WorkersPort`,
@@ -68,7 +68,7 @@ integration test ONLY when the thing under test IS the IO a fake cannot stand in
 2. **a genuine external-IO effect** - that an adapter's IO actually happens (a git/worktree op runs,
    the run-lock locks, `WorkersAdapter.kill` really signals a process). Test the EFFECT in isolation
    against a real disposable target - **never `os.getpid()`**;
-3. **read-surface JSON pins** - a `Task`/story field an agent consumes must be proven to survive
+3. **read-surface JSON pins** - a `Node`/item field an agent consumes must be proven to survive
    real serialization onto `lc show`/`lc claim` output (see the read-surface bullet below).
 
 **Decision vs effect (the trap that took CI down).** An integration test verifies an adapter
@@ -82,10 +82,10 @@ sweep SIGTERM the whole test run (exit 143), reproducibly, and took down CI for 
 If a change does not touch (1)-(3), it ships with a unit test, not an integration test. Get it green
 before `lc done`.
 
-- **Any `Task` (or story) field a step reads from `lc show`/`lc claim` JSON needs an integration
+- **Any `Node` (or item) field a step reads from `lc show`/`lc claim` JSON needs an integration
   test asserting the field appears in that CLI output** - a unit test on the domain entity alone
-  does not prove the field survives `Task.as_dict()` onto the read surface agents actually consume
-  (`tests/integration/test_tg.py::TestTaskDTOReadSurface` pins the current set; extend it, don't
+  does not prove the field survives `Node.as_dict()` onto the read surface agents actually consume
+  (`tests/integration/test_tg.py::TestNodeDTOReadSurface` pins the current set; extend it, don't
   bypass it, when a step starts reading a new field).
 - **Never verify against the live lightcycle store.** When checking a `lc` command by hand, point it at a
   throwaway store (`LC_ROOT_OVERRIDE` on a temp dir with its own sqlite store, as the integration
@@ -131,7 +131,7 @@ not code builtins.
 Concretely, `lc` and `domain/` must NOT: hardcode a workflow step or role name (e.g. `build`), require
 a specific named artifact (e.g. a `spec`), or add a command for one workflow action (e.g. a
 `plan-add`). Those are conventions - they live in the step markdown (the agent's prompt), composed
-from generic primitives (`lc file`, `lc link`, `lc done`, `--blocked-by`). The test: would this still
+from generic primitives (`lc new`, `lc attach`, `lc done`, `lc dep`). The test: would this still
 make sense for a totally different workflow - a frontend repo, a data pipeline? If not, it does not
 belong in the engine. (This rule was learned the hard way: a `lc plan-add` command baked a `build`
 step and a required `spec` into `lc`; it was reverted in favour of the planner composing primitives.)
