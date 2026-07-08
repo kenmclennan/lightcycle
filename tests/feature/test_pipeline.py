@@ -32,7 +32,7 @@ def _flow(ctx):
 
 @given(parsers.parse('the item "{spec}" is filed at step "{step}"'))
 def _filed(ctx, spec, step):
-    rc, theme, err = ctx["h"].run("theme", "objective for %s" % spec)
+    rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec)
     assert rc == 0, err
     rc, out, err = ctx["h"].run("file", spec, "--step", step, "--theme", theme.strip())
     assert rc == 0, err
@@ -48,7 +48,7 @@ def _has_claimed(ctx):
 
 @when(parsers.parse('I file the item "{spec}" at step "{step}"'))
 def _file(ctx, spec, step):
-    rc, theme, err = ctx["h"].run("theme", "objective for %s" % spec)
+    rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec)
     assert rc == 0, err
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run(
         "file", spec, "--step", step, "--theme", theme.strip()

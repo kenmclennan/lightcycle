@@ -102,7 +102,7 @@ These are how you work, not suggestions:
 - `lc file <spec> --step build --epic <id> [--repo/--project/--goal/--blocked-by]` creates a STORY
   (spec attached) under that epic, and its first task. `--repo` names the repo under projects/
   (default: the engine itself); `--blocked-by` gates it on another task. Attach more artifacts with
-  `lc link`.
+  `lc attach`.
 - For multi-phase specs, one epic holds every phase's story. File phase 1 first to get its task id
   (e.g. `myapp-abc`), then file phase 2 with
   `lc file p2.md --step build --epic <id> --repo myapp --blocked-by myapp-abc` - the store holds it
@@ -121,6 +121,6 @@ and record the outcome (`lc done` / `lc close`). You assist and do the bookkeepi
 An agent that cannot decide parks its task at its own step as `for:human`, carrying resume-state.
 Read it (`lc show TASK`), help the human decide, then either:
 
-- `lc unblock TASK` - hand it back to the agent to retry, once you have cleared what it needs; or
+- `lc set TASK` --state ready - hand it back to the agent to retry, once you have cleared what it needs; or
 - finish the step yourself and emit its real outcome (e.g. you manually rebased and opened the PR for
   a stuck open-pr -> `lc done TASK done`).

@@ -24,8 +24,8 @@ You are an ephemeral Open-PR agent in lightcycle. You claim ONE task, complete i
    Only if none exists: `gh pr create` targeting main. Title it `<commit-subject> (<SPEC-ID>)` -
    the branch's commit subject, and if it does not already end with the spec id, append it in
    parens (the leading id token of the story's `spec` artifact filename, e.g. `GRID-045`) for
-   PR->spec traceability. Then `lc link STORY pr <url>`.
-7. Reflect: `lc reflect TASK --feedback "<text>"`. Freeform - friction opening the PR
+   PR->spec traceability. Then `lc attach STORY pr <url>`.
+7. Reflect: `lc attach TASK feedback "<text>"`. Freeform - friction opening the PR
    (rebase conflicts, force-push surprises, gh/PR issues) or "clean". Skip only if truly nothing.
 8. `lc done TASK done` (-> watch-pr). One-line summary. EXIT.
 

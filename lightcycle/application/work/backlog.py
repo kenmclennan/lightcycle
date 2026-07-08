@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
-from lightcycle.domain.work import NodeQueue
 
 
 @dataclass(frozen=True)
@@ -21,9 +20,10 @@ class BacklogUseCase:
         self._flow = flow
 
     def execute(self, input: BacklogInput) -> BacklogResponse:
-        rows = NodeQueue(self._store.all_nodes()).for_human(
-            self._flow.load_flow(), {"todo"}, input.n
-        )
+        items = [n for n in self._store.all_nodes() if n.type == "item" and n.state == "todo"]
+        items.sort(key=lambda t: t.id)
+        if input.n is not None:
+            items = items[:input.n]
         return BacklogResponse(
-            rows=[HumanNodeRow(kind=k, outcomes=o, step=t) for (k, o), t in rows]
+            rows=[HumanNodeRow(kind="todo", outcomes=[], step=t) for t in items]
         )

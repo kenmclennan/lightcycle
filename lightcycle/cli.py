@@ -20,16 +20,12 @@ from lightcycle.application.feedback import (
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work import (
     ActiveStepsUseCase,
-    AddItemInput,
-    AddItemUseCase,
     BacklogInput,
     BacklogUseCase,
     CloseThemeInput,
     CloseThemeUseCase,
     CloseItemInput,
     CloseItemUseCase,
-    EditNodeInput,
-    EditNodeUseCase,
     FileItemInput,
     FileItemUseCase,
     InboxInput,
@@ -160,25 +156,12 @@ COMMAND_GROUPS = [
         ("dep", "<id> --needs <id>", "link one node as a blocker of another"),
     ]),
     ("Drive work in", [
-        ("theme", '"<objective>" [--workflow <w>] [--backlog <id>] [--project <p>]',
-         "open a theme: the objective container an item files under (--workflow sets its pipeline)"),
         ("file", "<spec> --theme <id> [--step <s>] [--workflow <w>] [--repo/--project/--goal/--blocked-by]",
          "create an item from a spec + its first step (step/workflow default to the theme's)"),
-        ("link", "<item> <type> <value> [--label]", "attach an artifact to an item"),
-        ("add", '"<title>" [--description/--goal/--project/--inbox]', "create a standalone human step (no spec/flow); --inbox surfaces it in lc inbox immediately"),
-        ("edit", "<id> [--title/--description/--goal/--project/--parent]", "update a step's fields"),
-        ("close", "<item> <reason>",
-         "close an item + its steps, remove the worktree, delete the merged branch"),
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
-        ("done", "<id> <outcome> [--note \"<text>\"]", "close a step with a flow outcome and advance the chain"),
-        ("block", "<id> --needs ... [--branch/--pr/--reason/--tried]",
-         "escalate to a human with resume-state"),
-        ("unblock", "<id>", "flip a blocked step back to its agent role so it re-claims and retries"),
-        ("reflect", '<step> [--feedback "text"]',
-         "record freeform feedback on the item for the retro (call before lc done)"),
-        ("label", "<id> <label>", "add a label to a step"),
+        ("done", "<id> <outcome> [--note \"<text>\"]", "close a node; a step done-with-outcome advances the flow"),
     ]),
     ("Feedback loop", [
         ("retro", "<theme>", "gather child feedback + objective signals into a read digest"),
@@ -437,88 +420,35 @@ def cmd_done(argv):
     )
     a = ap.parse_args(argv)
     note = " ".join(a.note) if a.note else None
+    node = _container.store.get_node(a.id)
     try:
-        resp = CompleteStepUseCase(_container.store, _flow()).execute(
-            CompleteInput(step=a.id, outcome=a.outcome, note=note)
-        )
-    except UseCaseError as e:
-        sys.stderr.write("%s\n" % e)
-        return 1
-    if resp.next_step:
-        print(resp.next_step)
-    return 0
-
-
-def cmd_block(argv):
-    ap = argparse.ArgumentParser(prog="lc block")
-    ap.add_argument("id")
-    for opt in ("branch", "pr", "reason", "tried", "needs"):
-        ap.add_argument("--%s" % opt)
-    a = ap.parse_args(argv)
-    if not a.needs:
-        sys.stderr.write("lc block requires --needs (what the human must decide/provide)\n")
-        return 2
-    BlockStepUseCase(_container.store).execute(
-        BlockInput(
-            step=a.id, needs=a.needs, branch=a.branch, pr=a.pr, reason=a.reason, tried=a.tried
-        )
-    )
-    print("blocked -> human")
-    return 0
-
-
-def cmd_unblock(argv):
-    ap = argparse.ArgumentParser(prog="lc unblock")
-    ap.add_argument("id")
-    a = ap.parse_args(argv)
-    try:
-        resp = UnblockStepUseCase(_container.store, _flow()).execute(UnblockInput(step=a.id))
-    except UseCaseError as e:
-        sys.stderr.write("%s\n" % e)
-        return 1
-    print("unblocked -> %s" % resp.role)
-    return 0
-
-
-def cmd_close(argv):
-    ap = argparse.ArgumentParser(prog="lc close")
-    ap.add_argument("item")
-    ap.add_argument("reason")
-    a = ap.parse_args(argv)
-    children = _container.store.children(a.item)
-    is_epic = _container.store.get_node(a.item).type == "theme" or any(
-        c.type == "item" for c in children
-    )
-    try:
-        if is_epic:
-            resp = CloseThemeUseCase(_container.store, _flow()).execute(
-                CloseThemeInput(theme=a.item, reason=a.reason)
+        if node.type == "step":
+            resp = CompleteStepUseCase(_container.store, _flow()).execute(
+                CompleteInput(step=a.id, outcome=a.outcome, note=note)
             )
+            if resp.next_step:
+                print(resp.next_step)
+        elif node.type == "theme":
+            resp = CloseThemeUseCase(_container.store, _flow()).execute(
+                CloseThemeInput(theme=a.id, reason=a.outcome)
+            )
+            _print_retro(resp.retro)
         else:
             CloseItemUseCase(_container.store, _worktrees()).execute(
-                CloseItemInput(item=a.item, reason=a.reason)
+                CloseItemInput(item=a.id, reason=a.outcome)
             )
-            resp = None
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    print("closed %s (%s)" % (a.item, a.reason))
-    if resp is not None:
-        _print_retro(resp.retro)
     return 0
 
 
-def cmd_link(argv):
-    ap = argparse.ArgumentParser(prog="lc link")
-    ap.add_argument("item")
-    ap.add_argument("type")
-    ap.add_argument("value")
-    ap.add_argument("--label")
-    a = ap.parse_args(argv)
-    LinkArtifactUseCase(_container.store).execute(
-        LinkArtifactInput(item=a.item, atype=a.type, value=a.value, label=a.label)
-    )
-    return 0
+
+
+
+
+
+
 
 
 def cmd_trace(argv):
@@ -610,24 +540,6 @@ def cmd_queue(argv):
     return 0
 
 
-def cmd_theme(argv):
-    ap = argparse.ArgumentParser(prog="lc theme")
-    ap.add_argument("objective")
-    ap.add_argument("--backlog")
-    ap.add_argument("--project")
-    ap.add_argument("--workflow")
-    a = ap.parse_args(argv)
-    try:
-        resp = OpenThemeUseCase(_container.store).execute(
-            OpenThemeInput(
-                objective=a.objective, backlog=a.backlog, project=a.project, workflow=a.workflow
-            )
-        )
-    except UseCaseError as e:
-        sys.stderr.write("%s\n" % e)
-        return 1
-    print(resp.theme)
-    return 0
 
 
 def cmd_file(argv):
@@ -674,6 +586,9 @@ def cmd_new(argv):
     ap.add_argument("--workflow")
     ap.add_argument("--project")
     ap.add_argument("--goal")
+    ap.add_argument("--description")
+    ap.add_argument("--backlog")
+    ap.add_argument("--inbox", action="store_true", dest="attention")
     a = ap.parse_args(argv)
     if a.type not in _NODE_TYPES:
         sys.stderr.write(
@@ -683,37 +598,57 @@ def cmd_new(argv):
     if a.type == "theme":
         try:
             resp = OpenThemeUseCase(_container.store).execute(
-                OpenThemeInput(objective=a.title, project=a.project, workflow=a.workflow)
+                OpenThemeInput(objective=a.title, backlog=a.backlog,
+                               project=a.project, workflow=a.workflow)
             )
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
         print(resp.theme)
     elif a.type == "item":
-        print(_container.store.create_item(
-            a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow))
+        tid = _container.store.create_item(
+            a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow)
+        if a.description or a.attention:
+            _container.store.edit_node(tid, description=a.description)
+            if a.attention:
+                _container.store.label_add(tid, "attention")
+        print(tid)
     else:
         print(_container.store.create_step(
-            a.title, parent=a.parent, project=a.project, goal=a.goal))
+            a.title, parent=a.parent, project=a.project, goal=a.goal, description=a.description,
+            attention=a.attention))
     return 0
 
 
 def cmd_set(argv):
     ap = argparse.ArgumentParser(prog="lc set")
-    for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label"):
+    for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label",
+                "needs", "branch", "pr", "reason", "tried"):
         ap.add_argument("--%s" % opt)
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    if a.state == "active":
-        try:
+    try:
+        if a.state == "active":
             resp = ActivateItemUseCase(_container.store, _flow()).execute(
                 ActivateItemInput(item=a.id, workflow=a.workflow, theme=a.parent)
             )
-        except UseCaseError as e:
-            sys.stderr.write("%s\n" % e)
-            return 1
-        print(resp.step)
-        return 0
+            print(resp.step)
+            return 0
+        if a.state == "blocked":
+            if not a.needs:
+                sys.stderr.write("--state blocked requires --needs (what the human must decide)\n")
+                return 2
+            BlockStepUseCase(_container.store).execute(
+                BlockInput(step=a.id, needs=a.needs, branch=a.branch, pr=a.pr,
+                           reason=a.reason, tried=a.tried)
+            )
+            return 0
+        if a.state == "ready":
+            UnblockStepUseCase(_container.store, _flow()).execute(UnblockInput(step=a.id))
+            return 0
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if a.label:
         _container.store.label_add(a.id, a.label)
     _container.store.edit_node(
@@ -729,6 +664,11 @@ def cmd_attach(argv):
     ap.add_argument("value")
     ap.add_argument("--label")
     a = ap.parse_args(argv)
+    if a.type == "feedback":
+        ReflectUseCase(_container.store, _container.fs).execute(
+            ReflectInput(step=a.id, feedback=a.value)
+        )
+        return 0
     LinkArtifactUseCase(_container.store).execute(
         LinkArtifactInput(item=a.id, atype=a.type, value=a.value, label=a.label)
     )
@@ -752,41 +692,8 @@ def cmd_rm(argv):
     return 0
 
 
-def cmd_add(argv):
-    ap = argparse.ArgumentParser(prog="lc add")
-    ap.add_argument("title")
-    ap.add_argument("--goal")
-    ap.add_argument("--project")
-    ap.add_argument("--description")
-    ap.add_argument("--inbox", action="store_true", dest="attention")
-    a = ap.parse_args(argv)
-    resp = AddItemUseCase(_container.store).execute(
-        AddItemInput(title=a.title, goal=a.goal, project=a.project, description=a.description,
-                     attention=a.attention))
-    print(resp.step)
-    return 0
 
 
-def cmd_edit(argv):
-    ap = argparse.ArgumentParser(prog="lc edit")
-    ap.add_argument("id")
-    ap.add_argument("--title")
-    ap.add_argument("--description")
-    ap.add_argument("--goal")
-    ap.add_argument("--project")
-    ap.add_argument("--parent")
-    a = ap.parse_args(argv)
-    EditNodeUseCase(_container.store).execute(
-        EditNodeInput(
-            step=a.id,
-            title=a.title,
-            description=a.description,
-            goal=a.goal,
-            project=a.project,
-            parent=a.parent,
-        )
-    )
-    return 0
 
 
 def _format_tick(result, prev_snapshot, now):
@@ -992,31 +899,8 @@ def cmd_status(argv):
     return 0
 
 
-def cmd_label(argv):
-    ap = argparse.ArgumentParser(prog="lc label")
-    ap.add_argument("id")
-    ap.add_argument("label")
-    a = ap.parse_args(argv)
-    _container.store.label_add(a.id, a.label)
-    return 0
 
 
-def cmd_reflect(argv):
-    ap = argparse.ArgumentParser(prog="lc reflect")
-    ap.add_argument("id")
-    ap.add_argument(
-        "--feedback",
-        default="",
-        help="freeform feedback for the retro: what went well, what got in the way, "
-        "tooling friction, spec gaps - whatever is worth surfacing (your step "
-        "file says what to look for)",
-    )
-    a = ap.parse_args(argv)
-    ReflectUseCase(_container.store, _container.fs).execute(
-        ReflectInput(step=a.id, feedback=a.feedback)
-    )
-    print("reflected")
-    return 0
 
 
 def cmd_worklog(argv):

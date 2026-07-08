@@ -228,7 +228,7 @@ class TestSkeleton(unittest.TestCase):
     def test_help_lists_subcommands(self):
         r = run_tg("--help")
         self.assertEqual(r.returncode, 0, r.stderr)
-        for verb in ("status", "claim", "done", "block", "start", "sweep"):
+        for verb in ("status", "claim", "done", "start", "sweep"):
             self.assertIn(verb, r.stdout)
 
     def test_unknown_subcommand_exits_2(self):
@@ -356,7 +356,7 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_block_writes_metadata_and_routes_human(self):
         b = self.store.create_step("build: t", step="build", role="coder")
-        rc, out, err = call(_cli_mod.cmd_block, b, "--branch", "grid/x", "--needs", "confirm aud")
+        rc, out, err = call(_cli_mod.cmd_set, b, "--state", "blocked", "--branch", "grid/x", "--needs", "confirm aud")
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(b)
         self.assertEqual(step.needs, "confirm aud")
@@ -366,7 +366,7 @@ class TestDoneBlock(unittest.TestCase):
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
         b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
-        rc, out, err = call(_cli_mod.cmd_block, b, "--needs", "rebase first")
+        rc, out, err = call(_cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first")
         self.assertEqual(rc, 0, err)
         self.assertIsNone(self.store.get_node(b).claimed_by)
         rc2, inbox_out, _ = call(_cli_mod.cmd_inbox)
@@ -677,15 +677,15 @@ class TestAdd(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
 
-    def test_add_creates_standalone_human_task(self):
-        rc, out, err = call(_cli_mod.cmd_add, "look at X later")
+    def test_new_item_is_an_untethered_todo(self):
+        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later")
         self.assertEqual(rc, 0, err)
         new = out.strip()
         self.assertTrue(new)
         rc2, out2, _ = call(_cli_mod.cmd_show, new)
         t = json.loads(out2)
-        self.assertEqual(t["role"], "human")
-        self.assertEqual(t["status"], "needs-human")
+        self.assertEqual(t["type"], "item")
+        self.assertEqual(t["state"], "todo")
         self.assertIsNone(t["step"])
         self.assertEqual(t["title"], "look at X later")
 
@@ -736,7 +736,7 @@ class TestLink(unittest.TestCase):
 
     def test_link_appends_artifact(self):
         sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
-        rc, out, err = call(_cli_mod.cmd_link, sid, "pr", "https://gh/9", "--label", "PR 9")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "pr", "https://gh/9", "--label", "PR 9")
         self.assertEqual(rc, 0, err)
         arts = self.store.item_artifacts(sid)
         self.assertEqual(arts[0].type, "pr")
@@ -765,23 +765,23 @@ class TestEpicCommand(unittest.TestCase):
         _fake_setUp(self)
 
     def test_epic_creates_epic_and_prints_id(self):
-        rc, out, err = call(_cli_mod.cmd_theme, "ship the thing")
+        rc, out, err = call(_cli_mod.cmd_new, "theme", "ship the thing")
         self.assertEqual(rc, 0, err)
         eid = out.strip()
         self.assertTrue(eid)
         self.assertEqual(self.store.get_node(eid).type, "theme")
 
     def test_epic_links_backlog(self):
-        rc, out, _ = call(_cli_mod.cmd_add, "a backlog item")
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item")
         backlog = out.strip()
-        rc2, out2, err2 = call(_cli_mod.cmd_theme, "ship the thing", "--backlog", backlog)
+        rc2, out2, err2 = call(_cli_mod.cmd_new, "theme", "ship the thing", "--backlog", backlog)
         self.assertEqual(rc2, 0, err2)
         eid = out2.strip()
         arts = self.store.item_artifacts(eid)
         self.assertEqual([(a.type, a.value) for a in arts], [("backlog", backlog)])
 
     def test_epic_unknown_backlog_errors(self):
-        rc, _, err = call(_cli_mod.cmd_theme, "ship the thing", "--backlog", "does-not-exist")
+        rc, _, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--backlog", "does-not-exist")
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
 
@@ -1032,7 +1032,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc, out, _ = call(_cli_mod.cmd_file, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         step = self.store.children(sid)[0].id
-        call(_cli_mod.cmd_link, sid, "branch", "grid/x")
+        call(_cli_mod.cmd_attach, sid, "branch", "grid/x")
         rc2, out2, err2 = call(_cli_mod.cmd_done, step, "done")
         self.assertEqual(rc2, 0, err2)
         self.assertEqual(self.store.get_node(step).status, "done")
@@ -1365,8 +1365,8 @@ class TestUnblock(unittest.TestCase):
     def test_unblock_returns_blocked_task_to_agent_role(self):
         b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
-        call(_cli_mod.cmd_block, b, "--needs", "rebase first")
-        rc, out, err = call(_cli_mod.cmd_unblock, b)
+        call(_cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first")
+        rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(b)
         self.assertEqual(t.status, "ready")
@@ -1376,8 +1376,8 @@ class TestUnblock(unittest.TestCase):
     def test_unblock_clears_needs_and_blocked_note(self):
         b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
-        call(_cli_mod.cmd_block, b, "--needs", "rebase first")
-        rc, out, err = call(_cli_mod.cmd_unblock, b)
+        call(_cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first")
+        rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(b)
         self.assertIsNone(t.needs)
@@ -1388,7 +1388,7 @@ class TestUnblock(unittest.TestCase):
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n"
         )
         b = self.store.create_step("ready-merge: t", step="ready-merge", role="human")
-        rc, out, err = call(_cli_mod.cmd_unblock, b)
+        rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 1)
         self.assertIn("ready-merge", err)
 
@@ -1426,7 +1426,7 @@ class TestCloseWorktree(unittest.TestCase):
         ws = json.loads(cout)["workspace"]
         self.assertTrue(os.path.isdir(ws))
         build = self.store.children(sid)[0].id
-        rc, _, err = call(_cli_mod.cmd_close, sid, "merged")
+        rc, _, err = call(_cli_mod.cmd_done, sid, "merged")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(sid).status, "done")
         self.assertEqual(self.store.get_node(build).status, "done")
@@ -1442,14 +1442,14 @@ class TestClose(unittest.TestCase):
         theme = self.store.create_theme("theme e")
         child = self.store.create_item("item s", theme=theme)
         self.store.close(child, "merged")
-        rc, out, err = call(_cli_mod.cmd_close, theme, "done")
+        rc, out, err = call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(theme).status, "done")
 
     def test_close_epic_refuses_with_open_story(self):
         theme = self.store.create_theme("theme e")
         child = self.store.create_item("item s", theme=theme)
-        rc, _, err = call(_cli_mod.cmd_close, theme, "done")
+        rc, _, err = call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(rc, 1)
         self.assertIn(child, err)
         self.assertEqual(self.store.get_node(theme).status, "ready")
@@ -1457,7 +1457,7 @@ class TestClose(unittest.TestCase):
     def test_close_epic_refuses_does_not_cascade_close_open_stories(self):
         theme = self.store.create_theme("theme e")
         child = self.store.create_item("item s", theme=theme)
-        call(_cli_mod.cmd_close, theme, "done")
+        call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(self.store.get_node(child).status, "ready")
 
     def test_close_epic_retro_artifact_surfaces_task_and_story_duration(self):
@@ -1467,7 +1467,7 @@ class TestClose(unittest.TestCase):
         claimed = self.store.claim_ready("coder")
         self.store.close(claimed.id, "done")
         self.store.close(child, "merged")
-        rc, out, err = call(_cli_mod.cmd_close, theme, "done")
+        rc, out, err = call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(rc, 0, err)
         artifact = next(a for a in self.store.item_artifacts(theme) if a.type == "retro")
         digest = json.loads(artifact.value)
@@ -1603,7 +1603,7 @@ class TestInboxBacklog(unittest.TestCase):
         write_workflow_from_steps(self.root)
 
     def test_inbox_shows_action_and_blocked_only(self):
-        call(_cli_mod.cmd_add, "a seed")
+        call(_cli_mod.cmd_new, "item", "a seed")
         self.store.create_step("merge: z", step="ready-merge", role="human")
         self.store.create_step("build: q", step="build", role="human")
         _, out, _ = call(_cli_mod.cmd_inbox)
@@ -1613,7 +1613,7 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertNotIn("a seed", out)
 
     def test_backlog_shows_todo_only(self):
-        call(_cli_mod.cmd_add, "a seed")
+        call(_cli_mod.cmd_new, "item", "a seed")
         self.store.create_step("merge: z", step="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_backlog)
         self.assertIn("[todo]", out)
@@ -1628,9 +1628,9 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 1)
 
     def test_backlog_limit_n(self):
-        call(_cli_mod.cmd_add, "seed one")
-        call(_cli_mod.cmd_add, "seed two")
-        call(_cli_mod.cmd_add, "seed three")
+        call(_cli_mod.cmd_new, "item", "seed one")
+        call(_cli_mod.cmd_new, "item", "seed two")
+        call(_cli_mod.cmd_new, "item", "seed three")
         _, out, _ = call(_cli_mod.cmd_backlog, "2")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
 
@@ -1656,10 +1656,9 @@ class TestReflect(unittest.TestCase):
     def test_reflect_stores_feedback_on_task(self):
         sid, tid = self._file_story()
         rc, out, err = call(
-            _cli_mod.cmd_reflect, tid, "--feedback", "pytest not found; spec thin on errors"
+            _cli_mod.cmd_attach, tid, "feedback", "pytest not found; spec thin on errors"
         )
         self.assertEqual(rc, 0, err)
-        self.assertIn("reflected", out)
         self.assertEqual(
             self.store.item_artifacts(sid), [Artifact(type="spec", value="/tmp/no-spec.md")]
         )
@@ -1671,8 +1670,8 @@ class TestReflect(unittest.TestCase):
 
     def test_reflect_multiple_calls_append(self):
         sid, tid = self._file_story()
-        call(_cli_mod.cmd_reflect, tid, "--feedback", "first")
-        call(_cli_mod.cmd_reflect, tid, "--feedback", "second")
+        call(_cli_mod.cmd_attach, tid, "feedback", "first")
+        call(_cli_mod.cmd_attach, tid, "feedback", "second")
         refs = [a for a in self.store.item_artifacts(tid) if a.type == "reflection"]
         self.assertEqual(len(refs), 2)
 
@@ -1684,7 +1683,7 @@ class TestReflect(unittest.TestCase):
         spec.close()
         sid, tid = self._file_story(spec_path=spec.name)
         self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
-        call(_cli_mod.cmd_reflect, tid, "--feedback", "ok")
+        call(_cli_mod.cmd_attach, tid, "feedback", "ok")
         data = json.loads(
             next(a for a in self.store.item_artifacts(tid) if a.type == "reflection").value
         )
@@ -1693,7 +1692,7 @@ class TestReflect(unittest.TestCase):
 
     def test_reflect_no_feedback_still_valid(self):
         sid, tid = self._file_story()
-        rc, out, err = call(_cli_mod.cmd_reflect, tid)
+        rc, out, err = call(_cli_mod.cmd_attach, tid, "feedback", "")
         self.assertEqual(rc, 0, err)
         data = json.loads(
             next(a for a in self.store.item_artifacts(tid) if a.type == "reflection").value
@@ -1722,7 +1721,7 @@ class TestRetro(unittest.TestCase):
     def test_retro_shows_feedback(self):
         theme, sid = self._make_epic_with_story()
         tid = self.store.create_step("build: s", step="build", role="coder", parent=sid)
-        call(_cli_mod.cmd_reflect, tid, "--feedback", "edge case coverage was thin")
+        call(_cli_mod.cmd_attach, tid, "feedback", "edge case coverage was thin")
         rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("N=1", out)
@@ -1732,7 +1731,7 @@ class TestRetro(unittest.TestCase):
     def test_retro_surfaces_epic_level_feedback(self):
         theme, _ = self._make_epic_with_story()
         ptid = self.store.create_step("plan: e", step="plan", role="planner", parent=theme)
-        call(_cli_mod.cmd_reflect, ptid, "--feedback", "brief was thin on dep ordering")
+        call(_cli_mod.cmd_attach, ptid, "feedback", "brief was thin on dep ordering")
         rc, out, err = call(_cli_mod.cmd_retro, theme)
         self.assertEqual(rc, 0, err)
         self.assertIn("brief was thin on dep ordering", out)
@@ -2019,7 +2018,7 @@ class TestWorkflowSelection(unittest.TestCase):
         )
 
     def _epic(self, *args):
-        _, out, err = call(_cli_mod.cmd_theme, *args)
+        _, out, err = call(_cli_mod.cmd_new, "theme", *args)
         return out.strip()
 
     def _file(self, spec, theme, *args):
@@ -2081,13 +2080,13 @@ class TestProjectWorkflowOverride(unittest.TestCase):
         return {t.step for t in self.store.all_nodes() if t.parent == item and t.step != "build"}
 
     def test_a_project_grid_workflow_shadows_the_default_for_that_project(self):
-        theme = call(_cli_mod.cmd_theme, "obj")[1].strip()
+        theme = call(_cli_mod.cmd_new, "theme", "obj")[1].strip()
         item = call(_cli_mod.cmd_file, "A.md", "--theme", theme, "--project", "myapp")[1].strip()
         call(_cli_mod.cmd_done, self._build_task(item).id, "done")
         self.assertEqual(self._successors(item), set())
 
     def test_a_story_without_that_project_uses_the_default(self):
-        theme = call(_cli_mod.cmd_theme, "obj2")[1].strip()
+        theme = call(_cli_mod.cmd_new, "theme", "obj2")[1].strip()
         item = call(_cli_mod.cmd_file, "B.md", "--theme", theme)[1].strip()
         call(_cli_mod.cmd_done, self._build_task(item).id, "done")
         self.assertIn("review", self._successors(item))
