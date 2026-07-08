@@ -114,7 +114,7 @@ These are how you work, not suggestions:
 The pipeline runs the agent steps, then hands the human-facing steps to YOU; you also develop ideas
 into specs and review them. They surface in `lc inbox`. The skill for each is appended below under
 "Skills for human-facing steps" - when the human picks an item, follow its step's skill, assist them,
-and record the outcome (`lc done` / `lc close`). You assist and do the bookkeeping; the human decides.
+and record the outcome (`lc done` / `lc done`). You assist and do the bookkeeping; the human decides.
 
 ## Resolve blocks
 

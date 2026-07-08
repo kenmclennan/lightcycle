@@ -26,8 +26,6 @@ from lightcycle.application.work import (
     CloseThemeUseCase,
     CloseItemInput,
     CloseItemUseCase,
-    FileItemInput,
-    FileItemUseCase,
     InboxInput,
     InboxUseCase,
     LinkArtifactInput,
@@ -154,10 +152,6 @@ COMMAND_GROUPS = [
         ("rm", "<id>", "delete a node"),
         ("attach", "<id> <type> <value> [--label]", "attach an artifact"),
         ("dep", "<id> --needs <id>", "link one node as a blocker of another"),
-    ]),
-    ("Drive work in", [
-        ("file", "<spec> --theme <id> [--step <s>] [--workflow <w>] [--repo/--project/--goal/--blocked-by]",
-         "create an item from a spec + its first step (step/workflow default to the theme's)"),
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
@@ -542,37 +536,6 @@ def cmd_queue(argv):
 
 
 
-def cmd_file(argv):
-    ap = argparse.ArgumentParser(prog="lc file")
-    ap.add_argument("spec")
-    ap.add_argument("--theme", required=True)
-    ap.add_argument("--step")
-    ap.add_argument("--workflow")
-    ap.add_argument("--project")
-    ap.add_argument("--goal")
-    ap.add_argument("--repo")
-    ap.add_argument("--blocked-by", action="append", dest="blocked_by", metavar="ID")
-    a = ap.parse_args(argv)
-    try:
-        resp = FileItemUseCase(
-            _container.store, _flow(), _container.git, _container.fs, _container.config
-        ).execute(
-            FileItemInput(
-                spec=a.spec,
-                step=a.step,
-                workflow=a.workflow,
-                theme=a.theme,
-                project=a.project,
-                goal=a.goal,
-                repo=a.repo,
-                blocked_by=a.blocked_by,
-            )
-        )
-    except UseCaseError as e:
-        sys.stderr.write("%s\n" % e)
-        return 1
-    print(resp.item)
-    return 0
 
 
 _NODE_TYPES = ("theme", "item", "step")
@@ -606,6 +569,15 @@ def cmd_new(argv):
             return 1
         print(resp.theme)
     elif a.type == "item":
+        if a.parent:
+            try:
+                parent = _container.store.get_node(a.parent)
+            except KeyError:
+                sys.stderr.write("unknown theme '%s'\n" % a.parent)
+                return 1
+            if parent.type != "theme":
+                sys.stderr.write("'%s' is not a theme (type=%s)\n" % (a.parent, parent.type))
+                return 1
         tid = _container.store.create_item(
             a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow)
         if a.description or a.attention:
@@ -623,14 +595,14 @@ def cmd_new(argv):
 def cmd_set(argv):
     ap = argparse.ArgumentParser(prog="lc set")
     for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label",
-                "needs", "branch", "pr", "reason", "tried"):
+                "needs", "branch", "pr", "reason", "tried", "step"):
         ap.add_argument("--%s" % opt)
     ap.add_argument("id")
     a = ap.parse_args(argv)
     try:
         if a.state == "active":
             resp = ActivateItemUseCase(_container.store, _flow()).execute(
-                ActivateItemInput(item=a.id, workflow=a.workflow, theme=a.parent)
+                ActivateItemInput(item=a.id, workflow=a.workflow, theme=a.parent, step=a.step)
             )
             print(resp.step)
             return 0
