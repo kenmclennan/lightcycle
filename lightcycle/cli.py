@@ -5,6 +5,7 @@ import signal
 import sys
 import time
 
+from lightcycle import __version__
 from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
@@ -126,6 +127,7 @@ COMMAND_GROUPS = [
          "<project>: scaffold that project's .lightcycle/ (workflows, config with a shortcode)"),
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("migrate", "", "one-time: move a legacy ~/.grid or ~/.config layout into ~/.lightcycle"),
+        ("version", "", "print the lightcycle version"),
     ]),
     ("Start working", [
         ("start", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue"),
@@ -203,10 +205,18 @@ def cmd_migrate(argv):
     return 0
 
 
+def cmd_version(argv):
+    argparse.ArgumentParser(prog="lc version").parse_args(argv)
+    print("lightcycle %s" % __version__)
+    return 0
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "migrate":
         return cmd_migrate(argv[1:])
+    if argv and argv[0] in ("version", "--version"):
+        return cmd_version([])
     set_container(Container())
     if not argv or argv[0] in ("-h", "--help"):
         print_help()
