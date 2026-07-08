@@ -66,6 +66,20 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(resp.steps[0].log, "/l/k.log")
 
 
+def _seed_mixed_store():
+    s = FakeStore()
+    todo_item = s.create_item("todo item")
+    active_item = s.create_item("active item")
+    s.edit_node(active_item, state="active")
+    theme = s.create_theme("a theme")
+    ready = s.create_step("ready one", step="build", role="coder")
+    human = s.create_step("needs me", role="human")
+    running = s.create_step("running", step="build", role="coder")
+    s.assign(running, "worker-1")
+    non_steps = [todo_item, active_item, theme]
+    return s, non_steps, {"ready": ready, "human": human, "running": running}
+
+
 class TestStatus(unittest.TestCase):
     def test_lanes_tasks_by_status(self):
         s = FakeStore()
@@ -86,6 +100,16 @@ class TestStatus(unittest.TestCase):
         self.assertEqual([t.id for t in lanes["blocked"]], [blocked])
         self.assertNotIn(blocked, [t.id for t in lanes["queue"]])
 
+    def test_lanes_contain_only_steps_never_items_or_themes(self):
+        s, non_steps, steps = _seed_mixed_store()
+        lanes = StatusUseCase(s).execute().lanes
+        self.assertEqual([t.id for t in lanes["queue"]], [steps["ready"]])
+        self.assertEqual([t.id for t in lanes["inbox"]], [steps["human"]])
+        self.assertEqual([t.id for t in lanes["active"]], [steps["running"]])
+        all_lane_ids = {t.id for lane in lanes.values() for t in lane}
+        for non_step in non_steps:
+            self.assertNotIn(non_step, all_lane_ids)
+
 
 class TestActiveTasks(unittest.TestCase):
     def test_returns_only_in_progress(self):
@@ -94,6 +118,13 @@ class TestActiveTasks(unittest.TestCase):
         running = s.create_step("running", step="build", role="coder")
         s.assign(running, "worker-1")
         self.assertEqual([t.id for t in ActiveStepsUseCase(s).execute().steps], [running])
+
+    def test_active_contains_only_steps_never_items_or_themes(self):
+        s, non_steps, steps = _seed_mixed_store()
+        result_ids = [t.id for t in ActiveStepsUseCase(s).execute().steps]
+        self.assertEqual(result_ids, [steps["running"]])
+        for non_step in non_steps:
+            self.assertNotIn(non_step, result_ids)
 
 
 class TestQueue(unittest.TestCase):
@@ -109,6 +140,13 @@ class TestQueue(unittest.TestCase):
         for i in range(12):
             s.create_step("t%d" % i, step="build", role="coder")
         self.assertEqual(len(QueueUseCase(s).execute(QueueInput()).steps), 10)
+
+    def test_queue_contains_only_steps_never_items_or_themes(self):
+        s, non_steps, steps = _seed_mixed_store()
+        result_ids = [t.id for t in QueueUseCase(s).execute(QueueInput()).steps]
+        self.assertEqual(result_ids, [steps["ready"]])
+        for non_step in non_steps:
+            self.assertNotIn(non_step, result_ids)
 
 
 class TestInboxBacklog(unittest.TestCase):
@@ -132,6 +170,16 @@ class TestInboxBacklog(unittest.TestCase):
         ]
         self.assertIn(self.todo, ids)
         self.assertNotIn(self.gate, ids)
+
+    def test_todo_item_in_backlog_appears_in_no_status_lane(self):
+        s = self._store()
+        backlog_ids = [
+            row.step.id for row in BacklogUseCase(s, _empty_flow(s)).execute(BacklogInput()).rows
+        ]
+        self.assertIn(self.todo, backlog_ids)
+        lanes = StatusUseCase(s).execute().lanes
+        lane_ids = {t.id for lane in lanes.values() for t in lane}
+        self.assertNotIn(self.todo, lane_ids)
 
 
 class TestInboxCandidateThemes(unittest.TestCase):

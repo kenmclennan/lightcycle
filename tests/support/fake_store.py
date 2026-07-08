@@ -126,6 +126,10 @@ class FakeStore(StorePort):
         return [record_to_node(b) for b in self._records.values()
                 if b.get("status") != "closed"]
 
+    def all_steps(self):
+        return [record_to_node(b) for b in self._records.values()
+                if b.get("type") == "step" and b.get("status") != "closed"]
+
     def get_node(self, tid):
         return record_to_node(self._get(tid))
 

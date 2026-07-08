@@ -225,3 +225,22 @@ class StoreContractBase:
         s = self.make_store()
         tid = s.create_step("t", role="coder")
         self.assertEqual(s.history(tid), [])
+
+    def test_all_steps_excludes_closed_steps(self):
+        s = self.make_store()
+        open_tid = s.create_step("open step")
+        closed_tid = s.create_step("closed step")
+        s.close(closed_tid, "done")
+        ids = [t.id for t in s.all_steps()]
+        self.assertIn(open_tid, ids)
+        self.assertNotIn(closed_tid, ids)
+
+    def test_all_steps_excludes_items_and_themes(self):
+        s = self.make_store()
+        theme = s.create_theme("theme")
+        item = s.create_item("todo item", theme=theme)
+        step = s.create_step("a step")
+        ids = [t.id for t in s.all_steps()]
+        self.assertEqual(ids, [step])
+        self.assertNotIn(theme, ids)
+        self.assertNotIn(item, ids)

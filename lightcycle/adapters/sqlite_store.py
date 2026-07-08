@@ -249,6 +249,9 @@ class SqliteStore(StorePort):
     def all_nodes(self):
         return self._select("status != 'closed'")
 
+    def all_steps(self):
+        return self._select("type = 'step' AND status != 'closed'")
+
     def get_node(self, tid):
         row = self._conn.execute(
             "SELECT %s FROM nodes WHERE id = ?" % ", ".join(_COLUMNS), (tid,)

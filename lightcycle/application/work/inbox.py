@@ -34,7 +34,7 @@ class InboxUseCase:
         self._flow = flow
 
     def execute(self, input: InboxInput) -> InboxResponse:
-        rows = NodeQueue(self._store.all_nodes()).for_human(
+        rows = NodeQueue(self._store.all_steps()).for_human(
             self._flow.load_flow(), {"action", "blocked", "triage"}, input.n)
         return InboxResponse(
             rows=[HumanNodeRow(kind=k, outcomes=o, step=t) for (k, o), t in rows],
