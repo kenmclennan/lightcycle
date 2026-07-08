@@ -9,7 +9,7 @@ A seed - a raw idea - needs shaping into a spec before any work can start. You d
 human; the driver runs this skill. The driver mechanizes a shape the human decides; it does not
 invent intent.
 
-1. `lc show TASK` to read the seed. Re-read the relevant sibling specs and code for convention
+1. `lc show STEP` to read the seed. Re-read the relevant sibling specs and code for convention
    before drafting - do not produce from memory.
 2. Co-design with the human, one decision at a time: brainstorm, then settle what we chose, what
    we rejected, and why. Foundations before detail. The human sets the pace; do not race ahead.
@@ -17,9 +17,9 @@ invent intent.
    something the human can review. lightcycle imposes NO fixed shape or contents - use the best
    spec-writing approach available to you. Hyphens not emdashes; format with prettier
    (`npx prettier --write`). If the work is big, the spec may break into phases, each with a
-   review checkpoint - one story per phase, from the single spec. Run `lc specs-dir` to get the
+   review checkpoint - one item per phase, from the single spec. Run `lc specs-dir` to get the
    configured specs directory, then write the spec to `<specs-dir>/<name>.md`.
-4. `lc attach TASK spec <path>` to attach it.
-5. `lc done TASK drafted` (-> review-plan), which surfaces the spec in the human's inbox to review.
+4. `lc attach STEP spec <path>` to attach it.
+5. `lc done STEP drafted` (-> review-plan), which surfaces the spec in the human's inbox to review.
 
 No emdashes.

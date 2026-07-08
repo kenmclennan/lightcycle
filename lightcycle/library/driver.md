@@ -19,19 +19,20 @@ experience. (See `METHODOLOGY.md` for the why.)
 Work moves through stages. You (with the human) touch the human-facing ones; the pool runs the rest
 autonomously - you never initiate a build, the pool polls the store for ready work and picks up whatever is ready.
 
-1. **Capture** - a rough idea lands in the backlog (`lc add`). Cheap, unrefined, may overlap others.
+1. **Capture** - a rough idea lands in the backlog (`lc new item`). Cheap, unrefined, may overlap others.
 2. **Develop** - shape a backlog item (or a group of related ones) into a **spec** with the human,
-   one decision at a time. The spec belongs to the desired **outcome** (the epic). lightcycle imposes
+   one decision at a time. The spec belongs to the desired **outcome** (the theme). lightcycle imposes
    no spec shape (see the develop skill). If the work is big, the spec breaks into **phases**, each
-   with a review checkpoint - one story per phase, from the single spec.
+   with a review checkpoint - one item per phase, from the single spec.
 3. **Review** - the human reviews the spec at the gate; approve, or send back with changes.
-4. **Build** - on approval, open or choose the epic for the objective (`lc epic`), then file a story
-   per phase under it (`lc file --epic <id>`, `--blocked-by` to order them); the pool runs each
-   (build -> review -> open-pr -> watch-pr), then hands `ready-merge`/`cleanup` to you.
+4. **Build** - on approval, open or choose the theme for the objective (`lc new theme`), then file an
+   item per phase under it (`lc new item` + `lc attach spec` + `lc set --state active`; `lc dep` to
+   order them); the pool runs each (build -> review -> open-pr -> watch-pr), then hands
+   `ready-merge`/`cleanup` to you.
 
 You enter at capture/develop and gate at review and ready-merge; the middle runs itself.
-_(The planner agent and a separate plan step were removed - the breakdown into phases/stories is part
-of developing the spec; you file the stories yourself.)_
+_(The planner agent and a separate plan step were removed - the breakdown into phases/items is part
+of developing the spec; you file the items yourself.)_
 
 ## Standing disciplines
 
@@ -41,40 +42,40 @@ These are how you work, not suggestions:
   it is written where it is enforced. Place it by **scope**: generic agent competence -> the step file;
   this project's conventions -> the repo's `CLAUDE.md`; cross-project style -> the global `CLAUDE.md`;
   this playbook -> here.
-- **An approved spec is FILED, never implemented.** The terminal state of developing a spec is
-  `lc file <spec> --step build` - handing it to the pipeline. You never write the code yourself.
-  If a loaded skill (Superpowers `brainstorming`/`writing-plans`, or any "now implement" flow) ends
-  by telling you to implement or to invoke a planning skill, that terminal state does NOT apply
-  here - lightcycle's overrides it. The instant a spec is approved, your next action is `lc file`; if
-  you are ever unsure whether to file, file. (A session once carried an approved design to the brink
+- **An approved spec is FILED, never implemented.** The terminal state of developing a spec is to file
+  it - `lc new item` + `lc attach spec` + `lc set --state active` - handing it to the pipeline. You
+  never write the code yourself. If a loaded skill (Superpowers `brainstorming`/`writing-plans`, or any
+  "now implement" flow) ends by telling you to implement or to invoke a planning skill, that terminal
+  state does NOT apply here - lightcycle's overrides it. The instant a spec is approved, your next
+  action is to file it (new item + attach spec + activate); if you are ever unsure whether to file, file. (A session once carried an approved design to the brink
   of self-implementation because the brainstorming skill's terminal state captured the driver - the
   human had to ask "are we using lc to do the build?". That question should never be needed.)
-- **Keep the engine agnostic.** `lc`/`core` hold only generic task/process primitives - no hardcoded
+- **Keep the engine agnostic.** `lc`/`core` hold only generic node/process primitives - no hardcoded
   step names, required named artifacts, or per-workflow commands. Workflow lives in step markdown,
   composed from primitives. (See `CLAUDE.md`.)
 - **Substrate by hand; additive through the pipeline.** Anything that changes how the engine loads,
   spawns, or composes itself, build by hand - the pipeline can't build the loader it runs on. Additive
   features go develop -> build like any work.
-- **Hold main steady under an active build.** While a story is building or in review, do not change the
+- **Hold main steady under an active build.** While a item is building or in review, do not change the
   `main` files its review depends on - shared docs, steps, or code. It stales the branch's base, so the
   build silently reverts your edits or the reviewer checks a moving target. Land your substrate change
-  before the build starts, or wait until the story merges. (Moving `METHODOLOGY.md`/`driver.md` under
+  before the build starts, or wait until the item merges. (Moving `METHODOLOGY.md`/`driver.md` under
   the GRID-010 build cost it four review rounds.)
-- **Freeze a spec once its story is building.** A filed story's spec is immutable while it builds or
+- **Freeze a spec once its item is building.** A filed item's spec is immutable while it builds or
   is in review. Editing it - especially widening scope - moves the target under the reviewer, so the
   build reads one spec and the review checks another, and it churns. New requirements or scope go in a
-  FOLLOW-UP story (`lc file ... --blocked-by`), never an edit to the in-flight spec. (Expanding
+  FOLLOW-UP item (a new item gated with `lc dep`), never an edit to the in-flight spec. (Expanding
   GRID-043 mid-build cost mcv several review rounds.)
 - **Reference and config chores are yours, not the pool's.** A change that is purely docs, references,
   naming sweeps, or config - no code logic to design or review - you do by hand; never file it as a
-  build task. The pipeline is for code with a spec and a review; a one-minute chore does not need a
+  build step. The pipeline is for code with a spec and a review; a one-minute chore does not need a
   worker, a branch, and a review cycle. (This is also how you keep main steady under a build.)
-- **Gate held work; do not hand-track it.** If work must wait on other work, file it with
-  `lc file ... --blocked-by <id>`. The store releases it when the blocker closes and the pool picks it
+- **Gate held work; do not hand-track it.** If work must wait on other work, gate it with
+  `lc dep <step> --needs <id>`. The store releases it when the blocker closes and the pool picks it
   up. Never carry "what goes next" in your head.
 - **Check blast radius before filing; block overlapping work.** Before you file, check whether the
   work touches the same files/subsystem as in-flight or just-filed work, or a spec references another
-  spec. If so, file it `--blocked-by` that work rather than in parallel. Overlapping parallel work
+  spec. If so, gate it with `lc dep` on that work rather than in parallel. Overlapping parallel work
   conflicts - a semantic rebase and rework - while serializing it builds cleanly on top. (GRID-058
   reused `c1y`/GRID-053's kill path but was filed in parallel, so it duplicated the path and hit a
   five-file conflict.) Until a planning agent automates this, it is your manual check at file time.
@@ -89,25 +90,26 @@ These are how you work, not suggestions:
 
 `lc inbox` (actions + blockers needing you), `lc backlog [N]` (items to develop later),
 `lc status` (all buckets), `lc active` (running), `lc queue` (upcoming agent work), `lc ps` (workers),
-`lc logs <task|role|run> [-f]` (watch worker output), `lc trace <story>` (a story end to end),
+`lc logs <step|role|run> [-f]` (watch worker output), `lc trace <item>` (a item end to end),
 `lc flow` (the pipeline and its steps).
 
 ## Drive work in
 
 - The spec is whatever the human gives you - a file they wrote, or one you draft together if they
   ask. lightcycle imposes no spec format; do not reshape what they hand you. Save it under the specs
-  root and file it as-is. If you draft one, never invent facts or sources.
-- Before filing, open an epic for the objective (`lc epic "<objective>" [--backlog <id>]`), or reuse
-  one already open for it. `lc file` has no path to a parentless story - `--epic` is required.
-- `lc file <spec> --step build --epic <id> [--repo/--project/--goal/--blocked-by]` creates a STORY
-  (spec attached) under that epic, and its first task. `--repo` names the repo under projects/
-  (default: the engine itself); `--blocked-by` gates it on another task. Attach more artifacts with
-  `lc attach`.
-- For multi-phase specs, one epic holds every phase's story. File phase 1 first to get its task id
-  (e.g. `myapp-abc`), then file phase 2 with
-  `lc file p2.md --step build --epic <id> --repo myapp --blocked-by myapp-abc` - the store holds it
-  until phase 1 closes.
-- `lc add "<title>"` for a rough idea or reminder - it lands in the backlog, no spec or flow needed.
+  root and attach it as-is. If you draft one, never invent facts or sources.
+- Before filing, open a theme for the objective (`lc new theme "<objective>" [--backlog <id>]`), or
+  reuse one already open for it.
+- File a phase as three primitives: `lc new item "<title>" --parent <theme> [--repo/--project/--goal]`
+  creates the item, `lc attach <item> spec <spec>` attaches the spec, and
+  `lc set <item> --state active [--workflow <w>]` activates it - filing its workflow's entry step and
+  handing it to the pipeline. Name a repo under projects/ with `lc attach <item> repo <name>` (default:
+  the engine itself). Gate one step on another with `lc dep <step> --needs <id>`.
+- For multi-phase specs, one theme holds every phase's item. File and activate phase 1 first to get its
+  entry-step id, then file phase 2 and gate it: `lc dep <phase2-step> --needs <phase1-step>` - the store
+  holds it until phase 1 closes.
+- `lc new item "<title>"` for a rough idea or reminder - it lands in the backlog as a todo, no spec or
+  flow needed (un-themed is fine; group it later with `lc set <item> --parent <theme>`).
 
 ## Work the human-facing steps
 
@@ -118,9 +120,9 @@ and record the outcome (`lc done` / `lc done`). You assist and do the bookkeepin
 
 ## Resolve blocks
 
-An agent that cannot decide parks its task at its own step as `for:human`, carrying resume-state.
-Read it (`lc show TASK`), help the human decide, then either:
+An agent that cannot decide parks its step as `for:human`, carrying resume-state.
+Read it (`lc show STEP`), help the human decide, then either:
 
-- `lc set TASK` --state ready - hand it back to the agent to retry, once you have cleared what it needs; or
+- `lc set STEP --state ready` - hand it back to the agent to retry, once you have cleared what it needs; or
 - finish the step yourself and emit its real outcome (e.g. you manually rebased and opened the PR for
-  a stuck open-pr -> `lc done TASK done`).
+  a stuck open-pr -> `lc done STEP done`).

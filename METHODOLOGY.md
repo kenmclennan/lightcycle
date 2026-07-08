@@ -44,16 +44,16 @@ rots in conversation, and you re-derive it, drift from it, or revert a working f
 recorded why it was there. Place each decision by **scope**: generic agent competence in the step
 file; this project's conventions in its `CLAUDE.md`; cross-project style in the global config; the
 driver's way-of-working in `driver.md`; the reasoning here. _Discovered the hard way: we kept making
-decisions in chat and nearly acted on a model (epics) we had never written down._
+decisions in chat and nearly acted on a model (themes) we had never written down._
 
 ### Keep the engine agnostic; conventions go to the project
 
-The engine builds _any_ repo. So `lc` and `core` must hold only generic task/process primitives - no
+The engine builds _any_ repo. So `lc` and `core` must hold only generic step/process primitives - no
 hardcoded step names, required named artifacts, or per-workflow commands. The workflow is the user's,
 and it lives in editable step markdown composed from primitives; a project's specifics live in that
 project's `CLAUDE.md`, which the agnostic agents read. _Discovered via the `lc plan-add` trap: a
 command that baked a `build` step and a required `spec` into the engine; reverted in favour of the
-planner composing `lc file --blocked-by`._
+planner composing `lc new` + `lc dep`._
 
 ### Substrate by hand; additive through the pipeline
 
@@ -68,7 +68,7 @@ currently running._
 Work is durable in the store, not in any worker or pool process. The pool is a stateless engine
 that polls the store for ready work and runs whatever is ready; kill it, suspend the laptop, lose a worker - nothing
 is lost, because the truth is in the store and `sweep` reconciles on restart. Two corollaries:
-**gate held work with `--blocked-by`** (the store releases it automatically - never hand-track what
+**gate held work with `lc dep`** (the store releases it automatically - never hand-track what
 goes next), and **prefer pull (poll the store) over push** (more robust; push is only a latency
 optimisation). _Discovered when an overnight suspend resumed cleanly, and when hand-tracking "held"
 work turned out to be redundant with a dependency the store already enforced._
@@ -80,23 +80,23 @@ driver) touches the human-facing stages - shaping ideas, deciding scope, gating 
 the pool runs the autonomous middle (build, review, open-pr, watch-pr). The human's scarce time is
 spent at the _edges_ (define and gate), never the mechanical middle.
 
-### Dependencies are story-level, not step-level
+### Dependencies are item-level, not step-level
 
-When one piece of work needs another, the dependency is between **stories**, and it clears when the
-predecessor story **closes** - not when any step inside it finishes. A story is the unit of
+When one piece of work needs another, the dependency is between **items**, and it clears when the
+predecessor item **closes** - not when any step inside it finishes. A item is the unit of
 completion; how it closes (built, reviewed, merged, abandoned) is opaque to the graph. This keeps the
-planner workflow-agnostic - it wires story to story and never names build, review, or merge - and it
-means "merge" is not a first-class event the system must define: merging is just one way a story
-closes. _Discovered when the planner's first run blocked dependents on predecessor build tasks, which
+planner workflow-agnostic - it wires item to item and never names build, review, or merge - and it
+means "merge" is not a first-class event the system must define: merging is just one way a item
+closes. _Discovered when the planner's first run blocked dependents on predecessor build steps, which
 close at build-done; a dependent would have started before the predecessor merged, building from a
 main that did not yet contain its work._
 
 ### Epics are coherent outcomes; refinement consolidates
 
-An **epic** is a coherent _outcome_, not a promoted todo and not a matter of size: some epics are one
+An **theme** is a coherent _outcome_, not a promoted todo and not a matter of size: some themes are one
 big thing, some are several related small ones. Refinement is the deliberate act of shaping rough,
-cheap, overlapping backlog captures into scoped epics, consolidating related items. The payoff is that
-**active epics are the current focus areas** - the prioritisation signal a flat todo list cannot give.
+cheap, overlapping backlog captures into scoped themes, consolidating related items. The payoff is that
+**active themes are the current focus areas** - the prioritisation signal a flat todo list cannot give.
 
 ### The self-improvement loop
 
@@ -129,7 +129,7 @@ The method is not finished. The open frontiers, where the principles are still f
 - **Engagement scheduler** - managing the human's attention and time across session modes (push a
   goal / refine / queue-and-leave / review) and an offline mode that fills their absence with bounded
   autonomous work, rate-limited to their review bandwidth.
-- **Refinement tooling** - making "rough backlog -> scoped epics" a real, supported step, with a
+- **Refinement tooling** - making "rough backlog -> scoped themes" a real, supported step, with a
   focus-area view and recorded lineage.
 - **Measurement and the retro** - turning the lifecycle's own history into the signal that drives the
   self-improvement loop.

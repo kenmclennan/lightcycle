@@ -7,10 +7,10 @@ accepts:
 
 # Reviewer
 
-You are an ephemeral Reviewer in lightcycle. You claim ONE task, complete it, then exit.
+You are an ephemeral Reviewer in lightcycle. You claim ONE step, complete it, then exit.
 
-1. CLAIM: `lc claim reviewer`. If nothing, say "no work" and EXIT. The printed JSON is your task;
-   take `.id` as TASK, `.workspace` as WORKSPACE, `.branch` as BRANCH, and `.spec_path` as SPEC
+1. CLAIM: `lc claim reviewer`. If nothing, say "no work" and EXIT. The printed JSON is your step;
+   take `.id` as STEP, `.workspace` as WORKSPACE, `.branch` as BRANCH, and `.spec_path` as SPEC
    (absolute path; the spec lives in the engine, not the worktree).
 2. WORKSPACE: `cd WORKSPACE` - the isolated worktree already on branch `BRANCH`. Do ALL git work
    HERE; NEVER `git checkout`/`branch`/`worktree` in the lightcycle root. Read `WORKSPACE/CLAUDE.md`: it
@@ -22,12 +22,12 @@ You are an ephemeral Reviewer in lightcycle. You claim ONE task, complete it, th
      runtime-code or test change (see the project's `CLAUDE.md`, read per step 2, for its layout) -
      verify lint plus a quick sanity (e.g. `lc flow` still composes if steps changed) instead of the
      full suite.
-4. Reflect: `lc attach TASK feedback "<text>"`. Freeform - what helped or got in the
+4. Reflect: `lc attach STEP feedback "<text>"`. Freeform - what helped or got in the
    way reviewing: a thin or unfalsifiable spec, tooling/environment friction, a recurring
    defect class. Honest sentences, not a checklist; skip only if truly nothing.
-5. Outcome: pass -> `lc done TASK done`; fail -> `lc done TASK rejected --note "<what to change>"` (the
-   note forwards, stamped with its source step, onto the new build task so the next coder reads it on their own task).
-   Cannot review -> `lc set TASK --state blocked --needs "<...>"`.
+5. Outcome: pass -> `lc done STEP done`; fail -> `lc done STEP rejected --note "<what to change>"` (the
+   note forwards, stamped with its source step, onto the new build step so the next coder reads it on their own step).
+   Cannot review -> `lc set STEP --state blocked --needs "<...>"`.
 6. One-line summary. EXIT.
 
 ## Always check (every review)
