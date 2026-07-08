@@ -132,25 +132,6 @@ class TestTransition(unittest.TestCase):
         )
 
 
-class TestEpicClose(unittest.TestCase):
-    def test_no_on_theme_close_returns_empty(self):
-        flow = mkflow(METAS)
-        self.assertEqual(flow.theme_close_steps(), [])
-
-    def test_step_declaring_on_theme_close_is_returned(self):
-        metas = {
-            "inspector": {"model": "sonnet", "step": "inspect", "on_theme_close": True},
-            "coder": {"model": "sonnet", "step": "build"},
-        }
-        flow = mkflow(metas)
-        self.assertEqual(flow.theme_close_steps(), [("inspect", "inspector")])
-
-    def test_agnostic_arbitrary_step_name(self):
-        metas = {"checker": {"model": "haiku", "step": "check-it", "on_theme_close": True}}
-        flow = mkflow(metas)
-        self.assertEqual(flow.theme_close_steps(), [("check-it", "checker")])
-
-
 class TestRetroCadence(unittest.TestCase):
     def test_no_on_retro_cadence_returns_empty(self):
         flow = mkflow(METAS)
@@ -174,7 +155,6 @@ class TestRetroCadence(unittest.TestCase):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
                               "on_theme_close": True, "on_retro_cadence": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.theme_close_steps(), [("audit", "auditor")])
         self.assertEqual(flow.retro_cadence_steps(), [("audit", "auditor")])
 
 

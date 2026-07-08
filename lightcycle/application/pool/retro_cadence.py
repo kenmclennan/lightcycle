@@ -27,7 +27,7 @@ class RetroCadenceUseCase:
 
     def execute(self, now: float) -> RetroCadenceResponse:
         interval_days = self._config.retro_interval_days()
-        min_epics = self._config.retro_min_epics()
+        min_items = self._config.retro_min_items()
         flow = self._flow_service.load_flow()
         cadence_steps = flow.retro_cadence_steps()
         if not cadence_steps:
@@ -43,11 +43,11 @@ class RetroCadenceUseCase:
             elapsed = _days_between(now_date, reference)
             if elapsed < interval_days:
                 continue
-            themes = self._store.themes_closed_since(reference)
-            if len(themes) < min_epics:
+            items = self._store.items_closed_since(reference)
+            if len(items) < min_items:
                 continue
             tid = self._store.create_step(
-                "%s: cross-theme trend audit" % step, step=step, role=role)
+                "%s: closed-work trend audit" % step, step=step, role=role)
             self._store.update_metadata(tid, {"since": reference, "fired_at": now_date})
             fired.append(tid)
 
@@ -60,11 +60,11 @@ class RetroCadenceUseCase:
                 max_fired_at = step.fired_at
         if max_fired_at:
             return max_fired_at
-        return self._oldest_closed_epic_date()
+        return self._oldest_closed_item_date()
 
-    def _oldest_closed_epic_date(self) -> Optional[str]:
-        themes = self._store.last_n_closed_epics(1000)
-        if not themes:
+    def _oldest_closed_item_date(self) -> Optional[str]:
+        items = self._store.last_n_closed_items(1000)
+        if not items:
             return None
-        dates = [e.closed_at[:10] for e in themes if e.closed_at]
+        dates = [i.closed_at[:10] for i in items if i.closed_at]
         return min(dates) if dates else None

@@ -129,11 +129,16 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def last_n_closed_epics(self, n):
+    def last_n_closed_themes(self, n):
+        pass
+
+
+    @abstractmethod
+    def items_closed_since(self, since_date):
         pass
 
     @abstractmethod
-    def themes_closed_since(self, since_date_str):
+    def last_n_closed_items(self, n):
         pass
 
     @abstractmethod

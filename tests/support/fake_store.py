@@ -347,7 +347,7 @@ class FakeStore(StorePort):
                 result.append(record_to_node(b))
         return result
 
-    def last_n_closed_epics(self, n):
+    def last_n_closed_themes(self, n):
         themes = [
             b
             for b in self._records.values()
@@ -356,17 +356,25 @@ class FakeStore(StorePort):
         themes.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
         return [record_to_node(b) for b in themes[:n]]
 
-    def themes_closed_since(self, since_date_str):
+
+    def items_closed_since(self, since_date):
         result = []
         for b in self._records.values():
-            if b.get("type") != "theme" or b.get("status") != "closed":
+            if b.get("type") != "item" or b.get("status") != "closed":
                 continue
             if "retro-origin" in (b.get("labels") or []):
                 continue
-            closed_at = (b.get("closed_at") or "")[:10]
-            if closed_at >= since_date_str:
+            if (b.get("closed_at") or "")[:10] >= since_date:
                 result.append(record_to_node(b))
         return result
+
+    def last_n_closed_items(self, n):
+        items = [
+            b for b in self._records.values()
+            if b.get("type") == "item" and b.get("status") == "closed"
+        ]
+        items.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
+        return [record_to_node(b) for b in items[:n]]
 
     def steps_at_step(self, step):
         label = "step:%s" % step

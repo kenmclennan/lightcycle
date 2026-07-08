@@ -134,14 +134,14 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertNotIn(self.gate, ids)
 
 
-class TestInboxCandidateEpics(unittest.TestCase):
+class TestInboxCandidateThemes(unittest.TestCase):
     def test_all_closed_stories_epic_is_candidate(self):
         s = FakeStore()
         theme = s.create_theme("My Epic")
         s.close(s.create_item("item 1", theme=theme), "done")
         s.close(s.create_item("item 2", theme=theme), "done")
         resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
-        self.assertIn(theme, [e.id for e in resp.candidate_epics])
+        self.assertIn(theme, [e.id for e in resp.candidate_themes])
 
     def test_one_open_story_epic_not_candidate(self):
         s = FakeStore()
@@ -149,13 +149,13 @@ class TestInboxCandidateEpics(unittest.TestCase):
         s.close(s.create_item("item 1", theme=theme), "done")
         s.create_item("item 2", theme=theme)
         resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
-        self.assertNotIn(theme, [e.id for e in resp.candidate_epics])
+        self.assertNotIn(theme, [e.id for e in resp.candidate_themes])
 
     def test_no_children_epic_not_candidate(self):
         s = FakeStore()
         theme = s.create_theme("Empty Epic")
         resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
-        self.assertNotIn(theme, [e.id for e in resp.candidate_epics])
+        self.assertNotIn(theme, [e.id for e in resp.candidate_themes])
 
     def test_closed_epic_not_candidate(self):
         s = FakeStore()
@@ -163,7 +163,7 @@ class TestInboxCandidateEpics(unittest.TestCase):
         s.close(s.create_item("item", theme=theme), "done")
         s.close(theme, "done")
         resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
-        self.assertNotIn(theme, [e.id for e in resp.candidate_epics])
+        self.assertNotIn(theme, [e.id for e in resp.candidate_themes])
 
     def test_candidate_epic_has_closed_story_count(self):
         s = FakeStore()
@@ -171,7 +171,7 @@ class TestInboxCandidateEpics(unittest.TestCase):
         for i in range(3):
             s.close(s.create_item("item %d" % i, theme=theme), "done")
         resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_settled_now()))
-        candidates = {e.id: e for e in resp.candidate_epics}
+        candidates = {e.id: e for e in resp.candidate_themes}
         self.assertEqual(candidates[theme].closed_item_count, 3)
 
     def test_existing_inbox_rows_unchanged(self):
@@ -183,7 +183,7 @@ class TestInboxCandidateEpics(unittest.TestCase):
         self.assertIn(gate, [row.step.id for row in resp.rows])
 
 
-class TestInboxCandidateEpicQuiescence(unittest.TestCase):
+class TestInboxCandidateThemeQuiescence(unittest.TestCase):
     def _close_story(self, store, theme, title, closed_date_str):
         sid = store.create_item(title, theme=theme)
         store.close(sid, "done")
@@ -196,10 +196,10 @@ class TestInboxCandidateEpicQuiescence(unittest.TestCase):
         self._close_story(s, theme, "item", "2026-07-04")
 
         just_closed = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_ts("2026-07-04")))
-        self.assertNotIn(theme, [e.id for e in just_closed.candidate_epics])
+        self.assertNotIn(theme, [e.id for e in just_closed.candidate_themes])
 
         settled = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_ts("2026-07-06")))
-        self.assertIn(theme, [e.id for e in settled.candidate_epics])
+        self.assertIn(theme, [e.id for e in settled.candidate_themes])
 
     def test_recency_gate_uses_latest_of_multiple_story_closures(self):
         s = FakeStore()
@@ -208,7 +208,7 @@ class TestInboxCandidateEpicQuiescence(unittest.TestCase):
         self._close_story(s, theme, "item 2", "2026-07-04")
 
         resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput(now=_ts("2026-07-04")))
-        self.assertNotIn(theme, [e.id for e in resp.candidate_epics])
+        self.assertNotIn(theme, [e.id for e in resp.candidate_themes])
 
 
 class TestInboxAttentionFlag(unittest.TestCase):

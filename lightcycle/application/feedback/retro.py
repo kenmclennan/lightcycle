@@ -129,7 +129,7 @@ class RetroUseCase:
             label = "since:%s" % input.since
 
         else:
-            themes = self._store.last_n_closed_epics(input.last)
+            themes = self._store.last_n_closed_themes(input.last)
             all_refs = []
             rows = []
             for theme in themes:
