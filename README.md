@@ -2,15 +2,15 @@
 
 A workflow-agnostic agent engine fronted by **`lc`**, a single Python CLI that owns
 all work and its lifecycle. Work lives in a local SQLite store (hidden behind `lc`)
-as tasks chained by dependencies. A run-loop spawns headless `claude` workers that
-each claim one task, do it, and exit. tmux is optional - every part runs as a
+as nodes chained by dependencies. A run-loop spawns headless `claude` workers that
+each claim one step, do it, and exit. tmux is optional - every part runs as a
 standalone command. You define how you work by composing **workflows** (routing
 graphs in `workflows/`) over a library of reusable **steps** (`steps/`); the
-engine imposes no spec format or fixed pipeline, and different epics can run
+engine imposes no spec format or fixed pipeline, and different themes can run
 different workflows at once.
 
 The name is the double meaning: work rides its **lifecycle** through the engine, and
-every task leaves a light-trail - the audit trail of what happened, when, and why.
+every node leaves a light-trail - the audit trail of what happened, when, and why.
 
 The live backlog and roadmap live in the store - run `lc backlog` for open items, `lc status` for the
 whole picture.
@@ -57,11 +57,13 @@ lc config --edit                     # point `projects` + `specs` at your dirs (
 lc init myapp                        # scaffold projects/myapp/.lightcycle (shortcode + workflows)
 
 # 3. drive some work in
-lc epic "Add a health endpoint"                       # open the goal; prints an epic id, e.g. MYAPP-1
-lc file specs/health.md --epic MYAPP-1 --repo myapp   # file a story + its first task from a spec
+lc new theme "Add a health endpoint"           # open the focus area; prints a theme id, e.g. MYAPP-1
+item=$(lc new item "health endpoint" --parent MYAPP-1 --repo myapp)   # a todo item under the theme
+lc attach $item spec specs/health.md           # attach whatever expresses it
+lc set $item --state active                    # plan it: files the workflow's entry step
 
 # 4. run the pool (separate terminal) and watch
-lc start                             # the agent loop: claims ready tasks, spawns workers, advances the flow
+lc start                             # the agent loop: claims ready steps, spawns workers, advances the flow
 lc status                            # inbox / active / queue / blocked, all at once
 lc driver                            # your interactive seat to shape specs and clear gates
 ```
@@ -77,47 +79,52 @@ surface in `lc inbox`.
 
 ## Model
 
-- **The engine is workflow-agnostic.** `lc` owns tasks, stories, and the flow, but
-  has no opinion on _how you work_ - including your spec format. It only stores a
-  spec's path as an artifact; it never parses it. The steps in `steps/` are an
-  _example_ workflow (a feature pipeline: coder -> reviewer -> open-pr -> watch-pr,
-  then the human steps ready-merge -> cleanup). You define your own way of working
-  by composing [workflows](#workflows) over the step library. A spec is whatever your
-  steps understand; hand the Driver one you wrote and it flows in as-is.
-- **Hierarchy: epic / story / task.** An **epic** is a goal; a **story** is a
-  deliverable outcome (one spec -> one branch -> one PR) and **holds the
-  artifacts**; a **task** is the work (a flow step under a story, or a standalone
-  `lc add` item). `lc file` creates a story + its first task at the step you name.
-- **Artifacts live on the story** as a `{type, value, label?}` list (spec, branch,
-  pr, ticket, doc, ...). Tasks read their parent story's artifacts - nothing is
-  copied between tasks.
-- **Steps can declare an artifact contract** (optional) in frontmatter:
-  `accepts:` (inputs) and `produces:` (outputs), keyed by artifact type
-  (`<type>: required|optional`). A required input gates the work; an optional input
-  is read if present but never gates (e.g. the coder accepts `branch: optional`,
-  since on a rework pass the branch already exists). `lc` enforces the required
-  parts mechanically: a task whose required inputs are absent routes to `for:human`
-  instead of running (precondition); `lc done` refuses to close until the required
-  outputs are linked (postcondition); `lc file --step` rejects a step whose inputs a
-  fresh story can't satisfy; and `lc flow` statically checks the whole pipeline
-  composes - every step's required inputs are guaranteed by some upstream producer
-  on every path. Presence-only: it checks the story's artifact list, never
-  git/GitHub reality. Agents with no contract are unconstrained.
-- **Everything is a task.** "build", "review", "open-pr" are tasks chained by
-  dependencies; closing one makes its dependents ready. Which task is ready IS the
-  stage. The chain is defined by the **workflow graph** (see [Workflows](#workflows)),
-  not by the steps: a workflow file names the entry stage, the `outcome -> next-stage`
-  edges, and which step file performs each stage. `lc` resolves each task's workflow
-  (from its epic) and routes its outcome through that graph - the next performer is the
-  step file the target stage maps to (an unowned target is a `for:human` terminal).
-  `lc flow` prints the assembled graph.
+Everything is a **node** - `theme`, `item`, or `step` - and the CLI is a small set of
+generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, plus
+`claim`). The workflow supplies the meaning; the engine ships no per-workflow verbs.
+
+- **The engine is workflow-agnostic.** `lc` owns nodes and the flow, but has no opinion
+  on _how you work_ - including your spec format. It only stores a spec's path as an
+  artifact; it never parses it. The steps in `steps/` are an _example_ workflow (a
+  feature pipeline: coder -> reviewer -> open-pr -> watch-pr, then the human steps
+  ready-merge -> cleanup). You define your own way of working by composing
+  [workflows](#workflows) over the step library. A spec is whatever your steps
+  understand; hand the Driver one you wrote and it flows in as-is.
+- **Hierarchy: theme / item / step.** A **theme** is a focus area grouping related work
+  (durable, often long-lived, and optional); an **item** is the unit you plan and ship
+  (one spec -> one branch -> one PR) and **holds the artifacts**; a **step** is one stage
+  of the item's workflow running (or the reusable step definition). An item is **stateful**:
+  `todo` (captured) -> `active` (planned, running steps) -> `closed`. `lc new item`
+  captures a todo; `lc set <item> --state active` **plans** it - filing the workflow's
+  entry step.
+- **Artifacts live on the item** as a `{type, value, label?}` list (spec, branch, pr,
+  ticket, doc, ...) via `lc attach`. Steps read their parent item's artifacts - nothing is
+  copied between steps.
+- **Steps can declare an artifact contract** (optional) in frontmatter: `accepts:`
+  (inputs) and `produces:` (outputs), keyed by artifact type (`<type>: required|optional`).
+  A required input gates the work; an optional input is read if present but never gates
+  (e.g. the coder accepts `branch: optional`, since on a rework pass the branch already
+  exists). `lc` enforces the required parts mechanically: a step whose required inputs are
+  absent routes to `for:human` instead of running (precondition); `lc done` refuses to
+  close until the required outputs are attached (postcondition); activating an item
+  (`lc set --state active`) rejects an entry step whose inputs the item's artifacts can't
+  satisfy; and `lc flow` statically checks the whole pipeline composes - every step's
+  required inputs are guaranteed by some upstream producer on every path. Presence-only:
+  it checks the item's artifact list, never git/GitHub reality. Agents with no contract are
+  unconstrained.
+- **A step is a stage running.** "build", "review", "open-pr" are steps chained by
+  dependencies; closing one makes its dependents ready. Which step is ready IS the stage.
+  The chain is defined by the **workflow graph** (see [Workflows](#workflows)), not by the
+  steps: a workflow file names the entry stage, the `outcome -> next-stage` edges, and which
+  step file performs each stage. `lc` resolves each step's workflow (from its item) and
+  routes its outcome through that graph - the next performer is the step file the target
+  stage maps to (an unowned target is a `for:human` terminal). `lc flow` prints the graph.
 - **`lc` owns the domain and the processes.** It is the only caller of the store. It
   spawns/tracks workers and runs the loop. No tmux required.
-- **Workers are ephemeral and claim their own task.** The loop spawns a role
-  (`coder`/`reviewer`/`open-pr`/`watch-pr`); the worker's first act is `lc claim
-<role>` (atomic), then it works and exits. A worker that dies before claiming
-  leaves nothing stuck. Human steps (`ready-merge`/`cleanup`) are never spawned;
-  they surface in `lc inbox`.
+- **Workers are ephemeral and claim their own step.** The loop spawns a role
+  (`coder`/`reviewer`/`open-pr`/`watch-pr`); the worker's first act is `lc claim <role>`
+  (atomic), then it works and exits. A worker that dies before claiming leaves nothing
+  stuck. Human steps (`ready-merge`/`cleanup`) are never spawned; they surface in `lc inbox`.
 - **Three homes: engine / `~/.lightcycle` / projects.** The **engine** is the pipx-installed
   package - code plus the _default_ step/workflow library it ships. **`~/.lightcycle/`** is
   everything that is _yours_: `config`, the store (`store.db`), `logs/`, `.worktrees/`, and any
@@ -133,23 +140,23 @@ surface in `lc inbox`.
   `shortcode` (id prefix) and `default-workflow`. `lc init` seeds it; `lc config [--edit]`
   shows or edits it.
 - **Per-project `.lightcycle/` (optional).** A project can override the defaults in
-  `projects/<name>/.lightcycle/config`: its own `shortcode` (new epic ids under it mint as
+  `projects/<name>/.lightcycle/config`: its own `shortcode` (new theme ids under it mint as
   `SHORTCODE-N`, and it's the prefix its specs use) and its own `default-workflow`. It
   may also drop project-local graphs in `.lightcycle/workflows/`. A project with no
   `.lightcycle/` just inherits the global defaults; `lc init <project>` scaffolds the folder.
-- **One repo per story, by name.** A story targets exactly one repo, named by a
-  `repo` artifact (`lc file <spec> --repo <name>`); the name resolves to
-  `projects/<name>`. Cross-repo work is handled by splitting the spec into one story per
+- **One repo per item, by name.** An item targets exactly one repo, named by a
+  `repo` artifact (`lc attach <item> repo <name>`); the name resolves to
+  `projects/<name>`. Cross-repo work is handled by splitting the spec into one item per
   repo, never by a multi-repo workspace.
-- **`lc` owns worktree isolation.** On claim, `lc` creates (or reuses) a per-story
-  git worktree of the story's repo on branch `feat/<slug>` (the `branch-prefix` config,
-  default `feat`) from `origin/main`, under `~/.lightcycle/.worktrees/<story>`, and hands
-  the worker its path as the claim JSON's `workspace` field (it also auto-links the
+- **`lc` owns worktree isolation.** On claim, `lc` creates (or reuses) a per-item
+  git worktree of the item's repo on branch `feat/<slug>` (the `branch-prefix` config,
+  default `feat`) from `origin/main`, under `~/.lightcycle/.worktrees/<item>`, and hands
+  the worker its path as the claim JSON's `workspace` field (it also auto-attaches the
   `branch` artifact). The spec lives under `specs`, so the claim JSON also carries
   `spec_path` (absolute) - workers read the spec from there and do all git work in the
   worktree, never touching the primary tree.
-- **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow step),
-  `project:`/`goal:`. `for:human` tasks never auto-run; they surface to you.
+- **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow stage),
+  `project:`/`goal:`. `for:human` steps never auto-run; they surface to you.
 
 ## Workflows
 
@@ -164,7 +171,7 @@ A workflow file has up to five sections; only `entry` is required:
 ```
 # Standard - spec -> code -> review -> PR -> merge
 
-entry: build            # the stage a filed story starts at
+entry: build            # the stage an activated item starts at
 
 nodes:                  # stage -> step file (omit when they already match)
   build   coder
@@ -178,7 +185,7 @@ edges:                  # from-stage  outcome  to-stage
 
 hooks:                  # engine event -> handling stage (+ value)
   pr_merge       ready-merge  merged
-  epic_close     audit
+  theme_close    audit
   retro_cadence  audit
 
 signals:                # stage  metric-name  outcome   (retro telemetry)
@@ -189,23 +196,23 @@ signals:                # stage  metric-name  outcome   (retro telemetry)
   it (`coder`). A target with no node/step file (e.g. `conflict-review`) is a
   `for:human` terminal. A stage owned by a step file with no `model` is a human step.
 - The engine reacts to a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_rework`,
-  `pr_conflict` (+ `_cap`/`_escalate`), `epic_close`, `retro_cadence`); the graph only
+  `pr_conflict` (+ `_cap`/`_escalate`), `theme_close`, `retro_cadence`); the graph only
   names which stage handles each. A workflow that omits `pr_*` never opens a PR - e.g.
   a two-line local-only spike: `entry: build` + `build done DONE`.
 - `lc flow [--json]` prints and statically checks the resolved graph.
 
-**Selecting a workflow.** Selection lives on the epic and its stories inherit it:
+**Selecting a workflow.** Selection lives on the theme and its items inherit it:
 
 ```bash
-lc epic "ship the thing"                 # uses the default workflow
-lc epic "spike an idea"  --workflow poc  # this epic (and its stories) run poc
-lc file spec.md --epic <id>              # inherits the epic's workflow; entry step derived
-lc file spec.md --epic <id> --workflow gherkin   # override for one story
+lc new theme "ship the thing"                 # uses the default workflow
+lc new theme "spike an idea" --workflow poc   # this theme (and its items) run poc
+lc set <item> --state active                  # inherits the theme's workflow; entry step derived
+lc set <item> --state active --workflow gherkin   # override for one item
 ```
 
-Resolution order for a task: **story override -> epic workflow -> the project's
+Resolution order for a step: **item override -> theme workflow -> the project's
 `.lightcycle/config` `default-workflow` -> the global `default-workflow`**. Because it's
-resolved per task, two epics can run different workflows concurrently.
+resolved per node, two themes can run different workflows concurrently.
 
 **Where workflows resolve from.** The engine ships default graphs in its packaged
 library; you shadow a name (or add your own) in `~/.lightcycle/workflows/` for all projects,
@@ -215,33 +222,38 @@ A variant step is just another named file the graph points a stage at
 
 ## Commands
 
-Initialise once with `lc init`, then run the parts in separate terminals.
+The mutating CLI is a small set of generic primitives over nodes; the read views and
+engine ops sit alongside. Initialise once with `lc init`, then run the parts in separate
+terminals.
 
-| Command                                                                              | What it does                                                                              |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `lc init [<project>]`                                                                | no arg: create `~/.lightcycle` (store + config). `<project>`: scaffold its `.lightcycle/` |
-| `lc config [--edit]`                                                                 | show (or `--edit`) the lightcycle config: projects + specs roots                          |
-| `lc migrate`                                                                         | one-time: relocate a legacy `~/.grid` or `~/.config` layout into `~/.lightcycle`          |
-| `lc start [--once]`                                                                  | the agent pool: sweep, then fill up to LC_MAX_AGENTS workers from the ready queue         |
-| `lc driver`                                                                          | open the interactive driver `claude` (your seat)                                          |
-| `lc status`                                                                          | all buckets: inbox / active / queue / blocked                                             |
-| `lc inbox [N]`                                                                       | what needs you now: gates to clear and agents waiting on you                              |
-| `lc backlog [N]`                                                                     | backlog items to develop later                                                            |
-| `lc active`                                                                          | tasks being worked now                                                                    |
-| `lc queue [N]`                                                                       | next N upcoming agent tasks                                                               |
-| `lc ps [--json]`                                                                     | running workers (role, task, pid, alive)                                                  |
-| `lc logs <task\|role\|run> [-f]`                                                     | tail a worker's or the loop's log                                                         |
-| `lc show <id>`                                                                       | a story (artifacts + child tasks) or a task (+ story artifacts)                           |
-| `lc trace <story>`                                                                   | story + its artifacts + child tasks + logs                                                |
-| `lc flow [--json]`                                                                   | print + check the assembled flow (stages, routes, contracts, composition)                 |
-| `lc epic "<objective>" [--workflow <w>]`                                             | open an epic; `--workflow` sets the pipeline its stories run                              |
-| `lc file <spec> --epic <id> [--step <s>] [--workflow <w>] [--repo/--project/--goal]` | create a story + first task (step/workflow default to the epic's)                         |
-| `lc link <story> <type> <value> [--label]`                                           | attach an artifact to a story                                                             |
-| `lc add "<title>"`                                                                   | create a standalone human task (no story/flow)                                            |
-| `lc sweep`                                                                           | release orphaned claims (dead worker -> task reclaimable)                                 |
-| `lc claim <role>`                                                                    | (agents) atomically claim the next task for a role                                        |
-| `lc done <id> <outcome>`                                                             | (agents) close with a flow outcome; advances the chain                                    |
-| `lc block <id> --needs ...`                                                          | (agents) escalate with resume-state -> `for:human`                                        |
+**Node primitives**
+
+| Command                                                            | What it does                                                                                                                                       |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lc new <type> "<title>" [--parent/--workflow/--goal/--project]`   | create a node; `<type>` is `theme`\|`item`\|`step` (validated)                                                                                     |
+| `lc set <id> [--parent/--state/--workflow/--title/--goal/--label]` | update a node; `--parent` **moves** it; `--state active` plans an item (files its entry step); `--state ready`/`blocked` unblocks/escalates a step |
+| `lc show <id>`                                                     | one node as JSON (artifacts, resume-state)                                                                                                         |
+| `lc done <id> [<outcome>]`                                         | close a node; a **step** done-with-outcome advances the flow; an item/theme cascades                                                               |
+| `lc rm <id>`                                                       | delete a node                                                                                                                                      |
+| `lc attach <id> <type> <value> [--label]`                          | attach an artifact (spec/branch/pr/repo/feedback/...)                                                                                              |
+| `lc dep <id> --needs <id>`                                         | link one node as a blocker of another                                                                                                              |
+| `lc claim <role>`                                                  | (agents) atomically claim the next ready step for a role                                                                                           |
+
+**See what's happening / run**
+
+| Command                                | What it does                                                                              |
+| -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `lc init [<project>]`                  | no arg: create `~/.lightcycle` (store + config). `<project>`: scaffold its `.lightcycle/` |
+| `lc config [--edit]`                   | show (or `--edit`) the lightcycle config: projects + specs roots                          |
+| `lc start [--once]`                    | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue       |
+| `lc driver`                            | open the interactive driver `claude` (your seat)                                          |
+| `lc status`                            | all buckets: inbox / active / queue / blocked                                             |
+| `lc inbox [N]` / `lc backlog [N]`      | what needs you now (gates + blocked) / todo items to develop later                        |
+| `lc active` / `lc queue [N]` / `lc ps` | steps running now / next N agent steps / running workers                                  |
+| `lc logs <step\|role\|run> [-f]`       | tail a worker's or the loop's log                                                         |
+| `lc trace <item> [--json]`             | an item end to end: artifacts + child steps + logs                                        |
+| `lc flow [--json]`                     | print + check the assembled flow (stages, routes, contracts, composition)                 |
+| `lc sweep`                             | release orphaned claims (dead worker -> step reclaimable)                                 |
 
 ## Steps and performers
 
@@ -263,13 +275,13 @@ separately in `driver.md` (not under `steps/`, since it is not a single step);
 
 ## Telemetry / logs
 
-- `logs/workers.json` - role, task (stamped at claim), pid, log path per worker.
+- `logs/workers.json` - role, step (stamped at claim), pid, log path per worker.
   Each `lc sweep` (and so each run-loop tick) prunes dead entries, keeping all live
   workers plus the most recent `LC_WORKER_HISTORY` dead ones (default 20) so
   `lc logs` can still reach recently finished workers.
 - `logs/worker-<role>-<spawnid>.log` - each worker's output (`lc logs` finds it).
 - `logs/run.log` - the run-loop's activity.
-- Task history gives cycle time, rework, throughput.
+- Node history gives cycle time, rework, throughput.
 
 ## Tests
 
