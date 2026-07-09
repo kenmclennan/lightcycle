@@ -332,6 +332,33 @@ class TestClaimTask(unittest.TestCase):
         self.assertEqual(resp.spec_path, os.path.join("/specs", "specs/X.md"))
 
 
+class TestClaimConfigWithRealSteps(unittest.TestCase):
+    def _uc(self, store):
+        return ClaimStepUseCase(
+            store,
+            FlowService(_RealFs(), store, _RealConfig()),
+            FakeWorktrees(),
+            FakeWorkers(),
+            FakeConfig(),
+        )
+
+    def test_surfaces_extra_frontmatter_as_config(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        s.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
+        s.create_step("watch-pr: x", step="watch-pr", role="watch-pr", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="watch-pr"))
+        self.assertEqual(resp.config, {"ci-wait": "15m"})
+
+    def test_omits_config_when_step_has_no_extra_frontmatter(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        s.add_artifact(item, "spec", "specs/X.md")
+        s.create_step("build: x", step="build", role="coder", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertIsNone(resp.config)
+
+
 class TestBlockTask(unittest.TestCase):
     def test_routes_to_human_with_resume(self):
         s = FakeStore()
