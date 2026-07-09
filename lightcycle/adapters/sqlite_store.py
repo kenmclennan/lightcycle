@@ -303,6 +303,17 @@ class SqliteStore(StorePort):
         )
         self._conn.commit()
 
+    def replace_artifact(self, item_id, atype, value, label=None):
+        self._conn.execute(
+            "DELETE FROM artifacts WHERE item_id = ? AND atype = ?",
+            (item_id, atype),
+        )
+        self._conn.execute(
+            "INSERT INTO artifacts (item_id, atype, value, label) VALUES (?, ?, ?, ?)",
+            (item_id, atype, value, label),
+        )
+        self._conn.commit()
+
     def all_nodes(self):
         return self._select("state != 'done'")
 
