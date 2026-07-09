@@ -4,7 +4,7 @@ from lightcycle.domain.pool import Worker, WorkerPool
 
 
 def probe(alive_pids):
-    return lambda pid: pid in alive_pids
+    return lambda pid, started=None: pid in alive_pids
 
 
 class TestWorker(unittest.TestCase):
