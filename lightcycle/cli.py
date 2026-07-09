@@ -4,6 +4,7 @@ import os
 import signal
 import sys
 import time
+import urllib.error
 
 from lightcycle import __version__
 from lightcycle.banner import show_banner
@@ -217,7 +218,11 @@ def cmd_upgrade(argv):
     ap = argparse.ArgumentParser(prog="lc upgrade")
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
-    resp = upgrade(__version__, check_only=a.check)
+    try:
+        resp = upgrade(__version__, check_only=a.check)
+    except (urllib.error.URLError, ValueError) as e:
+        sys.stderr.write("could not check for updates: %s\n" % e)
+        return 1
     if not resp.available:
         print("already at latest (%s)" % resp.current)
     elif a.check:
