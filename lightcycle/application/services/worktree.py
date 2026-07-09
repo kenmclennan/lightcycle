@@ -32,7 +32,7 @@ class WorktreeService:
         return (
             self.item_branch(item)
             or Branch.for_feature(
-                self._store.get_node(item).title, self._config.branch_prefix()
+                self._store.get_node(item).title, self._config.branch_prefix(), ident=item
             ).name
         )
 

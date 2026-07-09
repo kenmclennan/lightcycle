@@ -19,6 +19,33 @@ class TestBranch(unittest.TestCase):
             Branch.for_feature("GRID-001-repo-validation").name, "feat/grid-001-repo-validation"
         )
 
+    def test_for_feature_with_ident_short_title(self):
+        self.assertEqual(
+            Branch.for_feature("My Feature", ident="LC-1").name, "feat/LC-1-my-feature"
+        )
+
+    def test_for_feature_with_ident_custom_prefix(self):
+        self.assertEqual(
+            Branch.for_feature("My Feature", "wip", ident="LC-4").name, "wip/LC-4-my-feature"
+        )
+
+    def test_for_feature_with_ident_is_not_slugified(self):
+        self.assertEqual(Branch.for_feature("thing", ident="LC-5.1").name, "feat/LC-5.1-thing")
+
+    def test_for_feature_with_ident_truncates_long_title_on_word_boundary(self):
+        title = (
+            "Branch name is the entire item title slugified (100+ chars); use the item id "
+            "or a short truncated slug"
+        )
+        branch = Branch.for_feature(title, ident="LC-10")
+        self.assertEqual(branch.name, "feat/LC-10-branch-name-is-the-entire-item-title")
+        self.assertFalse(branch.name.endswith("-"))
+        self.assertLessEqual(len(branch.name) - len("feat/LC-10-"), 40)
+
+    def test_for_feature_with_ident_empty_or_punctuation_title(self):
+        self.assertEqual(Branch.for_feature("", ident="LC-3").name, "feat/LC-3")
+        self.assertEqual(Branch.for_feature("!!!", ident="LC-3").name, "feat/LC-3")
+
 
 class TestWorktree(unittest.TestCase):
     def test_path_in(self):

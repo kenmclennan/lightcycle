@@ -1258,8 +1258,9 @@ class TestWorktree(unittest.TestCase):
         self.assertTrue(os.path.isdir(ws))
         self.assertEqual(os.path.basename(ws), sid)
         self.assertEqual(os.path.dirname(ws), os.path.join(self.root, ".worktrees"))
-        self.assertEqual(self._branch_of(ws), "feat/w")
-        self.assertEqual(t["branch"], "feat/w")
+        branch = "feat/%s-w" % sid
+        self.assertEqual(self._branch_of(ws), branch)
+        self.assertEqual(t["branch"], branch)
 
     def test_claim_does_not_switch_root_branch(self):
         self._file()
@@ -1284,7 +1285,7 @@ class TestWorktree(unittest.TestCase):
         arts = self.store.item_artifacts(sid)
         branches = [a for a in arts if a.type == "branch"]
         self.assertEqual(len(branches), 1)
-        self.assertEqual(branches[0].value, "feat/w")
+        self.assertEqual(branches[0].value, "feat/%s-w" % sid)
 
     def test_worktrees_dir_gitignored(self):
         self._file()
@@ -1302,7 +1303,7 @@ class TestWorktree(unittest.TestCase):
         self.assertFalse(os.path.isdir(ws))
         ws2 = _cli_mod._worktrees().ensure(sid)
         self.assertEqual(ws, ws2)
-        self.assertEqual(self._branch_of(ws2), "feat/w")
+        self.assertEqual(self._branch_of(ws2), "feat/%s-w" % sid)
         self.assertTrue(os.path.isfile(os.path.join(ws2, "f.txt")))
 
 
@@ -1374,7 +1375,7 @@ class TestNamedRepo(unittest.TestCase):
 
     def test_named_repo_worktree_created_engine_untouched(self):
         view = self._claim("app")
-        branch = "feat/x"
+        branch = "feat/%s-x" % view["parent"]
         self.assertEqual(view["workspace"], os.path.join(self.engine, ".worktrees", view["parent"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
         self.assertTrue(self._has_branch(self.app, branch))
@@ -1382,7 +1383,7 @@ class TestNamedRepo(unittest.TestCase):
 
     def test_default_repo_targets_self(self):
         view = self._claim()
-        branch = "feat/x"
+        branch = "feat/%s-x" % view["parent"]
         self.assertTrue(os.path.isdir(view["workspace"]))
         self.assertTrue(self._has_branch(self.engine, branch))
         self.assertFalse(self._has_branch(self.app, branch))

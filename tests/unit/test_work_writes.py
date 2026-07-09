@@ -45,6 +45,9 @@ class FakeConfig:
     def engine_root(self):
         return self._projects
 
+    def branch_prefix(self):
+        return "feat"
+
 
 class FakeGitRemove:
     def __init__(self, repos=()):
@@ -244,6 +247,27 @@ class TestWorktreeServiceItemBranch(unittest.TestCase):
         self.assertIsNone(svc.item_branch(sid))
         s.add_artifact(sid, "branch", "feat/x")
         self.assertEqual(svc.item_branch(sid), "feat/x")
+
+
+class TestWorktreeServiceBranchFor(unittest.TestCase):
+    def test_no_branch_artifact_falls_back_to_id_slug(self):
+        s = FakeStore()
+        sid = s.create_item(
+            "Branch name is the entire item title slugified (100+ chars); use the item id "
+            "or a short truncated slug",
+            theme=s.create_theme("theme"),
+        )
+        svc = WorktreeService(s, None, None, FakeConfig())
+        branch = svc._branch_for(sid)
+        self.assertTrue(branch.startswith("feat/%s-" % sid))
+        self.assertLessEqual(len(branch), len("feat/%s-" % sid) + 40)
+
+    def test_existing_branch_artifact_wins(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "branch", "feat/custom-branch")
+        svc = WorktreeService(s, None, None, FakeConfig())
+        self.assertEqual(svc._branch_for(sid), "feat/custom-branch")
 
 
 class TestWorktreeServiceRemove(unittest.TestCase):
