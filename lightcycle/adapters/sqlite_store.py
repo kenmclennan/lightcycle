@@ -133,9 +133,19 @@ class SqliteStore(StorePort):
         for tid, type_, status, old_item_state in rows:
             new_state = _migrated_state(type_, status, old_item_state)
             self._conn.execute("UPDATE nodes SET state = ? WHERE id = ?", (new_state, tid))
-        self._conn.execute("DROP INDEX IF EXISTS idx_nodes_status")
+        for name in self._status_indexes():
+            self._conn.execute('DROP INDEX IF EXISTS "%s"' % name)
         self._conn.execute("ALTER TABLE nodes DROP COLUMN status")
         self._conn.commit()
+
+    def _status_indexes(self):
+        names = []
+        for row in self._conn.execute("PRAGMA index_list(nodes)").fetchall():
+            index = row[1]
+            columns = [c[2] for c in self._conn.execute('PRAGMA index_info("%s")' % index).fetchall()]
+            if "status" in columns:
+                names.append(index)
+        return names
 
     def _backup_before_collapse(self):
         self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
