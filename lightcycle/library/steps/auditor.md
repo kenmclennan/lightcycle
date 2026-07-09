@@ -25,7 +25,7 @@ cadence (trend lens). Check your step metadata to see which applies.
    `lc new item --inbox "<concise title>" --description "<finding: what was wrong> | <recommendation: what to change>"`
    Label it: `lc set <step-id> --label retro-origin`
    Then: `lc done STEP done --note "filed: <title>"`.
-5. If the bar is not met: `lc done STEP done --note "no finding"`. Do not file noise.
+5. If the bar is not met: `lc done STEP done --note "no findings"`. Do not file noise.
 
 ## Trend lens (cadence) - metadata has `since`
 
@@ -43,4 +43,4 @@ cadence (trend lens). Check your step metadata to see which applies.
    `lc new item "<concise title>" --description "<analysis: what keeps recurring> | <themes drawn from: list> | <recommendation: what to change>"`
    Label it: `lc set <step-id> --label retro-origin`
    Then: `lc done STEP done --note "filed: <title>"`.
-6. If no trend meets the bar: `lc done STEP done --note "no trend found"`. Do not file noise.
+6. If no trend meets the bar: `lc done STEP done --note "no findings"`. Do not file noise.

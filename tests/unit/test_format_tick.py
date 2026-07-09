@@ -8,7 +8,8 @@ _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 
 def _result(**kw):
     defaults = dict(swept=[], pruned=0, spawned=[], merged=[], abandoned=[], reworked=[],
-                    hook_completed=[], alive=0, max_agents=4, ready=0, inflight_count=0)
+                    hook_completed=[], cadence_fired=[], alive=0, max_agents=4, ready=0,
+                    inflight_count=0)
     defaults.update(kw)
     return TickResponse(**defaults)
 
@@ -121,6 +122,18 @@ class TestFormatTick(unittest.TestCase):
         result = _result()
         lines, _ = _format_tick(result, None, _NOW)
         self.assertEqual([l for l in lines if "state" not in l], [])
+
+    def test_cadence_fired_rendered_as_audit_line(self):
+        result = _result(cadence_fired=["audit.7"])
+        lines, _ = _format_tick(result, None, _NOW)
+        audit_lines = [l for l in lines if "audit.7" in l]
+        self.assertEqual(len(audit_lines), 1)
+        self.assertRegex(audit_lines[0], r'^\d{2}:\d{2}:\d{2}\s+audit\s+audit\.7$')
+
+    def test_cadence_fired_empty_renders_no_audit_line(self):
+        result = _result(cadence_fired=[])
+        lines, _ = _format_tick(result, None, _NOW)
+        self.assertEqual([l for l in lines if "audit" in l], [])
 
 
 if __name__ == "__main__":

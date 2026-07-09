@@ -704,6 +704,8 @@ def _format_tick(result, prev_snapshot, now):
         lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
     for bid in result.swept:
         lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
+    for sid in result.cadence_fired:
+        lines.append("%s  %-7s  %s" % (ts, "audit", sid))
     for step, tid, detail in result.hook_completed:
         msg = "%s: %s" % (tid, detail) if detail else tid
         lines.append("%s  %-7s  %s" % (ts, step, msg))
