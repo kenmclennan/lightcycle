@@ -474,6 +474,29 @@ class TestWorkersAdapterEffects(unittest.TestCase):
         alive.wait(timeout=5)
         self.assertIsNotNone(alive.poll())
 
+    def test_reap_children_clears_a_zombie_left_by_an_unwaited_child(self):
+        from lightcycle.adapters import workers as workers_adapter
+
+        sacrifice = subprocess.Popen(["true"])
+        deadline = time.time() + 5
+        state = ""
+        while time.time() < deadline:
+            state = subprocess.run(
+                ["ps", "-o", "stat=", "-p", str(sacrifice.pid)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            ).stdout.decode().strip()
+            if state.startswith("Z"):
+                break
+            time.sleep(0.01)
+        self.assertTrue(state.startswith("Z"), "sacrificial child never became a zombie")
+        self.assertTrue(workers_adapter.pid_alive(sacrifice.pid))
+
+        workers_adapter.reap_children()
+
+        self.assertFalse(workers_adapter.pid_alive(sacrifice.pid))
+        sacrifice.returncode = 0
+
 
 class TestSpawn(unittest.TestCase):
     def setUp(self):

@@ -9,6 +9,7 @@ class Worker:
     role: Optional[str] = None
     step: Optional[str] = None
     started: float = 0
+    pid_started: Optional[str] = None
     log: Optional[str] = None
     checked: bool = False
 
@@ -20,12 +21,13 @@ class Worker:
             role=d.get("role"),
             step=d.get("step"),
             started=d.get("started", 0),
+            pid_started=d.get("pid_started"),
             log=d.get("log"),
             checked=bool(d.get("checked", False)),
         )
 
     def is_alive(self, probe):
-        return bool(probe(self.pid if self.pid is not None else -1))
+        return bool(probe(self.pid if self.pid is not None else -1, self.pid_started))
 
     def is_booting(self, now, max_boot):
         return self.step is None and (now - self.started) < max_boot

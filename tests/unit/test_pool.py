@@ -23,12 +23,16 @@ class FakeWorkers:
         self._alive = set(alive_pids)
         self._pruned = pruned
         self.killed = []
+        self.reaped = 0
 
     def workers_state(self):
         return self._workers
 
-    def pid_alive(self, pid):
+    def pid_alive(self, pid, started=None):
         return pid in self._alive
+
+    def reap(self):
+        self.reaped += 1
 
     def kill(self, pid):
         self.killed.append(pid)
@@ -226,6 +230,14 @@ class TestSweep(unittest.TestCase):
 
 
 class TestTick(unittest.TestCase):
+    def test_reaps_dead_children_before_probing_liveness(self):
+        s = FakeStore()
+        workers = FakeWorkers()
+        TickUseCase(s, workers, FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1000.0)
+        )
+        self.assertEqual(workers.reaped, 1)
+
     def test_spawns_for_ready_roles_when_slots_free(self):
         s = FakeStore()
         s.create_step("b1", step="build", role="coder")

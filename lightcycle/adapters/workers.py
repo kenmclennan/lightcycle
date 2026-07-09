@@ -2,6 +2,7 @@ import fcntl
 import json
 import os
 import signal
+import subprocess
 from contextlib import contextmanager
 
 from lightcycle.ports.workers import WorkersPort
@@ -54,6 +55,43 @@ def pid_alive(pid):
         return False
 
 
+def process_start_time(pid):
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(int(pid))],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, ValueError, TypeError):
+        return None
+    if out.returncode != 0:
+        return None
+    text = out.stdout.decode().strip()
+    return text or None
+
+
+def decide_alive(pid_exists, recorded_start, live_start):
+    if not pid_exists:
+        return False
+    if recorded_start is None:
+        return True
+    return live_start == recorded_start
+
+
+def worker_alive(pid, recorded_start):
+    return decide_alive(pid_alive(pid), recorded_start, process_start_time(pid))
+
+
+def reap_children():
+    while True:
+        try:
+            reaped_pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            break
+        if reaped_pid == 0:
+            break
+
+
 def kill(pid):
     try:
         os.kill(int(pid), signal.SIGTERM)
@@ -71,7 +109,11 @@ def register_worker(root, entry):
 def prune_workers(root, keep_dead):
     with registry_lock(root):
         workers = workers_state(root)
-        dead_idx = [i for i, w in enumerate(workers) if not pid_alive(w.get("pid", -1))]
+        dead_idx = [
+            i
+            for i, w in enumerate(workers)
+            if not worker_alive(w.get("pid", -1), w.get("pid_started"))
+        ]
         n_drop = max(0, len(dead_idx) - keep_dead)
         if not n_drop:
             return 0
@@ -108,8 +150,11 @@ class WorkersAdapter(WorkersPort):
     def write_workers(self, workers):
         return write_workers(self._config.data_root(), workers)
 
-    def pid_alive(self, pid):
-        return pid_alive(pid)
+    def pid_alive(self, pid, started=None):
+        return worker_alive(pid, started)
+
+    def reap(self):
+        return reap_children()
 
     def kill(self, pid):
         return kill(pid)

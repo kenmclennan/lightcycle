@@ -19,8 +19,11 @@ class FakeWorkers:
     def workers_state(self):
         return self._workers
 
-    def pid_alive(self, pid):
+    def pid_alive(self, pid, started=None):
         return pid in self._alive
+
+    def reap(self):
+        pass
 
     def kill(self, pid):
         self.killed.append(pid)

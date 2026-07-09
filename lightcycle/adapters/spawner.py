@@ -6,7 +6,7 @@ import time
 import uuid
 
 from lightcycle.adapters import fsio
-from lightcycle.adapters.workers import register_worker
+from lightcycle.adapters.workers import process_start_time, register_worker
 from lightcycle.ports.spawner import SpawnerPort
 
 
@@ -41,6 +41,7 @@ def spawn_worker(config, role):
             "spawnid": spawnid,
             "role": role,
             "pid": proc.pid,
+            "pid_started": process_start_time(proc.pid),
             "log": log,
             "step": None,
             "started": time.time(),

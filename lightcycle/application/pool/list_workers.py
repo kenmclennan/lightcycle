@@ -14,7 +14,7 @@ class ListWorkersUseCase:
     def execute(self) -> ListWorkersResponse:
         return ListWorkersResponse(
             workers=[
-                dict(w, alive=self._workers.pid_alive(w.get("pid", -1)))
+                dict(w, alive=self._workers.pid_alive(w.get("pid", -1), w.get("pid_started")))
                 for w in self._workers.workers_state()
             ]
         )

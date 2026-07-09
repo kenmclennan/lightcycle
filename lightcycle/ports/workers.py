@@ -11,7 +11,11 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
-    def pid_alive(self, pid):
+    def pid_alive(self, pid, started=None):
+        pass
+
+    @abstractmethod
+    def reap(self):
         pass
 
     @abstractmethod

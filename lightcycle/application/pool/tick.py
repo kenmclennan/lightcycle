@@ -48,6 +48,7 @@ class TickUseCase:
         self._hook_completions = hook_completions
 
     def execute(self, input: TickInput) -> TickResponse:
+        self._workers.reap()
         monitor_result = self._monitor.execute() if self._monitor else None
         merged = monitor_result.merged if monitor_result else []
         abandoned = monitor_result.abandoned if monitor_result else []

@@ -777,8 +777,11 @@ class FakeWorkers:
     def workers_state(self):
         return []
 
-    def pid_alive(self, pid):
+    def pid_alive(self, pid, started=None):
         return False
+
+    def reap(self):
+        pass
 
     def prune_workers(self):
         return 0
