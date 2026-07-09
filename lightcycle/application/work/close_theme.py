@@ -1,8 +1,6 @@
-import json
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.feedback.retro import RetroInput, RetroResponse, RetroUseCase
 
 
 @dataclass(frozen=True)
@@ -11,15 +9,9 @@ class CloseThemeInput:
     reason: str
 
 
-@dataclass(frozen=True)
-class CloseThemeResponse:
-    retro: RetroResponse
-
-
 class CloseThemeUseCase:
-    def __init__(self, store, flow):
+    def __init__(self, store):
         self._store = store
-        self._flow = flow
 
     def _linked_backlog(self, theme):
         for artifact in self._store.item_artifacts(theme):
@@ -27,7 +19,7 @@ class CloseThemeUseCase:
                 return artifact.value
         return None
 
-    def execute(self, input: CloseThemeInput) -> CloseThemeResponse:
+    def execute(self, input: CloseThemeInput) -> None:
         children = self._store.children(input.theme)
         open_stories = [c for c in children if c.type == "item" and c.status != "done"]
         if open_stories:
@@ -39,21 +31,3 @@ class CloseThemeUseCase:
         backlog = self._linked_backlog(input.theme)
         if backlog:
             self._store.close(backlog, "resolved by theme close: %s" % input.theme)
-        retro = RetroUseCase(self._store, self._flow).execute(RetroInput(subject=input.theme))
-        digest = json.dumps(
-            {
-                "feedback": [{"step": f.step, "text": f.text} for f in retro.feedback],
-                "item_signals": [
-                    {
-                        "item": row.item.id,
-                        "signals": row.signals,
-                        "reflections": row.reflections,
-                        "durations": row.durations,
-                        "duration": row.total_duration(),
-                    }
-                    for row in retro.item_signals
-                ],
-            }
-        )
-        self._store.add_artifact(input.theme, "retro", digest)
-        return CloseThemeResponse(retro=retro)

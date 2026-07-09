@@ -14,16 +14,11 @@ from lightcycle.application.work import (
     LinkArtifactInput,
     LinkArtifactUseCase,
 )
-from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 METAS = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
-
-
-def _epic_flow(store):
-    return FlowService(FakeFs(), store)
 
 
 def _add_reflection(store, node_id, feedback):
@@ -185,7 +180,7 @@ class TestCloseEpic(unittest.TestCase):
         theme = s.create_theme("theme")
         child = s.create_item("item", theme=theme)
         s.close(child, "merged")
-        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertEqual(s.get_node(theme).status, "done")
 
     def test_refuses_with_open_child_and_names_it(self):
@@ -193,7 +188,7 @@ class TestCloseEpic(unittest.TestCase):
         theme = s.create_theme("theme")
         child = s.create_item("item", theme=theme)
         with self.assertRaises(UseCaseError) as ctx:
-            CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+            CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertIn(child, str(ctx.exception))
         self.assertEqual(s.get_node(theme).status, "ready")
 
@@ -204,10 +199,20 @@ class TestCloseEpic(unittest.TestCase):
         open_ = s.create_item("open item", theme=theme)
         s.close(closed, "merged")
         with self.assertRaises(UseCaseError) as ctx:
-            CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+            CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertIn(open_, str(ctx.exception))
         self.assertNotIn(closed, str(ctx.exception))
         self.assertEqual(s.get_node(theme).status, "ready")
+
+    def test_closing_theme_attaches_no_retro_artifact(self):
+        s = FakeStore()
+        theme = s.create_theme("theme")
+        item = s.create_item("child item", theme=theme)
+        step = s.create_step("build: x", step="build", role="coder", parent=item)
+        _add_reflection(s, step, "useful feedback")
+        s.close(item, "merged")
+        CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
+        self.assertEqual([a for a in s.item_artifacts(theme) if a.type == "retro"], [])
 
 
 class TestCloseEpicBacklogResolution(unittest.TestCase):
@@ -218,7 +223,7 @@ class TestCloseEpicBacklogResolution(unittest.TestCase):
         s.add_artifact(theme, "backlog", backlog)
         child = s.create_item("item", theme=theme)
         s.close(child, "merged")
-        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertEqual(s.get_node(backlog).status, "done")
 
     def test_no_backlog_link_is_a_no_op(self):
@@ -226,77 +231,8 @@ class TestCloseEpicBacklogResolution(unittest.TestCase):
         theme = s.create_theme("my theme")
         child = s.create_item("item", theme=theme)
         s.close(child, "merged")
-        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
+        CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertEqual(s.get_node(theme).status, "done")
-
-
-class TestCloseEpicWithRetro(unittest.TestCase):
-    def _setup(self, feedback=None):
-        s = FakeStore()
-        theme = s.create_theme("my theme")
-        item = s.create_item("child item", theme=theme)
-        step = s.create_step("build: x", step="build", role="coder", parent=item)
-        if feedback:
-            _add_reflection(s, step, feedback)
-        s.close(item, "merged")
-        return s, theme
-
-    def test_retro_included_in_response(self):
-        s, theme = self._setup(feedback="useful feedback")
-        resp = CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
-        self.assertEqual(resp.retro.reflection_count, 1)
-        self.assertEqual(resp.retro.feedback[0].text, "useful feedback")
-        self.assertEqual(len(resp.retro.item_signals), 1)
-
-    def test_retro_digest_recorded_as_artifact_on_epic(self):
-        s, theme = self._setup(feedback="spec was thin")
-        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
-        arts = s.item_artifacts(theme)
-        retro_arts = [a for a in arts if a.type == "retro"]
-        self.assertEqual(len(retro_arts), 1)
-        digest = json.loads(retro_arts[0].value)
-        self.assertIn("feedback", digest)
-        self.assertIn("item_signals", digest)
-        self.assertEqual(digest["feedback"][0]["text"], "spec was thin")
-
-    def test_theme_closed_before_retro_digest_is_stored(self):
-        s, theme = self._setup()
-        call_order = []
-        orig_close = s.close
-        orig_add = s.add_artifact
-
-        def tracking_close(tid, reason):
-            call_order.append(("close", tid))
-            return orig_close(tid, reason)
-
-        def tracking_add(tid, atype, value, label=None):
-            call_order.append(("add_artifact", tid, atype))
-            return orig_add(tid, atype, value, label)
-
-        s.close = tracking_close
-        s.add_artifact = tracking_add
-        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
-        close_idx = next(i for i, e in enumerate(call_order) if e == ("close", theme))
-        retro_idx = next(
-            i for i, e in enumerate(call_order) if len(e) >= 3 and e[1] == theme and e[2] == "retro"
-        )
-        self.assertLess(close_idx, retro_idx)
-
-    def test_empty_reflections_still_records_artifact(self):
-        s, theme = self._setup()
-        CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
-        arts = [a for a in s.item_artifacts(theme) if a.type == "retro"]
-        self.assertEqual(len(arts), 1)
-        digest = json.loads(arts[0].value)
-        self.assertEqual(digest["feedback"], [])
-
-    def test_refusal_skips_retro_and_leaves_no_artifact(self):
-        s = FakeStore()
-        theme = s.create_theme("my theme")
-        s.create_item("open item", theme=theme)
-        with self.assertRaises(UseCaseError):
-            CloseThemeUseCase(s, _epic_flow(s)).execute(CloseThemeInput(theme=theme, reason="done"))
-        self.assertEqual([a for a in s.item_artifacts(theme) if a.type == "retro"], [])
 
 
 class TestWorktreeServiceItemBranch(unittest.TestCase):

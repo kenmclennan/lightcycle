@@ -72,11 +72,17 @@ def flow_for(metas, store):
 
 
 class FakeWorktrees:
+    def __init__(self):
+        self.removed = []
+
     def ensure(self, item):
         return None
 
     def item_branch(self, item):
         return None
+
+    def remove(self, item):
+        self.removed.append(item)
 
 
 class FakeWorkers:
@@ -178,6 +184,54 @@ class TestCompleteTask(unittest.TestCase):
         )
         self.assertEqual(s.get_node(tid).status, "done")
         self.assertIsNone(resp.next_step)
+
+
+class TestCompleteStepCascadeClose(unittest.TestCase):
+    TERMINAL_METAS = {"finaliser": {"model": "sonnet", "step": "finalise"}}
+
+    def test_terminal_step_auto_closes_item_and_removes_worktree(self):
+        s = FakeStore()
+        item = s.create_item("it", theme=s.create_theme("theme"))
+        tid = s.create_step("finalise: x", step="finalise", role="finaliser", parent=item)
+        wt = FakeWorktrees()
+        CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), wt).execute(
+            CompleteInput(step=tid, outcome="done")
+        )
+        self.assertEqual(s.get_node(item).status, "done")
+        self.assertEqual(wt.removed, [item])
+
+    def test_intermediate_step_does_not_close_item(self):
+        s = FakeStore()
+        item = s.create_item("it", theme=s.create_theme("theme"))
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
+        CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteInput(step=bid, outcome="done")
+        )
+        self.assertEqual(s.get_node(item).status, "ready")
+
+    def test_last_open_item_close_auto_closes_theme(self):
+        s = FakeStore()
+        theme = s.create_theme("theme")
+        s.close(s.create_item("done already", theme=theme), "done")
+        item = s.create_item("it", theme=theme)
+        tid = s.create_step("finalise: x", step="finalise", role="finaliser", parent=item)
+        CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), FakeWorktrees()).execute(
+            CompleteInput(step=tid, outcome="done")
+        )
+        self.assertEqual(s.get_node(item).status, "done")
+        self.assertEqual(s.get_node(theme).status, "done")
+
+    def test_theme_with_still_open_item_stays_open(self):
+        s = FakeStore()
+        theme = s.create_theme("theme")
+        item = s.create_item("it", theme=theme)
+        tid = s.create_step("finalise: x", step="finalise", role="finaliser", parent=item)
+        s.create_item("still open", theme=theme)
+        CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), FakeWorktrees()).execute(
+            CompleteInput(step=tid, outcome="done")
+        )
+        self.assertEqual(s.get_node(item).status, "done")
+        self.assertEqual(s.get_node(theme).status, "ready")
 
 
 class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
