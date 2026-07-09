@@ -19,6 +19,7 @@ import lightcycle.cli as _cli_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.adapters.workers import process_start_time
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.domain.work import Artifact
@@ -544,7 +545,14 @@ class TestPs(unittest.TestCase):
         dead.wait()
         self._write_workers(
             [
-                {"spawnid": "A", "role": "coder", "pid": os.getpid(), "log": "x", "step": "t1"},
+                {
+                    "spawnid": "A",
+                    "role": "coder",
+                    "pid": os.getpid(),
+                    "pid_started": process_start_time(os.getpid()),
+                    "log": "x",
+                    "step": "t1",
+                },
                 {"spawnid": "B", "role": "reviewer", "pid": dead.pid, "log": "y", "step": "t2"},
             ]
         )
@@ -615,7 +623,13 @@ class TestRun(unittest.TestCase):
     def test_run_skips_role_with_inflight_worker(self):
         self.store.create_step("build: t", step="build", role="coder")
         self._preset_worker(
-            spawnid="boot", role="coder", pid=os.getpid(), log="x", step=None, started=time.time()
+            spawnid="boot",
+            role="coder",
+            pid=os.getpid(),
+            pid_started=process_start_time(os.getpid()),
+            log="x",
+            step=None,
+            started=time.time(),
         )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
@@ -1252,6 +1266,7 @@ class TestPruneWorkers(unittest.TestCase):
                     "spawnid": "a",
                     "role": "coder",
                     "pid": os.getpid(),
+                    "pid_started": process_start_time(os.getpid()),
                     "log": "x",
                     "step": None,
                     "started": time.time(),
