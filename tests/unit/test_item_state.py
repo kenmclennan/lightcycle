@@ -9,7 +9,7 @@ class TestItemState(unittest.TestCase):
         tid = s.create_item("capture me")
         node = s.get_node(tid)
         self.assertEqual(node.type, "item")
-        self.assertEqual(node.state, "todo")
+        self.assertEqual(node.state, "backlogged")
 
     def test_item_can_be_created_without_a_theme(self):
         s = FakeStore()
@@ -22,7 +22,7 @@ class TestItemState(unittest.TestCase):
         tid = s.create_item("themed", theme=theme)
         node = s.get_node(tid)
         self.assertEqual(node.theme, theme)
-        self.assertEqual(node.state, "todo")
+        self.assertEqual(node.state, "backlogged")
 
 
 if __name__ == "__main__":

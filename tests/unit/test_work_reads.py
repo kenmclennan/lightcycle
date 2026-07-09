@@ -59,7 +59,6 @@ def _seed_mixed_store():
     s = FakeStore()
     todo_item = s.create_item("todo item")
     active_item = s.create_item("active item")
-    s.edit_node(active_item, state="active")
     theme = s.create_theme("a theme")
     ready = s.create_step("ready one", step="build", role="coder")
     human = s.create_step("needs me", role="human")

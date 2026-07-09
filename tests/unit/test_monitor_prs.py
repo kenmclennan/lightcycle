@@ -155,8 +155,8 @@ class TestMonitorPrsMerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.merged, [item])
-        self.assertEqual(store.get_node(item).status, "done")
-        self.assertEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(item).state, "done")
+        self.assertEqual(store.get_node(step).state, "done")
         self.assertIn(item, worktrees.removed)
 
     def test_merged_story_closes_with_declared_merge_reason(self):
@@ -175,8 +175,8 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
         self.assertEqual(result.merged, [])
         self.assertEqual(result.abandoned, [])
-        self.assertEqual(store.get_node(item).status, "ready")
-        self.assertNotEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(item).state, "ready")
+        self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(worktrees.removed, [])
 
     def test_already_closed_story_is_skipped(self):
@@ -210,9 +210,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.merged, [item])
-        self.assertEqual(store.get_node(item).status, "done")
+        self.assertEqual(store.get_node(item).state, "done")
         self.assertEqual(store.get_node(item).outcome, "merged")
-        self.assertEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(step).state, "done")
         self.assertIn(item, worktrees.removed)
 
     def test_merged_pr_closes_story_whose_live_task_regressed_to_review(self):
@@ -229,7 +229,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.merged, [item])
-        self.assertEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(step).state, "done")
 
     def test_task_without_pr_artifact_is_skipped(self):
         store = FakeStore()
@@ -300,8 +300,8 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
 
         self.assertEqual(result.abandoned, [item])
         self.assertEqual(result.merged, [])
-        self.assertEqual(store.get_node(item).status, "done")
-        self.assertEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(item).state, "done")
+        self.assertEqual(store.get_node(step).state, "done")
         self.assertIn(item, worktrees.removed)
 
     def test_closed_unmerged_story_closes_with_declared_outcome(self):
@@ -319,7 +319,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.abandoned, [])
-        self.assertEqual(store.get_node(item).status, "ready")
+        self.assertEqual(store.get_node(item).state, "ready")
         self.assertEqual(worktrees.removed, [])
 
     def test_merged_pr_does_not_take_abandon_path(self):
@@ -367,7 +367,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.abandoned, [])
-        self.assertEqual(store.get_node(item).status, "ready")
+        self.assertEqual(store.get_node(item).state, "ready")
 
     def test_closed_unmerged_pr_closes_story_whose_live_task_is_at_watch_pr(self):
         url = "https://github.com/x/y/pull/22"
@@ -383,8 +383,8 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.abandoned, [item])
-        self.assertEqual(store.get_node(item).status, "done")
-        self.assertEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(item).state, "done")
+        self.assertEqual(store.get_node(step).state, "done")
         self.assertIn(item, worktrees.removed)
 
 
@@ -425,7 +425,7 @@ class TestMonitorPrsRework(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [item])
-        self.assertEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(step).state, "done")
         self.assertEqual(store.get_node(step).outcome, "changes")
 
     def test_rework_creates_new_build_task(self):
@@ -439,7 +439,7 @@ class TestMonitorPrsRework(unittest.TestCase):
         self.assertEqual(len(steps), 1)
         new_task = steps[0]
         self.assertEqual(new_task.step, "build")
-        self.assertEqual(new_task.status, "ready")
+        self.assertEqual(new_task.state, "ready")
 
     def test_rework_note_forwards_guidance_including_inline_context(self):
         url = "https://github.com/x/y/pull/32"
@@ -483,7 +483,7 @@ class TestMonitorPrsRework(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [])
-        self.assertNotEqual(store.get_node(step).status, "done")
+        self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(worktrees.removed, [])
 
     def test_rework_comment_before_push_does_not_refire(self):
@@ -494,7 +494,7 @@ class TestMonitorPrsRework(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [])
-        self.assertNotEqual(store.get_node(step).status, "done")
+        self.assertNotEqual(store.get_node(step).state, "done")
 
     def test_bot_comment_with_rework_marker_does_not_trigger(self):
         url = "https://github.com/x/y/pull/36"
@@ -571,7 +571,7 @@ class TestMonitorPrsRework(unittest.TestCase):
 
         self.assertEqual(result.merged, [item])
         self.assertEqual(result.reworked, [])
-        self.assertEqual(store.get_node(item).status, "done")
+        self.assertEqual(store.get_node(item).state, "done")
 
 
 class TestMonitorPrsConflict(unittest.TestCase):
@@ -599,7 +599,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.conflicted, [item])
-        self.assertEqual(store.get_node(step).status, "done")
+        self.assertEqual(store.get_node(step).state, "done")
         self.assertEqual(store.get_node(step).outcome, "conflicted")
 
     def test_conflicting_pr_creates_fix_task(self):
@@ -609,7 +609,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         uc.execute()
 
         steps = [t for t in store.all_nodes() if t.id != step and t.type == "step"
-                 and t.status != "done"]
+                 and t.state != "done"]
         self.assertEqual(len(steps), 1)
         self.assertEqual(steps[0].step, "fix-step")
 
@@ -620,7 +620,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.conflicted, [])
-        self.assertNotEqual(store.get_node(step).status, "done")
+        self.assertNotEqual(store.get_node(step).state, "done")
 
     def test_merged_pr_does_not_take_conflict_path(self):
         url = "https://github.com/x/y/pull/53"
@@ -695,7 +695,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         uc.execute()
 
         steps = [t for t in store.all_nodes() if t.id != step and t.type == "step"
-                 and t.status != "done"]
+                 and t.state != "done"]
         self.assertEqual(len(steps), 1)
         self.assertEqual(steps[0].role, "human")
         self.assertEqual(steps[0].step, "escalate-step")

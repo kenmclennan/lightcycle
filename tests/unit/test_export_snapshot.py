@@ -36,7 +36,7 @@ class TestExportSnapshot(unittest.TestCase):
         self.assertEqual(task_row["blocked_by"], [blocker])
 
         blocker_row = rows[blocker]
-        self.assertEqual(blocker_row["status"], "closed")
+        self.assertEqual(blocker_row["state"], "done")
         self.assertEqual(blocker_row["close_reason"], "done")
 
 

@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from lightcycle.domain.work import State
+
 
 @dataclass(frozen=True)
 class CloseItemInput:
@@ -14,7 +16,7 @@ class CloseItemUseCase:
 
     def execute(self, input: CloseItemInput) -> None:
         for kt in self._store.children(input.item):
-            if kt.status != "done":
+            if kt.state != State.DONE:
                 self._store.close(kt.id, input.reason)
         self._store.close(input.item, input.reason)
         self._worktrees.remove(input.item)

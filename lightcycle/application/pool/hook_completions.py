@@ -2,7 +2,7 @@ import datetime
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from lightcycle.domain.work.status import Status
+from lightcycle.domain.work.state import State
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class HookCompletionsUseCase:
         completed = []
         for step, _role in flow.hook_steps():
             for node in self._store.steps_at_step(step):
-                if node.status != Status.DONE or not node.closed_at:
+                if node.state != State.DONE or not node.closed_at:
                     continue
                 if since_iso is not None and node.closed_at <= since_iso:
                     continue

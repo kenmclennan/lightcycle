@@ -131,10 +131,10 @@ class TestSweep(unittest.TestCase):
     def test_reclaims_orphans_keeps_live_and_prunes(self):
         s = FakeStore()
         orphan = s.create_step("o", step="build", role="coder")
-        s.update_status(orphan, "in_progress")
+        s.update_state(orphan, "in_progress")
         s.assign(orphan, "dead-sp")
         held = s.create_step("h", step="build", role="coder")
-        s.update_status(held, "in_progress")
+        s.update_state(held, "in_progress")
         s.assign(held, "live-sp")
         workers = FakeWorkers(
             workers=[{"spawnid": "live-sp", "pid": 111, "step": held, "started": 100}],
@@ -144,8 +144,8 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(result.swept, [orphan])
         self.assertEqual(result.pruned, 2)
-        self.assertEqual(s.get_node(orphan).status, "ready")
-        self.assertEqual(s.get_node(held).status, "in-progress")
+        self.assertEqual(s.get_node(orphan).state, "ready")
+        self.assertEqual(s.get_node(held).state, "in_progress")
 
     def test_kills_and_prunes_a_live_past_boot_worker_owning_no_task(self):
         s = FakeStore()
@@ -172,7 +172,7 @@ class TestSweep(unittest.TestCase):
     def test_does_not_kill_a_live_worker_on_a_claimed_task(self):
         s = FakeStore()
         held = s.create_step("h", step="build", role="coder")
-        s.update_status(held, "in_progress")
+        s.update_state(held, "in_progress")
         s.assign(held, "busy-sp")
         workers = FakeWorkers(
             workers=[{"spawnid": "busy-sp", "pid": 444, "step": held, "started": 100}],
@@ -185,7 +185,7 @@ class TestSweep(unittest.TestCase):
     def test_live_worker_holding_task_kept_when_claimed_by_is_none(self):
         s = FakeStore()
         held = s.create_step("h", step="build", role="coder")
-        s.update_status(held, "in_progress")
+        s.update_state(held, "in_progress")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp", "pid": 555, "step": held, "started": 100}],
             alive_pids={555},
@@ -193,13 +193,13 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(held).status, "in-progress")
+        self.assertEqual(s.get_node(held).state, "in_progress")
 
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
         item = s.create_item("merged feature", theme=s.create_theme("theme"))
         step = s.create_step("build: merged feature", step="build", role="coder", parent=item)
-        s.update_status(step, "in_progress")
+        s.update_state(step, "in_progress")
         s.assign(step, "live-sp")
         workers = FakeWorkers(
             workers=[{"spawnid": "live-sp", "pid": 888, "step": step, "started": 100}],
@@ -215,14 +215,14 @@ class TestSweep(unittest.TestCase):
     def test_booting_worker_suppresses_reclaim_of_uncovered_task(self):
         s = FakeStore()
         t = s.create_step("t", step="build", role="coder")
-        s.update_status(t, "in_progress")
+        s.update_state(t, "in_progress")
         workers = FakeWorkers(
             workers=[{"spawnid": "boot", "pid": 666, "step": None, "started": 950}],
             alive_pids={666},
         )
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(t).status, "in-progress")
+        self.assertEqual(s.get_node(t).state, "in_progress")
 
 
 class TestTick(unittest.TestCase):

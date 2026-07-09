@@ -23,7 +23,7 @@ class TestCliPrimitives(unittest.TestCase):
         self.assertEqual(rc, 0)
         node = self.h.store.get_node(item)
         self.assertEqual(node.type, "item")
-        self.assertEqual(node.state, "todo")
+        self.assertEqual(node.state, "backlogged")
 
     def test_new_rejects_an_unknown_type(self):
         rc, _, err = self._run("new", "widget", "x")
@@ -34,7 +34,7 @@ class TestCliPrimitives(unittest.TestCase):
         _, item, _ = self._run("new", "item", "add refunds")
         rc, step, _ = self._run("set", item, "--state", "active", "--workflow", "standard")
         self.assertEqual(rc, 0)
-        self.assertEqual(self.h.store.get_node(item).state, "active")
+        self.assertEqual(self.h.store.get_node(item).state, "ready")
         self.assertEqual(self.h.store.get_node(step).step, "build")
 
     def test_set_parent_moves_the_item_under_a_theme(self):

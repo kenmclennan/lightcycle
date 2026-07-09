@@ -79,7 +79,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def update_status(self, tid, status):
+    def update_state(self, tid, state):
         pass
 
     @abstractmethod
@@ -105,7 +105,7 @@ class StorePort(ABC):
 
     @abstractmethod
     def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
-                  parent=None, workflow=None, state=None):
+                  parent=None, workflow=None):
         pass
 
     @abstractmethod

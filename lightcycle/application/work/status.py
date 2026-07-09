@@ -14,5 +14,4 @@ class StatusUseCase:
         self._store = store
 
     def execute(self) -> StatusResponse:
-        ready_ids = {t.id for t in self._store.ready_steps()}
-        return StatusResponse(lanes=NodeQueue(self._store.all_steps()).by_lane(ready_ids))
+        return StatusResponse(lanes=NodeQueue(self._store.all_steps()).by_lane())

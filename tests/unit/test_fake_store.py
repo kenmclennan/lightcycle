@@ -43,12 +43,12 @@ class TestAssignee(unittest.TestCase):
 
     def test_assign_sets_in_progress(self):
         self.s.assign(self.tid, "worker-1")
-        self.assertEqual(self.s.get_node(self.tid).status, "in-progress")
+        self.assertEqual(self.s.get_node(self.tid).state, "in_progress")
 
     def test_assign_empty_string_clears(self):
         self.s.assign(self.tid, "worker-1")
         self.s.assign(self.tid, "")
-        self.assertEqual(self.s.get_node(self.tid).status, "ready")
+        self.assertEqual(self.s.get_node(self.tid).state, "ready")
 
     def test_assign_none_clears(self):
         self.s.assign(self.tid, "worker-1")
@@ -63,7 +63,7 @@ class TestClose(unittest.TestCase):
 
     def test_close_sets_done_status(self):
         self.s.close(self.tid, "done")
-        self.assertEqual(self.s.get_node(self.tid).status, "done")
+        self.assertEqual(self.s.get_node(self.tid).state, "done")
 
     def test_outcome_roundtrip(self):
         self.s.close(self.tid, "rejected")
@@ -189,7 +189,7 @@ class TestReady(unittest.TestCase):
         tid = self.s.create_step("build: thing", role="coder")
         result = self.s.claim_ready("coder")
         self.assertEqual(result.id, tid)
-        self.assertEqual(result.status, "in-progress")
+        self.assertEqual(result.state, "in_progress")
 
     def test_claim_ready_task_no_longer_in_ready(self):
         self.s.create_step("build: thing", role="coder")
@@ -229,7 +229,7 @@ class TestListNodes(unittest.TestCase):
     def test_claimed_tasks_are_in_progress_with_claimer(self):
         claimed = self.s.create_step("build: a", role="coder")
         self.s.create_step("build: b", role="coder")
-        self.s.update_status(claimed, "in_progress")
+        self.s.update_state(claimed, "in_progress")
         self.s.assign(claimed, "sp-1")
         got = self.s.claimed_steps()
         self.assertEqual([t.id for t in got], [claimed])
@@ -264,7 +264,7 @@ class TestRouteToHuman(unittest.TestCase):
         self.s.route_to_human(self.tid, "needs review")
         step = self.s.get_node(self.tid)
         self.assertEqual(step.role, "human")
-        self.assertEqual(step.status, "needs-human")
+        self.assertEqual(step.state, "ready")
         self.assertIsNone(self.s._records[self.tid]["assignee"])
 
     def test_route_adds_note(self):

@@ -89,7 +89,7 @@ def _no_ready(ctx, role):
 
 @then("the claimed step is in progress")
 def _in_progress(ctx):
-    assert ctx["claimed"]["status"] == "in-progress"
+    assert ctx["claimed"]["state"] == "in_progress"
 
 
 @then("the command is rejected")

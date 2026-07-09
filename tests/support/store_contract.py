@@ -18,13 +18,13 @@ class StoreContractBase:
         s = self.make_store()
         tid = s.create_step("t", role="coder")
         s.assign(tid, "worker-1")
-        self.assertEqual(s.get_node(tid).status, "in-progress")
+        self.assertEqual(s.get_node(tid).state, "in_progress")
 
     def test_close_status_is_done(self):
         s = self.make_store()
         tid = s.create_step("t")
         s.close(tid, "done")
-        self.assertEqual(s.get_node(tid).status, "done")
+        self.assertEqual(s.get_node(tid).state, "done")
 
     def test_outcome_preserved(self):
         s = self.make_store()
@@ -37,7 +37,7 @@ class StoreContractBase:
         tid = s.create_step("t", role="coder")
         s.assign(tid, "worker-1")
         s.close(tid, "done")
-        self.assertEqual(s.get_node(tid).status, "done")
+        self.assertEqual(s.get_node(tid).state, "done")
 
     def test_note_roundtrip(self):
         s = self.make_store()
@@ -122,7 +122,7 @@ class StoreContractBase:
         tid = s.create_item("item: foo")
         node = s.get_node(tid)
         self.assertIsNone(node.theme)
-        self.assertEqual(node.state, "todo")
+        self.assertEqual(node.state, "backlogged")
 
     def test_create_task_with_description(self):
         s = self.make_store()
@@ -207,8 +207,8 @@ class StoreContractBase:
         tid = s.create_step("t", role="coder")
         s.claim_ready("coder")
         s.close(tid, "done")
-        statuses = [status for status, _ in s.history(tid)]
-        self.assertEqual(statuses, ["in-progress", "done"])
+        states = [state for state, _ in s.history(tid)]
+        self.assertEqual(states, ["in_progress", "done"])
 
     def test_history_stamps_ts_from_injected_clock(self):
         ticks = iter(["2026-01-01T10:00:00", "2026-01-01T10:30:00"])

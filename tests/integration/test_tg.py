@@ -312,7 +312,7 @@ class TestModel(unittest.TestCase):
         self.assertEqual(t["role"], "coder")
         self.assertEqual(t["step"], "build")
         self.assertEqual(t["type"], "step")
-        self.assertEqual(t["status"], "ready")
+        self.assertEqual(t["state"], "ready")
 
     def test_status_lanes_json(self):
         h = self.store.create_step("spec: x", step="spec", role="human")
@@ -334,7 +334,7 @@ class TestClaim(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["id"], c)
-        self.assertEqual(t["status"], "in-progress")
+        self.assertEqual(t["state"], "in_progress")
         rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(out2.strip(), "")
 
@@ -388,13 +388,13 @@ class TestDoneBlock(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
-        self.assertEqual(self.store.get_node(b).status, "done")
+        self.assertEqual(self.store.get_node(b).state, "done")
 
     def test_done_unknown_outcome_errors_without_closing(self):
         b = self.store.create_step("build: t", step="build", role="coder")
         rc, out, err = call(_cli_mod.cmd_done, b, "banana")
         self.assertEqual(rc, 1)
-        self.assertEqual(self.store.get_node(b).status, "ready")
+        self.assertEqual(self.store.get_node(b).state, "ready")
 
     def test_block_writes_metadata_and_routes_human(self):
         b = self.store.create_step("build: t", step="build", role="coder")
@@ -454,7 +454,7 @@ class TestSweep(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(b)
-        self.assertEqual(step.status, "ready")
+        self.assertEqual(step.state, "ready")
         self.assertIsNone(step.claimed_by)
 
 
@@ -727,7 +727,7 @@ class TestAdd(unittest.TestCase):
         rc2, out2, _ = call(_cli_mod.cmd_show, new)
         t = json.loads(out2)
         self.assertEqual(t["type"], "item")
-        self.assertEqual(t["state"], "todo")
+        self.assertEqual(t["state"], "backlogged")
         self.assertIsNone(t["step"])
         self.assertEqual(t["title"], "look at X later")
 
@@ -1044,7 +1044,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(out.strip(), "")
         step = self.store.get_node(b)
         self.assertEqual(step.role, "human")
-        self.assertEqual(step.status, "needs-human")
+        self.assertEqual(step.state, "ready")
 
     def test_claim_proceeds_when_inputs_present(self):
         theme = self.store.create_theme("theme")
@@ -1053,7 +1053,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc2, out2, err2 = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc2, 0, err2)
         t = json.loads(out2)
-        self.assertEqual(t["status"], "in-progress")
+        self.assertEqual(t["state"], "in_progress")
         self.assertEqual(t["parent"], sid)
 
     def test_done_refused_when_required_output_missing(self):
@@ -1064,7 +1064,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc2, out2, err2 = call(_cli_mod.cmd_done, step, "done")
         self.assertEqual(rc2, 1)
         self.assertIn("branch", err2)
-        self.assertEqual(self.store.get_node(step).status, "ready")
+        self.assertEqual(self.store.get_node(step).state, "ready")
 
     def test_done_succeeds_when_output_present(self):
         theme = self.store.create_theme("theme")
@@ -1074,7 +1074,7 @@ class TestArtifactContracts(unittest.TestCase):
         call(_cli_mod.cmd_attach, sid, "branch", "grid/x")
         rc2, out2, err2 = call(_cli_mod.cmd_done, step, "done")
         self.assertEqual(rc2, 0, err2)
-        self.assertEqual(self.store.get_node(step).status, "done")
+        self.assertEqual(self.store.get_node(step).state, "done")
 
     def test_file_rejects_non_entry_step(self):
         theme = self.store.create_theme("theme")
@@ -1304,7 +1304,7 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         self.store.create_step("build: t", step="build", role="coder")
         _, out, _ = call(_cli_mod.cmd_claim, "coder")
         t = json.loads(out)
-        self.assertEqual(t["status"], "in-progress")
+        self.assertEqual(t["state"], "in_progress")
         self.assertNotIn("workspace", t)
 
 
@@ -1391,7 +1391,7 @@ class TestUnblock(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(b)
-        self.assertEqual(t.status, "ready")
+        self.assertEqual(t.state, "ready")
         self.assertEqual(t.role, "coder")
         self.assertIsNone(t.claimed_by)
 
@@ -1450,8 +1450,8 @@ class TestCloseWorktree(unittest.TestCase):
         build = self.store.children(sid)[0].id
         rc, _, err = call(_cli_mod.cmd_done, sid, "merged")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store.get_node(sid).status, "done")
-        self.assertEqual(self.store.get_node(build).status, "done")
+        self.assertEqual(self.store.get_node(sid).state, "done")
+        self.assertEqual(self.store.get_node(build).state, "done")
         self.assertFalse(os.path.isdir(ws))
         self.assertFalse(self._has_branch(self.root, "feat/w"))
 
@@ -1466,7 +1466,7 @@ class TestClose(unittest.TestCase):
         self.store.close(child, "merged")
         rc, out, err = call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store.get_node(theme).status, "done")
+        self.assertEqual(self.store.get_node(theme).state, "done")
 
     def test_close_epic_refuses_with_open_story(self):
         theme = self.store.create_theme("theme e")
@@ -1474,13 +1474,13 @@ class TestClose(unittest.TestCase):
         rc, _, err = call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(rc, 1)
         self.assertIn(child, err)
-        self.assertEqual(self.store.get_node(theme).status, "ready")
+        self.assertEqual(self.store.get_node(theme).state, "ready")
 
     def test_close_epic_refuses_does_not_cascade_close_open_stories(self):
         theme = self.store.create_theme("theme e")
         child = self.store.create_item("item s", theme=theme)
         call(_cli_mod.cmd_done, theme, "done")
-        self.assertEqual(self.store.get_node(child).status, "ready")
+        self.assertEqual(self.store.get_node(child).state, "backlogged")
 
     def test_close_epic_attaches_no_retro_artifact(self):
         theme = self.store.create_theme("theme e")
@@ -1893,7 +1893,7 @@ class TestCadenceStepDTO(unittest.TestCase):
 
 class TestNodeDTOReadSurface(unittest.TestCase):
     AGENT_CONSUMED_FIELDS = (
-        "id", "parent", "step", "status", "artifacts", "description",
+        "id", "parent", "step", "state", "artifacts", "description",
         "notes", "theme", "since", "fired_at", "closed_at", "attention",
     )
 

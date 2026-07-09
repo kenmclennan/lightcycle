@@ -1,7 +1,7 @@
 import unittest
 
 from tests.support.fake_fs import flow_from_metas
-from lightcycle.domain.work import Node, NodeQueue
+from lightcycle.domain.work import Node, NodeQueue, State
 
 FLOW = flow_from_metas(
     {
@@ -30,41 +30,44 @@ class TestClassifyForHuman(unittest.TestCase):
         )
 
 
-class TestByLaneAndByStatus(unittest.TestCase):
-    def test_by_lane_groups_statuses_into_lanes(self):
+class TestByLaneAndByState(unittest.TestCase):
+    def test_by_lane_groups_states_into_lanes(self):
         q = NodeQueue(
             [
-                tk(id="d", status="done"),
-                tk(id="a", status="in-progress"),
-                tk(id="h", status="needs-human"),
-                tk(id="r", status="ready"),
-                tk(id="b", status="ready"),
+                tk(id="d", state=State.DONE),
+                tk(id="a", state=State.IN_PROGRESS),
+                tk(id="h", state=State.READY, role="human"),
+                tk(id="r", state=State.READY, role="coder"),
+                tk(id="b", state=State.BACKLOGGED, role="coder"),
             ]
         )
-        lanes = q.by_lane(ready_ids={"r"})
+        lanes = q.by_lane()
         self.assertEqual([t.id for t in lanes["done"]], ["d"])
         self.assertEqual([t.id for t in lanes["active"]], ["a"])
         self.assertEqual([t.id for t in lanes["inbox"]], ["h"])
         self.assertEqual([t.id for t in lanes["queue"]], ["r"])
         self.assertEqual([t.id for t in lanes["blocked"]], ["b"])
 
-    def test_by_status(self):
-        q = NodeQueue([tk(status="ready"), tk(status="done")])
-        self.assertEqual(len(q.by_status("ready")), 1)
+    def test_by_state(self):
+        q = NodeQueue([tk(state=State.READY), tk(state=State.DONE)])
+        self.assertEqual(len(q.by_state(State.READY)), 1)
 
 
 class TestForHuman(unittest.TestCase):
     def _queue(self, steps=None):
         steps = steps or [
-            tk(id="a-1", status="needs-human", step=None),
-            tk(id="a-2", status="needs-human", step="ready-merge"),
-            tk(id="a-3", status="needs-human", step="build"),
+            tk(id="a-1", state=State.READY, role="human", step=None),
+            tk(id="a-2", state=State.READY, role="human", step="ready-merge"),
+            tk(id="a-3", state=State.READY, role="human", step="build"),
         ]
         return NodeQueue(steps)
 
-    def test_only_needs_human_tasks_are_considered(self):
+    def test_only_ready_human_tasks_are_considered(self):
         q = NodeQueue(
-            [tk(id="r", status="ready", step=None), tk(id="h", status="needs-human", step=None)]
+            [
+                tk(id="r", state=State.READY, role="coder", step=None),
+                tk(id="h", state=State.READY, role="human", step=None),
+            ]
         )
         rows = q.for_human(FLOW, {"todo"})
         self.assertEqual([t.id for _, t in rows], ["h"])
@@ -82,15 +85,17 @@ class TestForHuman(unittest.TestCase):
     def test_sorted_by_id(self):
         q = self._queue(
             [
-                tk(id="b-3", status="needs-human", step=None),
-                tk(id="b-1", status="needs-human", step=None),
-                tk(id="b-2", status="needs-human", step=None),
+                tk(id="b-3", state=State.READY, role="human", step=None),
+                tk(id="b-1", state=State.READY, role="human", step=None),
+                tk(id="b-2", state=State.READY, role="human", step=None),
             ]
         )
         self.assertEqual([t.id for _, t in q.for_human(FLOW, {"todo"})], ["b-1", "b-2", "b-3"])
 
     def test_limit_n(self):
-        q = self._queue([tk(id="c-%d" % i, status="needs-human", step=None) for i in range(5)])
+        q = self._queue(
+            [tk(id="c-%d" % i, state=State.READY, role="human", step=None) for i in range(5)]
+        )
         self.assertEqual(len(q.for_human(FLOW, {"todo"}, n=2)), 2)
 
     def test_no_limit_returns_all(self):
