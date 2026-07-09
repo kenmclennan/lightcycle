@@ -24,7 +24,10 @@ def parse_remote_version(text):
 
 def fetch_remote_version():
     with urllib.request.urlopen(_REMOTE_INIT_URL, timeout=10) as resp:
-        return parse_remote_version(resp.read().decode())
+        version = parse_remote_version(resp.read().decode())
+    if version is None:
+        raise ValueError("no __version__ found in the remote file")
+    return version
 
 
 def install_upgrade():

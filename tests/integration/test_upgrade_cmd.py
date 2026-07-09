@@ -10,17 +10,26 @@ TG = str(ROOT / "bin" / "lc")
 
 
 def _run(args):
-    new, legacy, xdg = tempfile.mkdtemp(), tempfile.mkdtemp(), tempfile.mkdtemp()
-    env = dict(os.environ, LC_HOME=new, LC_LEGACY_HOME=legacy, XDG_CONFIG_HOME=xdg)
+    home, legacy, xdg = tempfile.mkdtemp(), tempfile.mkdtemp(), tempfile.mkdtemp()
+    env = dict(os.environ, LC_HOME=home, LC_LEGACY_HOME=legacy, XDG_CONFIG_HOME=xdg)
     env.pop("LC_CONFIG", None)
     env.pop("LC_ROOT_OVERRIDE", None)
-    return subprocess.run([sys.executable, TG] + args, capture_output=True, text=True, env=env)
+    result = subprocess.run([sys.executable, TG] + args, capture_output=True, text=True, env=env)
+    return result, home
 
 
 class TestUpgradeCommand(unittest.TestCase):
-    def test_check_runs_with_no_store_and_exits_zero(self):
-        r = _run(["upgrade", "--check"])
-        self.assertEqual(r.returncode, 0, r.stderr)
+    def test_check_is_store_less_and_exits_cleanly(self):
+        result, home = _run(["upgrade", "--check"])
+        self.assertFalse(
+            os.path.exists(os.path.join(home, "store.db")),
+            "upgrade --check must run before the store is built",
+        )
+        self.assertIn(
+            result.returncode,
+            (0, 1),
+            "expected a clean exit (0 checked, 1 network error), got:\n%s" % result.stderr,
+        )
 
 
 if __name__ == "__main__":
