@@ -54,10 +54,8 @@ class FlowService:
         return self.load_flow(name, project).next(step, outcome)
 
     def meta_for_step(self, step, name=None, project=None):
-        role = self.load_flow(name, project).owner_of(step)
-        if not role:
-            return {}
-        a = self._fs.parse_step(role, project)
+        graph = self.load_graph(name, project)
+        a = self._fs.parse_step(graph.file_for(step), project)
         return a["meta"] if a else {}
 
     def outcomes_for(self, step, name=None, project=None):
