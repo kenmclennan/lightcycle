@@ -37,3 +37,11 @@ class GitPort(ABC):
     @abstractmethod
     def worktree_registered(self, root, path):
         pass
+
+    @abstractmethod
+    def has_uncommitted(self, root):
+        pass
+
+    @abstractmethod
+    def commit_all(self, root, message):
+        pass

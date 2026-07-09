@@ -498,11 +498,15 @@ def cmd_trace(argv):
 
 
 def cmd_sweep(argv):
-    result = SweepUseCase(_container.store, _container.workers).execute(
-        time.time(), _container.config.max_boot_seconds()
-    )
+    result = SweepUseCase(
+        _container.store, _container.workers, _worktrees(), _container.git
+    ).execute(time.time(), _container.config.max_boot_seconds())
     for bid in result.swept:
         print("swept %s" % bid)
+    for bid in result.preserved:
+        print("preserved %s" % bid)
+    for bid in result.capture_failed:
+        sys.stderr.write("failed to preserve uncommitted work for %s\n" % bid)
     for spawnid in result.killed:
         print("killed %s" % spawnid)
     if result.pruned:
@@ -758,6 +762,8 @@ def cmd_start(argv):
             cadence_gate=cadence_gate,
             breaker_gate=breaker_gate,
             hook_completions=hook_completions,
+            worktrees=_worktrees(),
+            git=_container.git,
         )
         if a.once:
             now = time.time()

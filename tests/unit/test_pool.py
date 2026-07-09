@@ -56,11 +56,33 @@ class FakeBreakerGate:
 
 
 class FakeWorktrees:
-    def __init__(self):
+    def __init__(self, paths=None):
         self.removed = []
+        self._paths = paths or {}
 
     def remove(self, item):
         self.removed.append(item)
+
+    def worktree_path(self, item):
+        return self._paths.get(item, "/worktrees/%s" % item)
+
+
+class FakeCaptureGit:
+    def __init__(self, dirty=(), non_git=(), fail=()):
+        self._dirty = set(dirty)
+        self._non_git = set(non_git)
+        self._fail = set(fail)
+        self.commits = []
+
+    def is_git_repo(self, root):
+        return root not in self._non_git
+
+    def has_uncommitted(self, root):
+        return root in self._dirty
+
+    def commit_all(self, root, message):
+        self.commits.append((root, message))
+        return root not in self._fail
 
 
 class FakeSpawner:
@@ -230,6 +252,115 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(result.swept, [])
         self.assertEqual(s.get_node(t).state, "in_progress")
+
+    def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
+        git = FakeCaptureGit(dirty={"/worktrees/%s" % item})
+
+        result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
+            now=1000, max_boot=120
+        )
+
+        self.assertEqual(result.swept, [step])
+        self.assertEqual(result.preserved, [step])
+        self.assertEqual(git.commits, [("/worktrees/%s" % item, "wip: preserved %s on reclaim" % step)])
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_reclaiming_a_clean_worktree_does_not_commit(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
+        git = FakeCaptureGit()
+
+        result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
+            now=1000, max_boot=120
+        )
+
+        self.assertEqual(result.swept, [step])
+        self.assertEqual(result.preserved, [])
+        self.assertEqual(git.commits, [])
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_reclaiming_a_non_git_worktree_does_not_commit(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
+        git = FakeCaptureGit(non_git={"/worktrees/%s" % item})
+
+        result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
+            now=1000, max_boot=120
+        )
+
+        self.assertEqual(result.swept, [step])
+        self.assertEqual(result.preserved, [])
+        self.assertEqual(git.commits, [])
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_reclaiming_with_no_worktrees_or_git_ports_wired_is_a_noop(self):
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="coder")
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+
+        self.assertEqual(result.swept, [step])
+        self.assertEqual(result.preserved, [])
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_a_failed_commit_still_reclaims_and_is_reported(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
+        git = FakeCaptureGit(dirty={"/worktrees/%s" % item}, fail={"/worktrees/%s" % item})
+
+        result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
+            now=1000, max_boot=120
+        )
+
+        self.assertEqual(result.swept, [step])
+        self.assertEqual(result.preserved, [])
+        self.assertEqual(result.capture_failed, [step])
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_capture_happens_before_reclaim(self):
+        events = []
+
+        class OrderTrackingStore(FakeStore):
+            def reclaim(self, tid):
+                events.append(("reclaim", tid))
+                return super().reclaim(tid)
+
+        class OrderTrackingGit(FakeCaptureGit):
+            def commit_all(self, root, message):
+                events.append(("commit", root))
+                return super().commit_all(root, message)
+
+        s = OrderTrackingStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
+        git = OrderTrackingGit(dirty={"/worktrees/%s" % item})
+
+        SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(now=1000, max_boot=120)
+
+        self.assertEqual(events, [("commit", "/worktrees/%s" % item), ("reclaim", step)])
 
 
 class TestTick(unittest.TestCase):
