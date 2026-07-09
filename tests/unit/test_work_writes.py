@@ -165,6 +165,19 @@ class TestLinkArtifact(unittest.TestCase):
         self.assertEqual(arts[0].value, "http://x/1")
         self.assertEqual(arts[0].label, "PR 1")
 
+    def test_replace_replaces_same_type_artifact(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
+        )
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="specs/new.md", replace=True)
+        )
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "specs/new.md")
+
 
 class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):

@@ -8,6 +8,7 @@ class LinkArtifactInput:
     atype: str
     value: str
     label: Optional[str] = None
+    replace: bool = False
 
 
 class LinkArtifactUseCase:
@@ -15,4 +16,7 @@ class LinkArtifactUseCase:
         self._store = store
 
     def execute(self, input: LinkArtifactInput) -> None:
-        self._store.add_artifact(input.item, input.atype, input.value, input.label)
+        if input.replace:
+            self._store.replace_artifact(input.item, input.atype, input.value, input.label)
+        else:
+            self._store.add_artifact(input.item, input.atype, input.value, input.label)

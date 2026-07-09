@@ -808,6 +808,15 @@ class TestLink(unittest.TestCase):
         self.assertEqual(arts[0].value, "https://gh/9")
         self.assertEqual(arts[0].label, "PR 9")
 
+    def test_attach_replace_replaces_same_type(self):
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        call(_cli_mod.cmd_attach, sid, "spec", "specs/old.md")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "spec", "specs/new.md", "--replace")
+        self.assertEqual(rc, 0, err)
+        arts = self.store.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "specs/new.md")
+
 
 class TestModelV2(unittest.TestCase):
     def setUp(self):
@@ -950,6 +959,17 @@ class TestClaimArtifacts(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["item_artifacts"][0]["value"], "specs/Y.md")
+
+    def test_claim_surfaces_artifact_replacement(self):
+        theme = self.store.create_theme("theme")
+        rc, out, err = call(_file_compat, "specs/Y.md", "--step", "build", "--theme", theme)
+        self.assertEqual(rc, 0, err)
+        item = out.strip()
+        self.store.replace_artifact(item, "spec", "specs/Y-revised.md")
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 0, err)
+        t = json.loads(out)
+        self.assertEqual(t["item_artifacts"][0]["value"], "specs/Y-revised.md")
 
 class TestTrace(unittest.TestCase):
     def setUp(self):

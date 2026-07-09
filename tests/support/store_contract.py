@@ -112,6 +112,32 @@ class StoreContractBase:
         self.assertEqual(arts[0].type, "spec")
         self.assertEqual(arts[0].value, "specs/foo.md")
 
+    def test_add_artifact_still_appends_same_type(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "feedback", "first note")
+        s.add_artifact(sid, "feedback", "second note")
+        arts = [a for a in s.item_artifacts(sid) if a.type == "feedback"]
+        self.assertEqual(len(arts), 2)
+
+    def test_replace_artifact_replaces_existing_same_type(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "spec", "specs/old.md")
+        s.replace_artifact(sid, "spec", "specs/new.md")
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "specs/new.md")
+
+    def test_replace_artifact_is_generic_for_any_type(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "repo", "app-old")
+        s.replace_artifact(sid, "repo", "app-new")
+        arts = [a for a in s.item_artifacts(sid) if a.type == "repo"]
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "app-new")
+
     def test_create_epic_creates_epic_typed_task(self):
         s = self.make_store()
         eid = s.create_theme("objective")

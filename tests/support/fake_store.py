@@ -135,6 +135,17 @@ class FakeStore(StorePort):
         meta["artifacts"] = artifacts
         b["metadata"] = meta
 
+    def replace_artifact(self, item_id, atype, value, label=None):
+        b = self._get(item_id)
+        meta = dict(b.get("metadata") or {})
+        artifacts = [a for a in (meta.get("artifacts") or []) if a.get("type") != atype]
+        entry = {"type": atype, "value": value}
+        if label:
+            entry["label"] = label
+        artifacts.append(entry)
+        meta["artifacts"] = artifacts
+        b["metadata"] = meta
+
     def all_nodes(self):
         return [self._to_node(b) for b in self._records.values()
                 if b.get("state") != "done"]

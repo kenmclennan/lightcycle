@@ -660,6 +660,7 @@ def cmd_attach(argv):
     ap.add_argument("type")
     ap.add_argument("value")
     ap.add_argument("--label")
+    ap.add_argument("--replace", action="store_true")
     a = ap.parse_args(argv)
     if a.type == "feedback":
         ReflectUseCase(_container.store, _container.fs).execute(
@@ -667,7 +668,7 @@ def cmd_attach(argv):
         )
         return 0
     LinkArtifactUseCase(_container.store).execute(
-        LinkArtifactInput(item=a.id, atype=a.type, value=a.value, label=a.label)
+        LinkArtifactInput(item=a.id, atype=a.type, value=a.value, label=a.label, replace=a.replace)
     )
     return 0
 

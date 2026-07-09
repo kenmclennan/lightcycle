@@ -11,6 +11,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def replace_artifact(self, item_id, atype, value, label=None):
+        pass
+
+    @abstractmethod
     def all_nodes(self):
         pass
 
