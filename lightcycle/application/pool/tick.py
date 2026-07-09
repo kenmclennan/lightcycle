@@ -35,13 +35,13 @@ class TickResponse:
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
-        hook_completions=None,
+        hook_completions=None, worktrees=None, git=None,
     ):
         self._store = store
         self._workers = workers
         self._spawner = spawner
         self._config = config
-        self._sweep = SweepUseCase(store, workers)
+        self._sweep = SweepUseCase(store, workers, worktrees, git)
         self._monitor = monitor
         self._cadence_gate = cadence_gate
         self._breaker_gate = breaker_gate

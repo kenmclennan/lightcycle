@@ -52,6 +52,15 @@ def worktree_registered(root, path):
     return False
 
 
+def has_uncommitted(root):
+    return git(root, "status", "--porcelain").stdout.strip() != ""
+
+
+def commit_all(root, message):
+    git(root, "add", "-A")
+    return git_ok(root, "commit", "-m", message)
+
+
 class GitAdapter(GitPort):
     def git(self, root, *args):
         return git(root, *args)
@@ -79,3 +88,9 @@ class GitAdapter(GitPort):
 
     def worktree_registered(self, root, path):
         return worktree_registered(root, path)
+
+    def has_uncommitted(self, root):
+        return has_uncommitted(root)
+
+    def commit_all(self, root, message):
+        return commit_all(root, message)
