@@ -24,15 +24,15 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         tid = s.create_step("build: x", step="build", role="coder", project="grid", goal="ship")
         t = s.get_node(tid)
         self.assertEqual((t.role, t.step, t.project, t.goal), ("coder", "build", "grid", "ship"))
-        self.assertEqual(t.status, "ready")
+        self.assertEqual(t.state, "ready")
 
     def test_claim_and_close_map_status(self):
         s = self._store()
         s.create_step("build: x", step="build", role="coder")
         claimed = s.claim_ready("coder")
-        self.assertEqual(claimed.status, "in-progress")
+        self.assertEqual(claimed.state, "in_progress")
         s.close(claimed.id, "done")
-        self.assertEqual(s.get_node(claimed.id).status, "done")
+        self.assertEqual(s.get_node(claimed.id).state, "done")
         self.assertEqual(s.get_node(claimed.id).outcome, "done")
 
     def test_story_artifacts_roundtrip(self):
@@ -75,7 +75,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         s.route_to_human(tid, "needs a human")
         t = s.get_node(tid)
         self.assertEqual(t.role, "human")
-        self.assertEqual(t.status, "needs-human")
+        self.assertEqual(t.state, "ready")
         self.assertIn("needs a human", t.notes or "")
 
     def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
@@ -153,6 +153,122 @@ class TestSqliteStoreHistoryMigration(unittest.TestCase):
 
         store = SqliteStore(config)
         self.assertEqual(store.history("legacy-1"), [("in-progress", None)])
+
+
+_LEGACY_NODES_SCHEMA = """
+CREATE TABLE nodes (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open',
+    step TEXT,
+    role TEXT,
+    parent TEXT,
+    project TEXT,
+    goal TEXT,
+    description TEXT,
+    notes TEXT,
+    close_reason TEXT,
+    assignee TEXT,
+    since TEXT,
+    fired_at TEXT,
+    closed_at TEXT,
+    created_at TEXT,
+    attention INTEGER NOT NULL DEFAULT 0,
+    theme TEXT,
+    needs TEXT,
+    model TEXT,
+    workflow TEXT,
+    state TEXT
+);
+CREATE TABLE deps (node_id TEXT NOT NULL, blocked_by TEXT NOT NULL);
+CREATE TABLE artifacts (item_id TEXT NOT NULL, atype TEXT NOT NULL, value TEXT NOT NULL, label TEXT);
+CREATE TABLE labels (node_id TEXT NOT NULL, label TEXT NOT NULL);
+CREATE TABLE counters (namespace TEXT PRIMARY KEY, next INTEGER NOT NULL);
+CREATE TABLE history (node_id TEXT NOT NULL, seq INTEGER NOT NULL, status TEXT NOT NULL, ts TEXT);
+"""
+
+
+class TestSqliteStoreStateCollapseMigration(unittest.TestCase):
+    def _seed_legacy_store(self, root):
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.executescript(_LEGACY_NODES_SCHEMA)
+        conn.executemany(
+            "INSERT INTO nodes (id, type, status, role, assignee, state) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                ("s-closed", "step", "closed", "coder", None, None),
+                ("s-active", "step", "in_progress", "coder", "sp1", None),
+                ("s-ready", "step", "open", "coder", None, None),
+                ("s-blocked", "step", "open", "coder", None, None),
+                ("s-human", "step", "open", "human", None, None),
+                ("i-todo", "item", "open", None, None, "todo"),
+                ("i-active", "item", "open", None, None, "active"),
+                ("i-5v5", "item", "closed", None, None, "todo"),
+            ],
+        )
+        conn.execute(
+            "INSERT INTO deps (node_id, blocked_by) VALUES ('s-blocked', 's-ready')"
+        )
+        conn.commit()
+        conn.close()
+
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": cfg_path})
+
+    def test_migration_maps_every_row_to_the_single_state_field(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        store = SqliteStore(self._config(root))
+
+        self.assertEqual(store.get_node("s-closed").state, "done")
+        self.assertEqual(store.get_node("s-active").state, "in_progress")
+        self.assertEqual(store.get_node("s-ready").state, "ready")
+        self.assertEqual(store.get_node("s-blocked").state, "backlogged")
+        self.assertEqual(store.get_node("s-human").state, "ready")
+        self.assertEqual(store.get_node("i-todo").state, "backlogged")
+        self.assertEqual(store.get_node("i-active").state, "backlogged")
+
+        cols = {
+            r[1] for r in store._conn.execute("PRAGMA table_info(nodes)").fetchall()
+        }
+        self.assertNotIn("status", cols)
+        self.assertIn("state", cols)
+
+    def test_closed_node_with_stale_legacy_state_reports_done(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        store = SqliteStore(self._config(root))
+
+        node = store.get_node("i-5v5")
+        self.assertEqual(node.state, "done")
+
+    def test_migration_backs_up_the_store_before_mutating_it(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        SqliteStore(self._config(root))
+
+        backup = os.path.join(root, "backups", "store-pre-state-collapse.db.gz")
+        self.assertTrue(os.path.exists(backup))
+
+    def test_migrated_step_is_claimable_once_its_blocker_closes(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        store = SqliteStore(self._config(root))
+
+        self.assertEqual(store.get_node("s-blocked").state, "backlogged")
+        self.assertNotIn("s-blocked", [n.id for n in store.ready_steps()])
+
+        store.close("s-ready", "done")
+
+        self.assertEqual(store.get_node("s-blocked").state, "ready")
+        self.assertIn("s-blocked", [n.id for n in store.ready_steps()])
+        claimed = store.claim_ready("coder")
+        self.assertIsNotNone(claimed)
+        self.assertEqual(claimed.id, "s-blocked")
 
 
 if __name__ == "__main__":

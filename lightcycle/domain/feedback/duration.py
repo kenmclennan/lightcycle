@@ -1,6 +1,6 @@
 import datetime
 
-from lightcycle.domain.work.status import Status
+from lightcycle.domain.work.state import State
 
 
 class Duration:
@@ -8,8 +8,8 @@ class Duration:
         self._transitions = list(transitions)
 
     def elapsed(self):
-        claimed = self._first(Status.IN_PROGRESS)
-        finished = self._last(Status.DONE)
+        claimed = self._first(State.IN_PROGRESS)
+        finished = self._last(State.DONE)
         if claimed is None or finished is None:
             return None
         return self._parse(finished) - self._parse(claimed)

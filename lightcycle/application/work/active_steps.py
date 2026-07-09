@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-from lightcycle.domain.work import Node, NodeQueue
+from lightcycle.domain.work import Node, NodeQueue, State
 
 
 @dataclass(frozen=True)
@@ -15,5 +15,5 @@ class ActiveStepsUseCase:
 
     def execute(self) -> ActiveStepsResponse:
         return ActiveStepsResponse(
-            steps=NodeQueue(self._store.all_steps()).by_status("in-progress")
+            steps=NodeQueue(self._store.all_steps()).by_state(State.IN_PROGRESS)
         )

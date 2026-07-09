@@ -131,7 +131,7 @@ class TestCompleteTask(unittest.TestCase):
         resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
-        self.assertEqual(s.get_node(bid).status, "done")
+        self.assertEqual(s.get_node(bid).state, "done")
         self.assertEqual(s.get_node(resp.next_step).step, "review")
 
     def test_invalid_outcome_raises(self):
@@ -158,7 +158,7 @@ class TestCompleteTask(unittest.TestCase):
         resp = CompleteStepUseCase(s, flow_for(terminal_metas, s)).execute(
             CompleteInput(step=tid, outcome="done")
         )
-        self.assertEqual(s.get_node(tid).status, "done")
+        self.assertEqual(s.get_node(tid).state, "done")
         self.assertIsNone(resp.next_step)
 
     def test_step_with_routes_unknown_outcome_still_errors(self):
@@ -182,7 +182,7 @@ class TestCompleteTask(unittest.TestCase):
         resp = CompleteStepUseCase(s, flow_for(terminal_metas, s)).execute(
             CompleteInput(step=tid, outcome="done")
         )
-        self.assertEqual(s.get_node(tid).status, "done")
+        self.assertEqual(s.get_node(tid).state, "done")
         self.assertIsNone(resp.next_step)
 
 
@@ -197,7 +197,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), wt).execute(
             CompleteInput(step=tid, outcome="done")
         )
-        self.assertEqual(s.get_node(item).status, "done")
+        self.assertEqual(s.get_node(item).state, "done")
         self.assertEqual(wt.removed, [item])
 
     def test_intermediate_step_does_not_close_item(self):
@@ -207,7 +207,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
-        self.assertEqual(s.get_node(item).status, "ready")
+        self.assertEqual(s.get_node(item).state, "in_progress")
 
     def test_last_open_item_close_auto_closes_theme(self):
         s = FakeStore()
@@ -218,8 +218,8 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), FakeWorktrees()).execute(
             CompleteInput(step=tid, outcome="done")
         )
-        self.assertEqual(s.get_node(item).status, "done")
-        self.assertEqual(s.get_node(theme).status, "done")
+        self.assertEqual(s.get_node(item).state, "done")
+        self.assertEqual(s.get_node(theme).state, "done")
 
     def test_theme_with_still_open_item_stays_open(self):
         s = FakeStore()
@@ -230,8 +230,8 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), FakeWorktrees()).execute(
             CompleteInput(step=tid, outcome="done")
         )
-        self.assertEqual(s.get_node(item).status, "done")
-        self.assertEqual(s.get_node(theme).status, "ready")
+        self.assertEqual(s.get_node(item).state, "done")
+        self.assertEqual(s.get_node(theme).state, "in_progress")
 
 
 class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
@@ -260,7 +260,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
         resp = CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
             CompleteInput(step=aid, outcome="sideways")
         )
-        self.assertEqual(s.get_node(aid).status, "done")
+        self.assertEqual(s.get_node(aid).state, "done")
         self.assertEqual(s.get_node(resp.next_step).step, "gamma")
 
 
@@ -273,7 +273,7 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
         item = s.create_item("st", theme=s.create_theme("theme"))
         tid = s.create_step("open-pr: x", step="open-pr", role="open-pr", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=tid, outcome="conflicted"))
-        self.assertEqual(s.get_node(tid).status, "done")
+        self.assertEqual(s.get_node(tid).state, "done")
         self.assertEqual(s.get_node(resp.next_step).step, "resolve")
 
     def test_done_outcome_still_requires_a_pr(self):

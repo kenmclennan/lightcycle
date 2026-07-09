@@ -19,6 +19,5 @@ class QueueUseCase:
         self._store = store
 
     def execute(self, input: QueueInput) -> QueueResponse:
-        ready_ids = {t.id for t in self._store.ready_steps()}
-        lanes = NodeQueue(self._store.all_steps()).by_lane(ready_ids)
+        lanes = NodeQueue(self._store.all_steps()).by_lane()
         return QueueResponse(steps=(lanes["queue"] + lanes["blocked"])[: input.n])

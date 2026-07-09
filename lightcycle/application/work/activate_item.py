@@ -3,6 +3,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.contracts import StepContract
+from lightcycle.domain.work import State
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,7 @@ class ActivateItemUseCase:
         node = self._store.get_node(input.item)
         if node.type != "item":
             raise UseCaseError("'%s' is not an item (type=%s)" % (input.item, node.type))
-        if node.state != "todo":
+        if node.state != State.BACKLOGGED:
             raise UseCaseError("item '%s' is not a todo (state=%s)" % (input.item, node.state))
         if input.theme is not None:
             self._store.edit_node(input.item, parent=input.theme)
@@ -51,7 +52,7 @@ class ActivateItemUseCase:
                 "step '%s' requires %s; attach them before activating"
                 % (step_name, ", ".join(sorted(unmet)))
             )
-        self._store.edit_node(input.item, workflow=input.workflow, state="active")
+        self._store.edit_node(input.item, workflow=input.workflow)
         step = self._store.create_step(
             "%s: %s" % (step_name, node.title), step=step_name, role=role, parent=input.item
         )

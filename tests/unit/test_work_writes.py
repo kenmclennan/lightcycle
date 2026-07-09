@@ -77,7 +77,8 @@ class TestAddTask(unittest.TestCase):
         s = FakeStore()
         resp = AddItemUseCase(s).execute(AddItemInput(title="do a thing", goal="g1", project="p1"))
         t = s.get_node(resp.step)
-        self.assertEqual(t.status, "needs-human")
+        self.assertEqual(t.state, "ready")
+        self.assertEqual(t.role, "human")
         self.assertEqual(t.goal, "g1")
         self.assertEqual(t.project, "p1")
 
@@ -169,8 +170,8 @@ class TestCloseItem(unittest.TestCase):
         k = s.create_step("build: x", step="build", role="coder", parent=sid)
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
-        self.assertEqual(s.get_node(sid).status, "done")
-        self.assertEqual(s.get_node(k).status, "done")
+        self.assertEqual(s.get_node(sid).state, "done")
+        self.assertEqual(s.get_node(k).state, "done")
         self.assertEqual(wt.removed, [sid])
 
 
@@ -181,7 +182,7 @@ class TestCloseEpic(unittest.TestCase):
         child = s.create_item("item", theme=theme)
         s.close(child, "merged")
         CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
-        self.assertEqual(s.get_node(theme).status, "done")
+        self.assertEqual(s.get_node(theme).state, "done")
 
     def test_refuses_with_open_child_and_names_it(self):
         s = FakeStore()
@@ -190,7 +191,7 @@ class TestCloseEpic(unittest.TestCase):
         with self.assertRaises(UseCaseError) as ctx:
             CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertIn(child, str(ctx.exception))
-        self.assertEqual(s.get_node(theme).status, "ready")
+        self.assertEqual(s.get_node(theme).state, "ready")
 
     def test_refuses_leaves_epic_open_with_mixed_children(self):
         s = FakeStore()
@@ -202,7 +203,7 @@ class TestCloseEpic(unittest.TestCase):
             CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
         self.assertIn(open_, str(ctx.exception))
         self.assertNotIn(closed, str(ctx.exception))
-        self.assertEqual(s.get_node(theme).status, "ready")
+        self.assertEqual(s.get_node(theme).state, "in_progress")
 
     def test_closing_theme_attaches_no_retro_artifact(self):
         s = FakeStore()
@@ -224,7 +225,7 @@ class TestCloseEpicBacklogResolution(unittest.TestCase):
         child = s.create_item("item", theme=theme)
         s.close(child, "merged")
         CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
-        self.assertEqual(s.get_node(backlog).status, "done")
+        self.assertEqual(s.get_node(backlog).state, "done")
 
     def test_no_backlog_link_is_a_no_op(self):
         s = FakeStore()
@@ -232,7 +233,7 @@ class TestCloseEpicBacklogResolution(unittest.TestCase):
         child = s.create_item("item", theme=theme)
         s.close(child, "merged")
         CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
-        self.assertEqual(s.get_node(theme).status, "done")
+        self.assertEqual(s.get_node(theme).state, "done")
 
 
 class TestWorktreeServiceItemBranch(unittest.TestCase):

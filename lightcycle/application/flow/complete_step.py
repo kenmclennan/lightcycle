@@ -6,7 +6,7 @@ from lightcycle.application.flow.advance_step import AdvanceInput, AdvanceStepUs
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.domain.contracts import StepContract
-from lightcycle.domain.work.status import Status
+from lightcycle.domain.work.state import State
 
 _AUTO_CLOSE_REASON = "auto-closed: all children done"
 
@@ -71,7 +71,7 @@ class CompleteStepUseCase:
             return
         node = self._store.get_node(node_id)
         children = self._store.children(node_id)
-        if not children or any(c.status != Status.DONE for c in children):
+        if not children or any(c.state != State.DONE for c in children):
             return
         if node.type == "item":
             CloseItemUseCase(self._store, self._worktrees).execute(

@@ -3,7 +3,7 @@ from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.domain.work.status import Status
+from lightcycle.domain.work.state import State
 
 _REWORK_MARKER = "/rework"
 
@@ -59,7 +59,7 @@ class MonitorPrsUseCase:
                 close.execute(CloseItemInput(item=item.id, reason=close_outcome))
                 abandoned.append(item.id)
         for step in self._store.all_nodes():
-            if step.type != "step" or step.status == Status.DONE:
+            if step.type != "step" or step.state == State.DONE:
                 continue
             rework_outcome = self._flow.pr_rework_outcome(step.step)
             conflict_outcome = self._flow.pr_conflict_outcome(step.step)
@@ -89,7 +89,7 @@ class MonitorPrsUseCase:
                 if cap is not None and esc:
                     prior = sum(1 for t in self._store.steps_at_step(step.step)
                                 if t.parent == step.parent
-                                and t.status == Status.DONE and t.outcome == conflict_outcome)
+                                and t.state == State.DONE and t.outcome == conflict_outcome)
                     outcome = esc if prior >= cap else conflict_outcome
                 else:
                     outcome = conflict_outcome

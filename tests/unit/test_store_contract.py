@@ -20,7 +20,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         tid = s.create_step("t", role="coder")
         s.assign(tid, "worker-1")
         s.assign(tid, "")
-        self.assertEqual(s.get_node(tid).status, "ready")
+        self.assertEqual(s.get_node(tid).state, "ready")
 
     def test_two_deps_require_both_closed(self):
         s = self.make_store()
@@ -72,7 +72,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
     def test_claimed_tasks(self):
         s = self.make_store()
         claimed = s.create_step("t", role="coder")
-        s.update_status(claimed, "in_progress")
+        s.update_state(claimed, "in_progress")
         s.assign(claimed, "sp-x")
         ready = s.create_step("ready", role="coder")
         got = s.claimed_steps()

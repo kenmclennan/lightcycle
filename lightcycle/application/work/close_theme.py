@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.work import State
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,7 @@ class CloseThemeUseCase:
 
     def execute(self, input: CloseThemeInput) -> None:
         children = self._store.children(input.theme)
-        open_stories = [c for c in children if c.type == "item" and c.status != "done"]
+        open_stories = [c for c in children if c.type == "item" and c.state != State.DONE]
         if open_stories:
             ids = ", ".join(c.id for c in open_stories)
             raise UseCaseError(

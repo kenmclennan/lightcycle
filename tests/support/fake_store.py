@@ -3,7 +3,7 @@ import os
 import uuid
 
 from lightcycle.ports.store import StorePort
-from lightcycle.domain.work import Artifact, Status, Node, NodeView
+from lightcycle.domain.work import Artifact, Node, NodeView, State, roll_up
 
 
 def _new_id():
@@ -17,15 +17,17 @@ def _label_value(labels, prefix):
     return None
 
 
-def _status_of(record, role):
-    status = record.get("status")
-    if status == "closed":
-        return Status.DONE
-    if record.get("assignee") or status == "in_progress":
-        return Status.IN_PROGRESS
-    if role == "human":
-        return Status.NEEDS_HUMAN
-    return Status.READY
+def _leaf_state(record):
+    state = record.get("state")
+    if state == "done":
+        return State.DONE
+    if record.get("type") != "step":
+        return None
+    if record.get("assignee") or state == "in_progress":
+        return State.IN_PROGRESS
+    if record.get("dep_count"):
+        return State.BACKLOGGED
+    return State.READY
 
 
 def labels_for(*, role=None, step=None, project=None, goal=None, attention=False):
@@ -43,10 +45,11 @@ def labels_for(*, role=None, step=None, project=None, goal=None, attention=False
     return parts
 
 
-def record_to_node(record):
+def record_to_node(record, state=None):
     labels = record.get("labels") or []
     role = _label_value(labels, "for:")
     meta = record.get("metadata") or {}
+    resolved_state = state if state is not None else _leaf_state(record)
     return Node(
         id=record["id"],
         title=record.get("title", ""),
@@ -54,7 +57,7 @@ def record_to_node(record):
         parent=record.get("parent"),
         role=role,
         step=_label_value(labels, "step:"),
-        status=_status_of(record, role),
+        state=resolved_state,
         project=_label_value(labels, "project:"),
         goal=_label_value(labels, "goal:"),
         artifacts=[Artifact.from_dict(a) for a in (meta.get("artifacts") or [])],
@@ -66,7 +69,6 @@ def record_to_node(record):
         claimed_by=record.get("assignee"),
         workflow=record.get("workflow"),
         theme=record.get("parent") if record.get("type") == "item" else meta.get("theme"),
-        state=meta.get("state"),
         since=meta.get("since"),
         fired_at=meta.get("fired_at"),
         closed_at=record.get("closed_at"),
@@ -88,7 +90,7 @@ class FakeStore(StorePort):
             "title": "",
             "type": "step",
             "labels": [],
-            "status": "open",
+            "state": "ready",
             "assignee": None,
             "metadata": {},
             "parent": None,
@@ -107,6 +109,17 @@ class FakeStore(StorePort):
         except KeyError:
             raise KeyError("step not found: %s" % tid)
 
+    def _to_node(self, record):
+        node = record_to_node(record)
+        if node.state is None:
+            children_states = [
+                self._to_node(r).state
+                for r in self._records.values()
+                if r.get("parent") == record["id"]
+            ]
+            node.state = roll_up(children_states)
+        return node
+
     def item_artifacts(self, item_id):
         b = self._get(item_id)
         return [Artifact.from_dict(a) for a in ((b.get("metadata") or {}).get("artifacts") or [])]
@@ -123,15 +136,15 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_nodes(self):
-        return [record_to_node(b) for b in self._records.values()
-                if b.get("status") != "closed"]
+        return [self._to_node(b) for b in self._records.values()
+                if b.get("state") != "done"]
 
     def all_steps(self):
-        return [record_to_node(b) for b in self._records.values()
-                if b.get("type") == "step" and b.get("status") != "closed"]
+        return [self._to_node(b) for b in self._records.values()
+                if b.get("type") == "step" and b.get("state") != "done"]
 
     def get_node(self, tid):
-        return record_to_node(self._get(tid))
+        return self._to_node(self._get(tid))
 
     def node_view(self, tid):
         t = self.get_node(tid)
@@ -147,7 +160,7 @@ class FakeStore(StorePort):
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
-        self.update_status(tid, "open")
+        self.update_state(tid, State.READY)
         self.assign(tid, "")
 
     def route_to_human(self, tid, note):
@@ -157,7 +170,7 @@ class FakeStore(StorePort):
     def closed_items(self):
         result = []
         for b in self._records.values():
-            if b.get("type") != "item" or b.get("status") != "closed":
+            if b.get("type") != "item" or b.get("state") != "done":
                 continue
             result.append(
                 {
@@ -177,7 +190,7 @@ class FakeStore(StorePort):
         pass
 
     def reclaim(self, tid):
-        self.update_status(tid, "open")
+        self.update_state(tid, State.READY)
         self.assign(tid, "")
 
     def note(self, tid, text):
@@ -190,14 +203,14 @@ class FakeStore(StorePort):
 
     def close(self, tid, reason):
         b = self._get(tid)
-        b["status"] = "closed"
+        b["state"] = "done"
         b["outcome"] = reason
         b["closed_at"] = datetime.datetime.now().isoformat()
-        self._record_history(tid, Status.DONE)
+        self._record_history(tid, State.DONE)
         for other_id, blockers in self._deps.items():
             if tid in blockers:
                 other = self._records.get(other_id)
-                if other and other.get("status") != "closed":
+                if other and other.get("state") != "done":
                     other["dep_count"] = max(0, (other.get("dep_count") or 0) - 1)
 
     def update_metadata(self, tid, meta):
@@ -218,12 +231,12 @@ class FakeStore(StorePort):
         b = self._get(tid)
         b["labels"] = [l for l in b["labels"] if l != label]
 
-    def update_status(self, tid, status):
-        self._get(tid)["status"] = status
-        self._record_history(tid, status)
+    def update_state(self, tid, state):
+        self._get(tid)["state"] = str(state)
+        self._record_history(tid, state)
 
-    def _record_history(self, tid, status):
-        self._history.setdefault(tid, []).append((str(status), self._now()))
+    def _record_history(self, tid, state):
+        self._history.setdefault(tid, []).append((str(state), self._now()))
 
     def assign(self, tid, assignee):
         self._get(tid)["assignee"] = assignee or None
@@ -233,7 +246,7 @@ class FakeStore(StorePort):
             self._deps[node_id] = set()
         self._deps[node_id].add(blocked_by)
         blocker = self._records.get(blocked_by)
-        if blocker and blocker.get("status") != "closed":
+        if blocker and blocker.get("state") != "done":
             b = self._get(node_id)
             b["dep_count"] = (b.get("dep_count") or 0) + 1
 
@@ -241,14 +254,14 @@ class FakeStore(StorePort):
         return [
             b
             for b in self._records.values()
-            if b.get("status") == "open"
+            if b.get("state") == "ready"
             and not b.get("assignee")
             and not (b.get("dep_count") or 0)
             and b.get("type") == "step"
         ]
 
     def ready_steps(self):
-        return [record_to_node(b) for b in self._ready_records()]
+        return [self._to_node(b) for b in self._ready_records()]
 
     def claim_ready(self, role):
         candidates = [
@@ -258,9 +271,9 @@ class FakeStore(StorePort):
             return None
         b = candidates[0]
         b["assignee"] = os.environ.get("LC_SPAWNID") or role
-        b["status"] = "in_progress"
-        self._record_history(b["id"], Status.IN_PROGRESS)
-        return record_to_node(b)
+        b["state"] = "in_progress"
+        self._record_history(b["id"], State.IN_PROGRESS)
+        return self._to_node(b)
 
     def history(self, tid):
         return list(self._history.get(tid, []))
@@ -284,7 +297,7 @@ class FakeStore(StorePort):
         return tid
 
     def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
-                  parent=None, workflow=None, state=None):
+                  parent=None, workflow=None):
         b = self._get(tid)
         if title is not None:
             b["title"] = title
@@ -306,10 +319,6 @@ class FakeStore(StorePort):
             b["parent"] = parent
         if workflow is not None:
             b["workflow"] = workflow
-        if state is not None:
-            meta = dict(b.get("metadata") or {})
-            meta["state"] = state
-            b["metadata"] = meta
 
     def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None):
         b = self._new_record(
@@ -318,7 +327,7 @@ class FakeStore(StorePort):
             parent=theme,
             labels=labels_for(project=project, goal=goal),
             workflow=workflow,
-            metadata={"state": "todo"},
+            state="backlogged",
         )
         tid = b["id"]
         self._records[tid] = b
@@ -330,59 +339,60 @@ class FakeStore(StorePort):
             type="theme",
             labels=labels_for(project=project, goal=goal),
             workflow=workflow,
+            state="backlogged",
         )
         tid = b["id"]
         self._records[tid] = b
         return tid
 
     def children(self, item_id):
-        return [record_to_node(b) for b in self._records.values() if b.get("parent") == item_id]
+        return [self._to_node(b) for b in self._records.values() if b.get("parent") == item_id]
 
     def claimed_steps(self):
-        return [record_to_node(b) for b in self._records.values() if b.get("status") == "in_progress"]
+        return [self._to_node(b) for b in self._records.values() if b.get("state") == "in_progress"]
 
     def nodes_closed_since(self, since_date):
         result = []
         for b in self._records.values():
-            if b.get("type") != "step" or b.get("status") != "closed":
+            if b.get("type") != "step" or b.get("state") != "done":
                 continue
             closed_at = (b.get("closed_at") or "")[:10]
             if closed_at >= since_date:
-                result.append(record_to_node(b))
+                result.append(self._to_node(b))
         return result
 
     def last_n_closed_themes(self, n):
         themes = [
             b
             for b in self._records.values()
-            if b.get("type") == "theme" and b.get("status") == "closed"
+            if b.get("type") == "theme" and b.get("state") == "done"
         ]
         themes.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
-        return [record_to_node(b) for b in themes[:n]]
+        return [self._to_node(b) for b in themes[:n]]
 
 
     def items_closed_since(self, since_date):
         result = []
         for b in self._records.values():
-            if b.get("type") != "item" or b.get("status") != "closed":
+            if b.get("type") != "item" or b.get("state") != "done":
                 continue
             if "retro-origin" in (b.get("labels") or []):
                 continue
             if (b.get("closed_at") or "")[:10] >= since_date:
-                result.append(record_to_node(b))
+                result.append(self._to_node(b))
         return result
 
     def last_n_closed_items(self, n):
         items = [
             b for b in self._records.values()
-            if b.get("type") == "item" and b.get("status") == "closed"
+            if b.get("type") == "item" and b.get("state") == "done"
         ]
         items.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
-        return [record_to_node(b) for b in items[:n]]
+        return [self._to_node(b) for b in items[:n]]
 
     def steps_at_step(self, step):
         label = "step:%s" % step
-        return [record_to_node(b) for b in self._records.values()
+        return [self._to_node(b) for b in self._records.values()
                 if b.get("type") == "step" and label in (b.get("labels") or [])]
 
     def delete(self, tid):

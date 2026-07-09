@@ -463,12 +463,12 @@ def cmd_trace(argv):
     if a.json:
         print(json.dumps(resp.as_dict(), indent=2))
     else:
-        print("item %s  %s  [%s]" % (resp.item.id, resp.item.title, resp.item.status))
+        print("item %s  %s  [%s]" % (resp.item.id, resp.item.title, resp.item.state))
         for art in resp.artifacts:
             print("  artifact %s: %s" % (art.type, art.value))
         for t in resp.steps:
             log = "  log:" + t.log if t.log else ""
-            print("  step %s  %s  [%s]%s" % (t.id, t.step or "-", t.status, log))
+            print("  step %s  %s  [%s]%s" % (t.id, t.step or "-", t.state, log))
     return 0
 
 
@@ -526,7 +526,7 @@ def cmd_queue(argv):
     ap.add_argument("n", nargs="?", type=int, default=10)
     a = ap.parse_args(argv)
     for t in QueueUseCase(_container.store).execute(QueueInput(n=a.n)).steps:
-        print("  %-8s %s  %s" % (t.status, t.id, t.title))
+        print("  %-8s %s  %s" % (t.state, t.id, t.title))
     return 0
 
 
@@ -621,7 +621,7 @@ def cmd_set(argv):
         _container.store.label_add(a.id, a.label)
     _container.store.edit_node(
         a.id, title=a.title, description=a.description, goal=a.goal,
-        project=a.project, parent=a.parent, workflow=a.workflow, state=a.state)
+        project=a.project, parent=a.parent, workflow=a.workflow)
     return 0
 
 

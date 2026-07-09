@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from lightcycle.domain.work.artifact import Artifact
-from lightcycle.domain.work.status import Status
+from lightcycle.domain.work.state import State
 
 
 @dataclass
@@ -13,7 +13,7 @@ class Node:
     parent: Optional[str] = None
     role: Optional[str] = None
     step: Optional[str] = None
-    status: Status = Status.READY
+    state: State = State.READY
     project: Optional[str] = None
     goal: Optional[str] = None
     artifacts: List[Artifact] = field(default_factory=list)
@@ -30,7 +30,6 @@ class Node:
     attention: bool = False
     model: Optional[str] = None
     workflow: Optional[str] = None
-    state: Optional[str] = None
 
     def classify_for_human(self, flow):
         if not self.step:
@@ -48,7 +47,7 @@ class Node:
             "parent": self.parent,
             "role": self.role,
             "step": self.step,
-            "status": self.status,
+            "state": self.state,
             "project": self.project,
             "goal": self.goal,
             "artifacts": [a.as_dict() for a in self.artifacts],
@@ -56,5 +55,5 @@ class Node:
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "notes": self.notes, "theme": self.theme, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
-            "model": self.model, "state": self.state,
+            "model": self.model,
         }

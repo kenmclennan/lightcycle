@@ -19,7 +19,7 @@ class TestActivateItem(unittest.TestCase):
         resp = ActivateItemUseCase(s, _flow(s)).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
-        self.assertEqual(s.get_node(item).state, "active")
+        self.assertEqual(s.get_node(item).state, "ready")
         step = s.get_node(resp.step)
         self.assertEqual(step.type, "step")
         self.assertEqual(step.step, "build")

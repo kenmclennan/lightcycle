@@ -1,8 +1,10 @@
 import datetime
+import gzip
 import os
+import shutil
 import sqlite3
 
-from lightcycle.domain.work import Artifact, Status, Node, NodeView
+from lightcycle.domain.work import Artifact, Node, NodeView, State, roll_up
 from lightcycle.ports.store import StorePort
 
 _DB_FILENAME = "store.db"
@@ -12,7 +14,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'open',
+    state TEXT NOT NULL DEFAULT 'ready',
     step TEXT,
     role TEXT,
     parent TEXT,
@@ -30,11 +32,10 @@ CREATE TABLE IF NOT EXISTS nodes (
     theme TEXT,
     needs TEXT,
     model TEXT,
-    workflow TEXT,
-    state TEXT
+    workflow TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
+CREATE INDEX IF NOT EXISTS idx_nodes_state ON nodes(state);
 CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent);
 
 CREATE TABLE IF NOT EXISTS deps (
@@ -64,15 +65,15 @@ CREATE TABLE IF NOT EXISTS counters (
 CREATE TABLE IF NOT EXISTS history (
     node_id TEXT NOT NULL,
     seq INTEGER NOT NULL,
-    status TEXT NOT NULL,
+    state TEXT NOT NULL,
     ts TEXT
 );
 """
 
 _COLUMNS = (
-    "id", "type", "title", "status", "step", "role", "parent", "project", "goal",
+    "id", "type", "title", "state", "step", "role", "parent", "project", "goal",
     "description", "notes", "close_reason", "assignee", "since", "fired_at",
-    "closed_at", "attention", "theme", "needs", "model", "workflow", "state",
+    "closed_at", "attention", "theme", "needs", "model", "workflow",
 )
 
 _METADATA_COLUMNS = ("theme", "needs", "since", "fired_at", "workflow")
@@ -80,28 +81,32 @@ _METADATA_COLUMNS = ("theme", "needs", "since", "fired_at", "workflow")
 _LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
 
 
-def _domain_status(raw_status, assignee, role):
-    if raw_status == "closed":
-        return Status.DONE
-    if assignee:
-        return Status.IN_PROGRESS
-    if role == "human":
-        return Status.NEEDS_HUMAN
-    return Status.READY
+def _migrated_state(type_, status, old_item_state):
+    if status == "closed":
+        return State.DONE.value
+    if type_ == "step":
+        if status == "in_progress":
+            return State.IN_PROGRESS.value
+        return State.READY.value
+    if type_ == "item":
+        return State.BACKLOGGED.value if old_item_state == "todo" else State.READY.value
+    return State.READY.value
 
 
 class SqliteStore(StorePort):
     def __init__(self, config, now=None):
         self._config = config
         self._now = now or (lambda: datetime.datetime.now().isoformat())
-        path = os.path.join(config.data_root(), _DB_FILENAME)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        self._conn = sqlite3.connect(path)
+        self._db_path = os.path.join(config.data_root(), _DB_FILENAME)
+        os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
+        self._conn = sqlite3.connect(self._db_path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
         self._migrate_history_ts()
+        self._migrate_history_state_column()
         self._migrate_nodes_workflow()
+        self._migrate_collapse_state()
         self._conn.commit()
 
     def _migrate_history_ts(self):
@@ -109,13 +114,52 @@ class SqliteStore(StorePort):
         if "ts" not in cols:
             self._conn.execute("ALTER TABLE history ADD COLUMN ts TEXT")
 
+    def _migrate_history_state_column(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}
+        if "status" in cols and "state" not in cols:
+            self._conn.execute("ALTER TABLE history RENAME COLUMN status TO state")
+
     def _migrate_nodes_workflow(self):
         cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
         if "workflow" not in cols:
             self._conn.execute("ALTER TABLE nodes ADD COLUMN workflow TEXT")
 
+    def _migrate_collapse_state(self):
+        node_cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
+        if "status" not in node_cols:
+            return
+        self._backup_before_collapse()
+        rows = self._conn.execute("SELECT id, type, status, state FROM nodes").fetchall()
+        for tid, type_, status, old_item_state in rows:
+            new_state = _migrated_state(type_, status, old_item_state)
+            self._conn.execute("UPDATE nodes SET state = ? WHERE id = ?", (new_state, tid))
+        self._conn.execute("DROP INDEX IF EXISTS idx_nodes_status")
+        self._conn.execute("ALTER TABLE nodes DROP COLUMN status")
+        self._conn.commit()
+
+    def _backup_before_collapse(self):
+        self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self._conn.commit()
+        backups_dir = os.path.join(self._config.data_root(), "backups")
+        os.makedirs(backups_dir, exist_ok=True)
+        dst = os.path.join(backups_dir, "store-pre-state-collapse.db.gz")
+        with open(self._db_path, "rb") as src, gzip.open(dst, "wb") as out:
+            shutil.copyfileobj(src, out)
+
+    def _leaf_state(self, type_, raw_state, assignee, deps):
+        if type_ != "step":
+            return State.DONE if raw_state == "done" else None
+        if raw_state == "done":
+            return State.DONE
+        if assignee:
+            return State.IN_PROGRESS
+        if deps:
+            return State.BACKLOGGED
+        return State.READY
+
     def _row_to_node(self, row, artifacts, deps):
         d = dict(zip(_COLUMNS, row))
+        state = self._leaf_state(d["type"], d["state"], d["assignee"], deps)
         return Node(
             id=d["id"],
             title=d["title"],
@@ -123,7 +167,7 @@ class SqliteStore(StorePort):
             parent=d["parent"],
             role=d["role"],
             step=d["step"],
-            status=_domain_status(d["status"], d["assignee"], d["role"]),
+            state=state,
             project=d["project"],
             goal=d["goal"],
             artifacts=artifacts,
@@ -140,7 +184,6 @@ class SqliteStore(StorePort):
             attention=bool(d["attention"]),
             model=d["model"],
             workflow=d["workflow"],
-            state=d["state"],
         )
 
     def _rows_to_nodes(self, rows):
@@ -162,16 +205,20 @@ class SqliteStore(StorePort):
         deps_by_id = dict(
             self._conn.execute(
                 "SELECT d.node_id, COUNT(*) FROM deps d JOIN nodes t ON t.id = d.blocked_by "
-                "WHERE t.status != 'closed' AND d.node_id IN (%s) GROUP BY d.node_id"
+                "WHERE t.state != 'done' AND d.node_id IN (%s) GROUP BY d.node_id"
                 % placeholders,
                 ids,
             ).fetchall()
         )
 
-        return [
+        nodes = [
             self._row_to_node(row, artifacts_by_id.get(row[0], []), deps_by_id.get(row[0], 0))
             for row in rows
         ]
+        for node in nodes:
+            if node.state is None:
+                node.state = roll_up(c.state for c in self.children(node.id))
+        return nodes
 
     def _select(self, where, params=(), suffix=""):
         sql = "SELECT %s FROM nodes" % ", ".join(_COLUMNS)
@@ -223,13 +270,13 @@ class SqliteStore(StorePort):
             return True
         return False
 
-    def _record_history(self, tid, status):
+    def _record_history(self, tid, state):
         row = self._conn.execute(
             "SELECT COALESCE(MAX(seq), -1) FROM history WHERE node_id = ?", (tid,)
         ).fetchone()
         self._conn.execute(
-            "INSERT INTO history (node_id, seq, status, ts) VALUES (?, ?, ?, ?)",
-            (tid, row[0] + 1, str(status), self._now()),
+            "INSERT INTO history (node_id, seq, state, ts) VALUES (?, ?, ?, ?)",
+            (tid, row[0] + 1, str(state), self._now()),
         )
 
     def item_artifacts(self, item_id):
@@ -247,10 +294,10 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def all_nodes(self):
-        return self._select("status != 'closed'")
+        return self._select("state != 'done'")
 
     def all_steps(self):
-        return self._select("type = 'step' AND status != 'closed'")
+        return self._select("type = 'step' AND state != 'done'")
 
     def get_node(self, tid):
         row = self._conn.execute(
@@ -274,7 +321,7 @@ class SqliteStore(StorePort):
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
-        self.update_status(tid, "open")
+        self.update_state(tid, State.READY)
         self.assign(tid, "")
 
     def route_to_human(self, tid, note):
@@ -284,7 +331,7 @@ class SqliteStore(StorePort):
     def closed_items(self):
         rows = self._conn.execute(
             "SELECT id, title, closed_at, close_reason FROM nodes "
-            "WHERE type = 'item' AND status = 'closed'"
+            "WHERE type = 'item' AND state = 'done'"
         ).fetchall()
         return [
             {
@@ -321,7 +368,7 @@ class SqliteStore(StorePort):
                 ).fetchall()
             ]
             result.append({
-                "id": tid, "type": d["type"], "title": d["title"], "status": d["status"],
+                "id": tid, "type": d["type"], "title": d["title"], "state": d["state"],
                 "parent": d["parent"], "role": d["role"], "step": d["step"],
                 "project": d["project"], "goal": d["goal"], "attention": bool(d["attention"]),
                 "description": d["description"], "notes": d["notes"],
@@ -337,7 +384,7 @@ class SqliteStore(StorePort):
         pass
 
     def reclaim(self, tid):
-        self.update_status(tid, "open")
+        self.update_state(tid, State.READY)
         self.assign(tid, "")
 
     def note(self, tid, text):
@@ -357,10 +404,10 @@ class SqliteStore(StorePort):
 
     def close(self, tid, reason):
         self._conn.execute(
-            "UPDATE nodes SET status = 'closed', close_reason = ?, closed_at = ? WHERE id = ?",
+            "UPDATE nodes SET state = 'done', close_reason = ?, closed_at = ? WHERE id = ?",
             (reason, datetime.datetime.now().isoformat(), tid),
         )
-        self._record_history(tid, Status.DONE)
+        self._record_history(tid, State.DONE)
         self._conn.commit()
 
     def update_metadata(self, tid, meta):
@@ -395,9 +442,9 @@ class SqliteStore(StorePort):
             )
         self._conn.commit()
 
-    def update_status(self, tid, status):
-        self._conn.execute("UPDATE nodes SET status = ? WHERE id = ?", (status, tid))
-        self._record_history(tid, status)
+    def update_state(self, tid, state):
+        self._conn.execute("UPDATE nodes SET state = ? WHERE id = ?", (str(state), tid))
+        self._record_history(tid, state)
         self._conn.commit()
 
     def assign(self, tid, assignee):
@@ -418,18 +465,18 @@ class SqliteStore(StorePort):
 
     def ready_steps(self):
         return self._select(
-            "type = 'step' AND status = 'open' AND assignee IS NULL AND NOT EXISTS ("
+            "type = 'step' AND state = 'ready' AND NOT EXISTS ("
             "  SELECT 1 FROM deps d JOIN nodes b ON b.id = d.blocked_by "
-            "  WHERE d.node_id = nodes.id AND b.status != 'closed'"
+            "  WHERE d.node_id = nodes.id AND b.state != 'done'"
             ")"
         )
 
     def claim_ready(self, role):
         row = self._conn.execute(
-            "SELECT id FROM nodes WHERE type = 'step' AND status = 'open' "
-            "AND assignee IS NULL AND role = ? AND NOT EXISTS ("
+            "SELECT id FROM nodes WHERE type = 'step' AND state = 'ready' "
+            "AND role = ? AND NOT EXISTS ("
             "  SELECT 1 FROM deps d JOIN nodes b ON b.id = d.blocked_by "
-            "  WHERE d.node_id = nodes.id AND b.status != 'closed'"
+            "  WHERE d.node_id = nodes.id AND b.state != 'done'"
             ") LIMIT 1",
             (role,),
         ).fetchone()
@@ -438,9 +485,9 @@ class SqliteStore(StorePort):
         tid = row[0]
         assignee = self._config.spawn_id() or role
         self._conn.execute(
-            "UPDATE nodes SET assignee = ?, status = 'in_progress' WHERE id = ?", (assignee, tid)
+            "UPDATE nodes SET assignee = ?, state = 'in_progress' WHERE id = ?", (assignee, tid)
         )
-        self._record_history(tid, Status.IN_PROGRESS)
+        self._record_history(tid, State.IN_PROGRESS)
         self._conn.commit()
         return self.get_node(tid)
 
@@ -448,8 +495,8 @@ class SqliteStore(StorePort):
                     project=None, goal=None, description=None, attention=False, id=None):
         tid = self._mint_or_adopt(id, parent)
         self._conn.execute(
-            "INSERT INTO nodes (id, type, title, status, step, role, parent, project, goal, "
-            "description, attention, created_at) VALUES (?, 'step', ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO nodes (id, type, title, state, step, role, parent, project, goal, "
+            "description, attention, created_at) VALUES (?, 'step', ?, 'ready', ?, ?, ?, ?, ?, ?, ?, ?)",
             (tid, title, step, role, parent, project, goal, description,
              1 if attention else 0, datetime.datetime.now().isoformat()),
         )
@@ -460,7 +507,7 @@ class SqliteStore(StorePort):
         return tid
 
     def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
-                  parent=None, workflow=None, state=None):
+                  parent=None, workflow=None):
         updates = {}
         if title is not None:
             updates["title"] = title
@@ -474,8 +521,6 @@ class SqliteStore(StorePort):
             updates["parent"] = parent
         if workflow is not None:
             updates["workflow"] = workflow
-        if state is not None:
-            updates["state"] = state
         if not updates:
             return
         set_clause = ", ".join("%s = ?" % k for k in updates)
@@ -487,8 +532,8 @@ class SqliteStore(StorePort):
     def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
         tid = self._mint_or_adopt(id, theme)
         self._conn.execute(
-            "INSERT INTO nodes (id, type, title, status, parent, project, goal, workflow, "
-            "state, created_at) VALUES (?, 'item', ?, 'open', ?, ?, ?, ?, 'todo', ?)",
+            "INSERT INTO nodes (id, type, title, state, parent, project, goal, workflow, "
+            "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?, ?)",
             (tid, title, theme, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
@@ -497,8 +542,8 @@ class SqliteStore(StorePort):
     def create_theme(self, title, *, project=None, goal=None, workflow=None, id=None):
         tid = self._mint_or_adopt(id, None, shortcode=self._config.shortcode_for(project))
         self._conn.execute(
-            "INSERT INTO nodes (id, type, title, status, project, goal, workflow, created_at) "
-            "VALUES (?, 'theme', ?, 'open', ?, ?, ?, ?)",
+            "INSERT INTO nodes (id, type, title, state, project, goal, workflow, created_at) "
+            "VALUES (?, 'theme', ?, 'backlogged', ?, ?, ?, ?)",
             (tid, title, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
@@ -508,23 +553,23 @@ class SqliteStore(StorePort):
         return self._select("parent = ?", (item_id,))
 
     def claimed_steps(self):
-        return self._select("status = 'in_progress'")
+        return self._select("state = 'in_progress'")
 
     def history(self, tid):
         rows = self._conn.execute(
-            "SELECT status, ts FROM history WHERE node_id = ? ORDER BY seq ASC", (tid,)
+            "SELECT state, ts FROM history WHERE node_id = ? ORDER BY seq ASC", (tid,)
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
     def nodes_closed_since(self, since_date):
         return self._select(
-            "type = 'step' AND status = 'closed' AND substr(closed_at, 1, 10) >= ?",
+            "type = 'step' AND state = 'done' AND substr(closed_at, 1, 10) >= ?",
             (since_date,),
         )
 
     def last_n_closed_themes(self, n):
         return self._select(
-            "type = 'theme' AND status = 'closed'",
+            "type = 'theme' AND state = 'done'",
             params=(n,),
             suffix="ORDER BY closed_at DESC LIMIT ?",
         )
@@ -532,14 +577,14 @@ class SqliteStore(StorePort):
 
     def items_closed_since(self, since_date):
         return self._select(
-            "type = 'item' AND status = 'closed' AND substr(closed_at, 1, 10) >= ? "
+            "type = 'item' AND state = 'done' AND substr(closed_at, 1, 10) >= ? "
             "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin')",
             (since_date,),
         )
 
     def last_n_closed_items(self, n):
         return self._select(
-            "type = 'item' AND status = 'closed'",
+            "type = 'item' AND state = 'done'",
             params=(n,),
             suffix="ORDER BY closed_at DESC LIMIT ?",
         )
