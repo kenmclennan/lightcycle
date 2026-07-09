@@ -1121,6 +1121,82 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertIn("design", err)
 
 
+class TestReviewGateWithRealLibrary(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        shutil.copytree(ROOT / "lightcycle" / "library" / "workflows", Path(self.root, "workflows"))
+        shutil.copytree(ROOT / "lightcycle" / "library" / "steps", Path(self.root, "steps"))
+        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        self.store = FakeStore()
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
+        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
+
+    def _item_with_spec(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
+        self.assertEqual(rc, 0, err)
+        item = item.strip()
+        call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
+        return item
+
+    def test_arming_with_spec_files_a_review_plan_step_for_the_human(self):
+        item = self._item_with_spec()
+        rc, step_id, err = call(_cli_mod.cmd_set, item, "--state", "active")
+        self.assertEqual(rc, 0, err)
+        step = self.store.get_node(step_id.strip())
+        self.assertEqual(step.step, "review-plan")
+        self.assertEqual(step.role, "human")
+
+    def test_review_plan_step_surfaces_in_inbox(self):
+        item = self._item_with_spec()
+        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active")
+        rc, inbox_out, err = call(_cli_mod.cmd_inbox)
+        self.assertEqual(rc, 0, err)
+        self.assertIn(step_id.strip(), inbox_out)
+
+    def test_approved_advances_to_the_coder(self):
+        item = self._item_with_spec()
+        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active")
+        rc, out, err = call(_cli_mod.cmd_done, step_id.strip(), "approved")
+        self.assertEqual(rc, 0, err)
+        next_step = self.store.get_node(out.strip())
+        self.assertEqual(next_step.step, "build")
+        self.assertEqual(next_step.role, "coder")
+
+    def test_changes_advances_to_develop(self):
+        item = self._item_with_spec()
+        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active")
+        rc, out, err = call(
+            _cli_mod.cmd_done, step_id.strip(), "changes", "--note", "tighten scope"
+        )
+        self.assertEqual(rc, 0, err)
+        next_step = self.store.get_node(out.strip())
+        self.assertEqual(next_step.step, "develop")
+
+    def test_arming_without_spec_or_step_fails_fast_with_no_step_created(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
+        item = item.strip()
+        rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active")
+        self.assertEqual(rc2, 1)
+        self.assertIn("spec", err2)
+        self.assertEqual(self.store.children(item), [])
+
+    def test_seed_first_path_via_develop_reaches_the_same_gate(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
+        item = item.strip()
+        rc2, step_id, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--step", "develop")
+        self.assertEqual(rc2, 0, err2)
+        step_id = step_id.strip()
+        self.assertEqual(self.store.get_node(step_id).step, "develop")
+        call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
+        rc3, out, err3 = call(_cli_mod.cmd_done, step_id, "drafted")
+        self.assertEqual(rc3, 0, err3)
+        self.assertEqual(self.store.get_node(out.strip()).step, "review-plan")
+
+
 class TestPruneWorkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

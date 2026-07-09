@@ -5,7 +5,7 @@ front end and a conflict-resolution branch. This is the default workflow; the
 `nodes` block names the step file that performs each stage (omitted where the
 stage and file names already match).
 
-entry: build
+entry: review-plan
 
 nodes:
   build   coder
@@ -28,6 +28,7 @@ edges:
   resolve      escalate   conflict-review
   develop      drafted    review-plan
   review-plan  changes    develop
+  review-plan  approved   build
 
 hooks:
   pr_merge              ready-merge  merged

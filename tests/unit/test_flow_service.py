@@ -1,7 +1,7 @@
 import unittest
 
 from lightcycle.application.services.flow import FlowService
-from tests.support.fake_fs import FakeFs
+from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
 METAS = {
@@ -42,6 +42,20 @@ class TestFlowService(unittest.TestCase):
 
     def test_meta_for_step_unowned_is_empty(self):
         self.assertEqual(svc().meta_for_step("ready-merge"), {})
+
+    def test_meta_for_step_resolves_bare_human_step_by_file_not_role(self):
+        metas = {
+            "review-plan": {
+                "step": "review-plan",
+                "accepts": {"spec": "required"},
+                "routes": {"approved": "build"},
+            },
+            "coder": {"model": "sonnet", "step": "build"},
+        }
+        fs = FakeFs(metas, workflow=graph_text_from_metas(metas, entry="review-plan"))
+        service = FlowService(fs, FakeStore())
+        self.assertEqual(service.load_flow().owner_of("review-plan"), "human")
+        self.assertEqual(service.meta_for_step("review-plan"), metas["review-plan"])
 
     def test_ready_roles_from_store(self):
         store = FakeStore()
