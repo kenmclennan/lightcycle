@@ -75,6 +75,7 @@ from lightcycle.application.setup import (
     InitProjectInput,
     InitProjectUseCase,
     migrate_legacy,
+    upgrade,
 )
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
@@ -128,6 +129,7 @@ COMMAND_GROUPS = [
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("migrate", "", "one-time: move a legacy ~/.grid or ~/.config layout into ~/.lightcycle"),
         ("version", "", "print the lightcycle version"),
+        ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
     ]),
     ("Start working", [
         ("start", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue"),
@@ -211,12 +213,28 @@ def cmd_version(argv):
     return 0
 
 
+def cmd_upgrade(argv):
+    ap = argparse.ArgumentParser(prog="lc upgrade")
+    ap.add_argument("--check", action="store_true")
+    a = ap.parse_args(argv)
+    resp = upgrade(__version__, check_only=a.check)
+    if not resp.available:
+        print("already at latest (%s)" % resp.current)
+    elif a.check:
+        print("upgrade available: %s -> %s" % (resp.current, resp.remote))
+    else:
+        print("upgraded: %s -> %s" % (resp.current, resp.remote))
+    return 0
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "migrate":
         return cmd_migrate(argv[1:])
     if argv and argv[0] in ("version", "--version"):
         return cmd_version([])
+    if argv and argv[0] == "upgrade":
+        return cmd_upgrade(argv[1:])
     set_container(Container())
     if not argv or argv[0] in ("-h", "--help"):
         print_help()
