@@ -74,7 +74,7 @@ def decide_alive(pid_exists, recorded_start, live_start):
     if not pid_exists:
         return False
     if recorded_start is None:
-        return True
+        return False
     return live_start == recorded_start
 
 

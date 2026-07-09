@@ -13,8 +13,8 @@ class TestDecideAlive(unittest.TestCase):
     def test_alive_when_pid_exists_and_start_time_matches(self):
         self.assertTrue(decide_alive(True, "Thu Jul  9 09:00:00 2026", "Thu Jul  9 09:00:00 2026"))
 
-    def test_alive_when_pid_exists_and_no_start_time_was_recorded(self):
-        self.assertTrue(decide_alive(True, None, "Thu Jul  9 09:00:00 2026"))
+    def test_dead_when_no_start_time_was_recorded_since_it_cannot_be_verified(self):
+        self.assertFalse(decide_alive(True, None, "Thu Jul  9 09:00:00 2026"))
 
 
 if __name__ == "__main__":

@@ -10,6 +10,16 @@ from lightcycle.adapters.workers import process_start_time, register_worker
 from lightcycle.ports.spawner import SpawnerPort
 
 
+def capture_pid_started(proc, get_start=process_start_time, sleep=time.sleep, attempts=5, interval=0.05):
+    started = get_start(proc.pid)
+    tries = 1
+    while started is None and tries < attempts and proc.poll() is None:
+        sleep(interval)
+        started = get_start(proc.pid)
+        tries += 1
+    return started
+
+
 def spawn_worker(config, role):
     root = config.data_root()
     agent = fsio.parse_step([config.data_root(), config.library_root()], role)
@@ -35,13 +45,16 @@ def spawn_worker(config, role):
     else:
         cmd = [sys.executable, "-m", "lightcycle.adapters.worker_session"]
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=root, env=env)
+    pid_started = capture_pid_started(proc)
+    if pid_started is None and proc.poll() is not None:
+        return None
     register_worker(
         root,
         {
             "spawnid": spawnid,
             "role": role,
             "pid": proc.pid,
-            "pid_started": process_start_time(proc.pid),
+            "pid_started": pid_started,
             "log": log,
             "step": None,
             "started": time.time(),
