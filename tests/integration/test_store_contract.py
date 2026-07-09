@@ -186,6 +186,9 @@ CREATE TABLE artifacts (item_id TEXT NOT NULL, atype TEXT NOT NULL, value TEXT N
 CREATE TABLE labels (node_id TEXT NOT NULL, label TEXT NOT NULL);
 CREATE TABLE counters (namespace TEXT PRIMARY KEY, next INTEGER NOT NULL);
 CREATE TABLE history (node_id TEXT NOT NULL, seq INTEGER NOT NULL, status TEXT NOT NULL, ts TEXT);
+CREATE INDEX idx_nodes_status ON nodes(status);
+CREATE INDEX idx_tasks_status ON nodes(status);
+CREATE INDEX idx_status_report ON nodes(role);
 """
 
 
@@ -253,6 +256,21 @@ class TestSqliteStoreStateCollapseMigration(unittest.TestCase):
 
         backup = os.path.join(root, "backups", "store-pre-state-collapse.db.gz")
         self.assertTrue(os.path.exists(backup))
+
+    def test_migration_drops_status_column_indexes_but_keeps_unrelated_ones(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        store = SqliteStore(self._config(root))
+
+        indexes = [
+            r[0]
+            for r in store._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'nodes'"
+            ).fetchall()
+        ]
+        self.assertNotIn("idx_nodes_status", indexes)
+        self.assertNotIn("idx_tasks_status", indexes)
+        self.assertIn("idx_status_report", indexes)
 
     def test_migrated_step_is_claimable_once_its_blocker_closes(self):
         root = tempfile.mkdtemp()
