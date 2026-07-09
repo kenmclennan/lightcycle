@@ -11,12 +11,16 @@ class ClaimInput:
     role: str
 
 
+_STRUCTURAL_META_KEYS = ("model", "accepts", "produces")
+
+
 @dataclass(frozen=True)
 class ClaimResponse:
     view: NodeView
     workspace: Optional[str] = None
     branch: Optional[str] = None
     spec_path: Optional[str] = None
+    config: Optional[dict] = None
 
 
 class ClaimStepUseCase:
@@ -57,4 +61,7 @@ class ClaimStepUseCase:
             spec_path = (
                 spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
             )
-        return ClaimResponse(view=view, workspace=ws, branch=branch, spec_path=spec_path)
+        config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
+        return ClaimResponse(
+            view=view, workspace=ws, branch=branch, spec_path=spec_path, config=config or None
+        )

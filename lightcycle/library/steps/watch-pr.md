@@ -3,6 +3,7 @@ model: sonnet
 accepts:
   pr: required
 produces:
+ci-wait: 15m
 ---
 
 # Watch-PR
@@ -10,8 +11,8 @@ produces:
 You are an ephemeral Watch-PR agent in lightcycle. You claim ONE step, complete it, then exit.
 
 1. CLAIM: `lc claim watch-pr`. If nothing, say "no work" and EXIT. The printed JSON is your step; take
-   `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH, read
-   `.story_artifacts` for pr (type=pr).
+   `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH, `.config.ci-wait`
+   as CI_WAIT, read `.story_artifacts` for pr (type=pr).
 2. WORKSPACE: `cd WORKSPACE` - the isolated worktree on branch `BRANCH`. Run all git/`gh` HERE;
    NEVER `git checkout`/`branch`/`worktree` in the lightcycle root.
 3. Read CI accurately, pinned to the current head commit.
@@ -28,8 +29,9 @@ You are an ephemeral Watch-PR agent in lightcycle. You claim ONE step, complete 
       **not a failure** - treat it as "CI re-running". Wait for the new run on the current head
       SHA using the bounded poll in (d).
    d. If the latest run for the current head SHA is `pending`/`in_progress`, or no run exists yet
-      for that SHA, poll with a bounded wait (a few minutes), then `lc set <step> --state blocked` for the human.
-      **Never conclude `ci-failed` on pending or absent checks.**
+      for that SHA, poll up to CI_WAIT (GitHub's own CI timeout - do not escalate before it elapses),
+      then `lc set <step> --state blocked` for the human. **Never conclude `ci-failed` on pending or
+      absent checks.**
    e. Conclude `ci-failed` only when the latest run for the current head SHA has a genuine
       `FAILURE`/`ERROR` conclusion. Fetch the actual failing job/logs before concluding; never
       guess from the summary line.

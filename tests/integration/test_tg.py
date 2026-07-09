@@ -1946,6 +1946,25 @@ class TestNodeDTOReadSurface(unittest.TestCase):
             self.assertIn(field, d, "tg claim dropped field: %s" % field)
 
 
+class TestClaimConfigReadSurface(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+        (Path(self.root) / "steps").mkdir(exist_ok=True)
+        (Path(self.root) / "steps" / "watch-pr.md").write_text(
+            "---\nmodel: sonnet\naccepts:\n  pr: required\nci-wait: 15m\n---\n# Watch-PR\n"
+        )
+        write_workflow(self.root, {}, entry="watch-pr")
+
+    def test_claim_surfaces_config_ci_wait(self):
+        item = self.store.create_item("st", theme=self.store.create_theme("theme"))
+        self.store.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
+        self.store.create_step("watch-pr: x", step="watch-pr", role="watch-pr", parent=item)
+        rc, out, err = call(_cli_mod.cmd_claim, "watch-pr")
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["config"], {"ci-wait": "15m"})
+
+
 class TestWorktreePushTarget(unittest.TestCase):
     def setUp(self):
         self.parent = tempfile.mkdtemp()
