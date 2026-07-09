@@ -427,16 +427,15 @@ def cmd_done(argv):
     node = _container.store.get_node(a.id)
     try:
         if node.type == "step":
-            resp = CompleteStepUseCase(_container.store, _flow()).execute(
+            resp = CompleteStepUseCase(_container.store, _flow(), _worktrees()).execute(
                 CompleteInput(step=a.id, outcome=a.outcome, note=note)
             )
             if resp.next_step:
                 print(resp.next_step)
         elif node.type == "theme":
-            resp = CloseThemeUseCase(_container.store, _flow()).execute(
+            CloseThemeUseCase(_container.store).execute(
                 CloseThemeInput(theme=a.id, reason=a.outcome)
             )
-            _print_retro(resp.retro)
         else:
             CloseItemUseCase(_container.store, _worktrees()).execute(
                 CloseItemInput(item=a.id, reason=a.outcome)
@@ -501,22 +500,9 @@ def cmd_inbox(argv):
     ap = argparse.ArgumentParser(prog="lc inbox")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(now=time.time(), n=a.n))
+    resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n))
     for row in resp.rows:
         _print_human_row(row.kind, row.step)
-    if resp.candidate_themes:
-        print("close-candidate themes:")
-        for e in resp.candidate_themes:
-            print(
-                "  %s  %s (%d %s closed)  -- lc close %s <reason>"
-                % (
-                    e.id,
-                    e.title,
-                    e.closed_item_count,
-                    "item" if e.closed_item_count == 1 else "items",
-                    e.id,
-                )
-            )
     return 0
 
 
@@ -729,7 +715,7 @@ def cmd_start(argv):
     try:
         flow_service = _flow()
         flow = flow_service.load_flow()
-        complete = CompleteStepUseCase(_container.store, flow_service)
+        complete = CompleteStepUseCase(_container.store, flow_service, _worktrees())
         monitor = MonitorPrsUseCase(
             _container.store, _container.github, _worktrees(), flow, complete
         )
@@ -790,7 +776,7 @@ def _compose_driver(base_body, skills):
         base_body,
         "\n\n# Skills for human-facing steps\n",
         "These steps surface in `lc inbox`. When the human picks one, run the skill "
-        "for its step: assist them, and record the outcome (`lc done` / `lc close`).\n",
+        "for its step: assist them, and record the outcome (`lc done`).\n",
     ]
     for step, body in skills:
         parts.append("\n## %s\n\n%s" % (step, body.strip()))

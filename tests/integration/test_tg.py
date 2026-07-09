@@ -1482,21 +1482,16 @@ class TestClose(unittest.TestCase):
         call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(self.store.get_node(child).status, "ready")
 
-    def test_close_epic_retro_artifact_surfaces_task_and_story_duration(self):
+    def test_close_epic_attaches_no_retro_artifact(self):
         theme = self.store.create_theme("theme e")
         child = self.store.create_item("item s", theme=theme)
-        tid = self.store.create_step("build: t", step="build", role="coder", parent=child)
+        self.store.create_step("build: t", step="build", role="coder", parent=child)
         claimed = self.store.claim_ready("coder")
         self.store.close(claimed.id, "done")
         self.store.close(child, "merged")
         rc, out, err = call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(rc, 0, err)
-        artifact = next(a for a in self.store.item_artifacts(theme) if a.type == "retro")
-        digest = json.loads(artifact.value)
-        row = next(s for s in digest["item_signals"] if s["item"] == child)
-        self.assertIn(tid, row["durations"])
-        self.assertIsNotNone(row["durations"][tid])
-        self.assertIsNotNone(row["duration"])
+        self.assertEqual([a for a in self.store.item_artifacts(theme) if a.type == "retro"], [])
 
 
 class TestConfig(unittest.TestCase):

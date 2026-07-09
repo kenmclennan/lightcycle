@@ -3,7 +3,12 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.advance_step import AdvanceInput, AdvanceStepUseCase
+from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.domain.contracts import StepContract
+from lightcycle.domain.work.status import Status
+
+_AUTO_CLOSE_REASON = "auto-closed: all children done"
 
 
 @dataclass(frozen=True)
@@ -19,9 +24,10 @@ class CompleteResponse:
 
 
 class CompleteStepUseCase:
-    def __init__(self, store, flow):
+    def __init__(self, store, flow, worktrees=None):
         self._store = store
         self._flow = flow
+        self._worktrees = worktrees
         self._advance = AdvanceStepUseCase(store, flow)
 
     def execute(self, input: CompleteInput) -> CompleteResponse:
@@ -57,4 +63,22 @@ class CompleteStepUseCase:
                 self._store.note(new if new else input.step, transition.forward_note(input.note))
             else:
                 self._store.note(input.step, input.note)
+        self._cascade_close(t.parent)
         return CompleteResponse(next_step=new)
+
+    def _cascade_close(self, node_id):
+        if not node_id:
+            return
+        node = self._store.get_node(node_id)
+        children = self._store.children(node_id)
+        if not children or any(c.status != Status.DONE for c in children):
+            return
+        if node.type == "item":
+            CloseItemUseCase(self._store, self._worktrees).execute(
+                CloseItemInput(item=node_id, reason=_AUTO_CLOSE_REASON)
+            )
+        else:
+            CloseThemeUseCase(self._store).execute(
+                CloseThemeInput(theme=node_id, reason=_AUTO_CLOSE_REASON)
+            )
+        self._cascade_close(node.parent)

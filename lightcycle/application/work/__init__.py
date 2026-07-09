@@ -1,7 +1,7 @@
 from lightcycle.application.work.active_steps import ActiveStepsUseCase
 from lightcycle.application.work.add_item import AddItemInput, AddItemUseCase
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
-from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeResponse, CloseThemeUseCase
+from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.edit_node import EditNodeInput, EditNodeUseCase
 from lightcycle.application.work.inbox import InboxInput, InboxUseCase
@@ -19,7 +19,6 @@ __all__ = [
     "BacklogInput",
     "BacklogUseCase",
     "CloseThemeInput",
-    "CloseThemeResponse",
     "CloseThemeUseCase",
     "CloseItemInput",
     "CloseItemUseCase",
