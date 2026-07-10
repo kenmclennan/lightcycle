@@ -982,13 +982,14 @@ def cmd_retro(argv):
     ap.add_argument("id", nargs="?", default=None, help="item or theme id")
     ap.add_argument("--since", metavar="YYYY-MM-DD", help="aggregate steps closed on/after date")
     ap.add_argument("--last", type=int, metavar="N", help="aggregate last N closed themes")
+    ap.add_argument("--project", metavar="REPO", help="aggregate a project's closed unretroed items")
     a = ap.parse_args(argv)
 
-    flags = [a.id is not None, a.since is not None, a.last is not None]
+    flags = [a.id is not None, a.since is not None, a.last is not None, a.project is not None]
     if sum(flags) != 1:
-        ap.error("provide exactly one of: <id>, --since, --last")
+        ap.error("provide exactly one of: <id>, --since, --last, --project")
 
-    inp = RetroInput(subject=a.id, since=a.since, last=a.last)
-    resp = RetroUseCase(_container.store, _flow()).execute(inp)
+    inp = RetroInput(subject=a.id, since=a.since, last=a.last, project=a.project)
+    resp = RetroUseCase(_container.store, _flow(), _container.config).execute(inp)
     _print_retro(resp)
     return 0

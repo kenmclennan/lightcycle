@@ -154,6 +154,42 @@ class TestRetroSinceScope(unittest.TestCase):
         self.assertEqual(resp.reflection_count, 1)
 
 
+class _EngineConfig:
+    def __init__(self, engine="lightcycle"):
+        self._engine = engine
+
+    def engine_root(self):
+        return "/w/projects/%s" % self._engine
+
+
+class TestRetroProjectScope(unittest.TestCase):
+    def _closed_item(self, s, title, project, text):
+        item = s.create_item(title, theme=s.create_theme("theme"))
+        s.close(item, "merged")
+        if project is not None:
+            s.add_artifact(item, "repo", project)
+        k = s.create_step("build: x", step="build", role="coder", parent=item)
+        s.close(k, "done")
+        _add_reflection(s, k, text)
+        return item
+
+    def test_project_scope_gathers_only_that_project(self):
+        s = FakeStore()
+        saga = self._closed_item(s, "saga work", "saga", "saga friction")
+        self._closed_item(s, "lc work", None, "lc friction")
+        resp = RetroUseCase(s, _flow(s), _EngineConfig()).execute(RetroInput(project="saga"))
+        self.assertEqual({row.item.id for row in resp.item_signals}, {saga})
+        self.assertEqual(resp.reflection_count, 1)
+        self.assertEqual(resp.subject, "project:saga")
+
+    def test_project_scope_excludes_retroed_items(self):
+        s = FakeStore()
+        item = self._closed_item(s, "saga work", "saga", "friction")
+        s.label_add(item, "retroed")
+        resp = RetroUseCase(s, _flow(s), _EngineConfig()).execute(RetroInput(project="saga"))
+        self.assertEqual(resp.item_signals, [])
+
+
 class TestRetroLastScope(unittest.TestCase):
     def _make_closed_epic(self, s, title):
         theme = s.create_theme(title)

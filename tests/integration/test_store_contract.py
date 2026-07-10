@@ -98,6 +98,26 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         results = s.nodes_closed_since("2000-01-01")
         self.assertNotIn(sid, [t.id for t in results])
 
+    def test_closed_unretroed_items_returns_closed_items(self):
+        s = self._store()
+        sid = s.create_item("closed item", theme=s.create_theme("theme"))
+        s.close(sid, "merged")
+        self.assertIn(sid, [t.id for t in s.closed_unretroed_items()])
+
+    def test_closed_unretroed_items_excludes_open_and_retroed_and_origin(self):
+        s = self._store()
+        theme = s.create_theme("theme")
+        s.create_item("open item", theme=theme)
+        retroed = s.create_item("retroed item", theme=theme)
+        s.close(retroed, "merged")
+        s.label_add(retroed, "retroed")
+        origin = s.create_item("origin item", theme=theme)
+        s.close(origin, "merged")
+        s.label_add(origin, "retro-origin")
+        ids = [t.id for t in s.closed_unretroed_items()]
+        self.assertNotIn(retroed, ids)
+        self.assertNotIn(origin, ids)
+
     def test_last_n_closed_epics_returns_closed_epics(self):
         s = self._store()
         epic1 = s.create_theme("epic1")

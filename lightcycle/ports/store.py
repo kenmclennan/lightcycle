@@ -146,7 +146,7 @@ class StorePort(ABC):
 
 
     @abstractmethod
-    def items_closed_since(self, since_date):
+    def closed_unretroed_items(self):
         pass
 
     @abstractmethod

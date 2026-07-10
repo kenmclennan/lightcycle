@@ -1,9 +1,10 @@
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from lightcycle.domain import feedback as cfeedback
-from lightcycle.domain.work import Node
+from lightcycle.domain.work import Item, Node
 
 
 @dataclass(frozen=True)
@@ -11,6 +12,7 @@ class RetroInput:
     subject: Optional[str] = None
     since: Optional[str] = None
     last: Optional[int] = None
+    project: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -40,9 +42,24 @@ class RetroResponse:
 
 
 class RetroUseCase:
-    def __init__(self, store, flow):
+    def __init__(self, store, flow, config=None):
         self._store = store
         self._flow = flow
+        self._config = config
+
+    def _project_of(self, item, default):
+        return Item(item.id, tuple(self._store.item_artifacts(item.id))).repo(default)
+
+    def _project_scope(self, project, signals):
+        default = os.path.basename(self._config.engine_root())
+        rows, all_refs = [], []
+        for item in self._store.closed_unretroed_items():
+            if self._project_of(item, default) != project:
+                continue
+            row, refs = self._collect_item_row(item, signals)
+            rows.append(row)
+            all_refs.extend(refs)
+        return rows, all_refs
 
     def _reflections_of(self, node_id):
         out = []
@@ -127,6 +144,10 @@ class RetroUseCase:
             for step in orphan_steps:
                 all_refs.extend(self._reflections_of(step.id))
             label = "since:%s" % input.since
+
+        elif input.project is not None:
+            rows, all_refs = self._project_scope(input.project, signals)
+            label = "project:%s" % input.project
 
         else:
             themes = self._store.last_n_closed_themes(input.last)
