@@ -1,15 +1,13 @@
-import datetime
+import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List
+
+from lightcycle.domain.work import Item, State
 
 
 @dataclass(frozen=True)
 class RetroCadenceResponse:
     fired: List[str] = field(default_factory=list)
-
-
-def _date_str(ts: float) -> str:
-    return datetime.date.fromtimestamp(ts).isoformat()
 
 
 class RetroCadenceUseCase:
@@ -20,39 +18,35 @@ class RetroCadenceUseCase:
         self._config = config
 
     def execute(self, now: float) -> RetroCadenceResponse:
-        interval_items = self._config.retro_interval_items()
+        interval = self._config.retro_interval_items()
         flow = self._flow_service.load_flow()
         cadence_steps = flow.retro_cadence_steps()
         if not cadence_steps:
             return RetroCadenceResponse()
 
+        default = os.path.basename(self._config.engine_root())
+        by_project = {}
+        for item in self._store.closed_unretroed_items():
+            by_project.setdefault(self._project_of(item, default), []).append(item)
+
         fired = []
         for step, role in cadence_steps:
-            reference = self._last_fire_reference(step)
-            if reference is None:
-                continue
-            items = self._store.items_closed_since(reference)
-            if len(items) < interval_items:
-                continue
-            tid = self._store.create_step(
-                "%s: closed-work trend audit" % step, step=step, role=role)
-            self._store.update_metadata(tid, {"since": reference, "fired_at": _date_str(now)})
-            fired.append(tid)
+            open_projects = self._open_audit_projects(step)
+            for project, items in by_project.items():
+                if project in open_projects or len(items) < interval:
+                    continue
+                tid = self._store.create_step(
+                    "%s: %s trend audit" % (step, project),
+                    step=step, role=role, project=project)
+                fired.append(tid)
 
         return RetroCadenceResponse(fired=fired)
 
-    def _last_fire_reference(self, step) -> Optional[str]:
-        max_fired_at = None
-        for s in self._store.steps_at_step(step):
-            if s.fired_at and (max_fired_at is None or s.fired_at > max_fired_at):
-                max_fired_at = s.fired_at
-        if max_fired_at:
-            return max_fired_at
-        return self._oldest_closed_item_date()
+    def _project_of(self, item, default):
+        return Item(item.id, tuple(self._store.item_artifacts(item.id))).repo(default)
 
-    def _oldest_closed_item_date(self) -> Optional[str]:
-        items = self._store.last_n_closed_items(1000)
-        if not items:
-            return None
-        dates = [i.closed_at[:10] for i in items if i.closed_at]
-        return min(dates) if dates else None
+    def _open_audit_projects(self, step):
+        return {
+            s.project for s in self._store.steps_at_step(step)
+            if s.state != State.DONE and s.project
+        }

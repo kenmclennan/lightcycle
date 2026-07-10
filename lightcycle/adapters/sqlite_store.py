@@ -666,11 +666,11 @@ class SqliteStore(StorePort):
         )
 
 
-    def items_closed_since(self, since_date):
+    def closed_unretroed_items(self):
         return self._select(
-            "type = 'item' AND state = 'done' AND substr(closed_at, 1, 10) >= ? "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin')",
-            (since_date,),
+            "type = 'item' AND state = 'done' "
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin') "
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retroed')",
         )
 
     def last_n_closed_items(self, n):

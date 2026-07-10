@@ -393,15 +393,15 @@ class FakeStore(StorePort):
         return [self._to_node(b) for b in themes[:n]]
 
 
-    def items_closed_since(self, since_date):
+    def closed_unretroed_items(self):
         result = []
         for b in self._records.values():
             if b.get("type") != "item" or b.get("state") != "done":
                 continue
-            if "retro-origin" in (b.get("labels") or []):
+            labels = b.get("labels") or []
+            if "retro-origin" in labels or "retroed" in labels:
                 continue
-            if (b.get("closed_at") or "")[:10] >= since_date:
-                result.append(self._to_node(b))
+            result.append(self._to_node(b))
         return result
 
     def last_n_closed_items(self, n):
