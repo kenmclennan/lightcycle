@@ -70,7 +70,7 @@ lc driver                            # your interactive seat to shape specs and 
 
 `lc start` runs in the foreground and shows the neon banner as it comes online; Ctrl-C
 stops it (workers are ephemeral and exit on their own). The pool runs the agent steps;
-you drive from `lc driver` and clear the human gates (`review`, `ready-merge`) that
+you drive from `lc driver` and clear the human gates (`review-spec`, `await-merge`) that
 surface in `lc inbox`.
 
 **Developing the engine itself?** Work in a checkout and run it directly
@@ -86,8 +86,8 @@ generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, pl
 - **The engine is workflow-agnostic.** `lc` owns nodes and the flow, but has no opinion
   on _how you work_ - including your spec format. It only stores a spec's path as an
   artifact; it never parses it. The steps in `steps/` are an _example_ workflow (a
-  feature pipeline: coder -> reviewer -> open-pr -> watch-pr, then the human steps
-  ready-merge -> cleanup). You define your own way of working by composing
+  feature pipeline: write-code -> review-code -> open-pr -> watch-ci, then the human steps
+  await-merge -> cleanup). You define your own way of working by composing
   [workflows](#workflows) over the step library. A spec is whatever your steps
   understand; hand the Driver one you wrote and it flows in as-is.
 - **Hierarchy: theme / item / step.** A **theme** is a focus area grouping related work
@@ -103,7 +103,7 @@ generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, pl
 - **Steps can declare an artifact contract** (optional) in frontmatter: `accepts:`
   (inputs) and `produces:` (outputs), keyed by artifact type (`<type>: required|optional`).
   A required input gates the work; an optional input is read if present but never gates
-  (e.g. the coder accepts `branch: optional`, since on a rework pass the branch already
+  (e.g. write-code accepts `branch: optional`, since on a rework pass the branch already
   exists). `lc` enforces the required parts mechanically: a step whose required inputs are
   absent routes to `for:human` instead of running (precondition); `lc done` refuses to
   close until the required outputs are attached (postcondition); activating an item
@@ -112,7 +112,7 @@ generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, pl
   required inputs are guaranteed by some upstream producer on every path. Presence-only:
   it checks the item's artifact list, never git/GitHub reality. Agents with no contract are
   unconstrained.
-- **A step is a stage running.** "build", "review", "open-pr" are steps chained by
+- **A step is a stage running.** "write-code", "review-code", "open-pr" are steps chained by
   dependencies; closing one makes its dependents ready. Which step is ready IS the stage.
   The chain is defined by the **workflow graph** (see [Workflows](#workflows)), not by the
   steps: a workflow file names the entry stage, the `outcome -> next-stage` edges, and which
@@ -122,16 +122,16 @@ generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, pl
 - **`lc` owns the domain and the processes.** It is the only caller of the store. It
   spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own step.** The loop spawns a role
-  (`coder`/`reviewer`/`open-pr`/`watch-pr`); the worker's first act is `lc claim <role>`
+  (`write-code`/`review-code`/`open-pr`/`watch-ci`); the worker's first act is `lc claim <role>`
   (atomic), then it works and exits. A worker that dies before claiming leaves nothing
-  stuck. Human steps (`ready-merge`/`cleanup`) are never spawned; they surface in `lc inbox`.
+  stuck. Human steps (`await-merge`/`cleanup`) are never spawned; they surface in `lc inbox`.
 - **Three homes: engine / `~/.lightcycle` / projects.** The **engine** is the pipx-installed
   package - code plus the _default_ step/workflow library it ships. **`~/.lightcycle/`** is
   everything that is _yours_: `config`, the store (`store.db`), `logs/`, `.worktrees/`, and any
   step/workflow overrides - independent of the engine, so upgrades never touch it (found
   by default, or `$LC_HOME`). **`projects/`** holds your repos. A step or workflow name
   resolves **`projects/<p>/.lightcycle/{steps,workflows}` -> `~/.lightcycle/{steps,workflows}` -> engine
-  default** - drop a `~/.lightcycle/steps/coder.md` to change the coder for all your projects, or a
+  default** - drop a `~/.lightcycle/steps/write-code.md` to change write-code for all your projects, or a
   `projects/<p>/.lightcycle/workflows/standard.md` to change it for just that project's work; both
   survive engine upgrades. `lc init` scaffolds the (empty) `~/.lightcycle` override dirs.
 - **The config names where your work lives.** `~/.lightcycle/config` (or `$LC_CONFIG`) names
@@ -171,34 +171,32 @@ A workflow file has up to five sections; only `entry` is required:
 ```
 # Standard - spec -> code -> review -> PR -> merge
 
-entry: build            # the stage an activated item starts at
-
-nodes:                  # stage -> step file (omit when they already match)
-  build   coder
-  review  reviewer
+entry: review-spec      # the stage an activated item starts at (step = file = role)
 
 edges:                  # from-stage  outcome  to-stage
-  build     done        review
-  review    done        open-pr
-  review    rejected    build
-  open-pr   done        watch-pr
+  review-spec  approved   write-code
+  write-code   done       review-code
+  review-code  done       open-pr
+  review-code  rejected   write-code
+  open-pr      done       watch-ci
 
 hooks:                  # engine event -> handling stage (+ value)
-  pr_merge       ready-merge  merged
+  pr_merge       await-merge  merged
   theme_close    audit
   retro_cadence  audit
 
 signals:                # stage  metric-name  outcome   (retro telemetry)
-  review  review_rounds  rejected
+  review-code  review_rounds  rejected
 ```
 
-- A **stage** is a lane (`build`); a **node** maps it to the step file that performs
-  it (`coder`). A target with no node/step file (e.g. `conflict-review`) is a
+- Each **stage** names a step file, and by default they share a name (step = file =
+  role - e.g. `write-code`). The optional `nodes:` block maps a stage to a differently
+  named file (a variant); a target with no step file (e.g. `conflict-review`) is a
   `for:human` terminal. A stage owned by a step file with no `model` is a human step.
 - The engine reacts to a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_feedback`,
   `pr_conflict` (+ `_cap`/`_escalate`), `theme_close`, `retro_cadence`); the graph only
   names which stage handles each. A workflow that omits `pr_*` never opens a PR - e.g.
-  a two-line local-only spike: `entry: build` + `build done DONE`.
+  a two-line local-only spike: `entry: write-code` + `write-code done DONE`.
 - `lc flow [--json]` prints and statically checks the resolved graph.
 
 **Selecting a workflow.** Selection lives on the theme and its items inherit it:
@@ -218,7 +216,7 @@ resolved per node, two themes can run different workflows concurrently.
 library; you shadow a name (or add your own) in `~/.lightcycle/workflows/` for all projects,
 or in `projects/<p>/.lightcycle/workflows/` for just one - resolved project -> `~/.lightcycle` -> default.
 A variant step is just another named file the graph points a stage at
-(`build -> coder-gherkin`) - no step is ever forked in place.
+(`write-code -> write-code-gherkin`) - no step is ever forked in place.
 
 ## Commands
 
@@ -263,9 +261,9 @@ it:
 
 - **`model:` present** - an **ephemeral agent**. `lc` spawns a fresh `claude`
   (the file body is its system prompt), it does the step and exits. The example
-  pipeline uses `opus` for the reviewer, `sonnet` for coder/open-pr/watch-pr.
+  pipeline uses `opus` for review-code, `sonnet` for write-code/open-pr/watch-ci.
 - **no `model:`** - **you + the Driver**. The step surfaces in `lc inbox`; the file
-  body is a Driver skill for helping you do it (`review-plan`, `ready-merge`,
+  body is a Driver skill for helping you do it (`review-spec`, `await-merge`,
   `cleanup`). These are never spawned.
 
 The Driver is the human's interactive seat and the performer of the human steps -

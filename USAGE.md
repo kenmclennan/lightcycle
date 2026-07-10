@@ -27,7 +27,7 @@ lc queue 10            # next 10 upcoming agent steps
 lc ps                  # running workers: role, step, pid, alive/dead
 lc logs run -f         # tail the run-loop
 lc logs <step> -f      # tail the worker on a step
-lc logs coder -f       # tail the most recent coder
+lc logs write-code -f  # tail the most recent write-code worker
 lc show <step>         # one step incl. resume-state (for escalations)
 ```
 
@@ -39,8 +39,8 @@ In the driver, shape a spec with the human, then:
 lc new item "<title>" --parent <theme>  # then: lc attach <item> spec <path>; lc set <item> --state active
 ```
 
-The run-loop spawns a coder within a tick; it claims, builds, and exits, then the
-flow advances to review, then open-pr. `for:human` items (escalations, PRs ready to
+The run-loop spawns a write-code worker within a tick; it claims, builds, and exits, then the
+flow advances to review-code, then open-pr. `for:human` items (escalations, PRs ready to
 merge) show up in `lc inbox`.
 
 ## Recover after a kill

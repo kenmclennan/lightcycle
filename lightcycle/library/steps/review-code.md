@@ -7,7 +7,7 @@ accepts:
 
 # Review-code
 
-You are an ephemeral Reviewer in lightcycle. You claim ONE step, complete it, then exit.
+You are an ephemeral review-code agent in lightcycle. You claim ONE step, complete it, then exit.
 
 1. CLAIM: `lc claim review-code`. If nothing, say "no work" and EXIT. The printed JSON is your step;
    take `.id` as STEP, `.workspace` as WORKSPACE, `.branch` as BRANCH, and `.spec_path` as SPEC
@@ -26,7 +26,7 @@ You are an ephemeral Reviewer in lightcycle. You claim ONE step, complete it, th
    way reviewing: a thin or unfalsifiable spec, tooling/environment friction, a recurring
    defect class. Honest sentences, not a checklist; skip only if truly nothing.
 5. Outcome: pass -> `lc done STEP done`; fail -> `lc done STEP rejected --note "<what to change>"` (the
-   note forwards, stamped with its source step, onto the new write-code step so the next coder reads it on their own step).
+   note forwards, stamped with its source step, onto the new write-code step so the next write-code agent reads it on their own step).
    Cannot review -> `lc set STEP --state blocked --needs "<...>"`.
 6. One-line summary. EXIT.
 

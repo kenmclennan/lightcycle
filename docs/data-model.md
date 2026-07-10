@@ -13,7 +13,7 @@ graph TD
   backlog concern; work does not have to sit under one.
 - **item** - the unit of work. It carries the artifacts (spec, repo, branch, PR) and moves through
   the workflow via its steps.
-- **step** - one instance of a workflow stage (build, review, open-pr, ...). Steps are what agents
+- **step** - one instance of a workflow stage (write-code, review-code, open-pr, ...). Steps are what agents
   actually claim and execute.
 
 ## Identity
@@ -22,12 +22,12 @@ An id nests under its parent: a child's id is its parent's id plus `.N`.
 
 ```
 tg-18            item (filed with no theme)
-  tg-18.1        step (build)
-  tg-18.5        step (ready-merge)
+  tg-18.1        step (write-code)
+  tg-18.5        step (await-merge)
 
 LC-3             theme
   LC-3.1         item
-    LC-3.1.1     step (build)
+    LC-3.1.1     step (write-code)
 ```
 
 The prefix is the project **shortcode** (`shortcode: LC` in the config). Because a theme is optional,
@@ -47,7 +47,7 @@ as a roll-up of its children on every read, so a parent can never disagree with 
 
 Two things are kept **orthogonal** to the state (baking them in would multiply the states):
 
-- **role** - who processes the node: `coder`, `reviewer`, `open-pr`, `watch-pr`, `human`, ... A ready
+- **role** - who processes the node: `write-code`, `review-code`, `open-pr`, `watch-ci`, `human`, ... A ready
   step with `role=human` is a human gate (it shows in the inbox); the state is still just `ready`.
 - **outcome** - how a `done` node ended: `done`, `merged`, `abandoned`, `rejected`, ... `done` is the
   single terminal state; the outcome records the flavour.
@@ -56,14 +56,14 @@ Two things are kept **orthogonal** to the state (baking them in would multiply t
 
 - **artifacts** - typed values attached to an **item**: `repo`, `spec`, `branch`, `pr`, `feedback`,
   `retro`. Steps declare `accepts` / `produces` in their frontmatter, and the engine checks the
-  item's artifacts against that contract before a step may close (e.g. `build` produces `branch`).
+  item's artifacts against that contract before a step may close (e.g. `write-code` produces `branch`).
 - **deps** - a node can be blocked by another. A step with an unmet dependency stays `backlogged`
   and becomes claimable (`ready`) only once every blocker is closed.
 
 ```mermaid
 graph LR
   item[item] -->|has| art[artifacts repo spec branch pr]
-  step1[step build] -->|blocks| step2[step review]
-  step1 -->|role| r[coder]
+  step1[step write-code] -->|blocks| step2[step review-code]
+  step1 -->|role| r[write-code]
   step1 -->|state| s[in_progress]
 ```
