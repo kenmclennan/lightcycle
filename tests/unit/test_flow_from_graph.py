@@ -22,6 +22,7 @@ edges:
 
 hooks:
   pr_merge              ready-merge  merged
+  pr_feedback           ready-merge  handle-feedback
   pr_conflict           ready-merge  conflicted
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
@@ -38,6 +39,7 @@ STEP_METAS = {
     "ready-merge": {},
     "cleanup": {},
     "auditor": {"model": "sonnet"},
+    "handle-feedback": {"model": "sonnet"},
 }
 
 
@@ -67,6 +69,13 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_lifecycle_hook_steps(self):
         self.assertEqual(self.flow.retro_cadence_steps(), [("audit", "auditor")])
+
+    def test_pr_feedback_step_registers_as_a_stage(self):
+        self.assertEqual(self.flow.pr_feedback_step("ready-merge"), "handle-feedback")
+        self.assertEqual(self.flow.owner_of("handle-feedback"), "handle-feedback")
+
+    def test_pr_feedback_step_absent_by_default(self):
+        self.assertIsNone(self.flow.pr_feedback_step("build"))
 
     def test_mention_token_and_review_bot_allowlist(self):
         self.assertEqual(self.flow.mention_token("ready-merge"), "@lc")

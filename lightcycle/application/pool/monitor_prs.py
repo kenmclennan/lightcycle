@@ -6,27 +6,55 @@ from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseC
 from lightcycle.domain.work.state import State
 
 LC_MARKER = "<!-- lc -->"
+_WATERMARK_ARTIFACT = "feedback-watermark"
 
 
 def _is_bot(author):
     return "[bot]" in author
 
 
-def _format_guidance(comments, reviews):
-    parts = []
+def _eligible(author, allowlist):
+    return not _is_bot(author) or author in allowlist
+
+
+def _thread_key(comment):
+    return comment.in_reply_to_id or comment.id
+
+
+def _outstanding_threads(comments):
+    marked_threads = {_thread_key(c) for c in comments if LC_MARKER in c.body}
+    seen, outstanding = set(), []
     for c in comments:
-        if c.is_top_level:
-            body = c.body.strip()
-            if body:
-                parts.append(body)
-        else:
-            loc = "%s:%s" % (c.path, c.line) if c.line else (c.path or "")
-            parts.append("[%s] %s" % (loc, c.body.strip()))
+        if LC_MARKER in c.body:
+            continue
+        key = _thread_key(c)
+        if key is None or key in marked_threads or key in seen:
+            continue
+        seen.add(key)
+        outstanding.append(c)
+    return outstanding
+
+
+def _outstanding_reviews(reviews, comments):
+    marked_at = sorted(c.created_at for c in comments if LC_MARKER in c.body)
+    outstanding = []
     for r in reviews:
-        body = r.body.strip()
-        if body:
-            parts.append("[review by %s] %s" % (r.author, body))
-    return "\n\n".join(p for p in parts if p)
+        if LC_MARKER in r.body:
+            continue
+        if any(ts > r.created_at for ts in marked_at):
+            continue
+        outstanding.append(r)
+    return outstanding
+
+
+def _watermark(artifacts):
+    watermark = next((a for a in artifacts if a.type == _WATERMARK_ARTIFACT), None)
+    if watermark is None:
+        return 0.0
+    try:
+        return float(watermark.value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 @dataclass(frozen=True)
@@ -65,9 +93,9 @@ class MonitorPrsUseCase:
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE:
                 continue
-            rework_outcome = self._flow.pr_rework_outcome(step.step)
+            feedback_step = self._flow.pr_feedback_step(step.step)
             conflict_outcome = self._flow.pr_conflict_outcome(step.step)
-            if rework_outcome is None and conflict_outcome is None:
+            if feedback_step is None and conflict_outcome is None:
                 continue
             if not step.parent:
                 continue
@@ -75,32 +103,21 @@ class MonitorPrsUseCase:
             if pr is None:
                 continue
             advanced = False
-            if rework_outcome:
-                since = self._github.last_push_time(pr.value)
-                comments = [
-                    c for c in (
-                        self._github.comments_since(pr.value, since)
-                        + self._github.pull_comments(pr.value, since)
-                    )
-                    if LC_MARKER not in c.body
-                ]
-                reviews = [
-                    r for r in self._github.reviews(pr.value, since)
-                    if LC_MARKER not in r.body
-                ]
-                mention_token = self._flow.mention_token(step.step)
-                allowlist = self._flow.review_bot_allowlist(step.step)
-                mention = mention_token is not None and any(
-                    mention_token in c.body for c in comments if not _is_bot(c.author)
+            if feedback_step and self._has_outstanding_feedback(step, pr.value):
+                advanced = True
+                already_open = any(
+                    n.type == "step" and n.step == feedback_step and n.parent == step.parent
+                    for n in self._store.all_nodes()
                 )
-                botreview = any(r.author in allowlist for r in reviews)
-                if mention or botreview:
-                    guidance = _format_guidance(comments, reviews)
-                    self._complete.execute(
-                        CompleteInput(step=step.id, outcome=rework_outcome, note=guidance or None)
+                if not already_open:
+                    role = self._flow.owner_of(feedback_step)
+                    title = self._store.get_node(step.parent).title
+                    tid = self._store.create_step(
+                        "%s: %s" % (feedback_step, title), step=feedback_step,
+                        role=role, parent=step.parent,
                     )
+                    self._store.add_artifact(tid, "watched-step", step.id)
                     reworked.append(step.parent)
-                    advanced = True
             if not advanced and conflict_outcome and self._github.is_conflicted(pr.value):
                 cap = self._flow.pr_conflict_cap(step.step)
                 esc = self._flow.pr_conflict_escalate(step.step)
@@ -116,3 +133,36 @@ class MonitorPrsUseCase:
         return MonitorPrsResponse(
             merged=merged, abandoned=abandoned, reworked=reworked, conflicted=conflicted
         )
+
+    def _has_outstanding_feedback(self, step, pr):
+        since = self._github.last_push_time(pr)
+        top_level = self._github.comments_since(pr, since)
+        inline = self._github.pull_comments(pr, since)
+        reviews = self._github.reviews(pr, since)
+
+        allowlist = self._flow.review_bot_allowlist(step.step)
+        eligible_threads = [
+            c for c in _outstanding_threads(inline) if _eligible(c.author, allowlist)
+        ]
+        if eligible_threads:
+            return True
+
+        eligible_reviews = [
+            r for r in _outstanding_reviews(reviews, top_level + inline)
+            if r.author in allowlist
+        ]
+        if eligible_reviews:
+            return True
+
+        mention_token = self._flow.mention_token(step.step)
+        if mention_token:
+            watermark = _watermark(self._store.item_artifacts(step.id))
+            mentions = [
+                c for c in top_level
+                if LC_MARKER not in c.body and not _is_bot(c.author)
+                and mention_token in c.body and c.created_at > watermark
+            ]
+            if mentions:
+                return True
+
+        return False

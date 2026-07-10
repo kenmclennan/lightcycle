@@ -100,6 +100,8 @@ class GitHubEventsAdapter(GitHubEventsPort):
                                 author=c.get("user", {}).get("login", ""),
                                 body=c.get("body", ""),
                                 is_top_level=True,
+                                id=str(c["id"]) if c.get("id") is not None else None,
+                                created_at=created,
                             )
                         )
             except (json.JSONDecodeError, ValueError):
@@ -131,6 +133,12 @@ class GitHubEventsAdapter(GitHubEventsPort):
                                 is_top_level=False,
                                 path=c.get("path"),
                                 line=c.get("line"),
+                                id=str(c["id"]) if c.get("id") is not None else None,
+                                in_reply_to_id=(
+                                    str(c["in_reply_to_id"])
+                                    if c.get("in_reply_to_id") is not None else None
+                                ),
+                                created_at=created,
                             )
                         )
             except (json.JSONDecodeError, ValueError):
@@ -159,6 +167,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
                             Review(
                                 author=rv.get("user", {}).get("login", ""),
                                 body=rv.get("body", ""),
+                                created_at=submitted,
                             )
                         )
             except (json.JSONDecodeError, ValueError):

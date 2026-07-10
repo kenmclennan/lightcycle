@@ -36,7 +36,6 @@ _FLOW = flow_from_metas(
             "routes": {"merged": "cleanup", "changes": "build"},
             "on_pr_merge": "merged",
             "on_pr_close": "abandoned",
-            "on_pr_rework": "changes",
         }
     }
 )
@@ -51,17 +50,16 @@ _MERGE_ONLY_FLOW = flow_from_metas(
     }
 )
 
-_REWORK_ONLY_FLOW = flow_from_metas(
+_FEEDBACK_FLOW = flow_from_metas(
     {
-        "coder": {
+        "handle-feedback": {
             "model": "sonnet",
-            "step": "build",
-            "routes": {"done": "ready-merge"},
+            "step": "handle-feedback",
         },
         "reviewer": {
             "step": "ready-merge",
             "routes": {"changes": "build"},
-            "on_pr_rework": "changes",
+            "on_pr_feedback": "handle-feedback",
             "on_mention_token": "@lc",
             "on_review_bot_allowlist": [_BOT_LOGIN],
         },
@@ -70,15 +68,14 @@ _REWORK_ONLY_FLOW = flow_from_metas(
 
 _NO_MENTION_TOKEN_FLOW = flow_from_metas(
     {
-        "coder": {
+        "handle-feedback": {
             "model": "sonnet",
-            "step": "build",
-            "routes": {"done": "ready-merge"},
+            "step": "handle-feedback",
         },
         "reviewer": {
             "step": "ready-merge",
             "routes": {"changes": "build"},
-            "on_pr_rework": "changes",
+            "on_pr_feedback": "handle-feedback",
         },
     }
 )
@@ -100,6 +97,10 @@ _CONFLICT_FLOW = flow_from_metas({
 })
 
 _READY_MERGE_QUAD_FLOW = flow_from_metas({
+    "handle-feedback": {
+        "model": "sonnet",
+        "step": "handle-feedback",
+    },
     "reviewer": {
         "model": "sonnet",
         "step": "watch-pr",
@@ -111,7 +112,7 @@ _READY_MERGE_QUAD_FLOW = flow_from_metas({
         },
         "on_pr_merge": "merged",
         "on_pr_close": "abandoned",
-        "on_pr_rework": "changes",
+        "on_pr_feedback": "handle-feedback",
         "on_pr_conflict": "conflicted",
         "on_mention_token": "@lc",
         "on_review_bot_allowlist": [_BOT_LOGIN],
@@ -416,9 +417,9 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertIn(item, worktrees.removed)
 
 
-class TestMonitorPrsRework(unittest.TestCase):
+class TestMonitorPrsFeedback(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
-        f = flow or _REWORK_ONLY_FLOW
+        f = flow or _FEEDBACK_FLOW
         store = FakeStore()
         item = store.create_item("in-review feature", theme=store.create_theme("theme"))
         store.add_artifact(item, "pr", pr_url)
@@ -426,29 +427,42 @@ class TestMonitorPrsRework(unittest.TestCase):
             "ready-merge: in-review feature", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        complete = CompleteStepUseCase(store, _FlowAdapter(f))
-        uc = MonitorPrsUseCase(store, github, worktrees, f, complete)
+        uc = MonitorPrsUseCase(store, github, worktrees, f)
         return store, item, step, worktrees, uc
 
-    def _mention_comment(self, ts, body="@lc fix the tests"):
-        return (ts, Comment(author="reviewer", body=body, is_top_level=True))
+    def _spawned_feedback_steps(self, store, watched_step):
+        return [
+            t for t in store.all_nodes()
+            if t.id != watched_step and t.type == "step" and t.step == "handle-feedback"
+        ]
 
-    def _inline_comment(self, ts, body="nit: rename this"):
+    def _mention_comment(self, ts, body="@lc fix the tests", author="reviewer", cid=None):
+        return (
+            ts,
+            Comment(author=author, body=body, is_top_level=True,
+                    id=cid or str(ts), created_at=ts),
+        )
+
+    def _inline_comment(self, ts, body="nit: rename this", author="reviewer",
+                         cid=None, in_reply_to=None):
         return (
             ts,
             Comment(
-                author="reviewer",
+                author=author,
                 body=body,
                 is_top_level=False,
                 path="src/foo.py",
                 line=42,
+                id=cid or str(ts),
+                in_reply_to_id=in_reply_to,
+                created_at=ts,
             ),
         )
 
     def _bot_review(self, ts, author=_BOT_LOGIN, body="looks like a bug on line 12"):
-        return (ts, Review(author=author, body=body))
+        return (ts, Review(author=author, body=body, created_at=ts))
 
-    def test_mention_comment_after_push_advances_task(self):
+    def test_mention_comment_after_push_spawns_handle_feedback(self):
         url = "https://github.com/x/y/pull/30"
         gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention_comment(1500.0)])
         store, item, step, worktrees, uc = self._setup(url, gh)
@@ -456,14 +470,20 @@ class TestMonitorPrsRework(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [item])
-        self.assertEqual(store.get_node(step).state, "done")
-        self.assertEqual(store.get_node(step).outcome, "changes")
+        spawned = self._spawned_feedback_steps(store, step)
+        self.assertEqual(len(spawned), 1)
+        self.assertEqual(spawned[0].role, "handle-feedback")
+        self.assertEqual(spawned[0].parent, item)
+        self.assertEqual(spawned[0].state, "ready")
+        self.assertNotEqual(store.get_node(step).state, "done")
+        watched = [a for a in store.item_artifacts(spawned[0].id) if a.type == "watched-step"]
+        self.assertEqual([a.value for a in watched], [step])
 
-    def test_mention_in_inline_comment_advances_task(self):
+    def test_inline_comment_without_mention_token_still_spawns(self):
         url = "https://github.com/x/y/pull/30-inline"
         gh = FakeGitHub(
             push_time=1000.0,
-            timed_comments=[self._inline_comment(1500.0, body="@lc please check this")],
+            timed_comments=[self._inline_comment(1500.0, body="please rename this")],
         )
         store, item, step, worktrees, uc = self._setup(url, gh)
 
@@ -471,7 +491,20 @@ class TestMonitorPrsRework(unittest.TestCase):
 
         self.assertEqual(result.reworked, [item])
 
-    def test_allowlisted_bot_review_advances_task(self):
+    def test_threaded_comment_with_lc_reply_does_not_spawn(self):
+        url = "https://github.com/x/y/pull/30-threaded"
+        root = self._inline_comment(1200.0, cid="c1")
+        reply = self._inline_comment(
+            1300.0, body="answered %s" % LC_MARKER, cid="c2", in_reply_to="c1"
+        )
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[root, reply])
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+
+    def test_allowlisted_bot_review_spawns(self):
         url = "https://github.com/x/y/pull/30-bot"
         gh = FakeGitHub(push_time=1000.0, timed_reviews=[self._bot_review(1500.0)])
         store, item, step, worktrees, uc = self._setup(url, gh)
@@ -479,7 +512,6 @@ class TestMonitorPrsRework(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [item])
-        self.assertEqual(store.get_node(step).outcome, "changes")
 
     def test_non_allowlisted_bot_review_does_not_trigger(self):
         url = "https://github.com/x/y/pull/30-other-bot"
@@ -493,51 +525,6 @@ class TestMonitorPrsRework(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
         self.assertNotEqual(store.get_node(step).state, "done")
-
-    def test_rework_creates_new_build_task(self):
-        url = "https://github.com/x/y/pull/31"
-        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention_comment(1500.0)])
-        store, item, step, _, uc = self._setup(url, gh)
-
-        uc.execute()
-
-        steps = [t for t in store.all_nodes() if t.id != step and t.type == "step"]
-        self.assertEqual(len(steps), 1)
-        new_task = steps[0]
-        self.assertEqual(new_task.step, "build")
-        self.assertEqual(new_task.state, "ready")
-
-    def test_rework_note_forwards_guidance_including_inline_context(self):
-        url = "https://github.com/x/y/pull/32"
-        gh = FakeGitHub(
-            push_time=1000.0,
-            timed_comments=[
-                self._inline_comment(1200.0),
-                self._mention_comment(1500.0),
-            ],
-        )
-        store, item, step, _, uc = self._setup(url, gh)
-
-        uc.execute()
-
-        steps = [t for t in store.all_nodes() if t.id != step and t.type == "step"]
-        note = store.get_node(steps[0].id).notes
-        self.assertIn("[src/foo.py:42]", note)
-        self.assertIn("nit: rename this", note)
-
-    def test_rework_note_includes_bot_review_body(self):
-        url = "https://github.com/x/y/pull/33"
-        gh = FakeGitHub(
-            push_time=1000.0,
-            timed_reviews=[self._bot_review(1500.0)],
-        )
-        store, item, step, _, uc = self._setup(url, gh)
-
-        uc.execute()
-
-        steps = [t for t in store.all_nodes() if t.id != step and t.type == "step"]
-        note = store.get_node(steps[0].id).notes or ""
-        self.assertIn("looks like a bug on line 12", note)
 
     def test_plain_comment_without_mention_token_does_not_trigger(self):
         url = "https://github.com/x/y/pull/34"
@@ -553,7 +540,7 @@ class TestMonitorPrsRework(unittest.TestCase):
         self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(worktrees.removed, [])
 
-    def test_mention_comment_before_push_does_not_refire(self):
+    def test_mention_comment_before_push_does_not_fire(self):
         url = "https://github.com/x/y/pull/35"
         gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention_comment(500.0)])
         store, item, step, worktrees, uc = self._setup(url, gh)
@@ -561,11 +548,10 @@ class TestMonitorPrsRework(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [])
-        self.assertNotEqual(store.get_node(step).state, "done")
 
     def test_bot_comment_with_mention_token_does_not_trigger(self):
         url = "https://github.com/x/y/pull/36"
-        bot_comment = (1500.0, Comment(author="some-ci[bot]", body="@lc", is_top_level=True))
+        bot_comment = self._mention_comment(1500.0, body="@lc", author="some-ci[bot]")
         gh = FakeGitHub(push_time=1000.0, timed_comments=[bot_comment])
         store, item, step, worktrees, uc = self._setup(url, gh)
 
@@ -573,15 +559,10 @@ class TestMonitorPrsRework(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
 
-    def test_lc_marked_comment_does_not_trigger_or_appear_in_guidance(self):
+    def test_lc_marked_comment_does_not_trigger(self):
         url = "https://github.com/x/y/pull/37"
-        marked = (
-            1200.0,
-            Comment(
-                author="lc",
-                body="@lc already handled this %s" % LC_MARKER,
-                is_top_level=True,
-            ),
+        marked = self._mention_comment(
+            1200.0, body="@lc already handled this %s" % LC_MARKER, author="lc"
         )
         gh = FakeGitHub(push_time=1000.0, timed_comments=[marked])
         store, item, step, worktrees, uc = self._setup(url, gh)
@@ -592,7 +573,10 @@ class TestMonitorPrsRework(unittest.TestCase):
 
     def test_lc_marked_review_does_not_trigger(self):
         url = "https://github.com/x/y/pull/37-review"
-        marked = (1200.0, Review(author=_BOT_LOGIN, body="already replied %s" % LC_MARKER))
+        marked = (
+            1200.0,
+            Review(author=_BOT_LOGIN, body="already replied %s" % LC_MARKER, created_at=1200.0),
+        )
         gh = FakeGitHub(push_time=1000.0, timed_reviews=[marked])
         store, item, step, worktrees, uc = self._setup(url, gh)
 
@@ -600,7 +584,20 @@ class TestMonitorPrsRework(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
 
-    def test_no_mention_token_configured_never_fires_on_the_token(self):
+    def test_marked_reply_after_review_clears_it(self):
+        url = "https://github.com/x/y/pull/37-review-replied"
+        review = self._bot_review(1200.0)
+        reply = self._mention_comment(
+            1300.0, body="handled, ignoring %s" % LC_MARKER, author="lc"
+        )
+        gh = FakeGitHub(push_time=1000.0, timed_reviews=[review], timed_comments=[reply])
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+
+    def test_no_mention_token_configured_never_fires_on_top_level(self):
         url = "https://github.com/x/y/pull/37-no-config"
         gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention_comment(1500.0)])
         store, item, step, worktrees, uc = self._setup(url, gh, flow=_NO_MENTION_TOKEN_FLOW)
@@ -609,35 +606,59 @@ class TestMonitorPrsRework(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
 
-    def test_arbitrary_rework_outcome_name_is_used(self):
-        arbitrary_flow = flow_from_metas(
-            {
-                "gatekeeper": {
-                    "step": "await-ship",
-                    "routes": {"revise": "build-step"},
-                    "on_pr_rework": "revise",
-                    "on_mention_token": "@lc",
-                }
-            }
-        )
-        url = "https://github.com/x/y/pull/38"
-        store = FakeStore()
-        item = store.create_item("arbitrary rework", theme=store.create_theme("theme"))
-        store.add_artifact(item, "pr", url)
-        step = store.create_step(
-            "await-ship: arbitrary rework", step="await-ship", role="human", parent=item
-        )
+    def test_no_double_spawn_when_one_already_open(self):
+        url = "https://github.com/x/y/pull/40"
         gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention_comment(1500.0)])
-        worktrees = FakeWorktrees()
-        complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow))
-        uc = MonitorPrsUseCase(store, gh, worktrees, arbitrary_flow, complete)
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        uc.execute()
+        uc.execute()
+
+        self.assertEqual(len(self._spawned_feedback_steps(store, step)), 1)
+
+    def test_watermark_advance_stops_the_same_mention_from_refiring(self):
+        url = "https://github.com/x/y/pull/41"
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention_comment(1500.0)])
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        uc.execute()
+        spawned = self._spawned_feedback_steps(store, step)
+        store.close(spawned[0].id, "done")
+        store.replace_artifact(step, "feedback-watermark", "1500.0")
 
         result = uc.execute()
 
-        self.assertEqual(result.reworked, [item])
-        self.assertEqual(store.get_node(step).outcome, "revise")
+        self.assertEqual(result.reworked, [])
 
-    def test_merged_pr_takes_merge_path_not_rework(self):
+    def test_multi_round_new_comments_are_outstanding_independent_of_timestamp(self):
+        url = "https://github.com/x/y/pull/42"
+        round1 = self._inline_comment(1200.0, cid="c1")
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[round1])
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result1 = uc.execute()
+        self.assertEqual(result1.reworked, [item])
+        spawned1 = self._spawned_feedback_steps(store, step)
+        self.assertEqual(len(spawned1), 1)
+
+        reply1 = self._inline_comment(
+            1250.0, body="queued %s" % LC_MARKER, cid="c1-reply", in_reply_to="c1"
+        )
+        store.close(spawned1[0].id, "done")
+        gh._timed_comments = [round1, reply1]
+
+        result2 = uc.execute()
+        self.assertEqual(result2.reworked, [])
+
+        round2 = self._inline_comment(1400.0, cid="c2", body="another nit")
+        gh._timed_comments = [round1, reply1, round2]
+
+        result3 = uc.execute()
+        self.assertEqual(result3.reworked, [item])
+        spawned3 = self._spawned_feedback_steps(store, step)
+        self.assertEqual(len(spawned3), 1)
+
+    def test_merged_pr_takes_merge_path_not_feedback(self):
         url = "https://github.com/x/y/pull/39"
         gh = FakeGitHub(
             merged_prs={url}, push_time=1000.0, timed_comments=[self._mention_comment(1500.0)]
@@ -777,7 +798,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         self.assertEqual(steps[0].role, "human")
         self.assertEqual(steps[0].step, "escalate-step")
 
-    def test_conflict_fires_when_step_also_declares_rework(self):
+    def test_conflict_fires_when_step_also_declares_feedback(self):
         url = "https://github.com/x/y/pull/59"
         store = FakeStore()
         item = store.create_item("quad feature", theme=store.create_theme("theme"))
@@ -794,16 +815,19 @@ class TestMonitorPrsConflict(unittest.TestCase):
         self.assertEqual(result.reworked, [])
         self.assertEqual(store.get_node(step).outcome, "conflicted")
 
-    def test_rework_wins_over_conflict_when_both_conditions_true(self):
+    def test_feedback_wins_over_conflict_when_both_conditions_true(self):
         url = "https://github.com/x/y/pull/60"
         store = FakeStore()
         item = store.create_item("both quad feature", theme=store.create_theme("theme"))
         store.add_artifact(item, "pr", url)
         step = store.create_step("watch-pr: both quad feature", step="watch-pr", role="reviewer",
                                  parent=item)
-        rework_comment = (1500.0, Comment(author="reviewer", body="@lc fix it",
-                                          is_top_level=True))
-        gh = FakeGitHub(conflicted_prs={url}, push_time=1000.0, timed_comments=[rework_comment])
+        feedback_comment = (
+            1500.0,
+            Comment(author="reviewer", body="@lc fix it", is_top_level=True,
+                    id="c1", created_at=1500.0),
+        )
+        gh = FakeGitHub(conflicted_prs={url}, push_time=1000.0, timed_comments=[feedback_comment])
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
         uc = MonitorPrsUseCase(store, gh, FakeWorktrees(), _READY_MERGE_QUAD_FLOW, complete)
 
@@ -811,7 +835,13 @@ class TestMonitorPrsConflict(unittest.TestCase):
 
         self.assertEqual(result.reworked, [item])
         self.assertEqual(result.conflicted, [])
-        self.assertEqual(store.get_node(step).outcome, "changes")
+        self.assertNotEqual(store.get_node(step).state, "done")
+        spawned = [
+            t for t in store.all_nodes()
+            if t.id != step and t.type == "step" and t.step == "handle-feedback"
+        ]
+        self.assertEqual(len(spawned), 1)
+        self.assertEqual(spawned[0].parent, item)
 
     def test_no_cap_declared_never_escalates(self):
         url = "https://github.com/x/y/pull/58"

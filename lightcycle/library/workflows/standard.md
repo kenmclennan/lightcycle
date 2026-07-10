@@ -27,7 +27,7 @@ edges:
 hooks:
   pr_merge              await-merge  merged
   pr_close              await-merge  abandoned
-  pr_rework             await-merge  changes
+  pr_feedback           await-merge  handle-feedback
   pr_conflict           await-merge  conflicted
   pr_conflict_cap       await-merge  3
   pr_conflict_escalate  await-merge  gave-up
