@@ -169,6 +169,18 @@ class TestCompleteTask(unittest.TestCase):
                 CompleteInput(step=bid, outcome="typo")
             )
 
+    def test_unknown_stage_routes_to_human_instead_of_silent_close(self):
+        s = FakeStore()
+        rid = s.create_step("review-code: x", step="review-code", role="reviewer")
+        resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteInput(step=rid, outcome="done")
+        )
+        self.assertIsNone(resp.next_step)
+        node = s.get_node(rid)
+        self.assertNotEqual(node.state, "done")
+        self.assertEqual(node.role, "human")
+        self.assertIn("review-code", node.notes or "")
+
     def test_terminal_step_with_required_produce_does_not_demand_it(self):
         terminal_metas = {
             "finaliser": {

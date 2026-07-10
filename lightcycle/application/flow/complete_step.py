@@ -40,6 +40,13 @@ class CompleteStepUseCase:
                 "no transition for step=%s outcome=%s; not closing. "
                 "Fix the flow or use a defined outcome." % (t.step, input.outcome)
             )
+        if transition is None and not self._flow.is_known_step(t.step, name, project):
+            self._store.route_to_human(
+                input.step,
+                "no transition for step=%s outcome=%s; the workflow does not define %s"
+                % (t.step, input.outcome, t.step),
+            )
+            return CompleteResponse(next_step=None)
         target = (
             StepContract.from_meta(self._flow.meta_for_step(transition.to_step, name, project))
             if transition
