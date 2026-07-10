@@ -5,9 +5,14 @@ import shutil
 import sqlite3
 
 from lightcycle.domain.work import Artifact, Node, NodeView, State, roll_up
+from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import StorePort
 
 _DB_FILENAME = "store.db"
+
+
+class LiveStoreRefused(Exception):
+    pass
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS nodes (
@@ -94,9 +99,10 @@ def _migrated_state(type_, status, old_item_state):
 
 
 class SqliteStore(StorePort):
-    def __init__(self, config, now=None):
+    def __init__(self, config, now=None, package_root=None, worktrees_dir=None):
         self._config = config
         self._now = now or (lambda: datetime.datetime.now().isoformat())
+        self._refuse_live_store_from_worktree(package_root, worktrees_dir)
         self._db_path = os.path.join(config.data_root(), _DB_FILENAME)
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         self._conn = sqlite3.connect(self._db_path)
@@ -108,6 +114,17 @@ class SqliteStore(StorePort):
         self._migrate_nodes_workflow()
         self._migrate_collapse_state()
         self._conn.commit()
+
+    def _refuse_live_store_from_worktree(self, package_root, worktrees_dir):
+        pkg = package_root if package_root is not None else self._config.package_root()
+        wtd = worktrees_dir if worktrees_dir is not None else os.path.join(
+            self._config.default_data_root(), ".worktrees"
+        )
+        if refuses_live_store(pkg, wtd, self._config.data_root()):
+            raise LiveStoreRefused(
+                "running from a worktree checkout; refusing the live store. "
+                "Set LC_ROOT_OVERRIDE to a throwaway store for branch-code execution."
+            )
 
     def _migrate_history_ts(self):
         cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}

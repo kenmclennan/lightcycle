@@ -231,6 +231,19 @@ class TestGridRootAndEnv(unittest.TestCase):
     def test_engine_root_override(self):
         self.assertEqual(_cfg({"LC_ROOT_OVERRIDE": "/tmp/grid"}).engine_root(), "/tmp/grid")
 
+    def test_package_root_ignores_root_override(self):
+        overridden = _cfg({"LC_ROOT_OVERRIDE": "/tmp/grid"}).package_root()
+        plain = _cfg().package_root()
+        self.assertEqual(overridden, plain)
+        self.assertNotEqual(overridden, "/tmp/grid")
+
+    def test_default_data_root_ignores_root_override_and_home(self):
+        c = _cfg({"LC_ROOT_OVERRIDE": "/tmp/grid", "LC_HOME": "/tmp/other"})
+        self.assertEqual(c.default_data_root(), os.path.join(HOME, ".lightcycle"))
+
+    def test_data_root_matches_default_when_unset(self):
+        self.assertEqual(_cfg().data_root(), _cfg().default_data_root())
+
     def test_base_env_is_a_copy(self):
         c = _cfg({"FOO": "bar"})
         e = c.base_env()
