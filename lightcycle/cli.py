@@ -78,6 +78,7 @@ from lightcycle.application.setup import (
     migrate_legacy,
     upgrade,
 )
+from lightcycle.adapters.sqlite_store import LiveStoreRefused
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.config import Config, ConfigError
@@ -240,7 +241,11 @@ def main(argv=None):
         return cmd_version([])
     if argv and argv[0] == "upgrade":
         return cmd_upgrade(argv[1:])
-    set_container(Container())
+    try:
+        set_container(Container())
+    except LiveStoreRefused as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if not argv or argv[0] in ("-h", "--help"):
         print_help()
         return 0

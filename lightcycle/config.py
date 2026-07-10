@@ -66,10 +66,16 @@ class Config:
             return override
         return self._engine_root()
 
+    def package_root(self):
+        return self._engine_root()
+
     def data_root(self):
         override = self._env("LC_ROOT_OVERRIDE") or self._env("LC_HOME")
         if override:
             return override
+        return self.default_data_root()
+
+    def default_data_root(self):
         return os.path.join(self._home(), ".lightcycle")
 
     def library_root(self):
