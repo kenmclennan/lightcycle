@@ -8,7 +8,7 @@ class Flow:
         routes,
         pr_merge,
         pr_close,
-        pr_rework,
+        pr_feedback,
         retro_cadence=None,
         hooks=None,
         pr_conflict=None,
@@ -21,7 +21,7 @@ class Flow:
         self._routes = routes
         self._pr_merge = pr_merge
         self._pr_close = pr_close
-        self._pr_rework = pr_rework
+        self._pr_feedback = pr_feedback
         self._retro_cadence = retro_cadence or set()
         self._hooks = hooks or {}
         self._pr_conflict = pr_conflict or {}
@@ -41,6 +41,8 @@ class Flow:
         for toks in graph.hooks.values():
             if toks:
                 stages.add(toks[0])
+        if graph.hook_stage("pr_feedback"):
+            stages.add(graph.hook_value("pr_feedback"))
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())
 
@@ -53,13 +55,13 @@ class Flow:
         for stage in owner:
             routes[stage] = dict(graph.edges.get(stage) or {})
 
-        pr_merge, pr_close, pr_rework = {}, {}, {}
+        pr_merge, pr_close, pr_feedback = {}, {}, {}
         pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
         retro_cadence, hooks = set(), {}
         outcome_hooks = {
             "pr_merge": pr_merge,
             "pr_close": pr_close,
-            "pr_rework": pr_rework,
+            "pr_feedback": pr_feedback,
             "pr_conflict": pr_conflict,
             "pr_conflict_escalate": pr_conflict_escalate,
         }
@@ -87,7 +89,7 @@ class Flow:
             if toks:
                 hooks.setdefault("on_" + name, set()).add(toks[0])
 
-        return cls(owner, routes, pr_merge, pr_close, pr_rework, retro_cadence, hooks,
+        return cls(owner, routes, pr_merge, pr_close, pr_feedback, retro_cadence, hooks,
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate,
                    mention_token, review_bot_allowlist)
 
@@ -109,8 +111,8 @@ class Flow:
     def terminal_close_outcome(self):
         return next(iter(self._pr_close.values()), None)
 
-    def pr_rework_outcome(self, step):
-        return self._pr_rework.get(step)
+    def pr_feedback_step(self, step):
+        return self._pr_feedback.get(step)
 
     def pr_conflict_outcome(self, step):
         return self._pr_conflict.get(step)

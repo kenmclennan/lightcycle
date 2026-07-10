@@ -10,12 +10,16 @@ class Comment:
     is_top_level: bool
     path: Optional[str] = None
     line: Optional[int] = None
+    id: Optional[str] = None
+    in_reply_to_id: Optional[str] = None
+    created_at: float = 0.0
 
 
 @dataclass(frozen=True)
 class Review:
     author: str
     body: str
+    created_at: float = 0.0
 
 
 class GitHubEventsPort(ABC):

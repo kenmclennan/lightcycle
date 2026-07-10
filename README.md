@@ -195,7 +195,7 @@ signals:                # stage  metric-name  outcome   (retro telemetry)
 - A **stage** is a lane (`build`); a **node** maps it to the step file that performs
   it (`coder`). A target with no node/step file (e.g. `conflict-review`) is a
   `for:human` terminal. A stage owned by a step file with no `model` is a human step.
-- The engine reacts to a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_rework`,
+- The engine reacts to a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_feedback`,
   `pr_conflict` (+ `_cap`/`_escalate`), `theme_close`, `retro_cadence`); the graph only
   names which stage handles each. A workflow that omits `pr_*` never opens a PR - e.g.
   a two-line local-only spike: `entry: build` + `build done DONE`.
