@@ -58,6 +58,17 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         self.assertEqual(graph.signals["review"], {"review_rounds": "rejected"})
         self.assertEqual(graph.signals["open-pr"], {"conflicts": "~conflict"})
 
+    def test_edge_with_no_target_declares_a_terminal_outcome(self):
+        graph = parse_graph(
+            "entry: build\n"
+            "\n"
+            "edges:\n"
+            "  build  done  review\n"
+            "  build  clean\n"
+        )
+        self.assertIsNone(graph.target("build", "clean"))
+        self.assertIn("clean", graph.edges["build"])
+
     def test_ignores_prose_and_blank_lines(self):
         graph = parse_graph(
             "# Standard - spec to merge\n"

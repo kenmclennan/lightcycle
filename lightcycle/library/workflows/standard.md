@@ -23,6 +23,8 @@ edges:
   draft-spec       drafted     review-spec
   review-spec      changes     draft-spec
   review-spec      approved    write-code
+  audit            findings    review-findings
+  audit            clean
 
 hooks:
   pr_merge              await-merge  merged

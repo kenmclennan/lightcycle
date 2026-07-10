@@ -10,7 +10,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **step** - a single action performed by a role, filed from the workflow. A child of an item.
 - **artifact** - a typed value attached to an item: `spec`, `repo`, `branch`, `pr`, `design`, `feedback`. `feedback` accumulates; the others are single by convention (expressed in the step markdown, not the engine).
 - **role** - who performs a step. For an agent step it is the step name itself (`write-code`, `review-code`, `audit`, ...); human steps carry the role `human`.
-- **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`.
+- **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **state** - a node's single lifecycle position: `backlogged` -> `ready` -> `in_progress` -> `done`. One state machine (there is no separate `status`).
 - **lane** - a derived view over `(state, role)`: `inbox` (human action + gates), `active` (running), `queue` (ready agent steps), `blocked`. Lanes are computed, never stored.
 
@@ -34,7 +34,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **workflow** - the graph, defined in markdown: `entry`, `nodes` (stage -> step file), `edges` (outcome -> next step), `hooks` (external event -> transition), `signals`.
 - **step file** / **step markdown** - the prompt for a stage (`library/steps/<name>.md`). Workflow policy and conventions live here; the engine stays agnostic.
 - **entry** - the step filed when an item is activated.
-- **edge** - `step  outcome  next-step`.
+- **edge** - `step  outcome  next-step`; a `next-step`-less edge declares the outcome terminal (closes, no new step).
 - **hook** - an external event (a PR merge, close, or comment) mapped to a transition.
 - **gate** - a human step that must close before downstream proceeds (e.g. `review-spec`, the spec-review gate).
 - **signal** - a per-step counter or condition feeding cadence or escalation.
@@ -54,7 +54,8 @@ Every step name is an **action**. The step name, its markdown file, and (for an 
 - **cleanup** (human) - remove the worktree and branch; terminal.
 - **resolve-conflict** (agent) - rebase and resolve merge conflicts.
 - **review-conflict** (human) - the escalation endpoint when conflicts cannot be resolved.
-- **audit** (agent) - the cadence-spawned retro auditor.
+- **audit** (agent) - the cadence-spawned retro auditor; escalates findings, never files work.
+- **review-findings** (human) - read the audit's findings and decide; closing it is the acknowledgement.
 
 ## The three homes (deployment)
 

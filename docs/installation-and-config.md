@@ -57,7 +57,7 @@ visibly (no hidden defaults). Show or edit with `lc config [--edit]`.
 | `poll-seconds`                                                            | pool tick interval                                         |
 | `branch-prefix`                                                           | prefix for worktree branches                               |
 | `max-boot-seconds` / `max-session-seconds`                                | worker boot and session caps                               |
-| `retro-interval-days` / `retro-min-items`                                 | retro cadence trigger                                      |
+| `retro-interval-items`                                                    | closed items between retro audits                          |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs                                       |
 
 ## Project-level overrides
