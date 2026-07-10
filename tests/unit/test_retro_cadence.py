@@ -8,15 +8,11 @@ from tests.support.fake_store import FakeStore
 
 
 class FakeConfig:
-    def __init__(self, interval_items=3, engine="lightcycle"):
+    def __init__(self, interval_items=3):
         self._interval = interval_items
-        self._engine = engine
 
     def retro_interval_items(self):
         return self._interval
-
-    def engine_root(self):
-        return "/w/projects/%s" % self._engine
 
 
 def _flow_with_cadence(store, step="trend-check", role="trend-checker"):
@@ -37,8 +33,8 @@ def _close_item(store, title, project=None, theme=None):
     return eid
 
 
-def _gate(store, flow_svc, interval_items=3, engine="lightcycle"):
-    return RetroCadenceUseCase(store, flow_svc, FakeConfig(interval_items, engine))
+def _gate(store, flow_svc, interval_items=3):
+    return RetroCadenceUseCase(store, flow_svc, FakeConfig(interval_items))
 
 
 class TestRetroCadenceNoFire(unittest.TestCase):
@@ -66,11 +62,20 @@ class TestRetroCadenceFires(unittest.TestCase):
         self.assertEqual(len(result.fired), 1)
         self.assertEqual(s.get_node(result.fired[0]).project, "lightcycle")
 
-    def test_items_without_repo_use_engine_default(self):
+    def test_items_without_a_repo_are_skipped_not_bucketed(self):
         s = FakeStore()
         for i in range(3):
             _close_item(s, "item %d" % i)
-        result = _gate(s, _flow_with_cadence(s), interval_items=3, engine="lightcycle").execute(0.0)
+        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
+        self.assertEqual(result.fired, [])
+
+    def test_unscoped_items_do_not_count_toward_a_real_project(self):
+        s = FakeStore()
+        for i in range(3):
+            _close_item(s, "lc %d" % i, project="lightcycle")
+        for i in range(3):
+            _close_item(s, "orphan %d" % i)
+        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
         self.assertEqual(len(result.fired), 1)
         self.assertEqual(s.get_node(result.fired[0]).project, "lightcycle")
 

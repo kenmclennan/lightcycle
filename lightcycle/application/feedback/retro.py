@@ -1,5 +1,4 @@
 import json
-import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -42,19 +41,17 @@ class RetroResponse:
 
 
 class RetroUseCase:
-    def __init__(self, store, flow, config=None):
+    def __init__(self, store, flow):
         self._store = store
         self._flow = flow
-        self._config = config
 
-    def _project_of(self, item, default):
-        return Item(item.id, tuple(self._store.item_artifacts(item.id))).repo(default)
+    def _project_of(self, item):
+        return Item(item.id, tuple(self._store.item_artifacts(item.id))).artifact_of("repo")
 
     def _project_scope(self, project, signals):
-        default = os.path.basename(self._config.engine_root())
         rows, all_refs = [], []
         for item in self._store.closed_unretroed_items():
-            if self._project_of(item, default) != project:
+            if self._project_of(item) != project:
                 continue
             row, refs = self._collect_item_row(item, signals)
             rows.append(row)
