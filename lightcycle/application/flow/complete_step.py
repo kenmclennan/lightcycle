@@ -35,7 +35,8 @@ class CompleteStepUseCase:
         name = self._flow.workflow_for(t)
         project = self._flow.project_for(t)
         transition = self._flow.flow_next(t.step, input.outcome, name, project)
-        if transition is None and self._flow.outcomes_for(t.step, name, project):
+        declared = self._flow.outcomes_for(t.step, name, project)
+        if transition is None and declared and input.outcome not in declared:
             raise UseCaseError(
                 "no transition for step=%s outcome=%s; not closing. "
                 "Fix the flow or use a defined outcome." % (t.step, input.outcome)

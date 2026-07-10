@@ -18,8 +18,7 @@ _SEED_KEYS = [
     ("poll-seconds", "5"),
     ("worker-history", "20"),
     ("editor", "vi"),
-    ("retro-interval-days", "7"),
-    ("retro-min-items", "3"),
+    ("retro-interval-items", "20"),
 ]
 
 
@@ -257,17 +256,11 @@ class Config:
             return raw
         return self._required_str("editor")
 
-    def retro_interval_days(self):
-        env = self._env_int("LC_RETRO_INTERVAL_DAYS", None)
+    def retro_interval_items(self):
+        env = self._env_int("LC_RETRO_INTERVAL_ITEMS", None)
         if env is not None:
             return env
-        return self._required_int("retro-interval-days")
-
-    def retro_min_items(self):
-        env = self._env_int("LC_RETRO_MIN_ITEMS", None)
-        if env is not None:
-            return env
-        return self._required_int("retro-min-items")
+        return self._required_int("retro-interval-items")
 
     def spawn_id(self):
         return self._env("LC_SPAWNID")

@@ -119,6 +119,26 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(graph.target("review-spec", "approved"), "write-code")
         self.assertEqual(graph.target("review-spec", "changes"), "draft-spec")
 
+    def test_audit_findings_routes_to_review_findings(self):
+        step_metas = {
+            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
+            for role in step_roles(_ROOT)
+        }
+        graph = parse_graph(workflow_text(_ROOT, "standard"))
+        flow = Flow.from_graph(graph, step_metas)
+        self.assertEqual(graph.target("audit", "findings"), "review-findings")
+        self.assertEqual(flow.owner_of("review-findings"), "human")
+
+    def test_audit_clean_is_terminal(self):
+        step_metas = {
+            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
+            for role in step_roles(_ROOT)
+        }
+        graph = parse_graph(workflow_text(_ROOT, "standard"))
+        flow = Flow.from_graph(graph, step_metas)
+        self.assertIsNone(flow.next("audit", "clean"))
+        self.assertIsNone(graph.target("audit", "clean"))
+
 
 if __name__ == "__main__":
     unittest.main()

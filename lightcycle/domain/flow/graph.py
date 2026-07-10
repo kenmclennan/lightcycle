@@ -48,7 +48,8 @@ def parse_graph(text):
             stage, step_file = parts
             nodes[stage] = step_file
         elif section == "edges":
-            frm, outcome, target = parts
+            frm, outcome = parts[0], parts[1]
+            target = parts[2] if len(parts) > 2 else None
             edges.setdefault(frm, {})[outcome] = target
         elif section == "hooks":
             hooks[parts[0]] = parts[1:]

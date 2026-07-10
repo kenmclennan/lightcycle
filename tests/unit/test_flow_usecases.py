@@ -169,6 +169,26 @@ class TestCompleteTask(unittest.TestCase):
                 CompleteInput(step=bid, outcome="typo")
             )
 
+    def test_declared_terminal_outcome_closes_silently_alongside_a_routed_one(self):
+        metas = {"coder": {"model": "sonnet"}, "reviewer": {"model": "opus"}}
+        graph_text = (
+            "entry: build\n\n"
+            "nodes:\n"
+            "  build   coder\n"
+            "  review  reviewer\n\n"
+            "edges:\n"
+            "  build  done   review\n"
+            "  build  clean\n"
+        )
+        s = FakeStore()
+        flow_svc = FlowService(FakeFs(metas, workflow=graph_text), s)
+        bid = s.create_step("build: x", step="build", role="coder")
+        resp = CompleteStepUseCase(s, flow_svc).execute(
+            CompleteInput(step=bid, outcome="clean")
+        )
+        self.assertEqual(s.get_node(bid).state, "done")
+        self.assertIsNone(resp.next_step)
+
     def test_unknown_stage_routes_to_human_instead_of_silent_close(self):
         s = FakeStore()
         rid = s.create_step("review-code: x", step="review-code", role="reviewer")

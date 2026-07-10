@@ -19,6 +19,8 @@ edges:
   watch-pr     done      ready-merge
   ready-merge  merged    cleanup
   ready-merge  gave-up   conflict-review
+  audit        findings  review-findings
+  audit        clean
 
 hooks:
   pr_merge              ready-merge  merged
@@ -40,6 +42,7 @@ STEP_METAS = {
     "cleanup": {},
     "auditor": {"model": "sonnet"},
     "handle-feedback": {"model": "sonnet"},
+    "review-findings": {},
 }
 
 
@@ -91,3 +94,12 @@ class TestFlowFromGraph(unittest.TestCase):
     def test_bare_terminal_has_no_owner_and_routes_to_human(self):
         self.assertIsNone(self.flow.owner_of("conflict-review"))
         self.assertEqual(self.flow.next("ready-merge", "gave-up").to_role, "human")
+
+    def test_audit_findings_routes_to_review_findings(self):
+        t = self.flow.next("audit", "findings")
+        self.assertEqual(t.to_step, "review-findings")
+        self.assertEqual(t.to_role, "human")
+
+    def test_audit_clean_is_a_declared_terminal_outcome(self):
+        self.assertIsNone(self.flow.next("audit", "clean"))
+        self.assertIn("clean", self.flow.outcomes_for("audit"))

@@ -28,7 +28,14 @@ class FlowCheckUseCase:
         flow = Flow.from_graph(graph, role_metas)
         steps = flow.steps()
         owner = {s: flow.owner_of(s) for s in steps}
-        routes = {s: {o: flow.next(s, o).to_step for o in flow.outcomes_for(s)} for s in steps}
+        routes = {
+            s: {
+                o: transition.to_step
+                for o in flow.outcomes_for(s)
+                if (transition := flow.next(s, o)) is not None
+            }
+            for s in steps
+        }
         return FlowCheckResponse(
             owner=owner,
             routes=routes,

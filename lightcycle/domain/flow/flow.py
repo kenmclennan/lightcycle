@@ -103,7 +103,7 @@ class Flow:
         return sorted((self._routes.get(step) or {}).keys())
 
     def targets_from(self, step):
-        return list((self._routes.get(step) or {}).values())
+        return [t for t in (self._routes.get(step) or {}).values() if t]
 
     def terminal_merge_outcome(self):
         return next(iter(self._pr_merge.values()), None)
