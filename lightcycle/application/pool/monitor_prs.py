@@ -5,23 +5,27 @@ from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.work.state import State
 
-_REWORK_MARKER = "/rework"
+LC_MARKER = "<!-- lc -->"
 
 
 def _is_bot(author):
     return "[bot]" in author
 
 
-def _format_guidance(comments):
+def _format_guidance(comments, reviews):
     parts = []
     for c in comments:
         if c.is_top_level:
-            body = c.body.replace(_REWORK_MARKER, "").strip()
+            body = c.body.strip()
             if body:
                 parts.append(body)
         else:
             loc = "%s:%s" % (c.path, c.line) if c.line else (c.path or "")
             parts.append("[%s] %s" % (loc, c.body.strip()))
+    for r in reviews:
+        body = r.body.strip()
+        if body:
+            parts.append("[review by %s] %s" % (r.author, body))
     return "\n\n".join(p for p in parts if p)
 
 
@@ -73,11 +77,25 @@ class MonitorPrsUseCase:
             advanced = False
             if rework_outcome:
                 since = self._github.last_push_time(pr.value)
-                comments = self._github.comments_since(pr.value, since)
-                human = [c for c in comments if not _is_bot(c.author)]
-                top_level = [c for c in human if c.is_top_level]
-                if any(_REWORK_MARKER in c.body for c in top_level):
-                    guidance = _format_guidance(human)
+                comments = [
+                    c for c in (
+                        self._github.comments_since(pr.value, since)
+                        + self._github.pull_comments(pr.value, since)
+                    )
+                    if LC_MARKER not in c.body
+                ]
+                reviews = [
+                    r for r in self._github.reviews(pr.value, since)
+                    if LC_MARKER not in r.body
+                ]
+                mention_token = self._flow.mention_token(step.step)
+                allowlist = self._flow.review_bot_allowlist(step.step)
+                mention = mention_token is not None and any(
+                    mention_token in c.body for c in comments if not _is_bot(c.author)
+                )
+                botreview = any(r.author in allowlist for r in reviews)
+                if mention or botreview:
+                    guidance = _format_guidance(comments, reviews)
                     self._complete.execute(
                         CompleteInput(step=step.id, outcome=rework_outcome, note=guidance or None)
                     )

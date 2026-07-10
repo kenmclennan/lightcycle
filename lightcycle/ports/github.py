@@ -12,6 +12,12 @@ class Comment:
     line: Optional[int] = None
 
 
+@dataclass(frozen=True)
+class Review:
+    author: str
+    body: str
+
+
 class GitHubEventsPort(ABC):
     @abstractmethod
     def is_merged(self, pr: str) -> bool:
@@ -31,4 +37,12 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def comments_since(self, pr: str, since: float) -> List[Comment]:
+        pass
+
+    @abstractmethod
+    def pull_comments(self, pr: str, since: float) -> List[Comment]:
+        pass
+
+    @abstractmethod
+    def reviews(self, pr: str, since: float) -> List[Review]:
         pass

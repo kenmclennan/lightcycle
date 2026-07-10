@@ -37,6 +37,8 @@ hooks:
   pr_conflict           ready-merge  conflicted
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
+  mention_token         ready-merge  @lc
+  review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]
   retro_cadence         audit
 
 signals:

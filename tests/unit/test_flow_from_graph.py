@@ -25,6 +25,8 @@ hooks:
   pr_conflict           ready-merge  conflicted
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
+  mention_token         ready-merge  @lc
+  review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]  another-bot[bot]
   retro_cadence         audit
 """
 
@@ -65,6 +67,17 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_lifecycle_hook_steps(self):
         self.assertEqual(self.flow.retro_cadence_steps(), [("audit", "auditor")])
+
+    def test_mention_token_and_review_bot_allowlist(self):
+        self.assertEqual(self.flow.mention_token("ready-merge"), "@lc")
+        self.assertEqual(
+            self.flow.review_bot_allowlist("ready-merge"),
+            {"copilot-pull-request-reviewer[bot]", "another-bot[bot]"},
+        )
+
+    def test_mention_token_and_review_bot_allowlist_absent_by_default(self):
+        self.assertIsNone(self.flow.mention_token("build"))
+        self.assertEqual(self.flow.review_bot_allowlist("build"), set())
 
     def test_bare_terminal_has_no_owner_and_routes_to_human(self):
         self.assertIsNone(self.flow.owner_of("conflict-review"))

@@ -3,7 +3,7 @@ import json
 import re
 import subprocess
 
-from lightcycle.ports.github import Comment, GitHubEventsPort
+from lightcycle.ports.github import Comment, GitHubEventsPort, Review
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 
@@ -105,6 +105,15 @@ class GitHubEventsAdapter(GitHubEventsPort):
             except (json.JSONDecodeError, ValueError):
                 pass
 
+        return result
+
+    def pull_comments(self, pr: str, since: float):
+        parts = _repo_parts(pr)
+        if not parts:
+            return []
+        owner, repo, number = parts
+        result = []
+
         r = subprocess.run(
             ["gh", "api", "--paginate", "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number)],
             capture_output=True,
@@ -122,6 +131,34 @@ class GitHubEventsAdapter(GitHubEventsPort):
                                 is_top_level=False,
                                 path=c.get("path"),
                                 line=c.get("line"),
+                            )
+                        )
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        return result
+
+    def reviews(self, pr: str, since: float):
+        parts = _repo_parts(pr)
+        if not parts:
+            return []
+        owner, repo, number = parts
+        result = []
+
+        r = subprocess.run(
+            ["gh", "api", "--paginate", "/repos/%s/%s/pulls/%s/reviews" % (owner, repo, number)],
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode == 0:
+            try:
+                for rv in json.loads(r.stdout):
+                    submitted = _parse_iso(rv.get("submitted_at") or "1970-01-01T00:00:00Z")
+                    if submitted > since:
+                        result.append(
+                            Review(
+                                author=rv.get("user", {}).get("login", ""),
+                                body=rv.get("body", ""),
                             )
                         )
             except (json.JSONDecodeError, ValueError):
