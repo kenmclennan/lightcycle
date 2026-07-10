@@ -261,6 +261,17 @@ class FakeStore(StorePort):
             b = self._get(node_id)
             b["dep_count"] = (b.get("dep_count") or 0) + 1
 
+    def dep_remove(self, node_id, blocked_by):
+        deps = self._deps.get(node_id)
+        if not deps or blocked_by not in deps:
+            return False
+        deps.discard(blocked_by)
+        blocker = self._records.get(blocked_by)
+        if blocker and blocker.get("state") != "done":
+            b = self._get(node_id)
+            b["dep_count"] = max(0, (b.get("dep_count") or 0) - 1)
+        return True
+
     def _ready_records(self):
         return [
             b

@@ -501,6 +501,13 @@ class SqliteStore(StorePort):
             )
             self._conn.commit()
 
+    def dep_remove(self, node_id, blocked_by):
+        cur = self._conn.execute(
+            "DELETE FROM deps WHERE node_id = ? AND blocked_by = ?", (node_id, blocked_by)
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
     def ready_steps(self):
         return self._select(
             "type = 'step' AND state = 'ready' AND NOT EXISTS ("

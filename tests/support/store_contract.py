@@ -92,6 +92,44 @@ class StoreContractBase:
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
+    def test_dep_remove_drops_blocker(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        s.dep_add(blocked, blocker)
+        s.dep_remove(blocked, blocker)
+        ready_ids = [t.id for t in s.ready_steps()]
+        self.assertIn(blocked, ready_ids)
+
+    def test_dep_remove_of_absent_pair_removes_nothing(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        removed = s.dep_remove(blocked, blocker)
+        self.assertFalse(removed)
+
+    def test_dep_remove_returns_whether_a_dep_was_removed(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        s.dep_add(blocked, blocker)
+        self.assertTrue(s.dep_remove(blocked, blocker))
+        self.assertFalse(s.dep_remove(blocked, blocker))
+
+    def test_dep_remove_leaves_unrelated_deps_untouched(self):
+        s = self.make_store()
+        blocker1 = s.create_step("blocker1", role="coder")
+        blocker2 = s.create_step("blocker2", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        s.dep_add(blocked, blocker1)
+        s.dep_add(blocked, blocker2)
+        s.dep_remove(blocked, blocker1)
+        ready_ids = [t.id for t in s.ready_steps()]
+        self.assertNotIn(blocked, ready_ids)
+        s.close(blocker2, "done")
+        ready_ids = [t.id for t in s.ready_steps()]
+        self.assertIn(blocked, ready_ids)
+
     def test_claim_ready_matches_role_label(self):
         s = self.make_store()
         tid = s.create_step("t", role="coder")

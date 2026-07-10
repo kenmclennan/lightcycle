@@ -157,7 +157,7 @@ COMMAND_GROUPS = [
          "update a node; --parent moves it; --state active activates an item (files the entry step)"),
         ("rm", "<id>", "delete a node"),
         ("attach", "<id> <type> <value> [--label]", "attach an artifact"),
-        ("dep", "<id> --needs <id>", "link one node as a blocker of another"),
+        ("dep", "<id> --needs <id> | --remove <id>", "add or remove a blocker on a node"),
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
@@ -681,8 +681,17 @@ def cmd_attach(argv):
 def cmd_dep(argv):
     ap = argparse.ArgumentParser(prog="lc dep")
     ap.add_argument("id")
-    ap.add_argument("--needs", required=True)
+    group = ap.add_mutually_exclusive_group(required=True)
+    group.add_argument("--needs")
+    group.add_argument("--remove")
     a = ap.parse_args(argv)
+    if a.remove:
+        removed = _container.store.dep_remove(a.id, a.remove)
+        if removed:
+            print("removed: %s no longer blocked by %s" % (a.id, a.remove))
+        else:
+            print("no-op: %s was not blocked by %s" % (a.id, a.remove))
+        return 0
     _container.store.dep_add(a.id, a.needs)
     return 0
 
