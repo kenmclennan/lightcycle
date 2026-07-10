@@ -1,14 +1,11 @@
 import os
 
 
-def _is_under(path, directory):
-    path = os.path.normpath(path)
-    directory = os.path.normpath(directory)
-    return path == directory or path.startswith(directory + os.sep)
+def _has_worktrees_component(path):
+    return ".worktrees" in os.path.normpath(path).split(os.sep)
 
 
-def refuses_live_store(package_root, worktrees_dir, target_root):
-    if not _is_under(package_root, worktrees_dir):
+def refuses_live_store(package_root, live_store_root, target_root):
+    if not _has_worktrees_component(package_root):
         return False
-    default_root = os.path.dirname(os.path.normpath(worktrees_dir))
-    return os.path.normpath(target_root) == default_root
+    return os.path.normpath(target_root) == os.path.normpath(live_store_root)

@@ -1484,13 +1484,15 @@ class TestNamedRepo(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         return json.loads(out)
 
-    def test_named_repo_worktree_created_engine_untouched(self):
+    def test_named_repo_worktree_created_under_the_named_repo_engine_untouched(self):
         view = self._claim("app")
         branch = "feat/%s-x" % view["parent"]
-        self.assertEqual(view["workspace"], os.path.join(self.engine, ".worktrees", view["parent"]))
+        self.assertEqual(view["workspace"], os.path.join(self.app, ".worktrees", view["parent"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
         self.assertTrue(self._has_branch(self.app, branch))
         self.assertFalse(self._has_branch(self.engine, branch))
+        gi = (Path(self.app) / ".gitignore").read_text().splitlines()
+        self.assertIn(".worktrees/", [l.strip() for l in gi])
 
     def test_default_repo_targets_self(self):
         view = self._claim()
@@ -2081,19 +2083,16 @@ class TestWorktreePushTarget(unittest.TestCase):
     def setUp(self):
         self.parent = tempfile.mkdtemp()
         self.repo = make_repo(self.parent, "app")
-        self.worktrees_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.parent, True)
-        self.addCleanup(shutil.rmtree, self.worktrees_dir, True)
 
     def _svc(self, store):
         parent = self.parent
-        wt_dir = self.worktrees_dir
 
         class _Fs:
-            def worktrees_dir(self):
-                return wt_dir
+            def worktrees_dir(self, root):
+                return os.path.join(root, ".worktrees")
 
-            def ensure_worktrees_ignored(self):
+            def ensure_worktrees_ignored(self, root):
                 pass
 
         class _Cfg:

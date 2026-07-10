@@ -23,7 +23,7 @@ class WorktreeService:
         return os.path.join(self._config.projects_root(), self.item_repo(item))
 
     def worktree_path(self, item):
-        return Worktree(item).path_in(self._fs.worktrees_dir())
+        return Worktree(item).path_in(self.target_repo(item))
 
     def item_branch(self, item):
         return self._item(item).branch()
@@ -58,8 +58,8 @@ class WorktreeService:
             add_args = ["worktree", "add", path, "--no-track", "-b", branch, base]
         else:
             add_args = ["worktree", "add", path, branch]
-        os.makedirs(self._fs.worktrees_dir(), exist_ok=True)
-        self._fs.ensure_worktrees_ignored()
+        os.makedirs(self._fs.worktrees_dir(target), exist_ok=True)
+        self._fs.ensure_worktrees_ignored(target)
         retries = self._config.worktree_retries()
         backoff = self._config.worktree_retry_sleep()
         self._git.git(target, "worktree", "prune")
