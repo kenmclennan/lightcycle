@@ -31,6 +31,8 @@ def graph_text_from_metas(metas, entry=None):
             hook = key[3:]
             if val is True:
                 hooks.append("  %s  %s" % (hook, step))
+            elif isinstance(val, (list, tuple, set)):
+                hooks.append("  %s  %s  %s" % (hook, step, "  ".join(sorted(val))))
             else:
                 hooks.append("  %s  %s  %s" % (hook, step, val))
     out = []
