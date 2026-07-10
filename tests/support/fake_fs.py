@@ -1,3 +1,6 @@
+import os
+
+
 def flow_from_metas(metas):
     from lightcycle.domain.flow import Flow
     from lightcycle.domain.flow.graph import parse_graph
@@ -72,8 +75,8 @@ class FakeFs:
     def read_md(self, relpath, project=None):
         return None
 
-    def worktrees_dir(self):
-        return "/tmp/fake-worktrees"
+    def worktrees_dir(self, root):
+        return os.path.join(root, ".worktrees")
 
     def store_ready(self):
         return True
@@ -90,5 +93,5 @@ class FakeFs:
     def ensure_override_dirs(self):
         pass
 
-    def ensure_worktrees_ignored(self):
+    def ensure_worktrees_ignored(self, root):
         pass

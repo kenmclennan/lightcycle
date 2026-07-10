@@ -19,7 +19,7 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
-    def worktrees_dir(self):
+    def worktrees_dir(self, root):
         pass
 
     @abstractmethod
@@ -43,5 +43,5 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
-    def ensure_worktrees_ignored(self):
+    def ensure_worktrees_ignored(self, root):
         pass

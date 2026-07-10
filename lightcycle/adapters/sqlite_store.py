@@ -118,10 +118,10 @@ _ACTION_ROLE_RENAMES = {
 
 
 class SqliteStore(StorePort):
-    def __init__(self, config, now=None, package_root=None, worktrees_dir=None):
+    def __init__(self, config, now=None, package_root=None, default_data_root=None):
         self._config = config
         self._now = now or (lambda: datetime.datetime.now().isoformat())
-        self._refuse_live_store_from_worktree(package_root, worktrees_dir)
+        self._refuse_live_store_from_worktree(package_root, default_data_root)
         self._db_path = os.path.join(config.data_root(), _DB_FILENAME)
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         self._conn = sqlite3.connect(self._db_path)
@@ -135,12 +135,13 @@ class SqliteStore(StorePort):
         self._migrate_action_rename()
         self._conn.commit()
 
-    def _refuse_live_store_from_worktree(self, package_root, worktrees_dir):
+    def _refuse_live_store_from_worktree(self, package_root, default_data_root):
         pkg = package_root if package_root is not None else self._config.package_root()
-        wtd = worktrees_dir if worktrees_dir is not None else os.path.join(
-            self._config.default_data_root(), ".worktrees"
+        live_root = (
+            default_data_root if default_data_root is not None
+            else self._config.default_data_root()
         )
-        if refuses_live_store(pkg, wtd, self._config.data_root()):
+        if refuses_live_store(pkg, live_root, self._config.data_root()):
             raise LiveStoreRefused(
                 "running from a worktree checkout; refusing the live store. "
                 "Set LC_ROOT_OVERRIDE to a throwaway store for branch-code execution."

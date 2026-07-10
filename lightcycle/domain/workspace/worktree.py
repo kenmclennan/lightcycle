@@ -6,8 +6,8 @@ from dataclasses import dataclass
 class Worktree:
     item: str
 
-    def path_in(self, worktrees_dir: str) -> str:
-        return os.path.join(worktrees_dir, self.item)
+    def path_in(self, repo_root: str) -> str:
+        return os.path.join(repo_root, ".worktrees", self.item)
 
     @staticmethod
     def is_lock_contention(stderr: str) -> bool:

@@ -117,8 +117,8 @@ class FsAdapter(FsPort):
     def workflow_text(self, name, project=None):
         return workflow_text(self._search(project), name)
 
-    def worktrees_dir(self):
-        return worktrees_dir(self._config.data_root())
+    def worktrees_dir(self, root):
+        return worktrees_dir(root)
 
     def store_ready(self):
         return store_ready(self._config.data_root())
@@ -135,5 +135,5 @@ class FsAdapter(FsPort):
     def ensure_override_dirs(self):
         return ensure_override_dirs(self._config.data_root())
 
-    def ensure_worktrees_ignored(self):
-        return ensure_worktrees_ignored(self._config.data_root())
+    def ensure_worktrees_ignored(self, root):
+        return ensure_worktrees_ignored(root)

@@ -49,7 +49,8 @@ class TestBranch(unittest.TestCase):
 
 class TestWorktree(unittest.TestCase):
     def test_path_in(self):
-        self.assertEqual(Worktree("s-9").path_in("/root/.worktrees"), "/root/.worktrees/s-9")
+        self.assertEqual(Worktree("s-9").path_in("/home/u/projects/app"),
+                         "/home/u/projects/app/.worktrees/s-9")
 
     def test_transient_lock_errors_are_contention(self):
         self.assertTrue(Worktree.is_lock_contention("fatal: could not lock working tree"))
