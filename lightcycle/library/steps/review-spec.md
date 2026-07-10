@@ -3,7 +3,7 @@ accepts:
   spec: required
 ---
 
-# Review-plan (you + driver)
+# Review-spec (you + driver)
 
 A spec is waiting for review before work proceeds. You decide; the driver runs this skill to help
 you and to record the outcome. In the planner flow the child items are blocked-by this step, so
@@ -16,6 +16,6 @@ waits behind.
 3. On their verdict:
    - Approve -> `lc done STEP approved` (closes the gate; unblocks the children in the planner
      flow, advances to the coder in the linear flow).
-   - Changes -> `lc done STEP changes` (-> develop) with a note saying exactly what to revise.
+   - Changes -> `lc done STEP changes` (-> draft-spec) with a note saying exactly what to revise.
 
 The human makes the call; you assist and do the bookkeeping. No emdashes.

@@ -284,7 +284,7 @@ class TestSqliteStoreStateCollapseMigration(unittest.TestCase):
 
         self.assertEqual(store.get_node("s-blocked").state, "ready")
         self.assertIn("s-blocked", [n.id for n in store.ready_steps()])
-        claimed = store.claim_ready("coder")
+        claimed = store.claim_ready("write-code")
         self.assertIsNotNone(claimed)
         self.assertEqual(claimed.id, "s-blocked")
 

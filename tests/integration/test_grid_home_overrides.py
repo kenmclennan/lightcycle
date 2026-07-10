@@ -34,7 +34,7 @@ class TestGridHomeOverrides(unittest.TestCase):
         _run(["init"], home, xdg)
         self.assertIn("open-pr", _run(["flow"], home, xdg).stdout)
         Path(home, "workflows", "standard.md").write_text(
-            "entry: build\n\nnodes:\n  build  coder\n"
+            "entry: build\n\nnodes:\n  build  write-code\n"
         )
         out = _run(["flow"], home, xdg).stdout
         self.assertIn("build", out)

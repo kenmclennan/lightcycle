@@ -286,7 +286,7 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
         tid = s.create_step("open-pr: x", step="open-pr", role="open-pr", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=tid, outcome="conflicted"))
         self.assertEqual(s.get_node(tid).state, "done")
-        self.assertEqual(s.get_node(resp.next_step).step, "resolve")
+        self.assertEqual(s.get_node(resp.next_step).step, "resolve-conflict")
 
     def test_done_outcome_still_requires_a_pr(self):
         s = FakeStore()
@@ -358,8 +358,8 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", theme=s.create_theme("theme"))
         s.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
-        s.create_step("watch-pr: x", step="watch-pr", role="watch-pr", parent=item)
-        resp = self._uc(s).execute(ClaimInput(role="watch-pr"))
+        s.create_step("watch-ci: x", step="watch-ci", role="watch-ci", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="watch-ci"))
         self.assertEqual(resp.config, {"ci-wait": "15m"})
 
     def test_omits_config_when_step_has_no_extra_frontmatter(self):

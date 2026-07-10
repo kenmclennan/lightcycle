@@ -3,7 +3,7 @@ produces:
   spec: required
 ---
 
-# Develop (you + driver)
+# Draft-spec (you + driver)
 
 A seed - a raw idea - needs shaping into a spec before any work can start. You do this WITH the
 human; the driver runs this skill. The driver mechanizes a shape the human decides; it does not
@@ -26,6 +26,6 @@ invent intent.
 4. `lc attach STEP spec <path> --replace` to attach it. `--replace` swaps any existing `spec`
    artifact for the new one, so the item never ends up with two - harmless on a first draft (there
    is nothing to replace yet), required on a revise.
-5. `lc done STEP drafted` (-> review-plan), which surfaces the spec in the human's inbox to review.
+5. `lc done STEP drafted` (-> review-spec), which surfaces the spec in the human's inbox to review.
 
 No emdashes.

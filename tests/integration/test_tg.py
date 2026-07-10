@@ -1181,7 +1181,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         rc, step_id, err = call(_cli_mod.cmd_set, item, "--state", "active")
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(step_id.strip())
-        self.assertEqual(step.step, "review-plan")
+        self.assertEqual(step.step, "review-spec")
         self.assertEqual(step.role, "human")
 
     def test_review_plan_step_surfaces_in_inbox(self):
@@ -1197,8 +1197,8 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_done, step_id.strip(), "approved")
         self.assertEqual(rc, 0, err)
         next_step = self.store.get_node(out.strip())
-        self.assertEqual(next_step.step, "build")
-        self.assertEqual(next_step.role, "coder")
+        self.assertEqual(next_step.step, "write-code")
+        self.assertEqual(next_step.role, "write-code")
 
     def test_changes_advances_to_develop(self):
         item = self._item_with_spec()
@@ -1208,7 +1208,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         )
         self.assertEqual(rc, 0, err)
         next_step = self.store.get_node(out.strip())
-        self.assertEqual(next_step.step, "develop")
+        self.assertEqual(next_step.step, "draft-spec")
 
     def test_arming_without_spec_or_step_fails_fast_with_no_step_created(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
@@ -1221,14 +1221,14 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
     def test_seed_first_path_via_develop_reaches_the_same_gate(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
         item = item.strip()
-        rc2, step_id, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--step", "develop")
+        rc2, step_id, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--step", "draft-spec")
         self.assertEqual(rc2, 0, err2)
         step_id = step_id.strip()
-        self.assertEqual(self.store.get_node(step_id).step, "develop")
+        self.assertEqual(self.store.get_node(step_id).step, "draft-spec")
         call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
         rc3, out, err3 = call(_cli_mod.cmd_done, step_id, "drafted")
         self.assertEqual(rc3, 0, err3)
-        self.assertEqual(self.store.get_node(out.strip()).step, "review-plan")
+        self.assertEqual(self.store.get_node(out.strip()).step, "review-spec")
 
 
 class TestPruneWorkers(unittest.TestCase):
