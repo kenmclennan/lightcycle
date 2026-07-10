@@ -54,7 +54,7 @@ Every step name is an **action**. The step name, its markdown file, and (for an 
 - **cleanup** (human) - remove the worktree and branch; terminal.
 - **resolve-conflict** (agent) - rebase and resolve merge conflicts.
 - **review-conflict** (human) - the escalation endpoint when conflicts cannot be resolved.
-- **audit** (agent) - the cadence-spawned retro auditor; escalates findings, never files work.
+- **audit** (agent) - the cadence-spawned retro audit; escalates findings, never files work.
 - **review-findings** (human) - read the audit's findings and decide; closing it is the acknowledgement.
 
 ## The three homes (deployment)

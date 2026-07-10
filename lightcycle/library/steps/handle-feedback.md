@@ -28,7 +28,7 @@ outstanding comment needs, reply to record what you decided, then exit.
    - top-level mention or a review with no inline comments: `gh pr comment <pr> --body "..."`.
    Keep replies short: what you decided and why; for rework, say it's queued.
 5. If ANY item needs rework, route WATCHED once (not once per item): `lc done WATCHED changes
-   --note "<summary of what needs to change, with file:line where relevant>"` - the coder picks
+   --note "<summary of what needs to change, with file:line where relevant>"` - the write-code agent picks
    this up on WATCHED's next push.
 6. Advance the watermark past every top-level mention you just handled:
    `lc attach WATCHED feedback-watermark <max created_at epoch seen> --replace`. Skip if you saw no
@@ -37,4 +37,4 @@ outstanding comment needs, reply to record what you decided, then exit.
    or "clean". Skip only if truly nothing.
 8. `lc done STEP done`. One-line summary: how many rework/answer/ignore. EXIT.
 
-Never merge. Never edit code here - route rework to WATCHED and let the coder push. No emdashes.
+Never merge. Never edit code here - route rework to WATCHED and let the write-code agent push. No emdashes.

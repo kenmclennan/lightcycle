@@ -22,15 +22,15 @@ autonomously - you never initiate a build, the pool polls the store for ready wo
 1. **Capture** - a rough idea lands in the backlog (`lc new item`). Cheap, unrefined, may overlap others.
 2. **Develop** - shape a backlog item (or a group of related ones) into a **spec** with the human,
    one decision at a time. The spec belongs to the desired **outcome** (the theme). lightcycle imposes
-   no spec shape (see the develop skill). If the work is big, the spec breaks into **phases**, each
+   no spec shape (see the draft-spec skill). If the work is big, the spec breaks into **phases**, each
    with a review checkpoint - one item per phase, from the single spec.
 3. **Review** - the human reviews the spec at the gate; approve, or send back with changes.
 4. **Build** - on approval, open or choose the theme for the objective (`lc new theme`), then file an
    item per phase under it (`lc new item` + `lc attach spec` + `lc set --state active`; `lc dep` to
-   order them); the pool runs each (build -> review -> open-pr -> watch-pr), then hands
-   `ready-merge`/`cleanup` to you.
+   order them); the pool runs each (write-code -> review-code -> open-pr -> watch-ci), then hands
+   `await-merge`/`cleanup` to you.
 
-You enter at capture/develop and gate at review and ready-merge; the middle runs itself.
+You enter at capture/develop and gate at review-spec and await-merge; the middle runs itself.
 _(The planner agent and a separate plan step were removed - the breakdown into phases/items is part
 of developing the spec; you file the items yourself.)_
 
@@ -55,20 +55,20 @@ These are how you work, not suggestions:
   composed from primitives. (See `CLAUDE.md`.)
 - **Substrate by hand; additive through the pipeline.** Anything that changes how the engine loads,
   spawns, or composes itself, build by hand - the pipeline can't build the loader it runs on. Additive
-  features go develop -> build like any work.
+  features go draft-spec -> write-code like any work.
 - **Hold main steady under an active build.** While a item is building or in review, do not change the
   `main` files its review depends on - shared docs, steps, or code. It stales the branch's base, so the
-  build silently reverts your edits or the reviewer checks a moving target. Land your substrate change
+  build silently reverts your edits or review-code checks a moving target. Land your substrate change
   before the build starts, or wait until the item merges. (Moving `METHODOLOGY.md`/`driver.md` under
   the GRID-010 build cost it four review rounds.)
 - **Freeze a spec once its item is building.** A filed item's spec is immutable while it builds or
-  is in review. Editing it - especially widening scope - moves the target under the reviewer, so the
+  is in review. Editing it - especially widening scope - moves the target under review-code, so the
   build reads one spec and the review checks another, and it churns. New requirements or scope go in a
   FOLLOW-UP item (a new item gated with `lc dep`), never an edit to the in-flight spec. (Expanding
   GRID-043 mid-build cost mcv several review rounds.)
 - **Reference and config chores are yours, not the pool's.** A change that is purely docs, references,
   naming sweeps, or config - no code logic to design or review - you do by hand; never file it as a
-  build step. The pipeline is for code with a spec and a review; a one-minute chore does not need a
+  pipeline step. The pipeline is for code with a spec and a review; a one-minute chore does not need a
   worker, a branch, and a review cycle. (This is also how you keep main steady under a build.)
 - **Gate held work; do not hand-track it.** If work must wait on other work, gate it with
   `lc dep <step> --needs <id>`. The store releases it when the blocker closes and the pool picks it
@@ -81,7 +81,7 @@ These are how you work, not suggestions:
   five-file conflict.) Until a planning agent automates this, it is your manual check at file time.
 - **Back up before you restructure.** Before any structural change to the backlog or store, refresh the
   store snapshot (export + commit) so the state survives. (The durable mechanism is its own feature.)
-- **Prime every review.** The reviewer surfaces its concerns and the spec makes the work falsifiable,
+- **Prime every review.** The review-code agent surfaces its concerns and the spec makes the work falsifiable,
   so the human reviews against something concrete, never cold.
 - **Set the pace by the human.** Co-design one decision at a time: propose, confirm, record. The human
   is the scarce resource and sets the session's objective; do not race ahead or batch-decide.

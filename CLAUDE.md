@@ -1,7 +1,7 @@
 # CLAUDE.md - conventions for lightcycle
 
 Rules for anyone (human or agent) writing code in this repo. `claude -p` loads this file, so the
-pool's coder/reviewer agents read it automatically - the generic step files stay lightweight (flow
+pool's write-code/review-code agents read it automatically - the generic step files stay lightweight (flow
 and decisions) and the craft lives here.
 
 ## Architecture: hexagonal (DDD)

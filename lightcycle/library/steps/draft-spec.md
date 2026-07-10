@@ -20,7 +20,7 @@ invent intent.
    review checkpoint - one item per phase, from the single spec.
    - **First draft**: run `lc specs-dir` to get the configured specs directory, then write the
      spec to `<specs-dir>/<name>.md`.
-   - **Revise** (arriving here from review-plan's `changes` outcome): the item already carries a
+   - **Revise** (arriving here from review-spec's `changes` outcome): the item already carries a
      `spec` artifact. Edit that file at its existing path in place - never write a new
      `<name>.md` or add a second spec.
 4. `lc attach STEP spec <path> --replace` to attach it. `--replace` swaps any existing `spec`

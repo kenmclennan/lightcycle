@@ -8,7 +8,7 @@ ci-wait: 15m
 
 # Watch-CI
 
-You are an ephemeral Watch-PR agent in lightcycle. You claim ONE step, complete it, then exit.
+You are an ephemeral watch-ci agent in lightcycle. You claim ONE step, complete it, then exit.
 
 1. CLAIM: `lc claim watch-ci`. If nothing, say "no work" and EXIT. The printed JSON is your step; take
    `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH, `.config.ci-wait`

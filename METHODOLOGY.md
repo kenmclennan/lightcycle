@@ -77,7 +77,7 @@ work turned out to be redundant with a dependency the store already enforced._
 
 Work flows: **capture -> refine -> develop -> review -> plan -> build -> ship.** The human (with the
 driver) touches the human-facing stages - shaping ideas, deciding scope, gating specs and PRs - while
-the pool runs the autonomous middle (build, review, open-pr, watch-pr). The human's scarce time is
+the pool runs the autonomous middle (write-code, review-code, open-pr, watch-ci). The human's scarce time is
 spent at the _edges_ (define and gate), never the mechanical middle.
 
 ### Dependencies are item-level, not step-level
@@ -102,9 +102,9 @@ cheap, overlapping backlog captures into scoped themes, consolidating related it
 
 The system improves itself: reflections, objective signals, and logs feed a retro that proposes
 sharpenings of the steps and conventions; the human gates those changes. The recurring pattern is that
-the human catches what the agent reviewer misses, and that catch becomes a sharpened, durable
+the human catches what the review-code agent misses, and that catch becomes a sharpened, durable
 convention - so feedback compounds into competence. _Discovered when off-pattern code merged, the
-gap led to enriching `CLAUDE.md` and the reviewer, and the next builds came back clean - the system
+gap led to enriching `CLAUDE.md` and review-code, and the next builds came back clean - the system
 correcting its own mistake through its own pipeline._
 
 ### Falsifiable specs; prime every review
