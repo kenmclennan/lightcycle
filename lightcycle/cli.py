@@ -990,6 +990,6 @@ def cmd_retro(argv):
         ap.error("provide exactly one of: <id>, --since, --last, --project")
 
     inp = RetroInput(subject=a.id, since=a.since, last=a.last, project=a.project)
-    resp = RetroUseCase(_container.store, _flow(), _container.config).execute(inp)
+    resp = RetroUseCase(_container.store, _flow()).execute(inp)
     _print_retro(resp)
     return 0

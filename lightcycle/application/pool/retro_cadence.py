@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass, field
 from typing import List
 
@@ -24,10 +23,12 @@ class RetroCadenceUseCase:
         if not cadence_steps:
             return RetroCadenceResponse()
 
-        default = os.path.basename(self._config.engine_root())
         by_project = {}
         for item in self._store.closed_unretroed_items():
-            by_project.setdefault(self._project_of(item, default), []).append(item)
+            project = self._project_of(item)
+            if project is None:
+                continue
+            by_project.setdefault(project, []).append(item)
 
         fired = []
         for step, role in cadence_steps:
@@ -42,8 +43,8 @@ class RetroCadenceUseCase:
 
         return RetroCadenceResponse(fired=fired)
 
-    def _project_of(self, item, default):
-        return Item(item.id, tuple(self._store.item_artifacts(item.id))).repo(default)
+    def _project_of(self, item):
+        return Item(item.id, tuple(self._store.item_artifacts(item.id))).artifact_of("repo")
 
     def _open_audit_projects(self, step):
         return {
