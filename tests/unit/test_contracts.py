@@ -113,11 +113,11 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertTrue(result["ok"],
                         msg="Flow composition error - missing inputs: %s" % result.get("missing", {}))
 
-    def test_review_plan_is_the_entry_gate_before_the_coder(self):
+    def test_review_spec_is_the_entry_gate_before_the_coder(self):
         graph = parse_graph(workflow_text(_ROOT, "standard"))
-        self.assertEqual(graph.entry, "review-plan")
-        self.assertEqual(graph.target("review-plan", "approved"), "build")
-        self.assertEqual(graph.target("review-plan", "changes"), "develop")
+        self.assertEqual(graph.entry, "review-spec")
+        self.assertEqual(graph.target("review-spec", "approved"), "write-code")
+        self.assertEqual(graph.target("review-spec", "changes"), "draft-spec")
 
 
 if __name__ == "__main__":

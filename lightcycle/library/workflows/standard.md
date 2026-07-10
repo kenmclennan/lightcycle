@@ -1,51 +1,45 @@
 # Standard
 
-Spec -> code -> review -> open PR -> watch CI -> human merge, with a develop/plan
-front end and a conflict-resolution branch. This is the default workflow; the
-`nodes` block names the step file that performs each stage (omitted where the
-stage and file names already match).
+Spec -> code -> review -> open PR -> watch CI -> human merge, with a draft/review-spec
+front end and a conflict-resolution branch. This is the default workflow. Each step name
+is an action; the step name and its markdown file are the same word.
 
-entry: review-plan
-
-nodes:
-  build   coder
-  review  reviewer
-  audit   auditor
+entry: review-spec
 
 edges:
-  build        done       review
-  review       done       open-pr
-  review       rejected   build
-  open-pr      done       watch-pr
-  open-pr      conflicted resolve
-  watch-pr     done       ready-merge
-  watch-pr     ci-failed  build
-  ready-merge  merged     cleanup
-  ready-merge  changes    build
-  ready-merge  conflicted resolve
-  ready-merge  gave-up    conflict-review
-  resolve      resolved   open-pr
-  resolve      escalate   conflict-review
-  develop      drafted    review-plan
-  review-plan  changes    develop
-  review-plan  approved   build
+  write-code       done        review-code
+  review-code      done        open-pr
+  review-code      rejected    write-code
+  open-pr          done        watch-ci
+  open-pr          conflicted  resolve-conflict
+  watch-ci         done        await-merge
+  watch-ci         ci-failed   write-code
+  await-merge      merged      cleanup
+  await-merge      changes     write-code
+  await-merge      conflicted  resolve-conflict
+  await-merge      gave-up     review-conflict
+  resolve-conflict resolved    open-pr
+  resolve-conflict escalate    review-conflict
+  draft-spec       drafted     review-spec
+  review-spec      changes     draft-spec
+  review-spec      approved    write-code
 
 hooks:
-  pr_merge              ready-merge  merged
-  pr_close              ready-merge  abandoned
-  pr_rework             ready-merge  changes
-  pr_conflict           ready-merge  conflicted
-  pr_conflict_cap       ready-merge  3
-  pr_conflict_escalate  ready-merge  gave-up
-  mention_token         ready-merge  @lc
-  review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]
+  pr_merge              await-merge  merged
+  pr_close              await-merge  abandoned
+  pr_rework             await-merge  changes
+  pr_conflict           await-merge  conflicted
+  pr_conflict_cap       await-merge  3
+  pr_conflict_escalate  await-merge  gave-up
+  mention_token         await-merge  @lc
+  review_bot_allowlist  await-merge  copilot-pull-request-reviewer[bot]
   retro_cadence         audit
 
 signals:
-  review       review_rounds    rejected
-  review       resets           rejected
-  open-pr      conflicts        ~conflict
-  watch-pr     resets           ci-failed
-  ready-merge  resets           changes
-  resolve      resolve_attempts escalate
-  review-plan  resets           changes
+  review-code       review_rounds     rejected
+  review-code       resets            rejected
+  open-pr           conflicts         ~conflict
+  watch-ci          resets            ci-failed
+  await-merge       resets            changes
+  resolve-conflict  resolve_attempts  escalate
+  review-spec       resets            changes

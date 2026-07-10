@@ -12,20 +12,20 @@ TG = str(ROOT / "bin" / "lc")
 _CODER_STEP = """\
 ---
 model: sonnet
-step: build
+step: write-code
 routes:
-  done: review
+  done: review-code
 ---
-# coder
+# write-code
 stub
 """
 
 _REVIEWER_STEP = """\
 ---
 model: opus
-step: review
+step: review-code
 ---
-# reviewer
+# review-code
 stub
 """
 
@@ -49,13 +49,12 @@ class SmokeTest(unittest.TestCase):
         cls.root = _engine_root()
         steps = Path(cls.root) / "steps"
         steps.mkdir()
-        (steps / "coder.md").write_text(_CODER_STEP)
-        (steps / "reviewer.md").write_text(_REVIEWER_STEP)
+        (steps / "write-code.md").write_text(_CODER_STEP)
+        (steps / "review-code.md").write_text(_REVIEWER_STEP)
         workflows = Path(cls.root) / "workflows"
         workflows.mkdir()
         (workflows / "standard.md").write_text(
-            "entry: build\n\nnodes:\n  build   coder\n  review  reviewer\n"
-            "\nedges:\n  build  done  review\n"
+            "entry: write-code\n\nedges:\n  write-code  done  review-code\n"
         )
         ws = tempfile.mkdtemp()
         Path(cls.root, "grid.config").write_text(
@@ -96,10 +95,10 @@ class SmokeTest(unittest.TestCase):
         item_id = r.stdout.strip()
         r = _tg("attach", item_id, "spec", "specs/smoke.md", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
-        r = _tg("set", item_id, "--state", "active", "--step", "build", root=self.root)
+        r = _tg("set", item_id, "--state", "active", "--step", "write-code", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
-        r = _tg("claim", "coder", root=self.root)
+        r = _tg("claim", "write-code", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         step = json.loads(r.stdout)
         self.assertEqual(step["state"], "in_progress")
@@ -113,8 +112,8 @@ class SmokeTest(unittest.TestCase):
         r = _tg("show", review_id, root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         shown = json.loads(r.stdout)
-        self.assertEqual(shown["role"], "reviewer")
-        self.assertEqual(shown["step"], "review")
+        self.assertEqual(shown["role"], "review-code")
+        self.assertEqual(shown["step"], "review-code")
         self.assertEqual(shown["state"], "ready")
 
 

@@ -98,6 +98,25 @@ def _migrated_state(type_, status, old_item_state):
     return State.READY.value
 
 
+_ACTION_STEP_RENAMES = {
+    "build": "write-code",
+    "review": "review-code",
+    "review-plan": "review-spec",
+    "develop": "draft-spec",
+    "watch-pr": "watch-ci",
+    "ready-merge": "await-merge",
+    "resolve": "resolve-conflict",
+    "conflict-review": "review-conflict",
+}
+_ACTION_ROLE_RENAMES = {
+    "coder": "write-code",
+    "reviewer": "review-code",
+    "auditor": "audit",
+    "watch-pr": "watch-ci",
+    "resolve": "resolve-conflict",
+}
+
+
 class SqliteStore(StorePort):
     def __init__(self, config, now=None, package_root=None, worktrees_dir=None):
         self._config = config
@@ -113,6 +132,7 @@ class SqliteStore(StorePort):
         self._migrate_history_state_column()
         self._migrate_nodes_workflow()
         self._migrate_collapse_state()
+        self._migrate_action_rename()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, worktrees_dir):
@@ -170,6 +190,31 @@ class SqliteStore(StorePort):
         backups_dir = os.path.join(self._config.data_root(), "backups")
         os.makedirs(backups_dir, exist_ok=True)
         dst = os.path.join(backups_dir, "store-pre-state-collapse.db.gz")
+        with open(self._db_path, "rb") as src, gzip.open(dst, "wb") as out:
+            shutil.copyfileobj(src, out)
+
+    def _migrate_action_rename(self):
+        old_steps = tuple(_ACTION_STEP_RENAMES)
+        old_roles = tuple(_ACTION_ROLE_RENAMES)
+        q = "SELECT 1 FROM nodes WHERE step IN (%s) OR role IN (%s) LIMIT 1" % (
+            ",".join("?" * len(old_steps)),
+            ",".join("?" * len(old_roles)),
+        )
+        if not self._conn.execute(q, old_steps + old_roles).fetchone():
+            return
+        self._backup_before_action_rename()
+        for old, new in _ACTION_STEP_RENAMES.items():
+            self._conn.execute("UPDATE nodes SET step = ? WHERE step = ?", (new, old))
+        for old, new in _ACTION_ROLE_RENAMES.items():
+            self._conn.execute("UPDATE nodes SET role = ? WHERE role = ?", (new, old))
+        self._conn.commit()
+
+    def _backup_before_action_rename(self):
+        self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self._conn.commit()
+        backups_dir = os.path.join(self._config.data_root(), "backups")
+        os.makedirs(backups_dir, exist_ok=True)
+        dst = os.path.join(backups_dir, "store-pre-action-rename.db.gz")
         with open(self._db_path, "rb") as src, gzip.open(dst, "wb") as out:
             shutil.copyfileobj(src, out)
 

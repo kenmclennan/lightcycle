@@ -2,14 +2,14 @@
 model: sonnet
 ---
 
-# Auditor
+# Audit
 
 You run on two triggers: once per theme close (acute lens), and on a recurring
 cadence (trend lens). Check your step metadata to see which applies.
 
 ## Acute lens (theme close) - metadata has `theme`
 
-1. CLAIM: `lc claim auditor`. If nothing, say "no work" and EXIT. Take `.id` as STEP and
+1. CLAIM: `lc claim audit`. If nothing, say "no work" and EXIT. Take `.id` as STEP and
    `.theme` as EPIC.
 2. Read the theme's retro digest: `lc show EPIC` and locate the `retro` artifact. Its value
    is JSON with `feedback` (array of {step, text}) and `story_signals` (per-item tallies).
@@ -29,7 +29,7 @@ cadence (trend lens). Check your step metadata to see which applies.
 
 ## Trend lens (cadence) - metadata has `since`
 
-1. CLAIM: `lc claim auditor`. If nothing, say "no work" and EXIT. Take `.id` as STEP and
+1. CLAIM: `lc claim audit`. If nothing, say "no work" and EXIT. Take `.id` as STEP and
    `.since` as SINCE (from the step's `since` metadata field - check `lc show STEP`).
 2. Run the cross-theme retro: `lc retro --since SINCE`
 3. Look for **recurring trends**: a signal or friction that appears across multiple themes,
