@@ -95,6 +95,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def dep_remove(self, node_id, blocked_by):
+        pass
+
+    @abstractmethod
     def ready_steps(self):
         pass
 
