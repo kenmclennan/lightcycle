@@ -61,5 +61,8 @@ class FlowService:
     def outcomes_for(self, step, name=None, project=None):
         return self.load_flow(name, project).outcomes_for(step)
 
+    def is_known_step(self, step, name=None, project=None):
+        return bool(self.load_flow(name, project).owner_of(step))
+
     def ready_roles(self):
         return ReadyQueue(self._store.ready_steps()).distinct_roles()
