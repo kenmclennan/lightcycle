@@ -22,11 +22,21 @@ class TestParseRemoteVersion(unittest.TestCase):
 class TestUpgrade(unittest.TestCase):
     def test_upgrades_when_remote_is_newer(self):
         installer = FakeInstaller()
-        resp = upgrade("0.1.0", fetch=lambda: "0.2.0", install=installer)
+        resp = upgrade("0.1.0", fetch=lambda: "0.2.0", install=installer, installed=lambda: "0.2.0")
         self.assertTrue(resp.available)
         self.assertTrue(resp.applied)
         self.assertEqual(installer.calls, 1)
         self.assertEqual(resp.current, "0.1.0")
+        self.assertEqual(resp.remote, "0.2.0")
+
+    def test_reports_the_installed_version_not_the_stale_fetched_one(self):
+        resp = upgrade(
+            "0.1.0", fetch=lambda: "0.2.0", install=lambda: None, installed=lambda: "0.2.1")
+        self.assertEqual(resp.remote, "0.2.1")
+
+    def test_falls_back_to_fetched_when_installed_version_is_unknown(self):
+        resp = upgrade(
+            "0.1.0", fetch=lambda: "0.2.0", install=lambda: None, installed=lambda: None)
         self.assertEqual(resp.remote, "0.2.0")
 
     def test_no_op_when_versions_are_equal(self):
