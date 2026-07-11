@@ -37,10 +37,6 @@ Everything that is _yours_ lives in **`~/.lightcycle/`** (config, store, logs, w
 your step/workflow overrides) - separate from the installed engine, so `pipx upgrade`
 never touches your data. `~/.lightcycle` is found by default (override with `$LC_HOME`).
 
-**Upgrading from an older layout?** Run `lc migrate` once - it relocates a legacy
-`~/.grid/` (or the even older `~/.config/the-grid/config` + in-repo `.grid.db`) into
-`~/.lightcycle`, renaming the store to `store.db` and backing it up first.
-
 ## Quickstart
 
 ```bash

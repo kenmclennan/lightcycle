@@ -47,12 +47,3 @@ and re-running the script.
 
 There is intentionally **no `lc promote` / `lc rollback` command** - promoting a
 self-built engine is a dev workflow, not a feature of the shipped tool.
-
-## The one-time layout migration
-
-`lc migrate` is a **transitional** command: it relocates an older layout - a `~/.grid/`
-home (config, `.grid.db`, overrides, logs, worktrees), or the even older
-`~/.config/the-grid/config` + in-repo `.grid.db` - into `~/.lightcycle`, renaming the
-store to `store.db` and backing it up first. It exists only for machines that predate the
-current layout; fresh installs never need it, and it is slated for removal once existing
-machines are migrated (backlog `tg-14`).

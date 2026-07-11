@@ -77,20 +77,11 @@ class Config:
     def library_root(self):
         return str(Path(__file__).resolve().parent / "library")
 
-    def legacy_data_root(self):
-        return self._env("LC_LEGACY_HOME") or os.path.join(self._home(), ".grid")
-
-    def legacy_config_path(self):
-        return os.path.join(self.legacy_data_root(), "config")
-
     def config_path(self):
         override = self._env("LC_CONFIG")
         if override:
             return override
-        new = os.path.join(self.data_root(), "config")
-        if not os.path.exists(new) and os.path.exists(self.legacy_config_path()):
-            return self.legacy_config_path()
-        return new
+        return os.path.join(self.data_root(), "config")
 
     def load_config(self):
         p = self.config_path()
