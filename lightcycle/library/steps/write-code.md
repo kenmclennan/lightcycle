@@ -41,10 +41,10 @@ You are an ephemeral write-code agent in lightcycle. You claim ONE step, complet
    helped or got in the way: spec gaps you had to infer, tooling/environment friction
    (a command that failed, a wrong assumption), anything that would make the next write-code pass
    smoother. One or two honest sentences beat a checklist; skip it only if truly nothing.
-8. `lc done STEP done`. One-line summary. Optionally pass `--note` to prime the review-code agent -
-   what changed and what to verify: a risk, a deviation from spec, or the reason for a rework.
-   Write the note only when non-obvious; skip it for routine work. Never a pass/fail assessment
-   ("all tests green"). EXIT.
+8. `lc done STEP done` (-> open-pr). One-line summary. Optionally pass `--note` to prime whoever
+   reads it next (open-pr, and eventually review-code once CI is green) - what changed and what to
+   verify: a risk, a deviation from spec, or the reason for a rework. Write the note only when
+   non-obvious; skip it for routine work. Never a pass/fail assessment ("all tests green"). EXIT.
 
 The repo's `CLAUDE.md` (read explicitly at WORKSPACE, per step 2) carries the conventions and the
 craft skills to use - follow it and the surrounding code. lightcycle imposes no structure of its own;

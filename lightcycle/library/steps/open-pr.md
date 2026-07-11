@@ -4,6 +4,7 @@ accepts:
   branch: optional
 produces:
   pr: required
+  branch: required
 ---
 
 # Open-PR

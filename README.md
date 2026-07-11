@@ -86,7 +86,7 @@ generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, pl
 - **The engine is workflow-agnostic.** `lc` owns nodes and the flow, but has no opinion
   on _how you work_ - including your spec format. It only stores a spec's path as an
   artifact; it never parses it. The steps in `steps/` are an _example_ workflow (a
-  feature pipeline: write-code -> review-code -> open-pr -> watch-ci, then the human steps
+  feature pipeline: write-code -> open-pr -> watch-ci -> review-code, then the human steps
   await-merge -> cleanup). You define your own way of working by composing
   [workflows](#workflows) over the step library. A spec is whatever your steps
   understand; hand the Driver one you wrote and it flows in as-is.
@@ -112,7 +112,7 @@ generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, pl
   required inputs are guaranteed by some upstream producer on every path. Presence-only:
   it checks the item's artifact list, never git/GitHub reality. Agents with no contract are
   unconstrained.
-- **A step is a stage running.** "write-code", "review-code", "open-pr" are steps chained by
+- **A step is a stage running.** "write-code", "open-pr", "review-code" are steps chained by
   dependencies; closing one makes its dependents ready. Which step is ready IS the stage.
   The chain is defined by the **workflow graph** (see [Workflows](#workflows)), not by the
   steps: a workflow file names the entry stage, the `outcome -> next-stage` edges, and which
@@ -122,7 +122,7 @@ generic primitives over nodes (`new`/`set`/`show`/`done`/`rm`/`attach`/`dep`, pl
 - **`lc` owns the domain and the processes.** It is the only caller of the store. It
   spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own step.** The loop spawns a role
-  (`write-code`/`review-code`/`open-pr`/`watch-ci`); the worker's first act is `lc claim <role>`
+  (`write-code`/`open-pr`/`watch-ci`/`review-code`); the worker's first act is `lc claim <role>`
   (atomic), then it works and exits. A worker that dies before claiming leaves nothing
   stuck. Human steps (`await-merge`/`cleanup`) are never spawned; they surface in `lc inbox`.
 - **Three homes: engine / `~/.lightcycle` / projects.** The **engine** is the pipx-installed
@@ -169,16 +169,16 @@ step once and every workflow benefits; vary the graph without touching the promp
 A workflow file has up to five sections; only `entry` is required:
 
 ```
-# Standard - spec -> code -> review -> PR -> merge
+# Standard - spec -> code -> PR -> CI -> review -> merge
 
 entry: review-spec      # the stage an activated item starts at (step = file = role)
 
 edges:                  # from-stage  outcome  to-stage
   review-spec  approved   write-code
-  write-code   done       review-code
-  review-code  done       open-pr
-  review-code  rejected   write-code
+  write-code   done       open-pr
   open-pr      done       watch-ci
+  watch-ci     done       review-code
+  review-code  rejected   write-code
 
 hooks:                  # engine event -> handling stage (+ value)
   pr_merge       await-merge  merged

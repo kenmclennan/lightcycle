@@ -26,6 +26,10 @@ class WorkflowGraph:
         toks = self.hooks.get(name)
         return toks[1] if toks and len(toks) > 1 else None
 
+    def hook_extra(self, name, index=2):
+        toks = self.hooks.get(name)
+        return toks[index] if toks and len(toks) > index else None
+
 
 def parse_graph(text):
     entry = None

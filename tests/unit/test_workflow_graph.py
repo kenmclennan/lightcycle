@@ -47,6 +47,18 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         self.assertIsNone(graph.hook_value("theme_close"))
         self.assertIsNone(graph.hook_stage("pr_close"))
 
+    def test_hook_extra_carries_a_third_token(self):
+        graph = parse_graph(
+            "entry: build\n"
+            "\n"
+            "hooks:\n"
+            "  ci_failed_cap  watch-ci  3  review-ci\n"
+            "  pr_merge       ready-merge  merged\n"
+        )
+        self.assertEqual(graph.hook_extra("ci_failed_cap"), "review-ci")
+        self.assertIsNone(graph.hook_extra("pr_merge"))
+        self.assertIsNone(graph.hook_extra("theme_close"))
+
     def test_parses_signals_by_stage(self):
         graph = parse_graph(
             "entry: build\n"

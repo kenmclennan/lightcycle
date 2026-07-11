@@ -139,6 +139,18 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertIsNone(flow.next("audit", "clean"))
         self.assertIsNone(graph.target("audit", "clean"))
 
+    def test_ci_failed_cap_escalates_to_review_ci_after_three(self):
+        step_metas = {
+            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
+            for role in step_roles(_ROOT)
+        }
+        graph = parse_graph(workflow_text(_ROOT, "standard"))
+        flow = Flow.from_graph(graph, step_metas)
+        self.assertEqual(flow.ci_failed_cap_n("watch-ci"), 3)
+        self.assertEqual(flow.ci_failed_cap_target("watch-ci"), "review-ci")
+        self.assertEqual(flow.owner_of("review-ci"), "human")
+        self.assertEqual(flow.outcomes_for("review-ci"), [])
+
 
 if __name__ == "__main__":
     unittest.main()

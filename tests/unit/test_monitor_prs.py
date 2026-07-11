@@ -28,6 +28,18 @@ class _FlowAdapter:
     def meta_for_step(self, step, name=None, project=None):
         return {}
 
+    def owner_of(self, step, name=None, project=None):
+        return self._flow.owner_of(step)
+
+    def ci_failed_cap_outcome(self, step, name=None, project=None):
+        return self._flow.ci_failed_cap_outcome(step)
+
+    def ci_failed_cap_n(self, step, name=None, project=None):
+        return self._flow.ci_failed_cap_n(step)
+
+    def ci_failed_cap_target(self, step, name=None, project=None):
+        return self._flow.ci_failed_cap_target(step)
+
 
 _FLOW = flow_from_metas(
     {
