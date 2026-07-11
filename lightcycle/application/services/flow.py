@@ -76,5 +76,8 @@ class FlowService:
     def ci_failed_cap_target(self, step, name=None, project=None):
         return self.load_flow(name, project).ci_failed_cap_target(step)
 
+    def effective_transition(self, transition, outcome, prior_count, name=None, project=None):
+        return self.load_flow(name, project).effective_transition(transition, outcome, prior_count)
+
     def ready_roles(self):
         return ReadyQueue(self._store.ready_steps()).distinct_roles()

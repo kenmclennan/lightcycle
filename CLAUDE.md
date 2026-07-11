@@ -15,6 +15,8 @@ Dependencies point inward; the domain depends on nothing.
 
 Business logic stranded in `cli.py` or an adapter is the most common defect here; it belongs in a use case (`application/`), and any pure rule belongs in `domain/`.
 
+Next-step resolution has one home: a use case must not inline `flow_next` -> `create_step` or reimplement the transition / ci-failed-cap logic; it routes through the shared resolver (`application/flow/next_step.py`).
+
 ## Tests
 
 **First-time setup: `bin/setup`** - it checks prerequisites (python3, uv, git), installs the dev environment (`uv sync`), initialises the lightcycle store (`lc init`), and verifies. Idempotent. (The engine runs on system `python3` with zero runtime deps, so `bin/lc` works without the venv; the venv is only for the tests.)

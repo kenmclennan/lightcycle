@@ -154,6 +154,25 @@ class Flow:
     def ci_failed_cap_target(self, step):
         return self._ci_failed_cap_target.get(step)
 
+    def effective_transition(self, transition, outcome, prior_count):
+        if transition is None:
+            return None
+        step = transition.from_step
+        cap_outcome = self._ci_failed_cap_outcome.get(step)
+        if cap_outcome is None or outcome != cap_outcome:
+            return transition
+        cap_n = self._ci_failed_cap_n.get(step)
+        cap_target = self._ci_failed_cap_target.get(step)
+        if cap_n is None or not cap_target:
+            return transition
+        if prior_count < cap_n:
+            return transition
+        return Transition(
+            from_step=step,
+            outcome=outcome,
+            to_step=cap_target,
+            to_role=self.owner_of(cap_target) or "human",
+        )
 
     def retro_cadence_steps(self):
         return [(step, self._owner[step]) for step in sorted(self._retro_cadence) if step in self._owner]

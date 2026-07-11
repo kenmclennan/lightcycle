@@ -420,6 +420,76 @@ class TestCiFailedCapRouting(unittest.TestCase):
         self.assertEqual(s.get_node(resp.next_step).step, "build")
 
 
+class TestCiFailedCapAdvancePath(unittest.TestCase):
+    GRAPH_TEXT = TestCiFailedCapRouting.GRAPH_TEXT
+    METAS = TestCiFailedCapRouting.METAS
+
+    def _fail_n_times(self, store, item, n):
+        for _ in range(n):
+            old = store.create_step("watch: x", step="watch", role="watcher", parent=item)
+            store.close(old, "ci-failed")
+
+    def test_advance_under_cap_routes_normally(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        self._fail_n_times(s, item, 1)
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
+        resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
+
+    def test_advance_at_cap_escalates_instead_of_looping(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        self._fail_n_times(s, item, 2)
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
+        resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).role, "human")
+
+
+class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
+    GRAPH_TEXT = TestCiFailedCapRouting.GRAPH_TEXT
+    METAS = TestCiFailedCapRouting.METAS
+
+    def _fail_n_times(self, store, item, n):
+        for _ in range(n):
+            old = store.create_step("watch: x", step="watch", role="watcher", parent=item)
+            store.close(old, "ci-failed")
+
+    def _setup(self, prior_failures):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        self._fail_n_times(s, item, prior_failures)
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
+        return s, wid, flow
+
+    def test_below_cap_same_next_step_both_paths(self):
+        s, wid, flow = self._setup(prior_failures=1)
+        advanced = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
+        s2, wid2, flow2 = self._setup(prior_failures=1)
+        completed = CompleteStepUseCase(s2, flow2).execute(
+            CompleteInput(step=wid2, outcome="ci-failed")
+        )
+        self.assertEqual(
+            s.get_node(advanced.next_step).step, s2.get_node(completed.next_step).step
+        )
+
+    def test_at_cap_same_next_step_both_paths(self):
+        s, wid, flow = self._setup(prior_failures=2)
+        advanced = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
+        s2, wid2, flow2 = self._setup(prior_failures=2)
+        completed = CompleteStepUseCase(s2, flow2).execute(
+            CompleteInput(step=wid2, outcome="ci-failed")
+        )
+        self.assertEqual(s.get_node(advanced.next_step).step, "escalate-step")
+        self.assertEqual(
+            s.get_node(advanced.next_step).step, s2.get_node(completed.next_step).step
+        )
+
+
 class TestCiFailedCapWithRealSteps(unittest.TestCase):
     def _uc(self, store):
         return CompleteStepUseCase(store, FlowService(_RealFs(), store, _RealConfig()))
