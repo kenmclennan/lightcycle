@@ -14,7 +14,7 @@ def _config():
         "projects: %s\nspecs: %s\nshortcode: tg\ndefault-workflow: standard\n"
         % (projects, projects)
     )
-    config = Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": str(cfg)})
+    config = Config(environ={"LC_HOME": root, "LC_CONFIG": str(cfg)})
     return config, projects
 
 

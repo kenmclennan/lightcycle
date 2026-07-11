@@ -11,7 +11,7 @@ class TestMainRefusesLiveStoreFromWorktree(unittest.TestCase):
     def test_reports_the_refusal_and_exits_nonzero(self):
         with patch("lightcycle.cli.Container", side_effect=LiveStoreRefused(
             "running from a worktree checkout; refusing the live store. "
-            "Set LC_ROOT_OVERRIDE to a throwaway store for branch-code execution."
+            "Branch code verifies via tests against a temp store; set LC_HOME to point elsewhere."
         )):
             err = io.StringIO()
             with redirect_stderr(err):

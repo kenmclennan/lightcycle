@@ -158,7 +158,7 @@ class TestSqliteStoreHistoryMigration(unittest.TestCase):
         cfg_path = os.path.join(root, "config")
         with open(cfg_path, "w") as f:
             f.write("shortcode: GRID\n")
-        config = Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": cfg_path})
+        config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
         conn = sqlite3.connect(os.path.join(root, "store.db"))
         conn.execute(
@@ -240,7 +240,7 @@ class TestSqliteStoreStateCollapseMigration(unittest.TestCase):
         cfg_path = os.path.join(root, "config")
         with open(cfg_path, "w") as f:
             f.write("shortcode: GRID\n")
-        return Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": cfg_path})
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def test_migration_maps_every_row_to_the_single_state_field(self):
         root = tempfile.mkdtemp()

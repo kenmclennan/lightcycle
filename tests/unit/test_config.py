@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import lightcycle.config as config_mod
 from lightcycle.config import Config, ConfigError
 
 HOME = os.path.expanduser("~")
@@ -225,17 +226,14 @@ class TestRetroCadenceConfig(unittest.TestCase):
 
 
 class TestGridRootAndEnv(unittest.TestCase):
-    def test_engine_root_override(self):
-        self.assertEqual(_cfg({"LC_ROOT_OVERRIDE": "/tmp/grid"}).engine_root(), "/tmp/grid")
-
-    def test_package_root_ignores_root_override(self):
-        overridden = _cfg({"LC_ROOT_OVERRIDE": "/tmp/grid"}).package_root()
+    def test_package_root_ignores_lc_home(self):
+        overridden = _cfg({"LC_HOME": "/tmp/grid"}).package_root()
         plain = _cfg().package_root()
         self.assertEqual(overridden, plain)
         self.assertNotEqual(overridden, "/tmp/grid")
 
-    def test_default_data_root_ignores_root_override_and_home(self):
-        c = _cfg({"LC_ROOT_OVERRIDE": "/tmp/grid", "LC_HOME": "/tmp/other"})
+    def test_default_data_root_ignores_lc_home(self):
+        c = _cfg({"LC_HOME": "/tmp/other"})
         self.assertEqual(c.default_data_root(), os.path.join(HOME, ".lightcycle"))
 
     def test_data_root_matches_default_when_unset(self):
@@ -247,6 +245,19 @@ class TestGridRootAndEnv(unittest.TestCase):
         self.assertEqual(e["FOO"], "bar")
         e["FOO"] = "mutated"
         self.assertEqual(c.base_env()["FOO"], "bar")
+
+
+def test_library_root_is_package_relative_and_ignores_env():
+    expected = os.path.join(os.path.dirname(config_mod.__file__), "library")
+    cfg = Config(environ={"LC_LIBRARY": "/tmp/somewhere", "LC_HOME": "/tmp/elsewhere"})
+    assert cfg.library_root() == expected
+    assert cfg.library_root().endswith(os.path.join("lightcycle", "library"))
+
+
+def test_lc_root_override_is_no_longer_read():
+    cfg = Config(environ={"LC_ROOT_OVERRIDE": "/should/be/ignored"})
+    assert cfg.data_root() != "/should/be/ignored"
+    assert cfg.engine_root() != "/should/be/ignored"
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ stub
 
 def _tg(*args, root):
     env = dict(os.environ)
-    env["LC_ROOT_OVERRIDE"] = root
+    env["LC_HOME"] = root
     env["LC_CONFIG"] = os.path.join(root, "grid.config")
     return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
 

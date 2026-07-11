@@ -12,7 +12,6 @@ TG = str(ROOT / "bin" / "lc")
 def _run_migrate(new, legacy, xdg):
     env = dict(os.environ, LC_HOME=new, LC_LEGACY_HOME=legacy, XDG_CONFIG_HOME=xdg)
     env.pop("LC_CONFIG", None)
-    env.pop("LC_ROOT_OVERRIDE", None)
     return subprocess.run([sys.executable, TG, "migrate"], capture_output=True, text=True, env=env)
 
 
