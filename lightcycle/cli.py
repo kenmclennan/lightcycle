@@ -743,6 +743,16 @@ def _format_tick(result, prev_snapshot, now):
     return lines, cur
 
 
+def _upgrade_notice(check=lambda: upgrade(__version__, check_only=True)):
+    try:
+        resp = check()
+    except Exception:
+        return None
+    if not resp.available:
+        return None
+    return "a newer lightcycle is available (%s -> %s); run lc upgrade" % (resp.current, resp.remote)
+
+
 def cmd_start(argv):
     ap = argparse.ArgumentParser(prog="lc start")
     ap.add_argument("--once", action="store_true")
@@ -790,6 +800,9 @@ def cmd_start(argv):
         interval = _container.config.poll_seconds()
         max_agents = _container.config.max_agents()
         show_banner()
+        notice = _upgrade_notice()
+        if notice:
+            print(notice)
         print("lc start  poll=%ds  max-agents=%d" % (interval, max_agents))
         prev_snapshot = None
         prev_now = time.time()
