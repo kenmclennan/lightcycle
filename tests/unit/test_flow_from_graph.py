@@ -28,6 +28,7 @@ hooks:
   pr_conflict           ready-merge  conflicted
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
+  ci_failed_cap         watch-pr     ci-failed  3  review-ci
   mention_token         ready-merge  @lc
   review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]  another-bot[bot]
   retro_cadence         audit
@@ -43,6 +44,7 @@ STEP_METAS = {
     "auditor": {"model": "sonnet"},
     "handle-feedback": {"model": "sonnet"},
     "review-findings": {},
+    "review-ci": {},
 }
 
 
@@ -103,3 +105,17 @@ class TestFlowFromGraph(unittest.TestCase):
     def test_audit_clean_is_a_declared_terminal_outcome(self):
         self.assertIsNone(self.flow.next("audit", "clean"))
         self.assertIn("clean", self.flow.outcomes_for("audit"))
+
+    def test_ci_failed_cap_and_target(self):
+        self.assertEqual(self.flow.ci_failed_cap_outcome("watch-pr"), "ci-failed")
+        self.assertEqual(self.flow.ci_failed_cap_n("watch-pr"), 3)
+        self.assertEqual(self.flow.ci_failed_cap_target("watch-pr"), "review-ci")
+
+    def test_ci_failed_cap_absent_by_default(self):
+        self.assertIsNone(self.flow.ci_failed_cap_outcome("build"))
+        self.assertIsNone(self.flow.ci_failed_cap_n("build"))
+        self.assertIsNone(self.flow.ci_failed_cap_target("build"))
+
+    def test_ci_failed_cap_escalation_target_is_a_known_terminal_human_step(self):
+        self.assertEqual(self.flow.owner_of("review-ci"), "human")
+        self.assertEqual(self.flow.outcomes_for("review-ci"), [])

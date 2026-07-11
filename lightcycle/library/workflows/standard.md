@@ -1,19 +1,19 @@
 # Standard
 
-Spec -> code -> review -> open PR -> watch CI -> human merge, with a draft/review-spec
+Spec -> code -> open PR -> watch CI -> review -> human merge, with a draft/review-spec
 front end and a conflict-resolution branch. This is the default workflow. Each step name
 is an action; the step name and its markdown file are the same word.
 
 entry: review-spec
 
 edges:
-  write-code       done        review-code
-  review-code      done        open-pr
-  review-code      rejected    write-code
+  write-code       done        open-pr
   open-pr          done        watch-ci
   open-pr          conflicted  resolve-conflict
-  watch-ci         done        await-merge
+  watch-ci         done        review-code
   watch-ci         ci-failed   write-code
+  review-code      done        await-merge
+  review-code      rejected    write-code
   await-merge      merged      cleanup
   await-merge      changes     write-code
   await-merge      conflicted  resolve-conflict
@@ -33,6 +33,7 @@ hooks:
   pr_conflict           await-merge  conflicted
   pr_conflict_cap       await-merge  3
   pr_conflict_escalate  await-merge  gave-up
+  ci_failed_cap         watch-ci     ci-failed  3  review-ci
   mention_token         await-merge  @lc
   review_bot_allowlist  await-merge  copilot-pull-request-reviewer[bot]
   retro_cadence         audit

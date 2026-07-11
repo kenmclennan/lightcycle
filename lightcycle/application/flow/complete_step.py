@@ -2,10 +2,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.flow.advance_step import AdvanceInput, AdvanceStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.domain.contracts import StepContract
+from lightcycle.domain.flow.transition import Transition
 from lightcycle.domain.work.state import State
 
 _AUTO_CLOSE_REASON = "auto-closed: all children done"
@@ -28,7 +28,6 @@ class CompleteStepUseCase:
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
-        self._advance = AdvanceStepUseCase(store, flow)
 
     def execute(self, input: CompleteInput) -> CompleteResponse:
         t = self._store.get_node(input.step)
@@ -48,6 +47,7 @@ class CompleteStepUseCase:
                 % (t.step, input.outcome, t.step),
             )
             return CompleteResponse(next_step=None)
+        transition = self._capped(t, input.outcome, transition, name, project)
         target = (
             StepContract.from_meta(self._flow.meta_for_step(transition.to_step, name, project))
             if transition
@@ -65,7 +65,11 @@ class CompleteStepUseCase:
             )
         self._store.note(input.step, "outcome: %s" % input.outcome)
         self._store.close(input.step, input.outcome)
-        new = self._advance.execute(AdvanceInput(step=input.step, outcome=input.outcome)).next_step
+        new = (
+            self._store.create_step(**transition.next_step_spec(t).as_kwargs())
+            if transition
+            else None
+        )
         if input.note:
             if transition:
                 self._store.note(new if new else input.step, transition.forward_note(input.note))
@@ -73,6 +77,29 @@ class CompleteStepUseCase:
                 self._store.note(input.step, input.note)
         self._cascade_close(t.parent)
         return CompleteResponse(next_step=new)
+
+    def _capped(self, t, outcome, transition, name, project):
+        if transition is None:
+            return None
+        cap_outcome = self._flow.ci_failed_cap_outcome(t.step, name, project)
+        if cap_outcome is None or outcome != cap_outcome:
+            return transition
+        cap_n = self._flow.ci_failed_cap_n(t.step, name, project)
+        cap_target = self._flow.ci_failed_cap_target(t.step, name, project)
+        if cap_n is None or not cap_target:
+            return transition
+        prior = sum(
+            1 for s in self._store.steps_at_step(t.step)
+            if s.parent == t.parent and s.state == State.DONE and s.outcome == outcome
+        )
+        if prior < cap_n:
+            return transition
+        return Transition(
+            from_step=t.step,
+            outcome=outcome,
+            to_step=cap_target,
+            to_role=self._flow.owner_of(cap_target, name, project) or "human",
+        )
 
     def _cascade_close(self, node_id):
         if not node_id:

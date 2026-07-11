@@ -64,5 +64,17 @@ class FlowService:
     def is_known_step(self, step, name=None, project=None):
         return bool(self.load_flow(name, project).owner_of(step))
 
+    def owner_of(self, step, name=None, project=None):
+        return self.load_flow(name, project).owner_of(step)
+
+    def ci_failed_cap_outcome(self, step, name=None, project=None):
+        return self.load_flow(name, project).ci_failed_cap_outcome(step)
+
+    def ci_failed_cap_n(self, step, name=None, project=None):
+        return self.load_flow(name, project).ci_failed_cap_n(step)
+
+    def ci_failed_cap_target(self, step, name=None, project=None):
+        return self.load_flow(name, project).ci_failed_cap_target(step)
+
     def ready_roles(self):
         return ReadyQueue(self._store.ready_steps()).distinct_roles()

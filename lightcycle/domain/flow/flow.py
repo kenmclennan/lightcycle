@@ -16,6 +16,9 @@ class Flow:
         pr_conflict_escalate=None,
         mention_token=None,
         review_bot_allowlist=None,
+        ci_failed_cap_outcome=None,
+        ci_failed_cap_n=None,
+        ci_failed_cap_target=None,
     ):
         self._owner = owner
         self._routes = routes
@@ -29,6 +32,9 @@ class Flow:
         self._pr_conflict_escalate = pr_conflict_escalate or {}
         self._mention_token = mention_token or {}
         self._review_bot_allowlist = review_bot_allowlist or {}
+        self._ci_failed_cap_outcome = ci_failed_cap_outcome or {}
+        self._ci_failed_cap_n = ci_failed_cap_n or {}
+        self._ci_failed_cap_target = ci_failed_cap_target or {}
 
     @classmethod
     def from_graph(cls, graph, step_metas) -> "Flow":
@@ -43,6 +49,8 @@ class Flow:
                 stages.add(toks[0])
         if graph.hook_stage("pr_feedback"):
             stages.add(graph.hook_value("pr_feedback"))
+        if graph.hook_stage("ci_failed_cap") and graph.hook_extra("ci_failed_cap", 3):
+            stages.add(graph.hook_extra("ci_failed_cap", 3))
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())
 
@@ -75,6 +83,13 @@ class Flow:
         if graph.hook_stage("retro_cadence"):
             retro_cadence.add(graph.hook_stage("retro_cadence"))
 
+        ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target = {}, {}, {}
+        ci_failed_cap_stage = graph.hook_stage("ci_failed_cap")
+        if ci_failed_cap_stage:
+            ci_failed_cap_outcome[ci_failed_cap_stage] = graph.hook_value("ci_failed_cap")
+            ci_failed_cap_n[ci_failed_cap_stage] = int(graph.hook_extra("ci_failed_cap", 2))
+            ci_failed_cap_target[ci_failed_cap_stage] = graph.hook_extra("ci_failed_cap", 3)
+
         mention_token, review_bot_allowlist = {}, {}
         mention_stage = graph.hook_stage("mention_token")
         if mention_stage:
@@ -91,7 +106,8 @@ class Flow:
 
         return cls(owner, routes, pr_merge, pr_close, pr_feedback, retro_cadence, hooks,
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate,
-                   mention_token, review_bot_allowlist)
+                   mention_token, review_bot_allowlist,
+                   ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -128,6 +144,15 @@ class Flow:
 
     def review_bot_allowlist(self, step):
         return self._review_bot_allowlist.get(step) or set()
+
+    def ci_failed_cap_outcome(self, step):
+        return self._ci_failed_cap_outcome.get(step)
+
+    def ci_failed_cap_n(self, step):
+        return self._ci_failed_cap_n.get(step)
+
+    def ci_failed_cap_target(self, step):
+        return self._ci_failed_cap_target.get(step)
 
 
     def retro_cadence_steps(self):

@@ -316,6 +316,134 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
             self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
 
 
+class TestCiFailedCapRouting(unittest.TestCase):
+    GRAPH_TEXT = (
+        "entry: build\n"
+        "\n"
+        "nodes:\n"
+        "  build   coder\n"
+        "  watch   watcher\n"
+        "\n"
+        "edges:\n"
+        "  build  done       watch\n"
+        "  watch  ci-failed  build\n"
+        "  watch  done       ship\n"
+        "\n"
+        "hooks:\n"
+        "  ci_failed_cap  watch  ci-failed  2  escalate-step\n"
+    )
+    METAS = {
+        "coder": {"model": "sonnet"},
+        "watcher": {"model": "sonnet"},
+    }
+
+    def _uc(self, store):
+        return CompleteStepUseCase(
+            store, FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), store)
+        )
+
+    def _fail_n_times(self, store, item, n):
+        for _ in range(n):
+            old = store.create_step("watch: x", step="watch", role="watcher", parent=item)
+            store.close(old, "ci-failed")
+
+    def test_under_cap_routes_normally(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        self._fail_n_times(s, item, 1)
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(wid).outcome, "ci-failed")
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
+
+    def test_at_cap_escalates_instead_of_looping(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        self._fail_n_times(s, item, 2)
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(wid).outcome, "ci-failed")
+        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).role, "human")
+
+    def test_cap_counts_only_this_item(self):
+        s = FakeStore()
+        other = s.create_item("other", theme=s.create_theme("theme"))
+        self._fail_n_times(s, other, 2)
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
+
+    def test_cap_counts_only_the_matching_outcome(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        self._fail_n_times(s, item, 3)
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
+        self.assertEqual(s.get_node(resp.next_step).step, "ship")
+
+    def test_repeated_done_never_escalates_even_past_cap(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        for _ in range(2):
+            old = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+            s.close(old, "done")
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
+        self.assertEqual(s.get_node(resp.next_step).step, "ship")
+
+    def test_note_still_forwards_to_the_escalated_step(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        self._fail_n_times(s, item, 2)
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        resp = self._uc(s).execute(
+            CompleteInput(step=wid, outcome="ci-failed", note="job X / test Y failed")
+        )
+        self.assertIn("job X / test Y failed", s.get_node(resp.next_step).notes)
+
+    def test_no_cap_declared_never_escalates(self):
+        no_cap_metas = {"coder": {"model": "sonnet"}, "watcher": {"model": "sonnet"}}
+        no_cap_graph = (
+            "entry: build\n\nnodes:\n  build  coder\n  watch  watcher\n\n"
+            "edges:\n  build  done       watch\n  watch  ci-failed  build\n"
+        )
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        uc = CompleteStepUseCase(s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s))
+        for _ in range(5):
+            old = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+            s.close(old, "ci-failed")
+        wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
+        resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
+
+
+class TestCiFailedCapWithRealSteps(unittest.TestCase):
+    def _uc(self, store):
+        return CompleteStepUseCase(store, FlowService(_RealFs(), store, _RealConfig()))
+
+    def test_under_cap_routes_to_write_code(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        wid = s.create_step("watch-ci: x", step="watch-ci", role="watch-ci", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(wid).outcome, "ci-failed")
+        self.assertEqual(s.get_node(resp.next_step).step, "write-code")
+
+    def test_cap_reached_escalates_to_review_ci(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        for _ in range(3):
+            old = s.create_step("watch-ci: x", step="watch-ci", role="watch-ci", parent=item)
+            s.close(old, "ci-failed")
+        wid = s.create_step("watch-ci: x", step="watch-ci", role="watch-ci", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "review-ci")
+        self.assertEqual(s.get_node(resp.next_step).role, "human")
+
+
 class TestClaimTask(unittest.TestCase):
     def _uc(self, store, config=None):
         return ClaimStepUseCase(
