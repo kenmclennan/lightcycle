@@ -10,5 +10,5 @@ def make_sqlite_store(shortcode="GRID", now=None):
     cfg_path = os.path.join(root, "config")
     with open(cfg_path, "w") as f:
         f.write("shortcode: %s\n" % shortcode)
-    config = Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": cfg_path})
+    config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
     return SqliteStore(config, now=now)

@@ -144,7 +144,7 @@ class SqliteStore(StorePort):
         if refuses_live_store(pkg, live_root, self._config.data_root()):
             raise LiveStoreRefused(
                 "running from a worktree checkout; refusing the live store. "
-                "Set LC_ROOT_OVERRIDE to a throwaway store for branch-code execution."
+                "Branch code verifies via tests against a temp store; set LC_HOME to point elsewhere."
             )
 
     def _migrate_history_ts(self):

@@ -13,7 +13,6 @@ def _run(args):
     home, legacy, xdg = tempfile.mkdtemp(), tempfile.mkdtemp(), tempfile.mkdtemp()
     env = dict(os.environ, LC_HOME=home, LC_LEGACY_HOME=legacy, XDG_CONFIG_HOME=xdg)
     env.pop("LC_CONFIG", None)
-    env.pop("LC_ROOT_OVERRIDE", None)
     result = subprocess.run([sys.executable, TG] + args, capture_output=True, text=True, env=env)
     return result, home
 

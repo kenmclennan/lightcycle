@@ -43,7 +43,7 @@ def _write_config(root):
 class Harness:
     def __init__(self, roles):
         self.root = tempfile.mkdtemp()
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = _write_config(self.root)
         _write_steps(self.root, roles)
         self.store = FakeStore()

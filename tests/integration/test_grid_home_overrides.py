@@ -12,7 +12,6 @@ TG = str(ROOT / "bin" / "lc")
 def _env(home, xdg):
     env = dict(os.environ, LC_HOME=home, XDG_CONFIG_HOME=xdg)
     env.pop("LC_CONFIG", None)
-    env.pop("LC_ROOT_OVERRIDE", None)
     return env
 
 

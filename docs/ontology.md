@@ -59,8 +59,8 @@ Every step name is an **action**. The step name, its markdown file, and (for an 
 
 ## The three homes (deployment)
 
-- **engine** - the installed package (pipx venv): the code plus the default workflow and steps shipped in `library/`. Replaced wholesale by `lc upgrade`.
-- **data home** (`~/.lightcycle`) - the store (`store.db`), config, logs, worktrees. Never touched by upgrade. May override library steps and workflows.
+- **engine** - the installed package (pipx venv): the code plus the default workflow and steps shipped in `library/`. The library always resolves from this running engine package, never from an environment variable; it is only shadowed, never redirected. Replaced wholesale by `lc upgrade`.
+- **data home** (`~/.lightcycle`, named by `LC_HOME`) - the store (`store.db`), config, logs, worktrees. Never touched by upgrade. May shadow library steps and workflows.
 - **project** - a target repo, optionally with a `.lightcycle/` override of steps, workflows, or config.
 - **resolution order** for steps and workflows: project `.lightcycle/` -> data home -> engine `library/` (most specific wins).
 

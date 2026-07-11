@@ -20,7 +20,7 @@ def _env(with_store=True, with_workflows=True):
         "projects: %s\nspecs: %s\nshortcode: tg\ndefault-workflow: standard\n"
         % (projects, projects)
     )
-    config = Config(environ={"LC_ROOT_OVERRIDE": root, "LC_CONFIG": str(cfg)})
+    config = Config(environ={"LC_HOME": root, "LC_CONFIG": str(cfg)})
     Path(projects, "myproj").mkdir()
     return config, FsAdapter(config), projects
 

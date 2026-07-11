@@ -19,6 +19,7 @@ import lightcycle.cli as _cli_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.config import Config
 from lightcycle.adapters.workers import process_start_time
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
@@ -31,7 +32,7 @@ os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 def run_tg(*args, root=None, config=None):
     env = dict(os.environ)
     if root:
-        env["LC_ROOT_OVERRIDE"] = root
+        env["LC_HOME"] = root
     else:
         env["LC_HOME"] = tempfile.mkdtemp()
     if config:
@@ -251,7 +252,7 @@ def _file_compat(argv):
 
 def _fake_setUp(test, *, steps=False, contract_steps=False):
     test.root = tempfile.mkdtemp()
-    os.environ["LC_ROOT_OVERRIDE"] = test.root
+    os.environ["LC_HOME"] = test.root
     os.environ["LC_CONFIG"] = write_config(projects=test.root, specs=test.root)
     write_workflow(test.root, {})
     if steps:
@@ -262,7 +263,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     test._orig = _cli_mod._container
     _cli_mod.set_container(_cli_mod.Container(store=test.store))
     test.addCleanup(lambda: _cli_mod.set_container(test._orig))
-    test.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+    test.addCleanup(lambda: os.environ.pop("LC_HOME", None))
     test.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
 
@@ -509,7 +510,7 @@ class TestSpawn(unittest.TestCase):
             )
 
     def test_spawn_records_worker_log_and_lists_in_ps(self):
-        env = dict(os.environ, LC_ROOT_OVERRIDE=self.root, LC_SPAWN_CMD="echo started >> {log}")
+        env = dict(os.environ, LC_HOME=self.root, LC_SPAWN_CMD="echo started >> {log}")
         r = subprocess.run(
             [sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env
         )
@@ -534,7 +535,7 @@ class TestPs(unittest.TestCase):
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps(workers))
 
     def _run_ps(self, *args):
-        env = dict(os.environ, LC_ROOT_OVERRIDE=self.root)
+        env = dict(os.environ, LC_HOME=self.root)
         return subprocess.run(
             [sys.executable, TG, "ps", *args, "--json"], capture_output=True, text=True, env=env
         )
@@ -588,14 +589,14 @@ class TestRun(unittest.TestCase):
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
         write_workflow_from_steps(self.root)
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
@@ -706,14 +707,14 @@ class TestRunSingletonLock(unittest.TestCase):
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
         write_workflow_from_steps(self.root)
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
@@ -1157,15 +1158,13 @@ class TestArtifactContracts(unittest.TestCase):
 class TestReviewGateWithRealLibrary(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
-        shutil.copytree(ROOT / "lightcycle" / "library" / "workflows", Path(self.root, "workflows"))
-        shutil.copytree(ROOT / "lightcycle" / "library" / "steps", Path(self.root, "steps"))
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
     def _item_with_spec(self):
@@ -1250,7 +1249,7 @@ class TestPruneWorkers(unittest.TestCase):
         self.wfile.write_text(json.dumps(workers))
 
     def _sweep(self, history=None):
-        env = dict(os.environ, LC_ROOT_OVERRIDE=self.root)
+        env = dict(os.environ, LC_HOME=self.root)
         if history is not None:
             env["LC_WORKER_HISTORY"] = str(history)
         return subprocess.run(
@@ -1341,12 +1340,12 @@ class TestWorktree(unittest.TestCase):
         os.environ["LC_CONFIG"] = write_config(
             projects=os.path.dirname(self.root), specs=self.root
         )
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
     def tearDown(self):
         os.environ["LC_CONFIG"] = _ABSENT_CONFIG
@@ -1357,7 +1356,9 @@ class TestWorktree(unittest.TestCase):
 
     def _file(self):
         theme = self.store.create_theme("theme")
-        _, out, _ = call(_file_compat, "specs/W.md", "--step", "build", "--theme", theme)
+        _, out, _ = call(
+            _file_compat, "specs/W.md", "--step", "build", "--theme", theme, "--repo", "engine"
+        )
         return out.strip()
 
     def test_claim_returns_isolated_workspace(self):
@@ -1424,12 +1425,12 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         subprocess.run(["git", "init", "-q", self.root], check=True)
         write_steps(self.root)
         os.environ["LC_CONFIG"] = write_config(projects=parent, specs=self.root)
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
     def tearDown(self):
         os.environ["LC_CONFIG"] = _ABSENT_CONFIG
@@ -1452,12 +1453,12 @@ class TestNamedRepo(unittest.TestCase):
 
     def setUp(self):
         os.environ["LC_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
-        os.environ["LC_ROOT_OVERRIDE"] = self.engine
+        os.environ["LC_HOME"] = self.engine
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
     def tearDown(self):
         os.environ["LC_CONFIG"] = _ABSENT_CONFIG
@@ -1494,10 +1495,13 @@ class TestNamedRepo(unittest.TestCase):
         self.assertIn(".worktrees/", [l.strip() for l in gi])
 
     def test_default_repo_targets_self(self):
+        self_name = os.path.basename(Config().engine_root())
+        self_repo = make_repo(self.projects, self_name)
+        self.addCleanup(shutil.rmtree, self_repo, ignore_errors=True)
         view = self._claim()
         branch = "feat/%s-x" % view["parent"]
         self.assertTrue(os.path.isdir(view["workspace"]))
-        self.assertTrue(self._has_branch(self.engine, branch))
+        self.assertTrue(self._has_branch(self_repo, branch))
         self.assertFalse(self._has_branch(self.app, branch))
 
     def test_claim_includes_absolute_spec_path(self):
@@ -1557,12 +1561,12 @@ class TestCloseWorktree(unittest.TestCase):
         self.root = make_repo(parent, "engine")
         write_steps(self.root)
         os.environ["LC_CONFIG"] = write_config(projects=parent, specs=self.root)
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
     def tearDown(self):
         os.environ["LC_CONFIG"] = _ABSENT_CONFIG
@@ -1578,7 +1582,9 @@ class TestCloseWorktree(unittest.TestCase):
 
     def test_close_closes_story_and_tasks_and_removes_worktree(self):
         theme = self.store.create_theme("theme")
-        _, out, _ = call(_file_compat, "specs/W.md", "--step", "build", "--theme", theme)
+        _, out, _ = call(
+            _file_compat, "specs/W.md", "--step", "build", "--theme", theme, "--repo", "engine"
+        )
         sid = out.strip()
         _, cout, _ = call(_cli_mod.cmd_claim, "coder")
         ws = json.loads(cout)["workspace"]
@@ -1635,13 +1641,13 @@ class TestConfig(unittest.TestCase):
         self.root = tempfile.mkdtemp()
         self.dir = tempfile.mkdtemp()
         self.cfg = os.path.join(self.dir, "config")
-        os.environ["LC_ROOT_OVERRIDE"] = self.root
+        os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = self.cfg
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
-        self.addCleanup(lambda: os.environ.pop("LC_ROOT_OVERRIDE", None))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
     def test_config_prints_path_and_unset_roots(self):
