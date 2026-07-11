@@ -37,7 +37,7 @@ class TestExportSnapshot(unittest.TestCase):
 
         blocker_row = rows[blocker]
         self.assertEqual(blocker_row["state"], "done")
-        self.assertEqual(blocker_row["close_reason"], "done")
+        self.assertEqual(blocker_row["outcome"], "done")
 
 
 if __name__ == "__main__":

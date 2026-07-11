@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     goal TEXT,
     description TEXT,
     notes TEXT,
-    close_reason TEXT,
+    outcome TEXT,
     assignee TEXT,
     since TEXT,
     fired_at TEXT,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS history (
 
 _COLUMNS = (
     "id", "type", "title", "state", "step", "role", "parent", "project", "goal",
-    "description", "notes", "close_reason", "assignee", "since", "fired_at",
+    "description", "notes", "outcome", "assignee", "since", "fired_at",
     "closed_at", "attention", "theme", "needs", "model", "workflow",
 )
 
@@ -133,6 +133,7 @@ class SqliteStore(StorePort):
         self._migrate_nodes_workflow()
         self._migrate_collapse_state()
         self._migrate_action_rename()
+        self._migrate_close_reason_to_outcome()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -210,6 +211,11 @@ class SqliteStore(StorePort):
             self._conn.execute("UPDATE nodes SET role = ? WHERE role = ?", (new, old))
         self._conn.commit()
 
+    def _migrate_close_reason_to_outcome(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
+        if "close_reason" in cols and "outcome" not in cols:
+            self._conn.execute("ALTER TABLE nodes RENAME COLUMN close_reason TO outcome")
+
     def _backup_before_action_rename(self):
         self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         self._conn.commit()
@@ -246,7 +252,7 @@ class SqliteStore(StorePort):
             artifacts=artifacts,
             description=d["description"],
             needs=d["needs"],
-            outcome=d["close_reason"],
+            outcome=d["outcome"],
             deps=deps,
             notes=d["notes"],
             claimed_by=d["assignee"],
@@ -414,7 +420,7 @@ class SqliteStore(StorePort):
 
     def closed_items(self):
         rows = self._conn.execute(
-            "SELECT id, title, closed_at, close_reason FROM nodes "
+            "SELECT id, title, closed_at, outcome FROM nodes "
             "WHERE type = 'item' AND state = 'done'"
         ).fetchall()
         return [
@@ -456,7 +462,7 @@ class SqliteStore(StorePort):
                 "parent": d["parent"], "role": d["role"], "step": d["step"],
                 "project": d["project"], "goal": d["goal"], "attention": bool(d["attention"]),
                 "description": d["description"], "notes": d["notes"],
-                "close_reason": d["close_reason"], "assignee": d["assignee"], "theme": d["theme"],
+                "outcome": d["outcome"], "assignee": d["assignee"], "theme": d["theme"],
                 "needs": d["needs"], "artifacts": [a.as_dict() for a in artifacts],
                 "blocked_by": blocked_by, "labels": labels, "since": d["since"],
                 "fired_at": d["fired_at"], "closed_at": d["closed_at"],
@@ -488,7 +494,7 @@ class SqliteStore(StorePort):
 
     def close(self, tid, reason):
         self._conn.execute(
-            "UPDATE nodes SET state = 'done', close_reason = ?, closed_at = ? WHERE id = ?",
+            "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? WHERE id = ?",
             (reason, datetime.datetime.now().isoformat(), tid),
         )
         self._record_history(tid, State.DONE)
