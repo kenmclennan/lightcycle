@@ -75,13 +75,12 @@ from lightcycle.application.setup import (
     InitGridUseCase,
     InitProjectInput,
     InitProjectUseCase,
-    migrate_legacy,
     upgrade,
 )
 from lightcycle.adapters.sqlite_store import LiveStoreRefused
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
-from lightcycle.config import Config, ConfigError
+from lightcycle.config import ConfigError
 from lightcycle.container import Container
 
 
@@ -129,7 +128,6 @@ COMMAND_GROUPS = [
         ("init", "[<project>]", "no arg: create the lightcycle store + seed the HOME config (run once). "
          "<project>: scaffold that project's .lightcycle/ (workflows, config with a shortcode)"),
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
-        ("migrate", "", "one-time: move a legacy ~/.grid or ~/.config layout into ~/.lightcycle"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
     ]),
@@ -196,19 +194,6 @@ def print_help():
         print("")
 
 
-def cmd_migrate(argv):
-    argparse.ArgumentParser(prog="lc migrate").parse_args(argv)
-    resp = migrate_legacy(Config())
-    if resp.already:
-        print("already on the ~/.lightcycle layout - nothing to migrate")
-    elif resp.nothing:
-        print("no legacy layout found - nothing to migrate")
-    else:
-        print("migrated into ~/.lightcycle: %s (store backed up to %s)"
-              % (", ".join(resp.moved), resp.backup))
-    return 0
-
-
 def cmd_version(argv):
     argparse.ArgumentParser(prog="lc version").parse_args(argv)
     print("lightcycle %s" % __version__)
@@ -235,8 +220,6 @@ def cmd_upgrade(argv):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    if argv and argv[0] == "migrate":
-        return cmd_migrate(argv[1:])
     if argv and argv[0] in ("version", "--version"):
         return cmd_version([])
     if argv and argv[0] == "upgrade":

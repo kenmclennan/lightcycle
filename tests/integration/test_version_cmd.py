@@ -12,8 +12,8 @@ TG = str(ROOT / "bin" / "lc")
 
 
 def _run(args):
-    new, legacy, xdg = tempfile.mkdtemp(), tempfile.mkdtemp(), tempfile.mkdtemp()
-    env = dict(os.environ, LC_HOME=new, LC_LEGACY_HOME=legacy, XDG_CONFIG_HOME=xdg)
+    new, xdg = tempfile.mkdtemp(), tempfile.mkdtemp()
+    env = dict(os.environ, LC_HOME=new, XDG_CONFIG_HOME=xdg)
     env.pop("LC_CONFIG", None)
     return subprocess.run([sys.executable, TG] + args, capture_output=True, text=True, env=env)
 

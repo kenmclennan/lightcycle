@@ -260,5 +260,17 @@ def test_lc_root_override_is_no_longer_read():
     assert cfg.engine_root() != "/should/be/ignored"
 
 
+def test_legacy_grid_config_is_no_longer_read(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    grid = tmp_path / ".grid"
+    grid.mkdir()
+    (grid / "config").write_text("shortcode: LEGACY\n")
+    new_home = tmp_path / ".lightcycle"
+    cfg = Config(environ={"LC_HOME": str(new_home)})
+    assert cfg.config_path() == os.path.join(str(new_home), "config")
+    assert not hasattr(cfg, "legacy_data_root")
+    assert not hasattr(cfg, "legacy_config_path")
+
+
 if __name__ == "__main__":
     unittest.main()
