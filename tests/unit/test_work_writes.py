@@ -13,6 +13,8 @@ from lightcycle.application.work import (
     EditNodeUseCase,
     LinkArtifactInput,
     LinkArtifactUseCase,
+    RemoveNodeInput,
+    RemoveNodeUseCase,
 )
 from lightcycle.application.services.worktree import WorktreeService
 from tests.support.fake_fs import FakeFs
@@ -73,6 +75,45 @@ class FakeWorktrees:
 
     def remove(self, item):
         self.removed.append(item)
+
+
+class FakeWorktreesForRemove:
+    def __init__(self, target="/projects/app"):
+        self._target = target
+        self.removed = []
+
+    def target_repo(self, item):
+        return self._target
+
+    def worktree_path(self, item):
+        return "/projects/app/.worktrees/%s" % item
+
+    def remove(self, item):
+        self.removed.append(item)
+
+
+class FakeWorkersForRemove:
+    def __init__(self, workers=None, alive_pids=()):
+        self._workers = workers or []
+        self._alive = set(alive_pids)
+
+    def workers_state(self):
+        return self._workers
+
+    def pid_alive(self, pid, started=None):
+        return pid in self._alive
+
+
+class FakeGitForRemove:
+    def __init__(self, registered=(), dirty=()):
+        self._registered = set(registered)
+        self._dirty = set(dirty)
+
+    def worktree_registered(self, root, path):
+        return path in self._registered
+
+    def has_uncommitted(self, path):
+        return path in self._dirty
 
 
 class TestAddTask(unittest.TestCase):
@@ -303,6 +344,132 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
         svc.remove(sid)
         self.assertEqual(git.remote_deletes, [])
+
+
+class TestRemoveNode(unittest.TestCase):
+    def test_refuses_when_structural_children_present(self):
+        s = FakeStore()
+        theme = s.create_theme("theme")
+        child = s.create_item("child", theme=theme)
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        with self.assertRaises(UseCaseError) as ctx:
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=theme))
+        self.assertIn(theme, str(ctx.exception))
+        self.assertIn("1", str(ctx.exception))
+        self.assertEqual(s.get_node(theme).id, theme)
+        self.assertEqual(s.get_node(child).id, child)
+
+    def test_refuses_when_a_claimed_step_is_covered_by_a_live_worker(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkersForRemove(
+            workers=[{"spawnid": "live-sp", "pid": 111, "step": step, "started": 100}],
+            alive_pids={111},
+        )
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        with self.assertRaises(UseCaseError) as ctx:
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertIn(step, str(ctx.exception))
+        self.assertEqual(s.get_node(item).id, item)
+
+    def test_refuses_when_worktree_is_dirty(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        path = wt.worktree_path(item)
+        git = FakeGitForRemove(registered={path}, dirty={path})
+        with self.assertRaises(UseCaseError) as ctx:
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertIn(item, str(ctx.exception))
+        self.assertEqual(wt.removed, [])
+        self.assertEqual(s.get_node(item).id, item)
+
+    def test_stale_claim_does_not_block(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        with self.assertRaises(KeyError):
+            s.get_node(item)
+        with self.assertRaises(KeyError):
+            s.get_node(step)
+
+    def test_success_path_removes_worktree_and_step_rows(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        resp = RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertEqual(resp.steps_removed, 1)
+        self.assertTrue(resp.worktree_removed)
+        self.assertEqual(wt.removed, [item])
+        with self.assertRaises(KeyError):
+            s.get_node(item)
+        with self.assertRaises(KeyError):
+            s.get_node(step)
+
+    def test_force_overrides_dirty_worktree(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        path = wt.worktree_path(item)
+        git = FakeGitForRemove(registered={path}, dirty={path})
+        resp = RemoveNodeUseCase(s, workers, wt, git).execute(
+            RemoveNodeInput(id=item, force=True)
+        )
+        self.assertTrue(resp.worktree_removed)
+        self.assertEqual(wt.removed, [item])
+        with self.assertRaises(KeyError):
+            s.get_node(item)
+
+    def test_force_still_refuses_structural_children(self):
+        s = FakeStore()
+        theme = s.create_theme("theme")
+        s.create_item("child", theme=theme)
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        with self.assertRaises(UseCaseError):
+            RemoveNodeUseCase(s, workers, wt, git).execute(
+                RemoveNodeInput(id=theme, force=True)
+            )
+
+    def test_force_still_refuses_a_genuinely_live_worker(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkersForRemove(
+            workers=[{"spawnid": "live-sp", "pid": 111, "step": step, "started": 100}],
+            alive_pids={111},
+        )
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        with self.assertRaises(UseCaseError):
+            RemoveNodeUseCase(s, workers, wt, git).execute(
+                RemoveNodeInput(id=item, force=True)
+            )
+
+    def test_missing_node_is_a_clear_error(self):
+        s = FakeStore()
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        with self.assertRaises(UseCaseError):
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id="nope"))
 
 
 if __name__ == "__main__":
