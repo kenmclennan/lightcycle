@@ -40,6 +40,9 @@ class _FlowAdapter:
     def ci_failed_cap_target(self, step, name=None, project=None):
         return self._flow.ci_failed_cap_target(step)
 
+    def effective_transition(self, transition, outcome, prior_count, name=None, project=None):
+        return self._flow.effective_transition(transition, outcome, prior_count)
+
 
 _FLOW = flow_from_metas(
     {

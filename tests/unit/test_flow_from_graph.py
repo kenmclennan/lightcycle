@@ -119,3 +119,14 @@ class TestFlowFromGraph(unittest.TestCase):
     def test_ci_failed_cap_escalation_target_is_a_known_terminal_human_step(self):
         self.assertEqual(self.flow.owner_of("review-ci"), "human")
         self.assertEqual(self.flow.outcomes_for("review-ci"), [])
+
+    def test_effective_transition_non_matching_outcome_is_never_redirected(self):
+        raw = self.flow.next("watch-pr", "done")
+        self.assertIs(self.flow.effective_transition(raw, "done", 100), raw)
+
+    def test_effective_transition_no_cap_configured_is_a_no_op(self):
+        raw = self.flow.next("build", "done")
+        self.assertIs(self.flow.effective_transition(raw, "done", 100), raw)
+
+    def test_effective_transition_none_transition_stays_none(self):
+        self.assertIsNone(self.flow.effective_transition(None, "ci-failed", 5))
