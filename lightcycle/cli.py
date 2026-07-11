@@ -36,6 +36,8 @@ from lightcycle.application.work import (
     OpenThemeUseCase,
     QueueInput,
     QueueUseCase,
+    RemoveNodeInput,
+    RemoveNodeUseCase,
     ShowNodeInput,
     ShowNodeUseCase,
     StatusUseCase,
@@ -153,7 +155,8 @@ COMMAND_GROUPS = [
          "create a node; <type> is theme|item|step"),
         ("set", "<id> [--parent/--state/--workflow/--title/--goal/--desc/--label]",
          "update a node; --parent moves it; --state active activates an item (files the entry step)"),
-        ("rm", "<id>", "delete a node"),
+        ("rm", "<id> [--force]", "delete a node; refuses on structural children, a live "
+         "worker, or a dirty worktree - --force overrides the dirty worktree and stale claims"),
         ("attach", "<id> <type> <value> [--label]", "attach an artifact"),
         ("dep", "<id> --needs <id> | --remove <id>", "add or remove a blocker on a node"),
     ]),
@@ -682,8 +685,23 @@ def cmd_dep(argv):
 def cmd_rm(argv):
     ap = argparse.ArgumentParser(prog="lc rm")
     ap.add_argument("id")
+    ap.add_argument("--force", action="store_true")
     a = ap.parse_args(argv)
-    _container.store.delete(a.id)
+    try:
+        resp = RemoveNodeUseCase(
+            _container.store, _container.workers, _worktrees(), _container.git
+        ).execute(RemoveNodeInput(id=a.id, force=a.force))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print(
+        "removed %s (%d step row(s)%s)"
+        % (
+            resp.id,
+            resp.steps_removed,
+            ", worktree torn down" if resp.worktree_removed else "",
+        )
+    )
     return 0
 
 

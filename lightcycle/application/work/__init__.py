@@ -8,6 +8,7 @@ from lightcycle.application.work.inbox import InboxInput, InboxUseCase
 from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
 from lightcycle.application.work.open_theme import OpenThemeInput, OpenThemeResponse, OpenThemeUseCase
 from lightcycle.application.work.queue import QueueInput, QueueUseCase
+from lightcycle.application.work.remove_node import RemoveNodeInput, RemoveNodeResponse, RemoveNodeUseCase
 from lightcycle.application.work.show_node import ShowNodeInput, ShowNodeUseCase
 from lightcycle.application.work.status import StatusUseCase
 from lightcycle.application.work.trace import TraceInput, TraceUseCase
@@ -33,6 +34,9 @@ __all__ = [
     "OpenThemeUseCase",
     "QueueInput",
     "QueueUseCase",
+    "RemoveNodeInput",
+    "RemoveNodeResponse",
+    "RemoveNodeUseCase",
     "ShowNodeInput",
     "ShowNodeUseCase",
     "StatusUseCase",
