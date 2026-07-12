@@ -7,17 +7,26 @@ from lightcycle.domain.workspace import Branch, Worktree
 
 
 class WorktreeService:
-    def __init__(self, store, git, fs, config):
+    def __init__(self, store, git, fs, config, flow=None):
         self._store = store
         self._git = git
         self._fs = fs
         self._config = config
+        self._flow = flow
 
     def _item(self, item):
         return Item(item, tuple(self._store.item_artifacts(item)))
 
     def has_repo(self, item):
         return self._item(item).repo() is not None
+
+    def _uses_specs_workspace(self, item):
+        if self._flow is None:
+            return False
+        node = self._store.get_node(item)
+        workflow = self._flow.workflow_for(node)
+        project = self._flow.project_for(node)
+        return self._flow.load_graph(workflow, project).workspace == "specs"
 
     def item_repo(self, item):
         repo = self._item(item).repo()
@@ -26,6 +35,8 @@ class WorktreeService:
         return repo
 
     def target_repo(self, item):
+        if self._uses_specs_workspace(item):
+            return self._config.specs_root()
         return os.path.join(self._config.projects_root(), self.item_repo(item))
 
     def worktree_path(self, item):
@@ -48,13 +59,14 @@ class WorktreeService:
         self._store.add_artifact(item, "branch", branch)
 
     def ensure(self, item):
-        if not self.has_repo(item):
+        specs_workspace = self._uses_specs_workspace(item)
+        if not specs_workspace and not self.has_repo(item):
             return None
         target = self.target_repo(item)
         if not self._git.is_git_repo(target):
             raise UseCaseError(
                 "cannot set up workspace for %s: '%s' is not a git repo at %s"
-                % (item, self.item_repo(item), target)
+                % (item, target if specs_workspace else self.item_repo(item), target)
             )
         branch = self._branch_for(item)
         path = self.worktree_path(item)
@@ -94,7 +106,7 @@ class WorktreeService:
         return path
 
     def remove(self, item):
-        if not self.has_repo(item):
+        if not self._uses_specs_workspace(item) and not self.has_repo(item):
             return
         target = self.target_repo(item)
         if not self._git.is_git_repo(target):
