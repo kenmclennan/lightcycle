@@ -21,6 +21,21 @@ def _make_repo():
     return d
 
 
+class TestGitAdapterRemoteUrl(unittest.TestCase):
+    def test_returns_origin_url_when_configured(self):
+        repo = _make_repo()
+        _git(repo, "remote", "add", "origin", "git@github.com:x/specs.git")
+        adapter = GitAdapter()
+
+        self.assertEqual(adapter.remote_url(repo), "git@github.com:x/specs.git")
+
+    def test_returns_none_when_no_origin_configured(self):
+        repo = _make_repo()
+        adapter = GitAdapter()
+
+        self.assertIsNone(adapter.remote_url(repo))
+
+
 class TestGitAdapterCommitAll(unittest.TestCase):
     def test_commit_all_commits_a_dirty_worktree(self):
         repo = _make_repo()

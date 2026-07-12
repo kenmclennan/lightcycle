@@ -7,6 +7,7 @@ from lightcycle.adapters import frontmatter
 _SEED_KEYS = [
     ("projects", "~/workspace/projects"),
     ("specs", "~/workspace/specs"),
+    ("specs-remote", "git@github.com:you/lightcycle-specs.git"),
     ("branch-prefix", "feat"),
     ("shortcode", "PROJ"),
     ("default-workflow", "standard"),
@@ -168,6 +169,9 @@ class Config:
 
     def specs_root(self):
         return self._required_path("specs")
+
+    def specs_remote(self):
+        return self._required_str("specs-remote")
 
     def branch_prefix(self):
         return self._required_str("branch-prefix")

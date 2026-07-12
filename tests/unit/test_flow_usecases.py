@@ -561,6 +561,16 @@ class TestClaimTask(unittest.TestCase):
         resp = self._uc(s).execute(ClaimInput(role="coder"))
         self.assertEqual(resp.spec_path, os.path.join("/specs", "specs/X.md"))
 
+    def test_resolves_project_subdir_spec_path_against_specs_root(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        s.add_artifact(item, "spec", "myproject/LC-1-my-spec.md")
+        s.create_step("build: x", step="build", role="coder", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(
+            resp.spec_path, os.path.join("/specs", "myproject/LC-1-my-spec.md")
+        )
+
 
 class TestClaimConfigWithRealSteps(unittest.TestCase):
     def _uc(self, store):

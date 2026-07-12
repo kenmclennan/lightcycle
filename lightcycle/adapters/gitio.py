@@ -16,6 +16,13 @@ def is_git_repo(root):
     return git_ok(root, "rev-parse", "--git-dir")
 
 
+def remote_url(root):
+    proc = git(root, "remote", "get-url", "origin")
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip()
+
+
 def branch_exists(root, branch):
     return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch)
 
@@ -70,6 +77,9 @@ class GitAdapter(GitPort):
 
     def is_git_repo(self, root):
         return is_git_repo(root)
+
+    def remote_url(self, root):
+        return remote_url(root)
 
     def branch_exists(self, root, branch):
         return branch_exists(root, branch)
