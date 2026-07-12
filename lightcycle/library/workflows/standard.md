@@ -6,6 +6,8 @@ is an action; the step name and its markdown file are the same word.
 
 entry: review-spec
 
+requires: repo
+
 edges:
   write-code       done        open-pr
   open-pr          done        watch-ci

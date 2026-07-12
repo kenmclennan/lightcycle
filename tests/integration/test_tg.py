@@ -19,7 +19,6 @@ import lightcycle.cli as _cli_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
-from lightcycle.config import Config
 from lightcycle.adapters.workers import process_start_time
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
@@ -1171,6 +1170,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
         self.assertEqual(rc, 0, err)
         item = item.strip()
+        call(_cli_mod.cmd_attach, item, "repo", "widget")
         call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
         return item
 
@@ -1208,9 +1208,18 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         next_step = self.store.get_node(out.strip())
         self.assertEqual(next_step.step, "draft-spec")
 
+    def test_arming_without_repo_fails_fast_with_no_step_created(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
+        item = item.strip()
+        rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active")
+        self.assertEqual(rc2, 1)
+        self.assertIn("repo", err2)
+        self.assertEqual(self.store.children(item), [])
+
     def test_arming_without_spec_or_step_fails_fast_with_no_step_created(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
         item = item.strip()
+        call(_cli_mod.cmd_attach, item, "repo", "widget")
         rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active")
         self.assertEqual(rc2, 1)
         self.assertIn("spec", err2)
@@ -1219,6 +1228,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
     def test_seed_first_path_via_develop_reaches_the_same_gate(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
         item = item.strip()
+        call(_cli_mod.cmd_attach, item, "repo", "widget")
         rc2, step_id, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--step", "draft-spec")
         self.assertEqual(rc2, 0, err2)
         step_id = step_id.strip()
@@ -1494,15 +1504,12 @@ class TestNamedRepo(unittest.TestCase):
         gi = (Path(self.app) / ".gitignore").read_text().splitlines()
         self.assertIn(".worktrees/", [l.strip() for l in gi])
 
-    def test_default_repo_targets_self(self):
-        self_name = os.path.basename(Config().engine_root())
-        self_repo = make_repo(self.projects, self_name)
-        self.addCleanup(shutil.rmtree, self_repo, ignore_errors=True)
-        view = self._claim()
-        branch = "feat/%s-x" % view["parent"]
-        self.assertTrue(os.path.isdir(view["workspace"]))
-        self.assertTrue(self._has_branch(self_repo, branch))
-        self.assertFalse(self._has_branch(self.app, branch))
+    def test_claim_with_an_unresolvable_named_repo_fails_loudly(self):
+        theme = self.store.create_theme("theme")
+        call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme, "--repo", "ghost")
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 1)
+        self.assertIn("ghost", err)
 
     def test_claim_includes_absolute_spec_path(self):
         view = self._claim("app")

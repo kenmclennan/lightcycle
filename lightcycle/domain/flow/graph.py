@@ -7,6 +7,7 @@ _SECTIONS = ("nodes", "edges", "hooks", "signals")
 @dataclass(frozen=True)
 class WorkflowGraph:
     entry: str
+    requires: frozenset = field(default_factory=frozenset)
     nodes: dict = field(default_factory=dict)
     edges: dict = field(default_factory=dict)
     hooks: dict = field(default_factory=dict)
@@ -33,6 +34,7 @@ class WorkflowGraph:
 
 def parse_graph(text):
     entry = None
+    requires = frozenset()
     nodes, edges, hooks, signals = {}, {}, {}, {}
     section = None
     for line in text.splitlines():
@@ -42,6 +44,8 @@ def parse_graph(text):
             head = line.split(":", 1)[0].strip()
             if head == "entry":
                 entry = line.split(":", 1)[1].strip()
+            elif head == "requires":
+                requires = frozenset(line.split(":", 1)[1].split())
             elif head in _SECTIONS and line.rstrip().endswith(":"):
                 section = head
             else:
@@ -60,4 +64,6 @@ def parse_graph(text):
         elif section == "signals":
             stage, name, decl = parts
             signals.setdefault(stage, {})[name] = decl
-    return WorkflowGraph(entry=entry, nodes=nodes, edges=edges, hooks=hooks, signals=signals)
+    return WorkflowGraph(
+        entry=entry, requires=requires, nodes=nodes, edges=edges, hooks=hooks, signals=signals
+    )

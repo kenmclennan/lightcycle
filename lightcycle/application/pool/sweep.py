@@ -24,6 +24,8 @@ class SweepUseCase:
         if self._worktrees is None or self._git is None:
             return None
         item = t.parent or t.id
+        if not self._worktrees.has_repo(item):
+            return None
         path = self._worktrees.worktree_path(item)
         if not self._git.is_git_repo(path):
             return None
