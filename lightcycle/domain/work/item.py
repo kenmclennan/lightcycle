@@ -15,8 +15,8 @@ class Item:
                 return a.value
         return None
 
-    def repo(self, default):
-        return self.artifact_of("repo") or default
+    def repo(self):
+        return self.artifact_of("repo")
 
     def branch(self):
         return self.artifact_of("branch")

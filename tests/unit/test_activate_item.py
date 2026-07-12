@@ -7,9 +7,10 @@ from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
 
-def _flow(store):
+def _flow(store, requires=None):
     metas = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
-    return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas, entry="build")), store)
+    workflow = graph_text_from_metas(metas, entry="build", requires=requires)
+    return FlowService(FakeFs(metas, workflow=workflow), store)
 
 
 class TestActivateItem(unittest.TestCase):
@@ -43,6 +44,34 @@ class TestActivateItem(unittest.TestCase):
             ActivateItemUseCase(s, _flow(s)).execute(
                 ActivateItemInput(item=item, workflow="standard")
             )
+
+    def test_refuses_to_activate_into_a_repo_requiring_workflow_without_repo(self):
+        s = FakeStore()
+        item = s.create_item("add refunds")
+        with self.assertRaises(UseCaseError):
+            ActivateItemUseCase(s, _flow(s, requires={"repo"})).execute(
+                ActivateItemInput(item=item, workflow="standard")
+            )
+        self.assertEqual(s.get_node(item).state, "backlogged")
+
+    def test_activates_into_a_repo_requiring_workflow_with_repo_present(self):
+        s = FakeStore()
+        item = s.create_item("add refunds")
+        s.add_artifact(item, "repo", "saga")
+        resp = ActivateItemUseCase(s, _flow(s, requires={"repo"})).execute(
+            ActivateItemInput(item=item, workflow="standard")
+        )
+        self.assertEqual(s.get_node(item).state, "ready")
+        self.assertEqual(s.get_node(resp.step).step, "build")
+
+    def test_workflow_with_no_required_inputs_activates_repo_less_item(self):
+        s = FakeStore()
+        item = s.create_item("trend audit")
+        resp = ActivateItemUseCase(s, _flow(s)).execute(
+            ActivateItemInput(item=item, workflow="standard")
+        )
+        self.assertEqual(s.get_node(item).state, "ready")
+        self.assertEqual(s.get_node(resp.step).step, "build")
 
 
 if __name__ == "__main__":

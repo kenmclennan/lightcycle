@@ -35,7 +35,15 @@ class ActivateItemUseCase:
             node = self._store.get_node(input.item)
         workflow = input.workflow or self._flow.workflow_for(node)
         project = self._flow.project_for(node)
-        step_name = input.step or self._flow.load_graph(workflow, project).entry
+        graph = self._flow.load_graph(workflow, project)
+        present = {a.type for a in self._store.item_artifacts(input.item)}
+        missing_inputs = graph.requires - present
+        if missing_inputs:
+            raise UseCaseError(
+                "item '%s' requires %s; attach them before activating"
+                % (input.item, ", ".join(sorted(missing_inputs)))
+            )
+        step_name = input.step or graph.entry
         flow = self._flow.load_flow(workflow, project)
         role = flow.owner_of(step_name)
         if not role:
@@ -43,7 +51,6 @@ class ActivateItemUseCase:
                 "step '%s' is not owned in workflow '%s'; owned steps: %s"
                 % (step_name, workflow, ", ".join(flow.steps()) or "(none)")
             )
-        present = {a.type for a in self._store.item_artifacts(input.item)}
         unmet = StepContract.from_meta(
             self._flow.meta_for_step(step_name, workflow, project)
         ).missing_inputs(present)

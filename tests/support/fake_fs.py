@@ -15,7 +15,7 @@ def signals_from_metas(metas):
     return Signals.from_graph(parse_graph(graph_text_from_metas(metas)))
 
 
-def graph_text_from_metas(metas, entry=None):
+def graph_text_from_metas(metas, entry=None, requires=None):
     nodes, edges, hooks, signals = [], [], [], []
     for role in sorted(metas):
         meta = metas[role] or {}
@@ -41,6 +41,8 @@ def graph_text_from_metas(metas, entry=None):
     out = []
     if entry:
         out.append("entry: %s" % entry)
+    if requires:
+        out.append("requires: %s" % " ".join(sorted(requires)))
     if nodes:
         out.append("nodes:\n" + "\n".join(nodes))
     if edges:

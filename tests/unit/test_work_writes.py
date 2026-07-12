@@ -78,9 +78,13 @@ class FakeWorktrees:
 
 
 class FakeWorktreesForRemove:
-    def __init__(self, target="/projects/app"):
+    def __init__(self, target="/projects/app", has_repo=True):
         self._target = target
+        self._has_repo = has_repo
         self.removed = []
+
+    def has_repo(self, item):
+        return self._has_repo
 
     def target_repo(self, item):
         return self._target
@@ -345,6 +349,12 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         svc.remove(sid)
         self.assertEqual(git.remote_deletes, [])
 
+    def test_remove_is_a_noop_without_a_repo_artifact(self):
+        s = FakeStore()
+        sid = s.create_item("my item", theme=s.create_theme("theme"))
+        svc = WorktreeService(s, git=None, fs=FakeFs(), config=FakeConfig("/projects"))
+        svc.remove(sid)
+
 
 class TestRemoveNode(unittest.TestCase):
     def test_refuses_when_structural_children_present(self):
@@ -462,6 +472,16 @@ class TestRemoveNode(unittest.TestCase):
             RemoveNodeUseCase(s, workers, wt, git).execute(
                 RemoveNodeInput(id=item, force=True)
             )
+
+    def test_repo_less_item_is_never_dirty_and_removes_cleanly(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove(has_repo=False)
+        git = FakeGitForRemove(registered={wt.worktree_path(item)}, dirty={wt.worktree_path(item)})
+        resp = RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertTrue(resp.worktree_removed)
+        self.assertEqual(wt.removed, [item])
 
     def test_missing_node_is_a_clear_error(self):
         s = FakeStore()

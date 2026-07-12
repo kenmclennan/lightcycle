@@ -1,7 +1,7 @@
 import os
-import sys
 import time
 
+from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.work import Item
 from lightcycle.domain.workspace import Branch, Worktree
 
@@ -16,8 +16,14 @@ class WorktreeService:
     def _item(self, item):
         return Item(item, tuple(self._store.item_artifacts(item)))
 
+    def has_repo(self, item):
+        return self._item(item).repo() is not None
+
     def item_repo(self, item):
-        return self._item(item).repo(os.path.basename(self._config.engine_root()))
+        repo = self._item(item).repo()
+        if repo is None:
+            raise UseCaseError("item '%s' has no repo artifact" % item)
+        return repo
 
     def target_repo(self, item):
         return os.path.join(self._config.projects_root(), self.item_repo(item))
@@ -42,9 +48,14 @@ class WorktreeService:
         self._store.add_artifact(item, "branch", branch)
 
     def ensure(self, item):
+        if not self.has_repo(item):
+            return None
         target = self.target_repo(item)
         if not self._git.is_git_repo(target):
-            return None
+            raise UseCaseError(
+                "cannot set up workspace for %s: '%s' is not a git repo at %s"
+                % (item, self.item_repo(item), target)
+            )
         branch = self._branch_for(item)
         path = self.worktree_path(item)
         if self._git.worktree_registered(target, path) and os.path.isdir(path):
@@ -54,7 +65,9 @@ class WorktreeService:
         if is_new_branch:
             base = self._git.worktree_base(target)
             if base is None:
-                return None
+                raise UseCaseError(
+                    "cannot set up workspace for %s: no base branch found in %s" % (item, target)
+                )
             add_args = ["worktree", "add", path, "--no-track", "-b", branch, base]
         else:
             add_args = ["worktree", "add", path, branch]
@@ -70,8 +83,9 @@ class WorktreeService:
             self._git.git(target, "worktree", "prune")
             res = self._git.git(target, *add_args)
         if res.returncode != 0:
-            sys.stderr.write(res.stderr)
-            return None
+            raise UseCaseError(
+                "cannot set up workspace for %s: %s" % (item, res.stderr.strip())
+            )
         if is_new_branch:
             self._git.git(target, "config", "branch.%s.remote" % branch, "origin")
             self._git.git(target, "config", "branch.%s.merge" % branch,
@@ -80,6 +94,8 @@ class WorktreeService:
         return path
 
     def remove(self, item):
+        if not self.has_repo(item):
+            return
         target = self.target_repo(item)
         if not self._git.is_git_repo(target):
             return

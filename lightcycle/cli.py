@@ -259,9 +259,13 @@ def cmd_claim(argv):
     ap = argparse.ArgumentParser(prog="lc claim")
     ap.add_argument("role")
     a = ap.parse_args(argv)
-    resp = ClaimStepUseCase(
-        _container.store, _flow(), _worktrees(), _container.workers, _container.config
-    ).execute(ClaimInput(role=a.role))
+    try:
+        resp = ClaimStepUseCase(
+            _container.store, _flow(), _worktrees(), _container.workers, _container.config
+        ).execute(ClaimInput(role=a.role))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if resp is None:
         return 0
     out = resp.view.as_dict()

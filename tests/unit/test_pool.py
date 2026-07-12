@@ -56,12 +56,16 @@ class FakeBreakerGate:
 
 
 class FakeWorktrees:
-    def __init__(self, paths=None):
+    def __init__(self, paths=None, has_repo=True):
         self.removed = []
         self._paths = paths or {}
+        self._has_repo = has_repo
 
     def remove(self, item):
         self.removed.append(item)
+
+    def has_repo(self, item):
+        return self._has_repo
 
     def worktree_path(self, item):
         return self._paths.get(item, "/worktrees/%s" % item)
@@ -317,6 +321,23 @@ class TestSweep(unittest.TestCase):
 
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_reclaiming_a_repo_less_step_does_not_consult_git(self):
+        s = FakeStore()
+        step = s.create_step("build: t", step="build", role="coder")
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(has_repo=False)
+        git = FakeCaptureGit()
+
+        result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
+            now=1000, max_boot=120
+        )
+
+        self.assertEqual(result.swept, [step])
+        self.assertEqual(result.preserved, [])
+        self.assertEqual(git.commits, [])
         self.assertEqual(s.get_node(step).state, "ready")
 
     def test_a_failed_commit_still_reclaims_and_is_reported(self):
