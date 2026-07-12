@@ -1428,6 +1428,61 @@ class TestWorktree(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(ws2, "f.txt")))
 
 
+class TestSpecsWorkspaceWorktree(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.specs_repo = make_repo(tempfile.mkdtemp(), "specs")
+
+    def setUp(self):
+        engine_root = tempfile.mkdtemp()
+        os.environ["LC_CONFIG"] = write_config(
+            projects=tempfile.mkdtemp(), specs=self.specs_repo
+        )
+        os.environ["LC_HOME"] = engine_root
+        (Path(engine_root) / "workflows").mkdir(exist_ok=True)
+        (Path(engine_root) / "workflows" / "spec.md").write_text(
+            "entry: spec-writer\n\nworkspace: specs\n\nrequires: brief\n\n"
+            "edges:\n  spec-writer  done\n"
+        )
+        (Path(engine_root) / "steps").mkdir(exist_ok=True)
+        (Path(engine_root) / "steps" / "spec-writer.md").write_text(
+            "---\nmodel: sonnet\naccepts:\n  brief: required\nproduces:\n  spec: required\n"
+            "---\n# Spec-writer\nstub\n"
+        )
+        self.store = FakeStore()
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
+
+    def tearDown(self):
+        _reset_git_repo(self.specs_repo)
+
+    def test_claim_creates_a_worktree_inside_the_specs_repo_not_the_project(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("phase b1", theme=theme, workflow="spec")
+        self.store.add_artifact(item, "brief", "briefs/LC-1.md")
+        self.store.create_step("spec-writer: x", step="spec-writer", role="spec-writer", parent=item)
+
+        rc, out, err = call(_cli_mod.cmd_claim, "spec-writer")
+
+        self.assertEqual(rc, 0, err)
+        t = json.loads(out)
+        ws = t["workspace"]
+        self.assertTrue(os.path.isdir(ws))
+        self.assertEqual(os.path.dirname(ws), os.path.join(self.specs_repo, ".worktrees"))
+        self.assertEqual(t["brief_path"], os.path.join(self.specs_repo, "briefs/LC-1.md"))
+
+    def test_activating_a_spec_workflow_item_without_a_brief_fails_fast(self):
+        item = self.store.create_item("phase b1", workflow="spec")
+
+        rc, out, err = call(_cli_mod.cmd_set, item, "--state", "active")
+
+        self.assertNotEqual(rc, 0)
+        self.assertIn("brief", err)
+
+
 class TestWorktreeNoOrigin(unittest.TestCase):
     def setUp(self):
         parent = tempfile.mkdtemp()

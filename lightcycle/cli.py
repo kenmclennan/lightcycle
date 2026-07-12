@@ -115,7 +115,9 @@ def ready_roles():
 
 
 def _worktrees():
-    return WorktreeService(_container.store, _container.git, _container.fs, _container.config)
+    return WorktreeService(
+        _container.store, _container.git, _container.fs, _container.config, _flow()
+    )
 
 
 def require_store():
@@ -276,6 +278,8 @@ def cmd_claim(argv):
         out["branch"] = resp.branch
     if resp.spec_path:
         out["spec_path"] = resp.spec_path
+    if resp.brief_path:
+        out["brief_path"] = resp.brief_path
     if resp.config:
         out["config"] = resp.config
     print(json.dumps(out, indent=2))

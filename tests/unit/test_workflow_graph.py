@@ -96,6 +96,21 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
         self.assertEqual(graph.requires, frozenset())
 
+    def test_parses_workspace(self):
+        graph = parse_graph(
+            "entry: build\n"
+            "\n"
+            "workspace: specs\n"
+            "\n"
+            "edges:\n"
+            "  build  done  review\n"
+        )
+        self.assertEqual(graph.workspace, "specs")
+
+    def test_workspace_defaults_to_project_when_absent(self):
+        graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
+        self.assertEqual(graph.workspace, "project")
+
     def test_ignores_prose_and_blank_lines(self):
         graph = parse_graph(
             "# Standard - spec to merge\n"

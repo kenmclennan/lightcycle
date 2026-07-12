@@ -7,15 +7,38 @@ from tests.support.fake_store import FakeStore
 
 
 class _Cfg:
-    def __init__(self, projects_root, engine_root="lightcycle"):
+    def __init__(self, projects_root, engine_root="lightcycle", specs_root="/specs"):
         self._projects_root = projects_root
         self._engine_root = engine_root
+        self._specs_root = specs_root
 
     def projects_root(self):
         return self._projects_root
 
+    def specs_root(self):
+        return self._specs_root
+
     def engine_root(self):
         return self._engine_root
+
+
+class _FakeFlow:
+    def __init__(self, workspace="project"):
+        self._workspace = workspace
+
+    def workflow_for(self, node):
+        return "spec" if self._workspace == "specs" else "standard"
+
+    def project_for(self, node):
+        return None
+
+    def load_graph(self, workflow, project):
+        return _Graph(self._workspace)
+
+
+class _Graph:
+    def __init__(self, workspace):
+        self.workspace = workspace
 
 
 class _FakeGit:
@@ -94,6 +117,72 @@ class TestItemRepoNoFallback(unittest.TestCase):
         self.assertFalse(self.svc.has_repo(item))
         self.store.add_artifact(item, "repo", "saga")
         self.assertTrue(self.svc.has_repo(item))
+
+
+class TestSpecsWorkspace(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+
+    def test_target_repo_is_specs_root_when_workflow_sources_from_specs(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("spec item", theme=theme)
+        svc = WorktreeService(
+            self.store, git=None, fs=None,
+            config=_Cfg("/home/u/workspace/projects"), flow=_FakeFlow(workspace="specs"),
+        )
+
+        self.assertEqual(svc.target_repo(item), "/specs")
+
+    def test_target_repo_is_projects_root_repo_when_workflow_omits_workspace(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("story", theme=theme)
+        self.store.add_artifact(item, "repo", "saga")
+        svc = WorktreeService(
+            self.store, git=None, fs=None,
+            config=_Cfg("/home/u/workspace/projects"), flow=_FakeFlow(workspace="project"),
+        )
+
+        self.assertEqual(
+            svc.target_repo(item), os.path.join("/home/u/workspace/projects", "saga")
+        )
+
+    def test_target_repo_without_a_flow_falls_back_to_project(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("story", theme=theme)
+        self.store.add_artifact(item, "repo", "saga")
+        svc = WorktreeService(
+            self.store, git=None, fs=None, config=_Cfg("/home/u/workspace/projects")
+        )
+
+        self.assertEqual(
+            svc.target_repo(item), os.path.join("/home/u/workspace/projects", "saga")
+        )
+
+    def test_ensure_does_not_silently_skip_specs_workspace_without_a_repo_artifact(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("spec item", theme=theme)
+        git = _FakeGit()
+        svc = WorktreeService(
+            self.store, git, fs=None, config=_Cfg("/home/u/workspace/projects"),
+            flow=_FakeFlow(workspace="specs"),
+        )
+
+        with self.assertRaises(UseCaseError):
+            svc.ensure(item)
+        self.assertIn(("is_git_repo", "/specs"), git.calls)
+
+    def test_remove_targets_specs_root_without_a_repo_artifact(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("spec item", theme=theme)
+        git = _FakeGit()
+        svc = WorktreeService(
+            self.store, git, fs=None, config=_Cfg("/home/u/workspace/projects"),
+            flow=_FakeFlow(workspace="specs"),
+        )
+
+        svc.remove(item)
+
+        self.assertEqual(git.calls, [("is_git_repo", "/specs")])
 
 
 class TestEnsureNoSilentFailure(unittest.TestCase):

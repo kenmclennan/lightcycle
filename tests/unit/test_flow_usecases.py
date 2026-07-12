@@ -571,6 +571,20 @@ class TestClaimTask(unittest.TestCase):
             resp.spec_path, os.path.join("/specs", "myproject/LC-1-my-spec.md")
         )
 
+    def test_resolves_brief_path_against_specs_root(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        s.add_artifact(item, "brief", "briefs/X.md")
+        s.create_step("build: x", step="build", role="coder", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.brief_path, os.path.join("/specs", "briefs/X.md"))
+
+    def test_omits_brief_path_when_no_brief_artifact(self):
+        s = FakeStore()
+        s.create_step("build: x", step="build", role="coder")
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertIsNone(resp.brief_path)
+
 
 class TestClaimConfigWithRealSteps(unittest.TestCase):
     def _uc(self, store):

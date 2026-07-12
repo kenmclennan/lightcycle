@@ -20,6 +20,7 @@ class ClaimResponse:
     workspace: Optional[str] = None
     branch: Optional[str] = None
     spec_path: Optional[str] = None
+    brief_path: Optional[str] = None
     config: Optional[dict] = None
 
 
@@ -61,7 +62,14 @@ class ClaimStepUseCase:
             spec_path = (
                 spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
             )
+        brief = next((a.value for a in view.item_artifacts if a.type == "brief"), None)
+        brief_path = None
+        if brief:
+            brief_path = (
+                brief if os.path.isabs(brief) else os.path.join(self._config.specs_root(), brief)
+            )
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
         return ClaimResponse(
-            view=view, workspace=ws, branch=branch, spec_path=spec_path, config=config or None
+            view=view, workspace=ws, branch=branch, spec_path=spec_path, brief_path=brief_path,
+            config=config or None
         )

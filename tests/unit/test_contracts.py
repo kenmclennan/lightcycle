@@ -139,6 +139,18 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertIsNone(flow.next("audit", "clean"))
         self.assertIsNone(graph.target("audit", "clean"))
 
+    def test_spec_workflow_entry_sources_worktrees_from_the_specs_repo(self):
+        graph = parse_graph(workflow_text(_ROOT, "spec"))
+        self.assertEqual(graph.entry, "spec-writer")
+        self.assertEqual(graph.workspace, "specs")
+        self.assertEqual(graph.requires, {"brief"})
+        self.assertIsNone(graph.target("spec-writer", "done"))
+
+    def test_spec_writer_step_accepts_brief_and_produces_spec(self):
+        meta = (parse_step(_ROOT, "spec-writer") or {"meta": {}})["meta"]
+        self.assertEqual(meta.get("accepts"), {"brief": "required"})
+        self.assertEqual(meta.get("produces"), {"spec": "required"})
+
     def test_ci_failed_cap_escalates_to_review_ci_after_three(self):
         step_metas = {
             role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
