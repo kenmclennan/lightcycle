@@ -2,10 +2,11 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.store_contract import StoreContractBase
-from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.adapters.sqlite_store import SchemaVersionRefused, SqliteStore, _SCHEMA_VERSION
 from lightcycle.application.work.status import StatusUseCase
 from lightcycle.config import Config
 
@@ -152,161 +153,129 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
             self.assertIn(tid, result_ids)
 
 
-class TestSqliteStoreHistoryMigration(unittest.TestCase):
-    def test_legacy_history_rows_without_ts_column_read_back_as_unknown(self):
-        root = tempfile.mkdtemp()
-        cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
-        config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
-
-        conn = sqlite3.connect(os.path.join(root, "store.db"))
-        conn.execute(
-            "CREATE TABLE history (node_id TEXT NOT NULL, seq INTEGER NOT NULL, "
-            "status TEXT NOT NULL)"
-        )
-        conn.execute(
-            "INSERT INTO history (node_id, seq, status) VALUES ('legacy-1', 0, 'in-progress')"
-        )
-        conn.commit()
-        conn.close()
-
-        store = SqliteStore(config)
-        self.assertEqual(store.history("legacy-1"), [("in-progress", None)])
-
-
-_LEGACY_NODES_SCHEMA = """
-CREATE TABLE nodes (
-    id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    title TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'open',
-    step TEXT,
-    role TEXT,
-    parent TEXT,
-    project TEXT,
-    goal TEXT,
-    description TEXT,
-    notes TEXT,
-    close_reason TEXT,
-    assignee TEXT,
-    since TEXT,
-    fired_at TEXT,
-    closed_at TEXT,
-    created_at TEXT,
-    attention INTEGER NOT NULL DEFAULT 0,
-    theme TEXT,
-    needs TEXT,
-    model TEXT,
-    workflow TEXT,
-    state TEXT
-);
-CREATE TABLE deps (node_id TEXT NOT NULL, blocked_by TEXT NOT NULL);
-CREATE TABLE artifacts (item_id TEXT NOT NULL, atype TEXT NOT NULL, value TEXT NOT NULL, label TEXT);
-CREATE TABLE labels (node_id TEXT NOT NULL, label TEXT NOT NULL);
-CREATE TABLE counters (namespace TEXT PRIMARY KEY, next INTEGER NOT NULL);
-CREATE TABLE history (node_id TEXT NOT NULL, seq INTEGER NOT NULL, status TEXT NOT NULL, ts TEXT);
-CREATE INDEX idx_nodes_status ON nodes(status);
-CREATE INDEX idx_tasks_status ON nodes(status);
-CREATE INDEX idx_status_report ON nodes(role);
-"""
-
-
-class TestSqliteStoreStateCollapseMigration(unittest.TestCase):
-    def _seed_legacy_store(self, root):
-        conn = sqlite3.connect(os.path.join(root, "store.db"))
-        conn.executescript(_LEGACY_NODES_SCHEMA)
-        conn.executemany(
-            "INSERT INTO nodes (id, type, status, role, assignee, state) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                ("s-closed", "step", "closed", "coder", None, None),
-                ("s-active", "step", "in_progress", "coder", "sp1", None),
-                ("s-ready", "step", "open", "coder", None, None),
-                ("s-blocked", "step", "open", "coder", None, None),
-                ("s-human", "step", "open", "human", None, None),
-                ("i-todo", "item", "open", None, None, "todo"),
-                ("i-active", "item", "open", None, None, "active"),
-                ("i-5v5", "item", "closed", None, None, "todo"),
-            ],
-        )
-        conn.execute(
-            "INSERT INTO deps (node_id, blocked_by) VALUES ('s-blocked', 's-ready')"
-        )
-        conn.commit()
-        conn.close()
-
+class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
         with open(cfg_path, "w") as f:
             f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
-    def test_migration_maps_every_row_to_the_single_state_field(self):
+    def test_fresh_store_is_stamped_current_and_usable(self):
         root = tempfile.mkdtemp()
-        self._seed_legacy_store(root)
         store = SqliteStore(self._config(root))
 
-        self.assertEqual(store.get_node("s-closed").state, "done")
-        self.assertEqual(store.get_node("s-active").state, "in_progress")
-        self.assertEqual(store.get_node("s-ready").state, "ready")
-        self.assertEqual(store.get_node("s-blocked").state, "backlogged")
-        self.assertEqual(store.get_node("s-human").state, "ready")
-        self.assertEqual(store.get_node("i-todo").state, "backlogged")
-        self.assertEqual(store.get_node("i-active").state, "backlogged")
+        version = store._conn.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, _SCHEMA_VERSION)
 
-        cols = {
-            r[1] for r in store._conn.execute("PRAGMA table_info(nodes)").fetchall()
-        }
-        self.assertNotIn("status", cols)
-        self.assertIn("state", cols)
+        tid = store.create_step("write-code: x", role="write-code")
+        self.assertEqual(store.get_node(tid).title, "write-code: x")
 
-    def test_closed_node_with_stale_legacy_state_reports_done(self):
+    def test_unstamped_current_store_is_retro_stamped_with_data_intact(self):
         root = tempfile.mkdtemp()
-        self._seed_legacy_store(root)
         store = SqliteStore(self._config(root))
+        tid = store.create_step("write-code: x", role="write-code")
+        store._conn.execute("PRAGMA user_version = 0")
+        store._conn.commit()
+        store._conn.close()
 
-        node = store.get_node("i-5v5")
-        self.assertEqual(node.state, "done")
+        reopened = SqliteStore(self._config(root))
 
-    def test_migration_backs_up_the_store_before_mutating_it(self):
+        version = reopened._conn.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, _SCHEMA_VERSION)
+        self.assertEqual(reopened.get_node(tid).title, "write-code: x")
+
+    def test_reopening_a_stamped_store_does_not_churn(self):
         root = tempfile.mkdtemp()
-        self._seed_legacy_store(root)
         SqliteStore(self._config(root))
-
-        backup = os.path.join(root, "backups", "store-pre-state-collapse.db.gz")
-        self.assertTrue(os.path.exists(backup))
-
-    def test_migration_drops_status_column_indexes_but_keeps_unrelated_ones(self):
-        root = tempfile.mkdtemp()
-        self._seed_legacy_store(root)
         store = SqliteStore(self._config(root))
 
-        indexes = [
-            r[0]
-            for r in store._conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'nodes'"
-            ).fetchall()
-        ]
-        self.assertNotIn("idx_nodes_status", indexes)
-        self.assertNotIn("idx_tasks_status", indexes)
-        self.assertIn("idx_status_report", indexes)
+        version = store._conn.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, _SCHEMA_VERSION)
 
-    def test_migrated_step_is_claimable_once_its_blocker_closes(self):
+    def test_store_with_status_column_present_is_refused(self):
         root = tempfile.mkdtemp()
-        self._seed_legacy_store(root)
         store = SqliteStore(self._config(root))
+        store._conn.execute("ALTER TABLE nodes ADD COLUMN status TEXT")
+        store._conn.execute("PRAGMA user_version = 0")
+        store._conn.commit()
+        store._conn.close()
 
-        self.assertEqual(store.get_node("s-blocked").state, "backlogged")
-        self.assertNotIn("s-blocked", [n.id for n in store.ready_steps()])
+        with self.assertRaises(SchemaVersionRefused) as cm:
+            SqliteStore(self._config(root))
+        self.assertIn("0.2.27", str(cm.exception))
 
-        store.close("s-ready", "done")
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 0)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(nodes)").fetchall()}
+        self.assertIn("status", cols)
 
-        self.assertEqual(store.get_node("s-blocked").state, "ready")
-        self.assertIn("s-blocked", [n.id for n in store.ready_steps()])
-        claimed = store.claim_ready("write-code")
-        self.assertIsNotNone(claimed)
-        self.assertEqual(claimed.id, "s-blocked")
+    def test_store_missing_workflow_column_is_refused(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        store._conn.execute("ALTER TABLE nodes DROP COLUMN workflow")
+        store._conn.execute("PRAGMA user_version = 0")
+        store._conn.commit()
+        store._conn.close()
+
+        with self.assertRaises(SchemaVersionRefused):
+            SqliteStore(self._config(root))
+
+    def test_history_status_without_state_is_refused(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        store._conn.execute("ALTER TABLE history RENAME COLUMN state TO status")
+        store._conn.execute("PRAGMA user_version = 0")
+        store._conn.commit()
+        store._conn.close()
+
+        with self.assertRaises(SchemaVersionRefused):
+            SqliteStore(self._config(root))
+
+    def test_history_missing_ts_is_refused(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        store._conn.execute("ALTER TABLE history DROP COLUMN ts")
+        store._conn.execute("PRAGMA user_version = 0")
+        store._conn.commit()
+        store._conn.close()
+
+        with self.assertRaises(SchemaVersionRefused):
+            SqliteStore(self._config(root))
+
+    def test_store_with_legacy_step_value_is_refused(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        tid = store.create_step("old style", role="write-code")
+        store._conn.execute("UPDATE nodes SET step = 'build' WHERE id = ?", (tid,))
+        store._conn.execute("PRAGMA user_version = 0")
+        store._conn.commit()
+        store._conn.close()
+
+        with self.assertRaises(SchemaVersionRefused):
+            SqliteStore(self._config(root))
+
+    def test_store_with_legacy_role_value_is_refused(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        tid = store.create_step("old style", role="write-code")
+        store._conn.execute("UPDATE nodes SET role = 'reviewer' WHERE id = ?", (tid,))
+        store._conn.execute("PRAGMA user_version = 0")
+        store._conn.commit()
+        store._conn.close()
+
+        with self.assertRaises(SchemaVersionRefused):
+            SqliteStore(self._config(root))
+
+    def test_store_stamped_below_the_floor_is_refused(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        store._conn.execute("PRAGMA user_version = 1")
+        store._conn.commit()
+        store._conn.close()
+
+        with patch("lightcycle.adapters.sqlite_store._SCHEMA_VERSION", 2):
+            with self.assertRaises(SchemaVersionRefused):
+                SqliteStore(self._config(root))
 
 
 _PRE_OUTCOME_NODES_SCHEMA = """

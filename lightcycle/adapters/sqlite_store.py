@@ -1,7 +1,5 @@
 import datetime
-import gzip
 import os
-import shutil
 import sqlite3
 
 from lightcycle.domain.work import Artifact, Node, NodeView, State, roll_up
@@ -13,6 +11,14 @@ _DB_FILENAME = "store.db"
 
 class LiveStoreRefused(Exception):
     pass
+
+
+class SchemaVersionRefused(Exception):
+    pass
+
+
+_SCHEMA_VERSION = 1
+_LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES = "0.2.27"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS nodes (
@@ -86,35 +92,11 @@ _METADATA_COLUMNS = ("theme", "needs", "since", "fired_at", "workflow")
 _LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
 
 
-def _migrated_state(type_, status, old_item_state):
-    if status == "closed":
-        return State.DONE.value
-    if type_ == "step":
-        if status == "in_progress":
-            return State.IN_PROGRESS.value
-        return State.READY.value
-    if type_ == "item":
-        return State.BACKLOGGED.value if old_item_state == "todo" else State.READY.value
-    return State.READY.value
-
-
-_ACTION_STEP_RENAMES = {
-    "build": "write-code",
-    "review": "review-code",
-    "review-plan": "review-spec",
-    "develop": "draft-spec",
-    "watch-pr": "watch-ci",
-    "ready-merge": "await-merge",
-    "resolve": "resolve-conflict",
-    "conflict-review": "review-conflict",
-}
-_ACTION_ROLE_RENAMES = {
-    "coder": "write-code",
-    "reviewer": "review-code",
-    "auditor": "audit",
-    "watch-pr": "watch-ci",
-    "resolve": "resolve-conflict",
-}
+_LEGACY_STEP_NAMES = (
+    "build", "review", "review-plan", "develop", "watch-pr", "ready-merge",
+    "resolve", "conflict-review",
+)
+_LEGACY_ROLE_NAMES = ("coder", "reviewer", "auditor", "watch-pr", "resolve")
 
 
 class SqliteStore(StorePort):
@@ -128,11 +110,7 @@ class SqliteStore(StorePort):
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
-        self._migrate_history_ts()
-        self._migrate_history_state_column()
-        self._migrate_nodes_workflow()
-        self._migrate_collapse_state()
-        self._migrate_action_rename()
+        self._apply_schema_version_floor()
         self._migrate_close_reason_to_outcome()
         self._conn.commit()
 
@@ -148,82 +126,44 @@ class SqliteStore(StorePort):
                 "Branch code verifies via tests against a temp store; set LC_HOME to point elsewhere."
             )
 
-    def _migrate_history_ts(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}
-        if "ts" not in cols:
-            self._conn.execute("ALTER TABLE history ADD COLUMN ts TEXT")
-
-    def _migrate_history_state_column(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}
-        if "status" in cols and "state" not in cols:
-            self._conn.execute("ALTER TABLE history RENAME COLUMN status TO state")
-
-    def _migrate_nodes_workflow(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        if "workflow" not in cols:
-            self._conn.execute("ALTER TABLE nodes ADD COLUMN workflow TEXT")
-
-    def _migrate_collapse_state(self):
-        node_cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        if "status" not in node_cols:
+    def _apply_schema_version_floor(self):
+        version = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        if version >= _SCHEMA_VERSION:
             return
-        self._backup_before_collapse()
-        rows = self._conn.execute("SELECT id, type, status, state FROM nodes").fetchall()
-        for tid, type_, status, old_item_state in rows:
-            new_state = _migrated_state(type_, status, old_item_state)
-            self._conn.execute("UPDATE nodes SET state = ? WHERE id = ?", (new_state, tid))
-        for name in self._status_indexes():
-            self._conn.execute('DROP INDEX IF EXISTS "%s"' % name)
-        self._conn.execute("ALTER TABLE nodes DROP COLUMN status")
-        self._conn.commit()
-
-    def _status_indexes(self):
-        names = []
-        for row in self._conn.execute("PRAGMA index_list(nodes)").fetchall():
-            index = row[1]
-            columns = [c[2] for c in self._conn.execute('PRAGMA index_info("%s")' % index).fetchall()]
-            if "status" in columns:
-                names.append(index)
-        return names
-
-    def _backup_before_collapse(self):
-        self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        self._conn.commit()
-        backups_dir = os.path.join(self._config.data_root(), "backups")
-        os.makedirs(backups_dir, exist_ok=True)
-        dst = os.path.join(backups_dir, "store-pre-state-collapse.db.gz")
-        with open(self._db_path, "rb") as src, gzip.open(dst, "wb") as out:
-            shutil.copyfileobj(src, out)
-
-    def _migrate_action_rename(self):
-        old_steps = tuple(_ACTION_STEP_RENAMES)
-        old_roles = tuple(_ACTION_ROLE_RENAMES)
-        q = "SELECT 1 FROM nodes WHERE step IN (%s) OR role IN (%s) LIMIT 1" % (
-            ",".join("?" * len(old_steps)),
-            ",".join("?" * len(old_roles)),
+        if version == 0:
+            if self._is_legacy_store():
+                raise SchemaVersionRefused(
+                    "store predates the schema-version floor and cannot be opened by "
+                    "this engine; migrate it with lightcycle %s first, then reopen."
+                    % _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES
+                )
+            self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
+            return
+        raise SchemaVersionRefused(
+            "store is stamped at schema version %d, below this engine's floor of "
+            "%d; migrate it with lightcycle %s first, then reopen."
+            % (version, _SCHEMA_VERSION, _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES)
         )
-        if not self._conn.execute(q, old_steps + old_roles).fetchone():
-            return
-        self._backup_before_action_rename()
-        for old, new in _ACTION_STEP_RENAMES.items():
-            self._conn.execute("UPDATE nodes SET step = ? WHERE step = ?", (new, old))
-        for old, new in _ACTION_ROLE_RENAMES.items():
-            self._conn.execute("UPDATE nodes SET role = ? WHERE role = ?", (new, old))
-        self._conn.commit()
+
+    def _is_legacy_store(self):
+        node_cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
+        if "status" in node_cols or "workflow" not in node_cols:
+            return True
+        history_cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}
+        if "ts" not in history_cols:
+            return True
+        if "status" in history_cols and "state" not in history_cols:
+            return True
+        q = "SELECT 1 FROM nodes WHERE step IN (%s) OR role IN (%s) LIMIT 1" % (
+            ",".join("?" * len(_LEGACY_STEP_NAMES)),
+            ",".join("?" * len(_LEGACY_ROLE_NAMES)),
+        )
+        return self._conn.execute(q, _LEGACY_STEP_NAMES + _LEGACY_ROLE_NAMES).fetchone() is not None
 
     def _migrate_close_reason_to_outcome(self):
         cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
         if "close_reason" in cols and "outcome" not in cols:
             self._conn.execute("ALTER TABLE nodes RENAME COLUMN close_reason TO outcome")
-
-    def _backup_before_action_rename(self):
-        self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        self._conn.commit()
-        backups_dir = os.path.join(self._config.data_root(), "backups")
-        os.makedirs(backups_dir, exist_ok=True)
-        dst = os.path.join(backups_dir, "store-pre-action-rename.db.gz")
-        with open(self._db_path, "rb") as src, gzip.open(dst, "wb") as out:
-            shutil.copyfileobj(src, out)
 
     def _leaf_state(self, type_, raw_state, assignee, deps):
         if type_ != "step":
