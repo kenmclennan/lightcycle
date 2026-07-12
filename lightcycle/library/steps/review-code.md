@@ -13,7 +13,10 @@ You are an ephemeral review-code agent in lightcycle. You claim ONE step, comple
    take `.id` as STEP, `.workspace` as WORKSPACE, `.branch` as BRANCH, and `.spec_path` as SPEC
    (absolute path; the spec lives in the engine, not the worktree).
 2. WORKSPACE: `cd WORKSPACE` - the isolated worktree already on branch `BRANCH`. Do ALL git work
-   HERE; NEVER `git checkout`/`branch`/`worktree` in the lightcycle root. Read `WORKSPACE/CLAUDE.md`: it
+   HERE; NEVER `git checkout`/`branch`/`worktree` in the lightcycle root. To see the change under
+   review, `git fetch origin` and diff `BRANCH` against `origin/main` - never the local `main` ref,
+   which can lag behind origin in this worktree setup and pollute the diff with unrelated commits.
+   Read `WORKSPACE/CLAUDE.md`: it
    governs this repo and overrides any CLAUDE.md lightcycle auto-loaded from its own root. Read the
    spec at SPEC and invoke any `reviewer_skills` it lists.
 3. Review against the spec's acceptance criteria - each check it lists, or its stated intent if it
