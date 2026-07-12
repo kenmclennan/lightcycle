@@ -174,7 +174,8 @@ COMMAND_GROUPS = [
         ("advance", "<id> <outcome>", "create the next step for an outcome without closing"),
         ("ready-roles", "", "list roles that have a ready step"),
         ("spawn", "<role>", "spawn one worker for a role"),
-        ("specs-dir", "", "print the resolved specs directory (absolute path)"),
+        ("specs-dir", "[--check]", "print the resolved specs directory (absolute path); "
+         "--check validates it against specs-remote"),
     ]),
 ]
 
@@ -362,8 +363,29 @@ def cmd_ready_roles(argv):
 
 
 def cmd_specs_dir(argv):
-    argparse.ArgumentParser(prog="lc specs-dir").parse_args(argv)
-    print(_container.config.specs_root())
+    ap = argparse.ArgumentParser(prog="lc specs-dir")
+    ap.add_argument("--check", action="store_true")
+    a = ap.parse_args(argv)
+    root = _container.config.specs_root()
+    if not a.check:
+        print(root)
+        return 0
+    try:
+        expected = _container.config.specs_remote()
+    except ConfigError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    if not _container.git.is_git_repo(root):
+        sys.stderr.write("specs dir %s is not a git repo\n" % root)
+        return 1
+    origin = _container.git.remote_url(root)
+    if origin != expected:
+        sys.stderr.write(
+            "specs dir %s origin (%s) does not match specs-remote (%s)\n"
+            % (root, origin or "none", expected)
+        )
+        return 1
+    print("ok: %s matches specs-remote (%s)" % (root, expected))
     return 0
 
 

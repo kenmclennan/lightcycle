@@ -35,6 +35,16 @@ class TestRequiredRoots(unittest.TestCase):
         with self.assertRaises(ConfigError):
             _cfg().specs_root()
 
+    def test_specs_remote_missing_fails_fast(self):
+        with self.assertRaises(ConfigError):
+            _cfg().specs_remote()
+
+    def test_specs_remote_config_value_read(self):
+        self.assertEqual(
+            _cfg(specs_remote="git@github.com:x/specs.git").specs_remote(),
+            "git@github.com:x/specs.git",
+        )
+
     def test_absolute_roots_kept(self):
         c = _cfg(projects="/p", specs="/s")
         self.assertEqual(c.projects_root(), "/p")
@@ -148,6 +158,7 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
         self.assertIn("retro-interval-items: 20", text)
+        self.assertIn("specs-remote: git@github.com:you/lightcycle-specs.git", text)
 
     def test_tops_up_missing_keys_in_existing_config(self):
         d = tempfile.mkdtemp()
@@ -174,7 +185,8 @@ class TestEnsureConfig(unittest.TestCase):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
         all_keys = (
-            "projects: /p\nspecs: /s\nbranch-prefix: feat\nshortcode: PROJ\n"
+            "projects: /p\nspecs: /s\nspecs-remote: git@github.com:x/specs.git\n"
+            "branch-prefix: feat\nshortcode: PROJ\n"
             "default-workflow: standard\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
             "max-session-seconds: 1800\n"

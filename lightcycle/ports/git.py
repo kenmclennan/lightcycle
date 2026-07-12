@@ -15,6 +15,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def remote_url(self, root):
+        pass
+
+    @abstractmethod
     def branch_exists(self, root, branch):
         pass
 
