@@ -830,6 +830,29 @@ class TestLink(unittest.TestCase):
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].value, "specs/new.md")
 
+    def test_attach_file_reads_file_content_into_artifact_value(self):
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        f = Path(self.root) / "brief-draft.md"
+        f.write_text("the brief's literal text")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "brief", "--file", str(f))
+        self.assertEqual(rc, 0, err)
+        arts = self.store.item_artifacts(sid)
+        self.assertEqual(arts[0].type, "brief")
+        self.assertEqual(arts[0].value, "the brief's literal text")
+
+    def test_attach_without_value_or_file_fails(self):
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "brief")
+        self.assertEqual(rc, 2)
+
+    def test_attach_file_missing_path_fails_loudly(self):
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        rc, out, err = call(
+            _cli_mod.cmd_attach, sid, "brief", "--file", str(Path(self.root) / "nope.md")
+        )
+        self.assertEqual(rc, 1)
+        self.assertIn("nope.md", err)
+
 
 class TestModelV2(unittest.TestCase):
     def setUp(self):
@@ -1540,7 +1563,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         ws = t["workspace"]
         self.assertTrue(os.path.isdir(ws))
         self.assertEqual(os.path.dirname(ws), os.path.join(self.specs_repo, ".worktrees"))
-        self.assertEqual(t["brief_path"], os.path.join(self.specs_repo, "briefs/LC-1.md"))
+        self.assertEqual(t["brief"], "briefs/LC-1.md")
 
     def test_activating_a_spec_workflow_item_without_a_brief_fails_fast(self):
         item = self.store.create_item("phase b1", workflow="spec")
@@ -1649,6 +1672,10 @@ class TestNamedRepo(unittest.TestCase):
         self.assertTrue(os.path.isabs(view["spec_path"]))
         self.assertTrue(view["spec_path"].endswith("specs/X.md"))
         self.assertTrue(view["spec_path"].startswith(self.engine))
+
+    def test_claim_includes_absolute_repo_path(self):
+        view = self._claim("app")
+        self.assertEqual(view["repo_path"], self.app)
 
     def test_file_stores_single_repo_artifact(self):
         theme = self.store.create_theme("theme")

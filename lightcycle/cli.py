@@ -283,8 +283,10 @@ def cmd_claim(argv):
         out["branch"] = resp.branch
     if resp.spec_path:
         out["spec_path"] = resp.spec_path
-    if resp.brief_path:
-        out["brief_path"] = resp.brief_path
+    if resp.brief:
+        out["brief"] = resp.brief
+    if resp.repo_path:
+        out["repo_path"] = resp.repo_path
     if resp.config:
         out["config"] = resp.config
     if resp.phase:
@@ -702,17 +704,26 @@ def cmd_attach(argv):
     ap = argparse.ArgumentParser(prog="lc attach")
     ap.add_argument("id")
     ap.add_argument("type")
-    ap.add_argument("value")
+    group = ap.add_mutually_exclusive_group(required=True)
+    group.add_argument("value", nargs="?")
+    group.add_argument("--file")
     ap.add_argument("--label")
     ap.add_argument("--replace", action="store_true")
     a = ap.parse_args(argv)
+    value = a.value
+    if a.file:
+        data = _container.fs.read_bytes(a.file)
+        if data is None:
+            sys.stderr.write("no such file: %s\n" % a.file)
+            return 1
+        value = data.decode()
     if a.type == "feedback":
         ReflectUseCase(_container.store, _container.fs).execute(
-            ReflectInput(step=a.id, feedback=a.value)
+            ReflectInput(step=a.id, feedback=value)
         )
         return 0
     LinkArtifactUseCase(_container.store).execute(
-        LinkArtifactInput(item=a.id, atype=a.type, value=a.value, label=a.label, replace=a.replace)
+        LinkArtifactInput(item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace)
     )
     return 0
 
