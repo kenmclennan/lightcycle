@@ -19,7 +19,9 @@ invent intent.
    (`npx prettier --write`). If the work is big, the spec may break into phases, each with a
    review checkpoint - one item per phase, from the single spec.
    - **First draft**: run `lc specs-dir` to get the configured specs directory, then write the
-     spec to `<specs-dir>/<name>.md`.
+     spec to `<specs-dir>/<name>.md`, naming it after the item id it specs (never a parallel padded
+     sequence - the two collide). This step only runs where the workflow's entry step is draft-spec;
+     a spec-gated workflow instead has its spec drafted and attached before the item is activated.
    - **Revise** (arriving here from review-spec's `changes` outcome): the item already carries a
      `spec` artifact. Edit that file at its existing path in place - never write a new
      `<name>.md` or add a second spec.
