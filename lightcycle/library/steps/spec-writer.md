@@ -27,8 +27,10 @@ driver's context - you do not invent intent.
    It needs two things: clarity for the agents that build and review it, and something a human can
    review on the eventual PR. Hyphens not emdashes; format with prettier
    (`npx prettier --write`).
-5. Commit the spec on the branch.
-6. `lc attach ITEM spec <project>/<ITEM>-<slug>.md` to attach it.
-7. `lc done STEP done`. EXIT.
+5. Copy the brief from BRIEF to `<project>/<ITEM>-brief.md` inside WORKSPACE, so the spec PR
+   shows both the settled design and its formalization, and both are retained in the specs repo.
+6. Commit the spec and the brief on the branch.
+7. `lc attach ITEM spec <project>/<ITEM>-<slug>.md` to attach it.
+8. `lc done STEP done`. EXIT.
 
 No emdashes.
