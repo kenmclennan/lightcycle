@@ -24,8 +24,9 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.domain.work import Artifact
 
+from tests.support.isolation import inject_container
+
 _ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
-os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 
 
 def run_tg(*args, root=None, config=None):
@@ -251,19 +252,14 @@ def _file_compat(argv):
 
 def _fake_setUp(test, *, steps=False, contract_steps=False):
     test.root = tempfile.mkdtemp()
-    os.environ["LC_HOME"] = test.root
-    os.environ["LC_CONFIG"] = write_config(projects=test.root, specs=test.root)
+    cfg = write_config(projects=test.root, specs=test.root)
     write_workflow(test.root, {})
     if steps:
         write_steps(test.root)
     if contract_steps:
         write_contract_steps(test.root)
     test.store = FakeStore()
-    test._orig = _cli_mod._container
-    _cli_mod.set_container(_cli_mod.Container(store=test.store))
-    test.addCleanup(lambda: _cli_mod.set_container(test._orig))
-    test.addCleanup(lambda: os.environ.pop("LC_HOME", None))
-    test.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
+    inject_container(test, store=test.store, home=test.root, config_path=cfg)
 
 
 class TestSkeleton(unittest.TestCase):
