@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from lightcycle.application.work.resolve_backlog import retire_resolved
 from lightcycle.domain.work import State
 
 
@@ -20,3 +21,4 @@ class CloseItemUseCase:
                 self._store.close(kt.id, input.reason)
         self._store.close(input.item, input.reason)
         self._worktrees.remove(input.item)
+        retire_resolved(self._store, input.item)
