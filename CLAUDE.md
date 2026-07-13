@@ -58,6 +58,7 @@ Two craft checks that belong here, not in the step prompts: **no broken windows*
 ## Spec-authoring guidance
 
 - **Separate hooks from edges.** When a spec describes a workflow-graph change, keep hook-value outcomes (events that auto-close or bypass a step transition, e.g. `pr_merge`) visually separate from real edges - a distinct "Hooks:" list, mirroring the `edges:` / `hooks:` split the workflow markdown itself uses (see `lightcycle/library/workflows/standard.md`). An implementer must never have to reverse-engineer whether an outcome is an edge or a hook.
+- **Recurring acceptance lines.** Every lightcycle spec's acceptance should include: `bash tests/run.sh` green and `uv run ruff check .` clean; no comments or docstrings in changed code; and no manual `__version__` bump - the auto-bump-on-merge workflow handles it (a change touching `lightcycle/` without a bump triggers it). State these so specs stay consistent and the driver never reinvents them.
 
 ## Style
 

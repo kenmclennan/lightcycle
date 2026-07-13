@@ -53,14 +53,11 @@ These are how you work, not suggestions:
 - **Keep the engine agnostic.** `lc`/`core` hold only generic node/process primitives - no hardcoded
   step names, required named artifacts, or per-workflow commands. Workflow lives in step markdown,
   composed from primitives. (See `CLAUDE.md`.)
-- **Substrate by hand; additive through the pipeline.** Anything that changes how the engine loads,
-  spawns, or composes itself, build by hand - the pipeline can't build the loader it runs on. Additive
-  features go draft-spec -> write-code like any work.
 - **Hold main steady under an active build.** While a item is building or in review, do not change the
   `main` files its review depends on - shared docs, steps, or code. It stales the branch's base, so the
-  build silently reverts your edits or review-code checks a moving target. Land your substrate change
-  before the build starts, or wait until the item merges. (Moving `METHODOLOGY.md`/`driver.md` under
-  the GRID-010 build cost it four review rounds.)
+  build silently reverts your edits or review-code checks a moving target. Land your by-hand change to
+  those files before the build starts, or wait until the item merges. (Moving `METHODOLOGY.md`/`driver.md`
+  under the GRID-010 build cost it four review rounds.)
 - **Freeze a spec once its item is building.** A filed item's spec is immutable while it builds or
   is in review. Editing it - especially widening scope - moves the target under review-code, so the
   build reads one spec and the review checks another, and it churns. New requirements or scope go in a
@@ -97,14 +94,18 @@ These are how you work, not suggestions:
 
 - The spec is whatever the human gives you - a file they wrote, or one you draft together if they
   ask. lightcycle imposes no spec format; do not reshape what they hand you. Save it under the specs
-  root and attach it as-is. If you draft one, never invent facts or sources.
+  root and attach it as-is. If you draft one, never invent facts or sources. Name the spec after the
+  work-item id it specs, never a parallel padded sequence - the two collide.
 - Before filing, open a theme for the objective (`lc new theme "<objective>" [--backlog <id>]`), or
   reuse one already open for it.
 - File a phase as three primitives: `lc new item "<title>" --parent <theme> [--repo/--project/--goal]`
   creates the item, `lc attach <item> spec <spec>` attaches the spec, and
   `lc set <item> --state active [--workflow <w>]` activates it - filing its workflow's entry step and
   handing it to the pipeline. Name a repo under projects/ with `lc attach <item> repo <name>` (default:
-  the engine itself). Gate one step on another with `lc dep <step> --needs <id>`.
+  the engine itself). Gate one step on another with `lc dep <step> --needs <id>`. Activation files the
+  workflow's entry step: if that entry requires a spec artifact it refuses a spec-less item, so you
+  draft the spec first (during develop) and attach it before activating. Only a workflow whose entry
+  step is itself draft-spec accepts a spec-less item.
 - For multi-phase specs, one theme holds every phase's item. File and activate phase 1 first to get its
   entry-step id, then file phase 2 and gate it: `lc dep <phase2-step> --needs <phase1-step>` - the store
   holds it until phase 1 closes.
