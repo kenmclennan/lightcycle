@@ -62,6 +62,14 @@ class TestFlowService(unittest.TestCase):
         store.create_step("b", step="build", role="coder")
         self.assertIn("coder", svc(store).ready_roles())
 
+    def test_is_retro_cadence_step_true_for_a_step_declaring_on_retro_cadence(self):
+        metas = {"auditor": {"model": "sonnet", "step": "audit", "on_retro_cadence": True}}
+        service = FlowService(FakeFs(metas), FakeStore())
+        self.assertTrue(service.is_retro_cadence_step("audit"))
+
+    def test_is_retro_cadence_step_false_for_an_ordinary_step(self):
+        self.assertFalse(svc().is_retro_cadence_step("build"))
+
 
 class TestPhaseFor(unittest.TestCase):
     def test_project_workspace_is_the_code_phase(self):

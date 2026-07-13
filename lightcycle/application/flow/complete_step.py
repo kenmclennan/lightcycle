@@ -5,6 +5,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
+from lightcycle.application.work.project_of import project_of
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work.state import State
 
@@ -65,6 +66,8 @@ class CompleteStepUseCase:
             )
         self._store.note(input.step, "outcome: %s" % input.outcome)
         self._store.close(input.step, input.outcome)
+        if project and self._flow.is_retro_cadence_step(t.step, name, project):
+            self._mark_retroed(project)
         new = self._resolver.create(t, transition) if transition else None
         if input.note:
             if transition:
@@ -73,6 +76,11 @@ class CompleteStepUseCase:
                 self._store.note(input.step, input.note)
         self._cascade_close(t.parent)
         return CompleteResponse(next_step=new)
+
+    def _mark_retroed(self, project):
+        for item in self._store.closed_unretroed_items():
+            if project_of(self._store, item) == project:
+                self._store.label_add(item.id, "retroed")
 
     def _cascade_close(self, node_id):
         if not node_id:

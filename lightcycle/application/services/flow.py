@@ -69,6 +69,9 @@ class FlowService:
     def is_known_step(self, step, name=None, project=None):
         return bool(self.load_flow(name, project).owner_of(step))
 
+    def is_retro_cadence_step(self, step, name=None, project=None):
+        return step in dict(self.load_flow(name, project).retro_cadence_steps())
+
     def owner_of(self, step, name=None, project=None):
         return self.load_flow(name, project).owner_of(step)
 

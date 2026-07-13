@@ -2,8 +2,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from lightcycle.application.work.project_of import project_of
 from lightcycle.domain import feedback as cfeedback
-from lightcycle.domain.work import Item, Node
+from lightcycle.domain.work import Node
 
 
 @dataclass(frozen=True)
@@ -45,13 +46,10 @@ class RetroUseCase:
         self._store = store
         self._flow = flow
 
-    def _project_of(self, item):
-        return Item(item.id, tuple(self._store.item_artifacts(item.id))).artifact_of("repo")
-
     def _project_scope(self, project, signals):
         rows, all_refs = [], []
         for item in self._store.closed_unretroed_items():
-            if self._project_of(item) != project:
+            if project_of(self._store, item) != project:
                 continue
             row, refs = self._collect_item_row(item, signals)
             rows.append(row)
