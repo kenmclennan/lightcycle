@@ -84,7 +84,7 @@ from lightcycle.application.setup import (
 from lightcycle.adapters.sqlite_store import LiveStoreRefused
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
-from lightcycle.config import ConfigError
+from lightcycle.config import Config, ConfigError
 from lightcycle.container import Container
 
 
@@ -229,11 +229,40 @@ def cmd_upgrade(argv):
     return 0
 
 
+_WORKER_VERBS = ("claim", "done", "show", "attach")
+_SET_FORBIDDEN_FLAGS = (
+    "--parent", "--title", "--desc", "--description", "--goal", "--project",
+    "--workflow", "--backlog", "--label", "--step",
+)
+
+
+def _sets_state_blocked(args):
+    for i, a in enumerate(args):
+        if a == "--state":
+            return i + 1 < len(args) and args[i + 1] == "blocked"
+        if a.startswith("--state="):
+            return a.split("=", 1)[1] == "blocked"
+    return False
+
+
+def _worker_permitted(cmd, args):
+    if cmd in _WORKER_VERBS:
+        return True
+    if cmd == "set":
+        if any(a.split("=", 1)[0] in _SET_FORBIDDEN_FLAGS for a in args):
+            return False
+        return _sets_state_blocked(args)
+    return False
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] in ("version", "--version"):
         return cmd_version([])
     if argv and argv[0] == "upgrade":
+        if Config().is_worker():
+            sys.stderr.write("lc: workers may not run 'upgrade'\n")
+            return 1
         return cmd_upgrade(argv[1:])
     try:
         set_container(Container())
@@ -247,6 +276,12 @@ def main(argv=None):
     if cmd not in VERBS:
         sys.stderr.write("unknown subcommand: %s\n" % cmd)
         return 2
+    if _container.config.is_worker() and not _worker_permitted(cmd, argv[1:]):
+        sys.stderr.write(
+            "lc: workers may not run '%s' - permitted: claim, done, show, attach, "
+            "set --state blocked\n" % cmd
+        )
+        return 1
     fn = globals().get("cmd_" + cmd.replace("-", "_"))
     if fn is None:
         sys.stderr.write("not implemented: %s\n" % cmd)
