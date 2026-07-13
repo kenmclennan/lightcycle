@@ -20,6 +20,7 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
+from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work import (
     ActiveStepsUseCase,
     BacklogInput,
@@ -600,7 +601,7 @@ def cmd_new(argv):
     ap.add_argument("--project")
     ap.add_argument("--goal")
     ap.add_argument("--description")
-    ap.add_argument("--backlog")
+    ap.add_argument("--backlog", action="append")
     ap.add_argument("--inbox", action="store_true", dest="attention")
     a = ap.parse_args(argv)
     if a.type not in _NODE_TYPES:
@@ -634,6 +635,12 @@ def cmd_new(argv):
             _container.store.edit_node(tid, description=a.description)
             if a.attention:
                 _container.store.label_add(tid, "attention")
+        if a.backlog:
+            try:
+                link_resolves(_container.store, tid, a.backlog)
+            except UseCaseError as e:
+                sys.stderr.write("%s\n" % e)
+                return 1
         print(tid)
     else:
         print(_container.store.create_step(
@@ -647,6 +654,7 @@ def cmd_set(argv):
     for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label",
                 "needs", "branch", "pr", "reason", "tried", "step"):
         ap.add_argument("--%s" % opt)
+    ap.add_argument("--backlog", action="append")
     ap.add_argument("id")
     a = ap.parse_args(argv)
     try:
@@ -676,6 +684,12 @@ def cmd_set(argv):
     _container.store.edit_node(
         a.id, title=a.title, description=a.description, goal=a.goal,
         project=a.project, parent=a.parent, workflow=a.workflow)
+    if a.backlog:
+        try:
+            link_resolves(_container.store, a.id, a.backlog)
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
     return 0
 
 

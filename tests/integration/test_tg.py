@@ -865,12 +865,62 @@ class TestEpicCommand(unittest.TestCase):
         self.assertEqual(rc2, 0, err2)
         eid = out2.strip()
         arts = self.store.item_artifacts(eid)
-        self.assertEqual([(a.type, a.value) for a in arts], [("backlog", backlog)])
+        self.assertEqual([(a.type, a.value) for a in arts], [("resolves", backlog)])
+
+    def test_epic_links_multiple_backlog_ids(self):
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item")
+        b1 = out.strip()
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "another backlog item")
+        b2 = out.strip()
+        rc2, out2, err2 = call(
+            _cli_mod.cmd_new, "theme", "ship the thing", "--backlog", b1, "--backlog", b2
+        )
+        self.assertEqual(rc2, 0, err2)
+        eid = out2.strip()
+        arts = self.store.item_artifacts(eid)
+        self.assertEqual([(a.type, a.value) for a in arts], [("resolves", b1), ("resolves", b2)])
 
     def test_epic_unknown_backlog_errors(self):
         rc, _, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--backlog", "does-not-exist")
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
+
+
+class TestItemBacklogLink(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_new_item_links_backlog(self):
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item")
+        backlog = out.strip()
+        rc2, out2, err2 = call(_cli_mod.cmd_new, "item", "the work", "--backlog", backlog)
+        self.assertEqual(rc2, 0, err2)
+        tid = out2.strip()
+        arts = self.store.item_artifacts(tid)
+        self.assertEqual([(a.type, a.value) for a in arts], [("resolves", backlog)])
+
+    def test_new_item_links_multiple_backlog_ids(self):
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item")
+        b1 = out.strip()
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "another backlog item")
+        b2 = out.strip()
+        rc2, out2, err2 = call(
+            _cli_mod.cmd_new, "item", "the work", "--backlog", b1, "--backlog", b2
+        )
+        self.assertEqual(rc2, 0, err2)
+        tid = out2.strip()
+        arts = self.store.item_artifacts(tid)
+        self.assertEqual([(a.type, a.value) for a in arts], [("resolves", b1), ("resolves", b2)])
+
+    def test_set_links_backlog(self):
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item")
+        backlog = out.strip()
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "the work")
+        tid = out.strip()
+        rc2, _, err2 = call(_cli_mod.cmd_set, tid, "--backlog", backlog)
+        self.assertEqual(rc2, 0, err2)
+        arts = self.store.item_artifacts(tid)
+        self.assertEqual([(a.type, a.value) for a in arts], [("resolves", backlog)])
 
 
 class TestFileItem(unittest.TestCase):

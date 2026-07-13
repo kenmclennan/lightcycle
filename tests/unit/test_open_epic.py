@@ -16,10 +16,20 @@ class TestOpenEpic(unittest.TestCase):
         s = FakeStore()
         backlog = s.create_step("a backlog item", role="human")
         resp = OpenThemeUseCase(s).execute(
-            OpenThemeInput(objective="ship the thing", backlog=backlog)
+            OpenThemeInput(objective="ship the thing", backlog=[backlog])
         )
         arts = s.item_artifacts(resp.theme)
-        self.assertEqual([(a.type, a.value) for a in arts], [("backlog", backlog)])
+        self.assertEqual([(a.type, a.value) for a in arts], [("resolves", backlog)])
+
+    def test_links_multiple_backlog_ids_when_given(self):
+        s = FakeStore()
+        b1 = s.create_step("a backlog item", role="human")
+        b2 = s.create_step("another backlog item", role="human")
+        resp = OpenThemeUseCase(s).execute(
+            OpenThemeInput(objective="ship the thing", backlog=[b1, b2])
+        )
+        arts = s.item_artifacts(resp.theme)
+        self.assertEqual([(a.type, a.value) for a in arts], [("resolves", b1), ("resolves", b2)])
 
     def test_no_backlog_link_when_omitted(self):
         s = FakeStore()
@@ -30,7 +40,7 @@ class TestOpenEpic(unittest.TestCase):
         s = FakeStore()
         with self.assertRaises(UseCaseError):
             OpenThemeUseCase(s).execute(
-                OpenThemeInput(objective="ship the thing", backlog="does-not-exist")
+                OpenThemeInput(objective="ship the thing", backlog=["does-not-exist"])
             )
 
 

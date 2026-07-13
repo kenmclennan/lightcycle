@@ -248,6 +248,25 @@ class TestCloseItem(unittest.TestCase):
         self.assertEqual(s.get_node(k).state, "done")
         self.assertEqual(wt.removed, [sid])
 
+    def test_closes_linked_backlog_item_on_item_close(self):
+        s = FakeStore()
+        backlog = s.create_step("a backlog item", role="human")
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "resolves", backlog)
+        wt = FakeWorktrees()
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
+        self.assertEqual(s.get_node(backlog).state, "done")
+        self.assertEqual(
+            [(a.type, a.value) for a in s.item_artifacts(backlog)], [("resolved-by", sid)]
+        )
+
+    def test_no_backlog_link_on_item_close_is_unaffected(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        wt = FakeWorktrees()
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
+        self.assertEqual(s.get_node(sid).state, "done")
+
 
 class TestCloseEpic(unittest.TestCase):
     def test_closes_epic_when_all_children_closed(self):
@@ -311,15 +330,33 @@ class TestCloseEpic(unittest.TestCase):
 
 
 class TestCloseEpicBacklogResolution(unittest.TestCase):
-    def test_closes_linked_backlog_item_on_theme_close(self):
+    def test_closes_every_linked_backlog_item_on_theme_close(self):
         s = FakeStore()
-        backlog = s.create_step("a backlog item", role="human")
+        b1 = s.create_step("a backlog item", role="human")
+        b2 = s.create_step("another backlog item", role="human")
         theme = s.create_theme("my theme")
-        s.add_artifact(theme, "backlog", backlog)
+        s.add_artifact(theme, "resolves", b1)
+        s.add_artifact(theme, "resolves", b2)
         child = s.create_item("item", theme=theme)
         s.close(child, "merged")
         CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
-        self.assertEqual(s.get_node(backlog).state, "done")
+        self.assertEqual(s.get_node(b1).state, "done")
+        self.assertEqual(s.get_node(b2).state, "done")
+        self.assertEqual(
+            [(a.type, a.value) for a in s.item_artifacts(b1)], [("resolved-by", theme)]
+        )
+
+    def test_already_done_backlog_item_is_left_alone(self):
+        s = FakeStore()
+        backlog = s.create_step("a backlog item", role="human")
+        theme = s.create_theme("my theme")
+        s.add_artifact(theme, "resolves", backlog)
+        s.close(backlog, "already handled")
+        child = s.create_item("item", theme=theme)
+        s.close(child, "merged")
+        CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
+        self.assertEqual(s.get_node(backlog).outcome, "already handled")
+        self.assertEqual(s.item_artifacts(backlog), [])
 
     def test_no_backlog_link_is_a_no_op(self):
         s = FakeStore()
