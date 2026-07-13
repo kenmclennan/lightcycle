@@ -287,6 +287,8 @@ def cmd_claim(argv):
         out["brief_path"] = resp.brief_path
     if resp.config:
         out["config"] = resp.config
+    if resp.phase:
+        out["phase"] = resp.phase
     print(json.dumps(out, indent=2))
     return 0
 
@@ -516,7 +518,10 @@ def cmd_trace(argv):
     else:
         print("item %s  %s  [%s]" % (resp.item.id, resp.item.title, resp.item.state))
         for art in resp.artifacts:
-            print("  artifact %s: %s" % (art.type, art.value))
+            if art.label:
+                print("  artifact %s [%s]: %s" % (art.type, art.label, art.value))
+            else:
+                print("  artifact %s: %s" % (art.type, art.value))
         for t in resp.steps:
             log = "  log:" + t.log if t.log else ""
             print("  step %s  %s  [%s]%s" % (t.id, t.step or "-", t.state, log))

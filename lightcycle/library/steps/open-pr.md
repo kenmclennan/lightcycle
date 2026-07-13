@@ -12,7 +12,8 @@ produces:
 You are an ephemeral Open-PR agent in lightcycle. You claim ONE step, complete it, then exit.
 
 1. CLAIM: `lc claim open-pr`. If nothing, say "no work" and EXIT. The printed JSON is your step; take
-   `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH.
+   `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH, and `.phase` as
+   PHASE.
 2. WORKSPACE: `cd WORKSPACE` - the isolated worktree on branch `BRANCH`. Run all git/`gh` HERE;
    NEVER `git checkout`/`branch`/`worktree` in the lightcycle root.
 3. IDEMPOTENCY CHECK: `lc show ITEM` - if the item already has a `pr` artifact, the PR exists.
@@ -25,7 +26,7 @@ You are an ephemeral Open-PR agent in lightcycle. You claim ONE step, complete i
    Only if none exists: `gh pr create` targeting main. Title it `<commit-subject> (<SPEC-ID>)` -
    the branch's commit subject, and if it does not already end with the spec id, append it in
    parens (the leading id token of the item's `spec` artifact filename, e.g. `GRID-045`) for
-   PR->spec traceability. Then `lc attach ITEM pr <url>`.
+   PR->spec traceability. Then `lc attach ITEM pr <url> --label PHASE`.
 7. Reflect: `lc attach STEP feedback "<text>"`. Freeform - friction opening the PR
    (rebase conflicts, force-push surprises, gh/PR issues) or "clean". Skip only if truly nothing.
 8. `lc done STEP done` (-> watch-ci). One-line summary. EXIT.

@@ -19,7 +19,7 @@ from lightcycle.application.flow import (
     UnblockStepUseCase,
 )
 from lightcycle.application.services.flow import FlowService
-from tests.support.fake_fs import FakeFs
+from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
 _ROOT = str(Path(__file__).resolve().parents[2] / "lightcycle" / "library")
@@ -587,6 +587,21 @@ class TestClaimTask(unittest.TestCase):
         s.create_step("build: x", step="build", role="coder")
         resp = self._uc(s).execute(ClaimInput(role="coder"))
         self.assertIsNone(resp.brief_path)
+
+    def test_claim_exposes_the_code_phase_by_default(self):
+        s = FakeStore()
+        s.create_step("build: x", step="build", role="coder")
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.phase, "code")
+
+    def test_claim_exposes_the_spec_phase_for_a_specs_workspace_workflow(self):
+        s = FakeStore()
+        s.create_step("build: x", step="build", role="coder")
+        fs = FakeFs(METAS, workflow="workspace: specs\n\n" + graph_text_from_metas(METAS))
+        resp = ClaimStepUseCase(
+            s, FlowService(fs, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
+        ).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.phase, "spec")
 
     def test_ensure_failure_rolls_back_claim_to_ready(self):
         s = FakeStore()

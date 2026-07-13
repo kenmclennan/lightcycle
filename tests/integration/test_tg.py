@@ -1050,6 +1050,19 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(len(tr["steps"]), 1)
         self.assertEqual(tr["steps"][0]["step"], "build")
 
+    def test_trace_text_rendering_distinguishes_labelled_artifacts(self):
+        theme = self.store.create_theme("theme")
+        rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--theme", theme)
+        sid = out.strip()
+        self.store.add_artifact(sid, "pr", "https://github.com/x/y/pull/1", label="spec")
+        self.store.add_artifact(sid, "pr", "https://github.com/x/y/pull/2", label="code")
+
+        rc2, out2, err2 = call(_cli_mod.cmd_trace, sid)
+
+        self.assertEqual(rc2, 0, err2)
+        self.assertIn("artifact pr [spec]: https://github.com/x/y/pull/1", out2)
+        self.assertIn("artifact pr [code]: https://github.com/x/y/pull/2", out2)
+
 
 class TestAgentFrontmatter(unittest.TestCase):
     def setUp(self):
@@ -1432,6 +1445,11 @@ class TestWorktree(unittest.TestCase):
         branch = "feat/%s-w" % sid
         self.assertEqual(self._branch_of(ws), branch)
         self.assertEqual(t["branch"], branch)
+
+    def test_claim_exposes_the_code_phase(self):
+        self._file()
+        _, out, _ = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(json.loads(out)["phase"], "code")
 
     def test_claim_does_not_switch_root_branch(self):
         self._file()

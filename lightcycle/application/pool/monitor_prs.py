@@ -3,8 +3,8 @@ from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.application.work.file_child_item import FileChildItemInput, FileChildItemUseCase
-from lightcycle.domain.work.state import State
+from lightcycle.application.work.transition_item import TransitionItemInput, TransitionItemUseCase
+from lightcycle.domain.work import Item, State
 
 LC_MARKER = "<!-- lc -->"
 _WATERMARK_ARTIFACT = "feedback-watermark"
@@ -79,29 +79,37 @@ class MonitorPrsUseCase:
         project = self._flow_service.project_for(node)
         return self._flow_service.load_flow(name, project)
 
+    def _pr_value(self, node, item_id):
+        phase = self._flow_service.phase_for(node)
+        artifacts = tuple(self._store.item_artifacts(item_id))
+        return Item(item_id, artifacts).artifact_of("pr", label=phase)
+
     def execute(self) -> MonitorPrsResponse:
         merged, abandoned, reworked, conflicted = [], [], [], []
         close = CloseItemUseCase(self._store, self._worktrees)
-        file_child = FileChildItemUseCase(self._store, self._flow_service)
+        transition = TransitionItemUseCase(self._store, self._flow_service, self._worktrees)
         for item in self._store.all_nodes():
             if item.type != "item":
                 continue
-            pr = next((a for a in self._store.item_artifacts(item.id) if a.type == "pr"), None)
-            if pr is None:
+            pr_value = self._pr_value(item, item.id)
+            if pr_value is None:
                 continue
             flow = self._flow_for(item)
             merge_outcome = flow.terminal_merge_outcome()
             close_outcome = flow.terminal_close_outcome()
-            if merge_outcome and self._github.is_merged(pr.value):
-                close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
+            if merge_outcome and self._github.is_merged(pr_value):
                 merged.append(item.id)
-                target = flow.files_item_target(merge_outcome)
+                target = flow.continues_target(merge_outcome)
                 if target:
                     workflow, step = target
-                    file_child.execute(
-                        FileChildItemInput(parent=item.id, workflow=workflow, step=step)
+                    transition.execute(
+                        TransitionItemInput(
+                            item=item.id, outcome=merge_outcome, workflow=workflow, step=step
+                        )
                     )
-            elif close_outcome and self._github.is_closed_unmerged(pr.value):
+                else:
+                    close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
+            elif close_outcome and self._github.is_closed_unmerged(pr_value):
                 close.execute(CloseItemInput(item=item.id, reason=close_outcome))
                 abandoned.append(item.id)
         for step in self._store.all_nodes():
@@ -114,11 +122,11 @@ class MonitorPrsUseCase:
             conflict_outcome = flow.pr_conflict_outcome(step.step)
             if feedback_step is None and conflict_outcome is None:
                 continue
-            pr = next((a for a in self._store.item_artifacts(step.parent) if a.type == "pr"), None)
-            if pr is None:
+            pr_value = self._pr_value(step, step.parent)
+            if pr_value is None:
                 continue
             advanced = False
-            if feedback_step and self._has_outstanding_feedback(step, pr.value, flow):
+            if feedback_step and self._has_outstanding_feedback(step, pr_value, flow):
                 advanced = True
                 already_open = any(
                     n.type == "step" and n.step == feedback_step and n.parent == step.parent
@@ -133,7 +141,7 @@ class MonitorPrsUseCase:
                     )
                     self._store.add_artifact(tid, "watched-step", step.id)
                     reworked.append(step.parent)
-            if not advanced and conflict_outcome and self._github.is_conflicted(pr.value):
+            if not advanced and conflict_outcome and self._github.is_conflicted(pr_value):
                 cap = flow.pr_conflict_cap(step.step)
                 esc = flow.pr_conflict_escalate(step.step)
                 if cap is not None and esc:

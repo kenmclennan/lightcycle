@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.contracts import StepContract
+from lightcycle.application.work.step_filing import file_step
 from lightcycle.domain.work import State
 
 
@@ -35,32 +35,8 @@ class ActivateItemUseCase:
             node = self._store.get_node(input.item)
         workflow = input.workflow or self._flow.workflow_for(node)
         project = self._flow.project_for(node)
-        graph = self._flow.load_graph(workflow, project)
-        present = {a.type for a in self._store.item_artifacts(input.item)}
-        missing_inputs = graph.requires - present
-        if missing_inputs:
-            raise UseCaseError(
-                "item '%s' requires %s; attach them before activating"
-                % (input.item, ", ".join(sorted(missing_inputs)))
-            )
-        step_name = input.step or graph.entry
-        flow = self._flow.load_flow(workflow, project)
-        role = flow.owner_of(step_name)
-        if not role:
-            raise UseCaseError(
-                "step '%s' is not owned in workflow '%s'; owned steps: %s"
-                % (step_name, workflow, ", ".join(flow.steps()) or "(none)")
-            )
-        unmet = StepContract.from_meta(
-            self._flow.meta_for_step(step_name, workflow, project)
-        ).missing_inputs(present)
-        if unmet:
-            raise UseCaseError(
-                "step '%s' requires %s; attach them before activating"
-                % (step_name, ", ".join(sorted(unmet)))
-            )
         self._store.edit_node(input.item, workflow=input.workflow)
-        step = self._store.create_step(
-            "%s: %s" % (step_name, node.title), step=step_name, role=role, parent=input.item
+        step = file_step(
+            self._store, self._flow, input.item, node, workflow, project, input.step
         )
         return ActivateItemResponse(step=step)

@@ -19,7 +19,7 @@ class Flow:
         ci_failed_cap_outcome=None,
         ci_failed_cap_n=None,
         ci_failed_cap_target=None,
-        files_item=None,
+        continues=None,
     ):
         self._owner = owner
         self._routes = routes
@@ -36,7 +36,7 @@ class Flow:
         self._ci_failed_cap_outcome = ci_failed_cap_outcome or {}
         self._ci_failed_cap_n = ci_failed_cap_n or {}
         self._ci_failed_cap_target = ci_failed_cap_target or {}
-        self._files_item = files_item or {}
+        self._continues = continues or {}
 
     @classmethod
     def from_graph(cls, graph, step_metas) -> "Flow":
@@ -102,11 +102,11 @@ class Flow:
                 graph.hooks["review_bot_allowlist"][1:]
             )
 
-        files_item = {}
-        files_item_outcome = graph.hook_stage("files_item")
-        if files_item_outcome:
-            files_item[files_item_outcome] = (
-                graph.hook_value("files_item"), graph.hook_extra("files_item", 2)
+        continues = {}
+        continues_outcome = graph.hook_stage("continues")
+        if continues_outcome:
+            continues[continues_outcome] = (
+                graph.hook_value("continues"), graph.hook_extra("continues", 2)
             )
 
         for name, toks in graph.hooks.items():
@@ -117,7 +117,7 @@ class Flow:
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate,
                    mention_token, review_bot_allowlist,
                    ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target,
-                   files_item)
+                   continues)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -164,8 +164,8 @@ class Flow:
     def ci_failed_cap_target(self, step):
         return self._ci_failed_cap_target.get(step)
 
-    def files_item_target(self, outcome):
-        return self._files_item.get(outcome)
+    def continues_target(self, outcome):
+        return self._continues.get(outcome)
 
     def effective_transition(self, transition, outcome, prior_count):
         if transition is None:
