@@ -1,8 +1,9 @@
 import io
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
+from lightcycle.application.setup import VenvBusyError
 from lightcycle.cli import cmd_upgrade
 
 
@@ -44,6 +45,15 @@ class TestCmdUpgrade(unittest.TestCase):
             self.assertEqual(fake_upgrade.call_args.kwargs["check_only"], False)
         self.assertEqual(rc, 0)
         self.assertIn("upgraded: 0.2.0 -> 0.3.0", out.getvalue())
+
+    def test_refuses_and_prints_the_holders_message_when_venv_is_busy(self):
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
+            fake_upgrade.side_effect = VenvBusyError([(123, "/venv/bin/python -m lightcycle.pool")])
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = cmd_upgrade([]) or 0
+        self.assertEqual(rc, 1)
+        self.assertIn("/venv/bin/python -m lightcycle.pool", err.getvalue())
 
 
 if __name__ == "__main__":
