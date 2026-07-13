@@ -8,14 +8,14 @@ from pathlib import Path
 from lightcycle.application.setup.upgrade import scan_venv_holders
 
 ROOT = Path(__file__).resolve().parents[2]
-TG = str(ROOT / "bin" / "lc")
+LC = str(ROOT / "bin" / "lc")
 
 
 def _run(args):
     home, xdg = tempfile.mkdtemp(), tempfile.mkdtemp()
     env = dict(os.environ, LC_HOME=home, XDG_CONFIG_HOME=xdg)
     env.pop("LC_CONFIG", None)
-    result = subprocess.run([sys.executable, TG] + args, capture_output=True, text=True, env=env)
+    result = subprocess.run([sys.executable, LC] + args, capture_output=True, text=True, env=env)
     return result, home
 
 

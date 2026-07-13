@@ -23,12 +23,12 @@ class TestRenderLogLine(unittest.TestCase):
                 "type": "assistant",
                 "message": {
                     "content": [
-                        {"type": "tool_use", "name": "Bash", "input": {"command": "tg claim coder"}}
+                        {"type": "tool_use", "name": "Bash", "input": {"command": "lc claim coder"}}
                     ]
                 },
             }
         )
-        self.assertEqual(render_log_line(line), "$ tg claim coder")
+        self.assertEqual(render_log_line(line), "$ lc claim coder")
 
     def test_assistant_non_bash_tool_with_arg(self):
         line = json.dumps(

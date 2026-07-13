@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TG = str(ROOT / "bin" / "lc")
+LC = str(ROOT / "bin" / "lc")
 
 _CODER_STEP = """\
 ---
@@ -34,7 +34,7 @@ def _tg(*args, root):
     env = dict(os.environ)
     env["LC_HOME"] = root
     env["LC_CONFIG"] = os.path.join(root, "grid.config")
-    return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
+    return subprocess.run([sys.executable, LC, *args], capture_output=True, text=True, env=env)
 
 
 def _engine_root():
@@ -58,7 +58,7 @@ class SmokeTest(unittest.TestCase):
         )
         ws = tempfile.mkdtemp()
         Path(cls.root, "grid.config").write_text(
-            "projects: %s\nspecs: %s\nshortcode: tg\n"
+            "projects: %s\nspecs: %s\nshortcode: xy\n"
             "branch-prefix: feat\ndefault-workflow: standard\nmax-agents: 5\nworktree-retries: 6\n"
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
             "worker-history: 20\neditor: vi\n" % (ws, ws)
@@ -107,7 +107,7 @@ class SmokeTest(unittest.TestCase):
         r = _tg("done", build_id, "done", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         review_id = r.stdout.strip()
-        self.assertTrue(review_id, "tg done should print the next step id")
+        self.assertTrue(review_id, "lc done should print the next step id")
 
         r = _tg("show", review_id, root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)

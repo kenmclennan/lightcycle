@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TG = str(ROOT / "bin" / "lc")
+LC = str(ROOT / "bin" / "lc")
 
 
 def _env(home, xdg):
@@ -16,7 +16,7 @@ def _env(home, xdg):
 
 
 def _run(args, home, xdg):
-    return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True,
+    return subprocess.run([sys.executable, LC, *args], capture_output=True, text=True,
                           env=_env(home, xdg))
 
 

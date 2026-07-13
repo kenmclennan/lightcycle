@@ -17,7 +17,7 @@ def _env(with_store=True, with_workflows=True):
         Path(root, "workflows").mkdir()
     cfg = Path(tempfile.mkdtemp()) / "config"
     cfg.write_text(
-        "projects: %s\nspecs: %s\nshortcode: tg\ndefault-workflow: standard\n"
+        "projects: %s\nspecs: %s\nshortcode: xy\ndefault-workflow: standard\n"
         % (projects, projects)
     )
     config = Config(environ={"LC_HOME": root, "LC_CONFIG": str(cfg)})

@@ -27,7 +27,7 @@ class TestRefusesLiveStore(unittest.TestCase):
 
     def test_worktrees_component_under_any_project_repo_still_refuses(self):
         self.assertTrue(refuses_live_store(
-            package_root="/home/u/workspace/projects/saga/.worktrees/tg-17.1/saga/sub",
+            package_root="/home/u/workspace/projects/saga/.worktrees/lc-17.1/saga/sub",
             live_store_root="/home/u/.lightcycle",
             target_root="/home/u/.lightcycle",
         ))

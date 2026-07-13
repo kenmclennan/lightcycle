@@ -11,7 +11,7 @@ def _config():
     projects = tempfile.mkdtemp()
     cfg = Path(tempfile.mkdtemp()) / "config"
     cfg.write_text(
-        "projects: %s\nspecs: %s\nshortcode: tg\ndefault-workflow: standard\n"
+        "projects: %s\nspecs: %s\nshortcode: xy\ndefault-workflow: standard\n"
         % (projects, projects)
     )
     config = Config(environ={"LC_HOME": root, "LC_CONFIG": str(cfg)})
@@ -34,12 +34,12 @@ class TestProjectShortcode(unittest.TestCase):
     def test_epic_without_project_config_uses_global_shortcode(self):
         config, projects = _config()
         eid = SqliteStore(config).create_theme("y", project="plain")
-        self.assertTrue(eid.startswith("tg-"), eid)
+        self.assertTrue(eid.startswith("xy-"), eid)
 
     def test_no_project_uses_global_shortcode(self):
         config, _ = _config()
         eid = SqliteStore(config).create_theme("z")
-        self.assertTrue(eid.startswith("tg-"), eid)
+        self.assertTrue(eid.startswith("xy-"), eid)
 
     def test_stories_nest_under_the_epic_id(self):
         config, projects = _config()
