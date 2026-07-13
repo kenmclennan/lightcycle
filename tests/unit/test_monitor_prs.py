@@ -2,7 +2,8 @@ import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.pool import LC_MARKER, MonitorPrsUseCase, TickInput, TickUseCase
-from tests.support.fake_fs import flow_from_metas
+from lightcycle.application.services.flow import FlowService
+from tests.support.fake_fs import FakeFs, flow_from_metas
 from lightcycle.ports.github import Comment, GitHubEventsPort, Review
 from tests.support.fake_store import FakeStore
 
@@ -18,6 +19,9 @@ class _FlowAdapter:
 
     def project_for(self, step):
         return None
+
+    def load_flow(self, name=None, project=None):
+        return self._flow
 
     def flow_next(self, step, outcome, name=None, project=None):
         return self._flow.next(step, outcome)
@@ -180,6 +184,65 @@ class FakeWorktrees:
         self.removed.append(item)
 
 
+class TestMonitorPrsMultiWorkflow(unittest.TestCase):
+    def test_merge_reason_is_resolved_per_item_workflow(self):
+        fs = FakeFs(
+            metas={},
+            workflow={
+                "standard": (
+                    "entry: write-code\n\n"
+                    "edges:\n"
+                    "  write-code   done    open-pr\n"
+                    "  open-pr      done    await-merge\n"
+                    "  await-merge  changes write-code\n\n"
+                    "hooks:\n"
+                    "  pr_merge   await-merge  merged\n"
+                    "  pr_close   await-merge  abandoned\n"
+                ),
+                "spec": (
+                    "entry: spec-writer\n\n"
+                    "edges:\n"
+                    "  spec-writer  done    open-pr\n"
+                    "  open-pr      done    await-merge\n"
+                    "  await-merge  changes spec-writer\n\n"
+                    "hooks:\n"
+                    "  pr_merge   await-merge  spec-merged\n"
+                    "  pr_close   await-merge  abandoned\n"
+                ),
+            },
+        )
+        store = FakeStore()
+        flow_service = FlowService(fs, store)
+
+        code_item = store.create_item(
+            "code feature", theme=store.create_theme("theme"), workflow="standard"
+        )
+        code_url = "https://github.com/x/y/pull/100"
+        store.add_artifact(code_item, "pr", code_url)
+        store.create_step(
+            "await-merge: code feature", step="await-merge", role="human", parent=code_item
+        )
+
+        spec_item = store.create_item(
+            "a spec", theme=store.create_theme("theme2"), workflow="spec"
+        )
+        spec_url = "https://github.com/x/y/pull/101"
+        store.add_artifact(spec_item, "pr", spec_url)
+        store.create_step(
+            "await-merge: a spec", step="await-merge", role="human", parent=spec_item
+        )
+
+        worktrees = FakeWorktrees()
+        github = FakeGitHub(merged_prs={code_url, spec_url})
+        uc = MonitorPrsUseCase(store, github, worktrees, flow_service)
+
+        result = uc.execute()
+
+        self.assertEqual(set(result.merged), {code_item, spec_item})
+        self.assertEqual(store.get_node(code_item).outcome, "merged")
+        self.assertEqual(store.get_node(spec_item).outcome, "spec-merged")
+
+
 class TestMonitorPrsMerged(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()
@@ -189,7 +252,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
             "ready-merge: my feature", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, flow or _FLOW)
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(flow or _FLOW))
         return store, item, step, worktrees, uc
 
     def test_merged_pr_closes_story_and_children(self):
@@ -234,7 +297,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store.close(step, "merged")
         store.close(item, "merged")
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FLOW)
+        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
 
         result = uc.execute()
 
@@ -249,7 +312,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
             "build: upstream feature", step="build", role="coder", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FLOW)
+        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
 
         result = uc.execute()
 
@@ -268,7 +331,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
             "review: regressed feature", step="review", role="reviewer", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FLOW)
+        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
 
         result = uc.execute()
 
@@ -283,7 +346,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={"anything"})
-        uc = MonitorPrsUseCase(store, github, worktrees, _FLOW)
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(_FLOW))
 
         result = uc.execute()
 
@@ -293,7 +356,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         store.create_step("ready-merge: orphan", step="ready-merge", role="human")
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={"x"}), worktrees, _FLOW)
+        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={"x"}), worktrees, _FlowAdapter(_FLOW))
 
         result = uc.execute()
 
@@ -315,7 +378,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store.add_artifact(item, "pr", url)
         store.create_step("await-ship: ship it", step="await-ship", role="human", parent=item)
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, arbitrary_flow)
+        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(arbitrary_flow))
 
         result = uc.execute()
 
@@ -333,7 +396,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
             "ready-merge: abandoned feature", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, flow or _FLOW)
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(flow or _FLOW))
         return store, item, step, worktrees, uc
 
     def test_closed_unmerged_pr_closes_story(self):
@@ -394,7 +457,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
             "await-ship: cancelled work", step="await-ship", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, arbitrary_flow)
+        uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(arbitrary_flow))
 
         result = uc.execute()
 
@@ -422,7 +485,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
             "watch-pr: watched feature", step="watch-pr", role="reviewer", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FLOW)
+        uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW))
 
         result = uc.execute()
 
@@ -442,7 +505,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
             "ready-merge: in-review feature", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, f)
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f))
         return store, item, step, worktrees, uc
 
     def _spawned_feedback_steps(self, store, watched_step):
@@ -702,7 +765,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                                  role="watcher", parent=item)
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(f))
-        uc = MonitorPrsUseCase(store, github, worktrees, f, complete)
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f), complete)
         return store, item, step, worktrees, uc
 
     def test_conflicting_pr_advances_task_via_conflict_outcome(self):
@@ -773,7 +836,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), worktrees,
-                               arbitrary_flow, complete)
+                               _FlowAdapter(arbitrary_flow), complete)
 
         result = uc.execute()
 
@@ -822,7 +885,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                                  parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
-                               _READY_MERGE_QUAD_FLOW, complete)
+                               _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete)
 
         result = uc.execute()
 
@@ -844,7 +907,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         )
         gh = FakeGitHub(conflicted_prs={url}, push_time=1000.0, timed_comments=[feedback_comment])
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
-        uc = MonitorPrsUseCase(store, gh, FakeWorktrees(), _READY_MERGE_QUAD_FLOW, complete)
+        uc = MonitorPrsUseCase(store, gh, FakeWorktrees(), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete)
 
         result = uc.execute()
 
@@ -884,7 +947,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                                  role="watcher", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
-                               no_cap_flow, complete)
+                               _FlowAdapter(no_cap_flow), complete)
 
         result = uc.execute()
 
@@ -936,7 +999,7 @@ class TestTickWithMonitor(unittest.TestCase):
         store.add_artifact(item, "pr", url)
         store.create_step("ready-merge: merge me", step="ready-merge", role="human", parent=item)
         worktrees = FakeWorktrees()
-        monitor = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FLOW)
+        monitor = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
 
         result = TickUseCase(
             store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
@@ -954,7 +1017,7 @@ class TestTickWithMonitor(unittest.TestCase):
             "ready-merge: abandoned me", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        monitor = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FLOW)
+        monitor = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW))
 
         result = TickUseCase(
             store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
