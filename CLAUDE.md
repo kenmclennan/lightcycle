@@ -17,6 +17,8 @@ Business logic stranded in `cli.py` or an adapter is the most common defect here
 
 Next-step resolution has one home: a use case must not inline `flow_next` -> `create_step` or reimplement the transition / ci-failed-cap logic; it routes through the shared resolver (`application/flow/next_step.py`).
 
+Node hierarchy invariant: `parent` expresses exactly one chain - `theme > item > step` (an item's parent is its theme; a step's parent is its item). Every other relationship between nodes - backlog resolution, dependencies, lineage - is an artifact or edge, never an overloaded `parent`.
+
 ## Tests
 
 **First-time setup: `bin/setup`** - it checks prerequisites (python3, uv, git), installs the dev environment (`uv sync`), initialises the lightcycle store (`lc init`), and verifies. Idempotent. (The engine runs on system `python3` with zero runtime deps, so `bin/lc` works without the venv; the venv is only for the tests.)
@@ -55,11 +57,7 @@ Two craft checks that belong here, not in the step prompts: **no broken windows*
 
 ## Spec-authoring guidance
 
-- **Separate hooks from edges.** When a spec describes a workflow-graph change, keep hook-value
-  outcomes (events that auto-close or bypass a step transition, e.g. `pr_merge`) visually separate
-  from real edges - a distinct "Hooks:" list, mirroring the `edges:` / `hooks:` split the workflow
-  markdown itself uses (see `lightcycle/library/workflows/standard.md`). An implementer must never
-  have to reverse-engineer whether an outcome is an edge or a hook.
+- **Separate hooks from edges.** When a spec describes a workflow-graph change, keep hook-value outcomes (events that auto-close or bypass a step transition, e.g. `pr_merge`) visually separate from real edges - a distinct "Hooks:" list, mirroring the `edges:` / `hooks:` split the workflow markdown itself uses (see `lightcycle/library/workflows/standard.md`). An implementer must never have to reverse-engineer whether an outcome is an edge or a hook.
 
 ## Style
 
