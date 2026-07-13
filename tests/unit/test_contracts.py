@@ -143,7 +143,7 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         graph = parse_graph(workflow_text(_ROOT, "spec"))
         self.assertEqual(graph.entry, "spec-writer")
         self.assertEqual(graph.workspace, "specs")
-        self.assertEqual(graph.requires, {"brief"})
+        self.assertEqual(graph.requires, {"brief", "repo"})
         self.assertEqual(graph.target("spec-writer", "done"), "open-pr")
 
     def test_spec_workflow_reuses_open_pr_and_the_pr_watch(self):

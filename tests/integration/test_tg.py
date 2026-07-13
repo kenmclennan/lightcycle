@@ -1441,7 +1441,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         os.environ["LC_HOME"] = engine_root
         (Path(engine_root) / "workflows").mkdir(exist_ok=True)
         (Path(engine_root) / "workflows" / "spec.md").write_text(
-            "entry: spec-writer\n\nworkspace: specs\n\nrequires: brief\n\n"
+            "entry: spec-writer\n\nworkspace: specs\n\nrequires: brief repo\n\n"
             "edges:\n  spec-writer  done\n"
         )
         (Path(engine_root) / "steps").mkdir(exist_ok=True)
@@ -1481,6 +1481,16 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
 
         self.assertNotEqual(rc, 0)
         self.assertIn("brief", err)
+        self.assertIn("repo", err)
+
+    def test_activating_a_spec_workflow_item_without_a_repo_fails_fast(self):
+        item = self.store.create_item("phase b1", workflow="spec")
+        self.store.add_artifact(item, "brief", "briefs/LC-1.md")
+
+        rc, out, err = call(_cli_mod.cmd_set, item, "--state", "active")
+
+        self.assertNotEqual(rc, 0)
+        self.assertIn("repo", err)
 
 
 class TestWorktreeNoOrigin(unittest.TestCase):

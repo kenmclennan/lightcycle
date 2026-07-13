@@ -13,7 +13,7 @@ entry: spec-writer
 
 workspace: specs
 
-requires: brief
+requires: brief repo
 
 edges:
   spec-writer  done         open-pr
