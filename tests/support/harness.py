@@ -5,9 +5,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import lightcycle.cli as cli
-from lightcycle.container import Container
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.isolation import inject_container
 
 _AGENTS = {
     "coder": ("sonnet", "build", {"done": "review"}),
@@ -43,11 +43,10 @@ def _write_config(root):
 class Harness:
     def __init__(self, roles):
         self.root = tempfile.mkdtemp()
-        os.environ["LC_HOME"] = self.root
-        os.environ["LC_CONFIG"] = _write_config(self.root)
+        cfg = _write_config(self.root)
         _write_steps(self.root, roles)
         self.store = FakeStore()
-        cli.set_container(Container(store=self.store))
+        inject_container(self, store=self.store, home=self.root, config_path=cfg)
 
     def run(self, verb, *args):
         fn = getattr(cli, "cmd_" + verb.replace("-", "_"))
