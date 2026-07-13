@@ -19,6 +19,7 @@ class Flow:
         ci_failed_cap_outcome=None,
         ci_failed_cap_n=None,
         ci_failed_cap_target=None,
+        files_item=None,
     ):
         self._owner = owner
         self._routes = routes
@@ -35,6 +36,7 @@ class Flow:
         self._ci_failed_cap_outcome = ci_failed_cap_outcome or {}
         self._ci_failed_cap_n = ci_failed_cap_n or {}
         self._ci_failed_cap_target = ci_failed_cap_target or {}
+        self._files_item = files_item or {}
 
     @classmethod
     def from_graph(cls, graph, step_metas) -> "Flow":
@@ -100,6 +102,13 @@ class Flow:
                 graph.hooks["review_bot_allowlist"][1:]
             )
 
+        files_item = {}
+        files_item_outcome = graph.hook_stage("files_item")
+        if files_item_outcome:
+            files_item[files_item_outcome] = (
+                graph.hook_value("files_item"), graph.hook_extra("files_item", 2)
+            )
+
         for name, toks in graph.hooks.items():
             if toks:
                 hooks.setdefault("on_" + name, set()).add(toks[0])
@@ -107,7 +116,8 @@ class Flow:
         return cls(owner, routes, pr_merge, pr_close, pr_feedback, retro_cadence, hooks,
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate,
                    mention_token, review_bot_allowlist,
-                   ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target)
+                   ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target,
+                   files_item)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -153,6 +163,9 @@ class Flow:
 
     def ci_failed_cap_target(self, step):
         return self._ci_failed_cap_target.get(step)
+
+    def files_item_target(self, outcome):
+        return self._files_item.get(outcome)
 
     def effective_transition(self, transition, outcome, prior_count):
         if transition is None:

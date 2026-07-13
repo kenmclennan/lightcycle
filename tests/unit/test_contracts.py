@@ -160,6 +160,15 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(flow.pr_feedback_step("await-merge"), "handle-feedback")
         self.assertEqual(flow.mention_token("await-merge"), "@lc")
 
+    def test_spec_merged_files_a_code_item_at_write_code(self):
+        graph = parse_graph(workflow_text(_ROOT, "spec"))
+        step_metas = {
+            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
+            for role in step_roles(_ROOT)
+        }
+        flow = Flow.from_graph(graph, step_metas)
+        self.assertEqual(flow.files_item_target("spec-merged"), ("standard", "write-code"))
+
     def test_spec_writer_step_accepts_brief_and_produces_spec(self):
         meta = (parse_step(_ROOT, "spec-writer") or {"meta": {}})["meta"]
         self.assertEqual(meta.get("accepts"), {"brief": "required"})
