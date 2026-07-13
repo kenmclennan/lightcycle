@@ -801,10 +801,9 @@ def cmd_start(argv):
     signal.signal(signal.SIGTERM, _stop)
     try:
         flow_service = _flow()
-        flow = flow_service.load_flow()
         complete = CompleteStepUseCase(_container.store, flow_service, _worktrees())
         monitor = MonitorPrsUseCase(
-            _container.store, _container.github, _worktrees(), flow, complete
+            _container.store, _container.github, _worktrees(), flow_service, complete
         )
         cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
         breaker_gate = BreakerGateUseCase(_container.workers, _container.fs, _container.breaker)

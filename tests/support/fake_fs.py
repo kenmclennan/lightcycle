@@ -62,6 +62,8 @@ class FakeFs:
         self._workflow = workflow
 
     def workflow_text(self, name, project=None):
+        if isinstance(self._workflow, dict):
+            return self._workflow.get(name)
         if self._workflow is not None:
             return self._workflow
         return graph_text_from_metas(self._metas)

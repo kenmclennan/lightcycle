@@ -31,6 +31,6 @@ driver's context - you do not invent intent.
    shows both the settled design and its formalization, and both are retained in the specs repo.
 6. Commit the spec and the brief on the branch.
 7. `lc attach ITEM spec <project>/<ITEM>-<slug>.md` to attach it.
-8. `lc done STEP done`. EXIT.
+8. `lc done STEP done` (-> open-pr). EXIT.
 
 No emdashes.

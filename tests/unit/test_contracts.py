@@ -144,7 +144,21 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(graph.entry, "spec-writer")
         self.assertEqual(graph.workspace, "specs")
         self.assertEqual(graph.requires, {"brief"})
-        self.assertIsNone(graph.target("spec-writer", "done"))
+        self.assertEqual(graph.target("spec-writer", "done"), "open-pr")
+
+    def test_spec_workflow_reuses_open_pr_and_the_pr_watch(self):
+        step_metas = {
+            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
+            for role in step_roles(_ROOT)
+        }
+        graph = parse_graph(workflow_text(_ROOT, "spec"))
+        flow = Flow.from_graph(graph, step_metas)
+        self.assertEqual(graph.target("open-pr", "done"), "await-merge")
+        self.assertEqual(graph.target("await-merge", "changes"), "spec-writer")
+        self.assertEqual(flow.terminal_merge_outcome(), "spec-merged")
+        self.assertEqual(flow.terminal_close_outcome(), "abandoned")
+        self.assertEqual(flow.pr_feedback_step("await-merge"), "handle-feedback")
+        self.assertEqual(flow.mention_token("await-merge"), "@lc")
 
     def test_spec_writer_step_accepts_brief_and_produces_spec(self):
         meta = (parse_step(_ROOT, "spec-writer") or {"meta": {}})["meta"]
