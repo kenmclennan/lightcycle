@@ -243,6 +243,105 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
         self.assertEqual(store.get_node(spec_item).outcome, "spec-merged")
 
 
+class TestMonitorPrsFilesCodeItemOnSpecMerged(unittest.TestCase):
+    def _setup(self):
+        fs = FakeFs(
+            metas={
+                "coder": {"model": "sonnet", "accepts": {"spec": "required"}},
+            },
+            workflow={
+                "standard": (
+                    "entry: write-code\n\n"
+                    "requires: repo\n\n"
+                    "nodes:\n"
+                    "  write-code   coder\n\n"
+                    "edges:\n"
+                    "  review-spec  approved  write-code\n"
+                    "  write-code   done      open-pr\n"
+                    "  open-pr      done      await-merge\n"
+                    "  await-merge  changes   write-code\n\n"
+                    "hooks:\n"
+                    "  pr_merge   await-merge  merged\n"
+                    "  pr_close   await-merge  abandoned\n"
+                ),
+                "spec": (
+                    "entry: spec-writer\n\n"
+                    "requires: brief\n\n"
+                    "edges:\n"
+                    "  spec-writer  done    open-pr\n"
+                    "  open-pr      done    await-merge\n"
+                    "  await-merge  changes spec-writer\n\n"
+                    "hooks:\n"
+                    "  pr_merge     await-merge  spec-merged\n"
+                    "  pr_close     await-merge  abandoned\n"
+                    "  files_item   spec-merged  standard  write-code\n"
+                ),
+            },
+        )
+        store = FakeStore()
+        flow_service = FlowService(fs, store)
+
+        spec_item = store.create_item(
+            "LC-59: phase c1", theme=store.create_theme("theme"), workflow="spec", project="lightcycle"
+        )
+        store.add_artifact(spec_item, "repo", "lightcycle")
+        store.add_artifact(spec_item, "spec", "lightcycle/LC-59-phase-c1.md")
+        store.add_artifact(spec_item, "branch", "spec/LC-59-phase-c1")
+        spec_url = "https://github.com/x/y/pull/101"
+        store.add_artifact(spec_item, "pr", spec_url)
+        store.create_step(
+            "await-merge: LC-59: phase c1", step="await-merge", role="human", parent=spec_item
+        )
+
+        worktrees = FakeWorktrees()
+        github = FakeGitHub(merged_prs={spec_url})
+        uc = MonitorPrsUseCase(store, github, worktrees, flow_service)
+        return store, spec_item, uc
+
+    def _code_items_filed_from(self, store, spec_item):
+        return [
+            n for n in store.all_nodes()
+            if n.type == "item"
+            and any(a.type == "filed-from" and a.value == spec_item
+                    for a in store.item_artifacts(n.id))
+        ]
+
+    def test_spec_merged_files_one_linked_code_item_at_write_code(self):
+        store, spec_item, uc = self._setup()
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [spec_item])
+        self.assertEqual(store.get_node(spec_item).outcome, "spec-merged")
+
+        code_items = self._code_items_filed_from(store, spec_item)
+        self.assertEqual(len(code_items), 1)
+        code_item = code_items[0]
+        self.assertNotEqual(code_item.parent, spec_item)
+        self.assertEqual(code_item.workflow, "standard")
+        self.assertEqual(code_item.project, "lightcycle")
+
+        artifacts = {a.type: a.value for a in store.item_artifacts(code_item.id)}
+        self.assertEqual(artifacts, {
+            "filed-from": spec_item,
+            "spec": "lightcycle/LC-59-phase-c1.md",
+            "repo": "lightcycle",
+        })
+
+        steps = store.children(code_item.id)
+        self.assertEqual([s.step for s in steps], ["write-code"])
+
+    def test_running_twice_does_not_file_a_second_code_item(self):
+        store, spec_item, uc = self._setup()
+        uc.execute()
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        code_items = self._code_items_filed_from(store, spec_item)
+        self.assertEqual(len(code_items), 1)
+
+
 class TestMonitorPrsMerged(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()

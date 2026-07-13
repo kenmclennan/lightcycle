@@ -32,6 +32,7 @@ hooks:
   mention_token         ready-merge  @lc
   review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]  another-bot[bot]
   retro_cadence         audit
+  files_item            merged       standard  write-code
 """
 
 STEP_METAS = {
@@ -130,3 +131,9 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_effective_transition_none_transition_stays_none(self):
         self.assertIsNone(self.flow.effective_transition(None, "ci-failed", 5))
+
+    def test_files_item_target(self):
+        self.assertEqual(self.flow.files_item_target("merged"), ("standard", "write-code"))
+
+    def test_files_item_target_absent_by_default(self):
+        self.assertIsNone(self.flow.files_item_target("gave-up"))

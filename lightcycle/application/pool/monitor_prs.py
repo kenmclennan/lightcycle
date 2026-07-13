@@ -3,6 +3,7 @@ from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.application.work.file_child_item import FileChildItemInput, FileChildItemUseCase
 from lightcycle.domain.work.state import State
 
 LC_MARKER = "<!-- lc -->"
@@ -81,6 +82,7 @@ class MonitorPrsUseCase:
     def execute(self) -> MonitorPrsResponse:
         merged, abandoned, reworked, conflicted = [], [], [], []
         close = CloseItemUseCase(self._store, self._worktrees)
+        file_child = FileChildItemUseCase(self._store, self._flow_service)
         for item in self._store.all_nodes():
             if item.type != "item":
                 continue
@@ -93,6 +95,12 @@ class MonitorPrsUseCase:
             if merge_outcome and self._github.is_merged(pr.value):
                 close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
                 merged.append(item.id)
+                target = flow.files_item_target(merge_outcome)
+                if target:
+                    workflow, step = target
+                    file_child.execute(
+                        FileChildItemInput(parent=item.id, workflow=workflow, step=step)
+                    )
             elif close_outcome and self._github.is_closed_unmerged(pr.value):
                 close.execute(CloseItemInput(item=item.id, reason=close_outcome))
                 abandoned.append(item.id)
