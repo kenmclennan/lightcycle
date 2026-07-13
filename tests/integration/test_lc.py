@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-TG = str(ROOT / "bin" / "lc")
+LC = str(ROOT / "bin" / "lc")
 
 sys.path.insert(0, str(ROOT))
 import lightcycle.cli as _cli_mod
@@ -29,7 +29,7 @@ from tests.support.isolation import inject_container
 _ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
 
 
-def run_tg(*args, root=None, config=None):
+def run_lc(*args, root=None, config=None):
     env = dict(os.environ)
     if root:
         env["LC_HOME"] = root
@@ -37,7 +37,7 @@ def run_tg(*args, root=None, config=None):
         env["LC_HOME"] = tempfile.mkdtemp()
     if config:
         env["LC_CONFIG"] = config
-    return subprocess.run([sys.executable, TG, *args], capture_output=True, text=True, env=env)
+    return subprocess.run([sys.executable, LC, *args], capture_output=True, text=True, env=env)
 
 
 def write_config(projects=None, specs=None):
@@ -48,7 +48,7 @@ def write_config(projects=None, specs=None):
     if specs is not None:
         lines.append("specs: %s" % specs)
     lines += [
-        "shortcode: tg",
+        "shortcode: xy",
         "branch-prefix: feat",
         "default-workflow: standard",
         "max-agents: 5",
@@ -264,17 +264,17 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
 
 class TestSkeleton(unittest.TestCase):
     def test_help_lists_subcommands(self):
-        r = run_tg("--help")
+        r = run_lc("--help")
         self.assertEqual(r.returncode, 0, r.stderr)
         for verb in ("status", "claim", "done", "start", "sweep"):
             self.assertIn(verb, r.stdout)
 
     def test_unknown_subcommand_exits_2(self):
-        r = run_tg("wibble")
+        r = run_lc("wibble")
         self.assertEqual(r.returncode, 2)
 
     def test_help_is_grouped_and_described(self):
-        r = run_tg("--help")
+        r = run_lc("--help")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("See what's happening", r.stdout)
         self.assertIn("Start working", r.stdout)
@@ -507,7 +507,7 @@ class TestSpawn(unittest.TestCase):
     def test_spawn_records_worker_log_and_lists_in_ps(self):
         env = dict(os.environ, LC_HOME=self.root, LC_SPAWN_CMD="echo started >> {log}")
         r = subprocess.run(
-            [sys.executable, TG, "spawn", "coder"], capture_output=True, text=True, env=env
+            [sys.executable, LC, "spawn", "coder"], capture_output=True, text=True, env=env
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
@@ -515,7 +515,7 @@ class TestSpawn(unittest.TestCase):
         self.assertEqual(workers[0]["role"], "coder")
         self.assertTrue(os.path.exists(workers[0]["log"]))
         r = subprocess.run(
-            [sys.executable, TG, "ps", "--all", "--json"], capture_output=True, text=True, env=env
+            [sys.executable, LC, "ps", "--all", "--json"], capture_output=True, text=True, env=env
         )
         self.assertEqual(json.loads(r.stdout)[0]["role"], "coder")
 
@@ -532,7 +532,7 @@ class TestPs(unittest.TestCase):
     def _run_ps(self, *args):
         env = dict(os.environ, LC_HOME=self.root)
         return subprocess.run(
-            [sys.executable, TG, "ps", *args, "--json"], capture_output=True, text=True, env=env
+            [sys.executable, LC, "ps", *args, "--json"], capture_output=True, text=True, env=env
         )
 
     def test_default_shows_only_alive_workers(self):
@@ -1345,7 +1345,7 @@ class TestPruneWorkers(unittest.TestCase):
         if history is not None:
             env["LC_WORKER_HISTORY"] = str(history)
         return subprocess.run(
-            [sys.executable, TG, "sweep"], capture_output=True, text=True, env=env
+            [sys.executable, LC, "sweep"], capture_output=True, text=True, env=env
         )
 
     def test_sweep_prunes_dead_keeps_live(self):
@@ -1394,20 +1394,20 @@ class TestInitAndStoreGuard(unittest.TestCase):
     def test_init_creates_store_and_is_idempotent(self):
         d = self._bare()
         cfg = self._cfg(d)
-        r = run_tg("init", root=d, config=cfg)
+        r = run_lc("init", root=d, config=cfg)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.exists(os.path.join(d, "store.db")))
-        r2 = run_tg("init", root=d, config=cfg)
+        r2 = run_lc("init", root=d, config=cfg)
         self.assertEqual(r2.returncode, 0, r2.stderr)
 
     def test_run_without_store_errors(self):
         d = self._bare()
-        r = run_tg("start", "--once", root=d)
+        r = run_lc("start", "--once", root=d)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("init", r.stderr)
 
     def test_up_is_gone(self):
-        r = run_tg("up")
+        r = run_lc("up")
         self.assertEqual(r.returncode, 2)
 
 
@@ -1876,7 +1876,7 @@ class TestLogRender(unittest.TestCase):
                                     {
                                         "type": "tool_use",
                                         "name": "Bash",
-                                        "input": {"command": "tg claim coder"},
+                                        "input": {"command": "lc claim coder"},
                                     }
                                 ]
                             },
@@ -1906,7 +1906,7 @@ class TestLogRender(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_logs, "coder")
         self.assertEqual(rc, 0, err)
         self.assertIn("Claiming the step.", out)
-        self.assertIn("$ tg claim coder", out)
+        self.assertIn("$ lc claim coder", out)
         self.assertIn("done; banner fixed", out)
         self.assertNotIn('"type"', out)
 
@@ -2166,12 +2166,12 @@ class TestWorklog(unittest.TestCase):
         self.assertIn("done", out)
 
     def test_worklog_appears_in_help(self):
-        r = run_tg("--help")
+        r = run_lc("--help")
         self.assertIn("worklog", r.stdout)
 
 
 class TestCadenceStepDTO(unittest.TestCase):
-    """Verifies that the CLI DTO emitted by tg show / tg claim includes 'since'."""
+    """Verifies that the CLI DTO emitted by lc show / lc claim includes 'since'."""
 
     def setUp(self):
         _fake_setUp(self)
@@ -2216,7 +2216,7 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
         for field in self.AGENT_CONSUMED_FIELDS:
-            self.assertIn(field, d, "tg show dropped field: %s" % field)
+            self.assertIn(field, d, "lc show dropped field: %s" % field)
 
     def test_claim_surfaces_agent_consumed_fields(self):
         tid = self._make_task()
@@ -2225,7 +2225,7 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         d = json.loads(out)
         self.assertEqual(d["id"], tid)
         for field in self.AGENT_CONSUMED_FIELDS:
-            self.assertIn(field, d, "tg claim dropped field: %s" % field)
+            self.assertIn(field, d, "lc claim dropped field: %s" % field)
 
 
 class TestClaimConfigReadSurface(unittest.TestCase):

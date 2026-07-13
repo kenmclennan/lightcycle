@@ -1,6 +1,6 @@
 import re
 
-_TERMINAL = re.compile(r"\b(?:lc|tg)\s+(?:done|block)\b")
+_TERMINAL = re.compile(r"\blc\s+(?:done|block)\b")
 
 KEEP = "keep"
 NUDGE = "nudge"
