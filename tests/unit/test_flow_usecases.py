@@ -106,6 +106,9 @@ class FakeConfig:
     def specs_root(self):
         return "/specs"
 
+    def projects_root(self):
+        return "/projects"
+
 
 class TestAdvanceTask(unittest.TestCase):
     def test_creates_next_task(self):
@@ -640,19 +643,33 @@ class TestClaimTask(unittest.TestCase):
             resp.spec_path, os.path.join("/specs", "myproject/LC-1-my-spec.md")
         )
 
-    def test_resolves_brief_path_against_specs_root(self):
+    def test_resolves_brief_content_from_artifact(self):
         s = FakeStore()
         item = s.create_item("st", theme=s.create_theme("theme"))
-        s.add_artifact(item, "brief", "briefs/X.md")
+        s.add_artifact(item, "brief", "the brief's literal text")
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))
-        self.assertEqual(resp.brief_path, os.path.join("/specs", "briefs/X.md"))
+        self.assertEqual(resp.brief, "the brief's literal text")
 
-    def test_omits_brief_path_when_no_brief_artifact(self):
+    def test_omits_brief_when_no_brief_artifact(self):
         s = FakeStore()
         s.create_step("build: x", step="build", role="coder")
         resp = self._uc(s).execute(ClaimInput(role="coder"))
-        self.assertIsNone(resp.brief_path)
+        self.assertIsNone(resp.brief)
+
+    def test_resolves_repo_path_against_projects_root(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        s.add_artifact(item, "repo", "app")
+        s.create_step("build: x", step="build", role="coder", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.repo_path, os.path.join("/projects", "app"))
+
+    def test_omits_repo_path_when_no_repo_artifact(self):
+        s = FakeStore()
+        s.create_step("build: x", step="build", role="coder")
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertIsNone(resp.repo_path)
 
     def test_claim_exposes_the_code_phase_by_default(self):
         s = FakeStore()
