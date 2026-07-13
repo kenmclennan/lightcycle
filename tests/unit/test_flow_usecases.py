@@ -221,6 +221,72 @@ class TestCompleteTask(unittest.TestCase):
         self.assertIsNone(resp.next_step)
 
 
+class TestCompleteStepRetroCadenceMarking(unittest.TestCase):
+    GRAPH_TEXT = (
+        "entry: audit\n"
+        "\n"
+        "nodes:\n"
+        "  audit            auditor\n"
+        "  review-findings  reviewer\n"
+        "\n"
+        "edges:\n"
+        "  audit  findings  review-findings\n"
+        "  audit  clean\n"
+        "\n"
+        "hooks:\n"
+        "  retro_cadence  audit\n"
+    )
+    RETRO_METAS = {
+        "auditor": {"model": "sonnet"},
+        "reviewer": {"model": "sonnet"},
+    }
+
+    def _uc(self, store):
+        return CompleteStepUseCase(
+            store, FlowService(FakeFs(self.RETRO_METAS, workflow=self.GRAPH_TEXT), store),
+            FakeWorktrees(),
+        )
+
+    def _retro_item(self, store, project):
+        item = store.create_item("audit: %s" % project, project=project)
+        store.add_artifact(item, "repo", project)
+        store.label_add(item, "retro-origin")
+        return item
+
+    def _reviewed_item(self, store, project):
+        item = store.create_item("reviewed")
+        store.close(item, "done")
+        store.add_artifact(item, "repo", project)
+        return item
+
+    def test_findings_outcome_marks_project_retroed_and_files_follow_on_on_same_item(self):
+        s = FakeStore()
+        reviewed = self._reviewed_item(s, "proj")
+        item = self._retro_item(s, "proj")
+        aid = s.create_step("audit: proj", step="audit", role="auditor", parent=item, project="proj")
+        resp = self._uc(s).execute(CompleteInput(step=aid, outcome="findings"))
+        self.assertNotIn(reviewed, [i.id for i in s.closed_unretroed_items()])
+        self.assertEqual(s.get_node(resp.next_step).parent, item)
+        self.assertEqual(s.get_node(resp.next_step).step, "review-findings")
+
+    def test_clean_outcome_still_marks_retroed_with_no_follow_on(self):
+        s = FakeStore()
+        reviewed = self._reviewed_item(s, "proj")
+        item = self._retro_item(s, "proj")
+        aid = s.create_step("audit: proj", step="audit", role="auditor", parent=item, project="proj")
+        resp = self._uc(s).execute(CompleteInput(step=aid, outcome="clean"))
+        self.assertIsNone(resp.next_step)
+        self.assertNotIn(reviewed, [i.id for i in s.closed_unretroed_items()])
+
+    def test_non_retro_cadence_step_completion_does_not_mark_retroed(self):
+        s = FakeStore()
+        reviewed = self._reviewed_item(s, "proj")
+        item = s.create_item("st", theme=s.create_theme("theme"))
+        bid = s.create_step("build: x", step="build", role="coder", parent=item, project="proj")
+        CompleteStepUseCase(s, flow_for(METAS, s)).execute(CompleteInput(step=bid, outcome="done"))
+        self.assertIn(reviewed, [i.id for i in s.closed_unretroed_items()])
+
+
 class TestCompleteStepCascadeClose(unittest.TestCase):
     TERMINAL_METAS = {"finaliser": {"model": "sonnet", "step": "finalise"}}
 

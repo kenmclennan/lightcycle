@@ -2,6 +2,7 @@ import unittest
 
 from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
 from lightcycle.application.services.flow import FlowService
+from lightcycle.application.work.project_of import project_of
 from lightcycle.domain.work import Node, NodeQueue, State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -61,6 +62,27 @@ class TestRetroCadenceFires(unittest.TestCase):
         result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
         self.assertEqual(len(result.fired), 1)
         self.assertEqual(s.get_node(result.fired[0]).project, "lightcycle")
+
+    def test_fired_audit_has_a_real_item_parent_carrying_repo_and_retro_origin(self):
+        s = FakeStore()
+        for i in range(3):
+            _close_item(s, "item %d" % i, project="lightcycle")
+        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
+        step = s.get_node(result.fired[0])
+        self.assertIsNotNone(step.parent)
+        parent = s.get_node(step.parent)
+        self.assertEqual(parent.type, "item")
+        self.assertEqual(project_of(s, parent), "lightcycle")
+        s.close(step.parent, "done")
+        self.assertNotIn(step.parent, [i.id for i in s.closed_unretroed_items()])
+
+    def test_fired_audit_title_has_no_trend_wording_or_duplicated_step_name(self):
+        s = FakeStore()
+        for i in range(3):
+            _close_item(s, "item %d" % i, project="lightcycle")
+        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
+        step = s.get_node(result.fired[0])
+        self.assertEqual(step.title, "trend-check: lightcycle")
 
     def test_items_without_a_repo_are_skipped_not_bucketed(self):
         s = FakeStore()
