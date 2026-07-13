@@ -53,6 +53,14 @@ The craft is carried by skills, not by fattening the step files. Invoke them:
 
 Two craft checks that belong here, not in the step prompts: **no broken windows** (no failing or skipped tests, dead code, or leftover TODOs) and **names that age well** (never bake a deprecated concept into a durable identifier).
 
+## Spec-authoring guidance
+
+- **Separate hooks from edges.** When a spec describes a workflow-graph change, keep hook-value
+  outcomes (events that auto-close or bypass a step transition, e.g. `pr_merge`) visually separate
+  from real edges - a distinct "Hooks:" list, mirroring the `edges:` / `hooks:` split the workflow
+  markdown itself uses (see `lightcycle/library/workflows/standard.md`). An implementer must never
+  have to reverse-engineer whether an outcome is an edge or a hook.
+
 ## Style
 
 - No comments and no docstrings: zero `#` comments and zero docstrings anywhere. The "why" goes in commit messages and test names.

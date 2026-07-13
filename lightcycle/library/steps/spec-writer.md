@@ -27,6 +27,10 @@ driver's context - you do not invent intent.
    It needs two things: clarity for the agents that build and review it, and something a human can
    review on the eventual PR. Hyphens not emdashes; format with prettier
    (`npx prettier --write`).
+   - **Call-site audit for shared-precondition changes.** If the spec changes a shared
+     precondition or contract - a value that may now be missing/None, a guard that changes on a
+     widely-used method - grep the touched method/attribute and list every affected call site as
+     its own design bullet, not just the primary one.
 5. Copy the brief from BRIEF to `<project>/<ITEM>-brief.md` inside WORKSPACE, so the spec PR
    shows both the settled design and its formalization, and both are retained in the specs repo.
 6. Commit the spec and the brief on the branch.

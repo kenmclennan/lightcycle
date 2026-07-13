@@ -23,6 +23,10 @@ invent intent.
    - **Revise** (arriving here from review-spec's `changes` outcome): the item already carries a
      `spec` artifact. Edit that file at its existing path in place - never write a new
      `<name>.md` or add a second spec.
+   - **Call-site audit for shared-precondition changes.** If the spec changes a shared
+     precondition or contract - a value that may now be missing/None, a guard that changes on a
+     widely-used method - grep the touched method/attribute and list every affected call site as
+     its own design bullet, not just the primary one.
 4. `lc attach STEP spec <path> --replace` to attach it. `--replace` swaps any existing `spec`
    artifact for the new one, so the item never ends up with two - harmless on a first draft (there
    is nothing to replace yet), required on a revise.
