@@ -254,5 +254,8 @@ class Config:
     def spawn_id(self):
         return self._env("LC_SPAWNID")
 
+    def is_worker(self):
+        return bool(self._env("LC_WORKER"))
+
     def spawn_cmd(self):
         return self._env("LC_SPAWN_CMD")
