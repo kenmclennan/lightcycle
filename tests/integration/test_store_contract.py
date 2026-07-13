@@ -1,14 +1,21 @@
+import io
 import os
 import sqlite3
 import tempfile
 import unittest
+from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
+import lightcycle.cli as cli
+from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.store_contract import StoreContractBase
 from lightcycle.adapters.sqlite_store import SchemaVersionRefused, SqliteStore, _SCHEMA_VERSION
+from lightcycle.application.services.flow import FlowService
+from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.status import StatusUseCase
 from lightcycle.config import Config
+from lightcycle.container import Container
 
 
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
@@ -151,6 +158,131 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         result_ids = {t.id for t in s.all_nodes()}
         for tid in created:
             self.assertIn(tid, result_ids)
+
+    def test_edit_node_reids_a_referenceless_item_into_the_new_parents_namespace(self):
+        s = self._store()
+        theme = s.create_theme("theme")
+        standalone = s.create_item("standalone")
+        new_id = s.edit_node(standalone, parent=theme)
+        sibling = s.create_item("sibling", theme=theme)
+        self.assertEqual(new_id, "%s.1" % theme)
+        self.assertEqual(sibling, "%s.2" % theme)
+        self.assertEqual(s.get_node(new_id).parent, theme)
+        with self.assertRaises(KeyError):
+            s.get_node(standalone)
+
+    def test_edit_node_keeps_id_when_item_has_a_child_step(self):
+        s = self._store()
+        theme = s.create_theme("theme")
+        item = s.create_item("has a step")
+        s.create_step("child", parent=item)
+        new_id = s.edit_node(item, parent=theme)
+        self.assertEqual(new_id, item)
+        self.assertEqual(s.get_node(item).parent, theme)
+
+    def test_edit_node_keeps_id_for_each_id_bearing_artifact_type(self):
+        s = self._store()
+        theme = s.create_theme("theme")
+        for atype in ("branch", "pr", "spec", "resolves", "filed-from", "brief"):
+            item = s.create_item("item %s" % atype)
+            s.add_artifact(item, atype, "value")
+            new_id = s.edit_node(item, parent=theme)
+            self.assertEqual(new_id, item)
+
+    def test_edit_node_still_reids_with_only_a_non_id_bearing_artifact(self):
+        s = self._store()
+        theme = s.create_theme("theme")
+        item = s.create_item("has a repo")
+        s.add_artifact(item, "repo", "saga")
+        new_id = s.edit_node(item, parent=theme)
+        self.assertEqual(new_id, "%s.1" % theme)
+
+    def test_edit_node_reid_repoints_deps_and_removes_the_old_id_everywhere(self):
+        s = self._store()
+        theme = s.create_theme("theme")
+        blocker = s.create_step("blocker")
+        item = s.create_item("blocked item")
+        s.dep_add(item, blocker)
+        s.dep_add(blocker, item)
+        s.label_add(item, "retro-origin")
+        s.update_state(item, "in_progress")
+
+        new_id = s.edit_node(item, parent=theme)
+
+        deps = set(
+            s._conn.execute("SELECT node_id, blocked_by FROM deps").fetchall()
+        )
+        self.assertIn((new_id, blocker), deps)
+        self.assertIn((blocker, new_id), deps)
+        self.assertNotIn(item, [row[0] for row in deps] + [row[1] for row in deps])
+
+        self.assertEqual(
+            s._conn.execute("SELECT COUNT(*) FROM nodes WHERE id = ?", (item,)).fetchone()[0], 0
+        )
+        self.assertEqual(
+            s._conn.execute(
+                "SELECT COUNT(*) FROM history WHERE node_id = ?", (item,)
+            ).fetchone()[0],
+            0,
+        )
+        self.assertEqual(
+            s._conn.execute(
+                "SELECT COUNT(*) FROM labels WHERE node_id = ?", (item,)
+            ).fetchone()[0],
+            0,
+        )
+        new_labels = [
+            row[0] for row in s._conn.execute(
+                "SELECT label FROM labels WHERE node_id = ?", (new_id,)
+            ).fetchall()
+        ]
+        self.assertIn("retro-origin", new_labels)
+
+    def test_edit_node_parent_move_to_own_current_parent_is_a_no_op(self):
+        s = self._store()
+        theme = s.create_theme("theme")
+        item = s.create_item("already here", theme=theme)
+        new_id = s.edit_node(item, parent=theme)
+        self.assertEqual(new_id, item)
+
+    def test_activate_item_use_case_threads_the_reidded_item_through_file_step(self):
+        s = self._store()
+        metas = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
+        workflow = graph_text_from_metas(metas, entry="build")
+        flow = FlowService(FakeFs(metas, workflow=workflow), s)
+
+        theme = s.create_theme("payments")
+        item = s.create_item("add refunds")
+        resp = ActivateItemUseCase(s, flow).execute(
+            ActivateItemInput(item=item, workflow="standard", theme=theme)
+        )
+
+        new_item_id = "%s.1" % theme
+        with self.assertRaises(KeyError):
+            s.get_node(item)
+        self.assertEqual(s.get_node(new_item_id).state, "ready")
+        self.assertEqual(s.get_node(resp.step).parent, new_item_id)
+
+    def test_cmd_set_parent_and_backlog_links_the_resolved_backlog_to_the_reidded_item(self):
+        s = self._store()
+        cli.set_container(Container(store=s))
+        theme = s.create_theme("theme")
+        backlog_item = s.create_item("a backlog todo")
+        item = s.create_item("adopt me")
+
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = cli.cmd_set([item, "--parent", theme, "--backlog", backlog_item]) or 0
+        self.assertEqual(rc, 0, err.getvalue())
+
+        new_id = "%s.1" % theme
+        self.assertEqual(out.getvalue().strip(), new_id)
+        arts = s.item_artifacts(new_id)
+        self.assertTrue(
+            any(a.type == "resolves" and a.value == backlog_item for a in arts)
+        )
+        with self.assertRaises(KeyError):
+            s.get_node(item)
 
 
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):

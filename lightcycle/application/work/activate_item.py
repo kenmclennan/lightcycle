@@ -30,13 +30,14 @@ class ActivateItemUseCase:
             raise UseCaseError("'%s' is not an item (type=%s)" % (input.item, node.type))
         if node.state != State.BACKLOGGED:
             raise UseCaseError("item '%s' is not a todo (state=%s)" % (input.item, node.state))
+        item_id = input.item
         if input.theme is not None:
-            self._store.edit_node(input.item, parent=input.theme)
-            node = self._store.get_node(input.item)
+            item_id = self._store.edit_node(input.item, parent=input.theme)
+            node = self._store.get_node(item_id)
         workflow = input.workflow or self._flow.workflow_for(node)
         project = self._flow.project_for(node)
-        self._store.edit_node(input.item, workflow=input.workflow)
+        self._store.edit_node(item_id, workflow=input.workflow)
         step = file_step(
-            self._store, self._flow, input.item, node, workflow, project, input.step
+            self._store, self._flow, item_id, node, workflow, project, input.step
         )
         return ActivateItemResponse(step=step)
