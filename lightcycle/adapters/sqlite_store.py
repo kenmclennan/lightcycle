@@ -98,6 +98,8 @@ _LEGACY_STEP_NAMES = (
 )
 _LEGACY_ROLE_NAMES = ("coder", "reviewer", "auditor", "watch-pr", "resolve")
 
+_ID_BEARING_ARTIFACT_TYPES = {"branch", "pr", "spec", "resolves", "filed-from", "brief"}
+
 
 class SqliteStore(StorePort):
     def __init__(self, config, now=None, package_root=None, default_data_root=None):
@@ -543,6 +545,29 @@ class SqliteStore(StorePort):
                 self.dep_add(tid, dep)
         return tid
 
+    def _is_referenceless(self, tid):
+        if any(c.type == "step" for c in self.children(tid)):
+            return False
+        return not any(a.type in _ID_BEARING_ARTIFACT_TYPES for a in self.item_artifacts(tid))
+
+    def _rename_node(self, old_id, new_id):
+        self._conn.execute("UPDATE nodes SET id = ? WHERE id = ?", (new_id, old_id))
+        self._conn.execute(
+            "UPDATE history SET node_id = ? WHERE node_id = ?", (new_id, old_id)
+        )
+        self._conn.execute(
+            "UPDATE labels SET node_id = ? WHERE node_id = ?", (new_id, old_id)
+        )
+        self._conn.execute(
+            "UPDATE artifacts SET item_id = ? WHERE item_id = ?", (new_id, old_id)
+        )
+        self._conn.execute(
+            "UPDATE deps SET node_id = ? WHERE node_id = ?", (new_id, old_id)
+        )
+        self._conn.execute(
+            "UPDATE deps SET blocked_by = ? WHERE blocked_by = ?", (new_id, old_id)
+        )
+
     def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
                   parent=None, workflow=None):
         updates = {}
@@ -554,17 +579,29 @@ class SqliteStore(StorePort):
             updates["goal"] = goal
         if project is not None:
             updates["project"] = project
-        if parent is not None:
-            updates["parent"] = parent
         if workflow is not None:
             updates["workflow"] = workflow
-        if not updates:
-            return
-        set_clause = ", ".join("%s = ?" % k for k in updates)
-        self._conn.execute(
-            "UPDATE nodes SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
-        )
+
+        effective_id = tid
+        if parent is not None:
+            row = self._conn.execute(
+                "SELECT type, parent FROM nodes WHERE id = ?", (tid,)
+            ).fetchone()
+            if row is not None:
+                cur_type, cur_parent = row
+                if cur_type == "item" and parent != cur_parent and self._is_referenceless(tid):
+                    effective_id = self._mint_id(parent)
+                    self._rename_node(tid, effective_id)
+            updates["parent"] = parent
+
+        if updates:
+            set_clause = ", ".join("%s = ?" % k for k in updates)
+            self._conn.execute(
+                "UPDATE nodes SET %s WHERE id = ?" % set_clause,
+                (*updates.values(), effective_id),
+            )
         self._conn.commit()
+        return effective_id
 
     def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
         tid = self._mint_or_adopt(id, theme)

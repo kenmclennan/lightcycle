@@ -341,6 +341,7 @@ class FakeStore(StorePort):
             b["parent"] = parent
         if workflow is not None:
             b["workflow"] = workflow
+        return tid
 
     def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None):
         b = self._new_record(

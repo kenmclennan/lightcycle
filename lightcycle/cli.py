@@ -688,12 +688,14 @@ def cmd_set(argv):
         return 1
     if a.label:
         _container.store.label_add(a.id, a.label)
-    _container.store.edit_node(
+    tid = _container.store.edit_node(
         a.id, title=a.title, description=a.description, goal=a.goal,
         project=a.project, parent=a.parent, workflow=a.workflow)
+    if a.parent:
+        print(tid)
     if a.backlog:
         try:
-            link_resolves(_container.store, a.id, a.backlog)
+            link_resolves(_container.store, tid, a.backlog)
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1

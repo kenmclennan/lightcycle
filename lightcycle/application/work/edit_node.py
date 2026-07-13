@@ -14,7 +14,7 @@ class EditNodeInput:
 
 @dataclass(frozen=True)
 class EditNodeResponse:
-    pass
+    id: str
 
 
 class EditNodeUseCase:
@@ -22,7 +22,7 @@ class EditNodeUseCase:
         self._store = store
 
     def execute(self, input: EditNodeInput) -> EditNodeResponse:
-        self._store.edit_node(
+        tid = self._store.edit_node(
             input.step,
             title=input.title,
             description=input.description,
@@ -30,4 +30,4 @@ class EditNodeUseCase:
             project=input.project,
             parent=input.parent,
         )
-        return EditNodeResponse()
+        return EditNodeResponse(id=tid)
