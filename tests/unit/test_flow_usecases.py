@@ -72,10 +72,13 @@ def flow_for(metas, store):
 
 
 class FakeWorktrees:
-    def __init__(self):
+    def __init__(self, ensure_error=None):
         self.removed = []
+        self._ensure_error = ensure_error
 
     def ensure(self, item):
+        if self._ensure_error is not None:
+            raise self._ensure_error
         return None
 
     def item_branch(self, item):
@@ -584,6 +587,19 @@ class TestClaimTask(unittest.TestCase):
         s.create_step("build: x", step="build", role="coder")
         resp = self._uc(s).execute(ClaimInput(role="coder"))
         self.assertIsNone(resp.brief_path)
+
+    def test_ensure_failure_rolls_back_claim_to_ready(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder")
+        uc = ClaimStepUseCase(
+            s, flow_for(METAS, s), FakeWorktrees(ensure_error=RuntimeError("boom")),
+            FakeWorkers(), FakeConfig()
+        )
+        with self.assertRaises(RuntimeError):
+            uc.execute(ClaimInput(role="coder"))
+        t = s.get_node(bid)
+        self.assertEqual(str(t.state), "ready")
+        self.assertIsNone(t.claimed_by)
 
 
 class TestClaimConfigWithRealSteps(unittest.TestCase):

@@ -54,7 +54,11 @@ class ClaimStepUseCase:
             self._workers.set_step(spawnid, t.id)
         view = self._store.node_view(t.id)
         item = t.parent or t.id
-        ws = self._worktrees.ensure(item)
+        try:
+            ws = self._worktrees.ensure(item)
+        except Exception:
+            self._store.reclaim(t.id)
+            raise
         branch = self._worktrees.item_branch(item)
         spec = next((a.value for a in view.item_artifacts if a.type == "spec"), None)
         spec_path = None
