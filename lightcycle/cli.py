@@ -77,6 +77,7 @@ from lightcycle.application.setup import (
     InitGridUseCase,
     InitProjectInput,
     InitProjectUseCase,
+    VenvBusyError,
     upgrade,
 )
 from lightcycle.adapters.sqlite_store import LiveStoreRefused
@@ -212,6 +213,9 @@ def cmd_upgrade(argv):
     a = ap.parse_args(argv)
     try:
         resp = upgrade(__version__, check_only=a.check)
+    except VenvBusyError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     except (urllib.error.URLError, ValueError) as e:
         sys.stderr.write("could not check for updates: %s\n" % e)
         return 1

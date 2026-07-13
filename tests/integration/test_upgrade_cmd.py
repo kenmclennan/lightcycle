@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from lightcycle.application.setup.upgrade import scan_venv_holders
+
 ROOT = Path(__file__).resolve().parents[2]
 TG = str(ROOT / "bin" / "lc")
 
@@ -29,6 +31,16 @@ class TestUpgradeCommand(unittest.TestCase):
             (0, 1),
             "expected a clean exit (0 checked, 1 network error), got:\n%s" % result.stderr,
         )
+
+
+class TestScanVenvHolders(unittest.TestCase):
+    def test_finds_the_current_process_when_not_excluded(self):
+        holders = scan_venv_holders(exclude_pid=1)
+        self.assertIn(os.getpid(), [pid for pid, _ in holders])
+
+    def test_excludes_the_given_pid(self):
+        holders = scan_venv_holders(exclude_pid=os.getpid())
+        self.assertNotIn(os.getpid(), [pid for pid, _ in holders])
 
 
 if __name__ == "__main__":
