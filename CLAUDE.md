@@ -15,6 +15,12 @@ Dependencies point inward; the domain depends on nothing.
 
 Business logic stranded in `cli.py` or an adapter is the most common defect here; it belongs in a use case (`application/`), and any pure rule belongs in `domain/`.
 
+**Fast-path verification boundary.** Runtime source for CI/review fast-path purposes is
+`lightcycle/` (the package) excluding `lightcycle/library/` (the shipped step/workflow markdown,
+content rather than code), plus `tests/`. A diff touching only files outside that boundary
+(`lightcycle/library/**`, docs, specs, README, this file, `.github/**`) is docs-only: the
+reviewer/watch-ci fast path applies, and CI's `integration` job is skipped.
+
 Next-step resolution has one home: a use case must not inline `flow_next` -> `create_step` or reimplement the transition / ci-failed-cap logic; it routes through the shared resolver (`application/flow/next_step.py`).
 
 Node hierarchy invariant: `parent` expresses exactly one chain - `theme > item > step` (an item's parent is its theme; a step's parent is its item). Every other relationship between nodes - backlog resolution, dependencies, lineage - is an artifact or edge, never an overloaded `parent`.

@@ -21,7 +21,8 @@ jobs:
           else
             files=""
           fi
-          if [ -n "$files" ] && ! echo "$files" | grep -qvE '\.md$' && ! echo "$files" | grep -qE '^(lightcycle/|tests/)'; then
+          runtime_files=$(echo "$files" | grep -E '^(lightcycle/|tests/)' | grep -vE '^lightcycle/library/' || true)
+          if [ -n "$files" ] && ! echo "$files" | grep -qvE '\.md$' && [ -z "$runtime_files" ]; then
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
           else
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
