@@ -28,6 +28,11 @@ class WorktreeService:
         project = self._flow.project_for(node)
         return self._flow.load_graph(workflow, project).workspace == "specs"
 
+    def _phase(self, item):
+        if self._flow is None:
+            return None
+        return self._flow.phase_for(self._store.get_node(item))
+
     def item_repo(self, item):
         repo = self._item(item).repo()
         if repo is None:
@@ -43,7 +48,7 @@ class WorktreeService:
         return Worktree(item).path_in(self.target_repo(item))
 
     def item_branch(self, item):
-        return self._item(item).branch()
+        return self._item(item).artifact_of("branch", label=self._phase(item))
 
     def _branch_for(self, item):
         return (
@@ -54,9 +59,9 @@ class WorktreeService:
         )
 
     def _ensure_branch_artifact(self, item, branch):
-        if any(a.type == "branch" for a in self._store.item_artifacts(item)):
+        if self.item_branch(item) is not None:
             return
-        self._store.add_artifact(item, "branch", branch)
+        self._store.add_artifact(item, "branch", branch, label=self._phase(item))
 
     def ensure(self, item):
         specs_workspace = self._uses_specs_workspace(item)

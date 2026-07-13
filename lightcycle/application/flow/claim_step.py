@@ -22,6 +22,7 @@ class ClaimResponse:
     spec_path: Optional[str] = None
     brief_path: Optional[str] = None
     config: Optional[dict] = None
+    phase: Optional[str] = None
 
 
 class ClaimStepUseCase:
@@ -73,7 +74,8 @@ class ClaimStepUseCase:
                 brief if os.path.isabs(brief) else os.path.join(self._config.specs_root(), brief)
             )
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
+        phase = self._flow.phase_for(t)
         return ClaimResponse(
             view=view, workspace=ws, branch=branch, spec_path=spec_path, brief_path=brief_path,
-            config=config or None
+            config=config or None, phase=phase
         )

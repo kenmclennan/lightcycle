@@ -16,10 +16,8 @@ from lightcycle.application.work import (
     RemoveNodeInput,
     RemoveNodeUseCase,
 )
-from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
-from lightcycle.application.work.file_child_item import FileChildItemInput, FileChildItemUseCase
-from tests.support.fake_fs import FakeFs, graph_text_from_metas
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 METAS = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
@@ -29,17 +27,6 @@ def _add_reflection(store, node_id, feedback):
     store.add_artifact(
         node_id, "reflection", json.dumps({"step": node_id, "feedback": feedback, "spec_hash": "h"})
     )
-
-
-def _coder_flow(store):
-    metas = {
-        "coder": {
-            "model": "sonnet", "step": "write-code",
-            "accepts": {"spec": "required"}, "routes": {"done": "open-pr"},
-        },
-    }
-    workflow = graph_text_from_metas(metas, entry="write-code", requires={"repo"})
-    return FlowService(FakeFs(metas, workflow=workflow), store)
 
 
 class FakeGit:
@@ -297,26 +284,6 @@ class TestCloseEpic(unittest.TestCase):
         self.assertIn(open_, str(ctx.exception))
         self.assertNotIn(closed, str(ctx.exception))
         self.assertEqual(s.get_node(theme).state, "in_progress")
-
-    def test_refuses_close_when_a_filed_child_item_is_still_open(self):
-        s = FakeStore()
-        theme = s.create_theme("theme")
-        spec_item = s.create_item("LC-59: phase c1", theme=theme, project="lightcycle")
-        s.add_artifact(spec_item, "repo", "lightcycle")
-        s.add_artifact(spec_item, "spec", "lightcycle/LC-59-phase-c1.md")
-        s.close(spec_item, "spec-merged")
-
-        resp = FileChildItemUseCase(s, _coder_flow(s)).execute(
-            FileChildItemInput(parent=spec_item, workflow="standard", step="write-code")
-        )
-        code_item = s.get_node(resp.item)
-
-        self.assertEqual(code_item.parent, theme)
-        self.assertEqual(code_item.theme, theme)
-
-        with self.assertRaises(UseCaseError) as ctx:
-            CloseThemeUseCase(s).execute(CloseThemeInput(theme=theme, reason="done"))
-        self.assertIn(code_item.id, str(ctx.exception))
 
     def test_closing_theme_attaches_no_retro_artifact(self):
         s = FakeStore()

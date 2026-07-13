@@ -35,6 +35,9 @@ class _FakeFlow:
     def load_graph(self, workflow, project):
         return _Graph(self._workspace)
 
+    def phase_for(self, node):
+        return "spec" if self._workspace == "specs" else "code"
+
 
 class _Graph:
     def __init__(self, workspace):
@@ -183,6 +186,45 @@ class TestSpecsWorkspace(unittest.TestCase):
         svc.remove(item)
 
         self.assertEqual(git.calls, [("is_git_repo", "/specs")])
+
+
+class TestPhaseLabelledBranch(unittest.TestCase):
+    def test_item_branch_ignores_a_branch_labelled_for_a_different_phase(self):
+        store = FakeStore()
+        theme = store.create_theme("theme")
+        item = store.create_item("spec item", theme=theme)
+        store.add_artifact(item, "branch", "spec/x", label="spec")
+        svc = WorktreeService(
+            store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
+        )
+
+        self.assertIsNone(svc.item_branch(item))
+
+    def test_item_branch_matches_the_current_phase_label(self):
+        store = FakeStore()
+        theme = store.create_theme("theme")
+        item = store.create_item("spec item", theme=theme)
+        store.add_artifact(item, "branch", "spec/x", label="spec")
+        store.add_artifact(item, "branch", "feat/x", label="code")
+        svc = WorktreeService(
+            store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
+        )
+
+        self.assertEqual(svc.item_branch(item), "feat/x")
+
+    def test_ensure_branch_artifact_labels_the_new_branch_with_the_current_phase(self):
+        store = FakeStore()
+        theme = store.create_theme("theme")
+        item = store.create_item("code item", theme=theme)
+        store.add_artifact(item, "branch", "spec/x", label="spec")
+        svc = WorktreeService(
+            store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
+        )
+
+        svc._ensure_branch_artifact(item, "feat/y")
+
+        branches = {a.label: a.value for a in store.item_artifacts(item) if a.type == "branch"}
+        self.assertEqual(branches, {"spec": "spec/x", "code": "feat/y"})
 
 
 class TestEnsureNoSilentFailure(unittest.TestCase):

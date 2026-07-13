@@ -50,6 +50,11 @@ class FlowService:
     def load_flow(self, name=None, project=None):
         return Flow.from_graph(self.load_graph(name, project), self.role_metas(project))
 
+    def phase_for(self, node):
+        name = self.workflow_for(node)
+        project = self.project_for(node)
+        return "spec" if self.load_graph(name, project).workspace == "specs" else "code"
+
     def flow_next(self, step, outcome, name=None, project=None):
         return self.load_flow(name, project).next(step, outcome)
 

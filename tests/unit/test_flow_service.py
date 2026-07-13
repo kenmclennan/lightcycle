@@ -63,5 +63,22 @@ class TestFlowService(unittest.TestCase):
         self.assertIn("coder", svc(store).ready_roles())
 
 
+class TestPhaseFor(unittest.TestCase):
+    def test_project_workspace_is_the_code_phase(self):
+        store = FakeStore()
+        item = store.create_item("st", theme=store.create_theme("theme"), workflow="standard")
+        node = store.get_node(item)
+        service = FlowService(FakeFs(METAS, workflow=graph_text_from_metas(METAS)), store)
+        self.assertEqual(service.phase_for(node), "code")
+
+    def test_specs_workspace_is_the_spec_phase(self):
+        store = FakeStore()
+        item = store.create_item("st", theme=store.create_theme("theme"), workflow="spec")
+        node = store.get_node(item)
+        fs = FakeFs(METAS, workflow="workspace: specs\n\n" + graph_text_from_metas(METAS))
+        service = FlowService(fs, store)
+        self.assertEqual(service.phase_for(node), "spec")
+
+
 if __name__ == "__main__":
     unittest.main()
