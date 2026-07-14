@@ -3,19 +3,19 @@ from abc import ABC, abstractmethod
 
 class FsPort(ABC):
     @abstractmethod
-    def step_roles(self, project=None):
+    def step_roles(self, root):
         pass
 
     @abstractmethod
-    def read_md(self, relpath, project=None):
+    def read_md(self, relpath, root):
         pass
 
     @abstractmethod
-    def parse_step(self, role, project=None):
+    def parse_step(self, role, root):
         pass
 
     @abstractmethod
-    def workflow_text(self, name, project=None):
+    def workflow_text(self, name, root):
         pass
 
     @abstractmethod
@@ -36,10 +36,6 @@ class FsPort(ABC):
 
     @abstractmethod
     def ensure_logs_dir(self):
-        pass
-
-    @abstractmethod
-    def ensure_override_dirs(self):
         pass
 
     @abstractmethod

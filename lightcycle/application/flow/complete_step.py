@@ -35,14 +35,14 @@ class CompleteStepUseCase:
         t = self._store.get_node(input.step)
         name = self._flow.workflow_for(t)
         project = self._flow.project_for(t)
-        transition = self._resolver.resolve(t, input.outcome, name, project)
-        declared = self._flow.outcomes_for(t.step, name, project)
+        transition = self._resolver.resolve(t, input.outcome, name)
+        declared = self._flow.outcomes_for(t.step, name)
         if transition is None and declared and input.outcome not in declared:
             raise UseCaseError(
                 "no transition for step=%s outcome=%s; not closing. "
                 "Fix the flow or use a defined outcome." % (t.step, input.outcome)
             )
-        if transition is None and not self._flow.is_known_step(t.step, name, project):
+        if transition is None and not self._flow.is_known_step(t.step, name):
             self._store.route_to_human(
                 input.step,
                 "no transition for step=%s outcome=%s; the workflow does not define %s"
@@ -50,12 +50,12 @@ class CompleteStepUseCase:
             )
             return CompleteResponse(next_step=None)
         target = (
-            StepContract.from_meta(self._flow.meta_for_step(transition.to_step, name, project))
+            StepContract.from_meta(self._flow.meta_for_step(transition.to_step, name))
             if transition
             else None
         )
         missing = StepContract.from_meta(
-            self._flow.meta_for_step(t.step, name, project)
+            self._flow.meta_for_step(t.step, name)
         ).missing_outputs(
             self._store.present_types(t), target
         )
@@ -66,7 +66,7 @@ class CompleteStepUseCase:
             )
         self._store.note(input.step, "outcome: %s" % input.outcome)
         self._store.close(input.step, input.outcome)
-        if project and self._flow.is_retro_cadence_step(t.step, name, project):
+        if project and self._flow.is_retro_cadence_step(t.step, name):
             self._mark_retroed(project)
         new = self._resolver.create(t, transition) if transition else None
         if input.note:

@@ -1,22 +1,93 @@
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.pool import ReadyQueue
+from lightcycle.domain.workflows.identity import (
+    format_pin,
+    parse_pin,
+    parse_selector,
+    resolve_pin,
+)
 
 
 class FlowService:
-    def __init__(self, fs, store, config=None):
+    def __init__(self, fs, store, config=None, workflow_source=None):
         self._fs = fs
         self._store = store
         self._config = config
+        self._workflow_source = workflow_source
 
-    def role_metas(self, project=None):
+    def _default_pin(self):
+        selector = self._config.default_workflow()
+        parsed = parse_selector(selector)
+        if parsed is None:
+            raise ValueError(
+                "default-workflow %r must be fully qualified '<origin>/<name>'" % selector)
+        origin, _name = parsed
+        sha = self._workflow_source.current_sha(origin)
+        if sha is None:
+            raise ValueError(
+                "origin %r has no pulled version; run `lc workflow add`/`upgrade`" % origin)
+        return "%s@%s" % (selector, sha)
+
+    def _resolve(self, name):
+        if self._workflow_source is None:
+            return name, None
+        pin = name or self._default_pin()
+        parsed = parse_pin(pin)
+        if parsed is None:
+            raise ValueError("workflow %r is not a pin '<origin>/<name>@<sha>'" % pin)
+        origin, wfname, sha = parsed
+        return wfname, self._workflow_source.bundle_path(origin, sha)
+
+    def default_root(self):
+        return self._resolve(None)[1]
+
+    def resolve_selection(self, selector):
+        if self._workflow_source is None:
+            return selector
+        if selector is None:
+            return self._default_pin()
+        if parse_pin(selector) is not None:
+            return selector
+        parsed = parse_selector(selector)
+        if parsed is None:
+            raise ValueError(
+                "--workflow %r must be fully qualified '<origin>/<name>'" % selector)
+        origin, _name = parsed
+        sha = self._workflow_source.current_sha(origin)
+        if sha is None:
+            raise ValueError(
+                "origin %r has no pulled version; run `lc workflow add`/`upgrade`" % origin)
+        return resolve_pin(selector, sha)
+
+    def inherited_selection(self, node):
+        for n in self._walk(node):
+            if n.workflow:
+                return n.workflow
+        return None
+
+    def repin_name(self, current, new_name):
+        parsed = parse_pin(current)
+        if parsed is None:
+            return new_name
+        origin, _name, sha = parsed
+        return format_pin(origin, new_name, sha)
+
+    def _graph_and_root(self, name):
+        wfname, root = self._resolve(name)
+        text = self._fs.workflow_text(wfname, root)
+        if text is None:
+            raise ValueError("workflow %r not found" % (name or wfname))
+        return parse_graph(text), root
+
+    def _role_metas_in(self, root):
         return {
-            role: (self._fs.parse_step(role, project) or {"meta": {}})["meta"]
-            for role in self._fs.step_roles(project)
+            role: (self._fs.parse_step(role, root) or {"meta": {}})["meta"]
+            for role in self._fs.step_roles(root)
         }
 
-    def _default_name(self):
-        return self._config.default_workflow() if self._config is not None else None
+    def role_metas(self, name=None):
+        return self._role_metas_in(self._resolve(name)[1])
 
     def _walk(self, step):
         cur, seen = step, set()
@@ -30,9 +101,12 @@ class FlowService:
         for node in nodes:
             if node.workflow:
                 return node.workflow
-        if self._config is not None:
-            return self._config.default_workflow_for(getattr(nodes[-1], "project", None))
-        return None
+        if self._config is None:
+            return None
+        if self._workflow_source is not None:
+            return self._default_pin()
+        project = getattr(nodes[-1], "project", None) if nodes else None
+        return self._config.default_workflow_for(project)
 
     def project_for(self, step):
         for node in self._walk(step):
@@ -40,52 +114,47 @@ class FlowService:
                 return node.project
         return None
 
-    def load_graph(self, name=None, project=None):
-        name = name or self._default_name()
-        text = self._fs.workflow_text(name, project)
-        if text is None:
-            raise ValueError("workflow %r not found" % name)
-        return parse_graph(text)
+    def load_graph(self, name=None):
+        return self._graph_and_root(name)[0]
 
-    def load_flow(self, name=None, project=None):
-        return Flow.from_graph(self.load_graph(name, project), self.role_metas(project))
+    def load_flow(self, name=None):
+        graph, root = self._graph_and_root(name)
+        return Flow.from_graph(graph, self._role_metas_in(root))
 
     def phase_for(self, node):
-        name = self.workflow_for(node)
-        project = self.project_for(node)
-        return "spec" if self.load_graph(name, project).workspace == "specs" else "code"
+        return "spec" if self.load_graph(self.workflow_for(node)).workspace == "specs" else "code"
 
-    def flow_next(self, step, outcome, name=None, project=None):
-        return self.load_flow(name, project).next(step, outcome)
+    def flow_next(self, step, outcome, name=None):
+        return self.load_flow(name).next(step, outcome)
 
-    def meta_for_step(self, step, name=None, project=None):
-        graph = self.load_graph(name, project)
-        a = self._fs.parse_step(graph.file_for(step), project)
+    def meta_for_step(self, step, name=None):
+        graph, root = self._graph_and_root(name)
+        a = self._fs.parse_step(graph.file_for(step), root)
         return a["meta"] if a else {}
 
-    def outcomes_for(self, step, name=None, project=None):
-        return self.load_flow(name, project).outcomes_for(step)
+    def outcomes_for(self, step, name=None):
+        return self.load_flow(name).outcomes_for(step)
 
-    def is_known_step(self, step, name=None, project=None):
-        return bool(self.load_flow(name, project).owner_of(step))
+    def is_known_step(self, step, name=None):
+        return bool(self.load_flow(name).owner_of(step))
 
-    def is_retro_cadence_step(self, step, name=None, project=None):
-        return step in dict(self.load_flow(name, project).retro_cadence_steps())
+    def is_retro_cadence_step(self, step, name=None):
+        return step in dict(self.load_flow(name).retro_cadence_steps())
 
-    def owner_of(self, step, name=None, project=None):
-        return self.load_flow(name, project).owner_of(step)
+    def owner_of(self, step, name=None):
+        return self.load_flow(name).owner_of(step)
 
-    def ci_failed_cap_outcome(self, step, name=None, project=None):
-        return self.load_flow(name, project).ci_failed_cap_outcome(step)
+    def ci_failed_cap_outcome(self, step, name=None):
+        return self.load_flow(name).ci_failed_cap_outcome(step)
 
-    def ci_failed_cap_n(self, step, name=None, project=None):
-        return self.load_flow(name, project).ci_failed_cap_n(step)
+    def ci_failed_cap_n(self, step, name=None):
+        return self.load_flow(name).ci_failed_cap_n(step)
 
-    def ci_failed_cap_target(self, step, name=None, project=None):
-        return self.load_flow(name, project).ci_failed_cap_target(step)
+    def ci_failed_cap_target(self, step, name=None):
+        return self.load_flow(name).ci_failed_cap_target(step)
 
-    def effective_transition(self, transition, outcome, prior_count, name=None, project=None):
-        return self.load_flow(name, project).effective_transition(transition, outcome, prior_count)
+    def effective_transition(self, transition, outcome, prior_count, name=None):
+        return self.load_flow(name).effective_transition(transition, outcome, prior_count)
 
     def ready_roles(self):
         return ReadyQueue(self._store.ready_steps()).distinct_roles()

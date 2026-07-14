@@ -61,22 +61,22 @@ class FakeFs:
         self._dirs = dirs or {}
         self._workflow = workflow
 
-    def workflow_text(self, name, project=None):
+    def workflow_text(self, name, root=None):
         if isinstance(self._workflow, dict):
             return self._workflow.get(name)
         if self._workflow is not None:
             return self._workflow
         return graph_text_from_metas(self._metas)
 
-    def step_roles(self, project=None):
+    def step_roles(self, root=None):
         return sorted(self._metas)
 
-    def parse_step(self, role, project=None):
+    def parse_step(self, role, root=None):
         if role not in self._metas:
             return None
         return {"meta": self._metas[role] or {}, "body": "", "path": role}
 
-    def read_md(self, relpath, project=None):
+    def read_md(self, relpath, root=None):
         return None
 
     def worktrees_dir(self, root):
@@ -93,9 +93,6 @@ class FakeFs:
 
     def ensure_logs_dir(self):
         return "/tmp/fake-logs"
-
-    def ensure_override_dirs(self):
-        pass
 
     def ensure_worktrees_ignored(self, root):
         pass

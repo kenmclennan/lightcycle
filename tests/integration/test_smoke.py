@@ -47,19 +47,25 @@ class SmokeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = _engine_root()
-        steps = Path(cls.root) / "steps"
-        steps.mkdir()
+        origin = Path(cls.root) / "workflows" / "lightcycle"
+        bundle = origin / "testsha"
+        steps = bundle / "steps"
+        steps.mkdir(parents=True)
         (steps / "write-code.md").write_text(_CODER_STEP)
         (steps / "review-code.md").write_text(_REVIEWER_STEP)
-        workflows = Path(cls.root) / "workflows"
-        workflows.mkdir()
+        workflows = bundle / "workflows"
+        workflows.mkdir(parents=True)
         (workflows / "standard.md").write_text(
             "entry: write-code\n\nedges:\n  write-code  done  review-code\n"
+        )
+        (origin / "origin.toml").write_text(
+            'url = "local"\nref = "main"\ncurrent = "testsha"\n'
         )
         ws = tempfile.mkdtemp()
         Path(cls.root, "grid.config").write_text(
             "projects: %s\nspecs: %s\nshortcode: xy\n"
-            "branch-prefix: feat\ndefault-workflow: standard\nmax-agents: 5\nworktree-retries: 6\n"
+            "branch-prefix: feat\ndefault-workflow: lightcycle/standard\nmax-agents: 5\n"
+            "worktree-retries: 6\n"
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
             "worker-history: 20\neditor: vi\n" % (ws, ws)
         )

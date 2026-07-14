@@ -24,9 +24,7 @@ class WorktreeService:
         if self._flow is None:
             return False
         node = self._store.get_node(item)
-        workflow = self._flow.workflow_for(node)
-        project = self._flow.project_for(node)
-        return self._flow.load_graph(workflow, project).workspace == "specs"
+        return self._flow.load_graph(self._flow.workflow_for(node)).workspace == "specs"
 
     def _phase(self, item):
         if self._flow is None:

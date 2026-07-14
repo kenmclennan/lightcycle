@@ -67,11 +67,6 @@ def list_dir(path):
     return sorted(e.name for e in os.scandir(path) if e.is_dir())
 
 
-def ensure_override_dirs(root):
-    for name in ("steps", "workflows"):
-        os.makedirs(os.path.join(root, name), exist_ok=True)
-
-
 def ensure_logs_dir(root):
     d = os.path.join(root, "logs")
     os.makedirs(d, exist_ok=True)
@@ -97,25 +92,17 @@ class FsAdapter(FsPort):
     def __init__(self, config):
         self._config = config
 
-    def _search(self, project=None):
-        roots = []
-        if project:
-            roots.append(os.path.join(self._config.projects_root(), project, ".lightcycle"))
-        roots.append(self._config.data_root())
-        roots.append(self._config.library_root())
-        return roots
+    def step_roles(self, root):
+        return step_roles([root]) if root else []
 
-    def step_roles(self, project=None):
-        return step_roles(self._search(project))
+    def read_md(self, relpath, root):
+        return read_md([root], relpath) if root else None
 
-    def read_md(self, relpath, project=None):
-        return read_md(self._search(project), relpath)
+    def parse_step(self, role, root):
+        return parse_step([root], role) if root else None
 
-    def parse_step(self, role, project=None):
-        return parse_step(self._search(project), role)
-
-    def workflow_text(self, name, project=None):
-        return workflow_text(self._search(project), name)
+    def workflow_text(self, name, root):
+        return workflow_text([root], name) if root else None
 
     def worktrees_dir(self, root):
         return worktrees_dir(root)
@@ -131,9 +118,6 @@ class FsAdapter(FsPort):
 
     def ensure_logs_dir(self):
         return ensure_logs_dir(self._config.data_root())
-
-    def ensure_override_dirs(self):
-        return ensure_override_dirs(self._config.data_root())
 
     def ensure_worktrees_ignored(self, root):
         return ensure_worktrees_ignored(root)

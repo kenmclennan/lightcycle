@@ -10,7 +10,8 @@ _SEED_KEYS = [
     ("specs-remote", "git@github.com:you/lightcycle-specs.git"),
     ("branch-prefix", "feat"),
     ("shortcode", "PROJ"),
-    ("default-workflow", "standard"),
+    ("default-workflow", "lightcycle/standard"),
+    ("workflows-remote", "git@github.com:kenmclennan/lightcycle-workflows.git"),
     ("max-agents", "5"),
     ("worktree-retries", "6"),
     ("worktree-retry-sleep", "0.25"),
@@ -78,9 +79,6 @@ class Config:
 
     def default_data_root(self):
         return os.path.join(self._home(), ".lightcycle")
-
-    def library_root(self):
-        return str(Path(__file__).resolve().parent / "library")
 
     def config_path(self):
         override = self._env("LC_CONFIG")
@@ -185,6 +183,9 @@ class Config:
 
     def default_workflow(self):
         return self._required_str("default-workflow")
+
+    def workflows_remote(self):
+        return self._required_str("workflows-remote")
 
     def project_config(self, project):
         if not project:

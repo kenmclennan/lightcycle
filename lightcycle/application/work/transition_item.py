@@ -28,11 +28,10 @@ class TransitionItemUseCase:
         for child in self._store.children(input.item):
             if child.state != State.DONE:
                 self._store.close(child.id, input.outcome)
+        old = self._store.get_node(input.item)
+        new_workflow = self._flow.repin_name(old.workflow, input.workflow)
         self._worktrees.remove(input.item)
-        self._store.edit_node(input.item, workflow=input.workflow)
+        self._store.edit_node(input.item, workflow=new_workflow)
         node = self._store.get_node(input.item)
-        project = self._flow.project_for(node)
-        step = file_step(
-            self._store, self._flow, input.item, node, input.workflow, project, input.step
-        )
+        step = file_step(self._store, self._flow, input.item, node, new_workflow, input.step)
         return TransitionItemResponse(item=input.item, step=step)

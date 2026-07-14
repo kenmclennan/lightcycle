@@ -19,6 +19,14 @@ class WorkflowSourcePort(ABC):
         pass
 
     @abstractmethod
+    def bundle_path(self, origin, sha):
+        pass
+
+    @abstractmethod
+    def current_sha(self, origin):
+        pass
+
+    @abstractmethod
     def write_registry(self, origin, url, ref, current):
         pass
 

@@ -30,10 +30,9 @@ class TestInitProject(unittest.TestCase):
         config, fs, projects = _env()
         r = InitProjectUseCase(config, fs).execute(InitProjectInput(project="myproj"))
         grid = Path(projects) / "myproj" / ".lightcycle"
-        self.assertTrue((grid / "workflows").is_dir())
         self.assertIn("shortcode: MYPROJ", (grid / "config").read_text())
         self.assertIn("scratch-", (grid / ".gitignore").read_text())
-        self.assertEqual(set(r.created), {"workflows/", "config", ".gitignore"})
+        self.assertEqual(set(r.created), {"config", ".gitignore"})
 
     def test_is_idempotent(self):
         config, fs, _ = _env()

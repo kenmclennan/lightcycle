@@ -32,7 +32,7 @@ class TestCliPrimitives(unittest.TestCase):
 
     def test_set_state_active_activates_the_item(self):
         _, item, _ = self._run("new", "item", "add refunds")
-        rc, step, _ = self._run("set", item, "--state", "active", "--workflow", "standard")
+        rc, step, _ = self._run("set", item, "--state", "active", "--workflow", "lightcycle/standard")
         self.assertEqual(rc, 0)
         self.assertEqual(self.h.store.get_node(item).state, "ready")
         self.assertEqual(self.h.store.get_node(step).step, "build")
