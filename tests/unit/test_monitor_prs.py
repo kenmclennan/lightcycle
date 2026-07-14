@@ -187,6 +187,25 @@ class FakeWorktrees:
         self.removed.append(item)
 
 
+class _TripwireFlow:
+    def workflow_for(self, node):
+        raise AssertionError("resolved the flow for a PR-less item")
+
+    def load_flow(self, name=None):
+        raise AssertionError("loaded the flow for a PR-less item")
+
+
+class TestMonitorPrsSkipsPrlessItems(unittest.TestCase):
+    def test_backlogged_item_with_an_inherited_selector_is_never_flow_resolved(self):
+        store = FakeStore()
+        theme = store.create_theme("t", workflow="lightcycle/spec-driven")
+        store.create_item("backlog", theme=theme)
+        uc = MonitorPrsUseCase(store, FakeGitHub(), FakeWorktrees(), _TripwireFlow())
+        result = uc.execute()
+        self.assertEqual(result.merged, [])
+        self.assertEqual(result.abandoned, [])
+
+
 class TestMonitorPrsMultiWorkflow(unittest.TestCase):
     def test_merge_reason_is_resolved_per_item_workflow(self):
         fs = FakeFs(
