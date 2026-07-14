@@ -93,8 +93,10 @@ class MonitorPrsUseCase:
         for item in self._store.all_nodes():
             if item.type != "item":
                 continue
-            flow = self._flow_for(item)
             artifacts = tuple(self._store.item_artifacts(item.id))
+            if not any(a.type == "pr" for a in artifacts):
+                continue
+            flow = self._flow_for(item)
             resolved = False
             for stage in flow.merge_stages():
                 phase = "spec" if flow.workspace_of(stage) == "specs" else "code"
