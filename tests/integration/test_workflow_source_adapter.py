@@ -1,0 +1,102 @@
+import os
+import subprocess
+import tempfile
+import unittest
+
+from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
+
+
+class FakeConfig:
+    def __init__(self, data_root):
+        self._data_root = data_root
+
+    def data_root(self):
+        return self._data_root
+
+
+def _git(root, *args):
+    subprocess.run(["git", "-C", root, *args], check=True, capture_output=True, text=True)
+
+
+def _make_source_repo():
+    repo = tempfile.mkdtemp()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    with open(os.path.join(repo, "source.toml"), "w") as f:
+        f.write('name = "acme"\ncontract = 1\ndescription = "acme flows"\n')
+    os.makedirs(os.path.join(repo, "workflows"))
+    os.makedirs(os.path.join(repo, "steps"))
+    with open(os.path.join(repo, "workflows", "build.md"), "w") as f:
+        f.write("entry: code\n")
+    with open(os.path.join(repo, "steps", "code.md"), "w") as f:
+        f.write("---\nmodel: x\n---\nbody\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "seed")
+    head = subprocess.run(
+        ["git", "-C", repo, "rev-parse", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
+    return repo, head
+
+
+def _adapter():
+    return WorkflowSourceAdapter(FakeConfig(tempfile.mkdtemp()))
+
+
+class TestFetch(unittest.TestCase):
+    def test_fetch_resolves_the_ref_to_a_sha_and_checks_out_the_manifest(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        checkout, sha = adapter.fetch(repo, "main")
+        self.assertEqual(sha, head)
+        self.assertEqual(adapter.read_manifest(checkout),
+                         'name = "acme"\ncontract = 1\ndescription = "acme flows"\n')
+        adapter.cleanup(checkout)
+
+
+class TestMaterialize(unittest.TestCase):
+    def test_materialize_copies_the_bundle_and_is_idempotent(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        checkout, sha = adapter.fetch(repo, "main")
+        bundle = adapter.materialize("acme", sha, checkout)
+        self.assertTrue(os.path.exists(os.path.join(bundle, "source.toml")))
+        self.assertTrue(os.path.exists(os.path.join(bundle, "workflows", "build.md")))
+        self.assertTrue(os.path.exists(os.path.join(bundle, "steps", "code.md")))
+        self.assertTrue(adapter.has_version("acme", sha))
+        adapter.materialize("acme", sha, checkout)
+        self.assertTrue(adapter.has_version("acme", sha))
+        adapter.cleanup(checkout)
+
+
+class TestRegistry(unittest.TestCase):
+    def test_write_then_read_roundtrips(self):
+        adapter = _adapter()
+        adapter.write_registry("acme", "github.com/acme/f", "main", "abc123")
+        self.assertEqual(
+            adapter.read_registry("acme"),
+            {"url": "github.com/acme/f", "ref": "main", "current": "abc123"},
+        )
+
+    def test_read_missing_registry_is_none(self):
+        self.assertIsNone(_adapter().read_registry("nope"))
+
+
+class TestListingAndRemoval(unittest.TestCase):
+    def test_list_origins_and_versions_then_remove(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        checkout, sha = adapter.fetch(repo, "main")
+        adapter.materialize("acme", sha, checkout)
+        adapter.write_registry("acme", repo, "main", sha)
+        self.assertEqual(adapter.list_origins(), ["acme"])
+        self.assertEqual(adapter.list_versions("acme"), [sha])
+        adapter.remove_version("acme", sha)
+        self.assertEqual(adapter.list_versions("acme"), [])
+        adapter.remove_origin("acme")
+        self.assertEqual(adapter.list_origins(), [])
+        adapter.cleanup(checkout)
+
+
+if __name__ == "__main__":
+    unittest.main()

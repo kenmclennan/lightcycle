@@ -23,6 +23,7 @@ _SEED_KEYS = [
     ("backups-dir", "~/.lightcycle-backups"),
     ("backup-interval-minutes", "15"),
     ("backup-retention", "96"),
+    ("workflow-retention", "5"),
 ]
 
 
@@ -262,6 +263,9 @@ class Config:
 
     def backup_retention(self):
         return self._required_int("backup-retention")
+
+    def workflow_retention(self):
+        return self._required_int("workflow-retention")
 
     def spawn_id(self):
         return self._env("LC_SPAWNID")
