@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.pool import (
+    BackupResponse,
     BreakerGateResponse,
     HookCompletionsUseCase,
     ListWorkersUseCase,
@@ -53,6 +54,14 @@ class FakeBreakerGate:
 
     def execute(self, now):
         return BreakerGateResponse(breaker=self._breaker)
+
+
+class FakeBackupGate:
+    def __init__(self, response):
+        self._response = response
+
+    def execute(self, now):
+        return self._response
 
 
 class FakeWorktrees:
@@ -477,6 +486,25 @@ class TestTick(unittest.TestCase):
             s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4)
         ).execute(TickInput(now=1000.0))
         self.assertEqual(result.hook_completed, [])
+
+    def test_backup_gate_wired_in_populates_backed_up_and_pruned(self):
+        s = FakeStore()
+        backup_gate = FakeBackupGate(
+            BackupResponse(created="store-1000.db.gz", pruned=["store-1.db.gz"])
+        )
+        result = TickUseCase(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4), backup_gate=backup_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.backed_up, "store-1000.db.gz")
+        self.assertEqual(result.backup_pruned, ["store-1.db.gz"])
+
+    def test_no_backup_gate_leaves_defaults(self):
+        s = FakeStore()
+        result = TickUseCase(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4)
+        ).execute(TickInput(now=1000.0))
+        self.assertIsNone(result.backed_up)
+        self.assertEqual(result.backup_pruned, [])
 
 
 if __name__ == "__main__":

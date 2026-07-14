@@ -67,6 +67,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def disconnect(self):
+        pass
+
+    @abstractmethod
     def update_metadata(self, tid, meta):
         pass
 

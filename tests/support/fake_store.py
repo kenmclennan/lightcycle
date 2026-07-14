@@ -224,6 +224,9 @@ class FakeStore(StorePort):
                 if other and other.get("state") != "done":
                     other["dep_count"] = max(0, (other.get("dep_count") or 0) - 1)
 
+    def disconnect(self):
+        pass
+
     def update_metadata(self, tid, meta):
         self._get(tid)["metadata"] = dict(meta)
 

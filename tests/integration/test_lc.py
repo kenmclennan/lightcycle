@@ -59,6 +59,9 @@ def write_config(projects=None, specs=None):
         "worker-history: 20",
         "editor: vi",
         "retro-interval-items: 20",
+        "backups-dir: %s" % tempfile.mkdtemp(),
+        "backup-interval-minutes: 15",
+        "backup-retention: 96",
     ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p

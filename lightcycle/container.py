@@ -1,3 +1,4 @@
+from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
@@ -12,7 +13,7 @@ from lightcycle.config import Config
 class Container:
     def __init__(
         self, *, config=None, store=None, git=None, spawner=None, workers=None, fs=None,
-        github=None, lock=None, breaker=None, now=None,
+        github=None, lock=None, breaker=None, backup=None, now=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -23,3 +24,4 @@ class Container:
         self.github = github if github is not None else GitHubEventsAdapter()
         self.lock = lock if lock is not None else RunLockAdapter(self.config)
         self.breaker = breaker if breaker is not None else BreakerAdapter(self.config)
+        self.backup = backup if backup is not None else SqliteBackupAdapter(self.config)

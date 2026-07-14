@@ -159,6 +159,9 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("~/workspace/projects", text)
         self.assertIn("retro-interval-items: 20", text)
         self.assertIn("specs-remote: git@github.com:you/lightcycle-specs.git", text)
+        self.assertIn("backups-dir: ~/.lightcycle-backups", text)
+        self.assertIn("backup-interval-minutes: 15", text)
+        self.assertIn("backup-retention: 96", text)
 
     def test_tops_up_missing_keys_in_existing_config(self):
         d = tempfile.mkdtemp()
@@ -192,6 +195,8 @@ class TestEnsureConfig(unittest.TestCase):
             "max-session-seconds: 1800\n"
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
             "retro-interval-items: 20\n"
+            "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
+            "backup-retention: 96\n"
         )
         Path(p).write_text(all_keys)
         c = Config(environ={"LC_CONFIG": p})
@@ -235,6 +240,39 @@ class TestRetroCadenceConfig(unittest.TestCase):
         c = _cfg(retro_interval_items="20")
         self.assertFalse(hasattr(c, "retro_interval_days"))
         self.assertFalse(hasattr(c, "retro_min_items"))
+
+
+class TestBackupConfig(unittest.TestCase):
+    def test_missing_keys_raise_naming_the_key(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().backups_dir()
+        self.assertIn("backups-dir", str(ctx.exception))
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().backup_interval_minutes()
+        self.assertIn("backup-interval-minutes", str(ctx.exception))
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().backup_retention()
+        self.assertIn("backup-retention", str(ctx.exception))
+
+    def test_config_values_read(self):
+        c = _cfg(backups_dir="/b", backup_interval_minutes="30", backup_retention="10")
+        self.assertEqual(c.backups_dir(), "/b")
+        self.assertEqual(c.backup_interval_minutes(), 30)
+        self.assertEqual(c.backup_retention(), 10)
+
+    def test_malformed_int_fails_fast(self):
+        with self.assertRaises(ConfigError):
+            _cfg(backup_interval_minutes="soon").backup_interval_minutes()
+
+    def test_freshly_seeded_config_resolves_backups_dir_outside_data_root(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"LC_HOME": d, "LC_CONFIG": p})
+        c.ensure_config()
+        self.assertEqual(c.backups_dir(), os.path.join(HOME, ".lightcycle-backups"))
+        self.assertEqual(c.backup_interval_minutes(), 15)
+        self.assertEqual(c.backup_retention(), 96)
+        self.assertFalse(c.backups_dir().startswith(c.data_root() + os.sep))
 
 
 class TestGridRootAndEnv(unittest.TestCase):

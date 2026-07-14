@@ -99,6 +99,11 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         self.assertEqual(step.role, "human")
         self.assertIn("needs review", step.notes)
 
+    def test_disconnect_is_a_noop(self):
+        s = self.make_store()
+        s.disconnect()
+        s.create_step("t")
+
 
 if __name__ == "__main__":
     unittest.main()
