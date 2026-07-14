@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import signal
+import subprocess
 import sys
 import time
 import urllib.error
@@ -46,6 +47,11 @@ from lightcycle.application.work import (
     TraceUseCase,
 )
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
+from lightcycle.application.workflows.errors import WorkflowSourceError
+from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
+from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
+from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
 from lightcycle.application.flow import (
     AdvanceInput,
     AdvanceStepUseCase,
@@ -137,6 +143,8 @@ COMMAND_GROUPS = [
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
+        ("workflow", "<add|upgrade|list|rm> ...", "manage workflow sources (git origins of "
+         "workflow+step bundles) - separate from `lc upgrade`, which updates the engine"),
     ]),
     ("Start working", [
         ("start", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue"),
@@ -290,6 +298,64 @@ def main(argv=None):
         sys.stderr.write("not implemented: %s\n" % cmd)
         return 2
     return fn(argv[1:]) or 0
+
+
+def cmd_workflow(argv):
+    ap = argparse.ArgumentParser(prog="lc workflow")
+    sub = ap.add_subparsers(dest="sub")
+    p_add = sub.add_parser("add")
+    p_add.add_argument("url")
+    p_add.add_argument("--ref", default="main")
+    p_add.add_argument("--name")
+    p_upgrade = sub.add_parser("upgrade")
+    p_upgrade.add_argument("origin", nargs="?")
+    sub.add_parser("list")
+    p_rm = sub.add_parser("rm")
+    p_rm.add_argument("origin")
+    a = ap.parse_args(argv)
+    if a.sub is None:
+        ap.print_help()
+        return 2
+    c = _container
+    try:
+        if a.sub == "add":
+            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config).execute(
+                url=a.url, ref=a.ref, name=a.name)
+            msg = "added %s @ %s" % (resp.origin, resp.sha)
+            if resp.pruned:
+                msg += " (pruned %d)" % len(resp.pruned)
+            print(msg)
+            return 0
+        if a.sub == "upgrade":
+            origins = [a.origin] if a.origin else c.workflow_source.list_origins()
+            if not origins:
+                print("no workflow sources registered")
+                return 0
+            for origin in origins:
+                resp = UpgradeWorkflowSourceUseCase(c.workflow_source, c.store, c.config).execute(origin)
+                if resp.changed:
+                    print("upgraded %s @ %s" % (resp.origin, resp.sha))
+                else:
+                    print("%s already current (%s)" % (resp.origin, resp.sha))
+            return 0
+        if a.sub == "list":
+            resp = ListWorkflowSourcesUseCase(c.workflow_source, c.store).execute()
+            if not resp.origins:
+                print("no workflow sources registered")
+                return 0
+            for v in resp.origins:
+                line = "%s  %s  %s  (%d versions" % (v.name, v.current, v.url, len(v.versions))
+                if v.pinned:
+                    line += ", %d pinned" % len(v.pinned)
+                print(line + ")")
+            return 0
+        if a.sub == "rm":
+            resp = RemoveWorkflowSourceUseCase(c.workflow_source, c.store).execute(a.origin)
+            print("removed %s" % resp.origin)
+            return 0
+    except (WorkflowSourceError, subprocess.CalledProcessError) as e:
+        sys.stderr.write("lc workflow: %s\n" % e)
+        return 1
 
 
 def cmd_show(argv):

@@ -196,7 +196,7 @@ class TestEnsureConfig(unittest.TestCase):
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
             "retro-interval-items: 20\n"
             "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
-            "backup-retention: 96\n"
+            "backup-retention: 96\nworkflow-retention: 5\n"
         )
         Path(p).write_text(all_keys)
         c = Config(environ={"LC_CONFIG": p})

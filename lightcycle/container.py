@@ -7,13 +7,14 @@ from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.adapters.workers import WorkersAdapter
+from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.config import Config
 
 
 class Container:
     def __init__(
         self, *, config=None, store=None, git=None, spawner=None, workers=None, fs=None,
-        github=None, lock=None, breaker=None, backup=None, now=None,
+        github=None, lock=None, breaker=None, backup=None, workflow_source=None, now=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -25,3 +26,7 @@ class Container:
         self.lock = lock if lock is not None else RunLockAdapter(self.config)
         self.breaker = breaker if breaker is not None else BreakerAdapter(self.config)
         self.backup = backup if backup is not None else SqliteBackupAdapter(self.config)
+        self.workflow_source = (
+            workflow_source if workflow_source is not None
+            else WorkflowSourceAdapter(self.config)
+        )

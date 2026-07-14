@@ -10,7 +10,8 @@ class TestWorkerPermitted(unittest.TestCase):
             self.assertTrue(_worker_permitted(v, ["ITEM.1"]), v)
 
     def test_destructive_verbs_forbidden(self):
-        for v in ("rm", "init", "new", "start", "sweep", "dep", "backlog", "retro", "config"):
+        for v in ("rm", "init", "new", "start", "sweep", "dep", "backlog", "retro", "config",
+                  "workflow"):
             self.assertFalse(_worker_permitted(v, ["x"]), v)
 
     def test_set_state_blocked_allowed(self):
