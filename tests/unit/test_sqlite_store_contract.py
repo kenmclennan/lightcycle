@@ -1,3 +1,4 @@
+import sqlite3
 import unittest
 
 from tests.support.sqlite_store_factory import make_sqlite_store
@@ -9,6 +10,14 @@ from lightcycle.adapters.sqlite_store import SqliteStore
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
     def make_store(self, now=None):
         return make_sqlite_store(now=now)
+
+
+class TestSqliteStoreDisconnect(unittest.TestCase):
+    def test_disconnect_closes_the_underlying_connection(self):
+        s = make_sqlite_store()
+        s.disconnect()
+        with self.assertRaises(sqlite3.ProgrammingError):
+            s.create_step("t")
 
 
 class TestRemovedMigrationsLeaveNoDanglingReferences(unittest.TestCase):

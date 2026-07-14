@@ -442,6 +442,9 @@ class SqliteStore(StorePort):
         self._record_history(tid, State.DONE)
         self._conn.commit()
 
+    def disconnect(self):
+        self._conn.close()
+
     def update_metadata(self, tid, meta):
         updates = {k: v for k, v in meta.items() if k in _METADATA_COLUMNS}
         if not updates:

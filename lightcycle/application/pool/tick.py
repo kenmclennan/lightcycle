@@ -22,6 +22,8 @@ class TickResponse:
     conflicted: List[str] = field(default_factory=list)
     cadence_fired: List[str] = field(default_factory=list)
     hook_completed: List[Tuple[str, str, str]] = field(default_factory=list)
+    backed_up: Optional[str] = None
+    backup_pruned: List[str] = field(default_factory=list)
     alive: int = 0
     max_agents: int = 0
     ready: int = 0
@@ -35,7 +37,7 @@ class TickResponse:
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
-        hook_completions=None, worktrees=None, git=None,
+        hook_completions=None, worktrees=None, git=None, backup_gate=None,
     ):
         self._store = store
         self._workers = workers
@@ -46,6 +48,7 @@ class TickUseCase:
         self._cadence_gate = cadence_gate
         self._breaker_gate = breaker_gate
         self._hook_completions = hook_completions
+        self._backup_gate = backup_gate
 
     def execute(self, input: TickInput) -> TickResponse:
         self._workers.reap()
@@ -60,6 +63,7 @@ class TickUseCase:
         hook_completed = hook_result.completed if hook_result else []
         breaker_result = self._breaker_gate.execute(input.now) if self._breaker_gate else None
         breaker = breaker_result.breaker if breaker_result else Breaker()
+        backup_result = self._backup_gate.execute(input.now) if self._backup_gate else None
         swept = self._sweep.execute(input.now, self._config.max_boot_seconds())
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
@@ -88,6 +92,8 @@ class TickUseCase:
             conflicted=conflicted,
             cadence_fired=cadence_fired,
             hook_completed=hook_completed,
+            backed_up=backup_result.created if backup_result else None,
+            backup_pruned=backup_result.pruned if backup_result else [],
             alive=alive_count,
             max_agents=max_agents,
             ready=ready_count,

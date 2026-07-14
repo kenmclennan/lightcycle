@@ -1,3 +1,4 @@
+from lightcycle.application.pool.backup import BackupResponse, BackupUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateResponse, BreakerGateUseCase
 from lightcycle.application.pool.hook_completions import (
     HookCompletionsResponse,
@@ -18,6 +19,8 @@ from lightcycle.application.pool.tick import TickInput, TickUseCase
 __all__ = [
     "AcquireRunLockResponse",
     "AcquireRunLockUseCase",
+    "BackupResponse",
+    "BackupUseCase",
     "BreakerGateResponse",
     "BreakerGateUseCase",
     "HookCompletionsResponse",

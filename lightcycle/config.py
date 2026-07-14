@@ -20,6 +20,9 @@ _SEED_KEYS = [
     ("worker-history", "20"),
     ("editor", "vi"),
     ("retro-interval-items", "20"),
+    ("backups-dir", "~/.lightcycle-backups"),
+    ("backup-interval-minutes", "15"),
+    ("backup-retention", "96"),
 ]
 
 
@@ -250,6 +253,15 @@ class Config:
         if env is not None:
             return env
         return self._required_int("retro-interval-items")
+
+    def backups_dir(self):
+        return self._required_path("backups-dir")
+
+    def backup_interval_minutes(self):
+        return self._required_int("backup-interval-minutes")
+
+    def backup_retention(self):
+        return self._required_int("backup-retention")
 
     def spawn_id(self):
         return self._env("LC_SPAWNID")

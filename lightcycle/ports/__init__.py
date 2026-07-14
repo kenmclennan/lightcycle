@@ -1,3 +1,4 @@
+from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.fs import FsPort
 from lightcycle.ports.git import GitPort
@@ -8,6 +9,7 @@ from lightcycle.ports.store import StorePort
 from lightcycle.ports.workers import WorkersPort
 
 __all__ = [
+    "BackupPort",
     "BreakerPort",
     "FsPort",
     "GitHubEventsPort",

@@ -62,6 +62,7 @@ from lightcycle.application.flow import (
 )
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
+    BackupUseCase,
     BreakerGateUseCase,
     HookCompletionsUseCase,
     ListWorkersUseCase,
@@ -173,6 +174,8 @@ COMMAND_GROUPS = [
     ]),
     ("Maintenance", [
         ("sweep", "", "reclaim orphaned step claims and prune dead worker entries (kept: LC_WORKER_HISTORY, default 20)"),
+        ("restore", "[<snapshot>] --force", "overwrite the live store from a backup snapshot "
+         "(newest if omitted); refuses without --force or while lc start is running"),
     ]),
     ("Plumbing (the loop uses these)", [
         ("advance", "<id> <outcome>", "create the next step for an outcome without closing"),
@@ -584,6 +587,49 @@ def cmd_sweep(argv):
     return 0
 
 
+def cmd_restore(argv):
+    ap = argparse.ArgumentParser(prog="lc restore")
+    ap.add_argument("snapshot", nargs="?")
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--list", action="store_true")
+    a = ap.parse_args(argv)
+    snapshots = _container.backup.list_snapshots()
+    if a.list:
+        now = time.time()
+        for name, mtime in snapshots:
+            print("%s  age=%ds" % (name, int(now - mtime)))
+        return 0
+    if not snapshots:
+        sys.stderr.write("lc restore: no snapshots in %s\n" % _container.config.backups_dir())
+        return 1
+    if a.snapshot is None:
+        target, target_mtime = snapshots[0]
+    else:
+        match = next(((n, m) for n, m in snapshots if n == a.snapshot), None)
+        if match is None:
+            sys.stderr.write("lc restore: no such snapshot %s\n" % a.snapshot)
+            return 1
+        target, target_mtime = match
+    if not a.force:
+        sys.stderr.write(
+            "lc restore: this would overwrite the live store from %s; re-run with --force\n"
+            % target
+        )
+        return 1
+    lock_result = AcquireRunLockUseCase(_container.lock).execute()
+    if not lock_result.acquired:
+        sys.stderr.write("lc restore: lc start is running (pid %d); stop it first\n"
+                          % lock_result.holder_pid)
+        return 1
+    try:
+        _container.store.disconnect()
+        _container.backup.restore(target)
+    finally:
+        ReleaseRunLockUseCase(_container.lock).execute()
+    print("restored %s (age %ds)" % (target, int(time.time() - target_mtime)))
+    return 0
+
+
 def _print_human_row(kind, t, show_description=False):
     plan = next((art.value for art in t.artifacts if art.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
@@ -830,6 +876,11 @@ def _format_tick(result, prev_snapshot, now):
     for step, tid, detail in result.hook_completed:
         msg = "%s: %s" % (tid, detail) if detail else tid
         lines.append("%s  %-7s  %s" % (ts, step, msg))
+    if result.backed_up:
+        msg = result.backed_up
+        if result.backup_pruned:
+            msg += " pruned=%d" % len(result.backup_pruned)
+        lines.append("%s  %-7s  %s" % (ts, "backup", msg))
     if result.breaker_opened:
         reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
         lines.append("%s  %-7s  %s" % (ts, "breaker", "opened until %s" % reset_ts))
@@ -879,6 +930,7 @@ def cmd_start(argv):
         cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
         breaker_gate = BreakerGateUseCase(_container.workers, _container.fs, _container.breaker)
         hook_completions = HookCompletionsUseCase(_container.store, flow_service)
+        backup_gate = BackupUseCase(_container.backup, _container.config)
         tick = TickUseCase(
             _container.store,
             _container.workers,
@@ -890,6 +942,7 @@ def cmd_start(argv):
             hook_completions=hook_completions,
             worktrees=_worktrees(),
             git=_container.git,
+            backup_gate=backup_gate,
         )
         if a.once:
             now = time.time()
