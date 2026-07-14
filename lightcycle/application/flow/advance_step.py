@@ -24,8 +24,7 @@ class AdvanceStepUseCase:
     def execute(self, input: AdvanceInput) -> AdvanceResponse:
         t = self._store.get_node(input.step)
         name = self._flow.workflow_for(t)
-        project = self._flow.project_for(t)
-        transition = self._resolver.resolve(t, input.outcome, name, project)
+        transition = self._resolver.resolve(t, input.outcome, name)
         if transition is None:
             return AdvanceResponse(next_step=None)
         return AdvanceResponse(next_step=self._resolver.create(t, transition))

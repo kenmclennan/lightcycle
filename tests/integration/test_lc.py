@@ -40,6 +40,59 @@ def run_lc(*args, root=None, config=None):
     return subprocess.run([sys.executable, LC, *args], capture_output=True, text=True, env=env)
 
 
+_ORIGIN = "lightcycle"
+_SHA = "testsha"
+_DEFAULT_WORKFLOW = "%s/standard" % _ORIGIN
+
+
+def _origin_dir(root):
+    return Path(root) / "workflows" / _ORIGIN
+
+
+def _bundle(root):
+    return _origin_dir(root) / _SHA
+
+
+def _steps_dir(root):
+    return _bundle(root) / "steps"
+
+
+def _workflows_dir(root):
+    return _bundle(root) / "workflows"
+
+
+def _write_origin(root):
+    d = _origin_dir(root)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "origin.toml").write_text('url = "local"\nref = "main"\ncurrent = "%s"\n' % _SHA)
+
+
+def make_workflow_repo():
+    repo = tempfile.mkdtemp()
+    subprocess.run(["git", "-C", repo, "init", "-q", "-b", "main"], check=True)
+    subprocess.run(["git", "-C", repo, "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", repo, "config", "user.name", "t"], check=True)
+    (Path(repo) / "source.toml").write_text(
+        'name = "lightcycle"\ncontract = 1\ndescription = "seed"\n')
+    (Path(repo) / "workflows").mkdir()
+    (Path(repo) / "workflows" / "standard.md").write_text(
+        "entry: build\n\nnodes:\n  build  coder\n")
+    (Path(repo) / "steps").mkdir()
+    (Path(repo) / "steps" / "coder.md").write_text("---\nmodel: sonnet\nstep: build\n---\nstub\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "seed"], check=True)
+    return repo
+
+
+def write_real_library_bundle(root):
+    src = Path(__file__).resolve().parents[2] / "lightcycle" / "library"
+    bundle = _bundle(root)
+    bundle.mkdir(parents=True, exist_ok=True)
+    for sub in ("workflows", "steps"):
+        shutil.copytree(src / sub, bundle / sub, dirs_exist_ok=True)
+    _write_origin(root)
+
+
 def write_config(projects=None, specs=None):
     p = os.path.join(tempfile.mkdtemp(), "config")
     lines = []
@@ -50,7 +103,7 @@ def write_config(projects=None, specs=None):
     lines += [
         "shortcode: xy",
         "branch-prefix: feat",
-        "default-workflow: standard",
+        "default-workflow: %s" % _DEFAULT_WORKFLOW,
         "max-agents: 5",
         "worktree-retries: 6",
         "worktree-retry-sleep: 0.25",
@@ -120,24 +173,25 @@ _STEP_SIGNALS = {"review": {"review_rounds": "rejected"}, "open-pr": {"conflicts
 
 
 def write_workflow(root, metas, name="standard", entry=None):
-    wdir = Path(root) / "workflows"
-    wdir.mkdir(exist_ok=True)
+    wdir = _workflows_dir(root)
+    wdir.mkdir(parents=True, exist_ok=True)
     (wdir / ("%s.md" % name)).write_text(graph_text_from_metas(metas, entry=entry))
+    _write_origin(root)
 
 
 def write_workflow_from_steps(root, name="standard"):
     from lightcycle.adapters import frontmatter
 
     metas = {}
-    for f in sorted((Path(root) / "steps").glob("*.md")):
+    for f in sorted(_steps_dir(root).glob("*.md")):
         meta, _ = frontmatter.split_frontmatter(f.read_text())
         metas[f.stem] = meta
     write_workflow(root, metas, name)
 
 
 def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
-    adir = Path(root) / "steps"
-    adir.mkdir(exist_ok=True)
+    adir = _steps_dir(root)
+    adir.mkdir(parents=True, exist_ok=True)
     metas = {}
     for r in roles:
         model, step, routes = _AGENT_SPECS[r]
@@ -187,8 +241,8 @@ _CONTRACT_SPECS = {
 
 def write_contract_steps(root, specs=None):
     specs = specs or _CONTRACT_SPECS
-    adir = Path(root) / "steps"
-    adir.mkdir(exist_ok=True)
+    adir = _steps_dir(root)
+    adir.mkdir(parents=True, exist_ok=True)
     for r, s in specs.items():
         fm = ["---", "model: %s" % s["model"], "step: %s" % s["step"]]
         for blk in ("accepts", "produces", "routes"):
@@ -500,12 +554,15 @@ class TestWorkersAdapterEffects(unittest.TestCase):
 class TestSpawn(unittest.TestCase):
     def setUp(self):
         self.root = new_store()
-        for d in ("steps", "logs"):
-            (Path(self.root) / d).mkdir(exist_ok=True)
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        _steps_dir(self.root).mkdir(parents=True, exist_ok=True)
         for r in ("coder", "reviewer", "pr-watcher"):
-            (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
+            (_steps_dir(self.root) / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
+        _write_origin(self.root)
+        os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
     def test_spawn_records_worker_log_and_lists_in_ps(self):
         env = dict(os.environ, LC_HOME=self.root, LC_SPAWN_CMD="echo started >> {log}")
@@ -579,11 +636,12 @@ class TestPs(unittest.TestCase):
 class TestRun(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
-        for d in ("steps", "logs", "flows"):
+        for d in ("logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
+        _steps_dir(self.root).mkdir(parents=True, exist_ok=True)
         (Path(self.root) / "store.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
-            (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
+            (_steps_dir(self.root) / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
         write_workflow_from_steps(self.root)
@@ -682,7 +740,7 @@ class TestRun(unittest.TestCase):
         self.assertEqual(self._workers(), [])
 
     def test_run_loop_first_tick_does_not_replay_old_hook_completions(self):
-        (Path(self.root) / "steps" / "auditor.md").write_text(
+        (_steps_dir(self.root) / "auditor.md").write_text(
             "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
         )
         tid = self.store.create_step("audit: theme", step="audit", role="auditor")
@@ -697,11 +755,12 @@ class TestRun(unittest.TestCase):
 class TestRunSingletonLock(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
-        for d in ("steps", "logs", "flows"):
+        for d in ("logs", "flows"):
             (Path(self.root) / d).mkdir(exist_ok=True)
+        _steps_dir(self.root).mkdir(parents=True, exist_ok=True)
         (Path(self.root) / "store.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
-            (Path(self.root) / "steps" / ("%s.md" % r)).write_text(
+            (_steps_dir(self.root) / ("%s.md" % r)).write_text(
                 "---\nmodel: sonnet\n---\nstub %s" % r
             )
         write_workflow_from_steps(self.root)
@@ -1089,23 +1148,23 @@ class TestTrace(unittest.TestCase):
 class TestAgentFrontmatter(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
-        (Path(self.root) / "steps").mkdir(exist_ok=True)
-        (Path(self.root) / "steps" / "coder.md").write_text(
+        _steps_dir(self.root).mkdir(parents=True, exist_ok=True)
+        (_steps_dir(self.root) / "coder.md").write_text(
             "---\nmodel: sonnet\n---\n# Coder\n\nDo the thing.\n"
         )
 
     def test_parse_step_extracts_model_and_strips_frontmatter(self):
-        a = _cli_mod.container().fs.parse_step("coder")
+        a = _cli_mod.container().fs.parse_step("coder", _bundle(self.root))
         self.assertEqual(a["meta"]["model"], "sonnet")
         self.assertTrue(a["body"].startswith("# Coder"))
         self.assertNotIn("model:", a["body"])
 
     def test_parse_step_reads_nested_routes(self):
-        (Path(self.root) / "steps" / "reviewer.md").write_text(
+        (_steps_dir(self.root) / "reviewer.md").write_text(
             "---\nmodel: opus\nstep: review\nroutes:\n  done: open-pr\n"
             "  rejected: build\n---\n# Reviewer\n"
         )
-        a = _cli_mod.container().fs.parse_step("reviewer")
+        a = _cli_mod.container().fs.parse_step("reviewer", _bundle(self.root))
         self.assertEqual(a["meta"]["step"], "review")
         self.assertEqual(a["meta"]["routes"], {"done": "open-pr", "rejected": "build"})
         self.assertTrue(a["body"].startswith("# Reviewer"))
@@ -1116,9 +1175,8 @@ class TestFlowFromAgents(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def _flow(self):
-        return FlowService(
-            _cli_mod.container().fs, _cli_mod.container().store, _cli_mod.container().config
-        )
+        c = _cli_mod.container()
+        return FlowService(c.fs, c.store, c.config, c.workflow_source)
 
     def test_flow_next_derives_role_from_owner(self):
         t = self._flow().flow_next("build", "done")
@@ -1166,7 +1224,7 @@ class TestFileStep(unittest.TestCase):
         self.assertEqual(rc, 0, err)
 
     def test_spawn_refuses_when_model_missing(self):
-        (Path(self.root) / "steps" / "reviewer.md").write_text("no frontmatter here")
+        (_steps_dir(self.root) / "reviewer.md").write_text("no frontmatter here")
         os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
         self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
         rc, _, err = call(_cli_mod.cmd_spawn, "reviewer")
@@ -1244,6 +1302,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         self.root = tempfile.mkdtemp()
         os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
+        write_real_library_bundle(self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
@@ -1529,16 +1588,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
             projects=tempfile.mkdtemp(), specs=self.specs_repo
         )
         os.environ["LC_HOME"] = engine_root
-        (Path(engine_root) / "workflows").mkdir(exist_ok=True)
-        (Path(engine_root) / "workflows" / "spec.md").write_text(
-            "entry: spec-writer\n\nworkspace: specs\n\nrequires: brief repo\n\n"
-            "edges:\n  spec-writer  done\n"
-        )
-        (Path(engine_root) / "steps").mkdir(exist_ok=True)
-        (Path(engine_root) / "steps" / "spec-writer.md").write_text(
-            "---\nmodel: sonnet\naccepts:\n  brief: required\nproduces:\n  spec: required\n"
-            "---\n# Spec-writer\nstub\n"
-        )
+        write_real_library_bundle(engine_root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
@@ -1551,7 +1601,8 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
 
     def test_claim_creates_a_worktree_inside_the_specs_repo_not_the_project(self):
         theme = self.store.create_theme("theme")
-        item = self.store.create_item("phase b1", theme=theme, workflow="spec")
+        item = self.store.create_item(
+            "phase b1", theme=theme, workflow="lightcycle/spec@%s" % _SHA)
         self.store.add_artifact(item, "brief", "briefs/LC-1.md")
         self.store.create_step("spec-writer: x", step="spec-writer", role="spec-writer", parent=item)
 
@@ -1565,7 +1616,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         self.assertEqual(t["brief"], "briefs/LC-1.md")
 
     def test_activating_a_spec_workflow_item_without_a_brief_fails_fast(self):
-        item = self.store.create_item("phase b1", workflow="spec")
+        item = self.store.create_item("phase b1", workflow="lightcycle/spec")
 
         rc, out, err = call(_cli_mod.cmd_set, item, "--state", "active")
 
@@ -1574,7 +1625,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         self.assertIn("repo", err)
 
     def test_activating_a_spec_workflow_item_without_a_repo_fails_fast(self):
-        item = self.store.create_item("phase b1", workflow="spec")
+        item = self.store.create_item("phase b1", workflow="lightcycle/spec")
         self.store.add_artifact(item, "brief", "briefs/LC-1.md")
 
         rc, out, err = call(_cli_mod.cmd_set, item, "--state", "active")
@@ -1712,7 +1763,7 @@ class TestUnblock(unittest.TestCase):
         self.assertNotIn("BLOCKED:", t.notes or "")
 
     def test_unblock_refuses_human_step(self):
-        (Path(self.root) / "steps" / "ready-merge.md").write_text(
+        (_steps_dir(self.root) / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n"
         )
         b = self.store.create_step("ready-merge: t", step="ready-merge", role="human")
@@ -1802,6 +1853,39 @@ class TestClose(unittest.TestCase):
         self.assertEqual([a for a in self.store.item_artifacts(theme) if a.type == "retro"], [])
 
 
+class TestInitPullsWorkflows(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.repo = make_workflow_repo()
+        self.cfg = os.path.join(tempfile.mkdtemp(), "config")
+        Path(self.cfg).write_text(
+            "projects: %s\nspecs: %s\ndefault-workflow: lightcycle/standard\n"
+            "workflows-remote: %s\n" % (self.root, self.root, self.repo)
+        )
+        os.environ["LC_HOME"] = self.root
+        os.environ["LC_CONFIG"] = self.cfg
+        self.store = FakeStore()
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
+        self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
+
+    def test_init_pulls_the_default_origin_when_absent(self):
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("pulled lightcycle", out)
+        registry = _cli_mod.container().workflow_source.read_registry("lightcycle")
+        self.assertIsNotNone(registry)
+        self.assertEqual(registry["url"], self.repo)
+
+    def test_init_is_idempotent_and_does_not_repull(self):
+        call(_cli_mod.cmd_init)
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("pulled lightcycle", out)
+
+
 class TestConfig(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
@@ -1809,6 +1893,7 @@ class TestConfig(unittest.TestCase):
         self.cfg = os.path.join(self.dir, "config")
         os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = self.cfg
+        _write_origin(self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
@@ -1917,7 +2002,7 @@ class TestLogRender(unittest.TestCase):
 class TestInboxBacklog(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
-        adir = Path(self.root) / "steps"
+        adir = _steps_dir(self.root)
         adir.mkdir(exist_ok=True)
         (adir / "coder.md").write_text(
             "---\nmodel: sonnet\nstep: build\nroutes:\n  done: review\n---\nstub"
@@ -2234,8 +2319,8 @@ class TestNodeDTOReadSurface(unittest.TestCase):
 class TestClaimConfigReadSurface(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
-        (Path(self.root) / "steps").mkdir(exist_ok=True)
-        (Path(self.root) / "steps" / "watch-pr.md").write_text(
+        _steps_dir(self.root).mkdir(parents=True, exist_ok=True)
+        (_steps_dir(self.root) / "watch-pr.md").write_text(
             "---\nmodel: sonnet\naccepts:\n  pr: required\nci-wait: 15m\n---\n# Watch-PR\n"
         )
         write_workflow(self.root, {}, entry="watch-pr")
@@ -2354,7 +2439,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 class TestWorkflowSelection(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, steps=True)
-        (Path(self.root) / "workflows" / "solo.md").write_text(
+        (_workflows_dir(self.root) / "solo.md").write_text(
             "entry: build\n\nnodes:\n  build  coder\n"
         )
 
@@ -2377,7 +2462,7 @@ class TestWorkflowSelection(unittest.TestCase):
     def test_two_epics_route_by_their_own_workflow(self):
         std_epic = self._epic("standard objective")
         std_story = self._file("A.md", std_epic)
-        solo_epic = self._epic("solo objective", "--workflow", "solo")
+        solo_epic = self._epic("solo objective", "--workflow", "lightcycle/solo")
         solo_story = self._file("B.md", solo_epic)
 
         call(_cli_mod.cmd_done, self._build_task(std_story).id, "done")
@@ -2391,46 +2476,18 @@ class TestWorkflowSelection(unittest.TestCase):
         item = self._file("A.md", theme)
         self.assertEqual(self._build_task(item).step, "build")
 
-    def test_epic_workflow_is_inherited_without_stamping_the_story(self):
-        theme = self._epic("obj", "--workflow", "solo")
+    def test_activation_pins_the_inherited_workflow_onto_the_story(self):
+        theme = self._epic("obj", "--workflow", "lightcycle/solo")
         item = self._file("A.md", theme)
-        self.assertEqual(self.store.get_node(theme).workflow, "solo")
-        self.assertIsNone(self.store.get_node(item).workflow)
+        self.assertEqual(self.store.get_node(theme).workflow, "lightcycle/solo")
+        self.assertEqual(self.store.get_node(item).workflow, "lightcycle/solo@%s" % _SHA)
 
     def test_story_can_override_the_epic_workflow(self):
         theme = self._epic("obj")
-        item = self._file("A.md", theme, "--workflow", "solo")
-        self.assertEqual(self.store.get_node(item).workflow, "solo")
+        item = self._file("A.md", theme, "--workflow", "lightcycle/solo")
+        self.assertEqual(self.store.get_node(item).workflow, "lightcycle/solo@%s" % _SHA)
         call(_cli_mod.cmd_done, self._build_task(item).id, "done")
         self.assertEqual(self._open_successor_steps(item), set())
-
-
-class TestProjectWorkflowOverride(unittest.TestCase):
-    def setUp(self):
-        _fake_setUp(self, steps=True)
-        pdir = Path(self.root) / "myapp" / ".lightcycle" / "workflows"
-        pdir.mkdir(parents=True)
-        (pdir / "standard.md").write_text("entry: build\n\nnodes:\n  build  coder\n")
-
-    def _build_task(self, item):
-        return next(
-            t for t in self.store.all_nodes() if t.parent == item and t.step == "build"
-        )
-
-    def _successors(self, item):
-        return {t.step for t in self.store.all_nodes() if t.parent == item and t.step != "build"}
-
-    def test_a_project_grid_workflow_shadows_the_default_for_that_project(self):
-        theme = call(_cli_mod.cmd_new, "theme", "obj")[1].strip()
-        item = call(_file_compat, "A.md", "--theme", theme, "--project", "myapp")[1].strip()
-        call(_cli_mod.cmd_done, self._build_task(item).id, "done")
-        self.assertEqual(self._successors(item), set())
-
-    def test_a_story_without_that_project_uses_the_default(self):
-        theme = call(_cli_mod.cmd_new, "theme", "obj2")[1].strip()
-        item = call(_file_compat, "B.md", "--theme", theme)[1].strip()
-        call(_cli_mod.cmd_done, self._build_task(item).id, "done")
-        self.assertIn("review", self._successors(item))
 
 
 if __name__ == "__main__":

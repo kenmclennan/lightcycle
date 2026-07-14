@@ -3,7 +3,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import lightcycle.config as config_mod
 from lightcycle.config import Config, ConfigError
 
 HOME = os.path.expanduser("~")
@@ -190,7 +189,8 @@ class TestEnsureConfig(unittest.TestCase):
         all_keys = (
             "projects: /p\nspecs: /s\nspecs-remote: git@github.com:x/specs.git\n"
             "branch-prefix: feat\nshortcode: PROJ\n"
-            "default-workflow: standard\nmax-agents: 5\n"
+            "default-workflow: lightcycle/standard\n"
+            "workflows-remote: git@github.com:kenmclennan/lightcycle-workflows.git\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
             "max-session-seconds: 1800\n"
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
@@ -295,13 +295,6 @@ class TestGridRootAndEnv(unittest.TestCase):
         self.assertEqual(e["FOO"], "bar")
         e["FOO"] = "mutated"
         self.assertEqual(c.base_env()["FOO"], "bar")
-
-
-def test_library_root_is_package_relative_and_ignores_env():
-    expected = os.path.join(os.path.dirname(config_mod.__file__), "library")
-    cfg = Config(environ={"LC_LIBRARY": "/tmp/somewhere", "LC_HOME": "/tmp/elsewhere"})
-    assert cfg.library_root() == expected
-    assert cfg.library_root().endswith(os.path.join("lightcycle", "library"))
 
 
 def test_lc_root_override_is_no_longer_read():

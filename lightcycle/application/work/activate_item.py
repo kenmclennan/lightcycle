@@ -34,10 +34,10 @@ class ActivateItemUseCase:
         if input.theme is not None:
             item_id = self._store.edit_node(input.item, parent=input.theme)
             node = self._store.get_node(item_id)
-        workflow = input.workflow or self._flow.workflow_for(node)
-        project = self._flow.project_for(node)
-        self._store.edit_node(item_id, workflow=input.workflow)
-        step = file_step(
-            self._store, self._flow, item_id, node, workflow, project, input.step
-        )
+        selection = input.workflow
+        if selection is None:
+            selection = self._flow.inherited_selection(node)
+        pin = self._flow.resolve_selection(selection)
+        self._store.edit_node(item_id, workflow=pin)
+        step = file_step(self._store, self._flow, item_id, node, pin, input.step)
         return ActivateItemResponse(step=step)

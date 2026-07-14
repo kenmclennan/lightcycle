@@ -75,9 +75,7 @@ class MonitorPrsUseCase:
         self._complete = complete
 
     def _flow_for(self, node):
-        name = self._flow_service.workflow_for(node)
-        project = self._flow_service.project_for(node)
-        return self._flow_service.load_flow(name, project)
+        return self._flow_service.load_flow(self._flow_service.workflow_for(node))
 
     def _pr_value(self, node, item_id):
         phase = self._flow_service.phase_for(node)

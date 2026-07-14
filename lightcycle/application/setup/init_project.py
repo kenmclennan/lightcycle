@@ -26,8 +26,6 @@ class InitProjectUseCase:
             raise UseCaseError("global config missing - run `lc init` first")
         if not self._fs.store_ready():
             raise UseCaseError("lightcycle store not initialised - run `lc init` first")
-        if not os.path.isdir(os.path.join(self._config.library_root(), "workflows")):
-            raise UseCaseError("workflows library missing at the lightcycle root - run `lc init` first")
 
     def execute(self, input: InitProjectInput) -> InitProjectResponse:
         self._require_global()
@@ -37,11 +35,8 @@ class InitProjectUseCase:
                 "unknown project '%s' under %s" % (input.project, self._config.projects_root())
             )
         project_dir = os.path.join(proj_dir, ".lightcycle")
+        os.makedirs(project_dir, exist_ok=True)
         created = []
-        workflows = os.path.join(project_dir, "workflows")
-        if not os.path.isdir(workflows):
-            os.makedirs(workflows)
-            created.append("workflows/")
         cfg = os.path.join(project_dir, "config")
         if not os.path.exists(cfg):
             shortcode = input.project.rstrip("/").split("/")[-1].upper()

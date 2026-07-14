@@ -69,6 +69,23 @@ class TestMaterialize(unittest.TestCase):
         adapter.cleanup(checkout)
 
 
+class TestBundleResolution(unittest.TestCase):
+    def test_bundle_path_and_current_sha(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        checkout, sha = adapter.fetch(repo, "main")
+        adapter.materialize("acme", sha, checkout)
+        adapter.write_registry("acme", repo, "main", sha)
+        self.assertEqual(adapter.bundle_path("acme", sha),
+                         os.path.join(adapter._root(), "acme", sha))
+        self.assertTrue(os.path.isdir(adapter.bundle_path("acme", sha)))
+        self.assertEqual(adapter.current_sha("acme"), sha)
+        adapter.cleanup(checkout)
+
+    def test_current_sha_missing_origin_is_none(self):
+        self.assertIsNone(_adapter().current_sha("nope"))
+
+
 class TestRegistry(unittest.TestCase):
     def test_write_then_read_roundtrips(self):
         adapter = _adapter()

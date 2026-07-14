@@ -39,9 +39,7 @@ class ClaimStepUseCase:
         t = self._store.claim_ready(role)
         if t is None:
             return None
-        meta = self._flow.meta_for_step(
-            t.step, self._flow.workflow_for(t), self._flow.project_for(t)
-        )
+        meta = self._flow.meta_for_step(t.step, self._flow.workflow_for(t))
         missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:
             self._store.route_to_human(

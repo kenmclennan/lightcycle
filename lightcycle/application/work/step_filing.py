@@ -2,8 +2,8 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.contracts import StepContract
 
 
-def file_step(store, flow, item_id, node, workflow, project, step):
-    graph = flow.load_graph(workflow, project)
+def file_step(store, flow, item_id, node, workflow, step):
+    graph = flow.load_graph(workflow)
     present = {a.type for a in store.item_artifacts(item_id)}
     missing_inputs = graph.requires - present
     if missing_inputs:
@@ -12,7 +12,7 @@ def file_step(store, flow, item_id, node, workflow, project, step):
             % (item_id, ", ".join(sorted(missing_inputs)))
         )
     step_name = step or graph.entry
-    f = flow.load_flow(workflow, project)
+    f = flow.load_flow(workflow)
     role = f.owner_of(step_name)
     if not role:
         raise UseCaseError(
@@ -20,7 +20,7 @@ def file_step(store, flow, item_id, node, workflow, project, step):
             % (step_name, workflow, ", ".join(f.steps()) or "(none)")
         )
     unmet = StepContract.from_meta(
-        flow.meta_for_step(step_name, workflow, project)
+        flow.meta_for_step(step_name, workflow)
     ).missing_inputs(present)
     if unmet:
         raise UseCaseError(

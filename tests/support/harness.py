@@ -16,9 +16,16 @@ _AGENTS = {
 }
 
 
-def _write_steps(root, roles):
-    adir = Path(root) / "steps"
-    adir.mkdir(exist_ok=True)
+_ORIGIN = "lightcycle"
+_SHA = "testsha"
+DEFAULT_WORKFLOW = "%s/standard" % _ORIGIN
+
+
+def _write_bundle(root, roles):
+    origin_dir = Path(root) / "workflows" / _ORIGIN
+    bundle = origin_dir / _SHA
+    adir = bundle / "steps"
+    adir.mkdir(parents=True)
     metas = {}
     for r in roles:
         model, step, routes = _AGENTS[r]
@@ -27,15 +34,17 @@ def _write_steps(root, roles):
         fm += ["---", "# %s" % r, "stub"]
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
         metas[r] = {"model": model, "step": step, "routes": routes}
-    wdir = Path(root) / "workflows"
-    wdir.mkdir(exist_ok=True)
+    wdir = bundle / "workflows"
+    wdir.mkdir(parents=True)
     (wdir / "standard.md").write_text(graph_text_from_metas(metas, entry="build"))
+    (origin_dir / "origin.toml").write_text(
+        'url = "local"\nref = "main"\ncurrent = "%s"\n' % _SHA)
 
 
 def _write_config(root):
     p = os.path.join(tempfile.mkdtemp(), "config")
     Path(p).write_text(
-        "projects: %s\nspecs: %s\ndefault-workflow: standard\n" % (root, root)
+        "projects: %s\nspecs: %s\ndefault-workflow: %s\n" % (root, root, DEFAULT_WORKFLOW)
     )
     return p
 
@@ -44,7 +53,7 @@ class Harness:
     def __init__(self, roles):
         self.root = tempfile.mkdtemp()
         cfg = _write_config(self.root)
-        _write_steps(self.root, roles)
+        _write_bundle(self.root, roles)
         self.store = FakeStore()
         inject_container(self, store=self.store, home=self.root, config_path=cfg)
 

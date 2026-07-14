@@ -52,6 +52,7 @@ from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
+from lightcycle.domain.workflows.identity import parse_selector
 from lightcycle.application.flow import (
     AdvanceInput,
     AdvanceStepUseCase,
@@ -116,7 +117,8 @@ def specs_root():
 
 
 def _flow():
-    return FlowService(_container.fs, _container.store, _container.config)
+    return FlowService(_container.fs, _container.store, _container.config,
+                       _container.workflow_source)
 
 
 def ready_roles():
@@ -1042,9 +1044,10 @@ def cmd_start(argv):
 
 
 def _human_step_skills():
+    root = _flow().default_root()
     skills = []
-    for role in _container.fs.step_roles():
-        a = _container.fs.parse_step(role)
+    for role in _container.fs.step_roles(root):
+        a = _container.fs.parse_step(role, root)
         if a and a["meta"].get("step") and not a["meta"].get("model"):
             skills.append((a["meta"]["step"], a["body"]))
     return sorted(skills)
@@ -1111,7 +1114,27 @@ def cmd_init(argv):
     r = InitGridUseCase(_container.store, _container.fs, _container.config).execute()
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
+    _init_pull_default_origin()
     return 0
+
+
+def _init_pull_default_origin():
+    parsed = parse_selector(_container.config.default_workflow())
+    if parsed is None:
+        return
+    origin = parsed[0]
+    if _container.workflow_source.read_registry(origin) is not None:
+        return
+    url = _container.config.workflows_remote()
+    try:
+        resp = AddWorkflowSourceUseCase(
+            _container.workflow_source, _container.store, _container.config
+        ).execute(url=url, ref="main", name=origin)
+        print("pulled %s workflows @ %s" % (resp.origin, resp.sha))
+    except (WorkflowSourceError, subprocess.CalledProcessError) as e:
+        sys.stderr.write(
+            "could not pull workflows: %s\nrun `lc workflow add %s --name %s` once reachable\n"
+            % (e, url, origin))
 
 
 def cmd_config(argv):
