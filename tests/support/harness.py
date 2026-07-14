@@ -18,7 +18,7 @@ _AGENTS = {
 
 _ORIGIN = "lightcycle"
 _SHA = "testsha"
-DEFAULT_WORKFLOW = "%s/standard" % _ORIGIN
+DEFAULT_WORKFLOW = "%s/spec-driven" % _ORIGIN
 
 
 def _write_bundle(root, roles):
@@ -36,7 +36,7 @@ def _write_bundle(root, roles):
         metas[r] = {"model": model, "step": step, "routes": routes}
     wdir = bundle / "workflows"
     wdir.mkdir(parents=True)
-    (wdir / "standard.md").write_text(graph_text_from_metas(metas, entry="build"))
+    (wdir / "spec-driven.md").write_text(graph_text_from_metas(metas, entry="build"))
     (origin_dir / "origin.toml").write_text(
         'url = "local"\nref = "main"\ncurrent = "%s"\n' % _SHA)
 
@@ -44,7 +44,7 @@ def _write_bundle(root, roles):
 def _write_config(root):
     p = os.path.join(tempfile.mkdtemp(), "config")
     Path(p).write_text(
-        "projects: %s\nspecs: %s\ndefault-workflow: %s\n" % (root, root, DEFAULT_WORKFLOW)
+        "projects: %s\nspecs: %s\ndefault-origin: lightcycle\n" % (root, root)
     )
     return p
 

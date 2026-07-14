@@ -246,47 +246,43 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
         self.assertEqual(store.get_node(spec_item).outcome, "spec-merged")
 
 
-class TestMonitorPrsTransitionsOnSpecMerged(unittest.TestCase):
+_SPEC_DRIVEN = (
+    "entry: spec-writer\n\n"
+    "requires: brief repo\n\n"
+    "workspace:\n"
+    "  spec-await-merge  specs\n\n"
+    "nodes:\n"
+    "  write-code        coder\n"
+    "  spec-await-merge  await-merge\n"
+    "  code-await-merge  await-merge\n\n"
+    "edges:\n"
+    "  spec-await-merge  spec-merged  write-code\n"
+    "  spec-await-merge  changes      spec-writer\n"
+    "  write-code        done         code-open-pr\n"
+    "  code-await-merge  merged       cleanup\n"
+    "  code-await-merge  changes      write-code\n\n"
+    "hooks:\n"
+    "  pr_merge  spec-await-merge  spec-merged\n"
+    "  pr_merge  code-await-merge  merged\n"
+    "  pr_close  spec-await-merge  abandoned\n"
+    "  pr_close  code-await-merge  abandoned\n"
+)
+
+
+class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
     def _setup(self):
         fs = FakeFs(
             metas={
                 "coder": {"model": "sonnet", "accepts": {"spec": "required"}},
+                "await-merge": {"step": "await-merge"},
             },
-            workflow={
-                "standard": (
-                    "entry: write-code\n\n"
-                    "requires: repo\n\n"
-                    "nodes:\n"
-                    "  write-code   coder\n\n"
-                    "edges:\n"
-                    "  review-spec  approved  write-code\n"
-                    "  write-code   done      open-pr\n"
-                    "  open-pr      done      await-merge\n"
-                    "  await-merge  changes   write-code\n\n"
-                    "hooks:\n"
-                    "  pr_merge   await-merge  merged\n"
-                    "  pr_close   await-merge  abandoned\n"
-                ),
-                "spec": (
-                    "entry: spec-writer\n\n"
-                    "workspace: specs\n\n"
-                    "requires: brief\n\n"
-                    "edges:\n"
-                    "  spec-writer  done    open-pr\n"
-                    "  open-pr      done    await-merge\n"
-                    "  await-merge  changes spec-writer\n\n"
-                    "hooks:\n"
-                    "  pr_merge     await-merge  spec-merged\n"
-                    "  pr_close     await-merge  abandoned\n"
-                    "  continues    spec-merged  standard  write-code\n"
-                ),
-            },
+            workflow={"spec-driven": _SPEC_DRIVEN},
         )
         store = FakeStore()
         flow_service = FlowService(fs, store)
-
         spec_item = store.create_item(
-            "LC-59: phase c1", theme=store.create_theme("theme"), workflow="spec", project="lightcycle"
+            "LC-59: phase c1", theme=store.create_theme("theme"),
+            workflow="spec-driven", project="lightcycle",
         )
         store.add_artifact(spec_item, "repo", "lightcycle")
         store.add_artifact(spec_item, "spec", "lightcycle/LC-59-phase-c1.md")
@@ -294,45 +290,37 @@ class TestMonitorPrsTransitionsOnSpecMerged(unittest.TestCase):
         spec_url = "https://github.com/x/y/pull/101"
         store.add_artifact(spec_item, "pr", spec_url, label="spec")
         store.create_step(
-            "await-merge: LC-59: phase c1", step="await-merge", role="human", parent=spec_item
+            "spec-await-merge: LC-59", step="spec-await-merge", role="human", parent=spec_item
         )
-
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={spec_url})
-        uc = MonitorPrsUseCase(store, github, worktrees, flow_service)
+        complete = CompleteStepUseCase(store, flow_service)
+        uc = MonitorPrsUseCase(store, github, worktrees, flow_service, complete)
         return store, spec_item, uc, spec_url, worktrees, github
 
-    def test_spec_merged_transitions_the_same_item_to_write_code(self):
+    def test_spec_merge_advances_the_same_item_to_write_code(self):
         store, spec_item, uc, spec_url, worktrees, github = self._setup()
 
         result = uc.execute()
 
         self.assertEqual(result.merged, [spec_item])
-
         node = store.get_node(spec_item)
         self.assertEqual(node.id, spec_item)
-        self.assertEqual(node.workflow, "standard")
+        self.assertEqual(node.workflow, "spec-driven")
         self.assertEqual(node.state, "in_progress")
-
-        artifacts = {a.type: a.value for a in store.item_artifacts(spec_item)}
-        self.assertEqual(artifacts["spec"], "lightcycle/LC-59-phase-c1.md")
-        self.assertEqual(artifacts["repo"], "lightcycle")
-        self.assertNotIn("filed-from", artifacts)
-
         all_items = [n for n in store.all_nodes() if n.type == "item"]
         self.assertEqual([n.id for n in all_items], [spec_item])
-
         steps = [s for s in store.children(spec_item) if s.state != "done"]
         self.assertEqual([s.step for s in steps], ["write-code"])
 
-    def test_transition_removes_the_spec_worktree(self):
+    def test_crossing_the_phase_boundary_removes_the_spec_worktree(self):
         store, spec_item, uc, spec_url, worktrees, github = self._setup()
 
         uc.execute()
 
         self.assertEqual(worktrees.removed, [spec_item])
 
-    def test_running_twice_does_not_re_transition(self):
+    def test_running_twice_does_not_re_advance(self):
         store, spec_item, uc, spec_url, worktrees, github = self._setup()
         uc.execute()
         first_run_steps = {s.id for s in store.children(spec_item)}

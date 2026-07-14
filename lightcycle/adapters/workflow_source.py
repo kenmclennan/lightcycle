@@ -4,7 +4,6 @@ import subprocess
 import tempfile
 import tomllib
 
-from lightcycle.domain.workflows.identity import parse_selector
 from lightcycle.ports.workflow_source import WorkflowSourcePort
 
 _MANIFEST = "source.toml"
@@ -17,10 +16,7 @@ def _toml_str(value):
 
 
 def default_bundle_root(config):
-    parsed = parse_selector(config.default_workflow())
-    if parsed is None:
-        return None
-    origin, _name = parsed
+    origin = config.default_origin()
     adapter = WorkflowSourceAdapter(config)
     sha = adapter.current_sha(origin)
     return adapter.bundle_path(origin, sha) if sha else None
@@ -77,6 +73,12 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
     def current_sha(self, origin):
         registry = self.read_registry(origin)
         return registry["current"] if registry else None
+
+    def workflow_names(self, origin, sha):
+        d = os.path.join(self._bundle_dir(origin, sha), "workflows")
+        if not os.path.isdir(d):
+            return []
+        return sorted(e.name[:-3] for e in os.scandir(d) if e.name.endswith(".md"))
 
     def write_registry(self, origin, url, ref, current):
         os.makedirs(self._origin_dir(origin), exist_ok=True)

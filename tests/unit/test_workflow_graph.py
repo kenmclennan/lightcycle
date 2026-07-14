@@ -40,12 +40,23 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "  pr_conflict_cap  ready-merge  3\n"
             "  theme_close     audit\n"
         )
-        self.assertEqual(graph.hook_stage("pr_merge"), "ready-merge")
-        self.assertEqual(graph.hook_value("pr_merge"), "merged")
-        self.assertEqual(graph.hook_value("pr_conflict_cap"), "3")
-        self.assertEqual(graph.hook_stage("theme_close"), "audit")
-        self.assertIsNone(graph.hook_value("theme_close"))
-        self.assertIsNone(graph.hook_stage("pr_close"))
+        self.assertEqual(graph.hook_occurrences("pr_merge"), [["ready-merge", "merged"]])
+        self.assertEqual(graph.hook_occurrences("pr_conflict_cap"), [["ready-merge", "3"]])
+        self.assertEqual(graph.hook_occurrences("theme_close"), [["audit"]])
+        self.assertEqual(graph.hook_occurrences("pr_close"), [])
+
+    def test_a_hook_can_fire_on_multiple_stages(self):
+        graph = parse_graph(
+            "entry: spec-writer\n"
+            "\n"
+            "hooks:\n"
+            "  pr_merge  spec-await-merge  spec-merged\n"
+            "  pr_merge  code-await-merge  merged\n"
+        )
+        self.assertEqual(
+            graph.hook_occurrences("pr_merge"),
+            [["spec-await-merge", "spec-merged"], ["code-await-merge", "merged"]],
+        )
 
     def test_hook_extra_carries_a_third_token(self):
         graph = parse_graph(
@@ -55,9 +66,8 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "  ci_failed_cap  watch-ci  3  review-ci\n"
             "  pr_merge       ready-merge  merged\n"
         )
-        self.assertEqual(graph.hook_extra("ci_failed_cap"), "review-ci")
-        self.assertIsNone(graph.hook_extra("pr_merge"))
-        self.assertIsNone(graph.hook_extra("theme_close"))
+        self.assertEqual(graph.hook_occurrences("ci_failed_cap"),
+                         [["watch-ci", "3", "review-ci"]])
 
     def test_parses_signals_by_stage(self):
         graph = parse_graph(
@@ -110,6 +120,24 @@ class TestWorkflowGraphParsing(unittest.TestCase):
     def test_workspace_defaults_to_project_when_absent(self):
         graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
         self.assertEqual(graph.workspace, "project")
+
+    def test_scalar_workspace_applies_to_every_stage(self):
+        graph = parse_graph("entry: build\n\nworkspace: specs\n\nedges:\n  build  done  review\n")
+        self.assertEqual(graph.workspace_for("build"), "specs")
+        self.assertEqual(graph.workspace_for("anything"), "specs")
+
+    def test_workspace_block_maps_per_stage_with_project_default(self):
+        graph = parse_graph(
+            "entry: spec-writer\n\n"
+            "workspace:\n"
+            "  spec-writer       specs\n"
+            "  spec-await-merge  specs\n\n"
+            "edges:\n  spec-writer  done  write-code\n"
+        )
+        self.assertEqual(graph.workspace, "project")
+        self.assertEqual(graph.workspace_for("spec-writer"), "specs")
+        self.assertEqual(graph.workspace_for("spec-await-merge"), "specs")
+        self.assertEqual(graph.workspace_for("write-code"), "project")
 
     def test_ignores_prose_and_blank_lines(self):
         graph = parse_graph(

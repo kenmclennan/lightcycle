@@ -50,12 +50,3 @@ class TestProjectShortcode(unittest.TestCase):
         self.assertTrue(item.startswith(theme + "."), item)
 
 
-class TestProjectDefaultWorkflow(unittest.TestCase):
-    def test_project_default_workflow_overrides_global(self):
-        config, projects = _config()
-        _project(projects, "bdd", "default-workflow: gherkin\n")
-        self.assertEqual(config.default_workflow_for("bdd"), "gherkin")
-
-    def test_falls_back_to_global_default(self):
-        config, _ = _config()
-        self.assertEqual(config.default_workflow_for("plain"), "standard")

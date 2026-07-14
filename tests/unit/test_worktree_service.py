@@ -35,6 +35,9 @@ class _FakeFlow:
     def load_graph(self, name=None):
         return _Graph(self._workspace)
 
+    def workspace_for_node(self, node):
+        return self._workspace
+
     def phase_for(self, node):
         return "spec" if self._workspace == "specs" else "code"
 

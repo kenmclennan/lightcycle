@@ -32,7 +32,7 @@ def _flow(ctx):
 
 @given(parsers.parse('the item "{spec}" is filed at step "{step}"'))
 def _filed(ctx, spec, step):
-    rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec)
+    rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec, "--workflow", "lightcycle/spec-driven")
     assert rc == 0, err
     title = os.path.splitext(os.path.basename(spec))[0]
     rc, item, err = ctx["h"].run("new", "item", title, "--parent", theme.strip())
@@ -53,7 +53,7 @@ def _has_claimed(ctx):
 
 @when(parsers.parse('I file the item "{spec}" at step "{step}"'))
 def _file(ctx, spec, step):
-    rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec)
+    rc, theme, err = ctx["h"].run("new", "theme", "objective for %s" % spec, "--workflow", "lightcycle/spec-driven")
     assert rc == 0, err
     title = os.path.splitext(os.path.basename(spec))[0]
     rc, item, err = ctx["h"].run("new", "item", title, "--parent", theme.strip())

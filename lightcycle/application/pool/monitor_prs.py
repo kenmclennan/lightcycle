@@ -3,7 +3,6 @@ from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.application.work.transition_item import TransitionItemInput, TransitionItemUseCase
 from lightcycle.domain.work import Item, State
 
 LC_MARKER = "<!-- lc -->"
@@ -82,34 +81,47 @@ class MonitorPrsUseCase:
         artifacts = tuple(self._store.item_artifacts(item_id))
         return Item(item_id, artifacts).artifact_of("pr", label=phase)
 
+    def _active_step_at(self, item_id, stage):
+        for child in self._store.children(item_id):
+            if child.type == "step" and child.state != State.DONE and child.step == stage:
+                return child
+        return None
+
     def execute(self) -> MonitorPrsResponse:
         merged, abandoned, reworked, conflicted = [], [], [], []
         close = CloseItemUseCase(self._store, self._worktrees)
-        transition = TransitionItemUseCase(self._store, self._flow_service, self._worktrees)
         for item in self._store.all_nodes():
             if item.type != "item":
                 continue
-            pr_value = self._pr_value(item, item.id)
-            if pr_value is None:
-                continue
             flow = self._flow_for(item)
-            merge_outcome = flow.terminal_merge_outcome()
-            close_outcome = flow.terminal_close_outcome()
-            if merge_outcome and self._github.is_merged(pr_value):
-                merged.append(item.id)
-                target = flow.continues_target(merge_outcome)
-                if target:
-                    workflow, step = target
-                    transition.execute(
-                        TransitionItemInput(
-                            item=item.id, outcome=merge_outcome, workflow=workflow, step=step
-                        )
-                    )
-                else:
-                    close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
-            elif close_outcome and self._github.is_closed_unmerged(pr_value):
-                close.execute(CloseItemInput(item=item.id, reason=close_outcome))
-                abandoned.append(item.id)
+            artifacts = tuple(self._store.item_artifacts(item.id))
+            resolved = False
+            for stage in flow.merge_stages():
+                phase = "spec" if flow.workspace_of(stage) == "specs" else "code"
+                pr_value = Item(item.id, artifacts).artifact_of("pr", label=phase)
+                if pr_value is None:
+                    continue
+                merge_outcome = flow.merge_outcome(stage)
+                close_outcome = flow.close_outcome(stage)
+                if merge_outcome and self._github.is_merged(pr_value):
+                    nxt = flow.next(stage, merge_outcome)
+                    if nxt and nxt.to_step and nxt.to_role != "human":
+                        step = self._active_step_at(item.id, stage)
+                        if step is None:
+                            continue
+                        if flow.workspace_of(stage) != flow.workspace_of(nxt.to_step):
+                            self._worktrees.remove(item.id)
+                        self._complete.execute(CompleteInput(step=step.id, outcome=merge_outcome))
+                    else:
+                        close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
+                        resolved = True
+                    merged.append(item.id)
+                elif close_outcome and self._github.is_closed_unmerged(pr_value):
+                    close.execute(CloseItemInput(item=item.id, reason=close_outcome))
+                    abandoned.append(item.id)
+                    resolved = True
+                if resolved:
+                    break
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE:
                 continue

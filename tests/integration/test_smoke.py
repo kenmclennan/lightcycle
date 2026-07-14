@@ -55,7 +55,7 @@ class SmokeTest(unittest.TestCase):
         (steps / "review-code.md").write_text(_REVIEWER_STEP)
         workflows = bundle / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "standard.md").write_text(
+        (workflows / "spec-driven.md").write_text(
             "entry: write-code\n\nedges:\n  write-code  done  review-code\n"
         )
         (origin / "origin.toml").write_text(
@@ -64,7 +64,7 @@ class SmokeTest(unittest.TestCase):
         ws = tempfile.mkdtemp()
         Path(cls.root, "grid.config").write_text(
             "projects: %s\nspecs: %s\nshortcode: xy\n"
-            "branch-prefix: feat\ndefault-workflow: lightcycle/standard\nmax-agents: 5\n"
+            "branch-prefix: feat\ndefault-origin: lightcycle\nmax-agents: 5\n"
             "worktree-retries: 6\n"
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
             "worker-history: 20\neditor: vi\n" % (ws, ws)
@@ -101,7 +101,8 @@ class SmokeTest(unittest.TestCase):
         item_id = r.stdout.strip()
         r = _tg("attach", item_id, "spec", "specs/smoke.md", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
-        r = _tg("set", item_id, "--state", "active", "--step", "write-code", root=self.root)
+        r = _tg("set", item_id, "--state", "active", "--step", "write-code",
+                "--workflow", "lightcycle/spec-driven", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
         r = _tg("claim", "write-code", root=self.root)

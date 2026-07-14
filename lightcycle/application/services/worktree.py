@@ -2,7 +2,7 @@ import os
 import time
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.work import Item
+from lightcycle.domain.work import Item, State
 from lightcycle.domain.workspace import Branch, Worktree
 
 
@@ -20,16 +20,24 @@ class WorktreeService:
     def has_repo(self, item):
         return self._item(item).repo() is not None
 
+    def _active_step(self, item):
+        for child in self._store.children(item):
+            if getattr(child, "type", None) == "step" and child.state != State.DONE:
+                return child
+        return None
+
+    def _workspace_node(self, item):
+        return self._active_step(item) or self._store.get_node(item)
+
     def _uses_specs_workspace(self, item):
         if self._flow is None:
             return False
-        node = self._store.get_node(item)
-        return self._flow.load_graph(self._flow.workflow_for(node)).workspace == "specs"
+        return self._flow.workspace_for_node(self._workspace_node(item)) == "specs"
 
     def _phase(self, item):
         if self._flow is None:
             return None
-        return self._flow.phase_for(self._store.get_node(item))
+        return self._flow.phase_for(self._workspace_node(item))
 
     def item_repo(self, item):
         repo = self._item(item).repo()

@@ -189,7 +189,7 @@ class TestEnsureConfig(unittest.TestCase):
         all_keys = (
             "projects: /p\nspecs: /s\nspecs-remote: git@github.com:x/specs.git\n"
             "branch-prefix: feat\nshortcode: PROJ\n"
-            "default-workflow: lightcycle/standard\n"
+            "default-origin: lightcycle\n"
             "workflows-remote: git@github.com:kenmclennan/lightcycle-workflows.git\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
             "max-session-seconds: 1800\n"

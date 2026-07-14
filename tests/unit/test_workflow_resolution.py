@@ -34,7 +34,7 @@ class TestWorkflowFor(unittest.TestCase):
         step = self._task_under(s, epic_workflow="standard", story_workflow="gherkin")
         self.assertEqual(svc(s).workflow_for(step), "gherkin")
 
-    def test_unset_falls_back_to_default(self):
+    def test_unset_returns_none_when_no_ancestor_sets_it(self):
         s = FakeStore()
         step = self._task_under(s)
-        self.assertEqual(svc(s).workflow_for(step), "standard")
+        self.assertIsNone(svc(s).workflow_for(step))

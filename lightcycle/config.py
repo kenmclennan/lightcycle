@@ -10,7 +10,7 @@ _SEED_KEYS = [
     ("specs-remote", "git@github.com:you/lightcycle-specs.git"),
     ("branch-prefix", "feat"),
     ("shortcode", "PROJ"),
-    ("default-workflow", "lightcycle/standard"),
+    ("default-origin", "lightcycle"),
     ("workflows-remote", "git@github.com:kenmclennan/lightcycle-workflows.git"),
     ("max-agents", "5"),
     ("worktree-retries", "6"),
@@ -181,8 +181,8 @@ class Config:
     def shortcode(self):
         return self._required_str("shortcode")
 
-    def default_workflow(self):
-        return self._required_str("default-workflow")
+    def default_origin(self):
+        return self._required_str("default-origin")
 
     def workflows_remote(self):
         return self._required_str("workflows-remote")
@@ -198,9 +198,6 @@ class Config:
 
     def shortcode_for(self, project):
         return self.project_config(project).get("shortcode") or self.shortcode()
-
-    def default_workflow_for(self, project):
-        return self.project_config(project).get("default-workflow") or self.default_workflow()
 
     def max_agents(self):
         env = self._env_int("LC_MAX_AGENTS", None)
