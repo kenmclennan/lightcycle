@@ -102,72 +102,50 @@ class TestFlowContracts(unittest.TestCase):
         self.assertIn("design", a.missing().get("review", []))
 
 class TestRealStepsFlowComposition(unittest.TestCase):
-    def test_real_steps_flow_is_ok(self):
+    def _graph_flow(self):
         step_metas = {
             role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
             for role in step_roles(_ROOT)
         }
-        graph = parse_graph(workflow_text(_ROOT, "standard"))
-        flow = Flow.from_graph(graph, step_metas)
+        graph = parse_graph(workflow_text(_ROOT, "spec-driven"))
+        return graph, Flow.from_graph(graph, step_metas), step_metas
+
+    def test_real_steps_flow_is_ok(self):
+        graph, flow, step_metas = self._graph_flow()
         result = FlowContracts(flow, graph, step_metas).as_dict()
         self.assertTrue(result["ok"],
                         msg="Flow composition error - missing inputs: %s" % result.get("missing", {}))
 
-    def test_review_spec_is_the_entry_gate_before_the_coder(self):
-        graph = parse_graph(workflow_text(_ROOT, "standard"))
-        self.assertEqual(graph.entry, "review-spec")
-        self.assertEqual(graph.target("review-spec", "approved"), "write-code")
-        self.assertEqual(graph.target("review-spec", "changes"), "draft-spec")
+    def test_spec_writer_is_the_entry_and_sources_the_specs_repo(self):
+        graph, _, _ = self._graph_flow()
+        self.assertEqual(graph.entry, "spec-writer")
+        self.assertEqual(graph.requires, {"brief", "repo"})
+        self.assertEqual(graph.workspace_for("spec-writer"), "specs")
+        self.assertEqual(graph.workspace_for("write-code"), "project")
+
+    def test_spec_phase_reuses_open_pr_and_the_pr_watch(self):
+        graph, flow, _ = self._graph_flow()
+        self.assertEqual(graph.file_for("spec-open-pr"), "open-pr")
+        self.assertEqual(graph.target("spec-open-pr", "done"), "spec-await-merge")
+        self.assertEqual(graph.target("spec-await-merge", "changes"), "spec-writer")
+        self.assertEqual(flow.merge_outcome("spec-await-merge"), "spec-merged")
+        self.assertEqual(flow.close_outcome("spec-await-merge"), "abandoned")
+        self.assertEqual(flow.mention_token("spec-await-merge"), "@lc")
+
+    def test_spec_merge_continues_into_the_code_phase(self):
+        graph, flow, _ = self._graph_flow()
+        self.assertEqual(graph.target("spec-await-merge", "spec-merged"), "write-code")
+        self.assertEqual(flow.merge_outcome("code-await-merge"), "merged")
 
     def test_audit_findings_routes_to_review_findings(self):
-        step_metas = {
-            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
-            for role in step_roles(_ROOT)
-        }
-        graph = parse_graph(workflow_text(_ROOT, "standard"))
-        flow = Flow.from_graph(graph, step_metas)
+        graph, flow, _ = self._graph_flow()
         self.assertEqual(graph.target("audit", "findings"), "review-findings")
         self.assertEqual(flow.owner_of("review-findings"), "human")
 
     def test_audit_clean_is_terminal(self):
-        step_metas = {
-            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
-            for role in step_roles(_ROOT)
-        }
-        graph = parse_graph(workflow_text(_ROOT, "standard"))
-        flow = Flow.from_graph(graph, step_metas)
+        graph, flow, _ = self._graph_flow()
         self.assertIsNone(flow.next("audit", "clean"))
         self.assertIsNone(graph.target("audit", "clean"))
-
-    def test_spec_workflow_entry_sources_worktrees_from_the_specs_repo(self):
-        graph = parse_graph(workflow_text(_ROOT, "spec"))
-        self.assertEqual(graph.entry, "spec-writer")
-        self.assertEqual(graph.workspace, "specs")
-        self.assertEqual(graph.requires, {"brief", "repo"})
-        self.assertEqual(graph.target("spec-writer", "done"), "open-pr")
-
-    def test_spec_workflow_reuses_open_pr_and_the_pr_watch(self):
-        step_metas = {
-            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
-            for role in step_roles(_ROOT)
-        }
-        graph = parse_graph(workflow_text(_ROOT, "spec"))
-        flow = Flow.from_graph(graph, step_metas)
-        self.assertEqual(graph.target("open-pr", "done"), "await-merge")
-        self.assertEqual(graph.target("await-merge", "changes"), "spec-writer")
-        self.assertEqual(flow.terminal_merge_outcome(), "spec-merged")
-        self.assertEqual(flow.terminal_close_outcome(), "abandoned")
-        self.assertEqual(flow.pr_feedback_step("await-merge"), "handle-feedback")
-        self.assertEqual(flow.mention_token("await-merge"), "@lc")
-
-    def test_spec_merged_continues_the_same_item_at_write_code(self):
-        graph = parse_graph(workflow_text(_ROOT, "spec"))
-        step_metas = {
-            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
-            for role in step_roles(_ROOT)
-        }
-        flow = Flow.from_graph(graph, step_metas)
-        self.assertEqual(flow.continues_target("spec-merged"), ("standard", "write-code"))
 
     def test_spec_writer_step_accepts_brief_and_produces_spec(self):
         meta = (parse_step(_ROOT, "spec-writer") or {"meta": {}})["meta"]
@@ -175,12 +153,7 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(meta.get("produces"), {"spec": "required"})
 
     def test_ci_failed_cap_escalates_to_review_ci_after_three(self):
-        step_metas = {
-            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
-            for role in step_roles(_ROOT)
-        }
-        graph = parse_graph(workflow_text(_ROOT, "standard"))
-        flow = Flow.from_graph(graph, step_metas)
+        graph, flow, _ = self._graph_flow()
         self.assertEqual(flow.ci_failed_cap_n("watch-ci"), 3)
         self.assertEqual(flow.ci_failed_cap_target("watch-ci"), "review-ci")
         self.assertEqual(flow.owner_of("review-ci"), "human")

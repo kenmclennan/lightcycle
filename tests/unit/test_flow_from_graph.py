@@ -32,7 +32,6 @@ hooks:
   mention_token         ready-merge  @lc
   review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]  another-bot[bot]
   retro_cadence         audit
-  continues             merged       standard  write-code
 """
 
 STEP_METAS = {
@@ -68,7 +67,7 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertEqual(self.flow.next("review", "rejected").to_step, "build")
 
     def test_terminal_and_conflict_outcomes(self):
-        self.assertEqual(self.flow.terminal_merge_outcome(), "merged")
+        self.assertEqual(self.flow.merge_outcome("ready-merge"), "merged")
         self.assertEqual(self.flow.pr_conflict_outcome("ready-merge"), "conflicted")
         self.assertEqual(self.flow.pr_conflict_cap("ready-merge"), 3)
         self.assertEqual(self.flow.pr_conflict_escalate("ready-merge"), "gave-up")
@@ -131,9 +130,3 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_effective_transition_none_transition_stays_none(self):
         self.assertIsNone(self.flow.effective_transition(None, "ci-failed", 5))
-
-    def test_continues_target(self):
-        self.assertEqual(self.flow.continues_target("merged"), ("standard", "write-code"))
-
-    def test_continues_target_absent_by_default(self):
-        self.assertIsNone(self.flow.continues_target("gave-up"))

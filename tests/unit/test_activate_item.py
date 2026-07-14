@@ -36,6 +36,12 @@ class TestActivateItem(unittest.TestCase):
         )
         self.assertEqual(s.get_node(item).theme, theme)
 
+    def test_refuses_when_no_workflow_is_selected_or_inherited(self):
+        s = FakeStore()
+        item = s.create_item("x")
+        with self.assertRaises(UseCaseError):
+            ActivateItemUseCase(s, _flow(s)).execute(ActivateItemInput(item=item))
+
     def test_refuses_to_activate_a_non_todo(self):
         s = FakeStore()
         item = s.create_item("x")

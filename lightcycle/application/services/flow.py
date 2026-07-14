@@ -17,17 +17,17 @@ class FlowService:
         self._workflow_source = workflow_source
 
     def _default_pin(self):
-        selector = self._config.default_workflow()
-        parsed = parse_selector(selector)
-        if parsed is None:
-            raise ValueError(
-                "default-workflow %r must be fully qualified '<origin>/<name>'" % selector)
-        origin, _name = parsed
+        origin = self._config.default_origin()
         sha = self._workflow_source.current_sha(origin)
         if sha is None:
             raise ValueError(
-                "origin %r has no pulled version; run `lc workflow add`/`upgrade`" % origin)
-        return "%s@%s" % (selector, sha)
+                "default-origin %r has no pulled version; run `lc workflow add`/`upgrade`" % origin)
+        names = self._workflow_source.workflow_names(origin, sha)
+        if len(names) != 1:
+            raise ValueError(
+                "default-origin %r has %d workflows; a single-workflow origin is required as the "
+                "reference (or name the workflow explicitly)" % (origin, len(names)))
+        return "%s/%s@%s" % (origin, names[0], sha)
 
     def _resolve(self, name):
         if self._workflow_source is None:
@@ -46,7 +46,8 @@ class FlowService:
         if self._workflow_source is None:
             return selector
         if selector is None:
-            return self._default_pin()
+            raise ValueError(
+                "no workflow selected; pass --workflow <origin>/<name> or set one on an ancestor")
         if parse_pin(selector) is not None:
             return selector
         parsed = parse_selector(selector)
@@ -97,16 +98,12 @@ class FlowService:
             cur = self._store.get_node(cur.parent) if cur.parent else None
 
     def workflow_for(self, step):
-        nodes = list(self._walk(step))
-        for node in nodes:
+        for node in self._walk(step):
             if node.workflow:
                 return node.workflow
-        if self._config is None:
-            return None
         if self._workflow_source is not None:
             return self._default_pin()
-        project = getattr(nodes[-1], "project", None) if nodes else None
-        return self._config.default_workflow_for(project)
+        return None
 
     def project_for(self, step):
         for node in self._walk(step):
@@ -121,8 +118,13 @@ class FlowService:
         graph, root = self._graph_and_root(name)
         return Flow.from_graph(graph, self._role_metas_in(root))
 
+    def workspace_for_node(self, node):
+        graph = self.load_graph(self.workflow_for(node))
+        stage = node.step if getattr(node, "type", None) == "step" else None
+        return graph.workspace_for(stage) if stage else graph.workspace
+
     def phase_for(self, node):
-        return "spec" if self.load_graph(self.workflow_for(node)).workspace == "specs" else "code"
+        return "spec" if self.workspace_for_node(node) == "specs" else "code"
 
     def flow_next(self, step, outcome, name=None):
         return self.load_flow(name).next(step, outcome)

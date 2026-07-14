@@ -52,7 +52,6 @@ from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
-from lightcycle.domain.workflows.identity import parse_selector
 from lightcycle.application.flow import (
     AdvanceInput,
     AdvanceStepUseCase,
@@ -1119,10 +1118,7 @@ def cmd_init(argv):
 
 
 def _init_pull_default_origin():
-    parsed = parse_selector(_container.config.default_workflow())
-    if parsed is None:
-        return
-    origin = parsed[0]
+    origin = _container.config.default_origin()
     if _container.workflow_source.read_registry(origin) is not None:
         return
     url = _container.config.workflows_remote()

@@ -27,6 +27,10 @@ class WorkflowSourcePort(ABC):
         pass
 
     @abstractmethod
+    def workflow_names(self, origin, sha):
+        pass
+
+    @abstractmethod
     def write_registry(self, origin, url, ref, current):
         pass
 

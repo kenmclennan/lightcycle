@@ -38,10 +38,10 @@ class _RealFs:
 
 class _RealConfig:
     def default_workflow(self):
-        return "standard"
+        return "spec-driven"
 
     def default_workflow_for(self, project):
-        return "standard"
+        return "spec-driven"
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -150,7 +150,7 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_missing_required_output_raises(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         rid = s.create_step("review: x", step="review", role="reviewer", parent=item)
         with self.assertRaises(UseCaseError):
             CompleteStepUseCase(s, flow_for(METAS, s)).execute(
@@ -284,7 +284,7 @@ class TestCompleteStepRetroCadenceMarking(unittest.TestCase):
     def test_non_retro_cadence_step_completion_does_not_mark_retroed(self):
         s = FakeStore()
         reviewed = self._reviewed_item(s, "proj")
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         bid = s.create_step("build: x", step="build", role="coder", parent=item, project="proj")
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIn(reviewed, [i.id for i in s.closed_unretroed_items()])
@@ -374,16 +374,16 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
 
     def test_conflicted_outcome_closes_without_a_pr_and_routes_to_resolve(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
-        tid = s.create_step("open-pr: x", step="open-pr", role="open-pr", parent=item)
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        tid = s.create_step("code-open-pr: x", step="code-open-pr", role="open-pr", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=tid, outcome="conflicted"))
         self.assertEqual(s.get_node(tid).state, "done")
         self.assertEqual(s.get_node(resp.next_step).step, "resolve-conflict")
 
     def test_done_outcome_still_requires_a_pr(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
-        tid = s.create_step("open-pr: x", step="open-pr", role="open-pr", parent=item)
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        tid = s.create_step("code-open-pr: x", step="code-open-pr", role="open-pr", parent=item)
         with self.assertRaises(UseCaseError):
             self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
 
@@ -421,7 +421,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
 
     def test_under_cap_routes_normally(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         self._fail_n_times(s, item, 1)
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
@@ -430,7 +430,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
 
     def test_at_cap_escalates_instead_of_looping(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         self._fail_n_times(s, item, 2)
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
@@ -442,14 +442,14 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         other = s.create_item("other", theme=s.create_theme("theme"))
         self._fail_n_times(s, other, 2)
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "build")
 
     def test_cap_counts_only_the_matching_outcome(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         self._fail_n_times(s, item, 3)
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
@@ -457,7 +457,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
 
     def test_repeated_done_never_escalates_even_past_cap(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         for _ in range(2):
             old = s.create_step("watch: x", step="watch", role="watcher", parent=item)
             s.close(old, "done")
@@ -467,7 +467,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
 
     def test_note_still_forwards_to_the_escalated_step(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         self._fail_n_times(s, item, 2)
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         resp = self._uc(s).execute(
@@ -482,7 +482,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
             "edges:\n  build  done       watch\n  watch  ci-failed  build\n"
         )
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         uc = CompleteStepUseCase(s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s))
         for _ in range(5):
             old = s.create_step("watch: x", step="watch", role="watcher", parent=item)
@@ -503,7 +503,7 @@ class TestCiFailedCapAdvancePath(unittest.TestCase):
 
     def test_advance_under_cap_routes_normally(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         self._fail_n_times(s, item, 1)
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
@@ -512,7 +512,7 @@ class TestCiFailedCapAdvancePath(unittest.TestCase):
 
     def test_advance_at_cap_escalates_instead_of_looping(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         self._fail_n_times(s, item, 2)
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
@@ -532,7 +532,7 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
 
     def _setup(self, prior_failures):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         self._fail_n_times(s, item, prior_failures)
         wid = s.create_step("watch: x", step="watch", role="watcher", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
@@ -568,7 +568,7 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
 
     def test_under_cap_routes_to_write_code(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         wid = s.create_step("watch-ci: x", step="watch-ci", role="watch-ci", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(wid).outcome, "ci-failed")
@@ -576,7 +576,7 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
 
     def test_cap_reached_escalates_to_review_ci(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         for _ in range(3):
             old = s.create_step("watch-ci: x", step="watch-ci", role="watch-ci", parent=item)
             s.close(old, "ci-failed")
@@ -627,7 +627,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_resolves_spec_path_against_specs_root(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))
@@ -635,7 +635,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_resolves_project_subdir_spec_path_against_specs_root(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         s.add_artifact(item, "spec", "myproject/LC-1-my-spec.md")
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))
@@ -645,7 +645,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_resolves_brief_content_from_artifact(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         s.add_artifact(item, "brief", "the brief's literal text")
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))
@@ -659,7 +659,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_resolves_repo_path_against_projects_root(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         s.add_artifact(item, "repo", "app")
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))
@@ -712,7 +712,7 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
 
     def test_surfaces_extra_frontmatter_as_config(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         s.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
         s.create_step("watch-ci: x", step="watch-ci", role="watch-ci", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="watch-ci"))
@@ -720,7 +720,7 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
 
     def test_omits_config_when_step_has_no_extra_frontmatter(self):
         s = FakeStore()
-        item = s.create_item("st", theme=s.create_theme("theme"))
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))

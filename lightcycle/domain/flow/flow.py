@@ -19,7 +19,8 @@ class Flow:
         ci_failed_cap_outcome=None,
         ci_failed_cap_n=None,
         ci_failed_cap_target=None,
-        continues=None,
+        workspaces=None,
+        workspace_default="project",
     ):
         self._owner = owner
         self._routes = routes
@@ -36,7 +37,8 @@ class Flow:
         self._ci_failed_cap_outcome = ci_failed_cap_outcome or {}
         self._ci_failed_cap_n = ci_failed_cap_n or {}
         self._ci_failed_cap_target = ci_failed_cap_target or {}
-        self._continues = continues or {}
+        self._workspaces = workspaces or {}
+        self._workspace_default = workspace_default
 
     @classmethod
     def from_graph(cls, graph, step_metas) -> "Flow":
@@ -46,13 +48,16 @@ class Flow:
         for frm, outs in graph.edges.items():
             stages.add(frm)
             stages.update(outs.values())
-        for toks in graph.hooks.values():
-            if toks:
-                stages.add(toks[0])
-        if graph.hook_stage("pr_feedback"):
-            stages.add(graph.hook_value("pr_feedback"))
-        if graph.hook_stage("ci_failed_cap") and graph.hook_extra("ci_failed_cap", 3):
-            stages.add(graph.hook_extra("ci_failed_cap", 3))
+        for occs in graph.hooks.values():
+            for occ in occs:
+                if occ:
+                    stages.add(occ[0])
+        for occ in graph.hook_occurrences("pr_feedback"):
+            if len(occ) > 1:
+                stages.add(occ[1])
+        for occ in graph.hook_occurrences("ci_failed_cap"):
+            if len(occ) > 3:
+                stages.add(occ[3])
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())
 
@@ -76,48 +81,35 @@ class Flow:
             "pr_conflict_escalate": pr_conflict_escalate,
         }
         for name, bucket in outcome_hooks.items():
-            stage = graph.hook_stage(name)
-            if stage:
-                bucket[stage] = graph.hook_value(name)
-        cap_stage = graph.hook_stage("pr_conflict_cap")
-        if cap_stage:
-            pr_conflict_cap[cap_stage] = int(graph.hook_value("pr_conflict_cap"))
-        if graph.hook_stage("retro_cadence"):
-            retro_cadence.add(graph.hook_stage("retro_cadence"))
+            for occ in graph.hook_occurrences(name):
+                bucket[occ[0]] = occ[1] if len(occ) > 1 else None
+        for occ in graph.hook_occurrences("pr_conflict_cap"):
+            pr_conflict_cap[occ[0]] = int(occ[1])
+        for occ in graph.hook_occurrences("retro_cadence"):
+            retro_cadence.add(occ[0])
 
         ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target = {}, {}, {}
-        ci_failed_cap_stage = graph.hook_stage("ci_failed_cap")
-        if ci_failed_cap_stage:
-            ci_failed_cap_outcome[ci_failed_cap_stage] = graph.hook_value("ci_failed_cap")
-            ci_failed_cap_n[ci_failed_cap_stage] = int(graph.hook_extra("ci_failed_cap", 2))
-            ci_failed_cap_target[ci_failed_cap_stage] = graph.hook_extra("ci_failed_cap", 3)
+        for occ in graph.hook_occurrences("ci_failed_cap"):
+            ci_failed_cap_outcome[occ[0]] = occ[1]
+            ci_failed_cap_n[occ[0]] = int(occ[2])
+            ci_failed_cap_target[occ[0]] = occ[3]
 
         mention_token, review_bot_allowlist = {}, {}
-        mention_stage = graph.hook_stage("mention_token")
-        if mention_stage:
-            mention_token[mention_stage] = graph.hook_value("mention_token")
-        allowlist_stage = graph.hook_stage("review_bot_allowlist")
-        if allowlist_stage:
-            review_bot_allowlist[allowlist_stage] = set(
-                graph.hooks["review_bot_allowlist"][1:]
-            )
+        for occ in graph.hook_occurrences("mention_token"):
+            mention_token[occ[0]] = occ[1]
+        for occ in graph.hook_occurrences("review_bot_allowlist"):
+            review_bot_allowlist[occ[0]] = set(occ[1:])
 
-        continues = {}
-        continues_outcome = graph.hook_stage("continues")
-        if continues_outcome:
-            continues[continues_outcome] = (
-                graph.hook_value("continues"), graph.hook_extra("continues", 2)
-            )
-
-        for name, toks in graph.hooks.items():
-            if toks:
-                hooks.setdefault("on_" + name, set()).add(toks[0])
+        for name, occs in graph.hooks.items():
+            for occ in occs:
+                if occ:
+                    hooks.setdefault("on_" + name, set()).add(occ[0])
 
         return cls(owner, routes, pr_merge, pr_close, pr_feedback, retro_cadence, hooks,
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate,
                    mention_token, review_bot_allowlist,
                    ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target,
-                   continues)
+                   dict(graph.workspaces), graph.workspace)
 
     def owner_of(self, step):
         return self._owner.get(step)
@@ -131,11 +123,17 @@ class Flow:
     def targets_from(self, step):
         return [t for t in (self._routes.get(step) or {}).values() if t]
 
-    def terminal_merge_outcome(self):
-        return next(iter(self._pr_merge.values()), None)
+    def merge_outcome(self, step):
+        return self._pr_merge.get(step)
 
-    def terminal_close_outcome(self):
-        return next(iter(self._pr_close.values()), None)
+    def close_outcome(self, step):
+        return self._pr_close.get(step)
+
+    def merge_stages(self):
+        return sorted(set(self._pr_merge) | set(self._pr_close))
+
+    def workspace_of(self, stage):
+        return self._workspaces.get(stage, self._workspace_default)
 
     def pr_feedback_step(self, step):
         return self._pr_feedback.get(step)
@@ -163,9 +161,6 @@ class Flow:
 
     def ci_failed_cap_target(self, step):
         return self._ci_failed_cap_target.get(step)
-
-    def continues_target(self, outcome):
-        return self._continues.get(outcome)
 
     def effective_transition(self, transition, outcome, prior_count):
         if transition is None:

@@ -42,7 +42,7 @@ def run_lc(*args, root=None, config=None):
 
 _ORIGIN = "lightcycle"
 _SHA = "testsha"
-_DEFAULT_WORKFLOW = "%s/standard" % _ORIGIN
+_DEFAULT_WORKFLOW = "%s/spec-driven" % _ORIGIN
 
 
 def _origin_dir(root):
@@ -103,7 +103,7 @@ def write_config(projects=None, specs=None):
     lines += [
         "shortcode: xy",
         "branch-prefix: feat",
-        "default-workflow: %s" % _DEFAULT_WORKFLOW,
+        "default-origin: lightcycle",
         "max-agents: 5",
         "worktree-retries: 6",
         "worktree-retry-sleep: 0.25",
@@ -172,14 +172,14 @@ _AGENT_SPECS = {
 _STEP_SIGNALS = {"review": {"review_rounds": "rejected"}, "open-pr": {"conflicts": "~conflict"}}
 
 
-def write_workflow(root, metas, name="standard", entry=None):
+def write_workflow(root, metas, name="spec-driven", entry=None):
     wdir = _workflows_dir(root)
     wdir.mkdir(parents=True, exist_ok=True)
     (wdir / ("%s.md" % name)).write_text(graph_text_from_metas(metas, entry=entry))
     _write_origin(root)
 
 
-def write_workflow_from_steps(root, name="standard"):
+def write_workflow_from_steps(root, name="spec-driven"):
     from lightcycle.adapters import frontmatter
 
     metas = {}
@@ -834,7 +834,7 @@ class TestArtifacts(unittest.TestCase):
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
 
     def test_add_and_read_artifacts_append(self):
-        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         self.store.add_artifact(sid, "spec", "specs/X.md")
         self.store.add_artifact(sid, "pr", "https://gh/9", "PR 9")
         arts = self.store.item_artifacts(sid)
@@ -871,7 +871,7 @@ class TestLink(unittest.TestCase):
         _fake_setUp(self)
 
     def test_link_appends_artifact(self):
-        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         rc, out, err = call(_cli_mod.cmd_attach, sid, "pr", "https://gh/9", "--label", "PR 9")
         self.assertEqual(rc, 0, err)
         arts = self.store.item_artifacts(sid)
@@ -880,7 +880,7 @@ class TestLink(unittest.TestCase):
         self.assertEqual(arts[0].label, "PR 9")
 
     def test_attach_replace_replaces_same_type(self):
-        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         call(_cli_mod.cmd_attach, sid, "spec", "specs/old.md")
         rc, out, err = call(_cli_mod.cmd_attach, sid, "spec", "specs/new.md", "--replace")
         self.assertEqual(rc, 0, err)
@@ -889,7 +889,7 @@ class TestLink(unittest.TestCase):
         self.assertEqual(arts[0].value, "specs/new.md")
 
     def test_attach_file_reads_file_content_into_artifact_value(self):
-        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         f = Path(self.root) / "brief-draft.md"
         f.write_text("the brief's literal text")
         rc, out, err = call(_cli_mod.cmd_attach, sid, "brief", "--file", str(f))
@@ -899,12 +899,12 @@ class TestLink(unittest.TestCase):
         self.assertEqual(arts[0].value, "the brief's literal text")
 
     def test_attach_without_value_or_file_fails(self):
-        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         rc, out, err = call(_cli_mod.cmd_attach, sid, "brief")
         self.assertEqual(rc, 2)
 
     def test_attach_file_missing_path_fails_loudly(self):
-        sid = self.store.create_item("item s", theme=self.store.create_theme("theme"))
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         rc, out, err = call(
             _cli_mod.cmd_attach, sid, "brief", "--file", str(Path(self.root) / "nope.md")
         )
@@ -917,7 +917,7 @@ class TestModelV2(unittest.TestCase):
         _fake_setUp(self)
 
     def test_task_exposes_type_parent_and_parent_artifacts(self):
-        theme = self.store.create_theme("theme e")
+        theme = self.store.create_theme("theme e", workflow="lightcycle/spec-driven")
         item = self.store.create_item("item s", theme=theme)
         self.store.update_metadata(item, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
         step = self.store.create_step("build: b", step="build", role="coder", parent=item)
@@ -1009,7 +1009,7 @@ class TestFileItem(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_file_creates_story_with_spec_and_build_task(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, err = call(_file_compat, "specs/HSS-435.md", "--step", "build", "--theme", theme)
         self.assertEqual(rc, 0, err)
         sid = out.strip()
@@ -1029,7 +1029,7 @@ class TestFileItem(unittest.TestCase):
         self.assertIn("does-not-exist", err)
 
     def test_advance_parents_next_task_to_same_story(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         build = self.store.children(sid)[0].id
@@ -1048,7 +1048,7 @@ class TestFileBlockedBy(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_blocked_by_creates_dependency_on_first_task(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         gate = self.store.create_step("review-plan: foo", step="review-plan", role="human")
         rc, out, err = call(
             _file_compat, "specs/X.md", "--step", "build", "--theme", theme, "--blocked-by", gate
@@ -1060,7 +1060,7 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertIn(gate, self.store._deps.get(node_id, set()))
 
     def test_blocked_task_not_claimable_until_gate_closes(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         gate = self.store.create_step("review-plan: foo", step="review-plan", role="human")
         call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme, "--blocked-by", gate)
         rc, out, _ = call(_cli_mod.cmd_claim, "coder")
@@ -1070,7 +1070,7 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertTrue(out2.strip())
 
     def test_multiple_blocked_by_ids(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         gate1 = self.store.create_step("gate1", role="human")
         gate2 = self.store.create_step("gate2", role="human")
         rc, out, _ = call(
@@ -1097,7 +1097,7 @@ class TestClaimArtifacts(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_claim_surfaces_story_artifacts(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         call(_file_compat, "specs/Y.md", "--step", "build", "--theme", theme)
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
@@ -1105,7 +1105,7 @@ class TestClaimArtifacts(unittest.TestCase):
         self.assertEqual(t["item_artifacts"][0]["value"], "specs/Y.md")
 
     def test_claim_surfaces_artifact_replacement(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, err = call(_file_compat, "specs/Y.md", "--step", "build", "--theme", theme)
         self.assertEqual(rc, 0, err)
         item = out.strip()
@@ -1120,7 +1120,7 @@ class TestTrace(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_trace_shows_story_artifacts_and_tasks(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         rc2, out2, err2 = call(_cli_mod.cmd_trace, sid, "--json")
@@ -1132,7 +1132,7 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(tr["steps"][0]["step"], "build")
 
     def test_trace_text_rendering_distinguishes_labelled_artifacts(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         self.store.add_artifact(sid, "pr", "https://github.com/x/y/pull/1", label="spec")
@@ -1205,13 +1205,13 @@ class TestFileStep(unittest.TestCase):
 
 
     def test_file_rejects_unknown_step(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, _, err = call(_file_compat, "specs/X.md", "--step", "bogus", "--theme", theme)
         self.assertNotEqual(rc, 0)
         self.assertIn("bogus", err)
 
     def test_file_starts_at_given_step(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         _, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme)
         kid = self.store.get_node(self.store.children(out.strip())[0].id)
         self.assertEqual(kid.step, "build")
@@ -1246,7 +1246,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(step.state, "ready")
 
     def test_claim_proceeds_when_inputs_present(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, err = call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         rc2, out2, err2 = call(_cli_mod.cmd_claim, "coder")
@@ -1256,7 +1256,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(t["parent"], sid)
 
     def test_done_refused_when_required_output_missing(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         step = self.store.children(sid)[0].id
@@ -1266,7 +1266,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(self.store.get_node(step).state, "ready")
 
     def test_done_succeeds_when_output_present(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme)
         sid = out.strip()
         step = self.store.children(sid)[0].id
@@ -1276,7 +1276,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(self.store.get_node(step).state, "done")
 
     def test_file_rejects_non_entry_step(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         rc, out, err = call(_file_compat, "specs/X.md", "--step", "review", "--theme", theme)
         self.assertEqual(rc, 1)
         self.assertIn("branch", err)
@@ -1310,77 +1310,47 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
 
-    def _item_with_spec(self):
+    def _item_with_brief(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
         self.assertEqual(rc, 0, err)
         item = item.strip()
         call(_cli_mod.cmd_attach, item, "repo", "widget")
-        call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
+        call(_cli_mod.cmd_attach, item, "brief", "briefs/X.md")
         return item
 
-    def test_arming_with_spec_files_a_review_plan_step_for_the_human(self):
-        item = self._item_with_spec()
-        rc, step_id, err = call(_cli_mod.cmd_set, item, "--state", "active")
+    def test_arming_files_the_spec_writer_entry(self):
+        item = self._item_with_brief()
+        rc, step_id, err = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(step_id.strip())
-        self.assertEqual(step.step, "review-spec")
-        self.assertEqual(step.role, "human")
+        self.assertEqual(step.step, "spec-writer")
+        self.assertEqual(step.role, "spec-writer")
 
-    def test_review_plan_step_surfaces_in_inbox(self):
-        item = self._item_with_spec()
-        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active")
-        rc, inbox_out, err = call(_cli_mod.cmd_inbox)
+    def test_spec_writer_advances_to_the_spec_pr(self):
+        item = self._item_with_brief()
+        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
+        call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
+        rc, out, err = call(_cli_mod.cmd_done, step_id.strip(), "done")
         self.assertEqual(rc, 0, err)
-        self.assertIn(step_id.strip(), inbox_out)
-
-    def test_approved_advances_to_the_coder(self):
-        item = self._item_with_spec()
-        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active")
-        rc, out, err = call(_cli_mod.cmd_done, step_id.strip(), "approved")
-        self.assertEqual(rc, 0, err)
-        next_step = self.store.get_node(out.strip())
-        self.assertEqual(next_step.step, "write-code")
-        self.assertEqual(next_step.role, "write-code")
-
-    def test_changes_advances_to_develop(self):
-        item = self._item_with_spec()
-        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active")
-        rc, out, err = call(
-            _cli_mod.cmd_done, step_id.strip(), "changes", "--note", "tighten scope"
-        )
-        self.assertEqual(rc, 0, err)
-        next_step = self.store.get_node(out.strip())
-        self.assertEqual(next_step.step, "draft-spec")
+        self.assertEqual(self.store.get_node(out.strip()).step, "spec-open-pr")
 
     def test_arming_without_repo_fails_fast_with_no_step_created(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
         item = item.strip()
-        rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active")
+        call(_cli_mod.cmd_attach, item, "brief", "briefs/X.md")
+        rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc2, 1)
         self.assertIn("repo", err2)
         self.assertEqual(self.store.children(item), [])
 
-    def test_arming_without_spec_or_step_fails_fast_with_no_step_created(self):
+    def test_arming_without_a_brief_fails_fast_with_no_step_created(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
         item = item.strip()
         call(_cli_mod.cmd_attach, item, "repo", "widget")
-        rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active")
+        rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc2, 1)
-        self.assertIn("spec", err2)
+        self.assertIn("brief", err2)
         self.assertEqual(self.store.children(item), [])
-
-    def test_seed_first_path_via_develop_reaches_the_same_gate(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "widget")
-        item = item.strip()
-        call(_cli_mod.cmd_attach, item, "repo", "widget")
-        rc2, step_id, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--step", "draft-spec")
-        self.assertEqual(rc2, 0, err2)
-        step_id = step_id.strip()
-        self.assertEqual(self.store.get_node(step_id).step, "draft-spec")
-        call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
-        rc3, out, err3 = call(_cli_mod.cmd_done, step_id, "drafted")
-        self.assertEqual(rc3, 0, err3)
-        self.assertEqual(self.store.get_node(out.strip()).step, "review-spec")
 
 
 class TestPruneWorkers(unittest.TestCase):
@@ -1509,7 +1479,7 @@ class TestWorktree(unittest.TestCase):
         return git_in(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
 
     def _file(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         _, out, _ = call(
             _file_compat, "specs/W.md", "--step", "build", "--theme", theme, "--repo", "engine"
         )
@@ -1600,9 +1570,9 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         _reset_git_repo(self.specs_repo)
 
     def test_claim_creates_a_worktree_inside_the_specs_repo_not_the_project(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         item = self.store.create_item(
-            "phase b1", theme=theme, workflow="lightcycle/spec@%s" % _SHA)
+            "phase b1", theme=theme, workflow="lightcycle/spec-driven@%s" % _SHA)
         self.store.add_artifact(item, "brief", "briefs/LC-1.md")
         self.store.create_step("spec-writer: x", step="spec-writer", role="spec-writer", parent=item)
 
@@ -1616,7 +1586,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         self.assertEqual(t["brief"], "briefs/LC-1.md")
 
     def test_activating_a_spec_workflow_item_without_a_brief_fails_fast(self):
-        item = self.store.create_item("phase b1", workflow="lightcycle/spec")
+        item = self.store.create_item("phase b1", workflow="lightcycle/spec-driven")
 
         rc, out, err = call(_cli_mod.cmd_set, item, "--state", "active")
 
@@ -1625,7 +1595,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         self.assertIn("repo", err)
 
     def test_activating_a_spec_workflow_item_without_a_repo_fails_fast(self):
-        item = self.store.create_item("phase b1", workflow="lightcycle/spec")
+        item = self.store.create_item("phase b1", workflow="lightcycle/spec-driven")
         self.store.add_artifact(item, "brief", "briefs/LC-1.md")
 
         rc, out, err = call(_cli_mod.cmd_set, item, "--state", "active")
@@ -1691,7 +1661,7 @@ class TestNamedRepo(unittest.TestCase):
         )
 
     def _claim(self, repo=None):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         args = ["specs/X.md", "--step", "build", "--theme", theme]
         if repo:
             args += ["--repo", repo]
@@ -1711,7 +1681,7 @@ class TestNamedRepo(unittest.TestCase):
         self.assertIn(".worktrees/", [l.strip() for l in gi])
 
     def test_claim_with_an_unresolvable_named_repo_fails_loudly(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme, "--repo", "ghost")
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 1)
@@ -1728,7 +1698,7 @@ class TestNamedRepo(unittest.TestCase):
         self.assertEqual(view["repo_path"], self.app)
 
     def test_file_stores_single_repo_artifact(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         _, out, _ = call(
             _file_compat, "specs/X.md", "--step", "build", "--theme", theme, "--repo", "app"
         )
@@ -1798,7 +1768,7 @@ class TestCloseWorktree(unittest.TestCase):
         )
 
     def test_close_closes_story_and_tasks_and_removes_worktree(self):
-        theme = self.store.create_theme("theme")
+        theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         _, out, _ = call(
             _file_compat, "specs/W.md", "--step", "build", "--theme", theme, "--repo", "engine"
         )
@@ -1820,7 +1790,7 @@ class TestClose(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_close_theme_closes_when_all_stories_closed(self):
-        theme = self.store.create_theme("theme e")
+        theme = self.store.create_theme("theme e", workflow="lightcycle/spec-driven")
         child = self.store.create_item("item s", theme=theme)
         self.store.close(child, "merged")
         rc, out, err = call(_cli_mod.cmd_done, theme, "done")
@@ -1828,7 +1798,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.store.get_node(theme).state, "done")
 
     def test_close_epic_refuses_with_open_story(self):
-        theme = self.store.create_theme("theme e")
+        theme = self.store.create_theme("theme e", workflow="lightcycle/spec-driven")
         child = self.store.create_item("item s", theme=theme)
         rc, _, err = call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(rc, 1)
@@ -1836,13 +1806,13 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.store.get_node(theme).state, "ready")
 
     def test_close_epic_refuses_does_not_cascade_close_open_stories(self):
-        theme = self.store.create_theme("theme e")
+        theme = self.store.create_theme("theme e", workflow="lightcycle/spec-driven")
         child = self.store.create_item("item s", theme=theme)
         call(_cli_mod.cmd_done, theme, "done")
         self.assertEqual(self.store.get_node(child).state, "backlogged")
 
     def test_close_epic_attaches_no_retro_artifact(self):
-        theme = self.store.create_theme("theme e")
+        theme = self.store.create_theme("theme e", workflow="lightcycle/spec-driven")
         child = self.store.create_item("item s", theme=theme)
         self.store.create_step("build: t", step="build", role="coder", parent=child)
         claimed = self.store.claim_ready("coder")
@@ -2056,7 +2026,7 @@ class TestReflect(unittest.TestCase):
         _fake_setUp(self)
 
     def _file_story(self, spec_path=None):
-        sid = self.store.create_item("feat", theme=self.store.create_theme("theme"))
+        sid = self.store.create_item("feat", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         self.store.update_metadata(
             sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]}
         )
@@ -2115,7 +2085,7 @@ class TestRetro(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def _make_epic_with_story(self, sid=None):
-        theme = self.store.create_theme("theme-1")
+        theme = self.store.create_theme("theme-1", workflow="lightcycle/spec-driven")
         if sid is None:
             sid = self.store.create_item("item-1", theme=theme)
         return theme, sid
@@ -2186,7 +2156,7 @@ class TestWorklog(unittest.TestCase):
         _fake_setUp(self)
 
     def _close_story(self, title="feat: shipped-thing", reason="merged"):
-        sid = self.store.create_item(title, theme=self.store.create_theme("theme"))
+        sid = self.store.create_item(title, theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         self.store.close(sid, reason)
         return sid
 
@@ -2326,7 +2296,9 @@ class TestClaimConfigReadSurface(unittest.TestCase):
         write_workflow(self.root, {}, entry="watch-pr")
 
     def test_claim_surfaces_config_ci_wait(self):
-        item = self.store.create_item("st", theme=self.store.create_theme("theme"))
+        item = self.store.create_item(
+            "st", theme=self.store.create_theme("theme"),
+            workflow="lightcycle/spec-driven@%s" % _SHA)
         self.store.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
         self.store.create_step("watch-pr: x", step="watch-pr", role="watch-pr", parent=item)
         rc, out, err = call(_cli_mod.cmd_claim, "watch-pr")
@@ -2372,7 +2344,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 
     def _make_store(self, branch="feat/my-feat"):
         store = FakeStore()
-        sid = store.create_item("my-feat", theme=store.create_theme("theme"))
+        sid = store.create_item("my-feat", theme=store.create_theme("theme", workflow="lightcycle/spec-driven"))
         store.add_artifact(sid, "repo", "app")
         store.add_artifact(sid, "branch", branch)
         return store, sid
@@ -2460,7 +2432,7 @@ class TestWorkflowSelection(unittest.TestCase):
         return {t.step for t in self.store.all_nodes() if t.parent == item and t.step != "build"}
 
     def test_two_epics_route_by_their_own_workflow(self):
-        std_epic = self._epic("standard objective")
+        std_epic = self._epic("standard objective", "--workflow", "lightcycle/spec-driven")
         std_story = self._file("A.md", std_epic)
         solo_epic = self._epic("solo objective", "--workflow", "lightcycle/solo")
         solo_story = self._file("B.md", solo_epic)
@@ -2472,7 +2444,7 @@ class TestWorkflowSelection(unittest.TestCase):
         self.assertEqual(self._open_successor_steps(solo_story), set())
 
     def test_file_derives_entry_step_from_the_workflow(self):
-        theme = self._epic("obj")
+        theme = self._epic("obj", "--workflow", "lightcycle/spec-driven")
         item = self._file("A.md", theme)
         self.assertEqual(self._build_task(item).step, "build")
 
@@ -2483,7 +2455,7 @@ class TestWorkflowSelection(unittest.TestCase):
         self.assertEqual(self.store.get_node(item).workflow, "lightcycle/solo@%s" % _SHA)
 
     def test_story_can_override_the_epic_workflow(self):
-        theme = self._epic("obj")
+        theme = self._epic("obj", "--workflow", "lightcycle/spec-driven")
         item = self._file("A.md", theme, "--workflow", "lightcycle/solo")
         self.assertEqual(self.store.get_node(item).workflow, "lightcycle/solo@%s" % _SHA)
         call(_cli_mod.cmd_done, self._build_task(item).id, "done")

@@ -10,6 +10,7 @@ class FlowContracts:
         self._contract = {
             s: StepContract.from_meta(step_metas.get(graph.file_for(s))) for s in self._steps
         }
+        self._provided = set(FILE_PROVIDES) | set(graph.requires)
         self._dups = []
 
     def _required(self):
@@ -20,11 +21,11 @@ class FlowContracts:
 
     def entries(self):
         req = self._required()
-        return [s for s in self._steps if req[s] <= FILE_PROVIDES]
+        return [s for s in self._steps if req[s] <= self._provided]
 
     def _guaranteed(self):
         prod, entries = self._produced(), set(self.entries())
-        universe = set().union(FILE_PROVIDES, *prod.values()) if self._steps else set()
+        universe = set().union(self._provided, *prod.values()) if self._steps else set()
         incoming = {s: [] for s in self._steps}
         for src in self._steps:
             for nxt in self._flow.targets_from(src):
@@ -35,7 +36,7 @@ class FlowContracts:
             for s in self._steps:
                 ctxs = []
                 if s in entries:
-                    ctxs.append(set(FILE_PROVIDES))
+                    ctxs.append(set(self._provided))
                 for src in incoming[s]:
                     ctxs.append(ga[src] | prod[src])
                 ga[s] = set(universe) if not ctxs else set.intersection(*ctxs)
