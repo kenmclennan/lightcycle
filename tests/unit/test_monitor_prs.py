@@ -35,6 +35,9 @@ class _FlowAdapter:
     def owner_of(self, step, name=None, project=None):
         return self._flow.owner_of(step)
 
+    def is_retro_cadence_step(self, step, name=None, project=None):
+        return step in dict(self._flow.retro_cadence_steps())
+
     def ci_failed_cap_outcome(self, step, name=None, project=None):
         return self._flow.ci_failed_cap_outcome(step)
 

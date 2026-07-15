@@ -1,8 +1,8 @@
+import json
 import unittest
 
 from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
 from lightcycle.application.services.flow import FlowService
-from lightcycle.application.work.project_of import project_of
 from lightcycle.domain.work import Node, NodeQueue, State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -26,11 +26,21 @@ def _flow_without_cadence(store):
     return FlowService(FakeFs(metas), store)
 
 
-def _close_item(store, title, project=None, theme=None):
-    eid = store.create_item(title, theme=theme)
+def _add_reflection(store, node_id, feedback):
+    store.add_artifact(
+        node_id, "reflection", json.dumps({"step": node_id, "feedback": feedback, "spec_hash": "h"})
+    )
+
+
+def _close_item(store, title, repo=None, reflection=None):
+    eid = store.create_item(title)
     store.close(eid, "done")
-    if project is not None:
-        store.add_artifact(eid, "repo", project)
+    if repo is not None:
+        store.add_artifact(eid, "repo", repo)
+    if reflection is not None:
+        k = store.create_step("build: x", step="build", role="coder", parent=eid)
+        store.close(k, "done")
+        _add_reflection(store, k, reflection)
     return eid
 
 
@@ -50,61 +60,72 @@ class TestRetroCadenceNoFire(unittest.TestCase):
     def test_below_threshold_does_not_fire(self):
         s = FakeStore()
         for i in range(2):
-            _close_item(s, "item %d" % i, project="lightcycle")
+            _close_item(s, "item %d" % i, reflection="fb")
         self.assertEqual(_gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0).fired, [])
 
 
 class TestRetroCadenceFires(unittest.TestCase):
-    def test_threshold_fires_one_audit_scoped_to_project(self):
+    def test_threshold_fires_one_global_audit(self):
         s = FakeStore()
         for i in range(3):
-            _close_item(s, "item %d" % i, project="lightcycle")
+            _close_item(s, "item %d" % i, reflection="fb")
         result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
         self.assertEqual(len(result.fired), 1)
-        self.assertEqual(s.get_node(result.fired[0]).project, "lightcycle")
 
-    def test_fired_audit_has_a_real_item_parent_carrying_repo_and_retro_origin(self):
+    def test_fired_audit_has_a_real_item_parent_carrying_retro_origin_and_no_repo(self):
         s = FakeStore()
         for i in range(3):
-            _close_item(s, "item %d" % i, project="lightcycle")
+            _close_item(s, "item %d" % i, reflection="fb")
         result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
         step = s.get_node(result.fired[0])
         self.assertIsNotNone(step.parent)
         parent = s.get_node(step.parent)
         self.assertEqual(parent.type, "item")
-        self.assertEqual(project_of(s, parent), "lightcycle")
+        self.assertEqual(s.item_artifacts(parent.id), [])
         s.close(step.parent, "done")
         self.assertNotIn(step.parent, [i.id for i in s.closed_unretroed_items()])
 
     def test_fired_audit_title_has_no_trend_wording_or_duplicated_step_name(self):
         s = FakeStore()
         for i in range(3):
-            _close_item(s, "item %d" % i, project="lightcycle")
+            _close_item(s, "item %d" % i, reflection="fb")
         result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
         step = s.get_node(result.fired[0])
-        self.assertEqual(step.title, "trend-check: lightcycle")
+        self.assertEqual(step.title, "trend-check: pending-feedback")
 
-    def test_items_without_a_repo_are_skipped_not_bucketed(self):
+    def test_items_without_feedback_do_not_count(self):
         s = FakeStore()
         for i in range(3):
             _close_item(s, "item %d" % i)
         result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
         self.assertEqual(result.fired, [])
 
-    def test_unscoped_items_do_not_count_toward_a_real_project(self):
+    def test_item_with_repo_but_no_reflection_does_not_count(self):
         s = FakeStore()
         for i in range(3):
-            _close_item(s, "lc %d" % i, project="lightcycle")
+            _close_item(s, "item %d" % i, repo="lightcycle")
+        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
+        self.assertEqual(result.fired, [])
+
+    def test_item_without_repo_but_with_reflection_counts(self):
+        s = FakeStore()
         for i in range(3):
-            _close_item(s, "orphan %d" % i)
+            _close_item(s, "item %d" % i, reflection="fb")
         result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
         self.assertEqual(len(result.fired), 1)
-        self.assertEqual(s.get_node(result.fired[0]).project, "lightcycle")
+
+    def test_single_global_audit_fires_across_several_distinct_repos_plus_projectless(self):
+        s = FakeStore()
+        _close_item(s, "lc", repo="lightcycle", reflection="fb1")
+        _close_item(s, "saga", repo="saga", reflection="fb2")
+        _close_item(s, "orphan", reflection="fb3")
+        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
+        self.assertEqual(len(result.fired), 1)
 
     def test_fired_audit_at_declared_step_and_role(self):
         s = FakeStore()
         for i in range(3):
-            _close_item(s, "item %d" % i, project="lightcycle")
+            _close_item(s, "item %d" % i, reflection="fb")
         flow = _flow_with_cadence(s, step="trend-scan", role="trend-scanner")
         step = s.get_node(_gate(s, flow, interval_items=3).execute(0.0).fired[0])
         self.assertEqual(step.step, "trend-scan")
@@ -115,14 +136,14 @@ class TestRetroCadenceNoRunaway(unittest.TestCase):
     def test_does_not_refire_while_an_audit_is_open(self):
         s = FakeStore()
         for i in range(3):
-            _close_item(s, "item %d" % i, project="lightcycle")
+            _close_item(s, "item %d" % i, reflection="fb")
         gate = _gate(s, _flow_with_cadence(s), interval_items=3)
         self.assertEqual(len(gate.execute(0.0).fired), 1)
         self.assertEqual(gate.execute(0.0).fired, [])
 
     def test_marked_batch_does_not_refire_after_audit_closes(self):
         s = FakeStore()
-        items = [_close_item(s, "item %d" % i, project="lightcycle") for i in range(3)]
+        items = [_close_item(s, "item %d" % i, reflection="fb") for i in range(3)]
         gate = _gate(s, _flow_with_cadence(s), interval_items=3)
         first = gate.execute(0.0)
         for item in items:
@@ -132,51 +153,30 @@ class TestRetroCadenceNoRunaway(unittest.TestCase):
 
     def test_refires_for_a_fresh_batch(self):
         s = FakeStore()
-        items = [_close_item(s, "item %d" % i, project="lightcycle") for i in range(3)]
+        items = [_close_item(s, "item %d" % i, reflection="fb") for i in range(3)]
         gate = _gate(s, _flow_with_cadence(s), interval_items=3)
         first = gate.execute(0.0)
         for item in items:
             s.label_add(item, "retroed")
         s.close(first.fired[0], "clean")
         for i in range(3):
-            _close_item(s, "fresh %d" % i, project="lightcycle")
+            _close_item(s, "fresh %d" % i, reflection="fb")
         self.assertEqual(len(gate.execute(0.0).fired), 1)
-
-
-class TestRetroCadencePerProject(unittest.TestCase):
-    def test_projects_count_independently(self):
-        s = FakeStore()
-        for i in range(3):
-            _close_item(s, "lc %d" % i, project="lightcycle")
-        for i in range(2):
-            _close_item(s, "saga %d" % i, project="saga")
-        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
-        self.assertEqual(len(result.fired), 1)
-        self.assertEqual(s.get_node(result.fired[0]).project, "lightcycle")
-
-    def test_each_project_over_threshold_fires_its_own_audit(self):
-        s = FakeStore()
-        for i in range(3):
-            _close_item(s, "lc %d" % i, project="lightcycle")
-        for i in range(3):
-            _close_item(s, "saga %d" % i, project="saga")
-        result = _gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0)
-        self.assertEqual(sorted(s.get_node(t).project for t in result.fired), ["lightcycle", "saga"])
 
 
 class TestRetroCadenceExcludes(unittest.TestCase):
     def test_retro_origin_item_excluded(self):
         s = FakeStore()
         for i in range(2):
-            _close_item(s, "real %d" % i, project="lightcycle")
-        s.label_add(_close_item(s, "retro origin", project="lightcycle"), "retro-origin")
+            _close_item(s, "real %d" % i, reflection="fb")
+        s.label_add(_close_item(s, "retro origin", reflection="fb"), "retro-origin")
         self.assertEqual(_gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0).fired, [])
 
     def test_retroed_item_excluded(self):
         s = FakeStore()
         for i in range(2):
-            _close_item(s, "real %d" % i, project="lightcycle")
-        s.label_add(_close_item(s, "already retroed", project="lightcycle"), "retroed")
+            _close_item(s, "real %d" % i, reflection="fb")
+        s.label_add(_close_item(s, "already retroed", reflection="fb"), "retroed")
         self.assertEqual(_gate(s, _flow_with_cadence(s), interval_items=3).execute(0.0).fired, [])
 
 
