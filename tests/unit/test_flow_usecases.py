@@ -250,23 +250,27 @@ class TestCompleteStepRetroCadenceMarking(unittest.TestCase):
             FakeWorktrees(),
         )
 
-    def _retro_item(self, store, project):
-        item = store.create_item("audit: %s" % project, project=project)
-        store.add_artifact(item, "repo", project)
+    def _retro_item(self, store):
+        item = store.create_item("audit: pending-feedback")
         store.label_add(item, "retro-origin")
         return item
 
-    def _reviewed_item(self, store, project):
+    def _reviewed_item(self, store, repo=None, reflection=True):
         item = store.create_item("reviewed")
         store.close(item, "done")
-        store.add_artifact(item, "repo", project)
+        if repo is not None:
+            store.add_artifact(item, "repo", repo)
+        if reflection:
+            k = store.create_step("build: x", step="build", role="coder", parent=item)
+            store.close(k, "done")
+            store.add_artifact(k, "reflection", "fb")
         return item
 
-    def test_findings_outcome_marks_project_retroed_and_files_follow_on_on_same_item(self):
+    def test_findings_outcome_marks_feedback_bearing_items_retroed_and_files_follow_on_on_same_item(self):
         s = FakeStore()
-        reviewed = self._reviewed_item(s, "proj")
-        item = self._retro_item(s, "proj")
-        aid = s.create_step("audit: proj", step="audit", role="auditor", parent=item, project="proj")
+        reviewed = self._reviewed_item(s)
+        item = self._retro_item(s)
+        aid = s.create_step("audit: pending-feedback", step="audit", role="auditor", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=aid, outcome="findings"))
         self.assertNotIn(reviewed, [i.id for i in s.closed_unretroed_items()])
         self.assertEqual(s.get_node(resp.next_step).parent, item)
@@ -274,20 +278,41 @@ class TestCompleteStepRetroCadenceMarking(unittest.TestCase):
 
     def test_clean_outcome_still_marks_retroed_with_no_follow_on(self):
         s = FakeStore()
-        reviewed = self._reviewed_item(s, "proj")
-        item = self._retro_item(s, "proj")
-        aid = s.create_step("audit: proj", step="audit", role="auditor", parent=item, project="proj")
+        reviewed = self._reviewed_item(s)
+        item = self._retro_item(s)
+        aid = s.create_step("audit: pending-feedback", step="audit", role="auditor", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=aid, outcome="clean"))
         self.assertIsNone(resp.next_step)
         self.assertNotIn(reviewed, [i.id for i in s.closed_unretroed_items()])
 
     def test_non_retro_cadence_step_completion_does_not_mark_retroed(self):
         s = FakeStore()
-        reviewed = self._reviewed_item(s, "proj")
+        reviewed = self._reviewed_item(s)
         item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="coder", parent=item, project="proj")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIn(reviewed, [i.id for i in s.closed_unretroed_items()])
+
+    def test_item_with_no_reflection_is_not_marked_retroed(self):
+        s = FakeStore()
+        no_feedback = self._reviewed_item(s, reflection=False)
+        item = self._retro_item(s)
+        aid = s.create_step("audit: pending-feedback", step="audit", role="auditor", parent=item)
+        self._uc(s).execute(CompleteInput(step=aid, outcome="clean"))
+        self.assertIn(no_feedback, [i.id for i in s.closed_unretroed_items()])
+
+    def test_feedback_bearing_items_with_different_repos_are_all_marked_retroed(self):
+        s = FakeStore()
+        one = self._reviewed_item(s, repo="lightcycle")
+        two = self._reviewed_item(s, repo="saga")
+        three = self._reviewed_item(s)
+        item = self._retro_item(s)
+        aid = s.create_step("audit: pending-feedback", step="audit", role="auditor", parent=item)
+        self._uc(s).execute(CompleteInput(step=aid, outcome="clean"))
+        remaining = [i.id for i in s.closed_unretroed_items()]
+        self.assertNotIn(one, remaining)
+        self.assertNotIn(two, remaining)
+        self.assertNotIn(three, remaining)
 
 
 class TestCompleteStepCascadeClose(unittest.TestCase):

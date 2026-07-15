@@ -2150,6 +2150,36 @@ class TestRetro(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("duration=unknown", out)
 
+    def test_retro_pending_gathers_feedback_across_projects_and_projectless_items(self):
+        saga = self.store.create_item("saga work", theme=self.store.create_theme("t1"))
+        self.store.close(saga, "merged")
+        self.store.add_artifact(saga, "repo", "saga")
+        k1 = self.store.create_step("build: x", step="build", role="coder", parent=saga)
+        self.store.close(k1, "done")
+        call(_cli_mod.cmd_attach, k1, "feedback", "saga friction")
+
+        orphan = self.store.create_item("orphan work", theme=self.store.create_theme("t2"))
+        self.store.close(orphan, "merged")
+        k2 = self.store.create_step("build: y", step="build", role="coder", parent=orphan)
+        self.store.close(k2, "done")
+        call(_cli_mod.cmd_attach, k2, "feedback", "orphan friction")
+
+        rc, out, err = call(_cli_mod.cmd_retro, "--pending")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("N=2", out)
+        self.assertIn("saga friction", out)
+        self.assertIn("orphan friction", out)
+
+    def test_retro_rejects_zero_or_multiple_selectors(self):
+        rc, out, err = call(_cli_mod.cmd_retro)
+        self.assertEqual(rc, 2)
+        self.assertIn("provide exactly one of", err)
+
+        theme, _ = self._make_epic_with_story()
+        rc, out, err = call(_cli_mod.cmd_retro, theme, "--pending")
+        self.assertEqual(rc, 2)
+        self.assertIn("provide exactly one of", err)
+
 
 class TestWorklog(unittest.TestCase):
     def setUp(self):

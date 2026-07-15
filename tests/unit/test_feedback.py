@@ -182,6 +182,42 @@ class TestRetroProjectScope(unittest.TestCase):
         self.assertEqual(resp.item_signals, [])
 
 
+class TestRetroPendingScope(unittest.TestCase):
+    def _closed_item(self, s, title, project, text):
+        item = s.create_item(title, theme=s.create_theme("theme"))
+        s.close(item, "merged")
+        if project is not None:
+            s.add_artifact(item, "repo", project)
+        k = s.create_step("build: x", step="build", role="coder", parent=item)
+        s.close(k, "done")
+        _add_reflection(s, k, text)
+        return item
+
+    def test_pending_scope_gathers_feedback_across_projects_and_projectless_items(self):
+        s = FakeStore()
+        saga = self._closed_item(s, "saga work", "saga", "saga friction")
+        lc = self._closed_item(s, "lc work", "lightcycle", "lc friction")
+        orphan = self._closed_item(s, "orphan work", None, "orphan friction")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual({row.item.id for row in resp.item_signals}, {saga, lc, orphan})
+        self.assertEqual(resp.reflection_count, 3)
+        self.assertEqual(resp.subject, "pending")
+
+    def test_pending_scope_excludes_feedback_less_items(self):
+        s = FakeStore()
+        item = s.create_item("no feedback", theme=s.create_theme("theme"))
+        s.close(item, "done")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual(resp.item_signals, [])
+
+    def test_pending_scope_excludes_retroed_items(self):
+        s = FakeStore()
+        item = self._closed_item(s, "saga work", "saga", "friction")
+        s.label_add(item, "retroed")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual(resp.item_signals, [])
+
+
 class TestRetroLastScope(unittest.TestCase):
     def _make_closed_epic(self, s, title):
         theme = s.create_theme(title)

@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.project_of import project_of
 from lightcycle.domain import feedback as cfeedback
 from lightcycle.domain.work import Node
@@ -13,6 +14,7 @@ class RetroInput:
     since: Optional[str] = None
     last: Optional[int] = None
     project: Optional[str] = None
+    pending: bool = False
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,16 @@ class RetroUseCase:
         rows, all_refs = [], []
         for item in self._store.closed_unretroed_items():
             if project_of(self._store, item) != project:
+                continue
+            row, refs = self._collect_item_row(item, signals)
+            rows.append(row)
+            all_refs.extend(refs)
+        return rows, all_refs
+
+    def _pending_scope(self, signals):
+        rows, all_refs = [], []
+        for item in self._store.closed_unretroed_items():
+            if not has_feedback(self._store, item):
                 continue
             row, refs = self._collect_item_row(item, signals)
             rows.append(row)
@@ -143,6 +155,10 @@ class RetroUseCase:
         elif input.project is not None:
             rows, all_refs = self._project_scope(input.project, signals)
             label = "project:%s" % input.project
+
+        elif input.pending:
+            rows, all_refs = self._pending_scope(signals)
+            label = "pending"
 
         else:
             themes = self._store.last_n_closed_themes(input.last)
