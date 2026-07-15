@@ -1,6 +1,7 @@
 import datetime
 import gzip
 import os
+import re
 import sqlite3
 
 from lightcycle.ports.backup import BackupPort
@@ -8,6 +9,7 @@ from lightcycle.ports.backup import BackupPort
 _DB_FILENAME = "store.db"
 _PREFIX = "store-"
 _SUFFIX = ".db.gz"
+_SNAPSHOT_RE = re.compile(r"^store-\d{8}T\d{6}Z\.db\.gz$")
 
 
 def _snapshot_name(now):
@@ -29,11 +31,13 @@ class SqliteBackupAdapter(BackupPort):
         d = self._backups_dir()
         if not os.path.isdir(d):
             return []
-        names = sorted(
-            (n for n in os.listdir(d) if n.startswith(_PREFIX) and n.endswith(_SUFFIX)),
-            reverse=True,
-        )
-        return [(n, os.path.getmtime(os.path.join(d, n))) for n in names]
+        entries = [
+            (n, os.path.getmtime(os.path.join(d, n)))
+            for n in os.listdir(d)
+            if _SNAPSHOT_RE.match(n)
+        ]
+        entries.sort(key=lambda entry: entry[1], reverse=True)
+        return entries
 
     def create_snapshot(self, now):
         d = self._backups_dir()
