@@ -204,6 +204,43 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertFalse(result)
 
 
+class TestReconcileConfig(unittest.TestCase):
+    def test_tops_up_missing_keys_in_existing_config(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\nspecs: /s\n")
+        c = Config(environ={"LC_CONFIG": p})
+        added = c.reconcile_config()
+        self.assertIn("max-agents", added)
+        text = Path(p).read_text()
+        self.assertIn("projects: /p", text)
+        self.assertIn("max-agents: 5", text)
+
+    def test_does_not_create_config_when_absent(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"LC_CONFIG": p})
+        added = c.reconcile_config()
+        self.assertEqual(added, ())
+        self.assertFalse(os.path.exists(p))
+
+    def test_leaves_existing_values_untouched(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\nspecs: /s\nmax-agents: 8\n")
+        c = Config(environ={"LC_CONFIG": p})
+        c.reconcile_config()
+        self.assertEqual(c.load_config()["max-agents"], "8")
+
+    def test_noop_returns_empty_when_all_keys_present(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"LC_CONFIG": p})
+        c.ensure_config()
+        added = c.reconcile_config()
+        self.assertEqual(added, ())
+
+
 class TestSpawnProtocol(unittest.TestCase):
     def test_spawn_id_absent_is_none(self):
         self.assertIsNone(_cfg().spawn_id())
