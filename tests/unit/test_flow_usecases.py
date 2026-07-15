@@ -22,7 +22,7 @@ from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
-_ROOT = str(Path(__file__).resolve().parents[2] / "lightcycle" / "library")
+_ROOT = str(Path(__file__).resolve().parents[1] / "support" / "library")
 
 
 class _RealFs:

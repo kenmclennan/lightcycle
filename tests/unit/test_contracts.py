@@ -7,7 +7,7 @@ from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from tests.support.fake_fs import graph_text_from_metas
 
-_ROOT = str(Path(__file__).resolve().parents[2] / "lightcycle" / "library")
+_ROOT = str(Path(__file__).resolve().parents[1] / "support" / "library")
 
 CONTRACT_METAS = {
     "coder": {
