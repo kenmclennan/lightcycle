@@ -3,7 +3,11 @@ import subprocess
 import tempfile
 import unittest
 
+from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
+from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
+from lightcycle.application.workflows.errors import WorkflowSourceError
+from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
 
 
 class FakeConfig:
@@ -113,6 +117,60 @@ class TestListingAndRemoval(unittest.TestCase):
         adapter.remove_origin("acme")
         self.assertEqual(adapter.list_origins(), [])
         adapter.cleanup(checkout)
+
+
+class _Store:
+    def all_nodes(self):
+        return []
+
+
+class _Config:
+    def workflow_retention(self):
+        return 5
+
+
+def _make_source_repo_with_unresolved_step():
+    repo = tempfile.mkdtemp()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    with open(os.path.join(repo, "source.toml"), "w") as f:
+        f.write('name = "acme"\ncontract = 1\ndescription = "acme flows"\n')
+    os.makedirs(os.path.join(repo, "workflows"))
+    os.makedirs(os.path.join(repo, "steps"))
+    with open(os.path.join(repo, "workflows", "build.md"), "w") as f:
+        f.write("entry: missing-step\n")
+    with open(os.path.join(repo, "steps", "code.md"), "w") as f:
+        f.write("---\nmodel: x\n---\nbody\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "seed")
+    return repo
+
+
+class TestBundleReferenceValidation(unittest.TestCase):
+    def test_add_refuses_unresolved_step_reference_against_real_checkout(self):
+        repo = _make_source_repo_with_unresolved_step()
+        source = _adapter()
+        fs = FsAdapter(None)
+        with self.assertRaises(WorkflowSourceError):
+            AddWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute(
+                url=repo, ref="main", name=None)
+        self.assertIsNone(source.read_registry("acme"))
+        self.assertEqual(source.list_versions("acme"), [])
+
+    def test_upgrade_refuses_unresolved_step_reference_against_real_checkout(self):
+        repo, head = _make_source_repo()
+        source = _adapter()
+        fs = FsAdapter(None)
+        AddWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute(
+            url=repo, ref="main", name="acme")
+        with open(os.path.join(repo, "workflows", "build.md"), "w") as f:
+            f.write("entry: missing-step\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "break entry")
+        with self.assertRaises(WorkflowSourceError):
+            UpgradeWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute("acme")
+        self.assertEqual(source.current_sha("acme"), head)
 
 
 if __name__ == "__main__":

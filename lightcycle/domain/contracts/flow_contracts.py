@@ -6,6 +6,7 @@ FILE_PROVIDES = {"spec"}
 class FlowContracts:
     def __init__(self, flow, graph, step_metas):
         self._flow = flow
+        self._graph = graph
         self._steps = flow.steps()
         self._contract = {
             s: StepContract.from_meta(step_metas.get(graph.file_for(s))) for s in self._steps
@@ -68,6 +69,20 @@ class FlowContracts:
 
     def duplicates(self):
         return list(self._dups)
+
+    def _source_stages(self):
+        g = self._graph
+        stages = set(g.edges) | set(g.nodes) | set(g.signals)
+        if g.entry:
+            stages.add(g.entry)
+        for occs in g.hooks.values():
+            for occ in occs:
+                if occ:
+                    stages.add(occ[0])
+        return stages
+
+    def unresolved_steps(self):
+        return sorted(s for s in self._source_stages() if not self._flow.owner_of(s))
 
     def ok(self):
         return not self.missing() and not self._dups

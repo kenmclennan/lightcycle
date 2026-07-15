@@ -3,6 +3,7 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
+from tests.support.fake_fs import FakeFs
 
 
 def call(fn, *args):
@@ -91,6 +92,7 @@ class FakeContainer:
         self.workflow_source = source
         self.store = store
         self.config = FakeConfig()
+        self.fs = FakeFs()
 
 
 class TestCmdWorkflow(unittest.TestCase):
@@ -118,6 +120,16 @@ class TestCmdWorkflow(unittest.TestCase):
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 1)
         self.assertIn("contract", err)
+        self.assertEqual(self.source.list_origins(), [])
+
+    def test_add_unresolved_step_reference_errors(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        container = FakeContainer(self.source, self.store)
+        container.fs = FakeFs(workflows={"build": "entry: missing-step\n"})
+        cli.set_container(container)
+        rc, out, err = call(cli.cmd_workflow, "add", "u")
+        self.assertEqual(rc, 1)
+        self.assertIn("missing-step", err)
         self.assertEqual(self.source.list_origins(), [])
 
     def test_upgrade_no_origin_upgrades_all_registered(self):

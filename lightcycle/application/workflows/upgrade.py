@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.workflows.add import prune_origin
+from lightcycle.application.workflows.bundle_check import check_bundle_references
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.source import parse_source_manifest
@@ -16,10 +17,11 @@ class UpgradeResponse:
 
 
 class UpgradeWorkflowSourceUseCase:
-    def __init__(self, source, store, config):
+    def __init__(self, source, store, config, fs):
         self._source = source
         self._store = store
         self._config = config
+        self._fs = fs
 
     def execute(self, origin) -> UpgradeResponse:
         registry = self._source.read_registry(origin)
@@ -36,6 +38,14 @@ class UpgradeWorkflowSourceUseCase:
                     "source targets contract %d, engine provides %d; `lc upgrade` the engine "
                     "or use a source ref that targets %d"
                     % (manifest.contract, ENGINE_CONTRACT, ENGINE_CONTRACT))
+            problems = check_bundle_references(self._fs, checkout)
+            if problems:
+                detail = "; ".join(
+                    "%r: %s" % (wf, ", ".join(steps))
+                    for wf, steps in sorted(problems.items())
+                )
+                raise WorkflowSourceError(
+                    "bundle has unresolved step reference(s) - %s" % detail)
             self._source.materialize(origin, sha, checkout)
             self._source.write_registry(origin, registry["url"], registry["ref"], sha)
             pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
