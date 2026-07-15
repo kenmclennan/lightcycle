@@ -16,7 +16,7 @@ Dependencies point inward; the domain depends on nothing.
 Business logic stranded in `cli.py` or an adapter is the most common defect here; it belongs in a use case (`application/`), and any pure rule belongs in `domain/`.
 
 **Fast-path verification boundary.** Runtime source for CI/review fast-path purposes is
-`lightcycle/` (the package) excluding `lightcycle/library/` (the shipped step/workflow markdown,
+`lightcycle/` (the package) excluding `lightcycle/library/` (the shipped `driver.md` prompt,
 content rather than code), plus `tests/`. A diff touching only files outside that boundary
 (`lightcycle/library/**`, docs, specs, README, this file, `.github/**`) is docs-only: the
 reviewer/watch-ci fast path applies, and CI's `integration` job is skipped.
@@ -63,7 +63,7 @@ Two craft checks that belong here, not in the step prompts: **no broken windows*
 
 ## Spec-authoring guidance
 
-- **Separate hooks from edges.** When a spec describes a workflow-graph change, keep hook-value outcomes (events that auto-close or bypass a step transition, e.g. `pr_merge`) visually separate from real edges - a distinct "Hooks:" list, mirroring the `edges:` / `hooks:` split the workflow markdown itself uses (see `lightcycle/library/workflows/standard.md`). An implementer must never have to reverse-engineer whether an outcome is an edge or a hook.
+- **Separate hooks from edges.** When a spec describes a workflow-graph change, keep hook-value outcomes (events that auto-close or bypass a step transition, e.g. `pr_merge`) visually separate from real edges - a distinct "Hooks:" list, mirroring the `edges:` / `hooks:` split the workflow markdown itself uses (see the `workflows/*.md` in the `lightcycle-workflows` origin, or the `tests/support/library` flow fixtures). An implementer must never have to reverse-engineer whether an outcome is an edge or a hook.
 - **Recurring acceptance lines.** Every lightcycle spec's acceptance should include: `bash tests/run.sh` green and `uv run ruff check .` clean; no comments or docstrings in changed code; and no manual `__version__` bump - the auto-bump-on-merge workflow handles it (a change touching `lightcycle/` without a bump triggers it). State these so specs stay consistent and the driver never reinvents them.
 - **Acceptance calls for tests at the right tier.** Word a spec's test acceptance by the tier rule (see "When to write an integration test" under Tests): default to unit tests against fakes, and ask for an integration test only when the thing under test IS the IO a fake cannot stand in for (the store contract, a genuine external effect, a read-surface JSON pin). Do not write "add integration tests for X" by reflex - it pushes the coder to heavier coverage than the change needs.
 

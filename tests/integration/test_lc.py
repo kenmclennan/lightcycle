@@ -85,7 +85,7 @@ def make_workflow_repo():
 
 
 def write_real_library_bundle(root):
-    src = Path(__file__).resolve().parents[2] / "lightcycle" / "library"
+    src = Path(__file__).resolve().parents[1] / "support" / "library"
     bundle = _bundle(root)
     bundle.mkdir(parents=True, exist_ok=True)
     for sub in ("workflows", "steps"):
