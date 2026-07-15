@@ -46,6 +46,20 @@ def workflow_text(roots, name):
     return None
 
 
+def workflow_names(roots):
+    names, seen = [], set()
+    for root in _roots(roots):
+        adir = os.path.join(root, "workflows")
+        if not os.path.isdir(adir):
+            continue
+        for f in os.listdir(adir):
+            name = f[:-3]
+            if f.endswith(".md") and name not in seen:
+                seen.add(name)
+                names.append(name)
+    return sorted(names)
+
+
 def worktrees_dir(root):
     return os.path.join(root, ".worktrees")
 
@@ -103,6 +117,9 @@ class FsAdapter(FsPort):
 
     def workflow_text(self, name, root):
         return workflow_text([root], name) if root else None
+
+    def workflow_names(self, root):
+        return workflow_names([root]) if root else []
 
     def worktrees_dir(self, root):
         return worktrees_dir(root)

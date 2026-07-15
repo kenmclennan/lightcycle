@@ -321,7 +321,7 @@ def cmd_workflow(argv):
     c = _container
     try:
         if a.sub == "add":
-            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config).execute(
+            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.fs).execute(
                 url=a.url, ref=a.ref, name=a.name)
             msg = "added %s @ %s" % (resp.origin, resp.sha)
             if resp.pruned:
@@ -334,7 +334,7 @@ def cmd_workflow(argv):
                 print("no workflow sources registered")
                 return 0
             for origin in origins:
-                resp = UpgradeWorkflowSourceUseCase(c.workflow_source, c.store, c.config).execute(origin)
+                resp = UpgradeWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.fs).execute(origin)
                 if resp.changed:
                     print("upgraded %s @ %s" % (resp.origin, resp.sha))
                 else:
@@ -1125,7 +1125,7 @@ def _init_pull_default_origin():
     url = _container.config.workflows_remote()
     try:
         resp = AddWorkflowSourceUseCase(
-            _container.workflow_source, _container.store, _container.config
+            _container.workflow_source, _container.store, _container.config, _container.fs
         ).execute(url=url, ref="main", name=origin)
         print("pulled %s workflows @ %s" % (resp.origin, resp.sha))
     except (WorkflowSourceError, subprocess.CalledProcessError) as e:

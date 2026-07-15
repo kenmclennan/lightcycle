@@ -101,6 +101,26 @@ class TestFlowContracts(unittest.TestCase):
         self.assertFalse(a.ok())
         self.assertIn("design", a.missing().get("review", []))
 
+class TestUnresolvedSteps(unittest.TestCase):
+    def test_destination_only_fileless_target_is_not_unresolved(self):
+        metas = {"coder": {"step": "build", "routes": {"done": "review-conflict"}}}
+        graph = parse_graph(graph_text_from_metas(metas))
+        flow = Flow.from_graph(graph, metas)
+        self.assertEqual(FlowContracts(flow, graph, metas).unresolved_steps(), [])
+
+    def test_entry_without_a_step_file_is_unresolved(self):
+        graph = parse_graph("entry: missing\n")
+        flow = Flow.from_graph(graph, {})
+        self.assertEqual(FlowContracts(flow, graph, {}).unresolved_steps(), ["missing"])
+
+    def test_edge_source_without_a_step_file_is_unresolved(self):
+        text = "entry: build\n\nedges:\n  build  done  next\n  next  done  build\n"
+        graph = parse_graph(text)
+        metas = {"build": {"step": "build", "model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        self.assertEqual(FlowContracts(flow, graph, metas).unresolved_steps(), ["next"])
+
+
 class TestRealStepsFlowComposition(unittest.TestCase):
     def _graph_flow(self):
         step_metas = {

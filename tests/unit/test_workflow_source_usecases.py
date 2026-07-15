@@ -5,6 +5,7 @@ from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
+from tests.support.fake_fs import FakeFs
 
 
 class FakeSource:
@@ -82,8 +83,8 @@ class FakeConfig:
         return self._retention
 
 
-def _add(source, store=None, config=None):
-    return AddWorkflowSourceUseCase(source, store or FakeStore(), config or FakeConfig())
+def _add(source, store=None, config=None, fs=None):
+    return AddWorkflowSourceUseCase(source, store or FakeStore(), config or FakeConfig(), fs or FakeFs())
 
 
 class TestAdd(unittest.TestCase):
@@ -125,6 +126,26 @@ class TestAdd(unittest.TestCase):
         with self.assertRaises(WorkflowSourceError):
             _add(source).execute(url="u", ref="main", name=None)
 
+    def test_unresolved_step_reference_raises_and_registers_nothing(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        fs = FakeFs(workflows={"build": "entry: missing-step\n"})
+        with self.assertRaises(WorkflowSourceError):
+            _add(source, fs=fs).execute(url="u", ref="main", name=None)
+        self.assertEqual(source.list_origins(), [])
+        self.assertEqual(source.cleaned, ["checkout-1"])
+
+    def test_destination_only_fileless_terminal_pulls_cleanly(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        fs = FakeFs(
+            metas={"code": {"model": "x", "step": "code"}},
+            workflows={"build": "entry: code\n\nedges:\n  code  done  review-conflict\n"},
+        )
+        resp = _add(source, fs=fs).execute(url="u", ref="main", name=None)
+        self.assertEqual(resp.origin, "acme")
+        self.assertTrue(source.has_version("acme", "sha1"))
+
 
 class TestUpgrade(unittest.TestCase):
     def test_upgrade_pulls_new_sha_and_reports_changed(self):
@@ -132,25 +153,25 @@ class TestUpgrade(unittest.TestCase):
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         _add(source).execute(url="u", ref="main", name=None)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
-        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), FakeConfig()).execute("acme")
+        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), FakeConfig(), FakeFs()).execute("acme")
         self.assertEqual(resp.sha, "sha2")
         self.assertTrue(resp.changed)
         self.assertEqual(source.read_registry("acme")["current"], "sha2")
 
     def test_upgrade_unregistered_origin_raises(self):
         with self.assertRaises(WorkflowSourceError):
-            UpgradeWorkflowSourceUseCase(FakeSource(), FakeStore(), FakeConfig()).execute("nope")
+            UpgradeWorkflowSourceUseCase(FakeSource(), FakeStore(), FakeConfig(), FakeFs()).execute("nope")
 
     def test_upgrade_prunes_beyond_retention_but_keeps_pinned(self):
         source = FakeSource()
         store = FakeStore([_Node("acme/build@sha1")])
         cfg = FakeConfig(retention=1)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        AddWorkflowSourceUseCase(source, store, cfg).execute(url="u", ref="main", name=None)
+        AddWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute(url="u", ref="main", name=None)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
-        UpgradeWorkflowSourceUseCase(source, store, cfg).execute("acme")
+        UpgradeWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute("acme")
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha3")
-        UpgradeWorkflowSourceUseCase(source, store, cfg).execute("acme")
+        UpgradeWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute("acme")
         self.assertEqual(set(source.materialized["acme"]), {"sha1", "sha3"})
 
 
@@ -159,7 +180,7 @@ class TestRemove(unittest.TestCase):
         source = FakeSource()
         store = FakeStore([_Node("acme/build@sha1")])
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        AddWorkflowSourceUseCase(source, store, FakeConfig()).execute(url="u", ref="main", name=None)
+        AddWorkflowSourceUseCase(source, store, FakeConfig(), FakeFs()).execute(url="u", ref="main", name=None)
         with self.assertRaises(WorkflowSourceError):
             RemoveWorkflowSourceUseCase(source, store).execute("acme")
         self.assertEqual(source.list_origins(), ["acme"])
@@ -182,9 +203,9 @@ class TestList(unittest.TestCase):
         store = FakeStore([_Node("acme/build@sha1")])
         cfg = FakeConfig(retention=5)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        AddWorkflowSourceUseCase(source, store, cfg).execute(url="u", ref="main", name=None)
+        AddWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute(url="u", ref="main", name=None)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
-        UpgradeWorkflowSourceUseCase(source, store, cfg).execute("acme")
+        UpgradeWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute("acme")
         resp = ListWorkflowSourcesUseCase(source, store).execute()
         self.assertEqual(len(resp.origins), 1)
         view = resp.origins[0]

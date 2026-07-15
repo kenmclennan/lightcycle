@@ -55,18 +55,24 @@ def graph_text_from_metas(metas, entry=None, requires=None):
 
 
 class FakeFs:
-    def __init__(self, metas=None, files=None, dirs=None, workflow=None):
+    def __init__(self, metas=None, files=None, dirs=None, workflow=None, workflows=None):
         self._metas = metas or {}
         self._files = files or {}
         self._dirs = dirs or {}
         self._workflow = workflow
+        self._workflows = workflows or {}
 
     def workflow_text(self, name, root=None):
+        if name in self._workflows:
+            return self._workflows[name]
         if isinstance(self._workflow, dict):
             return self._workflow.get(name)
         if self._workflow is not None:
             return self._workflow
         return graph_text_from_metas(self._metas)
+
+    def workflow_names(self, root=None):
+        return sorted(self._workflows)
 
     def step_roles(self, root=None):
         return sorted(self._metas)

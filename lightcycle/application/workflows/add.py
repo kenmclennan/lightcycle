@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List
 
+from lightcycle.application.workflows.bundle_check import check_bundle_references
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.pinned import pinned_shas
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -25,10 +26,11 @@ def prune_origin(source, store, origin, keep_n):
 
 
 class AddWorkflowSourceUseCase:
-    def __init__(self, source, store, config):
+    def __init__(self, source, store, config, fs):
         self._source = source
         self._store = store
         self._config = config
+        self._fs = fs
 
     def execute(self, url, ref, name) -> AddResponse:
         checkout, sha = self._source.fetch(url, ref)
@@ -47,6 +49,14 @@ class AddWorkflowSourceUseCase:
                 raise WorkflowSourceError(
                     "origin %r is already registered; use `lc workflow upgrade %s`"
                     % (origin, origin))
+            problems = check_bundle_references(self._fs, checkout)
+            if problems:
+                detail = "; ".join(
+                    "%r: %s" % (wf, ", ".join(steps))
+                    for wf, steps in sorted(problems.items())
+                )
+                raise WorkflowSourceError(
+                    "bundle has unresolved step reference(s) - %s" % detail)
             self._source.materialize(origin, sha, checkout)
             self._source.write_registry(origin, url, ref, sha)
             pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
