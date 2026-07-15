@@ -31,7 +31,6 @@ hooks:
   ci_failed_cap         watch-pr     ci-failed  3  review-ci
   mention_token         ready-merge  @lc
   review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]  another-bot[bot]
-  retro_cadence         audit
 """
 
 STEP_METAS = {
@@ -71,9 +70,6 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertEqual(self.flow.pr_conflict_outcome("ready-merge"), "conflicted")
         self.assertEqual(self.flow.pr_conflict_cap("ready-merge"), 3)
         self.assertEqual(self.flow.pr_conflict_escalate("ready-merge"), "gave-up")
-
-    def test_lifecycle_hook_steps(self):
-        self.assertEqual(self.flow.retro_cadence_steps(), [("audit", "auditor")])
 
     def test_pr_feedback_step_registers_as_a_stage(self):
         self.assertEqual(self.flow.pr_feedback_step("ready-merge"), "handle-feedback")

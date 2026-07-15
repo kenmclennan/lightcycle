@@ -157,16 +157,6 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(graph.target("spec-await-merge", "spec-merged"), "write-code")
         self.assertEqual(flow.merge_outcome("code-await-merge"), "merged")
 
-    def test_audit_findings_routes_to_review_findings(self):
-        graph, flow, _ = self._graph_flow()
-        self.assertEqual(graph.target("audit", "findings"), "review-findings")
-        self.assertEqual(flow.owner_of("review-findings"), "human")
-
-    def test_audit_clean_is_terminal(self):
-        graph, flow, _ = self._graph_flow()
-        self.assertIsNone(flow.next("audit", "clean"))
-        self.assertIsNone(graph.target("audit", "clean"))
-
     def test_spec_writer_step_accepts_brief_and_produces_spec(self):
         meta = (parse_step(_ROOT, "spec-writer") or {"meta": {}})["meta"]
         self.assertEqual(meta.get("accepts"), {"brief": "required"})

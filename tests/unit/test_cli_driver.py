@@ -18,8 +18,8 @@ class _DriverCfg:
     def data_root(self):
         return "/data"
 
-    def library_root(self):
-        return "/pkg/library"
+    def prompts_root(self):
+        return "/pkg/prompts"
 
 
 class _DriverContainer:
@@ -29,7 +29,7 @@ class _DriverContainer:
 
 
 class TestCmdDriver(unittest.TestCase):
-    def test_reads_driver_md_from_the_library_and_forwards_extra_flags(self):
+    def test_reads_driver_md_from_the_prompts_root_and_forwards_extra_flags(self):
         container = _DriverContainer()
         cli.set_container(container)
         captured = {}
@@ -37,7 +37,7 @@ class TestCmdDriver(unittest.TestCase):
                 mock.patch.object(cli, "_human_step_skills", lambda: []), \
                 mock.patch.object(cli, "show_banner", lambda: None):
             cli.cmd_driver(["--resume", "s1"])
-        self.assertEqual(container.fs.read_args, ("driver.md", "/pkg/library"))
+        self.assertEqual(container.fs.read_args, ("driver.md", "/pkg/prompts"))
         cmd = captured["cmd"]
         self.assertIn("--model", cmd)
         self.assertIn("opus", cmd)

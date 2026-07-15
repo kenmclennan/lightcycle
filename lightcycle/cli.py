@@ -996,7 +996,7 @@ def cmd_start(argv):
         monitor = MonitorPrsUseCase(
             _container.store, _container.github, _worktrees(), flow_service, complete
         )
-        cadence_gate = RetroCadenceUseCase(_container.store, flow_service, _container.config)
+        cadence_gate = RetroCadenceUseCase(_container.store, _container.config)
         breaker_gate = BreakerGateUseCase(_container.workers, _container.fs, _container.breaker)
         hook_completions = HookCompletionsUseCase(_container.store, flow_service)
         backup_gate = BackupUseCase(_container.backup, _container.config)
@@ -1072,7 +1072,7 @@ def cmd_driver(argv):
     if not require_store():
         return 1
     root = _container.config.data_root()
-    seat = _container.fs.read_md("driver.md", _container.config.library_root())
+    seat = _container.fs.read_md("driver.md", _container.config.prompts_root())
     if seat is None or not seat["meta"].get("model"):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
         return 1

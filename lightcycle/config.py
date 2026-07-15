@@ -71,8 +71,8 @@ class Config:
     def package_root(self):
         return self._engine_root()
 
-    def library_root(self):
-        return str(Path(__file__).resolve().parent / "library")
+    def prompts_root(self):
+        return str(Path(__file__).resolve().parent / "prompts")
 
     def data_root(self):
         override = self._env("LC_HOME")

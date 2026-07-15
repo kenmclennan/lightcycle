@@ -6,6 +6,7 @@ from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.has_feedback import has_feedback
+from lightcycle.domain.audit import AUDIT_STEP
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work.state import State
 
@@ -33,6 +34,8 @@ class CompleteStepUseCase:
 
     def execute(self, input: CompleteInput) -> CompleteResponse:
         t = self._store.get_node(input.step)
+        if t.step == AUDIT_STEP:
+            return self._complete_engine_audit(t, input)
         name = self._flow.workflow_for(t)
         transition = self._resolver.resolve(t, input.outcome, name)
         declared = self._flow.outcomes_for(t.step, name)
@@ -65,8 +68,6 @@ class CompleteStepUseCase:
             )
         self._store.note(input.step, "outcome: %s" % input.outcome)
         self._store.close(input.step, input.outcome)
-        if self._flow.is_retro_cadence_step(t.step, name):
-            self._mark_retroed()
         new = self._resolver.create(t, transition) if transition else None
         if input.note:
             if transition:
@@ -75,6 +76,17 @@ class CompleteStepUseCase:
                 self._store.note(input.step, input.note)
         self._cascade_close(t.parent)
         return CompleteResponse(next_step=new)
+
+    def _complete_engine_audit(self, t, input: CompleteInput) -> CompleteResponse:
+        self._store.note(input.step, "outcome: %s" % input.outcome)
+        self._store.close(input.step, input.outcome)
+        self._mark_retroed()
+        if input.outcome == "findings" and input.note:
+            fid = self._store.create_step(
+                "review-findings: pending-feedback", role="human", parent=t.parent, attention=True)
+            self._store.note(fid, input.note)
+        self._cascade_close(t.parent)
+        return CompleteResponse(next_step=None)
 
     def _mark_retroed(self):
         for item in self._store.closed_unretroed_items():
