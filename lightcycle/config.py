@@ -99,6 +99,19 @@ class Config:
     def _default_config_text(self):
         return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)
 
+    def reconcile_config(self):
+        p = self.config_path()
+        if not os.path.exists(p):
+            return ()
+        existing = self.load_config()
+        missing = [(k, v) for k, v in _SEED_KEYS if k not in existing]
+        if not missing:
+            return ()
+        with open(p, "a") as f:
+            for k, v in missing:
+                f.write("%s: %s\n" % (k, v))
+        return tuple(k for k, v in missing)
+
     def ensure_config(self):
         p = self.config_path()
         if not os.path.exists(p):
@@ -106,14 +119,7 @@ class Config:
             with open(p, "w") as f:
                 f.write(self._default_config_text())
             return True
-        existing = self.load_config()
-        missing = [(k, v) for k, v in _SEED_KEYS if k not in existing]
-        if not missing:
-            return False
-        with open(p, "a") as f:
-            for k, v in missing:
-                f.write("%s: %s\n" % (k, v))
-        return True
+        return bool(self.reconcile_config())
 
     def _home(self):
         return os.path.expanduser("~")
