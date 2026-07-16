@@ -11,7 +11,7 @@ from lightcycle import __version__
 from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
-from lightcycle.render import node_extra, render_backlog, render_backlog_themed
+from lightcycle.render import render_backlog, render_backlog_themed, render_inbox
 
 from lightcycle.application.feedback import (
     ReflectInput,
@@ -701,18 +701,13 @@ def cmd_restore(argv):
     return 0
 
 
-def _print_human_row(kind, t, show_description=False):
-    extra = node_extra(t, show_description=show_description)
-    print("%-9s %s  %s%s" % ("[%s]" % kind, t.id, t.title or t.step, extra))
-
-
 def cmd_inbox(argv):
     ap = argparse.ArgumentParser(prog="lc inbox")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
     resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n))
-    for row in resp.rows:
-        _print_human_row(row.kind, row.step)
+    for line in render_inbox(resp.rows):
+        print(line)
     return 0
 
 

@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.domain.work import Artifact, Node
-from lightcycle.render import node_extra, render_backlog, render_backlog_themed
+from lightcycle.render import node_extra, render_backlog, render_backlog_themed, render_inbox
 
 
 def tk(**kw):
@@ -115,6 +115,86 @@ def _group(theme, project, rows):
     from lightcycle.application.work.backlog import ThemeGroup
 
     return ThemeGroup(theme=theme, project=project, rows=rows)
+
+
+def _inbox(kind, id_, project, title, suffix=""):
+    return "%-9s  %-10s  %-12s  %s" % ("[%s]" % kind, id_, project, title) + suffix
+
+
+class TestRenderInbox(unittest.TestCase):
+    def test_plain_row_no_suffix(self):
+        r = row(kind="action", project="proj-a", step=tk(id="t1", title="one"))
+        lines = render_inbox([r])
+        self.assertEqual(lines, [_inbox("action", "t1", "proj-a", "one")])
+
+    def test_missing_project_renders_dash(self):
+        r = row(kind="action", project=None, step=tk(id="t1", title="one"))
+        lines = render_inbox([r])
+        self.assertEqual(lines, [_inbox("action", "t1", "-", "one")])
+
+    def test_blocked_row_with_needs(self):
+        node = tk(id="t1", title="one", needs="waiting on X")
+        r = row(kind="blocked", step=node)
+        lines = render_inbox([r])
+        self.assertTrue(lines[0].endswith("  needs:waiting on X"))
+
+    def test_blocked_row_without_needs_has_no_suffix(self):
+        r = row(kind="blocked", project="proj-a", step=tk(id="t1", title="one"))
+        lines = render_inbox([r])
+        self.assertEqual(lines, [_inbox("blocked", "t1", "proj-a", "one")])
+
+    def test_triage_row_with_notes(self):
+        node = tk(id="t1", title="one", notes="found: missing test coverage")
+        r = row(kind="triage", step=node)
+        lines = render_inbox([r])
+        self.assertTrue(lines[0].endswith("  findings:found: missing test coverage"))
+
+    def test_triage_row_multiline_notes_first_line_truncated(self):
+        first_line = "x" * 80
+        node = tk(id="t1", title="one", notes=first_line + "\nsecond line")
+        r = row(kind="triage", step=node)
+        lines = render_inbox([r])
+        self.assertTrue(lines[0].endswith("  findings:" + "x" * 60 + "..."))
+
+    def test_action_row_with_pr_shows_pr_suffix(self):
+        r = row(kind="action", step=tk(id="t1", title="one"), pr="https://example.com/pr/1")
+        lines = render_inbox([r])
+        self.assertTrue(lines[0].endswith("  pr:https://example.com/pr/1"))
+
+    def test_blocked_row_with_pr_shows_needs_not_pr(self):
+        node = tk(id="t1", title="one", needs="waiting on X")
+        r = row(kind="blocked", step=node, pr="https://example.com/pr/1")
+        lines = render_inbox([r])
+        self.assertTrue(lines[0].endswith("  needs:waiting on X"))
+        self.assertNotIn("pr:", lines[0])
+
+    def test_kind_always_shown_even_for_single_row(self):
+        lines = render_inbox([row(kind="action", step=tk(id="t1", title="one"))])
+        self.assertTrue(lines[0].startswith("[action]"))
+
+    def test_desc_suffix_renders_after_strategy_suffix(self):
+        node = tk(id="t1", title="one", needs="waiting on X", description="deets")
+        r = row(kind="blocked", step=node)
+        lines = render_inbox([r])
+        self.assertTrue(lines[0].endswith("  needs:waiting on X  desc:deets"))
+
+    def test_plan_suffix_renders_after_strategy_suffix(self):
+        node = tk(
+            id="t1", title="one", needs="waiting on X",
+            artifacts=[Artifact(type="plan-doc", value="plans/x.md")],
+        )
+        r = row(kind="blocked", step=node)
+        lines = render_inbox([r])
+        self.assertTrue(lines[0].endswith("  needs:waiting on X  plan:plans/x.md"))
+
+    def test_mixed_kinds_align_id_column(self):
+        rows = [
+            row(kind="action", project="proj-a", step=tk(id="t1", title="one")),
+            row(kind="blocked", project="proj-a", step=tk(id="t2", title="two")),
+        ]
+        lines = render_inbox(rows)
+        id_offset = lines[0].index("t1")
+        self.assertEqual(id_offset, lines[1].index("t2"))
 
 
 if __name__ == "__main__":
