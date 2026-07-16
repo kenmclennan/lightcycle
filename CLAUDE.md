@@ -18,6 +18,18 @@ The engine is agnostic about _which_ origin it pulls; the four-repo map above is
 - **PR-flow for every repo.** Branch, open a PR, get it reviewed, merge. No direct-to-main - engine, origin, specs, and plugin alike.
 - **Coupled changes land in tandem.** When an engine change removes or alters something a workflow or skill depends on (a step, a hook, the grammar), open the origin/plugin PRs alongside the engine PR and note the coupling in each. Roll out live with `lc upgrade` (engine) + `lc workflow upgrade` (origin).
 
+## Filing an item into the pipeline
+
+Activating an item hands it to the pool, which claims it within seconds - so get every input in place and **verified** before you activate, in this order. Skipping or reordering these is how a spec-writer ends up claiming with no brief and improvising a wrong spec (this happened once - the pool merged a guessed spec before it was caught).
+
+1. Commit the brief to the specs repo's **`main`** (confirm you are on `main` first - not a leftover feature branch) and push.
+2. Verify it landed: `git cat-file -e origin/main:briefs/<ID>.md`.
+3. `lc attach <ID> brief briefs/<ID>.md` and `lc attach <ID> repo <project>`.
+4. Verify the artifacts stuck: `lc show <ID>` lists `brief` and `repo`.
+5. Only now `lc set <ID> --state active [--workflow <origin>/<name>]`.
+
+The engine also guards this (activation refuses if a required artifact is missing), but the checklist still saves a wasted spec cycle.
+
 ## Architecture: hexagonal (DDD)
 
 Dependencies point inward; the domain depends on nothing.
