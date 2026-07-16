@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 LC = str(ROOT / "bin" / "lc")
 
+sys.path.insert(0, str(ROOT))
+from tests.support.isolation import make_syncable_git_repo
+
 _CODER_STEP = """\
 ---
 model: sonnet
@@ -62,6 +65,7 @@ class SmokeTest(unittest.TestCase):
             'url = "local"\nref = "main"\ncurrent = "testsha"\n'
         )
         ws = tempfile.mkdtemp()
+        make_syncable_git_repo(ws)
         Path(cls.root, "grid.config").write_text(
             "projects: %s\nspecs: %s\nshortcode: xy\n"
             "branch-prefix: feat\ndefault-origin: lightcycle\nmax-agents: 5\n"

@@ -24,7 +24,7 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.domain.work import Artifact
 
-from tests.support.isolation import inject_container
+from tests.support.isolation import inject_container, make_syncable_git_repo
 
 _ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
 
@@ -309,6 +309,7 @@ def _file_compat(argv):
 
 def _fake_setUp(test, *, steps=False, contract_steps=False):
     test.root = tempfile.mkdtemp()
+    make_syncable_git_repo(test.root)
     cfg = write_config(projects=test.root, specs=test.root)
     write_workflow(test.root, {})
     if steps:

@@ -34,6 +34,15 @@ def worktree_base(root):
     return None
 
 
+def sync_to_origin(root):
+    if not git_ok(root, "fetch", "origin"):
+        return False
+    proc = git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if proc.returncode != 0:
+        return True
+    return git_ok(root, "merge", "--ff-only", "@{upstream}")
+
+
 def remove_worktree(root, path):
     git(root, "worktree", "remove", "--force", path)
     git(root, "worktree", "prune")
@@ -86,6 +95,9 @@ class GitAdapter(GitPort):
 
     def worktree_base(self, root):
         return worktree_base(root)
+
+    def sync_to_origin(self, root):
+        return sync_to_origin(root)
 
     def remove_worktree(self, root, path):
         return remove_worktree(root, path)
