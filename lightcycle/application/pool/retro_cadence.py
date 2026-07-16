@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List
 
-from lightcycle.application.work.has_feedback import has_feedback
+from lightcycle.application.work.pending_reflections import pending_reflection_count
 from lightcycle.domain.audit import AUDIT_STEP
 from lightcycle.domain.work import State
 
@@ -20,12 +20,8 @@ class RetroCadenceUseCase:
         self._config = config
 
     def execute(self, now: float) -> RetroCadenceResponse:
-        interval = self._config.retro_interval_items()
-        pending = [
-            item for item in self._store.closed_unretroed_items()
-            if has_feedback(self._store, item)
-        ]
-        if len(pending) < interval or self._open_audit():
+        interval = self._config.retro_interval_reflections()
+        if pending_reflection_count(self._store) < interval or self._open_audit():
             return RetroCadenceResponse()
 
         item_id = self._store.create_item(_BATCH_TITLE)

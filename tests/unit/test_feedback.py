@@ -11,6 +11,7 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.application.services.flow import FlowService
+from lightcycle.application.work.pending_reflections import pending_reflection_count
 from lightcycle.domain.feedback import UNLABELED_MODEL
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -216,6 +217,26 @@ class TestRetroPendingScope(unittest.TestCase):
         s.label_add(item, "retroed")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
         self.assertEqual(resp.item_signals, [])
+
+    def test_pending_scope_reflection_count_matches_shared_helper(self):
+        s = FakeStore()
+        self._closed_item(s, "saga work", "saga", "saga friction")
+        self._closed_item(s, "lc work", "lightcycle", "lc friction")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual(resp.reflection_count, pending_reflection_count(s))
+
+    def test_pending_scope_counts_per_reflection_not_per_item(self):
+        s = FakeStore()
+        item = s.create_item("saga work", theme=s.create_theme("theme"))
+        s.close(item, "merged")
+        s.add_artifact(item, "repo", "saga")
+        k = s.create_step("build: x", step="build", role="coder", parent=item)
+        s.close(k, "done")
+        _add_reflection(s, k, "first friction")
+        _add_reflection(s, k, "second friction")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual(resp.reflection_count, 2)
+        self.assertEqual(len(resp.item_signals), 1)
 
 
 class TestRetroLastScope(unittest.TestCase):

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from lightcycle.application.work.has_feedback import has_feedback
+from lightcycle.application.work.pending_reflections import pending_reflection_count
 from lightcycle.application.work.project_of import project_of
 from lightcycle.domain import feedback as cfeedback
 from lightcycle.domain.work import Node
@@ -170,10 +171,13 @@ class RetroUseCase:
                 all_refs.extend(epic_refs)
             label = "last:%d" % input.last
 
+        reflection_count = (
+            pending_reflection_count(self._store) if input.pending else len(all_refs)
+        )
         feedback = [
             FeedbackItem(step=f["step"], text=f["feedback"])
             for f in cfeedback.Retro(all_refs).feedback()
         ]
         return RetroResponse(
-            subject=label, reflection_count=len(all_refs), feedback=feedback, item_signals=rows
+            subject=label, reflection_count=reflection_count, feedback=feedback, item_signals=rows
         )

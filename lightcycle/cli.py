@@ -1197,8 +1197,15 @@ def cmd_worklog(argv):
     return 0
 
 
-def _print_retro(resp):
-    print("== retro: %s  (N=%d) ==" % (resp.subject, resp.reflection_count))
+def _print_retro(resp, interval=None):
+    if resp.subject == "pending" and interval is not None:
+        arrow = " -> fires" if resp.reflection_count >= interval else ""
+        print(
+            "== retro: pending  (%d / %d reflections%s) =="
+            % (resp.reflection_count, interval, arrow)
+        )
+    else:
+        print("== retro: %s  (N=%d) ==" % (resp.subject, resp.reflection_count))
     if resp.feedback:
         print("\nFeedback (read it; an analyser agent can later):")
         for item in resp.feedback:
@@ -1251,5 +1258,6 @@ def cmd_retro(argv):
     inp = RetroInput(subject=a.id, since=a.since, last=a.last, project=a.project,
                       pending=a.pending)
     resp = RetroUseCase(_container.store, _flow()).execute(inp)
-    _print_retro(resp)
+    interval = _container.config.retro_interval_reflections() if a.pending else None
+    _print_retro(resp, interval)
     return 0
