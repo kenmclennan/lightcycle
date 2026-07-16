@@ -5,9 +5,8 @@ import sys
 import threading
 import time
 
-from lightcycle.adapters import fsio
 from lightcycle.adapters.workers import workers_state
-from lightcycle.adapters.workflow_source import default_bundle_root
+from lightcycle.adapters.workflow_source import resolve_agent
 from lightcycle.config import Config
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 
@@ -124,8 +123,7 @@ def main():
         sys.stderr.write("worker_session: LC_ROLE, LC_SPAWNID required\n")
         return 1
     config = Config()
-    bundle = default_bundle_root(config)
-    agent = fsio.parse_step([bundle], role) if bundle else None
+    agent = resolve_agent(config, role)
     if agent is None:
         sys.stderr.write("worker_session: no agent definition for role %s\n" % role)
         return 1
