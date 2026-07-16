@@ -1996,7 +1996,7 @@ class TestInboxBacklog(unittest.TestCase):
         call(_cli_mod.cmd_new, "item", "a seed")
         self.store.create_step("merge: z", step="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_backlog)
-        self.assertIn("[todo]", out)
+        self.assertNotIn("[todo]", out)
         self.assertIn("a seed", out)
         self.assertNotIn("[action]", out)
 

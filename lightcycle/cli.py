@@ -11,6 +11,7 @@ from lightcycle import __version__
 from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
+from lightcycle.render import node_extra, render_backlog, render_backlog_themed
 
 from lightcycle.application.feedback import (
     ReflectInput,
@@ -700,11 +701,7 @@ def cmd_restore(argv):
 
 
 def _print_human_row(kind, t, show_description=False):
-    plan = next((art.value for art in t.artifacts if art.type == "plan-doc"), None)
-    extra = "  plan:%s" % plan if plan else ""
-    if show_description and t.description:
-        snippet = t.description[:60] + ("..." if len(t.description) > 60 else "")
-        extra += "  desc:%s" % snippet
+    extra = node_extra(t, show_description=show_description)
     print("%-9s %s  %s%s" % ("[%s]" % kind, t.id, t.title or t.step, extra))
 
 
@@ -721,9 +718,14 @@ def cmd_inbox(argv):
 def cmd_backlog(argv):
     ap = argparse.ArgumentParser(prog="lc backlog")
     ap.add_argument("n", nargs="?", type=int)
+    ap.add_argument("--project")
+    ap.add_argument("--themes", action="store_true")
     a = ap.parse_args(argv)
-    for row in BacklogUseCase(_container.store, _flow()).execute(BacklogInput(n=a.n)).rows:
-        _print_human_row(row.kind, row.step, show_description=True)
+    resp = BacklogUseCase(_container.store, _flow()).execute(
+        BacklogInput(n=a.n, project=a.project, themes=a.themes))
+    lines = render_backlog_themed(resp.groups) if a.themes else render_backlog(resp.rows)
+    for line in lines:
+        print(line)
     return 0
 
 
