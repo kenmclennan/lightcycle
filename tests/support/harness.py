@@ -7,7 +7,7 @@ from pathlib import Path
 import lightcycle.cli as cli
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
-from tests.support.isolation import inject_container
+from tests.support.isolation import inject_container, make_syncable_git_repo
 
 _AGENTS = {
     "coder": ("sonnet", "build", {"done": "review"}),
@@ -52,6 +52,7 @@ def _write_config(root):
 class Harness:
     def __init__(self, roles):
         self.root = tempfile.mkdtemp()
+        make_syncable_git_repo(self.root)
         cfg = _write_config(self.root)
         _write_bundle(self.root, roles)
         self.store = FakeStore()

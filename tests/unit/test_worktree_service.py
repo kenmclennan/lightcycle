@@ -1,8 +1,11 @@
 import os
+import shutil
+import tempfile
 import unittest
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 
@@ -20,6 +23,15 @@ class _Cfg:
 
     def engine_root(self):
         return self._engine_root
+
+    def worktree_retries(self):
+        return 0
+
+    def worktree_retry_sleep(self):
+        return 0
+
+    def branch_prefix(self):
+        return "feat"
 
 
 class _FakeFlow:
@@ -47,14 +59,44 @@ class _Graph:
         self.workspace = workspace
 
 
+class _GitResult:
+    def __init__(self, returncode=0, stderr=""):
+        self.returncode = returncode
+        self.stderr = stderr
+
+
 class _FakeGit:
-    def __init__(self, git_repos=()):
+    def __init__(self, git_repos=(), sync_result=True, base=None, registered=(), branches=()):
         self._git_repos = set(git_repos)
         self.calls = []
+        self._sync_result = sync_result
+        self._base = base
+        self._registered = set(registered)
+        self._branches = set(branches)
 
     def is_git_repo(self, path):
         self.calls.append(("is_git_repo", path))
         return path in self._git_repos
+
+    def sync_to_origin(self, root):
+        self.calls.append(("sync_to_origin", root))
+        return self._sync_result
+
+    def worktree_base(self, root):
+        self.calls.append(("worktree_base", root))
+        return self._base
+
+    def branch_exists(self, root, branch):
+        self.calls.append(("branch_exists", root, branch))
+        return (root, branch) in self._branches
+
+    def worktree_registered(self, root, path):
+        self.calls.append(("worktree_registered", root, path))
+        return path in self._registered
+
+    def git(self, root, *args):
+        self.calls.append(("git", root) + args)
+        return _GitResult()
 
 
 class TestWorktreePath(unittest.TestCase):
@@ -252,6 +294,69 @@ class TestEnsureNoSilentFailure(unittest.TestCase):
 
         with self.assertRaises(UseCaseError):
             svc.ensure(item)
+
+
+class TestEnsureSyncsOrigin(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.projects_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.projects_root, True)
+
+    def _item_with_repo(self, repo="saga"):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("story", theme=theme)
+        self.store.add_artifact(item, "repo", repo)
+        return item
+
+    def test_new_branch_path_syncs_origin_before_resolving_the_worktree_base(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = _FakeGit(git_repos={target}, sync_result=True, base="origin/main")
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+
+        svc.ensure(item)
+
+        kinds = [c[0] for c in git.calls]
+        self.assertIn("sync_to_origin", kinds)
+        self.assertLess(kinds.index("sync_to_origin"), kinds.index("worktree_base"))
+
+    def test_already_registered_worktree_does_not_sync(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        path = os.path.join(target, ".worktrees", item)
+        os.makedirs(path, exist_ok=True)
+        git = _FakeGit(git_repos={target}, registered={path})
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+
+        result = svc.ensure(item)
+
+        self.assertEqual(result, path)
+        self.assertNotIn("sync_to_origin", [c[0] for c in git.calls])
+
+    def test_ensure_raises_and_never_resolves_base_or_adds_a_worktree_when_sync_fails(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = _FakeGit(git_repos={target}, sync_result=False)
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+
+        with self.assertRaises(UseCaseError):
+            svc.ensure(item)
+
+        kinds = [c[0] for c in git.calls]
+        self.assertNotIn("worktree_base", kinds)
+        self.assertNotIn("git", kinds)
+
+    def test_sync_is_keyed_on_the_resolved_target_not_a_hardcoded_workspace_name(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = _FakeGit(git_repos={target}, sync_result=True, base="origin/main")
+        svc = WorktreeService(
+            self.store, git, FakeFs(), _Cfg(self.projects_root), flow=_FakeFlow(workspace="staging")
+        )
+
+        svc.ensure(item)
+
+        self.assertIn(("sync_to_origin", target), git.calls)
 
 
 if __name__ == "__main__":

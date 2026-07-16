@@ -63,6 +63,11 @@ class ClaimStepUseCase:
         spec = next((a.value for a in view.item_artifacts if a.type == "spec"), None)
         spec_path = None
         if spec:
+            try:
+                self._worktrees.sync_specs()
+            except Exception:
+                self._store.reclaim(t.id)
+                raise
             spec_path = (
                 spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
             )

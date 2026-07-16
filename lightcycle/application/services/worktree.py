@@ -86,6 +86,11 @@ class WorktreeService:
             return path
         is_new_branch = not self._git.branch_exists(target, branch)
         if is_new_branch:
+            if not self._git.sync_to_origin(target):
+                raise UseCaseError(
+                    "cannot set up workspace for %s: failed to sync '%s' with origin "
+                    "(fetch failed, or the local base has diverged)" % (item, target)
+                )
             base = self._git.worktree_base(target)
             if base is None:
                 raise UseCaseError(
@@ -115,6 +120,14 @@ class WorktreeService:
                           "refs/heads/%s" % branch)
         self._ensure_branch_artifact(item, branch)
         return path
+
+    def sync_specs(self):
+        root = self._config.specs_root()
+        if not self._git.sync_to_origin(root):
+            raise UseCaseError(
+                "cannot read spec: failed to sync specs checkout '%s' with origin "
+                "(fetch failed, or the local specs branch has diverged)" % root
+            )
 
     def remove(self, item):
         if not self._uses_specs_workspace(item) and not self.has_repo(item):

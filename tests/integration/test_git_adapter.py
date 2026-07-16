@@ -12,7 +12,7 @@ def _git(root, *args):
 
 def _make_repo():
     d = tempfile.mkdtemp()
-    _git(d, "init", "-q")
+    _git(d, "init", "-q", "-b", "main")
     _git(d, "config", "user.email", "t@t")
     _git(d, "config", "user.name", "t")
     (Path(d) / "README").write_text("x")
@@ -34,6 +34,64 @@ class TestGitAdapterRemoteUrl(unittest.TestCase):
         adapter = GitAdapter()
 
         self.assertIsNone(adapter.remote_url(repo))
+
+
+def _bare_origin():
+    d = tempfile.mkdtemp()
+    _git(d, "init", "-q", "-b", "main", "--bare")
+    return d
+
+
+def _clone(origin):
+    d = tempfile.mkdtemp()
+    subprocess.run(["git", "clone", "-q", origin, d], check=True, capture_output=True)
+    _git(d, "config", "user.email", "t@t")
+    _git(d, "config", "user.name", "t")
+    return d
+
+
+class TestGitAdapterSyncToOrigin(unittest.TestCase):
+    def test_sync_pulls_a_newly_merged_file_into_the_consumer_checkout(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+
+        consumer = _clone(origin)
+
+        (Path(publisher) / "NEW.md").write_text("merged spec")
+        _git(publisher, "add", "NEW.md")
+        _git(publisher, "commit", "-q", "-m", "add spec")
+        _git(publisher, "push", "-q", "origin", "main")
+
+        ok = GitAdapter().sync_to_origin(consumer)
+
+        self.assertTrue(ok)
+        self.assertTrue((Path(consumer) / "NEW.md").exists())
+
+    def test_sync_fails_loud_and_leaves_a_diverged_local_commit_untouched(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+
+        consumer = _clone(origin)
+
+        (Path(consumer) / "LOCAL.md").write_text("local only")
+        _git(consumer, "add", "LOCAL.md")
+        _git(consumer, "commit", "-q", "-m", "local change")
+        local_sha = _git(consumer, "rev-parse", "HEAD").stdout.strip()
+
+        (Path(publisher) / "NEW.md").write_text("merged spec")
+        _git(publisher, "add", "NEW.md")
+        _git(publisher, "commit", "-q", "-m", "add spec")
+        _git(publisher, "push", "-q", "origin", "main")
+
+        ok = GitAdapter().sync_to_origin(consumer)
+
+        self.assertFalse(ok)
+        self.assertEqual(_git(consumer, "rev-parse", "HEAD").stdout.strip(), local_sha)
+        self.assertTrue((Path(consumer) / "LOCAL.md").exists())
 
 
 class TestGitAdapterCommitAll(unittest.TestCase):

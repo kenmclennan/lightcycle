@@ -27,6 +27,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def sync_to_origin(self, root):
+        pass
+
+    @abstractmethod
     def remove_worktree(self, root, path):
         pass
 

@@ -72,9 +72,11 @@ def flow_for(metas, store):
 
 
 class FakeWorktrees:
-    def __init__(self, ensure_error=None):
+    def __init__(self, ensure_error=None, sync_specs_error=None):
         self.removed = []
         self._ensure_error = ensure_error
+        self._sync_specs_error = sync_specs_error
+        self.sync_specs_calls = 0
 
     def ensure(self, item):
         if self._ensure_error is not None:
@@ -83,6 +85,11 @@ class FakeWorktrees:
 
     def item_branch(self, item):
         return None
+
+    def sync_specs(self):
+        self.sync_specs_calls += 1
+        if self._sync_specs_error is not None:
+            raise self._sync_specs_error
 
     def remove(self, item):
         self.removed.append(item)
@@ -706,6 +713,47 @@ class TestClaimTask(unittest.TestCase):
         )
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="coder"))
+        t = s.get_node(bid)
+        self.assertEqual(str(t.state), "ready")
+        self.assertIsNone(t.claimed_by)
+
+    def test_claim_syncs_specs_when_a_spec_artifact_is_present(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        s.add_artifact(item, "spec", "specs/X.md")
+        s.create_step("build: x", step="build", role="coder", parent=item)
+        worktrees = FakeWorktrees()
+
+        ClaimStepUseCase(
+            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig()
+        ).execute(ClaimInput(role="coder"))
+
+        self.assertEqual(worktrees.sync_specs_calls, 1)
+
+    def test_claim_does_not_sync_specs_without_a_spec_artifact(self):
+        s = FakeStore()
+        s.create_step("build: x", step="build", role="coder")
+        worktrees = FakeWorktrees()
+
+        ClaimStepUseCase(
+            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig()
+        ).execute(ClaimInput(role="coder"))
+
+        self.assertEqual(worktrees.sync_specs_calls, 0)
+
+    def test_sync_specs_failure_reclaims_the_step_and_propagates(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        s.add_artifact(item, "spec", "specs/X.md")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
+        uc = ClaimStepUseCase(
+            s, flow_for(METAS, s), FakeWorktrees(sync_specs_error=RuntimeError("boom")),
+            FakeWorkers(), FakeConfig()
+        )
+
+        with self.assertRaises(RuntimeError):
+            uc.execute(ClaimInput(role="coder"))
+
         t = s.get_node(bid)
         self.assertEqual(str(t.state), "ready")
         self.assertIsNone(t.claimed_by)
