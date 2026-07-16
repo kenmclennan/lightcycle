@@ -9,8 +9,11 @@ class TestWorkerPermitted(unittest.TestCase):
         for v in ("claim", "done", "show", "attach"):
             self.assertTrue(_worker_permitted(v, ["ITEM.1"]), v)
 
+    def test_retro_allowed_for_the_audit_worker(self):
+        self.assertTrue(_worker_permitted("retro", ["--pending"]))
+
     def test_destructive_verbs_forbidden(self):
-        for v in ("rm", "init", "new", "start", "sweep", "dep", "backlog", "retro", "config",
+        for v in ("rm", "init", "new", "start", "sweep", "dep", "backlog", "config",
                   "workflow"):
             self.assertFalse(_worker_permitted(v, ["x"]), v)
 
