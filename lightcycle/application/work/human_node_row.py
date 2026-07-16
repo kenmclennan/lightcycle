@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from lightcycle.domain.work import Node
 
@@ -9,3 +9,4 @@ class HumanNodeRow:
     kind: str
     outcomes: List[str]
     step: Node
+    project: Optional[str] = None
