@@ -11,12 +11,7 @@ lightcycle is four coordinated repos. This one is the engine; a change that span
 - **lightcycle-specs** - design docs (`lightcycle/*.md`) and briefs (`briefs/*.md`). Specs land there through the spec-PR review gate before code is built.
 - **lightcycle-plugin** - the Claude Code companion: a marketplace repo whose SessionStart hook bootstraps the engine (pipx) and whose skills (e.g. `author-workflow`) help you work with it.
 
-The engine is agnostic about _which_ origin it pulls; the four-repo map above is the canonical lightcycle deployment, documented here so cross-repo work is legible - it is not an assumption baked into the code.
-
-## Working across the repos
-
-- **PR-flow for every repo.** Branch, open a PR, get it reviewed, merge. No direct-to-main - engine, origin, specs, and plugin alike.
-- **Coupled changes land in tandem.** When an engine change removes or alters something a workflow or skill depends on (a step, a hook, the grammar), open the origin/plugin PRs alongside the engine PR and note the coupling in each. Roll out live with `lc upgrade` (engine) + `lc workflow upgrade` (origin).
+The engine is agnostic about _which_ origin it pulls; the four-repo map above is the canonical lightcycle deployment, documented here so cross-repo work is legible - it is not an assumption baked into the code. (How work moves across these repos - PR-flow, coupled changes - is a driver operation, kept in `prompts/driver.md`, not here.)
 
 ## Architecture: hexagonal (DDD)
 
