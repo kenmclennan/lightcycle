@@ -24,7 +24,8 @@ def capture_pid_started(proc, get_start=process_start_time, sleep=time.sleep, at
 def spawn_worker(config, role):
     root = config.data_root()
     bundle = default_bundle_root(config)
-    agent = fsio.parse_step([bundle], role) if bundle else None
+    roots = [config.prompts_root()] + ([bundle] if bundle else [])
+    agent = fsio.parse_step(roots, role)
     if agent is None:
         sys.stderr.write("no agent definition for role %s\n" % role)
         return None

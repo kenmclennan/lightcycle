@@ -14,7 +14,7 @@ class FakeConfig:
     def data_root(self):
         return self._root
 
-    def library_root(self):
+    def prompts_root(self):
         return self._root
 
 

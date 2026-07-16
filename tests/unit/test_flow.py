@@ -132,32 +132,6 @@ class TestTransition(unittest.TestCase):
         )
 
 
-class TestRetroCadence(unittest.TestCase):
-    def test_no_on_retro_cadence_returns_empty(self):
-        flow = mkflow(METAS)
-        self.assertEqual(flow.retro_cadence_steps(), [])
-
-    def test_step_declaring_on_retro_cadence_is_returned(self):
-        metas = {
-            "scanner": {"model": "sonnet", "step": "scan", "on_retro_cadence": True},
-            "coder": {"model": "sonnet", "step": "build"},
-        }
-        flow = mkflow(metas)
-        self.assertEqual(flow.retro_cadence_steps(), [("scan", "scanner")])
-
-    def test_agnostic_arbitrary_step_name_not_audit(self):
-        metas = {"checker": {"model": "haiku", "step": "check-trends", "on_retro_cadence": True}}
-        flow = mkflow(metas)
-        self.assertEqual(flow.retro_cadence_steps(), [("check-trends", "checker")])
-
-
-    def test_step_can_declare_both_theme_close_and_retro_cadence(self):
-        metas = {"auditor": {"model": "sonnet", "step": "audit",
-                              "on_theme_close": True, "on_retro_cadence": True}}
-        flow = mkflow(metas)
-        self.assertEqual(flow.retro_cadence_steps(), [("audit", "auditor")])
-
-
 class TestHooks(unittest.TestCase):
     def test_no_hooks_returns_empty(self):
         flow = mkflow(METAS)
@@ -202,14 +176,14 @@ class TestHookSteps(unittest.TestCase):
 
     def test_step_flagged_by_multiple_hooks_appears_once(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
-                              "on_theme_close": True, "on_retro_cadence": True}}
+                              "on_theme_close": True, "on_deploy_green": True}}
         flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
 
     def test_multiple_hook_steps_sorted(self):
         metas = {
             "beta": {"model": "sonnet", "step": "zz-step", "on_theme_close": True},
-            "alpha": {"model": "sonnet", "step": "aa-step", "on_retro_cadence": True},
+            "alpha": {"model": "sonnet", "step": "aa-step", "on_deploy_green": True},
         }
         steps = mkflow(metas).hook_steps()
         self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])

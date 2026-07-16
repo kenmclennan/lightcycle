@@ -9,7 +9,6 @@ class Flow:
         pr_merge,
         pr_close,
         pr_feedback,
-        retro_cadence=None,
         hooks=None,
         pr_conflict=None,
         pr_conflict_cap=None,
@@ -27,7 +26,6 @@ class Flow:
         self._pr_merge = pr_merge
         self._pr_close = pr_close
         self._pr_feedback = pr_feedback
-        self._retro_cadence = retro_cadence or set()
         self._hooks = hooks or {}
         self._pr_conflict = pr_conflict or {}
         self._pr_conflict_cap = pr_conflict_cap or {}
@@ -72,7 +70,7 @@ class Flow:
 
         pr_merge, pr_close, pr_feedback = {}, {}, {}
         pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
-        retro_cadence, hooks = set(), {}
+        hooks = {}
         outcome_hooks = {
             "pr_merge": pr_merge,
             "pr_close": pr_close,
@@ -85,8 +83,6 @@ class Flow:
                 bucket[occ[0]] = occ[1] if len(occ) > 1 else None
         for occ in graph.hook_occurrences("pr_conflict_cap"):
             pr_conflict_cap[occ[0]] = int(occ[1])
-        for occ in graph.hook_occurrences("retro_cadence"):
-            retro_cadence.add(occ[0])
 
         ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target = {}, {}, {}
         for occ in graph.hook_occurrences("ci_failed_cap"):
@@ -105,7 +101,7 @@ class Flow:
                 if occ:
                     hooks.setdefault("on_" + name, set()).add(occ[0])
 
-        return cls(owner, routes, pr_merge, pr_close, pr_feedback, retro_cadence, hooks,
+        return cls(owner, routes, pr_merge, pr_close, pr_feedback, hooks,
                    pr_conflict, pr_conflict_cap, pr_conflict_escalate,
                    mention_token, review_bot_allowlist,
                    ci_failed_cap_outcome, ci_failed_cap_n, ci_failed_cap_target,
@@ -181,9 +177,6 @@ class Flow:
             to_step=cap_target,
             to_role=self.owner_of(cap_target) or "human",
         )
-
-    def retro_cadence_steps(self):
-        return [(step, self._owner[step]) for step in sorted(self._retro_cadence) if step in self._owner]
 
     def hook_steps(self):
         steps = set()

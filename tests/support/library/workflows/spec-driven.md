@@ -41,8 +41,6 @@ edges:
   code-await-merge  gave-up      review-conflict
   resolve-conflict  resolved     code-open-pr
   resolve-conflict  escalate     review-conflict
-  audit             findings     review-findings
-  audit             clean
 
 hooks:
   pr_merge              spec-await-merge  spec-merged
@@ -58,7 +56,6 @@ hooks:
   mention_token         spec-await-merge  @lc
   mention_token         code-await-merge  @lc
   review_bot_allowlist  code-await-merge  copilot-pull-request-reviewer[bot]
-  retro_cadence         audit
 
 signals:
   spec-await-merge  resets            changes
