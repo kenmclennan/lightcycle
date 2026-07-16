@@ -2,6 +2,22 @@
 
 Rules for anyone (human or agent) writing code in this repo. `claude -p` loads this file, so the pool's write-code/review-code agents read it automatically - the generic step files stay lightweight (flow and decisions) and the craft lives here.
 
+## The lightcycle repos
+
+lightcycle is four coordinated repos. This one is the engine; a change that spans repos lands in tandem.
+
+- **lightcycle** (this repo) - the `lc` engine: CLI, agent pool, and store. Pipx-installed, zero runtime deps, workflow-agnostic. The only home for engine code.
+- **lightcycle-workflows** - the built-in workflow origin: pullable bundles (`source.toml` + `workflows/*.md` + `steps/*.md`) the engine turns into sha-pinned, per-item pins. Content, not engine code. The engine defines the grammar; the bundles are agnostic to it.
+- **lightcycle-specs** - design docs (`lightcycle/*.md`) and briefs (`briefs/*.md`). Specs land there through the spec-PR review gate before code is built.
+- **lightcycle-plugin** - the Claude Code companion: a marketplace repo whose SessionStart hook bootstraps the engine (pipx) and whose skills (e.g. `author-workflow`) help you work with it.
+
+The engine is agnostic about _which_ origin it pulls; the four-repo map above is the canonical lightcycle deployment, documented here so cross-repo work is legible - it is not an assumption baked into the code.
+
+## Working across the repos
+
+- **PR-flow for every repo.** Branch, open a PR, get it reviewed, merge. No direct-to-main - engine, origin, specs, and plugin alike.
+- **Coupled changes land in tandem.** When an engine change removes or alters something a workflow or skill depends on (a step, a hook, the grammar), open the origin/plugin PRs alongside the engine PR and note the coupling in each. Roll out live with `lc upgrade` (engine) + `lc workflow upgrade` (origin).
+
 ## Architecture: hexagonal (DDD)
 
 Dependencies point inward; the domain depends on nothing.
