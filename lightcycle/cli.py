@@ -22,6 +22,7 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
+from lightcycle.application.work.project_of import project_of
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work import (
     ActiveStepsUseCase,
@@ -758,6 +759,7 @@ def cmd_new(argv):
     ap.add_argument("--parent")
     ap.add_argument("--workflow")
     ap.add_argument("--project")
+    ap.add_argument("--repo")
     ap.add_argument("--goal")
     ap.add_argument("--description")
     ap.add_argument("--backlog", action="append")
@@ -772,7 +774,7 @@ def cmd_new(argv):
         try:
             resp = OpenThemeUseCase(_container.store).execute(
                 OpenThemeInput(objective=a.title, backlog=a.backlog,
-                               project=a.project, workflow=a.workflow)
+                               project=a.project, workflow=a.workflow, repo=a.repo)
             )
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
@@ -790,6 +792,9 @@ def cmd_new(argv):
                 return 1
         tid = _container.store.create_item(
             a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow)
+        repo = a.repo or (project_of(_container.store, parent) if a.parent else None)
+        if repo:
+            _container.store.add_artifact(tid, "repo", repo)
         if a.description or a.attention:
             _container.store.edit_node(tid, description=a.description)
             if a.attention:
