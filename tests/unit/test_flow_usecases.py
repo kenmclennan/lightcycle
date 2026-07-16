@@ -268,6 +268,18 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         self.assertTrue(human[0].attention)
         self.assertEqual(human[0].state, "ready")
 
+    def test_findings_step_closes_terminally_when_reviewed(self):
+        s = FakeStore()
+        self._reviewed_item(s)
+        batch = self._retro_batch(s)
+        aid = self._audit_step(s, batch)
+        self._uc(s).execute(CompleteInput(step=aid, outcome="findings", note="the digest"))
+        findings = [c for c in s.children(batch) if c.role == "human"][0]
+        resp = self._uc(s).execute(CompleteInput(step=findings.id, outcome="reviewed"))
+        self.assertIsNone(resp.next_step)
+        self.assertEqual(s.get_node(findings.id).state, "done")
+        self.assertEqual(s.get_node(batch).state, "done")
+
     def test_clean_marks_retroed_with_no_inbox_step(self):
         s = FakeStore()
         reviewed = self._reviewed_item(s)
