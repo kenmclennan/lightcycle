@@ -8,7 +8,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **theme** - a grouping of related work toward a goal. Optional: an item can stand alone.
 - **item** - a unit of deliverable work. Carries artifacts. May have a parent theme.
 - **step** - a single action performed by a role, filed from the workflow. A child of an item.
-- **artifact** - a typed value attached to an item: `spec`, `repo`, `branch`, `pr`, `design`, `feedback`. `feedback` accumulates; the others are single by convention (expressed in the step markdown, not the engine).
+- **artifact** - a typed value attached to an item: `brief`, `spec`, `repo`, `branch`, `pr`, `design`, `findings`, `reflection`. `reflection` (an agent's feedback) accumulates; the others are single by convention (expressed in the step markdown, not the engine).
 - **role** - who performs a step. For an agent step it is the step name itself (`write-code`, `review-code`, `audit`, ...); human steps carry the role `human`.
 - **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **state** - a node's single lifecycle position: `backlogged` -> `ready` -> `in_progress` -> `done`. One state machine (there is no separate `status`).
@@ -31,39 +31,37 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 ## The workflow (how steps chain)
 
-- **workflow** - the graph, defined in markdown: `entry`, `nodes` (stage -> step file), `edges` (outcome -> next step), `hooks` (external event -> transition), `signals`.
-- **step file** / **step markdown** - the prompt for a stage (`library/steps/<name>.md`). Workflow policy and conventions live here; the engine stays agnostic.
+- **workflow** - the graph, defined in markdown: `entry`, `requires` (artifacts the item must carry to start), `workspace` (which repo a stage runs in), `nodes` (stage -> step file), `edges` (outcome -> next step), `hooks` (external event -> transition), `signals`.
+- **step file** / **step markdown** - the prompt for a stage (`steps/<name>.md`, in a workflow source). Workflow policy and conventions live here; the engine stays agnostic.
 - **entry** - the step filed when an item is activated.
 - **edge** - `step  outcome  next-step`; a `next-step`-less edge declares the outcome terminal (closes, no new step).
 - **hook** - an external event (a PR merge, close, or comment) mapped to a transition.
-- **gate** - a human step that must close before downstream proceeds (e.g. `review-spec`, the spec-review gate).
+- **gate** - a human step that must close before downstream proceeds (e.g. the spec-phase `await-merge`, the spec-PR review gate).
 - **signal** - a per-step counter or condition feeding cadence or escalation.
 
-## The standard pipeline (steps)
+## The spec-driven pipeline (steps)
 
-Every step name is an **action**. The step name, its markdown file, and (for an agent step) the role you claim are the **same word** - one name, not two.
+Every step name is an **action**. The step name, its markdown file, and (for an agent step) the role you claim are the **same word** - one name, not two. The built-in `spec-driven` workflow is one arc: a brief becomes a formal spec on a spec PR, and once that PR merges the same item continues into the code build. `open-pr` and `await-merge` each appear twice (the spec phase and the code phase).
 
-- **draft-spec** (human) - co-draft a spec from a seed.
-- **review-spec** (human) - the entry gate; approve the spec or send it back.
-- **write-code** (agent) - implement the spec on a branch.
-- **open-pr** (agent) - push the branch and open the PR.
+- **spec-writer** (agent) - author the formal spec from the item's brief, on a branch in the specs repo.
+- **open-pr** (agent) - push the branch and open the PR (used at both the spec and code phases).
+- **await-merge** (human) - you review and merge the PR; lightcycle never merges for you. The spec-phase `await-merge` is the review gate; merging it advances the SAME item into the code phase (no workflow flip).
+- **write-code** (agent) - implement the merged spec on a branch in the project repo.
 - **watch-ci** (agent) - wait for CI to go green.
 - **review-code** (agent) - review the code on the PR.
 - **handle-feedback** (agent) - interpret PR feedback (`@lc` mention or a review bot) and decide rework / answer / ignore.
-- **await-merge** (human) - you merge the green PR; lightcycle never merges for you.
 - **cleanup** (human) - remove the worktree and branch; terminal.
 - **resolve-conflict** (agent) - rebase and resolve merge conflicts.
 - **review-conflict** (human) - the escalation endpoint when conflicts cannot be resolved.
 - **review-ci** (human) - the escalation endpoint when CI keeps failing past the cap instead of looping write-code forever.
-- **audit** (agent) - the cadence-spawned retro audit; escalates findings, never files work.
-- **review-findings** (human) - read the audit's findings and decide; closing it is the acknowledgement.
 
-## The three homes (deployment)
+The periodic retro **audit** is no longer a workflow step - it is an **engine service** that runs across all workflows (any item that produces feedback is audited on a cadence), with findings surfaced in `lc inbox`. See the audit under the engine, not the workflow.
 
-- **engine** - the installed package (pipx venv): the code plus the default workflow and steps shipped in `library/`. The library always resolves from this running engine package, never from an environment variable; it is only shadowed, never redirected. Replaced wholesale by `lc upgrade`.
-- **data home** (`~/.lightcycle`, named by `LC_HOME`) - the store (`store.db`), config, logs, worktrees. Never touched by upgrade. May shadow library steps and workflows.
-- **project** - a target repo, optionally with a `.lightcycle/` override of steps, workflows, or config.
-- **resolution order** for steps and workflows: project `.lightcycle/` -> data home -> engine `library/` (most specific wins).
+## Deployment (engine, data home, workflow sources)
+
+- **engine** - the installed package (pipx venv): the code plus `prompts/` (the engine-owned agent prompts it spawns directly - `driver.md`, `audit.md`). Replaced wholesale by `lc upgrade`. The engine ships no workflow library; workflows are pulled.
+- **data home** (`~/.lightcycle`, named by `LC_HOME`) - the store (`store.db`), config, logs, worktrees, and the pulled workflow bundles under `workflows/<origin>/<sha>/`. Never touched by `lc upgrade`.
+- **workflow source** - a git repo (an **origin**) holding a `source.toml` manifest plus `workflows/*.md` and `steps/*.md`. The engine pulls it into an immutable, sha-pinned **bundle**; each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves the flow and steps from that pin. Managed with `lc workflow add|upgrade|list|rm`. There is no `.lightcycle/` step/workflow override and no resolution chain - a pinned bundle is self-contained.
 
 ## Identity
 
