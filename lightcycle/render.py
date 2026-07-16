@@ -2,9 +2,12 @@ def node_extra(node, *, show_description=False):
     plan = next((a.value for a in node.artifacts if a.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
     if show_description and node.description:
-        snippet = node.description[:60] + ("..." if len(node.description) > 60 else "")
-        extra += "  desc:%s" % snippet
+        extra += "  desc:%s" % _truncate(node.description)
     return extra
+
+
+def _truncate(text, limit=60):
+    return text[:limit] + ("..." if len(text) > limit else "")
 
 
 def render_backlog(rows):
@@ -42,3 +45,24 @@ def _item_line(r, show_kind):
     if show_kind:
         return "[%s]  %s  %s%s" % (r.kind, r.step.id, title, extra)
     return "%s  %s%s" % (r.step.id, title, extra)
+
+
+def render_inbox(rows):
+    return [_inbox_line(r) for r in rows]
+
+
+def _inbox_line(r):
+    title = r.step.title or r.step.step
+    project = r.project or "-"
+    line = "%-9s  %-10s  %-12s  %s" % ("[%s]" % r.kind, r.step.id, project, title)
+    return line + _strategy_suffix(r) + node_extra(r.step, show_description=True)
+
+
+def _strategy_suffix(r):
+    if r.kind == "blocked" and r.step.needs:
+        return "  needs:%s" % r.step.needs
+    if r.kind == "triage" and r.step.notes:
+        return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])
+    if r.pr:
+        return "  pr:%s" % r.pr
+    return ""

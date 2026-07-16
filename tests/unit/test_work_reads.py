@@ -23,6 +23,10 @@ def _empty_flow(store):
     return FlowService(FakeFs({}), store)
 
 
+def _flow_with_step(store, step_name):
+    return FlowService(FakeFs({"some-role": {"step": step_name}}), store)
+
+
 class _Workers:
     def __init__(self, workers=None):
         self._workers = workers or []
@@ -209,6 +213,56 @@ class TestInboxAttentionFlag(unittest.TestCase):
         resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.step.title, "audit: spec gaps")
+
+
+class TestInboxProjectAndPr(unittest.TestCase):
+    def _item_with_step(self, s, step_name="ready-merge", repo=None, pr=None):
+        item = s.create_item("an item")
+        if repo:
+            s.add_artifact(item, "repo", repo)
+        if pr:
+            s.add_artifact(item, "pr", pr)
+        tid = s.create_step("a gate", step=step_name, role="human", parent=item)
+        return item, tid
+
+    def test_row_project_from_item_repo_artifact(self):
+        s = FakeStore()
+        _, tid = self._item_with_step(s, repo="proj-a")
+        resp = InboxUseCase(s, _flow_with_step(s, "ready-merge")).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.project, "proj-a")
+
+    def test_row_project_none_when_item_has_no_repo_artifact(self):
+        s = FakeStore()
+        _, tid = self._item_with_step(s)
+        resp = InboxUseCase(s, _flow_with_step(s, "ready-merge")).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertIsNone(row.project)
+
+    def test_row_pr_from_item_pr_artifact(self):
+        s = FakeStore()
+        _, tid = self._item_with_step(s, pr="https://example.com/pr/9")
+        resp = InboxUseCase(s, _flow_with_step(s, "ready-merge")).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.pr, "https://example.com/pr/9")
+
+    def test_row_pr_none_when_item_has_no_pr_artifact(self):
+        s = FakeStore()
+        _, tid = self._item_with_step(s)
+        resp = InboxUseCase(s, _flow_with_step(s, "ready-merge")).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertIsNone(row.pr)
+
+    def test_pr_resolves_regardless_of_step_name(self):
+        s = FakeStore()
+        _, tid = self._item_with_step(
+            s, step_name="totally-arbitrary-step-name", pr="https://example.com/pr/3"
+        )
+        resp = InboxUseCase(s, _flow_with_step(s, "totally-arbitrary-step-name")).execute(
+            InboxInput()
+        )
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.pr, "https://example.com/pr/3")
 
 
 if __name__ == "__main__":

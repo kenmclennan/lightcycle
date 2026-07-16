@@ -10,3 +10,4 @@ class HumanNodeRow:
     outcomes: List[str]
     step: Node
     project: Optional[str] = None
+    pr: Optional[str] = None
