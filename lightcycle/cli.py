@@ -242,7 +242,7 @@ def cmd_upgrade(argv):
     return 0
 
 
-_WORKER_VERBS = ("claim", "done", "show", "attach")
+_WORKER_VERBS = ("claim", "done", "show", "attach", "retro")
 _SET_FORBIDDEN_FLAGS = (
     "--parent", "--title", "--desc", "--description", "--goal", "--project",
     "--workflow", "--backlog", "--label", "--step",
