@@ -156,7 +156,7 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("editor: vi", text)
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
-        self.assertIn("retro-interval-items: 20", text)
+        self.assertIn("retro-interval-reflections: 20", text)
         self.assertIn("specs-remote: git@github.com:you/lightcycle-specs.git", text)
         self.assertIn("backups-dir: ~/.lightcycle-backups", text)
         self.assertIn("backup-interval-minutes: 15", text)
@@ -194,7 +194,7 @@ class TestEnsureConfig(unittest.TestCase):
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
             "max-session-seconds: 1800\n"
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
-            "retro-interval-items: 20\n"
+            "retro-interval-reflections: 20\n"
             "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
             "backup-retention: 96\nworkflow-retention: 5\n"
         )
@@ -254,27 +254,32 @@ class TestSpawnProtocol(unittest.TestCase):
 class TestRetroCadenceConfig(unittest.TestCase):
     def test_missing_key_raises(self):
         with self.assertRaises(ConfigError):
-            _cfg().retro_interval_items()
+            _cfg().retro_interval_reflections()
 
     def test_config_value_read(self):
-        self.assertEqual(_cfg(retro_interval_items="20").retro_interval_items(), 20)
-        self.assertEqual(_cfg(retro_interval_items="5").retro_interval_items(), 5)
+        self.assertEqual(_cfg(retro_interval_reflections="20").retro_interval_reflections(), 20)
+        self.assertEqual(_cfg(retro_interval_reflections="5").retro_interval_reflections(), 5)
 
     def test_env_override_wins(self):
         self.assertEqual(
-            _cfg({"LC_RETRO_INTERVAL_ITEMS": "30"}, retro_interval_items="20").retro_interval_items(),
+            _cfg(
+                {"LC_RETRO_INTERVAL_REFLECTIONS": "30"}, retro_interval_reflections="20"
+            ).retro_interval_reflections(),
             30,
         )
 
     def test_env_override_without_config_key(self):
-        self.assertEqual(_cfg({"LC_RETRO_INTERVAL_ITEMS": "20"}).retro_interval_items(), 20)
+        self.assertEqual(
+            _cfg({"LC_RETRO_INTERVAL_REFLECTIONS": "20"}).retro_interval_reflections(), 20
+        )
 
     def test_malformed_config_fails_fast(self):
         with self.assertRaises(ConfigError):
-            _cfg(retro_interval_items="lots").retro_interval_items()
+            _cfg(retro_interval_reflections="lots").retro_interval_reflections()
 
     def test_removed_keys_are_gone(self):
-        c = _cfg(retro_interval_items="20")
+        c = _cfg(retro_interval_reflections="20")
+        self.assertFalse(hasattr(c, "retro_interval_items"))
         self.assertFalse(hasattr(c, "retro_interval_days"))
         self.assertFalse(hasattr(c, "retro_min_items"))
 

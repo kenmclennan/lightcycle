@@ -111,7 +111,7 @@ def write_config(projects=None, specs=None):
         "poll-seconds: 5",
         "worker-history: 20",
         "editor: vi",
-        "retro-interval-items: 20",
+        "retro-interval-reflections: 20",
         "backups-dir: %s" % tempfile.mkdtemp(),
         "backup-interval-minutes: 15",
         "backup-retention: 96",
@@ -2212,9 +2212,45 @@ class TestRetro(unittest.TestCase):
 
         rc, out, err = call(_cli_mod.cmd_retro, "--pending")
         self.assertEqual(rc, 0, err)
-        self.assertIn("N=2", out)
+        self.assertIn("2 / 20 reflections", out)
+        self.assertNotIn("-> fires", out)
         self.assertIn("saga friction", out)
         self.assertIn("orphan friction", out)
+
+    def test_retro_pending_shows_fires_arrow_above_interval(self):
+        cfg = write_config(projects=self.root, specs=self.root)
+        inject_container(
+            self, store=self.store, home=self.root, config_path=cfg,
+            extra_env={"LC_RETRO_INTERVAL_REFLECTIONS": "2"},
+        )
+        saga = self.store.create_item("saga work", theme=self.store.create_theme("t1"))
+        self.store.close(saga, "merged")
+        k1 = self.store.create_step("build: x", step="build", role="coder", parent=saga)
+        self.store.close(k1, "done")
+        call(_cli_mod.cmd_attach, k1, "feedback", "one")
+        call(_cli_mod.cmd_attach, k1, "feedback", "two")
+        call(_cli_mod.cmd_attach, k1, "feedback", "three")
+
+        rc, out, err = call(_cli_mod.cmd_retro, "--pending")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("3 / 2 reflections -> fires", out)
+
+    def test_retro_pending_shows_fires_arrow_at_exact_interval_boundary(self):
+        cfg = write_config(projects=self.root, specs=self.root)
+        inject_container(
+            self, store=self.store, home=self.root, config_path=cfg,
+            extra_env={"LC_RETRO_INTERVAL_REFLECTIONS": "2"},
+        )
+        saga = self.store.create_item("saga work", theme=self.store.create_theme("t1"))
+        self.store.close(saga, "merged")
+        k1 = self.store.create_step("build: x", step="build", role="coder", parent=saga)
+        self.store.close(k1, "done")
+        call(_cli_mod.cmd_attach, k1, "feedback", "one")
+        call(_cli_mod.cmd_attach, k1, "feedback", "two")
+
+        rc, out, err = call(_cli_mod.cmd_retro, "--pending")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("2 / 2 reflections -> fires", out)
 
     def test_retro_rejects_zero_or_multiple_selectors(self):
         rc, out, err = call(_cli_mod.cmd_retro)

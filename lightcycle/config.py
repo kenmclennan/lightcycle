@@ -20,7 +20,7 @@ _SEED_KEYS = [
     ("poll-seconds", "5"),
     ("worker-history", "20"),
     ("editor", "vi"),
-    ("retro-interval-items", "20"),
+    ("retro-interval-reflections", "20"),
     ("backups-dir", "~/.lightcycle-backups"),
     ("backup-interval-minutes", "15"),
     ("backup-retention", "96"),
@@ -256,11 +256,11 @@ class Config:
             return raw
         return self._required_str("editor")
 
-    def retro_interval_items(self):
-        env = self._env_int("LC_RETRO_INTERVAL_ITEMS", None)
+    def retro_interval_reflections(self):
+        env = self._env_int("LC_RETRO_INTERVAL_REFLECTIONS", None)
         if env is not None:
             return env
-        return self._required_int("retro-interval-items")
+        return self._required_int("retro-interval-reflections")
 
     def backups_dir(self):
         return self._required_path("backups-dir")
