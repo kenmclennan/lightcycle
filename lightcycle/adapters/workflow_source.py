@@ -22,6 +22,17 @@ def default_bundle_root(config):
     return adapter.bundle_path(origin, sha) if sha else None
 
 
+def agent_search_roots(config):
+    bundle = default_bundle_root(config)
+    return [config.prompts_root()] + ([bundle] if bundle else [])
+
+
+def resolve_agent(config, role):
+    from lightcycle.adapters import fsio
+
+    return fsio.parse_step(agent_search_roots(config), role)
+
+
 class WorkflowSourceAdapter(WorkflowSourcePort):
     def __init__(self, config):
         self._config = config

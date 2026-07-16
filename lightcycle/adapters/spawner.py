@@ -5,9 +5,8 @@ import sys
 import time
 import uuid
 
-from lightcycle.adapters import fsio
 from lightcycle.adapters.workers import process_start_time, register_worker
-from lightcycle.adapters.workflow_source import default_bundle_root
+from lightcycle.adapters.workflow_source import resolve_agent
 from lightcycle.ports.spawner import SpawnerPort
 
 
@@ -23,9 +22,7 @@ def capture_pid_started(proc, get_start=process_start_time, sleep=time.sleep, at
 
 def spawn_worker(config, role):
     root = config.data_root()
-    bundle = default_bundle_root(config)
-    roots = [config.prompts_root()] + ([bundle] if bundle else [])
-    agent = fsio.parse_step(roots, role)
+    agent = resolve_agent(config, role)
     if agent is None:
         sys.stderr.write("no agent definition for role %s\n" % role)
         return None
