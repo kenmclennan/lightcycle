@@ -17,12 +17,13 @@ def render_backlog_themed(groups):
     for i, g in enumerate(groups):
         if i:
             lines.append("")
+        show_kind = len({r.kind for r in g.rows}) > 1
         if g.theme is None:
             lines.append("(no theme)")
+            lines.extend(_flat_line(r, show_kind) for r in g.rows)
         else:
             lines.append("%s  %s  %s" % (g.theme.id, g.project or "-", g.theme.title))
-        show_kind = len({r.kind for r in g.rows}) > 1
-        lines.extend("    " + _item_line(r, show_kind) for r in g.rows)
+            lines.extend("    " + _item_line(r, show_kind) for r in g.rows)
     return lines
 
 

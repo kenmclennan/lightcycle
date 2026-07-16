@@ -90,10 +90,16 @@ class TestRenderBacklogThemed(unittest.TestCase):
         self.assertEqual(lines[1], "    LC-99.1  item one")
 
     def test_no_theme_group_heading(self):
-        group = _group(None, None, [row(step=tk(id="LC-77", title="loose item"))])
+        group = _group(None, None, [row(project=None, step=tk(id="LC-77", title="loose item"))])
         lines = render_backlog_themed([group])
         self.assertEqual(lines[0], "(no theme)")
-        self.assertEqual(lines[1], "    LC-77  loose item")
+        self.assertEqual(lines[1], _flat("LC-77", "-", "loose item"))
+
+    def test_no_theme_group_item_shows_project(self):
+        group = _group(None, None, [row(project="proj-a", step=tk(id="LC-77", title="loose item"))])
+        lines = render_backlog_themed([group])
+        self.assertEqual(lines[0], "(no theme)")
+        self.assertEqual(lines[1], _flat("LC-77", "proj-a", "loose item"))
 
     def test_blank_line_between_groups(self):
         g1 = _group(tk(id="LC-1", title="t1"), "-", [row(step=tk(id="LC-1.1", title="a"))])
