@@ -6,7 +6,7 @@ from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.has_feedback import has_feedback
-from lightcycle.domain.audit import AUDIT_STEP
+from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work.state import State
 
@@ -36,6 +36,8 @@ class CompleteStepUseCase:
         t = self._store.get_node(input.step)
         if t.step == AUDIT_STEP:
             return self._complete_engine_audit(t, input)
+        if t.step == FINDINGS_STEP:
+            return self._complete_findings(t, input)
         name = self._flow.workflow_for(t)
         transition = self._resolver.resolve(t, input.outcome, name)
         declared = self._flow.outcomes_for(t.step, name)
@@ -83,8 +85,15 @@ class CompleteStepUseCase:
         self._mark_retroed()
         if input.outcome == "findings" and input.note:
             fid = self._store.create_step(
-                "review-findings: pending-feedback", role="human", parent=t.parent, attention=True)
+                "review-findings: pending-feedback", step=FINDINGS_STEP, role="human",
+                parent=t.parent, attention=True)
             self._store.note(fid, input.note)
+        self._cascade_close(t.parent)
+        return CompleteResponse(next_step=None)
+
+    def _complete_findings(self, t, input: CompleteInput) -> CompleteResponse:
+        self._store.note(input.step, "outcome: %s" % input.outcome)
+        self._store.close(input.step, input.outcome)
         self._cascade_close(t.parent)
         return CompleteResponse(next_step=None)
 
