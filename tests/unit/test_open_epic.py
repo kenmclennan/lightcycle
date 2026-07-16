@@ -43,6 +43,19 @@ class TestOpenEpic(unittest.TestCase):
                 OpenThemeInput(objective="ship the thing", backlog=["does-not-exist"])
             )
 
+    def test_attaches_repo_artifact_when_given(self):
+        s = FakeStore()
+        resp = OpenThemeUseCase(s).execute(
+            OpenThemeInput(objective="ship the thing", repo="lightcycle")
+        )
+        arts = s.item_artifacts(resp.theme)
+        self.assertEqual([(a.type, a.value) for a in arts], [("repo", "lightcycle")])
+
+    def test_no_repo_artifact_when_omitted(self):
+        s = FakeStore()
+        resp = OpenThemeUseCase(s).execute(OpenThemeInput(objective="ship the thing"))
+        self.assertEqual(s.item_artifacts(resp.theme), [])
+
 
 if __name__ == "__main__":
     unittest.main()

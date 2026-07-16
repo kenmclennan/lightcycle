@@ -825,6 +825,52 @@ class TestAdd(unittest.TestCase):
         self.assertIsNone(t["step"])
         self.assertEqual(t["title"], "look at X later")
 
+    def test_new_item_with_repo_attaches_repo_artifact(self):
+        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--repo", "lightcycle")
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
+        arts = self.store.item_artifacts(new)
+        self.assertEqual([(a.type, a.value) for a in arts], [("repo", "lightcycle")])
+
+    def test_new_theme_with_repo_attaches_repo_artifact(self):
+        rc, out, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--repo", "lightcycle")
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
+        arts = self.store.item_artifacts(new)
+        self.assertEqual([(a.type, a.value) for a in arts], [("repo", "lightcycle")])
+
+    def test_new_item_with_parent_inherits_theme_repo_when_no_repo_given(self):
+        rc, theme, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--repo", "lightcycle")
+        self.assertEqual(rc, 0, err)
+        theme = theme.strip()
+        rc, out, err = call(_cli_mod.cmd_new, "item", "a step", "--parent", theme)
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
+        arts = self.store.item_artifacts(new)
+        self.assertEqual([(a.type, a.value) for a in arts], [("repo", "lightcycle")])
+
+    def test_new_item_explicit_repo_overrides_theme_inheritance(self):
+        rc, theme, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--repo", "lightcycle")
+        self.assertEqual(rc, 0, err)
+        theme = theme.strip()
+        rc, out, err = call(
+            _cli_mod.cmd_new, "item", "a step", "--parent", theme, "--repo", "other"
+        )
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
+        arts = self.store.item_artifacts(new)
+        self.assertEqual([(a.type, a.value) for a in arts], [("repo", "other")])
+
+    def test_new_item_with_parent_theme_lacking_repo_stays_untagged(self):
+        rc, theme, err = call(_cli_mod.cmd_new, "theme", "ship the thing")
+        self.assertEqual(rc, 0, err)
+        theme = theme.strip()
+        rc, out, err = call(_cli_mod.cmd_new, "item", "a step", "--parent", theme)
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
+        arts = self.store.item_artifacts(new)
+        self.assertEqual(arts, [])
+
 
 class TestArtifacts(unittest.TestCase):
     def setUp(self):

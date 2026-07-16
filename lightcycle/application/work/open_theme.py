@@ -10,6 +10,7 @@ class OpenThemeInput:
     backlog: Optional[List[str]] = None
     project: Optional[str] = None
     workflow: Optional[str] = None
+    repo: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,8 @@ class OpenThemeUseCase:
         theme = self._store.create_theme(
             input.objective, project=input.project, workflow=input.workflow
         )
+        if input.repo:
+            self._store.add_artifact(theme, "repo", input.repo)
         if input.backlog:
             link_resolves(self._store, theme, input.backlog)
         return OpenThemeResponse(theme=theme)
