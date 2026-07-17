@@ -124,6 +124,24 @@ class TestRetroCadenceFires(unittest.TestCase):
         _close_item(s, "thick", reflections=2)
         self.assertEqual(len(_gate(s, interval_reflections=3).execute(0.0).fired), 1)
 
+    def test_fired_audit_parent_item_reads_ready_not_backlogged(self):
+        s = FakeStore()
+        for i in range(3):
+            _close_item(s, "item %d" % i, reflections=1)
+        step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
+        parent = s.get_node(step.parent)
+        self.assertEqual(parent.state, State.READY)
+
+    def test_parent_item_reads_in_progress_once_audit_is_claimed(self):
+        s = FakeStore()
+        for i in range(3):
+            _close_item(s, "item %d" % i, reflections=1)
+        step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
+        s.assign(step.id, "audit")
+        s.update_state(step.id, State.IN_PROGRESS)
+        parent = s.get_node(step.parent)
+        self.assertEqual(parent.state, State.IN_PROGRESS)
+
 
 class TestRetroCadenceNoRunaway(unittest.TestCase):
     def test_does_not_refire_while_an_audit_is_open(self):

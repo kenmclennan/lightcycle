@@ -289,6 +289,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         self.assertIsNone(resp.next_step)
         self.assertNotIn(reviewed, [i.id for i in s.closed_unretroed_items()])
         self.assertEqual([c for c in s.children(batch) if c.role == "human"], [])
+        self.assertEqual(s.get_node(batch).state, "done")
 
     def test_non_audit_step_completion_does_not_mark_retroed(self):
         s = FakeStore()
