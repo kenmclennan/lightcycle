@@ -1,23 +1,15 @@
-import os
-import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.support.isolation import engine_lc_outside_any_worktree
+
 ROOT = Path(__file__).resolve().parents[2]
 LC = str(ROOT / "bin" / "lc")
 
-
-def _engine_copy_outside_any_worktree():
-    dst = tempfile.mkdtemp()
-    shutil.copytree(str(ROOT / "lightcycle"), os.path.join(dst, "lightcycle"))
-    shutil.copytree(str(ROOT / "bin"), os.path.join(dst, "bin"))
-    return os.path.join(dst, "bin", "lc")
-
-
-LC_OUTSIDE_WORKTREE = _engine_copy_outside_any_worktree()
+LC_OUTSIDE_WORKTREE = engine_lc_outside_any_worktree()
 
 
 def run_worker(*args):
