@@ -292,7 +292,11 @@ def main(argv=None):
     if cmd not in VERBS:
         sys.stderr.write("unknown subcommand: %s\n" % cmd)
         return 2
-    if _container.config.is_worker() and not _worker_permitted(cmd, argv[1:]):
+    if (
+        _container.config.is_worker()
+        and _container.config.is_live_home()
+        and not _worker_permitted(cmd, argv[1:])
+    ):
         sys.stderr.write(
             "lc: workers may not run '%s' - permitted: claim, done, show, attach, "
             "set --state blocked\n" % cmd

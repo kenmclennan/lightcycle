@@ -83,6 +83,11 @@ class Config:
     def default_data_root(self):
         return os.path.join(self._home(), ".lightcycle")
 
+    def is_live_home(self):
+        return os.path.normpath(self.data_root()) == os.path.normpath(
+            self.default_data_root()
+        )
+
     def config_path(self):
         override = self._env("LC_CONFIG")
         if override:
