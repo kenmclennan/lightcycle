@@ -30,6 +30,7 @@ class TestNodeSpec(unittest.TestCase):
                 "deps": ["t-1", "t-2"],
                 "project": "grid",
                 "goal": "ship",
+                "attention": False,
             },
         )
 

@@ -8,6 +8,7 @@ from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeU
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from lightcycle.domain.contracts import StepContract
+from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.state import State
 
 _AUTO_CLOSE_REASON = "auto-closed: all children done"
@@ -26,11 +27,15 @@ class CompleteResponse:
 
 
 class CompleteStepUseCase:
-    def __init__(self, store, flow, worktrees=None):
+    def __init__(self, store, flow, worktrees=None, config=None):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
+        self._config = config
         self._resolver = NextStepResolver(store, flow)
+
+    def _expected_assignee(self):
+        return self._config.spawn_id() if self._config else None
 
     def execute(self, input: CompleteInput) -> CompleteResponse:
         t = self._store.get_node(input.step)
@@ -70,9 +75,12 @@ class CompleteStepUseCase:
                 "cannot close %s: step '%s' must produce %s; none on the item. "
                 "lc link the artifact first." % (input.step, t.step, ", ".join(sorted(missing)))
             )
+        spec = transition.next_step_spec(t) if transition else None
+        won, new = self._store.complete_step_atomic(
+            input.step, input.outcome, self._expected_assignee(), spec)
+        if not won:
+            return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
-        self._store.close(input.step, input.outcome)
-        new = self._resolver.create(t, transition) if transition else None
         if input.note:
             if transition:
                 self._store.note(new if new else input.step, transition.forward_note(input.note))
@@ -82,20 +90,28 @@ class CompleteStepUseCase:
         return CompleteResponse(next_step=new)
 
     def _complete_engine_audit(self, t, input: CompleteInput) -> CompleteResponse:
-        self._store.note(input.step, "outcome: %s" % input.outcome)
-        self._store.close(input.step, input.outcome)
-        self._mark_retroed()
+        spec = None
         if input.outcome == "findings" and input.note:
-            fid = self._store.create_step(
-                "review-findings: pending-feedback", step=FINDINGS_STEP, role="human",
-                parent=t.parent, attention=True)
+            spec = NodeSpec(
+                title="review-findings: pending-feedback", step=FINDINGS_STEP,
+                role="human", parent=t.parent, attention=True)
+        won, fid = self._store.complete_step_atomic(
+            input.step, input.outcome, self._expected_assignee(), spec)
+        if not won:
+            return CompleteResponse(next_step=None)
+        self._store.note(input.step, "outcome: %s" % input.outcome)
+        self._mark_retroed()
+        if fid is not None:
             self._store.note(fid, input.note)
         self._cascade_close(t.parent)
         return CompleteResponse(next_step=None)
 
     def _complete_findings(self, t, input: CompleteInput) -> CompleteResponse:
+        won, _ = self._store.complete_step_atomic(
+            input.step, input.outcome, self._expected_assignee(), None)
+        if not won:
+            return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
-        self._store.close(input.step, input.outcome)
         self._cascade_close(t.parent)
         return CompleteResponse(next_step=None)
 

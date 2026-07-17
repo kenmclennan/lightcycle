@@ -117,6 +117,7 @@ class TestTransition(unittest.TestCase):
                 "deps": ["t-1"],
                 "project": None,
                 "goal": None,
+                "attention": False,
             },
         )
 

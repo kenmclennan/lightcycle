@@ -111,6 +111,7 @@ class SqliteStore(StorePort):
         self._conn = sqlite3.connect(self._db_path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(_SCHEMA)
         self._apply_schema_version_floor()
         self._migrate_close_reason_to_outcome()
@@ -442,6 +443,27 @@ class SqliteStore(StorePort):
         self._record_history(tid, State.DONE)
         self._conn.commit()
 
+    def complete_step_atomic(self, step, outcome, expected_assignee, next_step_spec):
+        expected = expected_assignee or ""
+        cur = self._conn.execute(
+            "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? "
+            "WHERE id = ? AND state != 'done' AND (? = '' OR assignee = ?)",
+            (outcome, datetime.datetime.now().isoformat(), step, expected, expected),
+        )
+        if cur.rowcount == 0:
+            self._conn.rollback()
+            return (False, None)
+        try:
+            self._record_history(step, State.DONE)
+            new_id = None
+            if next_step_spec is not None:
+                new_id = self._insert_step_nocommit(**next_step_spec.as_kwargs())
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        return (True, new_id)
+
     def disconnect(self):
         self._conn.close()
 
@@ -488,7 +510,7 @@ class SqliteStore(StorePort):
         )
         self._conn.commit()
 
-    def dep_add(self, node_id, blocked_by):
+    def _dep_add_nocommit(self, node_id, blocked_by):
         exists = self._conn.execute(
             "SELECT 1 FROM deps WHERE node_id = ? AND blocked_by = ?", (node_id, blocked_by)
         ).fetchone()
@@ -496,7 +518,10 @@ class SqliteStore(StorePort):
             self._conn.execute(
                 "INSERT INTO deps (node_id, blocked_by) VALUES (?, ?)", (node_id, blocked_by)
             )
-            self._conn.commit()
+
+    def dep_add(self, node_id, blocked_by):
+        self._dep_add_nocommit(node_id, blocked_by)
+        self._conn.commit()
 
     def dep_remove(self, node_id, blocked_by):
         cur = self._conn.execute(
@@ -526,15 +551,20 @@ class SqliteStore(StorePort):
             return None
         tid = row[0]
         assignee = self._config.spawn_id() or role
-        self._conn.execute(
-            "UPDATE nodes SET assignee = ?, state = 'in_progress' WHERE id = ?", (assignee, tid)
+        cur = self._conn.execute(
+            "UPDATE nodes SET assignee = ?, state = 'in_progress' "
+            "WHERE id = ? AND state = 'ready'",
+            (assignee, tid),
         )
+        if cur.rowcount == 0:
+            self._conn.commit()
+            return None
         self._record_history(tid, State.IN_PROGRESS)
         self._conn.commit()
         return self.get_node(tid)
 
-    def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None, description=None, attention=False, id=None):
+    def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
+                              project=None, goal=None, description=None, attention=False, id=None):
         tid = self._mint_or_adopt(id, parent)
         self._conn.execute(
             "INSERT INTO nodes (id, type, title, state, step, role, parent, project, goal, "
@@ -542,10 +572,17 @@ class SqliteStore(StorePort):
             (tid, title, step, role, parent, project, goal, description,
              1 if attention else 0, datetime.datetime.now().isoformat()),
         )
-        self._conn.commit()
         if deps:
             for dep in deps:
-                self.dep_add(tid, dep)
+                self._dep_add_nocommit(tid, dep)
+        return tid
+
+    def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
+                    project=None, goal=None, description=None, attention=False, id=None):
+        tid = self._insert_step_nocommit(
+            title, step=step, role=role, parent=parent, deps=deps, project=project,
+            goal=goal, description=description, attention=attention, id=id)
+        self._conn.commit()
         return tid
 
     def _is_referenceless(self, tid):
