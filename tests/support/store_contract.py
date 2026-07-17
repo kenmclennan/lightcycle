@@ -378,6 +378,13 @@ class StoreContractBase:
         s.close(blocker, "done")
         self.assertEqual(s.get_node(blocked).state, "ready")
 
+    def test_step_state_ready_when_blocker_deleted(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker")
+        blocked = s.create_step("blocked", deps=[blocker])
+        s.delete(blocker)
+        self.assertEqual(s.get_node(blocked).state, "ready")
+
     def test_item_state_rolls_up_mixed_children(self):
         s = self.make_store()
         item = s.create_item("item")
