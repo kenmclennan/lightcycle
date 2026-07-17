@@ -11,6 +11,10 @@ FLOW = flow_from_metas(
 )
 
 
+def fixed(flow):
+    return lambda t: flow
+
+
 def tk(id="t", **kw):
     return Node(id=id, **kw)
 
@@ -69,17 +73,17 @@ class TestForHuman(unittest.TestCase):
                 tk(id="h", state=State.READY, role="human", step=None),
             ]
         )
-        rows = q.for_human(FLOW, {"todo"})
+        rows = q.for_human(fixed(FLOW), {"todo"})
         self.assertEqual([t.id for _, t in rows], ["h"])
 
     def test_inbox_returns_action_and_blocked(self):
-        kinds = [c[0] for c, _ in self._queue().for_human(FLOW, {"action", "blocked"})]
+        kinds = [c[0] for c, _ in self._queue().for_human(fixed(FLOW), {"action", "blocked"})]
         self.assertIn("action", kinds)
         self.assertIn("blocked", kinds)
         self.assertNotIn("todo", kinds)
 
     def test_backlog_returns_todo_only(self):
-        kinds = [c[0] for c, _ in self._queue().for_human(FLOW, {"todo"})]
+        kinds = [c[0] for c, _ in self._queue().for_human(fixed(FLOW), {"todo"})]
         self.assertEqual(kinds, ["todo"])
 
     def test_sorted_by_id(self):
@@ -90,16 +94,16 @@ class TestForHuman(unittest.TestCase):
                 tk(id="b-2", state=State.READY, role="human", step=None),
             ]
         )
-        self.assertEqual([t.id for _, t in q.for_human(FLOW, {"todo"})], ["b-1", "b-2", "b-3"])
+        self.assertEqual([t.id for _, t in q.for_human(fixed(FLOW), {"todo"})], ["b-1", "b-2", "b-3"])
 
     def test_limit_n(self):
         q = self._queue(
             [tk(id="c-%d" % i, state=State.READY, role="human", step=None) for i in range(5)]
         )
-        self.assertEqual(len(q.for_human(FLOW, {"todo"}, n=2)), 2)
+        self.assertEqual(len(q.for_human(fixed(FLOW), {"todo"}, n=2)), 2)
 
     def test_no_limit_returns_all(self):
-        rows = self._queue().for_human(FLOW, {"action", "blocked", "todo"})
+        rows = self._queue().for_human(fixed(FLOW), {"action", "blocked", "todo"})
         self.assertEqual(len(rows), 3)
 
 

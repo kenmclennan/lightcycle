@@ -15,7 +15,7 @@ from lightcycle.application.work import (
     TraceUseCase,
 )
 from lightcycle.application.services.flow import FlowService
-from tests.support.fake_fs import FakeFs
+from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
 
@@ -139,6 +139,26 @@ class TestQueue(unittest.TestCase):
         self.assertEqual(result_ids, [steps["ready"]])
         for non_step in non_steps:
             self.assertNotIn(non_step, result_ids)
+
+
+class TestInboxPerItemWorkflow(unittest.TestCase):
+    def test_each_human_step_is_classified_against_its_own_workflow(self):
+        s = FakeStore()
+        a_metas = {"gate": {"step": "gate", "routes": {"approve": "done", "reject": "build"}}}
+        b_metas = {"gate": {"step": "gate", "routes": {"merge": "done"}}}
+        fs = FakeFs(a_metas, workflows={
+            "wfA": graph_text_from_metas(a_metas),
+            "wfB": graph_text_from_metas(b_metas),
+        })
+        flow_svc = FlowService(fs, s)
+        item_a = s.create_item("iA", theme=s.create_theme("A"), workflow="wfA")
+        a = s.create_step("gate: A", step="gate", role="human", parent=item_a)
+        item_b = s.create_item("iB", theme=s.create_theme("B"), workflow="wfB")
+        b = s.create_step("gate: B", step="gate", role="human", parent=item_b)
+        rows = InboxUseCase(s, flow_svc).execute(InboxInput()).rows
+        outcomes = {row.step.id: row.outcomes for row in rows}
+        self.assertEqual(outcomes[a], ["approve", "reject"])
+        self.assertEqual(outcomes[b], ["merge"])
 
 
 class TestInboxBacklog(unittest.TestCase):
