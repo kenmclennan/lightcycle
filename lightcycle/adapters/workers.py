@@ -73,8 +73,8 @@ def process_start_time(pid):
 def decide_alive(pid_exists, recorded_start, live_start):
     if not pid_exists:
         return False
-    if recorded_start is None:
-        return False
+    if recorded_start is None or live_start is None:
+        return True
     return live_start == recorded_start
 
 
