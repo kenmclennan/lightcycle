@@ -3,7 +3,7 @@ import os
 import uuid
 
 from lightcycle.ports.store import StorePort
-from lightcycle.domain.work import Artifact, Node, NodeView, State, roll_up
+from lightcycle.domain.work import Artifact, Node, NodeView, State, derive_state
 
 
 def _new_id():
@@ -15,19 +15,6 @@ def _label_value(labels, prefix):
         if l.startswith(prefix):
             return l[len(prefix):]
     return None
-
-
-def _leaf_state(record):
-    state = record.get("state")
-    if state == "done":
-        return State.DONE
-    if record.get("type") != "step":
-        return None
-    if record.get("assignee") or state == "in_progress":
-        return State.IN_PROGRESS
-    if record.get("dep_count"):
-        return State.BACKLOGGED
-    return State.READY
 
 
 def labels_for(*, role=None, step=None, project=None, goal=None, attention=False):
@@ -45,11 +32,21 @@ def labels_for(*, role=None, step=None, project=None, goal=None, attention=False
     return parts
 
 
-def record_to_node(record, state=None):
+def record_to_node(record):
     labels = record.get("labels") or []
     role = _label_value(labels, "for:")
     meta = record.get("metadata") or {}
-    resolved_state = state if state is not None else _leaf_state(record)
+    closed = record.get("state") == "done"
+    if record.get("type") == "step" or closed:
+        resolved_state = derive_state(
+            record.get("type"),
+            closed,
+            record.get("assignee"),
+            record.get("dep_count") or 0,
+            [],
+        )
+    else:
+        resolved_state = None
     return Node(
         id=record["id"],
         title=record.get("title", ""),
@@ -112,12 +109,14 @@ class FakeStore(StorePort):
     def _to_node(self, record):
         node = record_to_node(record)
         if node.state is None:
-            children_states = [
+            child_states = [
                 self._to_node(r).state
                 for r in self._records.values()
                 if r.get("parent") == record["id"]
             ]
-            node.state = roll_up(children_states)
+            node.state = derive_state(
+                node.type, False, node.claimed_by, bool(node.deps), child_states
+            )
         return node
 
     def item_artifacts(self, item_id):
