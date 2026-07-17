@@ -15,9 +15,9 @@ class NodeQueue:
             lanes[lane_for(t.state, t.role).value].append(t)
         return lanes
 
-    def for_human(self, flow, kinds, n=None):
+    def for_human(self, resolve_flow, kinds, n=None):
         rows = [
-            (t.classify_for_human(flow), t)
+            (t.classify_for_human(resolve_flow(t)), t)
             for t in self._steps
             if t.state == State.READY and t.role == "human"
         ]

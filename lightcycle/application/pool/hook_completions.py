@@ -2,8 +2,6 @@ import datetime
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from lightcycle.domain.work.state import State
-
 
 @dataclass(frozen=True)
 class HookCompletionsResponse:
@@ -22,13 +20,21 @@ class HookCompletionsUseCase:
 
     def execute(self, since: Optional[float]) -> HookCompletionsResponse:
         since_iso = _iso(since) if since is not None else None
-        flow = self._flow_service.load_flow()
+        since_date = since_iso[:10] if since_iso else ""
+        cache = {}
         completed = []
-        for step, _role in flow.hook_steps():
-            for node in self._store.steps_at_step(step):
-                if node.state != State.DONE or not node.closed_at:
-                    continue
-                if since_iso is not None and node.closed_at <= since_iso:
-                    continue
-                completed.append((step, node.id, node.notes or node.outcome or ""))
+        for node in self._store.nodes_closed_since(since_date):
+            if not node.closed_at:
+                continue
+            if since_iso is not None and node.closed_at <= since_iso:
+                continue
+            if node.step in self._hook_steps_for(node, cache):
+                completed.append((node.step, node.id, node.notes or node.outcome or ""))
         return HookCompletionsResponse(completed=completed)
+
+    def _hook_steps_for(self, node, cache):
+        pin = self._flow_service.workflow_for(node)
+        if pin not in cache:
+            flow = self._flow_service.load_flow(pin)
+            cache[pin] = {step for step, _role in flow.hook_steps()}
+        return cache[pin]

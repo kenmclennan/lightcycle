@@ -3,7 +3,7 @@ import unittest
 
 from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
 from lightcycle.application.services.flow import FlowService
-from tests.support.fake_fs import FakeFs
+from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
 
@@ -70,6 +70,46 @@ class TestHookCompletionsDetection(unittest.TestCase):
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         result = HookCompletionsUseCase(s, flow_svc).execute(None)
         self.assertEqual(result.completed, [("deploy", tid, "done")])
+
+
+class TestHookCompletionsPerItem(unittest.TestCase):
+    def _fs(self):
+        hooked = {"auditor": {"model": "s", "step": "audit", "on_theme_close": True}}
+        plain = {"builder": {"model": "s", "step": "audit"}}
+        return FakeFs(hooked, workflows={
+            "wfA": graph_text_from_metas(hooked),
+            "wfB": graph_text_from_metas(plain),
+        })
+
+    def _done_audit(self, s, workflow):
+        theme = s.create_theme("t-%s" % workflow)
+        item = s.create_item("i-%s" % workflow, theme=theme, workflow=workflow)
+        tid = s.create_step("audit: %s" % workflow, step="audit", role="auditor", parent=item)
+        s.close(tid, "done")
+        _set_closed_at(s, tid, "2026-01-01T12:00:00")
+        return tid
+
+    def test_hooks_resolve_per_item_not_from_a_single_default_flow(self):
+        s = FakeStore()
+        flow_svc = FlowService(self._fs(), s)
+        on_a = self._done_audit(s, "wfA")
+        self._done_audit(s, "wfB")
+        result = HookCompletionsUseCase(s, flow_svc).execute(None)
+        self.assertEqual(result.completed, [("audit", on_a, "done")])
+
+    def test_reports_a_non_default_workflow_hook_even_after_its_item_is_done(self):
+        s = FakeStore()
+        role = {"auditor": {"model": "s", "step": "audit"}}
+        hooked = {"auditor": {"model": "s", "step": "audit", "on_theme_close": True}}
+        fs = FakeFs(role, workflows={"wfX": graph_text_from_metas(hooked)})
+        flow_svc = FlowService(fs, s)
+        item = s.create_item("i", theme=s.create_theme("t"), workflow="wfX")
+        tid = s.create_step("audit: X", step="audit", role="auditor", parent=item)
+        s.close(tid, "done")
+        _set_closed_at(s, tid, "2026-01-01T12:00:00")
+        s.close(item, "done")
+        result = HookCompletionsUseCase(s, flow_svc).execute(None)
+        self.assertEqual(result.completed, [("audit", tid, "done")])
 
 
 class TestHookCompletionsSinceThreshold(unittest.TestCase):
