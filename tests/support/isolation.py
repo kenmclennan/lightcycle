@@ -1,10 +1,22 @@
 import os
+import shutil
 import subprocess
+import tempfile
 from collections.abc import Mapping
+from pathlib import Path
 
 import lightcycle.cli as cli
 from lightcycle.config import Config
 from lightcycle.container import Container
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def engine_lc_outside_any_worktree():
+    dst = tempfile.mkdtemp()
+    shutil.copytree(str(REPO_ROOT / "lightcycle"), os.path.join(dst, "lightcycle"))
+    shutil.copytree(str(REPO_ROOT / "bin"), os.path.join(dst, "bin"))
+    return os.path.join(dst, "bin", "lc")
 
 
 class FrozenEnvironError(Exception):
