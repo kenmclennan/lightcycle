@@ -34,6 +34,8 @@ class CompleteStepUseCase:
 
     def execute(self, input: CompleteInput) -> CompleteResponse:
         t = self._store.get_node(input.step)
+        if t.state == State.DONE:
+            return CompleteResponse(next_step=None)
         if t.step == AUDIT_STEP:
             return self._complete_engine_audit(t, input)
         if t.step == FINDINGS_STEP:

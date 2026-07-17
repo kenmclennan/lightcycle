@@ -436,7 +436,7 @@ class SqliteStore(StorePort):
 
     def close(self, tid, reason):
         self._conn.execute(
-            "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? WHERE id = ?",
+            "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? WHERE id = ? AND state != 'done'",
             (reason, datetime.datetime.now().isoformat(), tid),
         )
         self._record_history(tid, State.DONE)

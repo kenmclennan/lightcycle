@@ -147,6 +147,19 @@ class TestCompleteTask(unittest.TestCase):
         self.assertEqual(s.get_node(bid).state, "done")
         self.assertEqual(s.get_node(resp.next_step).step, "review")
 
+    def test_completing_already_done_step_is_noop(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder")
+        CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteInput(step=bid, outcome="done")
+        )
+        count_after_first = len(s._records)
+        resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteInput(step=bid, outcome="done")
+        )
+        self.assertIsNone(resp.next_step)
+        self.assertEqual(len(s._records), count_after_first)
+
     def test_invalid_outcome_raises(self):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="coder")

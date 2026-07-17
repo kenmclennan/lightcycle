@@ -214,6 +214,8 @@ class FakeStore(StorePort):
 
     def close(self, tid, reason):
         b = self._get(tid)
+        if b.get("state") == "done":
+            return
         b["state"] = "done"
         b["outcome"] = reason
         b["closed_at"] = datetime.datetime.now().isoformat()
