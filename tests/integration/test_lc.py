@@ -399,15 +399,14 @@ class TestClaim(unittest.TestCase):
 
     def test_claim_assigns_worker_spawnid(self):
         b = self.store.create_step("build: y", step="build", role="coder")
-        old = os.environ.get("LC_SPAWNID")
+        cfg = write_config(projects=self.root, specs=self.root)
+        inject_container(
+            self, store=self.store, home=self.root, config_path=cfg,
+            extra_env={"LC_SPAWNID": "spawn-xyz"},
+        )
         os.environ["LC_SPAWNID"] = "spawn-xyz"
-        try:
-            call(_cli_mod.cmd_claim, "coder")
-        finally:
-            if old is None:
-                os.environ.pop("LC_SPAWNID", None)
-            else:
-                os.environ["LC_SPAWNID"] = old
+        self.addCleanup(os.environ.pop, "LC_SPAWNID", None)
+        call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(self.store.get_node(b).claimed_by, "spawn-xyz")
 
 
@@ -1265,15 +1264,21 @@ class TestFileStep(unittest.TestCase):
         self.assertEqual(kid.role, "coder")
 
     def test_spawn_uses_frontmatter_model(self):
-        os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
-        self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
+        cfg = write_config(projects=self.root, specs=self.root)
+        inject_container(
+            self, store=self.store, home=self.root, config_path=cfg,
+            extra_env={"LC_SPAWN_CMD": "echo x >> {log}"},
+        )
         rc, _, err = call(_cli_mod.cmd_spawn, "coder")
         self.assertEqual(rc, 0, err)
 
     def test_spawn_refuses_when_model_missing(self):
         (_steps_dir(self.root) / "reviewer.md").write_text("no frontmatter here")
-        os.environ["LC_SPAWN_CMD"] = "echo x >> {log}"
-        self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
+        cfg = write_config(projects=self.root, specs=self.root)
+        inject_container(
+            self, store=self.store, home=self.root, config_path=cfg,
+            extra_env={"LC_SPAWN_CMD": "echo x >> {log}"},
+        )
         rc, _, err = call(_cli_mod.cmd_spawn, "reviewer")
         self.assertEqual(rc, 1)
         self.assertIn("model", err)
