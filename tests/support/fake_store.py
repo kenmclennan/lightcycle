@@ -437,6 +437,11 @@ class FakeStore(StorePort):
                 if b.get("type") == "step" and label in (b.get("labels") or [])]
 
     def delete(self, tid):
+        for other_id, blockers in self._deps.items():
+            if tid in blockers:
+                other = self._records.get(other_id)
+                if other and other.get("state") != "done":
+                    other["dep_count"] = max(0, (other.get("dep_count") or 0) - 1)
         self._records.pop(tid, None)
         self._deps.pop(tid, None)
         self._history.pop(tid, None)
