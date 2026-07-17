@@ -235,7 +235,7 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(held).state, "in_progress")
+        self.assertIn(held, [t.id for t in s.claimed_steps()])
 
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
@@ -264,7 +264,7 @@ class TestSweep(unittest.TestCase):
         )
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
         self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(t).state, "in_progress")
+        self.assertIn(t, [n.id for n in s.claimed_steps()])
 
     def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
         s = FakeStore()

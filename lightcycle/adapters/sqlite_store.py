@@ -2,7 +2,7 @@ import datetime
 import os
 import sqlite3
 
-from lightcycle.domain.work import Artifact, Node, NodeView, State, roll_up
+from lightcycle.domain.work import Artifact, Node, NodeView, State, derive_state
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import StorePort
 
@@ -168,20 +168,13 @@ class SqliteStore(StorePort):
         if "close_reason" in cols and "outcome" not in cols:
             self._conn.execute("ALTER TABLE nodes RENAME COLUMN close_reason TO outcome")
 
-    def _leaf_state(self, type_, raw_state, assignee, deps):
-        if type_ != "step":
-            return State.DONE if raw_state == "done" else None
-        if raw_state == "done":
-            return State.DONE
-        if assignee:
-            return State.IN_PROGRESS
-        if deps:
-            return State.BACKLOGGED
-        return State.READY
-
     def _row_to_node(self, row, artifacts, deps):
         d = dict(zip(_COLUMNS, row))
-        state = self._leaf_state(d["type"], d["state"], d["assignee"], deps)
+        closed = d["state"] == "done"
+        if d["type"] == "step" or closed:
+            state = derive_state(d["type"], closed, d["assignee"], deps, [])
+        else:
+            state = None
         return Node(
             id=d["id"],
             title=d["title"],
@@ -239,7 +232,10 @@ class SqliteStore(StorePort):
         ]
         for node in nodes:
             if node.state is None:
-                node.state = roll_up(c.state for c in self.children(node.id))
+                child_states = [c.state for c in self.children(node.id)]
+                node.state = derive_state(
+                    node.type, False, node.claimed_by, bool(node.deps), child_states
+                )
         return nodes
 
     def _select(self, where, params=(), suffix=""):

@@ -349,3 +349,72 @@ class StoreContractBase:
         self.assertEqual(ids, [step])
         self.assertNotIn(theme, ids)
         self.assertNotIn(item, ids)
+
+    def test_step_state_backlogged_when_blocked(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker")
+        blocked = s.create_step("blocked", deps=[blocker])
+        self.assertEqual(s.get_node(blocked).state, "backlogged")
+
+    def test_step_state_in_progress_when_assigned_despite_deps(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker")
+        blocked = s.create_step("blocked", deps=[blocker])
+        s.assign(blocked, "w1")
+        self.assertEqual(s.get_node(blocked).state, "in_progress")
+
+    def test_step_state_done_when_closed(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker")
+        blocked = s.create_step("blocked", deps=[blocker])
+        s.assign(blocked, "w1")
+        s.close(blocked, "done")
+        self.assertEqual(s.get_node(blocked).state, "done")
+
+    def test_step_state_ready_when_unblocked(self):
+        s = self.make_store()
+        blocker = s.create_step("blocker")
+        blocked = s.create_step("blocked", deps=[blocker])
+        s.close(blocker, "done")
+        self.assertEqual(s.get_node(blocked).state, "ready")
+
+    def test_item_state_rolls_up_mixed_children(self):
+        s = self.make_store()
+        item = s.create_item("item")
+        done_step = s.create_step("done step", parent=item)
+        s.create_step("open step", parent=item)
+        s.close(done_step, "done")
+        self.assertEqual(s.get_node(item).state, "in_progress")
+
+    def test_item_state_done_when_all_children_done(self):
+        s = self.make_store()
+        item = s.create_item("item")
+        a = s.create_step("a", parent=item)
+        b = s.create_step("b", parent=item)
+        s.close(a, "done")
+        s.close(b, "done")
+        self.assertEqual(s.get_node(item).state, "done")
+
+    def test_item_state_ready_when_all_children_ready(self):
+        s = self.make_store()
+        item = s.create_item("item")
+        s.create_step("a", parent=item)
+        s.create_step("b", parent=item)
+        self.assertEqual(s.get_node(item).state, "ready")
+
+    def test_empty_item_state_backlogged(self):
+        s = self.make_store()
+        item = s.create_item("item")
+        self.assertEqual(s.get_node(item).state, "backlogged")
+
+    def test_step_state_ready_when_in_progress_column_but_unassigned(self):
+        s = self.make_store()
+        tid = s.create_step("t")
+        s.update_state(tid, "in_progress")
+        self.assertEqual(s.get_node(tid).state, "ready")
+
+    def test_closed_empty_container_state_done(self):
+        s = self.make_store()
+        item = s.create_item("item")
+        s.close(item, "done")
+        self.assertEqual(s.get_node(item).state, "done")
