@@ -6,7 +6,6 @@ import time
 import uuid
 
 from lightcycle.adapters.workers import process_start_time, register_worker
-from lightcycle.adapters.workflow_source import resolve_agent
 from lightcycle.ports.spawner import SpawnerPort
 
 
@@ -22,14 +21,6 @@ def capture_pid_started(proc, get_start=process_start_time, sleep=time.sleep, at
 
 def spawn_worker(config, role):
     root = config.data_root()
-    agent = resolve_agent(config, role)
-    if agent is None:
-        sys.stderr.write("no agent definition for role %s\n" % role)
-        return None
-    model = agent["meta"].get("model")
-    if not model:
-        sys.stderr.write("agent %s has no 'model' in frontmatter\n" % role)
-        return None
     spawnid = uuid.uuid4().hex[:8]
     log = os.path.join(root, "logs", "worker-%s-%s.log" % (role, spawnid))
     os.makedirs(os.path.dirname(log), exist_ok=True)

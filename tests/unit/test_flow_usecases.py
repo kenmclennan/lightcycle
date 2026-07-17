@@ -19,6 +19,7 @@ from lightcycle.application.flow import (
     UnblockStepUseCase,
 )
 from lightcycle.application.services.flow import FlowService
+from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
@@ -96,11 +97,16 @@ class FakeWorktrees:
 
 
 class FakeWorkers:
-    def __init__(self):
+    def __init__(self, assigned=None):
         self.stamped = []
+        self._assigned = dict(assigned or {})
 
     def set_step(self, spawnid, step):
         self.stamped.append((spawnid, step))
+        self._assigned[spawnid] = step
+
+    def step_for(self, spawnid):
+        return self._assigned.get(spawnid)
 
 
 class FakeConfig:
@@ -679,6 +685,103 @@ class TestClaimTask(unittest.TestCase):
 
     def test_nothing_ready_returns_none(self):
         self.assertIsNone(self._uc(FakeStore()).execute(ClaimInput(role="coder")))
+
+    def _inprogress(self, s, tid, owner):
+        s.update_state(tid, State.IN_PROGRESS)
+        s.assign(tid, owner)
+
+    def _idempotent_uc(self, s, workers):
+        return ClaimStepUseCase(
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+        )
+
+    def test_idempotent_returns_assigned_inflight_without_a_fresh_claim(self):
+        s = FakeStore()
+        assigned = s.create_step("build: x", step="build", role="coder")
+        self._inprogress(s, assigned, "sp1")
+        later = s.create_step("build: y", step="build", role="coder")
+        resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": assigned})).execute(
+            ClaimInput(role="coder"))
+        self.assertEqual(resp.view.step.id, assigned)
+        self.assertEqual(s.get_node(later).state, "ready")
+
+    def test_idempotent_falls_through_when_assignment_is_done(self):
+        s = FakeStore()
+        old = s.create_step("build: x", step="build", role="coder")
+        s.close(old, "done")
+        fresh = s.create_step("build: y", step="build", role="coder")
+        resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": old})).execute(
+            ClaimInput(role="coder"))
+        self.assertEqual(resp.view.step.id, fresh)
+
+    def test_idempotent_falls_through_when_reassigned_to_another_worker(self):
+        s = FakeStore()
+        stolen = s.create_step("build: x", step="build", role="coder")
+        self._inprogress(s, stolen, "other")
+        fresh = s.create_step("build: y", step="build", role="coder")
+        resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": stolen})).execute(
+            ClaimInput(role="coder"))
+        self.assertEqual(resp.view.step.id, fresh)
+
+    def test_resume_after_a_real_claim_ready_agrees_on_owner(self):
+        prior = os.environ.get("LC_SPAWNID")
+        os.environ["LC_SPAWNID"] = "sp1"
+        self.addCleanup(
+            lambda: os.environ.__setitem__("LC_SPAWNID", prior) if prior is not None
+            else os.environ.pop("LC_SPAWNID", None))
+        s = FakeStore()
+        step = s.create_step("build: x", step="build", role="coder")
+        workers = FakeWorkers()
+        uc = ClaimStepUseCase(
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"))
+        first = uc.execute(ClaimInput(role="coder"))
+        self.assertEqual(first.view.step.id, step)
+        resume = uc.execute(ClaimInput(role="coder"))
+        self.assertEqual(resume.view.step.id, step)
+
+    def test_idempotent_falls_through_when_assigned_step_is_gone(self):
+        s = FakeStore()
+        fresh = s.create_step("build: y", step="build", role="coder")
+        resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": "ghost"})).execute(
+            ClaimInput(role="coder"))
+        self.assertEqual(resp.view.step.id, fresh)
+
+    def test_idempotent_path_does_not_reclaim_on_assembly_failure(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        s.add_artifact(item, "spec", "specs/X.md")
+        x = s.create_step("build: x", step="build", role="coder", parent=item)
+        self._inprogress(s, x, "sp1")
+        uc = ClaimStepUseCase(
+            s, flow_for(SPEC_METAS, s),
+            FakeWorktrees(sync_specs_error=RuntimeError("net")),
+            FakeWorkers(assigned={"sp1": x}), FakeConfig(spawn="sp1"),
+        )
+        with self.assertRaises(RuntimeError):
+            uc.execute(ClaimInput(role="coder"))
+        self.assertEqual(s.get_node(x).state, "in_progress")
+        self.assertEqual(s.get_node(x).claimed_by, "sp1")
+
+    def test_fresh_claim_reclaims_on_assembly_failure(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        s.add_artifact(item, "spec", "specs/X.md")
+        x = s.create_step("build: x", step="build", role="coder", parent=item)
+        uc = ClaimStepUseCase(
+            s, flow_for(SPEC_METAS, s),
+            FakeWorktrees(sync_specs_error=RuntimeError("net")),
+            FakeWorkers(), FakeConfig(spawn="sp1"),
+        )
+        with self.assertRaises(RuntimeError):
+            uc.execute(ClaimInput(role="coder"))
+        self.assertEqual(s.get_node(x).state, "ready")
+
+    def test_carries_the_resolved_pin(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="lightcycle/spec-driven@abc")
+        s.create_step("build: x", step="build", role="coder", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.pin, "lightcycle/spec-driven@abc")
 
     def test_stamps_spawn_id_when_present(self):
         s = FakeStore()

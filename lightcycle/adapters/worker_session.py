@@ -4,11 +4,38 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import dataclass
 
 from lightcycle.adapters.workers import workers_state
-from lightcycle.adapters.workflow_source import resolve_agent
-from lightcycle.config import Config
+from lightcycle.adapters.workflow_source import resolve_agent_for_pin
+from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
+from lightcycle.container import Container
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
+
+
+class SessionError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class SessionPlan:
+    model: str
+    sysprompt: str
+
+
+def plan_session(claim, resolve, reclaim, role):
+    resp = claim(role)
+    if resp is None:
+        return None
+    agent = resolve(role, resp.pin)
+    if agent is None:
+        reclaim(resp.view.step.id)
+        raise SessionError("no agent definition for role %s" % role)
+    model = agent["meta"].get("model")
+    if not model:
+        reclaim(resp.view.step.id)
+        raise SessionError("agent %s has no 'model' in frontmatter" % role)
+    return SessionPlan(model=model, sysprompt=agent["body"])
 
 KICKOFF = ("You are the %s. Claim your next step and complete it per your role instructions, "
            "then exit.")
@@ -122,16 +149,26 @@ def main():
     if not (role and spawnid):
         sys.stderr.write("worker_session: LC_ROLE, LC_SPAWNID required\n")
         return 1
-    config = Config()
-    agent = resolve_agent(config, role)
-    if agent is None:
-        sys.stderr.write("worker_session: no agent definition for role %s\n" % role)
+    container = Container()
+    config = container.config
+    claim = ClaimStepUseCase(
+        container.store, container.flow_service(), container.worktrees(),
+        container.workers, config,
+    )
+    try:
+        plan = plan_session(
+            lambda r: claim.execute(ClaimInput(role=r)),
+            lambda r, pin: resolve_agent_for_pin(config, r, pin),
+            container.store.reclaim,
+            role,
+        )
+    except Exception as e:
+        sys.stderr.write("worker_session: %s\n" % e)
         return 1
-    model = agent["meta"].get("model")
-    if not model:
-        sys.stderr.write("worker_session: agent %s has no 'model' in frontmatter\n" % role)
-        return 1
-    return run(config.data_root(), role, spawnid, model, agent["body"], config.max_session_seconds())
+    if plan is None:
+        return 0
+    return run(config.data_root(), role, spawnid, plan.model, plan.sysprompt,
+               config.max_session_seconds())
 
 
 if __name__ == "__main__":

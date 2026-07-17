@@ -1263,27 +1263,6 @@ class TestFileStep(unittest.TestCase):
         self.assertEqual(kid.step, "build")
         self.assertEqual(kid.role, "coder")
 
-    def test_spawn_uses_frontmatter_model(self):
-        cfg = write_config(projects=self.root, specs=self.root)
-        inject_container(
-            self, store=self.store, home=self.root, config_path=cfg,
-            extra_env={"LC_SPAWN_CMD": "echo x >> {log}"},
-        )
-        rc, _, err = call(_cli_mod.cmd_spawn, "coder")
-        self.assertEqual(rc, 0, err)
-
-    def test_spawn_refuses_when_model_missing(self):
-        (_steps_dir(self.root) / "reviewer.md").write_text("no frontmatter here")
-        cfg = write_config(projects=self.root, specs=self.root)
-        inject_container(
-            self, store=self.store, home=self.root, config_path=cfg,
-            extra_env={"LC_SPAWN_CMD": "echo x >> {log}"},
-        )
-        rc, _, err = call(_cli_mod.cmd_spawn, "reviewer")
-        self.assertEqual(rc, 1)
-        self.assertIn("model", err)
-
-
 class TestArtifactContracts(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, contract_steps=True)

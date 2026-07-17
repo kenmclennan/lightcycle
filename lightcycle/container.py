@@ -30,3 +30,21 @@ class Container:
             workflow_source if workflow_source is not None
             else WorkflowSourceAdapter(self.config)
         )
+
+    def flow_service(self):
+        return make_flow_service(self.fs, self.store, self.config, self.workflow_source)
+
+    def worktrees(self):
+        return make_worktrees(self.store, self.git, self.fs, self.config, self.flow_service())
+
+
+def make_flow_service(fs, store, config, workflow_source):
+    from lightcycle.application.services.flow import FlowService
+
+    return FlowService(fs, store, config, workflow_source)
+
+
+def make_worktrees(store, git, fs, config, flow):
+    from lightcycle.application.services.worktree import WorktreeService
+
+    return WorktreeService(store, git, fs, config, flow)

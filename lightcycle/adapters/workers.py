@@ -131,6 +131,13 @@ def set_step(root, spawnid, step):
         write_workers(root, workers)
 
 
+def step_for(root, spawnid):
+    for w in workers_state(root):
+        if w.get("spawnid") == spawnid:
+            return w.get("step")
+    return None
+
+
 def mark_checked(root, spawnid):
     with registry_lock(root):
         workers = workers_state(root)
@@ -165,6 +172,9 @@ class WorkersAdapter(WorkersPort):
 
     def set_step(self, spawnid, step):
         return set_step(self._config.data_root(), spawnid, step)
+
+    def step_for(self, spawnid):
+        return step_for(self._config.data_root(), spawnid)
 
     def mark_checked(self, spawnid):
         return mark_checked(self._config.data_root(), spawnid)
