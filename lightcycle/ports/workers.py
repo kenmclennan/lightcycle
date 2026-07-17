@@ -31,5 +31,9 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
+    def step_for(self, spawnid):
+        pass
+
+    @abstractmethod
     def mark_checked(self, spawnid):
         pass

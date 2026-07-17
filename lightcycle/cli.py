@@ -91,10 +91,8 @@ from lightcycle.application.setup import (
     upgrade,
 )
 from lightcycle.adapters.sqlite_store import LiveStoreRefused
-from lightcycle.application.services.flow import FlowService
-from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.config import Config, ConfigError
-from lightcycle.container import Container
+from lightcycle.container import Container, make_flow_service, make_worktrees
 
 
 _container = None
@@ -118,8 +116,8 @@ def specs_root():
 
 
 def _flow():
-    return FlowService(_container.fs, _container.store, _container.config,
-                       _container.workflow_source)
+    return make_flow_service(
+        _container.fs, _container.store, _container.config, _container.workflow_source)
 
 
 def ready_roles():
@@ -127,9 +125,8 @@ def ready_roles():
 
 
 def _worktrees():
-    return WorktreeService(
-        _container.store, _container.git, _container.fs, _container.config, _flow()
-    )
+    return make_worktrees(
+        _container.store, _container.git, _container.fs, _container.config, _flow())
 
 
 def require_store():

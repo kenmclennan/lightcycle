@@ -15,24 +15,6 @@ def _toml_str(value):
     return '"%s"' % value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def default_bundle_root(config):
-    origin = config.default_origin()
-    adapter = WorkflowSourceAdapter(config)
-    sha = adapter.current_sha(origin)
-    return adapter.bundle_path(origin, sha) if sha else None
-
-
-def agent_search_roots(config):
-    bundle = default_bundle_root(config)
-    return [config.prompts_root()] + ([bundle] if bundle else [])
-
-
-def resolve_agent(config, role):
-    from lightcycle.adapters import fsio
-
-    return fsio.parse_step(agent_search_roots(config), role)
-
-
 def bundle_for_pin(config, pin):
     from lightcycle.domain.workflows.identity import parse_pin
 

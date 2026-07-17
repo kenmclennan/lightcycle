@@ -1,6 +1,30 @@
+import tempfile
 import unittest
+from pathlib import Path
 
+from lightcycle.adapters import workers as wk
 from lightcycle.domain.pool import Worker, WorkerPool
+
+
+class TestStepFor(unittest.TestCase):
+    def _root(self):
+        root = tempfile.mkdtemp()
+        (Path(root) / "logs").mkdir()
+        return root
+
+    def test_returns_the_assigned_step(self):
+        root = self._root()
+        wk.register_worker(root, {"spawnid": "sp1", "step": None})
+        wk.set_step(root, "sp1", "b-1")
+        self.assertEqual(wk.step_for(root, "sp1"), "b-1")
+
+    def test_none_when_unassigned(self):
+        root = self._root()
+        wk.register_worker(root, {"spawnid": "sp1", "step": None})
+        self.assertIsNone(wk.step_for(root, "sp1"))
+
+    def test_none_for_unknown_spawnid(self):
+        self.assertIsNone(wk.step_for(self._root(), "nope"))
 
 
 def probe(alive_pids):

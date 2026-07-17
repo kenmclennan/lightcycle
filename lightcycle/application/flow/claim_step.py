@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.domain.contracts import StepContract
-from lightcycle.domain.work import NodeView
+from lightcycle.domain.work import NodeView, State
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class ClaimResponse:
     repo_path: Optional[str] = None
     config: Optional[dict] = None
     phase: Optional[str] = None
+    pin: Optional[str] = None
 
 
 class ClaimStepUseCase:
@@ -35,11 +36,32 @@ class ClaimStepUseCase:
         self._config = config
 
     def execute(self, input: ClaimInput) -> Optional[ClaimResponse]:
-        role = input.role
+        assigned = self._assigned_inflight()
+        if assigned is not None:
+            return self._context(assigned)
+        return self._claim(input.role)
+
+    def _assigned_inflight(self):
+        spawnid = self._config.spawn_id()
+        if not spawnid:
+            return None
+        sid = self._workers.step_for(spawnid)
+        if not sid:
+            return None
+        try:
+            node = self._store.get_node(sid)
+        except KeyError:
+            return None
+        if node.state != State.IN_PROGRESS or node.claimed_by != spawnid:
+            return None
+        return node
+
+    def _claim(self, role):
         t = self._store.claim_ready(role)
         if t is None:
             return None
-        meta = self._flow.meta_for_step(t.step, self._flow.workflow_for(t))
+        pin = self._flow.workflow_for(t)
+        meta = self._flow.meta_for_step(t.step, pin)
         missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:
             self._store.route_to_human(
@@ -52,22 +74,25 @@ class ClaimStepUseCase:
         spawnid = self._config.spawn_id()
         if spawnid:
             self._workers.set_step(spawnid, t.id)
-        view = self._store.node_view(t.id)
-        item = t.parent or t.id
         try:
-            ws = self._worktrees.ensure(item)
+            return self._context(t, pin, meta)
         except Exception:
             self._store.reclaim(t.id)
             raise
+
+    def _context(self, t, pin=None, meta=None):
+        if pin is None:
+            pin = self._flow.workflow_for(t)
+        if meta is None:
+            meta = self._flow.meta_for_step(t.step, pin)
+        view = self._store.node_view(t.id)
+        item = t.parent or t.id
+        ws = self._worktrees.ensure(item)
         branch = self._worktrees.item_branch(item)
         spec = next((a.value for a in view.item_artifacts if a.type == "spec"), None)
         spec_path = None
         if spec:
-            try:
-                self._worktrees.sync_specs()
-            except Exception:
-                self._store.reclaim(t.id)
-                raise
+            self._worktrees.sync_specs()
             spec_path = (
                 spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
             )
@@ -82,5 +107,5 @@ class ClaimStepUseCase:
         phase = self._flow.phase_for(t)
         return ClaimResponse(
             view=view, workspace=ws, branch=branch, spec_path=spec_path, brief=brief,
-            repo_path=repo_path, config=config or None, phase=phase
+            repo_path=repo_path, config=config or None, phase=phase, pin=pin
         )

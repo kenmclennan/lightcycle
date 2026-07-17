@@ -1,11 +1,55 @@
+import types
 import unittest
 
+from lightcycle.adapters.worker_session import SessionError, plan_session
 from lightcycle.domain.pool.worker_session import (
     CLOSE,
     NUDGE,
     SessionPolicy,
     is_terminal_command,
 )
+
+
+class TestPlanSession(unittest.TestCase):
+    def _resp(self, pin, step_id="s-1"):
+        return types.SimpleNamespace(
+            pin=pin, view=types.SimpleNamespace(step=types.SimpleNamespace(id=step_id)))
+
+    def _never_reclaim(self, step_id):
+        raise AssertionError("reclaim should not be called: %s" % step_id)
+
+    def test_no_work_yields_no_plan(self):
+        self.assertIsNone(
+            plan_session(lambda role: None, lambda role, pin: None, self._never_reclaim, "coder"))
+
+    def test_resolves_md_and_model_from_the_claimed_pin(self):
+        seen = {}
+
+        def resolve(role, pin):
+            seen["args"] = (role, pin)
+            return {"meta": {"model": "opus"}, "body": "B-body"}
+
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha"), resolve, self._never_reclaim, "coder")
+        self.assertEqual(seen["args"], ("coder", "wfB/x@sha"))
+        self.assertEqual((plan.model, plan.sysprompt), ("opus", "B-body"))
+
+    def test_no_agent_definition_reclaims_the_pre_claim_and_raises(self):
+        reclaimed = []
+        with self.assertRaises(SessionError):
+            plan_session(
+                lambda role: self._resp("p", "s-9"), lambda role, pin: None,
+                reclaimed.append, "coder")
+        self.assertEqual(reclaimed, ["s-9"])
+
+    def test_agent_without_model_reclaims_the_pre_claim_and_raises(self):
+        reclaimed = []
+        with self.assertRaises(SessionError):
+            plan_session(
+                lambda role: self._resp("p", "s-9"),
+                lambda role, pin: {"meta": {}, "body": "x"},
+                reclaimed.append, "coder")
+        self.assertEqual(reclaimed, ["s-9"])
 
 
 class TestTerminalCommand(unittest.TestCase):
