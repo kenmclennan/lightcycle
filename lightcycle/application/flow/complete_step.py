@@ -6,7 +6,7 @@ from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.has_feedback import has_feedback
-from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
+from lightcycle.domain.audit import FINDINGS_STEP, StepKind
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.state import State
@@ -33,6 +33,11 @@ class CompleteStepUseCase:
         self._worktrees = worktrees
         self._config = config
         self._resolver = NextStepResolver(store, flow)
+        self._completers = {
+            StepKind.WORKFLOW: self._complete_workflow,
+            StepKind.ENGINE_AUDIT: self._complete_engine_audit,
+            StepKind.ENGINE_FINDINGS: self._complete_findings,
+        }
 
     def _expected_assignee(self):
         return self._config.spawn_id() if self._config else None
@@ -41,10 +46,9 @@ class CompleteStepUseCase:
         t = self._store.get_node(input.step)
         if t.state == State.DONE:
             return CompleteResponse(next_step=None)
-        if t.step == AUDIT_STEP:
-            return self._complete_engine_audit(t, input)
-        if t.step == FINDINGS_STEP:
-            return self._complete_findings(t, input)
+        return self._completers[StepKind.of(t)](t, input)
+
+    def _complete_workflow(self, t, input: CompleteInput) -> CompleteResponse:
         name = self._flow.workflow_for(t)
         transition = self._resolver.resolve(t, input.outcome, name)
         declared = self._flow.outcomes_for(t.step, name)
