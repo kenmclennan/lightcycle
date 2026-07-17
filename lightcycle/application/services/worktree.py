@@ -2,6 +2,7 @@ import os
 import time
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.work import Item, State
 from lightcycle.domain.workspace import Branch, Worktree
 
@@ -32,7 +33,7 @@ class WorktreeService:
     def _uses_specs_workspace(self, item):
         if self._flow is None:
             return False
-        return self._flow.workspace_for_node(self._workspace_node(item)) == "specs"
+        return self._flow.workspace_for_node(self._workspace_node(item)) == SPECS_WORKSPACE
 
     def _phase(self, item):
         if self._flow is None:
