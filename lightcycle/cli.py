@@ -595,7 +595,8 @@ def cmd_done(argv):
     node = _container.store.get_node(a.id)
     try:
         if node.type == "step":
-            resp = CompleteStepUseCase(_container.store, _flow(), _worktrees()).execute(
+            resp = CompleteStepUseCase(
+                _container.store, _flow(), _worktrees(), _container.config).execute(
                 CompleteInput(step=a.id, outcome=a.outcome, note=note)
             )
             if resp.next_step:
@@ -998,7 +999,8 @@ def cmd_start(argv):
     signal.signal(signal.SIGTERM, _stop)
     try:
         flow_service = _flow()
-        complete = CompleteStepUseCase(_container.store, flow_service, _worktrees())
+        complete = CompleteStepUseCase(
+            _container.store, flow_service, _worktrees(), _container.config)
         monitor = MonitorPrsUseCase(
             _container.store, _container.github, _worktrees(), flow_service, complete
         )

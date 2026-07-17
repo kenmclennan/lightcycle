@@ -1,6 +1,47 @@
+from lightcycle.domain.work import NodeSpec
+
+
 class StoreContractBase:
     def make_store(self, now=None):
         raise NotImplementedError
+
+    def test_complete_step_atomic_wins_and_files_successor(self):
+        s = self.make_store()
+        tid = s.create_step("t", role="coder")
+        s.assign(tid, "w1")
+        won, new = s.complete_step_atomic(
+            tid, "done", "w1", NodeSpec(title="next", step="review", role="reviewer"))
+        self.assertTrue(won)
+        self.assertIsNotNone(new)
+        self.assertEqual(s.get_node(tid).state, "done")
+        self.assertEqual(s.get_node(tid).outcome, "done")
+
+    def test_complete_step_atomic_already_done_loses(self):
+        s = self.make_store()
+        tid = s.create_step("t", role="coder")
+        s.assign(tid, "w1")
+        s.complete_step_atomic(tid, "done", "w1", None)
+        won, new = s.complete_step_atomic(tid, "done", "w1", NodeSpec(title="next", step="review"))
+        self.assertFalse(won)
+        self.assertIsNone(new)
+
+    def test_complete_step_atomic_fences_mismatched_assignee(self):
+        s = self.make_store()
+        tid = s.create_step("t", role="coder")
+        s.assign(tid, "w1")
+        won, new = s.complete_step_atomic(
+            tid, "done", "w2", NodeSpec(title="next", step="review"))
+        self.assertFalse(won)
+        self.assertIsNone(new)
+        self.assertEqual(s.get_node(tid).state, "in_progress")
+
+    def test_complete_step_atomic_empty_assignee_not_fenced(self):
+        s = self.make_store()
+        tid = s.create_step("t", role="coder")
+        s.assign(tid, "w1")
+        won, _ = s.complete_step_atomic(tid, "done", "", None)
+        self.assertTrue(won)
+        self.assertEqual(s.get_node(tid).state, "done")
 
     def test_label_add_visible_as_role(self):
         s = self.make_store()

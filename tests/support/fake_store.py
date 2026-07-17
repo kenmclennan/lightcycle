@@ -226,6 +226,19 @@ class FakeStore(StorePort):
                 if other and other.get("state") != "done":
                     other["dep_count"] = max(0, (other.get("dep_count") or 0) - 1)
 
+    def complete_step_atomic(self, step, outcome, expected_assignee, next_step_spec):
+        expected = expected_assignee or ""
+        b = self._get(step)
+        if b.get("state") == "done":
+            return (False, None)
+        if expected and (b.get("assignee") or "") != expected:
+            return (False, None)
+        self.close(step, outcome)
+        new_id = None
+        if next_step_spec is not None:
+            new_id = self.create_step(**next_step_spec.as_kwargs())
+        return (True, new_id)
+
     def disconnect(self):
         pass
 

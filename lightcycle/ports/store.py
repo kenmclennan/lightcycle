@@ -67,6 +67,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def complete_step_atomic(self, step, outcome, expected_assignee, next_step_spec):
+        pass
+
+    @abstractmethod
     def disconnect(self):
         pass
 

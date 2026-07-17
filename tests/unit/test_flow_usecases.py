@@ -147,6 +147,35 @@ class TestCompleteTask(unittest.TestCase):
         self.assertEqual(s.get_node(bid).state, "done")
         self.assertEqual(s.get_node(resp.next_step).step, "review")
 
+    def test_completion_notes_the_outcome_on_the_step(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder")
+        CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteInput(step=bid, outcome="done")
+        )
+        self.assertIn("outcome: done", s.get_node(bid).notes or "")
+
+    def test_worker_with_mismatched_spawn_id_is_fenced_at_the_use_case(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder")
+        s.assign(bid, "w1")
+        resp = CompleteStepUseCase(
+            s, flow_for(METAS, s), config=FakeConfig("w2")
+        ).execute(CompleteInput(step=bid, outcome="done"))
+        self.assertIsNone(resp.next_step)
+        self.assertEqual(s.get_node(bid).state, "in_progress")
+        self.assertIsNone(s.get_node(bid).notes)
+
+    def test_worker_with_matching_spawn_id_completes(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder")
+        s.assign(bid, "w1")
+        resp = CompleteStepUseCase(
+            s, flow_for(METAS, s), config=FakeConfig("w1")
+        ).execute(CompleteInput(step=bid, outcome="done"))
+        self.assertIsNotNone(resp.next_step)
+        self.assertEqual(s.get_node(bid).state, "done")
+
     def test_completing_already_done_step_is_noop(self):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="coder")
