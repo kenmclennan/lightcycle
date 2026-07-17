@@ -33,6 +33,24 @@ def resolve_agent(config, role):
     return fsio.parse_step(agent_search_roots(config), role)
 
 
+def bundle_for_pin(config, pin):
+    from lightcycle.domain.workflows.identity import parse_pin
+
+    parsed = parse_pin(pin) if pin else None
+    if parsed is None:
+        return None
+    origin, _name, sha = parsed
+    return WorkflowSourceAdapter(config).bundle_path(origin, sha)
+
+
+def resolve_agent_for_pin(config, role, pin):
+    from lightcycle.adapters import fsio
+
+    bundle = bundle_for_pin(config, pin)
+    roots = [config.prompts_root()] + ([bundle] if bundle else [])
+    return fsio.parse_step(roots, role)
+
+
 class WorkflowSourceAdapter(WorkflowSourcePort):
     def __init__(self, config):
         self._config = config
