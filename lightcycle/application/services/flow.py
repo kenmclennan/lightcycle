@@ -1,4 +1,5 @@
 from lightcycle.domain.flow import Flow
+from lightcycle.domain.flow.flow import phase_for_workspace
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.pool import ReadyQueue
 from lightcycle.domain.workflows.identity import (
@@ -124,7 +125,7 @@ class FlowService:
         return graph.workspace_for(stage) if stage else graph.workspace
 
     def phase_for(self, node):
-        return "spec" if self.workspace_for_node(node) == "specs" else "code"
+        return phase_for_workspace(self.workspace_for_node(node))
 
     def flow_next(self, step, outcome, name=None):
         return self.load_flow(name).next(step, outcome)

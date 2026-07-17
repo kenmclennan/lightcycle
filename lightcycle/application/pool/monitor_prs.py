@@ -99,7 +99,7 @@ class MonitorPrsUseCase:
             flow = self._flow_for(item)
             resolved = False
             for stage in flow.merge_stages():
-                phase = "spec" if flow.workspace_of(stage) == "specs" else "code"
+                phase = flow.phase_of(stage)
                 pr_value = Item(item.id, artifacts).artifact_of("pr", label=phase)
                 if pr_value is None:
                     continue
@@ -154,15 +154,10 @@ class MonitorPrsUseCase:
                     self._store.add_artifact(tid, "watched-step", step.id)
                     reworked.append(step.parent)
             if not advanced and conflict_outcome and self._github.is_conflicted(pr_value):
-                cap = flow.pr_conflict_cap(step.step)
-                esc = flow.pr_conflict_escalate(step.step)
-                if cap is not None and esc:
-                    prior = sum(1 for t in self._store.steps_at_step(step.step)
-                                if t.parent == step.parent
-                                and t.state == State.DONE and t.outcome == conflict_outcome)
-                    outcome = esc if prior >= cap else conflict_outcome
-                else:
-                    outcome = conflict_outcome
+                prior = sum(1 for t in self._store.steps_at_step(step.step)
+                            if t.parent == step.parent
+                            and t.state == State.DONE and t.outcome == conflict_outcome)
+                outcome = flow.pr_conflict_transition(step.step, conflict_outcome, prior)
                 self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
                 conflicted.append(step.parent)
         return MonitorPrsResponse(
