@@ -69,6 +69,14 @@ class FakeGitRemove:
         self.remote_deletes.append((root, branch))
 
 
+class _RaisingFlow:
+    def workspace_for_node(self, node):
+        raise ValueError("workflow 'lightcycle/spec-driven' is not a pin '<origin>/<name>@<sha>'")
+
+    def phase_for(self, node):
+        raise ValueError("workflow 'lightcycle/spec-driven' is not a pin '<origin>/<name>@<sha>'")
+
+
 class FakeWorktrees:
     def __init__(self):
         self.removed = []
@@ -78,13 +86,17 @@ class FakeWorktrees:
 
 
 class FakeWorktreesForRemove:
-    def __init__(self, target="/projects/app", has_repo=True):
+    def __init__(self, target="/projects/app", has_repo=True, has_worktree_history=True):
         self._target = target
         self._has_repo = has_repo
+        self._has_worktree_history = has_worktree_history
         self.removed = []
 
     def has_repo(self, item):
         return self._has_repo
+
+    def has_worktree_history(self, item):
+        return self._has_worktree_history
 
     def target_repo(self, item):
         return self._target
@@ -118,6 +130,14 @@ class FakeGitForRemove:
 
     def has_uncommitted(self, path):
         return path in self._dirty
+
+
+class RaisingGitForRemove:
+    def worktree_registered(self, root, path):
+        raise AssertionError("worktree_registered should not be called")
+
+    def has_uncommitted(self, path):
+        raise AssertionError("has_uncommitted should not be called")
 
 
 class TestAddTask(unittest.TestCase):
@@ -252,6 +272,13 @@ class TestCloseItem(unittest.TestCase):
         sid = s.create_item("st", theme=s.create_theme("theme"))
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
+        self.assertEqual(s.get_node(sid).state, "done")
+
+    def test_closes_a_never_activated_backlogged_item_without_crashing(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        wt = WorktreeService(s, FakeGit(), FakeFs(), FakeConfig(), flow=_RaisingFlow())
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="wontfix"))
         self.assertEqual(s.get_node(sid).state, "done")
 
 
@@ -527,6 +554,17 @@ class TestRemoveNode(unittest.TestCase):
         git = FakeGitForRemove()
         with self.assertRaises(UseCaseError):
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id="nope"))
+
+    def test_never_activated_item_is_not_treated_as_dirty(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove(has_worktree_history=False)
+        git = RaisingGitForRemove()
+        resp = RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertTrue(resp.worktree_removed)
+        with self.assertRaises(KeyError):
+            s.get_node(item)
 
 
 if __name__ == "__main__":

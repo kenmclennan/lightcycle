@@ -21,6 +21,9 @@ class WorktreeService:
     def has_repo(self, item):
         return self._item(item).repo() is not None
 
+    def has_worktree_history(self, item):
+        return "branch" in self._item(item).present_types()
+
     def _active_step(self, item):
         for child in self._store.children(item):
             if getattr(child, "type", None) == "step" and child.state != State.DONE:
@@ -131,6 +134,8 @@ class WorktreeService:
             )
 
     def remove(self, item):
+        if not self.has_worktree_history(item):
+            return
         if not self._uses_specs_workspace(item) and not self.has_repo(item):
             return
         target = self.target_repo(item)
