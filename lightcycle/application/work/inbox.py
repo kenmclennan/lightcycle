@@ -22,9 +22,21 @@ class InboxUseCase:
 
     def execute(self, input: InboxInput) -> InboxResponse:
         resolver = self._resolver()
-        rows = NodeQueue(self._store.all_steps()).for_human(
+        watched = self._watched_step_ids()
+        steps = [t for t in self._store.all_steps() if t.id not in watched]
+        rows = NodeQueue(steps).for_human(
             resolver, {"action", "blocked", "triage"}, input.n)
         return InboxResponse(rows=[self._row(k, o, t, resolver) for (k, o), t in rows])
+
+    def _watched_step_ids(self):
+        watched = set()
+        for n in self._store.all_nodes():
+            if n.type != "step":
+                continue
+            for a in self._store.item_artifacts(n.id):
+                if a.type == "watched-step":
+                    watched.add(a.value)
+        return watched
 
     def _resolver(self):
         cache = {}

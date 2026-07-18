@@ -315,6 +315,27 @@ class TestInboxProjectAndPr(unittest.TestCase):
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.pr, "https://example.com/pr/spec")
 
+    def test_watched_step_excluded_while_its_feedback_step_is_open(self):
+        s = FakeStore()
+        _, watched = self._item_with_step(s, step_name="await-merge")
+        item = s.get_node(watched).parent
+        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+                            parent=item)
+        s.add_artifact(fb, "watched-step", watched)
+        resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
+        self.assertNotIn(watched, [r.step.id for r in resp.rows])
+
+    def test_watched_step_returns_once_its_feedback_step_closes(self):
+        s = FakeStore()
+        _, watched = self._item_with_step(s, step_name="await-merge")
+        item = s.get_node(watched).parent
+        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+                            parent=item)
+        s.add_artifact(fb, "watched-step", watched)
+        s.close(fb, "done")
+        resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
+        self.assertIn(watched, [r.step.id for r in resp.rows])
+
 
 if __name__ == "__main__":
     unittest.main()
