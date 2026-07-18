@@ -4,7 +4,8 @@ from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.pool import LC_MARKER, MonitorPrsUseCase, TickInput, TickUseCase
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, flow_from_metas
-from lightcycle.ports.github import Comment, GitHubEventsPort, Review
+from lightcycle.ports.github import Comment, Review
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
@@ -145,38 +146,6 @@ _READY_MERGE_QUAD_FLOW = flow_from_metas({
         "routes": {"resolved": "watch-pr", "escalate": "human-step"},
     },
 })
-
-
-class FakeGitHub(GitHubEventsPort):
-    def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
-                 timed_comments=None, timed_reviews=None):
-        self._merged = set(merged_prs)
-        self._closed = set(closed_prs)
-        self._conflicted = set(conflicted_prs)
-        self._push_time = push_time
-        self._timed_comments = timed_comments or []
-        self._timed_reviews = timed_reviews or []
-
-    def is_merged(self, pr):
-        return pr in self._merged
-
-    def is_closed_unmerged(self, pr):
-        return pr in self._closed
-
-    def is_conflicted(self, pr):
-        return pr in self._conflicted
-
-    def last_push_time(self, pr):
-        return self._push_time
-
-    def comments_since(self, pr, since):
-        return [c for ts, c in self._timed_comments if ts > since and c.is_top_level]
-
-    def pull_comments(self, pr, since):
-        return [c for ts, c in self._timed_comments if ts > since and not c.is_top_level]
-
-    def reviews(self, pr, since):
-        return [r for ts, r in self._timed_reviews if ts > since]
 
 
 class FakeWorktrees:
@@ -826,6 +795,20 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [])
+
+    def test_closed_without_watermark_advance_does_not_duplicate_spawn(self):
+        url = "https://github.com/x/y/pull/41-closed-early"
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention_comment(1500.0)])
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        uc.execute()
+        spawned = self._spawned_feedback_steps(store, step)
+        store.close(spawned[0].id, "done")
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(len(self._spawned_feedback_steps(store, step)), 0)
 
     def test_multi_round_new_comments_are_outstanding_independent_of_timestamp(self):
         url = "https://github.com/x/y/pull/42"

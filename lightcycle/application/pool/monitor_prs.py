@@ -7,6 +7,7 @@ from lightcycle.domain.work import Item, State
 
 LC_MARKER = "<!-- lc -->"
 _WATERMARK_ARTIFACT = "feedback-watermark"
+_SPAWN_MARK_ARTIFACT = "feedback-spawned-through"
 
 
 def _is_bot(author):
@@ -53,6 +54,16 @@ def _watermark(artifacts):
         return 0.0
     try:
         return float(watermark.value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _spawned_through(artifacts):
+    a = next((a for a in artifacts if a.type == _SPAWN_MARK_ARTIFACT), None)
+    if a is None:
+        return 0.0
+    try:
+        return float(a.value)
     except (TypeError, ValueError):
         return 0.0
 
@@ -138,21 +149,28 @@ class MonitorPrsUseCase:
             if pr_value is None:
                 continue
             advanced = False
-            if feedback_step and self._has_outstanding_feedback(step, pr_value, flow):
-                advanced = True
-                already_open = any(
-                    n.type == "step" and n.step == feedback_step and n.parent == step.parent
-                    for n in self._store.all_nodes()
-                )
-                if not already_open:
-                    role = flow.owner_of(feedback_step)
-                    title = self._store.get_node(step.parent).title
-                    tid = self._store.create_step(
-                        "%s: %s" % (feedback_step, title), step=feedback_step,
-                        role=role, parent=step.parent,
+            if feedback_step:
+                outstanding = self._outstanding_feedback(step, pr_value, flow)
+                if outstanding:
+                    advanced = True
+                    newest = max(o.created_at for o in outstanding)
+                    open_now = any(
+                        n.type == "step" and n.step == feedback_step and n.parent == step.parent
+                        for n in self._store.all_nodes()
                     )
-                    self._store.add_artifact(tid, "watched-step", step.id)
-                    reworked.append(step.parent)
+                    spawned_through = _spawned_through(self._store.item_artifacts(step.id))
+                    if not open_now and newest > spawned_through:
+                        role = flow.owner_of(feedback_step)
+                        title = self._store.get_node(step.parent).title
+                        tid = self._store.create_step(
+                            "%s: %s" % (feedback_step, title), step=feedback_step,
+                            role=role, parent=step.parent,
+                        )
+                        self._store.add_artifact(tid, "watched-step", step.id)
+                        self._store.replace_artifact(
+                            step.id, _SPAWN_MARK_ARTIFACT, str(newest)
+                        )
+                        reworked.append(step.parent)
             if not advanced and conflict_outcome and self._github.is_conflicted(pr_value):
                 prior = sum(1 for t in self._store.steps_at_step(step.step)
                             if t.parent == step.parent
@@ -164,35 +182,25 @@ class MonitorPrsUseCase:
             merged=merged, abandoned=abandoned, reworked=reworked, conflicted=conflicted
         )
 
-    def _has_outstanding_feedback(self, step, pr, flow):
+    def _outstanding_feedback(self, step, pr, flow):
         since = self._github.last_push_time(pr)
         top_level = self._github.comments_since(pr, since)
         inline = self._github.pull_comments(pr, since)
         reviews = self._github.reviews(pr, since)
 
         allowlist = flow.review_bot_allowlist(step.step)
-        eligible_threads = [
-            c for c in _outstanding_threads(inline) if _eligible(c.author, allowlist)
+        items = [c for c in _outstanding_threads(inline) if _eligible(c.author, allowlist)]
+        items += [
+            r for r in _outstanding_reviews(reviews, top_level + inline) if r.author in allowlist
         ]
-        if eligible_threads:
-            return True
-
-        eligible_reviews = [
-            r for r in _outstanding_reviews(reviews, top_level + inline)
-            if r.author in allowlist
-        ]
-        if eligible_reviews:
-            return True
 
         mention_token = flow.mention_token(step.step)
         if mention_token:
             watermark = _watermark(self._store.item_artifacts(step.id))
-            mentions = [
+            items += [
                 c for c in top_level
                 if LC_MARKER not in c.body and not _is_bot(c.author)
                 and mention_token in c.body and c.created_at > watermark
             ]
-            if mentions:
-                return True
 
-        return False
+        return items
