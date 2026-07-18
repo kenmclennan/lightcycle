@@ -77,6 +77,13 @@ def _complete(ctx, outcome):
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("done", ctx["claimed"]["id"], outcome)
 
 
+@when(parsers.parse('a worker completes the ready {step} step with outcome "{outcome}"'))
+def _worker_routes(ctx, step, outcome):
+    sid = ctx["h"].ready_steps("coder")[0].id
+    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run_as_worker(
+        "handle-feedback-worker", "done", sid, outcome)
+
+
 @then(parsers.parse("there is one ready step for the {role}"))
 def _one_ready(ctx, role):
     assert len(ctx["h"].ready_steps(role)) == 1

@@ -230,7 +230,8 @@ class FakeStore(StorePort):
         b = self._get(step)
         if b.get("state") == "done":
             return (False, None)
-        if expected and (b.get("assignee") or "") != expected:
+        assignee = b.get("assignee") or ""
+        if expected and assignee and assignee != expected:
             return (False, None)
         self.close(step, outcome)
         new_id = None

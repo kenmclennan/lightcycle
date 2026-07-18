@@ -43,6 +43,16 @@ class StoreContractBase:
         self.assertTrue(won)
         self.assertEqual(s.get_node(tid).state, "done")
 
+    def test_complete_step_atomic_worker_can_complete_an_unclaimed_step(self):
+        s = self.make_store()
+        tid = s.create_step("t", role="coder")
+        won, new = s.complete_step_atomic(
+            tid, "done", "handle-feedback-worker",
+            NodeSpec(title="next", step="review", role="reviewer"))
+        self.assertTrue(won)
+        self.assertIsNotNone(new)
+        self.assertEqual(s.get_node(tid).state, "done")
+
     def test_label_add_visible_as_role(self):
         s = self.make_store()
         tid = s.create_step("t")
