@@ -182,6 +182,15 @@ class TestCompleteTask(unittest.TestCase):
         self.assertIsNotNone(resp.next_step)
         self.assertEqual(s.get_node(bid).state, "done")
 
+    def test_a_worker_can_route_an_unclaimed_step_it_does_not_own(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder")
+        resp = CompleteStepUseCase(
+            s, flow_for(METAS, s), config=FakeConfig("handle-feedback-worker")
+        ).execute(CompleteInput(step=bid, outcome="done"))
+        self.assertIsNotNone(resp.next_step)
+        self.assertEqual(s.get_node(bid).state, "done")
+
     def test_completing_already_done_step_is_noop(self):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="coder")

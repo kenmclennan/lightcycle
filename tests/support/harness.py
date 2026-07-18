@@ -53,10 +53,18 @@ class Harness:
     def __init__(self, roles):
         self.root = tempfile.mkdtemp()
         make_syncable_git_repo(self.root)
-        cfg = _write_config(self.root)
+        self._cfg = _write_config(self.root)
         _write_bundle(self.root, roles)
         self.store = FakeStore()
-        inject_container(self, store=self.store, home=self.root, config_path=cfg)
+        inject_container(self, store=self.store, home=self.root, config_path=self._cfg)
+
+    def run_as_worker(self, spawnid, verb, *args):
+        inject_container(self, store=self.store, home=self.root, config_path=self._cfg,
+                         extra_env={"LC_SPAWNID": spawnid})
+        try:
+            return self.run(verb, *args)
+        finally:
+            inject_container(self, store=self.store, home=self.root, config_path=self._cfg)
 
     def run(self, verb, *args):
         fn = getattr(cli, "cmd_" + verb.replace("-", "_"))

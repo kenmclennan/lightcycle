@@ -443,7 +443,8 @@ class SqliteStore(StorePort):
         expected = expected_assignee or ""
         cur = self._conn.execute(
             "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? "
-            "WHERE id = ? AND state != 'done' AND (? = '' OR assignee = ?)",
+            "WHERE id = ? AND state != 'done' "
+            "AND (? = '' OR COALESCE(assignee, '') = '' OR assignee = ?)",
             (outcome, datetime.datetime.now().isoformat(), step, expected, expected),
         )
         if cur.rowcount == 0:

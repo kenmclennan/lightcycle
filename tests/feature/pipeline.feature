@@ -28,3 +28,8 @@ Feature: Work flows through the pipeline
     When the coder completes it with outcome "banana"
     Then the command is rejected
     And there are no ready steps for the reviewer
+
+  Scenario: A worker routes a step it does not own
+    Given the item "specs/login.md" is filed at step "build"
+    When a worker completes the ready build step with outcome "done"
+    Then there is one ready step for the reviewer
