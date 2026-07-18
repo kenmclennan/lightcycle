@@ -16,6 +16,8 @@ _MENTION_TIME = 1500.0
 
 _WORKFLOW_TEXT = (
     "entry: await-merge\n\n"
+    "edges:\n"
+    "  await-merge  changes  await-merge\n\n"
     "hooks:\n"
     "  pr_feedback    await-merge  handle-feedback\n"
     "  mention_token  await-merge  @lc\n"
@@ -124,3 +126,42 @@ def _no_ready(ctx, role):
 @then("there is still exactly one handle-feedback step in total")
 def _one_total(ctx):
     assert len(ctx["h"].store.steps_at_step("handle-feedback")) == 1
+
+
+@when(parsers.parse(
+    'the handle-feedback step routes the watched step to "{outcome}" and closes'
+))
+def _routes_and_closes(ctx, outcome):
+    rc, out, err = ctx["h"].run("done", ctx["watched_step"], outcome, "--note", "rework needed")
+    assert rc == 0, err
+    rc, out, err = ctx["h"].run("claim", "handle-feedback")
+    assert rc == 0, err
+    fb_id = json.loads(out)["id"]
+    rc, out, err = ctx["h"].run("done", fb_id, "done")
+    assert rc == 0, err
+
+
+@then("the watched step is not in the human inbox")
+def _watched_not_in_inbox(ctx):
+    rc, out, err = ctx["h"].run("inbox")
+    assert rc == 0, err
+    assert ctx["watched_step"] not in out
+
+
+@then("the watched step is in the human inbox")
+def _watched_in_inbox(ctx):
+    rc, out, err = ctx["h"].run("inbox")
+    assert rc == 0, err
+    assert ctx["watched_step"] in out
+
+
+@then("a fresh await-merge step is in the human inbox")
+def _fresh_await_merge_in_inbox(ctx):
+    fresh = next(
+        n for n in ctx["h"].store.all_nodes()
+        if n.type == "step" and n.step == ctx["watched_step_name"]
+        and n.state == "ready" and n.id != ctx["watched_step"]
+    )
+    rc, out, err = ctx["h"].run("inbox")
+    assert rc == 0, err
+    assert fresh.id in out

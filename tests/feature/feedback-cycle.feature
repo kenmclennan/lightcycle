@@ -21,3 +21,18 @@ Feature: The PR-feedback cycle spawns and settles handle-feedback steps
     When the handle-feedback step replies and advances the watermark
     And the pool ticks again
     Then there are no ready steps for "handle-feedback"
+
+  Scenario: The watched step leaves the human inbox while handle-feedback is open
+    When the pool ticks
+    Then the watched step is not in the human inbox
+
+  Scenario: The watched step returns to the human inbox once handle-feedback closes without rework
+    When the pool ticks
+    And the handle-feedback step is marked done without clearing the feedback
+    Then the watched step is in the human inbox
+
+  Scenario: A reworked PR returns the item to a fresh await-merge step in the human inbox
+    When the pool ticks
+    And the handle-feedback step routes the watched step to "changes" and closes
+    Then the watched step is not in the human inbox
+    And a fresh await-merge step is in the human inbox
