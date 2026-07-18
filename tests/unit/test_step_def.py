@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.flow.flow import SPECS_WORKSPACE, Flow, phase_for_workspace
+from lightcycle.domain.flow.flow import Flow
 from lightcycle.domain.flow.step_def import CiCap, StepDef
 
 
@@ -18,17 +18,14 @@ class TestStepDef(unittest.TestCase):
 
 
 class TestPhase(unittest.TestCase):
-    def test_phase_for_workspace(self):
-        self.assertEqual(phase_for_workspace(SPECS_WORKSPACE), "spec")
-        self.assertEqual(phase_for_workspace("project"), "code")
-
-    def test_flow_phase_of(self):
-        flow = Flow({"s": StepDef(workspace="specs"), "c": StepDef(workspace="project")})
+    def test_flow_phase_of_returns_the_declared_phase(self):
+        flow = Flow({"s": StepDef(phase="spec"), "c": StepDef(phase="code")})
         self.assertEqual(flow.phase_of("s"), "spec")
         self.assertEqual(flow.phase_of("c"), "code")
 
-    def test_flow_phase_of_defaults_to_code(self):
-        self.assertEqual(Flow({}).phase_of("missing"), "code")
+    def test_flow_phase_of_is_none_when_undeclared(self):
+        self.assertIsNone(Flow({"s": StepDef()}).phase_of("s"))
+        self.assertIsNone(Flow({}).phase_of("missing"))
 
 
 class TestConflictTransition(unittest.TestCase):

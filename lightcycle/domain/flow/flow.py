@@ -4,10 +4,6 @@ from lightcycle.domain.flow.transition import Transition
 SPECS_WORKSPACE = "specs"
 
 
-def phase_for_workspace(workspace):
-    return "spec" if workspace == SPECS_WORKSPACE else "code"
-
-
 class Flow:
     def __init__(self, steps, workspace_default="project"):
         self._steps = steps
@@ -75,12 +71,14 @@ class Flow:
                     step_hooks.setdefault(occ[0], set()).add("on_" + name)
 
         workspaces = dict(graph.workspaces)
+        phases = dict(graph.phases)
 
         steps = {}
         all_stages = (
-            set(owner) | set(workspaces) | set(pr_merge) | set(pr_close) | set(pr_feedback)
-            | set(pr_conflict) | set(pr_conflict_cap) | set(pr_conflict_escalate)
-            | set(mention_token) | set(review_bot_allowlist) | set(ci_cap) | set(step_hooks)
+            set(owner) | set(workspaces) | set(phases) | set(pr_merge) | set(pr_close)
+            | set(pr_feedback) | set(pr_conflict) | set(pr_conflict_cap)
+            | set(pr_conflict_escalate) | set(mention_token) | set(review_bot_allowlist)
+            | set(ci_cap) | set(step_hooks)
         )
         for stage in all_stages:
             steps[stage] = StepDef(
@@ -96,6 +94,7 @@ class Flow:
                 review_bot_allowlist=review_bot_allowlist.get(stage, frozenset()),
                 ci_cap=ci_cap.get(stage),
                 workspace=workspaces.get(stage),
+                phase=phases.get(stage),
                 hooks=frozenset(step_hooks.get(stage, set())),
             )
         return cls(steps, graph.workspace)
@@ -136,7 +135,8 @@ class Flow:
         return self._workspace_default
 
     def phase_of(self, step):
-        return phase_for_workspace(self.workspace_of(step))
+        sd = self._steps.get(step)
+        return sd.phase if sd else None
 
     def pr_feedback_step(self, step):
         sd = self._steps.get(step)

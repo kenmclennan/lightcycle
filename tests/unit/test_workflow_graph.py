@@ -139,6 +139,26 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         self.assertEqual(graph.workspace_for("spec-await-merge"), "specs")
         self.assertEqual(graph.workspace_for("write-code"), "project")
 
+    def test_workspace_for_phase_resolves_a_phases_repo_across_its_stages(self):
+        graph = parse_graph(
+            "entry: spec-writer\n\n"
+            "workspace:\n"
+            "  spec-writer       specs\n"
+            "  spec-await-merge  specs\n\n"
+            "phase:\n"
+            "  spec-writer       spec\n"
+            "  spec-await-merge  spec\n"
+            "  write-code        code\n\n"
+            "edges:\n  spec-writer  done  write-code\n"
+        )
+        self.assertEqual(graph.workspace_for_phase("spec"), "specs")
+        self.assertEqual(graph.workspace_for_phase("code"), "project")
+
+    def test_workspace_for_phase_falls_back_to_the_default_for_an_undeclared_phase(self):
+        graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
+        self.assertEqual(graph.workspace_for_phase(None), "project")
+        self.assertEqual(graph.workspace_for_phase("code"), "project")
+
     def test_ignores_prose_and_blank_lines(self):
         graph = parse_graph(
             "# Standard - spec to merge\n"

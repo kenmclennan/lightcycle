@@ -23,4 +23,5 @@ class StepDef:
     review_bot_allowlist: frozenset = frozenset()
     ci_cap: Optional[CiCap] = None
     workspace: Optional[str] = None
+    phase: Optional[str] = None
     hooks: frozenset = frozenset()

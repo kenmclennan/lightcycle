@@ -16,7 +16,7 @@ def signals_from_metas(metas):
 
 
 def graph_text_from_metas(metas, entry=None, requires=None):
-    nodes, edges, hooks, signals = [], [], [], []
+    nodes, edges, hooks, signals, phases = [], [], [], [], []
     for role in sorted(metas):
         meta = metas[role] or {}
         step = meta.get("step")
@@ -24,6 +24,8 @@ def graph_text_from_metas(metas, entry=None, requires=None):
             continue
         if step != role:
             nodes.append("  %s  %s" % (step, role))
+        if meta.get("phase"):
+            phases.append("  %s  %s" % (step, meta["phase"]))
         for outcome, target in (meta.get("routes") or {}).items():
             edges.append("  %s  %s  %s" % (step, outcome, target))
         for name, decl in (meta.get("signals") or {}).items():
@@ -51,6 +53,8 @@ def graph_text_from_metas(metas, entry=None, requires=None):
         out.append("hooks:\n" + "\n".join(hooks))
     if signals:
         out.append("signals:\n" + "\n".join(signals))
+    if phases:
+        out.append("phase:\n" + "\n".join(phases))
     return "\n\n".join(out) + "\n"
 
 

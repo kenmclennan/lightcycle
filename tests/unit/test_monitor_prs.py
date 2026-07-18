@@ -239,6 +239,12 @@ _SPEC_DRIVEN = (
     "requires: brief repo\n\n"
     "workspace:\n"
     "  spec-await-merge  specs\n\n"
+    "phase:\n"
+    "  spec-writer       spec\n"
+    "  spec-await-merge  spec\n"
+    "  write-code        code\n"
+    "  code-open-pr      code\n"
+    "  code-await-merge  code\n\n"
     "nodes:\n"
     "  write-code        coder\n"
     "  spec-await-merge  await-merge\n"
@@ -329,6 +335,62 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
 
         self.assertEqual(result.merged, [])
         self.assertEqual(store.get_node(spec_item).state, "in_progress")
+
+
+_SAME_REPO_TWO_PHASE = (
+    "entry: feature-writer\n\n"
+    "requires: brief repo\n\n"
+    "phase:\n"
+    "  feature-writer       feature\n"
+    "  feature-await-merge  feature\n"
+    "  write-code           code\n"
+    "  code-await-merge     code\n\n"
+    "nodes:\n"
+    "  write-code           coder\n"
+    "  feature-await-merge  await-merge\n"
+    "  code-await-merge     await-merge\n\n"
+    "edges:\n"
+    "  feature-await-merge  feature-merged  write-code\n"
+    "  feature-await-merge  changes         feature-writer\n"
+    "  write-code           done            code-await-merge\n"
+    "  code-await-merge     merged          cleanup\n\n"
+    "hooks:\n"
+    "  pr_merge  feature-await-merge  feature-merged\n"
+    "  pr_merge  code-await-merge     merged\n"
+    "  pr_close  feature-await-merge  abandoned\n"
+    "  pr_close  code-await-merge     abandoned\n"
+)
+
+
+class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
+    def test_crossing_a_phase_boundary_removes_the_worktree_even_within_one_repo(self):
+        fs = FakeFs(
+            metas={
+                "coder": {"model": "sonnet"},
+                "await-merge": {"step": "await-merge"},
+            },
+            workflow={"bdd": _SAME_REPO_TWO_PHASE},
+        )
+        store = FakeStore()
+        flow_service = FlowService(fs, store)
+        item = store.create_item(
+            "LC-7: login", theme=store.create_theme("theme"),
+            workflow="bdd", project="app",
+        )
+        store.add_artifact(item, "repo", "app")
+        store.add_artifact(item, "branch", "feat/LC-7-feature-login", label="feature")
+        url = "https://github.com/x/y/pull/7"
+        store.add_artifact(item, "pr", url, label="feature")
+        store.create_step(
+            "feature-await-merge: LC-7", step="feature-await-merge", role="human", parent=item
+        )
+        worktrees = FakeWorktrees()
+        complete = CompleteStepUseCase(store, flow_service)
+        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, flow_service, complete)
+
+        uc.execute()
+
+        self.assertEqual(worktrees.removed, [item])
 
 
 class TestMonitorPrsMerged(unittest.TestCase):

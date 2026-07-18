@@ -54,8 +54,18 @@ class WorktreeService:
             return self._config.specs_root()
         return os.path.join(self._config.projects_root(), self.item_repo(item))
 
+    def _recorded_branches(self, item):
+        return [(a.label, a.value) for a in self._item(item).artifacts if a.type == "branch"]
+
+    def _target_for_phase(self, item, phase):
+        if self._flow is not None:
+            node = self._store.get_node(item)
+            if self._flow.workspace_for_phase(node, phase) == SPECS_WORKSPACE:
+                return self._config.specs_root()
+        return os.path.join(self._config.projects_root(), self.item_repo(item))
+
     def worktree_path(self, item):
-        return Worktree(item).path_in(self.target_repo(item))
+        return Worktree(item, self._phase(item)).path_in(self.target_repo(item))
 
     def item_branch(self, item):
         return self._item(item).artifact_of("branch", label=self._phase(item))
@@ -64,7 +74,8 @@ class WorktreeService:
         return (
             self.item_branch(item)
             or Branch.for_feature(
-                self._store.get_node(item).title, self._config.branch_prefix(), ident=item
+                self._store.get_node(item).title, self._config.branch_prefix(),
+                ident=item, phase=self._phase(item)
             ).name
         )
 
@@ -138,10 +149,10 @@ class WorktreeService:
             return
         if not self._uses_specs_workspace(item) and not self.has_repo(item):
             return
-        target = self.target_repo(item)
-        if not self._git.is_git_repo(target):
-            return
-        branch = self._branch_for(item)
-        self._git.remove_worktree(target, self.worktree_path(item))
-        self._git.delete_branch(target, branch)
-        self._git.delete_remote_branch(target, branch)
+        for phase, branch in self._recorded_branches(item):
+            target = self._target_for_phase(item, phase)
+            if not self._git.is_git_repo(target):
+                continue
+            self._git.remove_worktree(target, Worktree(item, phase).path_in(target))
+            self._git.delete_branch(target, branch)
+            self._git.delete_remote_branch(target, branch)

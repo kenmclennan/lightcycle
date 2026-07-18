@@ -46,11 +46,31 @@ class TestBranch(unittest.TestCase):
         self.assertEqual(Branch.for_feature("", ident="LC-3").name, "feat/LC-3")
         self.assertEqual(Branch.for_feature("!!!", ident="LC-3").name, "feat/LC-3")
 
+    def test_for_feature_with_phase_scopes_the_name(self):
+        self.assertEqual(
+            Branch.for_feature("My Feature", ident="LC-1", phase="code").name,
+            "feat/LC-1-code-my-feature")
+        self.assertEqual(
+            Branch.for_feature("My Feature", ident="LC-1", phase="feature").name,
+            "feat/LC-1-feature-my-feature")
+
+    def test_for_feature_without_phase_is_unchanged(self):
+        self.assertEqual(
+            Branch.for_feature("My Feature", ident="LC-1", phase=None).name,
+            "feat/LC-1-my-feature")
+
 
 class TestWorktree(unittest.TestCase):
     def test_path_in(self):
         self.assertEqual(Worktree("s-9").path_in("/home/u/projects/app"),
                          "/home/u/projects/app/.worktrees/s-9")
+
+    def test_path_in_scopes_by_phase(self):
+        self.assertEqual(Worktree("s-9", "code").path_in("/r"), "/r/.worktrees/s-9-code")
+        self.assertEqual(Worktree("s-9", "feature").path_in("/r"), "/r/.worktrees/s-9-feature")
+
+    def test_path_in_without_phase_is_unchanged(self):
+        self.assertEqual(Worktree("s-9", None).path_in("/r"), "/r/.worktrees/s-9")
 
     def test_transient_lock_errors_are_contention(self):
         self.assertTrue(Worktree.is_lock_contention("fatal: could not lock working tree"))

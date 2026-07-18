@@ -53,6 +53,29 @@ class _FakeFlow:
     def phase_for(self, node):
         return "spec" if self._workspace == "specs" else "code"
 
+    def workspace_for_phase(self, node, phase):
+        return self._workspace
+
+
+class _PhaseFlow:
+    def __init__(self, phase):
+        self._phase = phase
+
+    def workflow_for(self, node):
+        return "standard"
+
+    def load_graph(self, name=None):
+        return _Graph("project")
+
+    def workspace_for_node(self, node):
+        return "project"
+
+    def phase_for(self, node):
+        return self._phase
+
+    def workspace_for_phase(self, node, phase):
+        return "project"
+
 
 class _Graph:
     def __init__(self, workspace):
@@ -98,6 +121,15 @@ class _FakeGit:
         self.calls.append(("git", root) + args)
         return _GitResult()
 
+    def remove_worktree(self, root, path):
+        self.calls.append(("remove_worktree", root, path))
+
+    def delete_branch(self, root, branch):
+        self.calls.append(("delete_branch", root, branch))
+
+    def delete_remote_branch(self, root, branch):
+        self.calls.append(("delete_remote_branch", root, branch))
+
 
 class TestWorktreePath(unittest.TestCase):
     def setUp(self):
@@ -135,6 +167,25 @@ class TestWorktreePath(unittest.TestCase):
             os.path.dirname(os.path.dirname(horde_path)),
             os.path.join("/home/u/workspace/projects", "horde"),
         )
+
+    def test_two_phases_in_the_same_repo_get_distinct_worktrees_and_branches(self):
+        item = self.store.create_item("Login feature", theme=self.store.create_theme("t"))
+        self.store.add_artifact(item, "repo", "app")
+        cfg = _Cfg("/home/u/workspace/projects")
+
+        def svc(phase):
+            return WorktreeService(self.store, git=None, fs=None, config=cfg,
+                                   flow=_PhaseFlow(phase))
+
+        feat_path, code_path = svc("feature").worktree_path(item), svc("code").worktree_path(item)
+        self.assertEqual(os.path.basename(feat_path), "%s-feature" % item)
+        self.assertEqual(os.path.basename(code_path), "%s-code" % item)
+        self.assertNotEqual(feat_path, code_path)
+
+        feat_branch, code_branch = svc("feature")._branch_for(item), svc("code")._branch_for(item)
+        self.assertEqual(feat_branch, "feat/%s-feature-login-feature" % item)
+        self.assertEqual(code_branch, "feat/%s-code-login-feature" % item)
+        self.assertNotEqual(feat_branch, code_branch)
 
 
 class TestItemRepoNoFallback(unittest.TestCase):
@@ -240,6 +291,74 @@ class _RaisingFlow:
 
     def phase_for(self, node):
         raise ValueError("workflow 'lightcycle/spec-driven' is not a pin '<origin>/<name>@<sha>'")
+
+    def workspace_for_phase(self, node, phase):
+        raise ValueError("workflow 'lightcycle/spec-driven' is not a pin '<origin>/<name>@<sha>'")
+
+
+class _CloseFlow:
+    def workflow_for(self, node):
+        return "spec-driven"
+
+    def load_graph(self, name=None):
+        return _Graph("project")
+
+    def workspace_for_node(self, node):
+        return "project"
+
+    def phase_for(self, node):
+        return None
+
+    def workspace_for_phase(self, node, phase):
+        return "specs" if phase == "spec" else "project"
+
+
+class TestRemovePhaseScoped(unittest.TestCase):
+    def _item(self):
+        store = FakeStore()
+        item = store.create_item("Login", theme=store.create_theme("t"))
+        store.add_artifact(item, "repo", "app")
+        return store, item
+
+    def test_remove_tears_down_every_recorded_phase_in_its_own_repo(self):
+        store, item = self._item()
+        store.add_artifact(item, "branch", "spec/login", label="spec")
+        store.add_artifact(item, "branch", "feat/app-code-login", label="code")
+        target = os.path.join("/projects", "app")
+        git = _FakeGit(git_repos={"/specs", target})
+        svc = WorktreeService(store, git, fs=None, config=_Cfg("/projects"), flow=_CloseFlow())
+
+        svc.remove(item)
+
+        self.assertIn(
+            ("remove_worktree", target, os.path.join(target, ".worktrees", "%s-code" % item)),
+            git.calls,
+        )
+        self.assertIn(("delete_branch", target, "feat/app-code-login"), git.calls)
+        self.assertIn(("delete_remote_branch", target, "feat/app-code-login"), git.calls)
+        self.assertIn(
+            ("remove_worktree", "/specs", os.path.join("/specs", ".worktrees", "%s-spec" % item)),
+            git.calls,
+        )
+        self.assertIn(("delete_branch", "/specs", "spec/login"), git.calls)
+        self.assertNotIn(
+            ("remove_worktree", target, os.path.join(target, ".worktrees", item)), git.calls
+        )
+
+    def test_remove_unlabeled_phase_uses_the_item_worktree_and_branch(self):
+        store, item = self._item()
+        store.add_artifact(item, "branch", "feat/app-login")
+        target = os.path.join("/projects", "app")
+        git = _FakeGit(git_repos={target})
+        svc = WorktreeService(store, git, fs=None, config=_Cfg("/projects"), flow=_CloseFlow())
+
+        svc.remove(item)
+
+        self.assertIn(
+            ("remove_worktree", target, os.path.join(target, ".worktrees", item)), git.calls
+        )
+        self.assertIn(("delete_branch", target, "feat/app-login"), git.calls)
+        self.assertIn(("delete_remote_branch", target, "feat/app-login"), git.calls)
 
 
 class TestHasWorktreeHistory(unittest.TestCase):

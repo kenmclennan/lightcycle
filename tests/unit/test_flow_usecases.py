@@ -20,7 +20,7 @@ from lightcycle.application.flow import (
 )
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State
-from tests.support.fake_fs import FakeFs, graph_text_from_metas
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 _ROOT = str(Path(__file__).resolve().parents[1] / "support" / "library")
@@ -856,20 +856,21 @@ class TestClaimTask(unittest.TestCase):
         resp = self._uc(s).execute(ClaimInput(role="coder"))
         self.assertIsNone(resp.repo_path)
 
-    def test_claim_exposes_the_code_phase_by_default(self):
+    def test_claim_exposes_the_declared_phase(self):
+        s = FakeStore()
+        s.create_step("build: x", step="build", role="coder")
+        metas = {"coder": {"model": "sonnet", "step": "build", "phase": "spec",
+                           "routes": {"done": "review"}}}
+        resp = ClaimStepUseCase(
+            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
+        ).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.phase, "spec")
+
+    def test_claim_phase_is_none_when_undeclared(self):
         s = FakeStore()
         s.create_step("build: x", step="build", role="coder")
         resp = self._uc(s).execute(ClaimInput(role="coder"))
-        self.assertEqual(resp.phase, "code")
-
-    def test_claim_exposes_the_spec_phase_for_a_specs_workspace_workflow(self):
-        s = FakeStore()
-        s.create_step("build: x", step="build", role="coder")
-        fs = FakeFs(METAS, workflow="workspace: specs\n\n" + graph_text_from_metas(METAS))
-        resp = ClaimStepUseCase(
-            s, FlowService(fs, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
-        ).execute(ClaimInput(role="coder"))
-        self.assertEqual(resp.phase, "spec")
+        self.assertIsNone(resp.phase)
 
     def test_ensure_failure_rolls_back_claim_to_ready(self):
         s = FakeStore()
