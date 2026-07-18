@@ -521,6 +521,9 @@ def cmd_flow(argv):
     steps, req, opt, prod = an["steps"], an["req"], an["opt"], an["prod"]
     entries, terminals = an["entries"], an["terminals"]
     unreachable, missing, dups, ok = an["unreachable"], an["missing"], an["dups"], an["ok"]
+    phase_gaps = an["phase_gaps"]
+    unknown_phases = an["unknown_phases"]
+    phase_conflicts = an["phase_conflicts"]
 
     hooks = resp.hooks
     if a.json:
@@ -539,6 +542,9 @@ def cmd_flow(argv):
                     "unreachable": unreachable,
                     "missing_inputs": missing,
                     "conflicts": dups,
+                    "phase_gaps": phase_gaps,
+                    "unknown_phases": unknown_phases,
+                    "phase_conflicts": phase_conflicts,
                     "ok": ok,
                 },
                 indent=2,
@@ -577,6 +583,14 @@ def cmd_flow(argv):
         sys.stderr.write("warning: step '%s' is unreachable from any entry\n" % s)
     for d in dups:
         sys.stderr.write("conflict: %s\n" % d)
+    if phase_gaps:
+        sys.stderr.write("phase: stages missing a phase: %s\n" % ", ".join(phase_gaps))
+    if unknown_phases:
+        sys.stderr.write(
+            "phase: phase declared for unknown stage: %s\n" % ", ".join(unknown_phases)
+        )
+    for phase, workspaces in sorted(phase_conflicts.items()):
+        sys.stderr.write("phase: phase '%s' spans workspaces: %s\n" % (phase, ", ".join(workspaces)))
     return 0 if ok else 1
 
 

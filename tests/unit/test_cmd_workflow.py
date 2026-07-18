@@ -132,6 +132,25 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertIn("missing-step", err)
         self.assertEqual(self.source.list_origins(), [])
 
+    def test_add_incomplete_phase_block_errors(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        container = FakeContainer(self.source, self.store)
+        text = (
+            "entry: build\n\n"
+            "nodes:\n  build  coder\n  review  reviewer\n\n"
+            "edges:\n  build  done  review\n\n"
+            "phase:\n  build  code\n"
+        )
+        container.fs = FakeFs(
+            metas={"coder": {"model": "x"}, "reviewer": {"model": "x"}},
+            workflows={"build": text},
+        )
+        cli.set_container(container)
+        rc, out, err = call(cli.cmd_workflow, "add", "u")
+        self.assertEqual(rc, 1)
+        self.assertIn("review", err)
+        self.assertEqual(self.source.list_origins(), [])
+
     def test_upgrade_no_origin_upgrades_all_registered(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         call(cli.cmd_workflow, "add", "u")

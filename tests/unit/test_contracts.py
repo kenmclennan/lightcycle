@@ -121,6 +121,58 @@ class TestUnresolvedSteps(unittest.TestCase):
         self.assertEqual(FlowContracts(flow, graph, metas).unresolved_steps(), ["next"])
 
 
+class TestPhaseContracts(unittest.TestCase):
+    def test_phase_gap_is_refused(self):
+        metas = {
+            "coder": {"step": "build", "phase": "code"},
+            "reviewer": {"step": "review"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.phase_gaps(), ["review"])
+        self.assertFalse(a.ok())
+
+    def test_unknown_phase_stage_is_refused(self):
+        text = "entry: build\n\nnodes:\n  build  coder\n\nphase:\n  build  code\n  ghost  code\n"
+        graph = parse_graph(text)
+        metas = {"coder": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unknown_phases(), ["ghost"])
+        self.assertFalse(a.ok())
+
+    def test_phase_spanning_two_workspaces_is_refused(self):
+        text = (
+            "entry: build\n\n"
+            "nodes:\n  build  coder\n  review  reviewer\n\n"
+            "edges:\n  build  done  review\n\n"
+            "workspace:\n  build  specs\n\n"
+            "phase:\n  build  code\n  review  code\n"
+        )
+        graph = parse_graph(text)
+        metas = {"coder": {"model": "x"}, "reviewer": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.phase_conflicts(), {"code": ["project", "specs"]})
+        self.assertFalse(a.ok())
+
+    def test_fully_phased_flow_is_ok(self):
+        metas = {k: dict(v) for k, v in CONTRACT_METAS.items()}
+        metas["coder"]["phase"] = "code"
+        metas["reviewer"]["phase"] = "code"
+        metas["pr-watcher"]["phase"] = "code"
+        a = contracts(metas)
+        self.assertEqual(a.phase_gaps(), [])
+        self.assertEqual(a.unknown_phases(), [])
+        self.assertEqual(a.phase_conflicts(), {})
+        self.assertTrue(a.ok())
+
+    def test_no_phase_block_is_ok(self):
+        a = contracts(CONTRACT_METAS)
+        self.assertEqual(a.phase_gaps(), [])
+        self.assertEqual(a.unknown_phases(), [])
+        self.assertEqual(a.phase_conflicts(), {})
+
+
 class TestRealStepsFlowComposition(unittest.TestCase):
     def _graph_flow(self):
         step_metas = {

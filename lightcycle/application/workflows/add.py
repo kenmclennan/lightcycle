@@ -52,11 +52,11 @@ class AddWorkflowSourceUseCase:
             problems = check_bundle_references(self._fs, checkout)
             if problems:
                 detail = "; ".join(
-                    "%r: %s" % (wf, ", ".join(steps))
-                    for wf, steps in sorted(problems.items())
+                    "%r: %s" % (wf, "; ".join(messages))
+                    for wf, messages in sorted(problems.items())
                 )
                 raise WorkflowSourceError(
-                    "bundle has unresolved step reference(s) - %s" % detail)
+                    "bundle has composition problem(s) - %s" % detail)
             self._source.materialize(origin, sha, checkout)
             self._source.write_registry(origin, url, ref, sha)
             pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
