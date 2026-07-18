@@ -222,6 +222,7 @@ class TestSpecsWorkspace(unittest.TestCase):
     def test_remove_targets_specs_root_without_a_repo_artifact(self):
         theme = self.store.create_theme("theme")
         item = self.store.create_item("spec item", theme=theme)
+        self.store.add_artifact(item, "branch", "spec/x")
         git = _FakeGit()
         svc = WorktreeService(
             self.store, git, fs=None, config=_Cfg("/home/u/workspace/projects"),
@@ -231,6 +232,59 @@ class TestSpecsWorkspace(unittest.TestCase):
         svc.remove(item)
 
         self.assertEqual(git.calls, [("is_git_repo", "/specs")])
+
+
+class _RaisingFlow:
+    def workspace_for_node(self, node):
+        raise ValueError("workflow 'lightcycle/spec-driven' is not a pin '<origin>/<name>@<sha>'")
+
+    def phase_for(self, node):
+        raise ValueError("workflow 'lightcycle/spec-driven' is not a pin '<origin>/<name>@<sha>'")
+
+
+class TestHasWorktreeHistory(unittest.TestCase):
+    def test_false_until_ensure_creates_a_branch_artifact(self):
+        store = FakeStore()
+        theme = store.create_theme("theme")
+        item = store.create_item("story", theme=theme)
+        svc = WorktreeService(store, git=None, fs=None, config=_Cfg("/projects"))
+
+        self.assertFalse(svc.has_worktree_history(item))
+
+        store.add_artifact(item, "branch", "feat/x")
+
+        self.assertTrue(svc.has_worktree_history(item))
+
+
+class TestRemoveNeverActivatedItem(unittest.TestCase):
+    def test_remove_is_a_noop_for_a_never_activated_item_under_a_raising_flow(self):
+        store = FakeStore()
+        theme = store.create_theme("theme")
+        item = store.create_item("story", theme=theme)
+        store.add_artifact(item, "repo", "saga")
+        git = _FakeGit()
+        svc = WorktreeService(
+            store, git, fs=None, config=_Cfg("/projects"), flow=_RaisingFlow()
+        )
+
+        svc.remove(item)
+
+        self.assertEqual(git.calls, [])
+
+    def test_remove_still_tears_down_when_worktree_history_exists(self):
+        store = FakeStore()
+        theme = store.create_theme("theme")
+        item = store.create_item("story", theme=theme)
+        store.add_artifact(item, "repo", "saga")
+        store.add_artifact(item, "branch", "feat/my-branch")
+        git = _FakeGit()
+        svc = WorktreeService(
+            store, git, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
+        )
+
+        svc.remove(item)
+
+        self.assertEqual(git.calls, [("is_git_repo", "/projects/saga")])
 
 
 class TestPhaseLabelledBranch(unittest.TestCase):
