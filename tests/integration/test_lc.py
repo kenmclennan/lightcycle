@@ -1528,10 +1528,10 @@ class TestWorktree(unittest.TestCase):
         self.assertEqual(self._branch_of(ws), branch)
         self.assertEqual(t["branch"], branch)
 
-    def test_claim_exposes_the_code_phase(self):
+    def test_claim_omits_phase_for_an_unlabeled_workflow(self):
         self._file()
         _, out, _ = call(_cli_mod.cmd_claim, "coder")
-        self.assertEqual(json.loads(out)["phase"], "code")
+        self.assertNotIn("phase", json.loads(out))
 
     def test_claim_does_not_switch_root_branch(self):
         self._file()

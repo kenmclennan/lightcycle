@@ -122,7 +122,7 @@ class MonitorPrsUseCase:
                         step = self._active_step_at(item.id, stage)
                         if step is None:
                             continue
-                        if flow.workspace_of(stage) != flow.workspace_of(nxt.to_step):
+                        if flow.phase_of(stage) != flow.phase_of(nxt.to_step):
                             self._worktrees.remove(item.id)
                         self._complete.execute(CompleteInput(step=step.id, outcome=merge_outcome))
                     else:

@@ -9,8 +9,11 @@ class Branch:
     name: str
 
     @classmethod
-    def for_feature(cls, feature: str, prefix: str = "feat", ident: str = "") -> "Branch":
+    def for_feature(cls, feature: str, prefix: str = "feat", ident: str = "",
+                    phase: str = None) -> "Branch":
         slug = cls._slugify(feature, limit=_SLUG_LIMIT)
+        if phase:
+            ident = "%s-%s" % (ident, phase) if ident else phase
         if not ident:
             return cls(name="%s/%s" % (prefix, slug))
         if not slug:

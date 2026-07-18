@@ -14,12 +14,22 @@ class WorkflowGraph:
     hooks: dict = field(default_factory=dict)
     signals: dict = field(default_factory=dict)
     workspaces: dict = field(default_factory=dict)
+    phases: dict = field(default_factory=dict)
 
     def file_for(self, stage):
         return self.nodes.get(stage, stage)
 
     def workspace_for(self, stage):
         return self.workspaces.get(stage, self.workspace)
+
+    def phase_for(self, stage):
+        return self.phases.get(stage)
+
+    def workspace_for_phase(self, phase):
+        for stage, ph in self.phases.items():
+            if ph == phase:
+                return self.workspace_for(stage)
+        return self.workspace
 
     def target(self, stage, outcome):
         return (self.edges.get(stage) or {}).get(outcome)
@@ -32,7 +42,7 @@ def parse_graph(text):
     entry = None
     requires = frozenset()
     workspace = "project"
-    nodes, edges, hooks, signals, workspaces = {}, {}, {}, {}, {}
+    nodes, edges, hooks, signals, workspaces, phases = {}, {}, {}, {}, {}, {}
     section = None
     for line in text.splitlines():
         if not line.strip():
@@ -48,6 +58,8 @@ def parse_graph(text):
                 workspace = value
             elif head == "workspace":
                 section = "workspace"
+            elif head == "phase":
+                section = "phase"
             elif head in _SECTIONS and line.rstrip().endswith(":"):
                 section = head
             else:
@@ -69,7 +81,11 @@ def parse_graph(text):
         elif section == "workspace":
             stage, ws = parts
             workspaces[stage] = ws
+        elif section == "phase":
+            stage, ph = parts
+            phases[stage] = ph
     return WorkflowGraph(
         entry=entry, requires=requires, workspace=workspace,
-        nodes=nodes, edges=edges, hooks=hooks, signals=signals, workspaces=workspaces
+        nodes=nodes, edges=edges, hooks=hooks, signals=signals,
+        workspaces=workspaces, phases=phases
     )

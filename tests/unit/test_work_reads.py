@@ -290,7 +290,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
         s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
         tid = s.create_step("await merge", step="code-await-merge", role="human", parent=item)
-        flow = FlowService(FakeFs({"some-role": {"step": "code-await-merge"}}), s)
+        flow = FlowService(FakeFs({"some-role": {"step": "code-await-merge", "phase": "code"}}), s)
         resp = InboxUseCase(s, flow).execute(InboxInput())
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.pr, "https://example.com/pr/code")
@@ -306,6 +306,8 @@ class TestInboxProjectAndPr(unittest.TestCase):
             workflow=(
                 "workspace:\n"
                 "  spec-await-merge  specs\n\n"
+                "phase:\n"
+                "  spec-await-merge  spec\n\n"
                 "nodes:\n"
                 "  spec-await-merge  await-merge\n"
             ),

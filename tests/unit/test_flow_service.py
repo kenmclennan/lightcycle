@@ -64,20 +64,20 @@ class TestFlowService(unittest.TestCase):
 
 
 class TestPhaseFor(unittest.TestCase):
-    def test_project_workspace_is_the_code_phase(self):
+    def _step(self, metas):
         store = FakeStore()
-        item = store.create_item("st", theme=store.create_theme("theme"), workflow="standard")
-        node = store.get_node(item)
-        service = FlowService(FakeFs(METAS, workflow=graph_text_from_metas(METAS)), store)
-        self.assertEqual(service.phase_for(node), "code")
+        item = store.create_item("st", theme=store.create_theme("theme"), workflow="w")
+        step = store.get_node(store.create_step("b", step="build", role="coder", parent=item))
+        return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
 
-    def test_specs_workspace_is_the_spec_phase(self):
-        store = FakeStore()
-        item = store.create_item("st", theme=store.create_theme("theme"), workflow="spec")
-        node = store.get_node(item)
-        fs = FakeFs(METAS, workflow="workspace: specs\n\n" + graph_text_from_metas(METAS))
-        service = FlowService(fs, store)
-        self.assertEqual(service.phase_for(node), "spec")
+    def test_returns_the_steps_declared_phase(self):
+        service, step = self._step(
+            {"coder": {"model": "sonnet", "step": "build", "phase": "code"}})
+        self.assertEqual(service.phase_for(step), "code")
+
+    def test_is_none_when_the_step_declares_no_phase(self):
+        service, step = self._step({"coder": {"model": "sonnet", "step": "build"}})
+        self.assertIsNone(service.phase_for(step))
 
 
 if __name__ == "__main__":

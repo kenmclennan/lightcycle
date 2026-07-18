@@ -5,9 +5,11 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Worktree:
     item: str
+    phase: str = None
 
     def path_in(self, repo_root: str) -> str:
-        return os.path.join(repo_root, ".worktrees", self.item)
+        name = "%s-%s" % (self.item, self.phase) if self.phase else self.item
+        return os.path.join(repo_root, ".worktrees", name)
 
     @staticmethod
     def is_lock_contention(stderr: str) -> bool:
