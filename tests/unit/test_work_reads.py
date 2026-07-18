@@ -284,6 +284,37 @@ class TestInboxProjectAndPr(unittest.TestCase):
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.pr, "https://example.com/pr/3")
 
+    def test_row_pr_prefers_current_phase_over_earlier_phase(self):
+        s = FakeStore()
+        item = s.create_item("an item")
+        s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
+        s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
+        tid = s.create_step("await merge", step="code-await-merge", role="human", parent=item)
+        flow = FlowService(FakeFs({"some-role": {"step": "code-await-merge"}}), s)
+        resp = InboxUseCase(s, flow).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.pr, "https://example.com/pr/code")
+
+    def test_row_pr_prefers_spec_phase_at_a_spec_await_merge_step(self):
+        s = FakeStore()
+        item = s.create_item("an item")
+        s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
+        s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
+        tid = s.create_step("await merge", step="spec-await-merge", role="human", parent=item)
+        fs = FakeFs(
+            metas={"await-merge": {"step": "spec-await-merge"}},
+            workflow=(
+                "workspace:\n"
+                "  spec-await-merge  specs\n\n"
+                "nodes:\n"
+                "  spec-await-merge  await-merge\n"
+            ),
+        )
+        flow = FlowService(fs, s)
+        resp = InboxUseCase(s, flow).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.pr, "https://example.com/pr/spec")
+
 
 if __name__ == "__main__":
     unittest.main()

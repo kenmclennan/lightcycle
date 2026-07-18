@@ -21,9 +21,10 @@ class InboxUseCase:
         self._flow = flow
 
     def execute(self, input: InboxInput) -> InboxResponse:
+        resolver = self._resolver()
         rows = NodeQueue(self._store.all_steps()).for_human(
-            self._resolver(), {"action", "blocked", "triage"}, input.n)
-        return InboxResponse(rows=[self._row(k, o, t) for (k, o), t in rows])
+            resolver, {"action", "blocked", "triage"}, input.n)
+        return InboxResponse(rows=[self._row(k, o, t, resolver) for (k, o), t in rows])
 
     def _resolver(self):
         cache = {}
@@ -36,12 +37,12 @@ class InboxUseCase:
 
         return resolve
 
-    def _row(self, kind, outcomes, t):
+    def _row(self, kind, outcomes, t, resolver):
         item = self._item(t.parent) if t.parent else None
         return HumanNodeRow(
             kind=kind, outcomes=outcomes, step=t,
             project=item.repo() if item else None,
-            pr=item.artifact_of("pr") if item else None,
+            pr=item.artifact_of("pr", label=resolver(t).phase_of(t.step)) if item else None,
         )
 
     def _item(self, item_id):
