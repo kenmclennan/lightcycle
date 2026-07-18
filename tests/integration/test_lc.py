@@ -1327,6 +1327,14 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("design", err)
 
+    def test_flow_flags_incomplete_phase_block(self):
+        specs = {k: dict(v) for k, v in _CONTRACT_SPECS.items()}
+        specs["coder"] = dict(specs["coder"], phase="code")
+        write_contract_steps(self.root, specs)
+        rc, out, err = call(_cli_mod.cmd_flow)
+        self.assertEqual(rc, 1)
+        self.assertIn("phase", err)
+
 
 class TestReviewGateWithRealLibrary(unittest.TestCase):
     def setUp(self):
