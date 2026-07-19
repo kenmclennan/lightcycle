@@ -590,7 +590,8 @@ def cmd_flow(argv):
         sys.stderr.write("phase: stages missing a phase: %s\n" % ", ".join(phase_gaps))
     if unknown_phases:
         sys.stderr.write(
-            "phase: phase declared for unknown stage: %s\n" % ", ".join(unknown_phases)
+            "phase: phase declared for a non-owned stage (only owned stages carry a phase; "
+            "fileless terminals do not): %s\n" % ", ".join(unknown_phases)
         )
     for phase, workspaces in sorted(phase_conflicts.items()):
         sys.stderr.write("phase: phase '%s' spans workspaces: %s\n" % (phase, ", ".join(workspaces)))
