@@ -149,6 +149,9 @@ class FakeStore(StorePort):
         return [self._to_node(b) for b in self._records.values()
                 if b.get("state") != "done"]
 
+    def all_nodes_including_done(self):
+        return [self._to_node(b) for b in self._records.values()]
+
     def all_steps(self):
         return [self._to_node(b) for b in self._records.values()
                 if b.get("type") == "step" and b.get("state") != "done"]

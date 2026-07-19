@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lightcycle.config import Config, ConfigError
+from lightcycle.config import _SEED_KEYS, Config, ConfigError
 
 HOME = os.path.expanduser("~")
 
@@ -239,6 +239,33 @@ class TestReconcileConfig(unittest.TestCase):
         c.ensure_config()
         added = c.reconcile_config()
         self.assertEqual(added, ())
+
+
+class TestMissingConfigKeys(unittest.TestCase):
+    def test_all_seed_keys_present_returns_empty(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"LC_CONFIG": p})
+        c.ensure_config()
+        self.assertEqual(c.missing_config_keys(), ())
+
+    def test_partial_config_reports_the_rest(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\nspecs: /s\n")
+        c = Config(environ={"LC_CONFIG": p})
+        missing = c.missing_config_keys()
+        self.assertIn("max-agents", missing)
+        self.assertIn("default-origin", missing)
+        self.assertNotIn("projects", missing)
+        self.assertNotIn("specs", missing)
+
+    def test_absent_config_file_reports_every_seed_key(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"LC_CONFIG": p})
+        missing = c.missing_config_keys()
+        self.assertEqual(set(missing), {k for k, _ in _SEED_KEYS})
 
 
 class TestSpawnProtocol(unittest.TestCase):

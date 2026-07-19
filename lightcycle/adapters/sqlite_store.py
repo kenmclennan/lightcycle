@@ -325,6 +325,9 @@ class SqliteStore(StorePort):
     def all_nodes(self):
         return self._select("state != 'done'")
 
+    def all_nodes_including_done(self):
+        return self._select("")
+
     def all_steps(self):
         return self._select("type = 'step' AND state != 'done'")
 

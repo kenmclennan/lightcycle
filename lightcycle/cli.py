@@ -49,6 +49,7 @@ from lightcycle.application.work import (
     TraceUseCase,
 )
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
@@ -185,6 +186,7 @@ COMMAND_GROUPS = [
         ("sweep", "", "reclaim orphaned step claims and prune dead worker entries (kept: LC_WORKER_HISTORY, default 20)"),
         ("restore", "[<snapshot>] --force", "overwrite the live store from a backup snapshot "
          "(newest if omitted); refuses without --force or while lc start is running"),
+        ("doctor", "[--json]", "read-only diagnostics: store fsck + pinned-bundle/config/origin drift"),
     ]),
     ("Plumbing (the loop uses these)", [
         ("advance", "<id> <outcome>", "create the next step for an outcome without closing"),
@@ -715,6 +717,31 @@ def cmd_restore(argv):
         ReleaseRunLockUseCase(_container.lock).execute()
     print("restored %s (age %ds)" % (target, int(time.time() - target_mtime)))
     return 0
+
+
+def cmd_doctor(argv):
+    ap = argparse.ArgumentParser(prog="lc doctor")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    report = DoctorUseCase(
+        _container.store, _container.workflow_source, _container.config
+    ).execute(DoctorInput())
+    if a.json:
+        print(json.dumps(
+            {cat: [p.as_dict() for p in probs] for cat, probs in report.problems.items()},
+            indent=2,
+        ))
+        return 0 if report.healthy() else 1
+    for cat, probs in report.problems.items():
+        if not probs:
+            print("%s: ok" % cat)
+            continue
+        print("%s:" % cat)
+        for p in probs:
+            suffix = " (%s)" % p.node_id if p.node_id else ""
+            print("  %s%s" % (p.message, suffix))
+    print("healthy" if report.healthy() else "unhealthy")
+    return 0 if report.healthy() else 1
 
 
 def cmd_inbox(argv):
