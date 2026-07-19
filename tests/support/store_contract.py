@@ -317,6 +317,18 @@ class StoreContractBase:
         self.assertIn(open_tid, ids)
         self.assertNotIn(closed_tid, ids)
 
+    def test_all_nodes_including_done_includes_closed_nodes(self):
+        s = self.make_store()
+        open_tid = s.create_step("open step")
+        closed_tid = s.create_step("closed step")
+        s.close(closed_tid, "done")
+        ids = [t.id for t in s.all_nodes()]
+        self.assertIn(open_tid, ids)
+        self.assertNotIn(closed_tid, ids)
+        all_ids = [t.id for t in s.all_nodes_including_done()]
+        self.assertIn(open_tid, all_ids)
+        self.assertIn(closed_tid, all_ids)
+
     def test_history_records_claim_and_close_in_order(self):
         s = self.make_store()
         tid = s.create_step("t", role="coder")

@@ -19,6 +19,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def all_nodes_including_done(self):
+        pass
+
+    @abstractmethod
     def all_steps(self):
         pass
 

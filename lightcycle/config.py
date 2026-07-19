@@ -104,18 +104,23 @@ class Config:
     def _default_config_text(self):
         return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)
 
+    def _missing_seed_keys(self, existing):
+        return [(k, v) for k, v in _SEED_KEYS if k not in existing]
+
     def reconcile_config(self):
         p = self.config_path()
         if not os.path.exists(p):
             return ()
-        existing = self.load_config()
-        missing = [(k, v) for k, v in _SEED_KEYS if k not in existing]
+        missing = self._missing_seed_keys(self.load_config())
         if not missing:
             return ()
         with open(p, "a") as f:
             for k, v in missing:
                 f.write("%s: %s\n" % (k, v))
         return tuple(k for k, v in missing)
+
+    def missing_config_keys(self):
+        return tuple(k for k, v in self._missing_seed_keys(self.load_config()))
 
     def ensure_config(self):
         p = self.config_path()
