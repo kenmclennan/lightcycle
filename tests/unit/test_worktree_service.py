@@ -10,16 +10,21 @@ from tests.support.fake_store import FakeStore
 
 
 class _Cfg:
-    def __init__(self, projects_root, engine_root="lightcycle", specs_root="/specs"):
+    def __init__(self, projects_root, engine_root="lightcycle", specs_root="/specs",
+                 specs_remote=None):
         self._projects_root = projects_root
         self._engine_root = engine_root
         self._specs_root = specs_root
+        self._specs_remote = specs_remote
 
     def projects_root(self):
         return self._projects_root
 
     def specs_root(self):
         return self._specs_root
+
+    def specs_remote(self):
+        return self._specs_remote
 
     def engine_root(self):
         return self._engine_root
@@ -89,13 +94,16 @@ class _GitResult:
 
 
 class _FakeGit:
-    def __init__(self, git_repos=(), sync_result=True, base=None, registered=(), branches=()):
+    def __init__(self, git_repos=(), sync_result=True, base=None, registered=(), branches=(),
+                 clone_result=True, sync_default_result=True):
         self._git_repos = set(git_repos)
         self.calls = []
         self._sync_result = sync_result
         self._base = base
         self._registered = set(registered)
         self._branches = set(branches)
+        self._clone_result = clone_result
+        self._sync_default_result = sync_default_result
 
     def is_git_repo(self, path):
         self.calls.append(("is_git_repo", path))
@@ -104,6 +112,14 @@ class _FakeGit:
     def sync_to_origin(self, root):
         self.calls.append(("sync_to_origin", root))
         return self._sync_result
+
+    def clone(self, url, dest):
+        self.calls.append(("clone", url, dest))
+        return self._clone_result
+
+    def sync_to_default_branch(self, root):
+        self.calls.append(("sync_to_default_branch", root))
+        return self._sync_default_result
 
     def worktree_base(self, root):
         self.calls.append(("worktree_base", root))
@@ -530,6 +546,46 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         svc.ensure(item)
 
         self.assertIn(("sync_to_origin", target), git.calls)
+
+
+class TestSyncSpecs(unittest.TestCase):
+    def test_clones_when_specs_root_is_not_a_git_repo(self):
+        git = _FakeGit(git_repos=(), clone_result=True, sync_default_result=True)
+        svc = WorktreeService(FakeStore(), git=git, fs=None,
+                              config=_Cfg("/proj", specs_root="/specs",
+                                          specs_remote="git@x:specs.git"))
+
+        svc.sync_specs()
+
+        self.assertIn(("clone", "git@x:specs.git", "/specs"), git.calls)
+
+    def test_does_not_clone_when_specs_root_is_already_a_git_repo(self):
+        git = _FakeGit(git_repos={"/specs"}, sync_default_result=True)
+        svc = WorktreeService(FakeStore(), git=git, fs=None,
+                              config=_Cfg("/proj", specs_root="/specs",
+                                          specs_remote="git@x:specs.git"))
+
+        svc.sync_specs()
+
+        self.assertNotIn(("clone", "git@x:specs.git", "/specs"), git.calls)
+
+    def test_raises_when_clone_fails(self):
+        git = _FakeGit(git_repos=(), clone_result=False)
+        svc = WorktreeService(FakeStore(), git=git, fs=None,
+                              config=_Cfg("/proj", specs_root="/specs",
+                                          specs_remote="git@x:specs.git"))
+
+        with self.assertRaises(UseCaseError):
+            svc.sync_specs()
+
+    def test_raises_when_sync_to_default_branch_fails(self):
+        git = _FakeGit(git_repos={"/specs"}, sync_default_result=False)
+        svc = WorktreeService(FakeStore(), git=git, fs=None,
+                              config=_Cfg("/proj", specs_root="/specs",
+                                          specs_remote="git@x:specs.git"))
+
+        with self.assertRaises(UseCaseError):
+            svc.sync_specs()
 
 
 if __name__ == "__main__":

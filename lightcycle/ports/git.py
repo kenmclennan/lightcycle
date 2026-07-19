@@ -31,6 +31,14 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def clone(self, url, dest):
+        pass
+
+    @abstractmethod
+    def sync_to_default_branch(self, root):
+        pass
+
+    @abstractmethod
     def remove_worktree(self, root, path):
         pass
 

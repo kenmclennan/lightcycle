@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -88,6 +89,84 @@ class TestGitAdapterSyncToOrigin(unittest.TestCase):
         _git(publisher, "push", "-q", "origin", "main")
 
         ok = GitAdapter().sync_to_origin(consumer)
+
+        self.assertFalse(ok)
+        self.assertEqual(_git(consumer, "rev-parse", "HEAD").stdout.strip(), local_sha)
+        self.assertTrue((Path(consumer) / "LOCAL.md").exists())
+
+
+class TestGitAdapterClone(unittest.TestCase):
+    def test_clone_creates_a_working_copy_from_a_bare_origin(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+        dest = os.path.join(tempfile.mkdtemp(), "nested", "specs")
+
+        ok = GitAdapter().clone(origin, dest)
+
+        self.assertTrue(ok)
+        self.assertTrue((Path(dest) / "README").exists())
+
+
+class TestGitAdapterSyncToDefaultBranch(unittest.TestCase):
+    def test_brings_a_checkout_on_a_stale_branch_up_to_the_merged_default_branch(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+        consumer = _clone(origin)
+        _git(consumer, "checkout", "-q", "-b", "some-other-branch")
+
+        (Path(publisher) / "NEW.md").write_text("merged spec")
+        _git(publisher, "add", "NEW.md")
+        _git(publisher, "commit", "-q", "-m", "add spec")
+        _git(publisher, "push", "-q", "origin", "main")
+
+        ok = GitAdapter().sync_to_default_branch(consumer)
+
+        self.assertTrue(ok)
+        self.assertEqual(_git(consumer, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip(), "main")
+        self.assertTrue((Path(consumer) / "NEW.md").exists())
+
+    def test_fails_loud_and_preserves_uncommitted_changes_when_checkout_would_clobber(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+        consumer = _clone(origin)
+        _git(consumer, "checkout", "-q", "-b", "some-other-branch")
+        (Path(consumer) / "README").write_text("uncommitted local edit")
+
+        (Path(publisher) / "README").write_text("conflicting merged edit")
+        _git(publisher, "add", "README")
+        _git(publisher, "commit", "-q", "-m", "edit readme")
+        _git(publisher, "push", "-q", "origin", "main")
+
+        ok = GitAdapter().sync_to_default_branch(consumer)
+
+        self.assertFalse(ok)
+        self.assertEqual(_git(consumer, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip(),
+                         "some-other-branch")
+        self.assertEqual((Path(consumer) / "README").read_text(), "uncommitted local edit")
+
+    def test_fails_loud_and_leaves_a_diverged_local_default_branch_untouched(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+        consumer = _clone(origin)
+        (Path(consumer) / "LOCAL.md").write_text("local only")
+        _git(consumer, "add", "LOCAL.md")
+        _git(consumer, "commit", "-q", "-m", "local change")
+        local_sha = _git(consumer, "rev-parse", "HEAD").stdout.strip()
+
+        (Path(publisher) / "NEW.md").write_text("merged spec")
+        _git(publisher, "add", "NEW.md")
+        _git(publisher, "commit", "-q", "-m", "add spec")
+        _git(publisher, "push", "-q", "origin", "main")
+
+        ok = GitAdapter().sync_to_default_branch(consumer)
 
         self.assertFalse(ok)
         self.assertEqual(_git(consumer, "rev-parse", "HEAD").stdout.strip(), local_sha)
