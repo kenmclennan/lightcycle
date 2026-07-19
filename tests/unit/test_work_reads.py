@@ -245,6 +245,13 @@ class TestInboxProjectAndPr(unittest.TestCase):
         tid = s.create_step("a gate", step=step_name, role="human", parent=item)
         return item, tid
 
+    def test_service_step_with_human_role_is_an_action_not_blocked(self):
+        s = FakeStore()
+        _, tid = self._item_with_step(s, step_name="review-findings")
+        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.kind, "action")
+
     def test_row_project_from_item_repo_artifact(self):
         s = FakeStore()
         _, tid = self._item_with_step(s, repo="proj-a")

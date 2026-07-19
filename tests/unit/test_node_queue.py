@@ -28,9 +28,14 @@ class TestClassifyForHuman(unittest.TestCase):
             tk(step="ready-merge").classify_for_human(FLOW), ("action", ["changes", "merged"])
         )
 
-    def test_blocked_for_an_agent_step_plus_unblock(self):
+    def test_blocked_for_an_agent_step_the_flow_does_know_still_blocked(self):
         self.assertEqual(
             tk(step="build").classify_for_human(FLOW), ("blocked", ["done", "unblock"])
+        )
+
+    def test_action_for_a_step_the_flow_does_not_know(self):
+        self.assertEqual(
+            tk(step="review-findings").classify_for_human(FLOW), ("action", [])
         )
 
 
