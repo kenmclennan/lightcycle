@@ -22,7 +22,8 @@ def check_bundle_references(fs, root):
             messages.append("stages missing a phase: %s" % ", ".join(contracts.phase_gaps()))
         if contracts.unknown_phases():
             messages.append(
-                "phase declared for unknown stage: %s" % ", ".join(contracts.unknown_phases())
+                "phase declared for a non-owned stage (only owned stages carry a phase; "
+                "fileless terminals do not): %s" % ", ".join(contracts.unknown_phases())
             )
         for phase, workspaces in sorted(contracts.phase_conflicts().items()):
             messages.append("phase %r spans workspaces: %s" % (phase, ", ".join(workspaces)))
