@@ -43,6 +43,29 @@ def sync_to_origin(root):
     return git_ok(root, "merge", "--ff-only", "@{upstream}")
 
 
+def clone(url, dest):
+    os.makedirs(os.path.dirname(dest.rstrip(os.sep)) or ".", exist_ok=True)
+    proc = subprocess.run(["git", "clone", "--quiet", url, dest], capture_output=True, text=True)
+    return proc.returncode == 0
+
+
+def sync_to_default_branch(root):
+    if not git_ok(root, "fetch", "origin"):
+        return False
+    base = worktree_base(root)
+    if base is None:
+        return False
+    branch = base.split("/", 1)[1]
+    current = git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    if not git_ok(root, "checkout", branch) and not git_ok(root, "checkout", "--track", base):
+        return False
+    if git_ok(root, "merge", "--ff-only", base):
+        return True
+    if current and current != branch:
+        git_ok(root, "checkout", current)
+    return False
+
+
 def remove_worktree(root, path):
     git(root, "worktree", "remove", "--force", path)
     git(root, "worktree", "prune")
@@ -98,6 +121,12 @@ class GitAdapter(GitPort):
 
     def sync_to_origin(self, root):
         return sync_to_origin(root)
+
+    def clone(self, url, dest):
+        return clone(url, dest)
+
+    def sync_to_default_branch(self, root):
+        return sync_to_default_branch(root)
 
     def remove_worktree(self, root, path):
         return remove_worktree(root, path)

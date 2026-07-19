@@ -138,10 +138,17 @@ class WorktreeService:
 
     def sync_specs(self):
         root = self._config.specs_root()
-        if not self._git.sync_to_origin(root):
+        if not self._git.is_git_repo(root):
+            if not self._git.clone(self._config.specs_remote(), root):
+                raise UseCaseError(
+                    "cannot read spec: failed to clone specs repo '%s' into '%s'"
+                    % (self._config.specs_remote(), root)
+                )
+        if not self._git.sync_to_default_branch(root):
             raise UseCaseError(
-                "cannot read spec: failed to sync specs checkout '%s' with origin "
-                "(fetch failed, or the local specs branch has diverged)" % root
+                "cannot read spec: failed to sync specs checkout '%s' to the origin default branch "
+                "(fetch failed, no default branch found, or the local checkout is dirty/diverged)"
+                % root
             )
 
     def remove(self, item):
