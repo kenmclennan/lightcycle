@@ -20,7 +20,7 @@ _ALL_KEYS = dict(
     worktree_retry_sleep="0.25", max_boot_seconds="120", max_session_seconds="1800",
     poll_seconds="5", worker_history="20", editor="vi", retro_interval_reflections="20",
     backups_dir="/b", backup_interval_minutes="15", backup_retention="96",
-    workflow_retention="5",
+    workflow_retention="5", max_title_length="72",
 )
 
 

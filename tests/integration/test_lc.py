@@ -115,6 +115,7 @@ def write_config(projects=None, specs=None):
         "backups-dir: %s" % tempfile.mkdtemp(),
         "backup-interval-minutes: 15",
         "backup-retention: 96",
+        "max-title-length: 72",
     ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p
@@ -352,6 +353,16 @@ class TestSpecsDir(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_specs_dir)
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.strip(), self.root)
+
+
+class TestTitleCap(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_new_item_title_over_cap_is_rejected_end_to_end(self):
+        rc, out, err = call(_cli_mod.cmd_new, "item", "x" * 100)
+        self.assertEqual(rc, 1)
+        self.assertIn("72", err)
 
 
 class TestModel(unittest.TestCase):
