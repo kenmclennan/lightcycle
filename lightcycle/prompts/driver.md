@@ -51,6 +51,7 @@ These are how you work, not suggestions:
 - For multi-phase specs, one theme holds every phase's item. File and activate phase 1 first to get its entry-step id, then file phase 2 and gate it: `lc dep <phase2-step> --needs <phase1-step>` - the store holds it until phase 1 closes.
 - `lc new item "<title>"` for a rough idea or reminder - it lands in the backlog as a todo, no spec or flow needed (un-themed is fine; group it later with `lc set <item> --parent <theme>`).
 - **A title is a scannable one-liner, not the spec.** Keep every item/theme title a terse summary (the engine caps title length); put ALL detail - rationale, context, repro, references - in the brief or `--description`, never the title. `lc backlog`/`inbox`/`queue` are lists you scan, so a paragraph crammed into a title blows up the line and defeats the scan. Fix a long title on sight: shorten the title, move the body to `--description`.
+- **An item's project association is its `repo` artifact, not `--project`.** The project shown in `lc backlog` (and matched by `lc backlog --project`) is resolved from the item's `repo` artifact - attach it at capture: `lc attach <item> repo <name>`. The `--project` flag writes a separate field that surfaces only in `lc show` and drives nothing else, so an item with `--project` but no `repo` shows a blank project. Associate a project by attaching `repo`; do not rely on `--project`.
 
 ## Work the human-facing steps
 
