@@ -25,6 +25,7 @@ _SEED_KEYS = [
     ("backup-interval-minutes", "15"),
     ("backup-retention", "96"),
     ("workflow-retention", "5"),
+    ("max-title-length", "72"),
 ]
 
 
@@ -283,6 +284,9 @@ class Config:
 
     def workflow_retention(self):
         return self._required_int("workflow-retention")
+
+    def max_title_length(self):
+        return self._required_int("max-title-length")
 
     def spawn_id(self):
         return self._env("LC_SPAWNID")

@@ -11,7 +11,7 @@ from lightcycle import __version__
 from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
-from lightcycle.render import render_backlog, render_backlog_themed, render_inbox
+from lightcycle.render import render_backlog, render_backlog_themed, render_inbox, render_queue
 
 from lightcycle.application.feedback import (
     ReflectInput,
@@ -24,6 +24,7 @@ from lightcycle.application.feedback import (
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.project_of import project_of
 from lightcycle.application.work.resolve_backlog import link_resolves
+from lightcycle.application.work.title_guard import validate_title
 from lightcycle.application.work import (
     ActiveStepsUseCase,
     BacklogInput,
@@ -749,7 +750,7 @@ def cmd_inbox(argv):
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
     resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n))
-    for line in render_inbox(resp.rows):
+    for line in render_inbox(resp.rows, _container.config.max_title_length()):
         print(line)
     return 0
 
@@ -762,7 +763,11 @@ def cmd_backlog(argv):
     a = ap.parse_args(argv)
     resp = BacklogUseCase(_container.store, _flow()).execute(
         BacklogInput(n=a.n, project=a.project, themes=a.themes))
-    lines = render_backlog_themed(resp.groups) if a.themes else render_backlog(resp.rows)
+    title_cap = _container.config.max_title_length()
+    lines = (
+        render_backlog_themed(resp.groups, title_cap)
+        if a.themes else render_backlog(resp.rows, title_cap)
+    )
     for line in lines:
         print(line)
     return 0
@@ -778,8 +783,9 @@ def cmd_queue(argv):
     ap = argparse.ArgumentParser(prog="lc queue")
     ap.add_argument("n", nargs="?", type=int, default=10)
     a = ap.parse_args(argv)
-    for t in QueueUseCase(_container.store).execute(QueueInput(n=a.n)).steps:
-        print("  %-8s %s  %s" % (t.state, t.id, t.title))
+    steps = QueueUseCase(_container.store).execute(QueueInput(n=a.n)).steps
+    for line in render_queue(steps, _container.config.max_title_length()):
+        print(line)
     return 0
 
 
@@ -808,6 +814,11 @@ def cmd_new(argv):
             "unknown type '%s'; expected theme | item | step (theme > item > step)\n" % a.type
         )
         return 2
+    try:
+        validate_title(_container.config, a.title)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if a.type == "theme":
         try:
             resp = OpenThemeUseCase(_container.store).execute(
@@ -860,6 +871,8 @@ def cmd_set(argv):
     ap.add_argument("id")
     a = ap.parse_args(argv)
     try:
+        if a.title:
+            validate_title(_container.config, a.title)
         if a.state == "active":
             resp = ActivateItemUseCase(_container.store, _flow()).execute(
                 ActivateItemInput(item=a.id, workflow=a.workflow, theme=a.parent, step=a.step)

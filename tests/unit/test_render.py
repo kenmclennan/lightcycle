@@ -2,7 +2,12 @@ import unittest
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.domain.work import Artifact, Node
-from lightcycle.render import node_extra, render_backlog, render_backlog_themed, render_inbox
+from lightcycle.render import (
+    node_extra, render_backlog, render_backlog_themed, render_inbox, render_queue,
+)
+
+
+TITLE_CAP = 72
 
 
 def tk(**kw):
@@ -57,58 +62,84 @@ class TestRenderBacklog(unittest.TestCase):
             row(project="proj-a", step=tk(id="t1", title="one")),
             row(project="proj-a", step=tk(id="t2", title="two")),
         ]
-        lines = render_backlog(rows)
+        lines = render_backlog(rows, TITLE_CAP)
         self.assertEqual(
             lines, [_flat("t1", "proj-a", "one"), _flat("t2", "proj-a", "two")]
         )
 
     def test_mixed_kind_shows_prefix(self):
         rows = [row(kind="todo", step=tk(id="t1", title="one")), row(kind="action", step=tk(id="t2", title="two"))]
-        lines = render_backlog(rows)
+        lines = render_backlog(rows, TITLE_CAP)
         self.assertTrue(all(l.startswith("[") for l in lines))
 
     def test_missing_project_renders_dash(self):
-        lines = render_backlog([row(project=None, step=tk(id="t1", title="one"))])
+        lines = render_backlog([row(project=None, step=tk(id="t1", title="one"))], TITLE_CAP)
         self.assertEqual(lines[0], _flat("t1", "-", "one"))
 
     def test_description_suffix_preserved(self):
-        lines = render_backlog([row(project="proj-a", step=tk(id="t1", title="one", description="deets"))])
+        lines = render_backlog([row(project="proj-a", step=tk(id="t1", title="one", description="deets"))], TITLE_CAP)
         self.assertTrue(lines[0].endswith("desc:deets"))
 
     def test_plan_suffix_preserved(self):
         node = tk(id="t1", title="one", artifacts=[Artifact(type="plan-doc", value="plans/x.md")])
-        lines = render_backlog([row(project="proj-a", step=node)])
+        lines = render_backlog([row(project="proj-a", step=node)], TITLE_CAP)
         self.assertIn("plan:plans/x.md", lines[0])
+
+    def test_title_over_cap_is_truncated_with_ellipsis(self):
+        title = "x" * (TITLE_CAP + 20)
+        lines = render_backlog([row(project="proj-a", step=tk(id="t1", title=title))], TITLE_CAP)
+        self.assertIn(title[:TITLE_CAP] + "...", lines[0])
+        self.assertNotIn(title, lines[0])
+
+    def test_title_at_or_under_cap_is_untouched(self):
+        title = "x" * (TITLE_CAP - 1)
+        lines = render_backlog([row(project="proj-a", step=tk(id="t1", title=title))], TITLE_CAP)
+        self.assertIn(title, lines[0])
 
 
 class TestRenderBacklogThemed(unittest.TestCase):
     def test_theme_heading_and_indented_items(self):
         theme = tk(id="LC-99", title="theme title")
         group = _group(theme, "proj-a", [row(step=tk(id="LC-99.1", title="item one"))])
-        lines = render_backlog_themed([group])
+        lines = render_backlog_themed([group], TITLE_CAP)
         self.assertEqual(lines[0], "LC-99  proj-a  theme title")
         self.assertEqual(lines[1], "    LC-99.1  item one")
 
     def test_no_theme_group_heading(self):
         group = _group(None, None, [row(project=None, step=tk(id="LC-77", title="loose item"))])
-        lines = render_backlog_themed([group])
+        lines = render_backlog_themed([group], TITLE_CAP)
         self.assertEqual(lines[0], "(no theme)")
         self.assertEqual(lines[1], _flat("LC-77", "-", "loose item"))
 
     def test_no_theme_group_item_shows_project(self):
         group = _group(None, None, [row(project="proj-a", step=tk(id="LC-77", title="loose item"))])
-        lines = render_backlog_themed([group])
+        lines = render_backlog_themed([group], TITLE_CAP)
         self.assertEqual(lines[0], "(no theme)")
         self.assertEqual(lines[1], _flat("LC-77", "proj-a", "loose item"))
 
     def test_blank_line_between_groups(self):
         g1 = _group(tk(id="LC-1", title="t1"), "-", [row(step=tk(id="LC-1.1", title="a"))])
         g2 = _group(None, None, [row(step=tk(id="LC-2", title="b"))])
-        lines = render_backlog_themed([g1, g2])
+        lines = render_backlog_themed([g1, g2], TITLE_CAP)
         self.assertEqual(lines[2], "")
 
     def test_empty_groups_renders_no_lines(self):
-        self.assertEqual(render_backlog_themed([]), [])
+        self.assertEqual(render_backlog_themed([], TITLE_CAP), [])
+
+    def test_title_over_cap_is_truncated_with_ellipsis(self):
+        title = "x" * (TITLE_CAP + 20)
+        theme = tk(id="LC-99", title="theme title")
+        group = _group(theme, "proj-a", [row(step=tk(id="LC-99.1", title=title))])
+        lines = render_backlog_themed([group], TITLE_CAP)
+        self.assertIn(title[:TITLE_CAP] + "...", lines[1])
+        self.assertNotIn(title, lines[1])
+
+    def test_title_at_or_under_cap_is_untouched(self):
+        title = "x" * (TITLE_CAP - 1)
+        theme = tk(id="LC-99", title="theme title")
+        group = _group(theme, "proj-a", [row(step=tk(id="LC-99.1", title=title))])
+        lines = render_backlog_themed([group], TITLE_CAP)
+        self.assertIn(title, lines[1])
 
 
 def _group(theme, project, rows):
@@ -124,58 +155,58 @@ def _inbox(kind, id_, project, title, suffix=""):
 class TestRenderInbox(unittest.TestCase):
     def test_plain_row_no_suffix(self):
         r = row(kind="action", project="proj-a", step=tk(id="t1", title="one"))
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertEqual(lines, [_inbox("action", "t1", "proj-a", "one")])
 
     def test_missing_project_renders_dash(self):
         r = row(kind="action", project=None, step=tk(id="t1", title="one"))
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertEqual(lines, [_inbox("action", "t1", "-", "one")])
 
     def test_blocked_row_with_needs(self):
         node = tk(id="t1", title="one", needs="waiting on X")
         r = row(kind="blocked", step=node)
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  needs:waiting on X"))
 
     def test_blocked_row_without_needs_has_no_suffix(self):
         r = row(kind="blocked", project="proj-a", step=tk(id="t1", title="one"))
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertEqual(lines, [_inbox("blocked", "t1", "proj-a", "one")])
 
     def test_triage_row_with_notes(self):
         node = tk(id="t1", title="one", notes="found: missing test coverage")
         r = row(kind="triage", step=node)
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  findings:found: missing test coverage"))
 
     def test_triage_row_multiline_notes_first_line_truncated(self):
         first_line = "x" * 80
         node = tk(id="t1", title="one", notes=first_line + "\nsecond line")
         r = row(kind="triage", step=node)
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  findings:" + "x" * 60 + "..."))
 
     def test_action_row_with_pr_shows_pr_suffix(self):
         r = row(kind="action", step=tk(id="t1", title="one"), pr="https://example.com/pr/1")
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  pr:https://example.com/pr/1"))
 
     def test_blocked_row_with_pr_shows_needs_not_pr(self):
         node = tk(id="t1", title="one", needs="waiting on X")
         r = row(kind="blocked", step=node, pr="https://example.com/pr/1")
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  needs:waiting on X"))
         self.assertNotIn("pr:", lines[0])
 
     def test_kind_always_shown_even_for_single_row(self):
-        lines = render_inbox([row(kind="action", step=tk(id="t1", title="one"))])
+        lines = render_inbox([row(kind="action", step=tk(id="t1", title="one"))], TITLE_CAP)
         self.assertTrue(lines[0].startswith("[action]"))
 
     def test_desc_suffix_renders_after_strategy_suffix(self):
         node = tk(id="t1", title="one", needs="waiting on X", description="deets")
         r = row(kind="blocked", step=node)
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  needs:waiting on X  desc:deets"))
 
     def test_plan_suffix_renders_after_strategy_suffix(self):
@@ -184,7 +215,7 @@ class TestRenderInbox(unittest.TestCase):
             artifacts=[Artifact(type="plan-doc", value="plans/x.md")],
         )
         r = row(kind="blocked", step=node)
-        lines = render_inbox([r])
+        lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  needs:waiting on X  plan:plans/x.md"))
 
     def test_mixed_kinds_align_id_column(self):
@@ -192,9 +223,39 @@ class TestRenderInbox(unittest.TestCase):
             row(kind="action", project="proj-a", step=tk(id="t1", title="one")),
             row(kind="blocked", project="proj-a", step=tk(id="t2", title="two")),
         ]
-        lines = render_inbox(rows)
+        lines = render_inbox(rows, TITLE_CAP)
         id_offset = lines[0].index("t1")
         self.assertEqual(id_offset, lines[1].index("t2"))
+
+    def test_title_over_cap_is_truncated_with_ellipsis(self):
+        title = "x" * (TITLE_CAP + 20)
+        r = row(kind="action", project="proj-a", step=tk(id="t1", title=title))
+        lines = render_inbox([r], TITLE_CAP)
+        self.assertIn(title[:TITLE_CAP] + "...", lines[0])
+        self.assertNotIn(title, lines[0])
+
+    def test_title_at_or_under_cap_is_untouched(self):
+        title = "x" * (TITLE_CAP - 1)
+        r = row(kind="action", project="proj-a", step=tk(id="t1", title=title))
+        lines = render_inbox([r], TITLE_CAP)
+        self.assertIn(title, lines[0])
+
+
+class TestRenderQueue(unittest.TestCase):
+    def test_short_title_passes_through(self):
+        lines = render_queue([tk(id="t1", title="one", state="ready")], TITLE_CAP)
+        self.assertEqual(lines, ["  %-8s %s  %s" % ("ready", "t1", "one")])
+
+    def test_title_over_cap_is_truncated_with_ellipsis(self):
+        title = "x" * (TITLE_CAP + 20)
+        lines = render_queue([tk(id="t1", title=title, state="ready")], TITLE_CAP)
+        self.assertIn(title[:TITLE_CAP] + "...", lines[0])
+        self.assertNotIn(title, lines[0])
+
+    def test_state_and_id_columns_preserved(self):
+        lines = render_queue([tk(id="t1", title="one", state="in_progress")], TITLE_CAP)
+        self.assertIn("in_progress", lines[0])
+        self.assertIn("t1", lines[0])
 
 
 if __name__ == "__main__":

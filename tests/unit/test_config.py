@@ -161,6 +161,7 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("backups-dir: ~/.lightcycle-backups", text)
         self.assertIn("backup-interval-minutes: 15", text)
         self.assertIn("backup-retention: 96", text)
+        self.assertIn("max-title-length: 72", text)
 
     def test_tops_up_missing_keys_in_existing_config(self):
         d = tempfile.mkdtemp()
@@ -196,7 +197,7 @@ class TestEnsureConfig(unittest.TestCase):
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
             "retro-interval-reflections: 20\n"
             "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
-            "backup-retention: 96\nworkflow-retention: 5\n"
+            "backup-retention: 96\nworkflow-retention: 5\nmax-title-length: 72\n"
         )
         Path(p).write_text(all_keys)
         c = Config(environ={"LC_CONFIG": p})
@@ -212,9 +213,11 @@ class TestReconcileConfig(unittest.TestCase):
         c = Config(environ={"LC_CONFIG": p})
         added = c.reconcile_config()
         self.assertIn("max-agents", added)
+        self.assertIn("max-title-length", added)
         text = Path(p).read_text()
         self.assertIn("projects: /p", text)
         self.assertIn("max-agents: 5", text)
+        self.assertIn("max-title-length: 72", text)
 
     def test_does_not_create_config_when_absent(self):
         d = tempfile.mkdtemp()
@@ -266,6 +269,15 @@ class TestMissingConfigKeys(unittest.TestCase):
         c = Config(environ={"LC_CONFIG": p})
         missing = c.missing_config_keys()
         self.assertEqual(set(missing), {k for k, _ in _SEED_KEYS})
+
+
+class TestMaxTitleLength(unittest.TestCase):
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().max_title_length()
+
+    def test_config_value_read(self):
+        self.assertEqual(_cfg(max_title_length="72").max_title_length(), 72)
 
 
 class TestSpawnProtocol(unittest.TestCase):
