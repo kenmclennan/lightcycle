@@ -35,7 +35,8 @@ class Node:
         if not self.step:
             return ("triage", []) if self.attention else ("todo", [])
         outs = flow.outcomes_for(self.step)
-        if flow.owner_of(self.step) == "human":
+        owner = flow.owner_of(self.step)
+        if owner is None or owner == "human":
             return ("action", outs)
         return ("blocked", outs + ["unblock"])
 
