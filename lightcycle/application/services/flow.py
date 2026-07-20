@@ -1,4 +1,3 @@
-from lightcycle.config import ConfigError
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.pool import ReadyQueue
@@ -21,41 +20,21 @@ class FlowService:
         origin = self._config.default_origin()
         sha = self._workflow_source.current_sha(origin)
         if sha is None:
-            raise ValueError(
-                "default-origin %r has no pulled version; run `lc workflow add`/`upgrade`" % origin)
+            return None
         names = self._workflow_source.workflow_names(origin, sha)
-        if len(names) == 1:
-            return "%s/%s@%s" % (origin, names[0], sha)
-        try:
-            selector = self._config.default_workflow()
-        except ConfigError:
-            selector = None
-        if not selector:
-            raise ValueError(
-                "default-origin %r has %d workflows (%s); set `default-workflow` in config or pass "
-                "an explicit --workflow" % (origin, len(names), ", ".join(sorted(names))))
-        parsed = parse_selector(selector)
-        if parsed is None:
-            raise ValueError("default-workflow %r must be '<origin>/<name>'" % selector)
-        _origin, name = parsed
-        if name not in names:
-            raise ValueError(
-                "default-workflow %r names a workflow not in default-origin %r (has %s)"
-                % (selector, origin, ", ".join(sorted(names))))
-        return "%s/%s@%s" % (origin, name, sha)
+        return "%s/%s@%s" % (origin, names[0], sha) if len(names) == 1 else None
 
     def _resolve(self, name):
         if self._workflow_source is None:
             return name, None
-        pin = name or self._default_pin()
+        pin = name if name is not None else self._default_pin()
+        if pin is None:
+            return None, None
         parsed = parse_pin(pin)
         if parsed is None:
             raise ValueError("workflow %r is not a pin '<origin>/<name>@<sha>'" % pin)
         origin, wfname, sha = parsed
         return wfname, self._workflow_source.bundle_path(origin, sha)
-
-    def default_root(self):
-        return self._resolve(None)[1]
 
     def resolve_selection(self, selector):
         if self._workflow_source is None:
@@ -68,7 +47,7 @@ class FlowService:
         parsed = parse_selector(selector)
         if parsed is None:
             raise ValueError(
-                "--workflow %r must be fully qualified '<origin>/<name>'" % selector)
+                "workflow %r must be fully qualified '<origin>/<name>'" % selector)
         origin, _name = parsed
         sha = self._workflow_source.current_sha(origin)
         if sha is None:
@@ -93,7 +72,9 @@ class FlowService:
         wfname, root = self._resolve(name)
         text = self._fs.workflow_text(wfname, root)
         if text is None:
-            raise ValueError("workflow %r not found" % (name or wfname))
+            if wfname is None:
+                return parse_graph(""), root
+            raise ValueError("workflow %r not found" % name)
         return parse_graph(text), root
 
     def _role_metas_in(self, root):
@@ -104,6 +85,26 @@ class FlowService:
 
     def role_metas(self, name=None):
         return self._role_metas_in(self._resolve(name)[1])
+
+    def workflow_meta(self, name=None):
+        wfname, root = self._resolve(name)
+        return self._fs.workflow_meta(wfname, root)
+
+    def step_skill(self, node):
+        stage = node.step if getattr(node, "type", None) == "step" else None
+        if not stage:
+            return None
+        selection = self.inherited_selection(node)
+        if selection is None:
+            return None
+        try:
+            graph, root = self._graph_and_root(self.resolve_selection(selection))
+        except ValueError:
+            return None
+        parsed = self._fs.parse_step(graph.file_for(stage), root)
+        if not parsed or parsed["meta"].get("model"):
+            return None
+        return (parsed.get("body") or "").strip() or None
 
     def _walk(self, step):
         cur, seen = step, set()
@@ -116,8 +117,6 @@ class FlowService:
         for node in self._walk(step):
             if node.workflow:
                 return node.workflow
-        if self._workflow_source is not None:
-            return self._default_pin()
         return None
 
     def project_for(self, step):
@@ -133,18 +132,39 @@ class FlowService:
         graph, root = self._graph_and_root(name)
         return Flow.from_graph(graph, self._role_metas_in(root))
 
+    def _pin_for_node(self, node):
+        selection = self.workflow_for(node)
+        return self.resolve_selection(selection) if selection is not None else None
+
+    def _graph_for_node(self, node):
+        try:
+            return self.load_graph(self._pin_for_node(node))
+        except ValueError:
+            return None
+
+    def flow_for(self, node):
+        try:
+            return self.load_flow(self._pin_for_node(node))
+        except ValueError:
+            return Flow({})
+
     def workspace_for_node(self, node):
-        graph = self.load_graph(self.workflow_for(node))
+        graph = self._graph_for_node(node)
+        if graph is None:
+            return None
         stage = node.step if getattr(node, "type", None) == "step" else None
         return graph.workspace_for(stage) if stage else graph.workspace
 
     def phase_for(self, node):
-        graph = self.load_graph(self.workflow_for(node))
+        graph = self._graph_for_node(node)
+        if graph is None:
+            return None
         stage = node.step if getattr(node, "type", None) == "step" else None
         return graph.phase_for(stage) if stage else None
 
     def workspace_for_phase(self, node, phase):
-        return self.load_graph(self.workflow_for(node)).workspace_for_phase(phase)
+        graph = self._graph_for_node(node)
+        return graph.workspace_for_phase(phase) if graph is not None else None
 
     def flow_next(self, step, outcome, name=None):
         return self.load_flow(name).next(step, outcome)

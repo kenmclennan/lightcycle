@@ -291,9 +291,17 @@ class TestInboxProjectAndPr(unittest.TestCase):
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.pr, "https://example.com/pr/3")
 
+    def test_workflow_less_service_step_classifies_from_role_without_a_default(self):
+        s = FakeStore()
+        tid = s.create_step("review-findings: x", step="review-findings", role="human")
+        resp = InboxUseCase(s, FlowService(FakeFs({}), s)).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.kind, "action")
+        self.assertIsNone(row.pr)
+
     def test_row_pr_prefers_current_phase_over_earlier_phase(self):
         s = FakeStore()
-        item = s.create_item("an item")
+        item = s.create_item("an item", workflow="wf")
         s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
         s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
         tid = s.create_step("await merge", step="code-await-merge", role="human", parent=item)
@@ -304,9 +312,9 @@ class TestInboxProjectAndPr(unittest.TestCase):
 
     def test_row_pr_prefers_spec_phase_at_a_spec_await_merge_step(self):
         s = FakeStore()
-        item = s.create_item("an item")
-        s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
+        item = s.create_item("an item", workflow="wf")
         s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
+        s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
         tid = s.create_step("await merge", step="spec-await-merge", role="human", parent=item)
         fs = FakeFs(
             metas={"await-merge": {"step": "spec-await-merge"}},

@@ -1249,7 +1249,7 @@ class TestFlowFromAgents(unittest.TestCase):
         self.assertIsNone(self._flow().flow_next("build", "banana"))
 
     def test_flow_command_lists_steps_and_human_terminal(self):
-        rc, out, err = call(_cli_mod.cmd_flow)
+        rc, out, err = call(_cli_mod.cmd_workflow, "check", "lightcycle/spec-driven")
         self.assertEqual(rc, 0, err)
         self.assertIn("build", out)
         self.assertIn("review", out)
@@ -1279,7 +1279,9 @@ class TestArtifactContracts(unittest.TestCase):
         _fake_setUp(self, contract_steps=True)
 
     def test_claim_escalates_when_required_input_missing(self):
-        b = self.store.create_step("build: x", step="build", role="coder")
+        theme = self.store.create_theme("t", workflow="lightcycle/spec-driven")
+        item = self.store.create_item("i", theme=theme)
+        b = self.store.create_step("build: x", step="build", role="coder", parent=item)
         rc, out, err = call(_cli_mod.cmd_claim, "coder")
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.strip(), "")
@@ -1324,7 +1326,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertIn("branch", err)
 
     def test_flow_reports_composition_ok(self):
-        rc, out, err = call(_cli_mod.cmd_flow)
+        rc, out, err = call(_cli_mod.cmd_workflow, "check", "lightcycle/spec-driven")
         self.assertEqual(rc, 0, err)
         self.assertIn("branch", out)
 
@@ -1334,7 +1336,7 @@ class TestArtifactContracts(unittest.TestCase):
             specs["reviewer"], accepts={"spec": "required", "design": "required"}
         )
         write_contract_steps(self.root, specs)
-        rc, out, err = call(_cli_mod.cmd_flow)
+        rc, out, err = call(_cli_mod.cmd_workflow, "check", "lightcycle/spec-driven")
         self.assertEqual(rc, 1)
         self.assertIn("design", err)
 
@@ -1342,7 +1344,7 @@ class TestArtifactContracts(unittest.TestCase):
         specs = {k: dict(v) for k, v in _CONTRACT_SPECS.items()}
         specs["coder"] = dict(specs["coder"], phase="code")
         write_contract_steps(self.root, specs)
-        rc, out, err = call(_cli_mod.cmd_flow)
+        rc, out, err = call(_cli_mod.cmd_workflow, "check", "lightcycle/spec-driven")
         self.assertEqual(rc, 1)
         self.assertIn("phase", err)
 
@@ -2034,8 +2036,10 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_inbox_shows_action_and_blocked_only(self):
         call(_cli_mod.cmd_new, "item", "a seed")
-        self.store.create_step("merge: z", step="ready-merge", role="human")
-        self.store.create_step("build: q", step="build", role="human")
+        theme = self.store.create_theme("t", workflow="lightcycle/spec-driven")
+        host = self.store.create_item("host", theme=theme)
+        self.store.create_step("merge: z", step="ready-merge", role="human", parent=host)
+        self.store.create_step("build: q", step="build", role="human", parent=host)
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("[action]", out)
         self.assertIn("[blocked]", out)

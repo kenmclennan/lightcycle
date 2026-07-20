@@ -688,7 +688,8 @@ class TestClaimTask(unittest.TestCase):
 
     def test_records_model_from_role_frontmatter(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        bid = s.create_step("build: x", step="build", role="coder",
+                            parent=s.create_item("i", workflow="standard"))
         self._uc(s).execute(ClaimInput(role="coder"))
         self.assertEqual(s.get_node(bid).model, "sonnet")
 
@@ -803,7 +804,8 @@ class TestClaimTask(unittest.TestCase):
 
     def test_missing_required_input_routes_to_human(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        bid = s.create_step("build: x", step="build", role="coder",
+                            parent=s.create_item("i", workflow="standard"))
         resp = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
         ).execute(ClaimInput(role="coder"))
@@ -858,7 +860,8 @@ class TestClaimTask(unittest.TestCase):
 
     def test_claim_exposes_the_declared_phase(self):
         s = FakeStore()
-        s.create_step("build: x", step="build", role="coder")
+        s.create_step("build: x", step="build", role="coder",
+                     parent=s.create_item("i", workflow="standard"))
         metas = {"coder": {"model": "sonnet", "step": "build", "phase": "spec",
                            "routes": {"done": "review"}}}
         resp = ClaimStepUseCase(

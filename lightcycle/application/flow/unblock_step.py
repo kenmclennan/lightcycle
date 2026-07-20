@@ -20,7 +20,7 @@ class UnblockStepUseCase:
 
     def execute(self, input: UnblockInput) -> UnblockResponse:
         t = self._store.get_node(input.step)
-        role = self._flow.load_flow(self._flow.workflow_for(t)).owner_of(t.step)
+        role = self._flow.flow_for(t).owner_of(t.step)
         if not role or role == "human":
             raise UseCaseError(
                 "nothing to unblock: step '%s' has no agent owner" % (t.step or "(none)")

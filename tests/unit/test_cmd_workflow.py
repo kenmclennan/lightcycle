@@ -3,7 +3,25 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
+from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_store import FakeStore as SupportStore
+
+
+class TestWorkflowListSummaries(unittest.TestCase):
+    def test_list_shows_each_workflows_summary(self):
+        source = FakeSource()
+        source.registries["acme"] = {"url": "u", "ref": "main", "current": "sha1"}
+        source.materialized["acme"] = ["sha1"]
+        source.workflow_names = lambda o, s: ["bdd-driven", "spec-driven"]
+        fs = FakeFs(workflows={
+            "spec-driven": "---\nsummary: spec to merged\n---\nentry: x\n",
+            "bdd-driven": "---\nsummary: gherkin first\n---\nentry: y\n",
+        })
+        resp = ListWorkflowSourcesUseCase(source, SupportStore(), fs).execute()
+        wfs = dict(resp.origins[0].workflows)
+        self.assertEqual(wfs["spec-driven"], "spec to merged")
+        self.assertEqual(wfs["bdd-driven"], "gherkin first")
 
 
 def call(fn, *args):
@@ -45,6 +63,12 @@ class FakeSource:
 
     def has_version(self, origin, sha):
         return sha in self.materialized.get(origin, [])
+
+    def bundle_path(self, origin, sha):
+        return "%s/%s" % (origin, sha)
+
+    def workflow_names(self, origin, sha):
+        return []
 
     def write_registry(self, origin, url, ref, current):
         self.registries[origin] = {"url": url, "ref": ref, "current": current}

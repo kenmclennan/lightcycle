@@ -1,6 +1,5 @@
 import unittest
 
-from lightcycle.config import ConfigError
 from lightcycle.application.flow.flow_check import FlowCheckInput, FlowCheckUseCase
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
@@ -36,51 +35,83 @@ class _WFSource:
 
 
 class _RefCfg:
-    def __init__(self, default_workflow=None):
-        self._dw = default_workflow
-
     def default_origin(self):
         return "lightcycle"
 
-    def default_workflow(self):
-        if not self._dw:
-            raise ConfigError("default-workflow")
-        return self._dw
 
-
-def _ref_svc(names, default_workflow=None):
+def _ref_svc(names):
     return FlowService(
-        FakeFs(METAS), FakeStore(),
-        config=_RefCfg(default_workflow), workflow_source=_WFSource(names),
+        FakeFs(METAS), FakeStore(), config=_RefCfg(), workflow_source=_WFSource(names),
     )
 
 
-class TestDefaultPinMultiWorkflow(unittest.TestCase):
-    def test_single_workflow_is_inferred(self):
-        self.assertEqual(_ref_svc(["spec-driven"])._default_pin(), "lightcycle/spec-driven@abc")
-
-    def test_multi_workflow_resolves_the_configured_default(self):
+class TestWorkflowMeta(unittest.TestCase):
+    def test_reads_summary_and_when_to_use_frontmatter(self):
+        fs = FakeFs(METAS, workflow="---\nsummary: spec to merged\nwhen-to-use: default flow\n---\nentry: build\n")
+        svc = FlowService(fs, FakeStore())
         self.assertEqual(
-            _ref_svc(["spec-driven", "bdd-driven"], "lightcycle/spec-driven")._default_pin(),
-            "lightcycle/spec-driven@abc",
+            svc.workflow_meta(),
+            {"summary": "spec to merged", "when-to-use": "default flow"},
         )
 
-    def test_multi_workflow_without_a_default_raises_specifically(self):
-        with self.assertRaises(ValueError) as ctx:
-            _ref_svc(["spec-driven", "bdd-driven"])._default_pin()
-        msg = str(ctx.exception)
-        self.assertIn("2 workflows", msg)
-        self.assertIn("default-workflow", msg)
+    def test_no_frontmatter_is_empty(self):
+        svc = FlowService(FakeFs(METAS, workflow="entry: build\n"), FakeStore())
+        self.assertEqual(svc.workflow_meta(), {})
 
-    def test_default_workflow_naming_an_absent_workflow_raises(self):
-        with self.assertRaises(ValueError) as ctx:
-            _ref_svc(["spec-driven", "bdd-driven"], "lightcycle/nope")._default_pin()
-        self.assertIn("nope", str(ctx.exception))
 
-    def test_present_but_empty_default_workflow_raises_the_clean_error_not_configerror(self):
-        with self.assertRaises(ValueError) as ctx:
-            _ref_svc(["spec-driven", "bdd-driven"], "")._default_pin()
-        self.assertIn("default-workflow", str(ctx.exception))
+class TestDefaultPin(unittest.TestCase):
+    def test_single_workflow_infers_a_pin(self):
+        self.assertEqual(_ref_svc(["spec-driven"])._default_pin(), "lightcycle/spec-driven@abc")
+
+    def test_multiple_workflows_yield_no_default_pin_rather_than_raising(self):
+        self.assertIsNone(_ref_svc(["spec-driven", "bdd-driven"])._default_pin())
+
+
+class TestNodeHelpersTolerateWorkflowLessNodes(unittest.TestCase):
+    def _svc_node(self):
+        store = FakeStore()
+        step = store.create_step("audit: x", step="audit", role="audit")
+        svc = FlowService(FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
+        return svc, store.get_node(step)
+
+    def test_flow_for_a_service_step_is_empty_and_never_reaches_default_pin(self):
+        svc, node = self._svc_node()
+        self.assertEqual(svc.flow_for(node).steps(), [])
+
+    def test_phase_for_a_service_step_is_none_without_a_crash(self):
+        svc, node = self._svc_node()
+        self.assertIsNone(svc.phase_for(node))
+        svc.workspace_for_node(node)
+
+
+class TestStepSkill(unittest.TestCase):
+    def _svc_store(self):
+        metas = {"reviewer": {"model": "opus", "step": "review"}, "gate": {"step": "gate"}}
+        wf = "entry: gate\n\nedges:\n  gate  done  review\n\nnodes:\n  review  reviewer\n"
+        store = FakeStore()
+        svc = FlowService(
+            FakeFs(metas, workflow=wf, bodies={"gate": "GATE SKILL BODY", "reviewer": "REVIEWER BODY"}),
+            store,
+        )
+        return svc, store
+
+    def test_human_gate_step_returns_its_skill_body(self):
+        svc, store = self._svc_store()
+        item = store.create_item("i", theme=store.create_theme("t"), workflow="wf")
+        step = store.create_step("gate: i", step="gate", role="human", parent=item)
+        self.assertEqual(svc.step_skill(store.get_node(step)), "GATE SKILL BODY")
+
+    def test_agent_step_has_no_skill(self):
+        svc, store = self._svc_store()
+        item = store.create_item("i", theme=store.create_theme("t"), workflow="wf")
+        step = store.create_step("review: i", step="review", role="reviewer", parent=item)
+        self.assertIsNone(svc.step_skill(store.get_node(step)))
+
+    def test_workflow_less_node_has_no_skill(self):
+        svc, store = self._svc_store()
+        item = store.create_item("i", theme=store.create_theme("t"))
+        step = store.create_step("gate: i", step="gate", role="human", parent=item)
+        self.assertIsNone(svc.step_skill(store.get_node(step)))
 
 
 class TestFlowCheckSelectsWorkflow(unittest.TestCase):

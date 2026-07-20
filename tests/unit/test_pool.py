@@ -470,7 +470,8 @@ class TestTick(unittest.TestCase):
         flow_svc = FlowService(
             FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_theme_close": True}}), s
         )
-        tid = s.create_step("audit: theme", step="audit", role="auditor")
+        tid = s.create_step("audit: theme", step="audit", role="auditor",
+                            parent=s.create_item("i", workflow="wf"))
         s.note(tid, "no finding")
         s.close(tid, "done")
         s._records[tid]["closed_at"] = "2026-01-01T12:00:00"

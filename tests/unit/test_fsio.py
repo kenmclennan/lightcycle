@@ -31,6 +31,23 @@ class TestWorkflowNames(unittest.TestCase):
         self.assertEqual(fs.workflow_names(), ["build", "spec-driven"])
         self.assertEqual(fs.workflow_text("build"), "entry: code\n")
 
+    def test_workflow_meta_reads_frontmatter_summary(self):
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "workflows"))
+        with open(os.path.join(root, "workflows", "spec-driven.md"), "w") as f:
+            f.write("---\nsummary: spec to merged\nwhen-to-use: default build flow\n---\nentry: x\n")
+        self.assertEqual(
+            FsAdapter(None).workflow_meta("spec-driven", root),
+            {"summary": "spec to merged", "when-to-use": "default build flow"},
+        )
+
+    def test_workflow_meta_without_frontmatter_is_empty(self):
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "workflows"))
+        with open(os.path.join(root, "workflows", "bare.md"), "w") as f:
+            f.write("entry: x\n\nedges:\n  x  done  y\n")
+        self.assertEqual(FsAdapter(None).workflow_meta("bare", root), {})
+
     def test_fake_fs_no_workflows_seeded_is_empty(self):
         self.assertEqual(FakeFs().workflow_names(), [])
 

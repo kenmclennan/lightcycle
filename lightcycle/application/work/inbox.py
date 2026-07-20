@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
+from lightcycle.domain.flow import Flow
 from lightcycle.domain.work import Item, NodeQueue
+
+_NO_FLOW = Flow({})
 
 
 @dataclass(frozen=True)
@@ -42,10 +45,15 @@ class InboxUseCase:
         cache = {}
 
         def resolve(t):
-            pin = self._flow.workflow_for(t)
-            if pin not in cache:
-                cache[pin] = self._flow.load_flow(pin)
-            return cache[pin]
+            selection = self._flow.workflow_for(t)
+            if selection is None:
+                return _NO_FLOW
+            if selection not in cache:
+                try:
+                    cache[selection] = self._flow.load_flow(self._flow.resolve_selection(selection))
+                except ValueError:
+                    cache[selection] = _NO_FLOW
+            return cache[selection]
 
         return resolve
 

@@ -59,12 +59,14 @@ def graph_text_from_metas(metas, entry=None, requires=None):
 
 
 class FakeFs:
-    def __init__(self, metas=None, files=None, dirs=None, workflow=None, workflows=None):
+    def __init__(self, metas=None, files=None, dirs=None, workflow=None, workflows=None,
+                 bodies=None):
         self._metas = metas or {}
         self._files = files or {}
         self._dirs = dirs or {}
         self._workflow = workflow
         self._workflows = workflows or {}
+        self._bodies = bodies or {}
 
     def workflow_text(self, name, root=None):
         if name in self._workflows:
@@ -75,6 +77,14 @@ class FakeFs:
             return self._workflow
         return graph_text_from_metas(self._metas)
 
+    def workflow_meta(self, name, root=None):
+        from lightcycle.adapters.frontmatter import split_frontmatter
+        text = self.workflow_text(name, root)
+        if not text:
+            return {}
+        meta, _ = split_frontmatter(text)
+        return meta
+
     def workflow_names(self, root=None):
         return sorted(self._workflows)
 
@@ -84,7 +94,7 @@ class FakeFs:
     def parse_step(self, role, root=None):
         if role not in self._metas:
             return None
-        return {"meta": self._metas[role] or {}, "body": "", "path": role}
+        return {"meta": self._metas[role] or {}, "body": self._bodies.get(role, ""), "path": role}
 
     def read_md(self, relpath, root=None):
         return None
