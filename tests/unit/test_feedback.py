@@ -103,11 +103,40 @@ class TestRetroItemScope(unittest.TestCase):
 
     def test_story_with_rejected_task_tallies_signal(self):
         s = FakeStore()
-        item = s.create_item("item", theme=s.create_theme("theme"))
+        item = s.create_item("item", theme=s.create_theme("theme"), workflow="standard")
         k = s.create_step("review: x", step="review", role="reviewer", parent=item)
         s.close(k, "rejected")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item))
         self.assertEqual(resp.item_signals[0].signals.get("review_rounds"), {UNLABELED_MODEL: 1})
+
+    def test_each_item_is_tallied_with_its_own_workflow_signals(self):
+        s = FakeStore()
+        wf_a = "entry: review\n\nedges:\n  review  rejected  review\n\nsignals:\n  review  rounds_a  rejected\n"
+        wf_b = "entry: review\n\nedges:\n  review  rejected  review\n\nsignals:\n  review  rounds_b  rejected\n"
+        flow = FlowService(FakeFs(_METAS, workflow={"wf-a": wf_a, "wf-b": wf_b}), s)
+        theme = s.create_theme("theme")
+        a = s.create_item("a", theme=theme, workflow="wf-a")
+        b = s.create_item("b", theme=theme, workflow="wf-b")
+        s.close(s.create_step("review: a", step="review", role="reviewer", parent=a), "rejected")
+        s.close(s.create_step("review: b", step="review", role="reviewer", parent=b), "rejected")
+
+        rows = {r.item.id: r.signals for r in RetroUseCase(s, flow).execute(RetroInput(subject=theme)).item_signals}
+
+        self.assertIn("rounds_a", rows[a])
+        self.assertNotIn("rounds_b", rows[a])
+        self.assertIn("rounds_b", rows[b])
+        self.assertNotIn("rounds_a", rows[b])
+
+    def test_an_unresolvable_item_workflow_yields_empty_signals_not_a_raise(self):
+        s = FakeStore()
+        flow = FlowService(FakeFs(_METAS, workflow={"wf-a": "entry: review\n"}), s)
+        theme = s.create_theme("theme")
+        item = s.create_item("gone", theme=theme, workflow="pruned-workflow")
+        s.close(s.create_step("review: x", step="review", role="reviewer", parent=item), "rejected")
+
+        resp = RetroUseCase(s, flow).execute(RetroInput(subject=theme))
+
+        self.assertEqual(resp.item_signals[0].signals, {})
 
 
 class TestRetroSinceScope(unittest.TestCase):

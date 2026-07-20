@@ -1,3 +1,4 @@
+from lightcycle.config import ConfigError
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.pool import ReadyQueue
@@ -23,11 +24,25 @@ class FlowService:
             raise ValueError(
                 "default-origin %r has no pulled version; run `lc workflow add`/`upgrade`" % origin)
         names = self._workflow_source.workflow_names(origin, sha)
-        if len(names) != 1:
+        if len(names) == 1:
+            return "%s/%s@%s" % (origin, names[0], sha)
+        try:
+            selector = self._config.default_workflow()
+        except ConfigError:
+            selector = None
+        if not selector:
             raise ValueError(
-                "default-origin %r has %d workflows; a single-workflow origin is required as the "
-                "reference (or name the workflow explicitly)" % (origin, len(names)))
-        return "%s/%s@%s" % (origin, names[0], sha)
+                "default-origin %r has %d workflows (%s); set `default-workflow` in config or pass "
+                "an explicit --workflow" % (origin, len(names), ", ".join(sorted(names))))
+        parsed = parse_selector(selector)
+        if parsed is None:
+            raise ValueError("default-workflow %r must be '<origin>/<name>'" % selector)
+        _origin, name = parsed
+        if name not in names:
+            raise ValueError(
+                "default-workflow %r names a workflow not in default-origin %r (has %s)"
+                % (selector, origin, ", ".join(sorted(names))))
+        return "%s/%s@%s" % (origin, name, sha)
 
     def _resolve(self, name):
         if self._workflow_source is None:

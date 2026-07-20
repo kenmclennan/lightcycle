@@ -163,7 +163,8 @@ COMMAND_GROUPS = [
         ("logs", "<step|role|run> [-f]", "tail a worker's or the loop's log"),
         ("show", "<id>", "one step or item as JSON (artifacts, resume-state)"),
         ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
-        ("flow", "[--json]", "print and check the assembled flow (steps, routes, contracts, composition)"),
+        ("flow", "[--json] [--workflow <origin>/<name>]",
+         "print and check the assembled flow (steps, routes, contracts, composition)"),
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
     ]),
     ("Node primitives", [
@@ -518,8 +519,15 @@ def cmd_specs_dir(argv):
 def cmd_flow(argv):
     ap = argparse.ArgumentParser(prog="lc flow")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--workflow")
     a = ap.parse_args(argv)
-    resp = FlowCheckUseCase(_flow()).execute(FlowCheckInput())
+    flow = _flow()
+    try:
+        selected = flow.resolve_selection(a.workflow) if a.workflow else None
+        resp = FlowCheckUseCase(flow).execute(FlowCheckInput(workflow=selected))
+    except ValueError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     owner, routes, an = resp.owner, resp.routes, resp.analysis
     steps, req, opt, prod = an["steps"], an["req"], an["opt"], an["prod"]
     entries, terminals = an["entries"], an["terminals"]

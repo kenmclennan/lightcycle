@@ -1,5 +1,7 @@
 import unittest
 
+from lightcycle.config import ConfigError
+from lightcycle.application.flow.flow_check import FlowCheckInput, FlowCheckUseCase
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
@@ -16,6 +18,84 @@ METAS = {
 
 def svc(store=None):
     return FlowService(FakeFs(METAS), store or FakeStore())
+
+
+class _WFSource:
+    def __init__(self, names, sha="abc"):
+        self._names = names
+        self._sha = sha
+
+    def current_sha(self, origin):
+        return self._sha
+
+    def workflow_names(self, origin, sha):
+        return list(self._names)
+
+    def bundle_path(self, origin, sha):
+        return "/bundle"
+
+
+class _RefCfg:
+    def __init__(self, default_workflow=None):
+        self._dw = default_workflow
+
+    def default_origin(self):
+        return "lightcycle"
+
+    def default_workflow(self):
+        if not self._dw:
+            raise ConfigError("default-workflow")
+        return self._dw
+
+
+def _ref_svc(names, default_workflow=None):
+    return FlowService(
+        FakeFs(METAS), FakeStore(),
+        config=_RefCfg(default_workflow), workflow_source=_WFSource(names),
+    )
+
+
+class TestDefaultPinMultiWorkflow(unittest.TestCase):
+    def test_single_workflow_is_inferred(self):
+        self.assertEqual(_ref_svc(["spec-driven"])._default_pin(), "lightcycle/spec-driven@abc")
+
+    def test_multi_workflow_resolves_the_configured_default(self):
+        self.assertEqual(
+            _ref_svc(["spec-driven", "bdd-driven"], "lightcycle/spec-driven")._default_pin(),
+            "lightcycle/spec-driven@abc",
+        )
+
+    def test_multi_workflow_without_a_default_raises_specifically(self):
+        with self.assertRaises(ValueError) as ctx:
+            _ref_svc(["spec-driven", "bdd-driven"])._default_pin()
+        msg = str(ctx.exception)
+        self.assertIn("2 workflows", msg)
+        self.assertIn("default-workflow", msg)
+
+    def test_default_workflow_naming_an_absent_workflow_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            _ref_svc(["spec-driven", "bdd-driven"], "lightcycle/nope")._default_pin()
+        self.assertIn("nope", str(ctx.exception))
+
+    def test_present_but_empty_default_workflow_raises_the_clean_error_not_configerror(self):
+        with self.assertRaises(ValueError) as ctx:
+            _ref_svc(["spec-driven", "bdd-driven"], "")._default_pin()
+        self.assertIn("default-workflow", str(ctx.exception))
+
+
+class TestFlowCheckSelectsWorkflow(unittest.TestCase):
+    def _svc(self):
+        wfs = {
+            "wf-a": "entry: coder\n\nedges:\n  coder  done  reviewer\n",
+            "wf-b": "entry: reviewer\n\nedges:\n  reviewer  done  open-pr\n",
+        }
+        return FlowService(FakeFs(METAS, workflow=wfs), FakeStore())
+
+    def test_named_workflow_is_loaded(self):
+        a = FlowCheckUseCase(self._svc()).execute(FlowCheckInput(workflow="wf-a"))
+        b = FlowCheckUseCase(self._svc()).execute(FlowCheckInput(workflow="wf-b"))
+        self.assertIn("coder", a.analysis["steps"])
+        self.assertNotIn("coder", b.analysis["steps"])
 
 
 class TestFlowService(unittest.TestCase):

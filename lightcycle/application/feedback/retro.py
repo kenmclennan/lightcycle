@@ -49,22 +49,40 @@ class RetroUseCase:
         self._store = store
         self._flow = flow
 
-    def _project_scope(self, project, signals):
+    def _signals_resolver(self):
+        cache = {}
+        empty = cfeedback.Signals([])
+
+        def resolve(item):
+            selection = self._flow.inherited_selection(item)
+            if selection is None:
+                return empty
+            if selection not in cache:
+                try:
+                    pin = self._flow.resolve_selection(selection)
+                    cache[selection] = cfeedback.Signals.from_graph(self._flow.load_graph(pin))
+                except ValueError:
+                    cache[selection] = empty
+            return cache[selection]
+
+        return resolve
+
+    def _project_scope(self, project, signals_for):
         rows, all_refs = [], []
         for item in self._store.closed_unretroed_items():
             if project_of(self._store, item) != project:
                 continue
-            row, refs = self._collect_item_row(item, signals)
+            row, refs = self._collect_item_row(item, signals_for)
             rows.append(row)
             all_refs.extend(refs)
         return rows, all_refs
 
-    def _pending_scope(self, signals):
+    def _pending_scope(self, signals_for):
         rows, all_refs = [], []
         for item in self._store.closed_unretroed_items():
             if not has_feedback(self._store, item):
                 continue
-            row, refs = self._collect_item_row(item, signals)
+            row, refs = self._collect_item_row(item, signals_for)
             rows.append(row)
             all_refs.extend(refs)
         return rows, all_refs
@@ -86,25 +104,25 @@ class RetroUseCase:
             result[t.id] = elapsed.total_seconds() if elapsed is not None else None
         return result
 
-    def _collect_item_row(self, item, signals):
+    def _collect_item_row(self, item, signals_for):
         children = self._store.children(item.id)
         steps = [c for c in children if c.type == "step"]
         refs = []
         for t in steps:
             refs.extend(self._reflections_of(t.id))
         row = ItemSignals(
-            item=item, signals=signals.tally(steps), reflections=len(refs),
+            item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
             durations=self._durations_of(steps),
         )
         return row, refs
 
-    def _theme_scope(self, subject_id, signals):
+    def _theme_scope(self, subject_id, signals_for):
         children = self._store.children(subject_id)
         items = [c for c in children if c.type == "item"]
         all_refs = []
         rows = []
         for item in items:
-            row, refs = self._collect_item_row(item, signals)
+            row, refs = self._collect_item_row(item, signals_for)
             rows.append(row)
             all_refs.extend(refs)
         for child in children:
@@ -113,15 +131,15 @@ class RetroUseCase:
         return rows, all_refs
 
     def execute(self, input: RetroInput) -> RetroResponse:
-        signals = cfeedback.Signals.from_graph(self._flow.load_graph())
+        signals_for = self._signals_resolver()
 
         if input.subject is not None:
             children = self._store.children(input.subject)
             if any(c.type == "item" for c in children):
-                rows, all_refs = self._theme_scope(input.subject, signals)
+                rows, all_refs = self._theme_scope(input.subject, signals_for)
             else:
                 subject = self._store.get_node(input.subject)
-                row, refs = self._collect_item_row(subject, signals)
+                row, refs = self._collect_item_row(subject, signals_for)
                 rows = [row]
                 all_refs = list(refs)
             label = input.subject
@@ -145,7 +163,7 @@ class RetroUseCase:
                 item = self._store.get_node(item_id)
                 rows.append(
                     ItemSignals(
-                        item=item, signals=signals.tally(item_steps), reflections=len(refs),
+                        item=item, signals=signals_for(item).tally(item_steps), reflections=len(refs),
                         durations=self._durations_of(item_steps),
                     )
                 )
@@ -154,11 +172,11 @@ class RetroUseCase:
             label = "since:%s" % input.since
 
         elif input.project is not None:
-            rows, all_refs = self._project_scope(input.project, signals)
+            rows, all_refs = self._project_scope(input.project, signals_for)
             label = "project:%s" % input.project
 
         elif input.pending:
-            rows, all_refs = self._pending_scope(signals)
+            rows, all_refs = self._pending_scope(signals_for)
             label = "pending"
 
         else:
@@ -166,7 +184,7 @@ class RetroUseCase:
             all_refs = []
             rows = []
             for theme in themes:
-                epic_rows, epic_refs = self._theme_scope(theme.id, signals)
+                epic_rows, epic_refs = self._theme_scope(theme.id, signals_for)
                 rows.extend(epic_rows)
                 all_refs.extend(epic_refs)
             label = "last:%d" % input.last

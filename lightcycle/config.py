@@ -11,6 +11,7 @@ _SEED_KEYS = [
     ("branch-prefix", "feat"),
     ("shortcode", "PROJ"),
     ("default-origin", "lightcycle"),
+    ("default-workflow", "lightcycle/spec-driven"),
     ("workflows-remote", "git@github.com:kenmclennan/lightcycle-workflows.git"),
     ("max-agents", "5"),
     ("worktree-retries", "6"),
@@ -203,6 +204,9 @@ class Config:
 
     def default_origin(self):
         return self._required_str("default-origin")
+
+    def default_workflow(self):
+        return self._required_str("default-workflow")
 
     def workflows_remote(self):
         return self._required_str("workflows-remote")
