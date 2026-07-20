@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 from lightcycle.domain.contracts import FlowContracts
 from lightcycle.domain.flow import Flow
@@ -7,7 +7,7 @@ from lightcycle.domain.flow import Flow
 
 @dataclass(frozen=True)
 class FlowCheckInput:
-    pass
+    workflow: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -23,8 +23,8 @@ class FlowCheckUseCase:
         self._flow = flow
 
     def execute(self, input: FlowCheckInput) -> FlowCheckResponse:
-        role_metas = self._flow.role_metas()
-        graph = self._flow.load_graph()
+        role_metas = self._flow.role_metas(input.workflow)
+        graph = self._flow.load_graph(input.workflow)
         flow = Flow.from_graph(graph, role_metas)
         steps = flow.steps()
         owner = {s: flow.owner_of(s) for s in steps}

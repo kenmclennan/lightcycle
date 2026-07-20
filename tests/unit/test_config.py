@@ -191,6 +191,7 @@ class TestEnsureConfig(unittest.TestCase):
             "projects: /p\nspecs: /s\nspecs-remote: git@github.com:x/specs.git\n"
             "branch-prefix: feat\nshortcode: PROJ\n"
             "default-origin: lightcycle\n"
+            "default-workflow: lightcycle/spec-driven\n"
             "workflows-remote: git@github.com:kenmclennan/lightcycle-workflows.git\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
             "max-session-seconds: 1800\n"
@@ -278,6 +279,18 @@ class TestMaxTitleLength(unittest.TestCase):
 
     def test_config_value_read(self):
         self.assertEqual(_cfg(max_title_length="72").max_title_length(), 72)
+
+
+class TestDefaultWorkflow(unittest.TestCase):
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().default_workflow()
+
+    def test_config_value_read(self):
+        self.assertEqual(
+            _cfg(default_workflow="lightcycle/spec-driven").default_workflow(),
+            "lightcycle/spec-driven",
+        )
 
 
 class TestSpawnProtocol(unittest.TestCase):
