@@ -41,7 +41,7 @@ These are how you work, not suggestions:
 
 ## See where things are
 
-`lc inbox` (actions + blockers needing you), `lc backlog [N]` (items to develop later), `lc status` (all buckets), `lc active` (running), `lc queue` (upcoming agent work), `lc ps` (workers), `lc logs <step|role|run> [-f]` (watch worker output), `lc trace <item>` (a item end to end), `lc flow` (the pipeline and its steps).
+`lc inbox` (actions + blockers needing you), `lc backlog [N]` (items to develop later), `lc status` (all buckets), `lc active` (running), `lc queue` (upcoming agent work), `lc ps` (workers), `lc logs <step|role|run> [-f]` (watch worker output), `lc trace <item>` (a item end to end), `lc workflow list`/`describe <origin>/<name>` (workflows and their shape), `lc workflow check <origin>/<name>` (validate a workflow composes).
 
 ## Drive work in
 
@@ -55,7 +55,7 @@ These are how you work, not suggestions:
 
 ## Work the human-facing steps
 
-The pipeline runs the agent steps, then hands the human-facing steps to YOU; you also develop ideas into specs and review them. They surface in `lc inbox`. The skill for each is appended below under "Skills for human-facing steps" - when the human picks an item, follow its step's skill, assist them, and record the outcome (`lc done` / `lc done`). You assist and do the bookkeeping; the human decides.
+The pipeline runs the agent steps, then hands the human-facing steps to YOU; you also develop ideas into specs and review them. They surface in `lc inbox`. Each step's skill lives with its workflow, not here - when the human picks an item, run `lc show <step>` to get that step's skill (resolved from the item's own workflow), follow it, assist them, and record the outcome (`lc done`). You assist and do the bookkeeping; the human decides. (To see or understand a workflow itself: `lc workflow list` for summaries, `lc workflow describe <origin>/<name>` for one.)
 
 ## Resolve blocks
 

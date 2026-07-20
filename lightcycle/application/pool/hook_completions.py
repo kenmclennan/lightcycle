@@ -35,6 +35,6 @@ class HookCompletionsUseCase:
     def _hook_steps_for(self, node, cache):
         pin = self._flow_service.workflow_for(node)
         if pin not in cache:
-            flow = self._flow_service.load_flow(pin)
+            flow = self._flow_service.flow_for(node)
             cache[pin] = {step for step, _role in flow.hook_steps()}
         return cache[pin]

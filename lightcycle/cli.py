@@ -145,8 +145,9 @@ COMMAND_GROUPS = [
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
-        ("workflow", "<add|upgrade|list|rm> ...", "manage workflow sources (git origins of "
-         "workflow+step bundles) - separate from `lc upgrade`, which updates the engine"),
+        ("workflow", "<add|upgrade|list|rm|check|describe> ...", "manage workflow sources and "
+         "inspect workflows: check <origin>/<name> validates composition, describe <origin>/<name> "
+         "shows its summary/shape - separate from `lc upgrade`, which updates the engine"),
     ]),
     ("Start working", [
         ("start", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue"),
@@ -163,8 +164,6 @@ COMMAND_GROUPS = [
         ("logs", "<step|role|run> [-f]", "tail a worker's or the loop's log"),
         ("show", "<id>", "one step or item as JSON (artifacts, resume-state)"),
         ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
-        ("flow", "[--json] [--workflow <origin>/<name>]",
-         "print and check the assembled flow (steps, routes, contracts, composition)"),
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
     ]),
     ("Node primitives", [
@@ -320,12 +319,21 @@ def cmd_workflow(argv):
     p_upgrade = sub.add_parser("upgrade")
     p_upgrade.add_argument("origin", nargs="?")
     sub.add_parser("list")
+    p_check = sub.add_parser("check")
+    p_check.add_argument("workflow")
+    p_check.add_argument("--json", action="store_true")
+    p_describe = sub.add_parser("describe")
+    p_describe.add_argument("workflow")
     p_rm = sub.add_parser("rm")
     p_rm.add_argument("origin")
     a = ap.parse_args(argv)
     if a.sub is None:
         ap.print_help()
         return 2
+    if a.sub == "check":
+        return _workflow_check(a.workflow, a.json)
+    if a.sub == "describe":
+        return _workflow_describe(a.workflow)
     c = _container
     try:
         if a.sub == "add":
@@ -349,7 +357,7 @@ def cmd_workflow(argv):
                     print("%s already current (%s)" % (resp.origin, resp.sha))
             return 0
         if a.sub == "list":
-            resp = ListWorkflowSourcesUseCase(c.workflow_source, c.store).execute()
+            resp = ListWorkflowSourcesUseCase(c.workflow_source, c.store, c.fs).execute()
             if not resp.origins:
                 print("no workflow sources registered")
                 return 0
@@ -358,6 +366,8 @@ def cmd_workflow(argv):
                 if v.pinned:
                     line += ", %d pinned" % len(v.pinned)
                 print(line + ")")
+                for wf, summary in v.workflows:
+                    print("  %s%s" % (wf, "  - %s" % summary if summary else ""))
             return 0
         if a.sub == "rm":
             resp = RemoveWorkflowSourceUseCase(c.workflow_source, c.store).execute(a.origin)
@@ -373,7 +383,11 @@ def cmd_show(argv):
     ap.add_argument("id")
     a = ap.parse_args(argv)
     view = ShowNodeUseCase(_container.store).execute(ShowNodeInput(step=a.id)).view
-    print(json.dumps(view.as_dict(), indent=2))
+    out = view.as_dict()
+    skill = _flow().step_skill(view.step)
+    if skill:
+        out["skill"] = skill
+    print(json.dumps(out, indent=2))
     return 0
 
 
@@ -516,14 +530,10 @@ def cmd_specs_dir(argv):
     return 0
 
 
-def cmd_flow(argv):
-    ap = argparse.ArgumentParser(prog="lc flow")
-    ap.add_argument("--json", action="store_true")
-    ap.add_argument("--workflow")
-    a = ap.parse_args(argv)
+def _workflow_check(selector, as_json):
     flow = _flow()
     try:
-        selected = flow.resolve_selection(a.workflow) if a.workflow else None
+        selected = flow.resolve_selection(selector)
         resp = FlowCheckUseCase(flow).execute(FlowCheckInput(workflow=selected))
     except ValueError as e:
         sys.stderr.write("%s\n" % e)
@@ -537,7 +547,7 @@ def cmd_flow(argv):
     phase_conflicts = an["phase_conflicts"]
 
     hooks = resp.hooks
-    if a.json:
+    if as_json:
         print(
             json.dumps(
                 {
@@ -604,6 +614,29 @@ def cmd_flow(argv):
     for phase, workspaces in sorted(phase_conflicts.items()):
         sys.stderr.write("phase: phase '%s' spans workspaces: %s\n" % (phase, ", ".join(workspaces)))
     return 0 if ok else 1
+
+
+def _workflow_describe(selector):
+    flow = _flow()
+    try:
+        pin = flow.resolve_selection(selector)
+        meta = flow.workflow_meta(pin)
+        graph = flow.load_graph(pin)
+        assembled = flow.load_flow(pin)
+    except ValueError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print(selector)
+    if meta.get("summary"):
+        print("  summary      %s" % meta["summary"])
+    if meta.get("when-to-use"):
+        print("  when to use  %s" % meta["when-to-use"])
+    print("  entry        %s" % graph.entry)
+    phases = sorted({p for p in graph.phases.values()})
+    if phases:
+        print("  phases       %s" % ", ".join(phases))
+    print("  steps        %s" % ", ".join(assembled.steps()))
+    return 0
 
 
 def cmd_done(argv):
@@ -1112,30 +1145,6 @@ def cmd_start(argv):
         ReleaseRunLockUseCase(_container.lock).execute()
 
 
-def _human_step_skills():
-    root = _flow().default_root()
-    skills = []
-    for role in _container.fs.step_roles(root):
-        a = _container.fs.parse_step(role, root)
-        if a and a["meta"].get("step") and not a["meta"].get("model"):
-            skills.append((a["meta"]["step"], a["body"]))
-    return sorted(skills)
-
-
-def _compose_driver(base_body, skills):
-    if not skills:
-        return base_body
-    parts = [
-        base_body,
-        "\n\n# Skills for human-facing steps\n",
-        "These steps surface in `lc inbox`. When the human picks one, run the skill "
-        "for its step: assist them, and record the outcome (`lc done`).\n",
-    ]
-    for step, body in skills:
-        parts.append("\n## %s\n\n%s" % (step, body.strip()))
-    return "\n".join(parts)
-
-
 def cmd_driver(argv):
     if not require_store():
         return 1
@@ -1144,7 +1153,7 @@ def cmd_driver(argv):
     if seat is None or not seat["meta"].get("model"):
         sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
         return 1
-    body = _compose_driver(seat["body"], _human_step_skills())
+    body = seat["body"]
     show_banner()
     os.execvp(
         "claude",

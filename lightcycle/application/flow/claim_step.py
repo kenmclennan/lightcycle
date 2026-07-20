@@ -60,8 +60,9 @@ class ClaimStepUseCase:
         t = self._store.claim_ready(role)
         if t is None:
             return None
-        pin = self._flow.workflow_for(t)
-        meta = self._flow.meta_for_step(t.step, pin)
+        selection = self._flow.workflow_for(t)
+        pin = self._flow.resolve_selection(selection) if selection else None
+        meta = self._flow.meta_for_step(t.step, pin) if pin else {}
         missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:
             self._store.route_to_human(
@@ -84,7 +85,7 @@ class ClaimStepUseCase:
         if pin is None:
             pin = self._flow.workflow_for(t)
         if meta is None:
-            meta = self._flow.meta_for_step(t.step, pin)
+            meta = self._flow.meta_for_step(t.step, pin) if pin else {}
         view = self._store.node_view(t.id)
         item = t.parent or t.id
         ws = self._worktrees.ensure(item)

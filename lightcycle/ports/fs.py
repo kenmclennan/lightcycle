@@ -19,6 +19,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def workflow_meta(self, name, root):
+        pass
+
+    @abstractmethod
     def workflow_names(self, root):
         pass
 

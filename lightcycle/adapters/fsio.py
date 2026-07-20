@@ -46,6 +46,14 @@ def workflow_text(roots, name):
     return None
 
 
+def workflow_meta(roots, name):
+    text = workflow_text(roots, name)
+    if text is None:
+        return {}
+    meta, _ = frontmatter.split_frontmatter(text)
+    return meta
+
+
 def workflow_names(roots):
     names, seen = [], set()
     for root in _roots(roots):
@@ -117,6 +125,9 @@ class FsAdapter(FsPort):
 
     def workflow_text(self, name, root):
         return workflow_text([root], name) if root else None
+
+    def workflow_meta(self, name, root):
+        return workflow_meta([root], name) if root else {}
 
     def workflow_names(self, root):
         return workflow_names([root]) if root else []

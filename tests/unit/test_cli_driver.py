@@ -2,7 +2,6 @@ import unittest
 from unittest import mock
 
 from lightcycle import cli
-from lightcycle.cli import _compose_driver
 
 
 class _DriverFs:
@@ -34,7 +33,6 @@ class TestCmdDriver(unittest.TestCase):
         cli.set_container(container)
         captured = {}
         with mock.patch.object(cli.os, "execvp", lambda f, a: captured.update(cmd=a)), \
-                mock.patch.object(cli, "_human_step_skills", lambda: []), \
                 mock.patch.object(cli, "show_banner", lambda: None):
             cli.cmd_driver(["--resume", "s1"])
         self.assertEqual(container.fs.read_args, ("driver.md", "/pkg/prompts"))
@@ -47,7 +45,6 @@ class TestCmdDriver(unittest.TestCase):
         cli.set_container(_DriverContainer())
         default_cmd, opted_in = {}, {}
         patches = (
-            mock.patch.object(cli, "_human_step_skills", lambda: []),
             mock.patch.object(cli, "show_banner", lambda: None),
         )
         for p in patches:
@@ -59,18 +56,6 @@ class TestCmdDriver(unittest.TestCase):
         with mock.patch.object(cli.os, "execvp", lambda f, a: opted_in.update(c=a)):
             cli.cmd_driver(["--dangerously-skip-permissions"])
         self.assertIn("--dangerously-skip-permissions", opted_in["c"])
-
-
-class TestComposeDriver(unittest.TestCase):
-    def test_no_skills_returns_base_unchanged(self):
-        self.assertEqual(_compose_driver("BASE", []), "BASE")
-
-    def test_appends_each_skill_labelled_by_step(self):
-        out = _compose_driver("BASE", [("review-plan", "REVIEW BODY"), ("cleanup", "CLEAN BODY")])
-        self.assertIn("BASE", out)
-        for marker in ("## review-plan", "REVIEW BODY", "## cleanup", "CLEAN BODY"):
-            self.assertIn(marker, out)
-        self.assertLess(out.index("BASE"), out.index("review-plan"))
 
 
 if __name__ == "__main__":

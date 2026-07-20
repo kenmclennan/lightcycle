@@ -16,12 +16,15 @@ class _FlowAdapter:
         self._flow = flow
 
     def workflow_for(self, step):
-        return None
+        return "wf"
 
     def project_for(self, step):
         return None
 
     def load_flow(self, name=None, project=None):
+        return self._flow
+
+    def flow_for(self, node):
         return self._flow
 
     def flow_next(self, step, outcome, name=None, project=None):
@@ -158,6 +161,9 @@ class FakeWorktrees:
 
 class _TripwireFlow:
     def workflow_for(self, node):
+        raise AssertionError("resolved the flow for a PR-less item")
+
+    def flow_for(self, node):
         raise AssertionError("resolved the flow for a PR-less item")
 
     def load_flow(self, name=None):
