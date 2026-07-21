@@ -4,8 +4,12 @@ from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
+from lightcycle.domain.flow import Flow
+from lightcycle.domain.flow.graph import parse_graph
+from lightcycle.render import render_workflow_mermaid
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore as SupportStore
+from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
 
 
 class TestWorkflowListSummaries(unittest.TestCase):
@@ -242,6 +246,34 @@ class TestCmdWorkflow(unittest.TestCase):
     def test_unknown_subcommand_errors(self):
         rc, out, err = call(cli.cmd_workflow, "frobnicate")
         self.assertEqual(rc, 2)
+
+    def test_describe_prints_summary_entry_and_steps(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        container = FakeContainer(self.source, self.store)
+        container.fs = FakeFs(metas=STEP_METAS, workflows={"build": GRAPH_TEXT})
+        cli.set_container(container)
+        rc, out, err = call(cli.cmd_workflow, "describe", "acme/build@sha1")
+        self.assertEqual(rc, 0)
+        flow = Flow.from_graph(parse_graph(GRAPH_TEXT), STEP_METAS)
+        expected = (
+            "acme/build@sha1\n"
+            "  entry        build\n"
+            "  steps        %s\n" % ", ".join(flow.steps())
+        )
+        self.assertEqual(out, expected)
+        self.assertNotIn("flowchart", out)
+
+    def test_describe_mermaid_flag_prints_diagram(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        container = FakeContainer(self.source, self.store)
+        container.fs = FakeFs(metas=STEP_METAS, workflows={"build": GRAPH_TEXT})
+        cli.set_container(container)
+        rc, out, err = call(cli.cmd_workflow, "describe", "acme/build@sha1", "--mermaid")
+        self.assertEqual(rc, 0)
+        graph = parse_graph(GRAPH_TEXT)
+        flow = Flow.from_graph(graph, STEP_METAS)
+        self.assertEqual(out.splitlines(), render_workflow_mermaid(graph, flow))
+        self.assertEqual(out.splitlines()[0], "flowchart TD")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,9 @@ from lightcycle.adapters.simulate import NullWorkers, RecordingGit, SimulateConf
 from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
-from lightcycle.render import render_backlog, render_backlog_themed, render_inbox, render_queue
+from lightcycle.render import (
+    render_backlog, render_backlog_themed, render_inbox, render_queue, render_workflow_mermaid,
+)
 
 from lightcycle.application.feedback import (
     ReflectInput,
@@ -329,6 +331,7 @@ def cmd_workflow(argv):
     p_check.add_argument("--json", action="store_true")
     p_describe = sub.add_parser("describe")
     p_describe.add_argument("workflow")
+    p_describe.add_argument("--mermaid", action="store_true")
     p_simulate = sub.add_parser("simulate")
     p_simulate.add_argument("workflow")
     p_rm = sub.add_parser("rm")
@@ -340,7 +343,7 @@ def cmd_workflow(argv):
     if a.sub == "check":
         return _workflow_check(a.workflow, a.json)
     if a.sub == "describe":
-        return _workflow_describe(a.workflow)
+        return _workflow_describe(a.workflow, a.mermaid)
     if a.sub == "simulate":
         return _workflow_simulate(a.workflow)
     c = _container
@@ -625,7 +628,7 @@ def _workflow_check(selector, as_json):
     return 0 if ok else 1
 
 
-def _workflow_describe(selector):
+def _workflow_describe(selector, as_mermaid=False):
     flow = _flow()
     try:
         pin = flow.resolve_selection(selector)
@@ -635,6 +638,10 @@ def _workflow_describe(selector):
     except ValueError as e:
         sys.stderr.write("%s\n" % e)
         return 1
+    if as_mermaid:
+        for line in render_workflow_mermaid(graph, assembled):
+            print(line)
+        return 0
     print(selector)
     if meta.get("summary"):
         print("  summary      %s" % meta["summary"])
