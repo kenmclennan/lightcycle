@@ -1,10 +1,14 @@
 import unittest
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
+from lightcycle.domain.flow import Flow
+from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work import Artifact, Node
 from lightcycle.render import (
     node_extra, render_backlog, render_backlog_themed, render_inbox, render_queue,
+    render_workflow_mermaid,
 )
+from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
 
 
 TITLE_CAP = 72
@@ -256,6 +260,112 @@ class TestRenderQueue(unittest.TestCase):
         lines = render_queue([tk(id="t1", title="one", state="in_progress")], TITLE_CAP)
         self.assertIn("in_progress", lines[0])
         self.assertIn("t1", lines[0])
+
+
+PHASE_GRAPH_TEXT = """
+entry: build
+
+nodes:
+  build   coder
+  review  reviewer
+  ship    shipper
+
+edges:
+  build   done    review
+  review  done    ship
+  review  reject  build
+  ship    done    done-terminal
+
+phase:
+  build   code
+  review  code
+  ship    test
+"""
+
+PHASE_STEP_METAS = {
+    "coder": {"model": "sonnet"},
+    "reviewer": {"model": "sonnet"},
+    "shipper": {"model": "sonnet"},
+}
+
+
+class TestRenderWorkflowMermaid(unittest.TestCase):
+    def setUp(self):
+        self.graph = parse_graph(GRAPH_TEXT)
+        self.flow = Flow.from_graph(self.graph, STEP_METAS)
+        self.lines = render_workflow_mermaid(self.graph, self.flow)
+
+    def test_starts_with_flowchart_header(self):
+        self.assertEqual(self.lines[0], "flowchart TD")
+
+    def test_every_stage_declared_with_expected_shape(self):
+        self.assertIn('build["build"]', self.lines)
+        self.assertIn('review["review"]', self.lines)
+        self.assertIn('audit["audit"]', self.lines)
+        self.assertIn('open_pr["open-pr"]', self.lines)
+        self.assertIn('watch_pr["watch-pr"]', self.lines)
+        self.assertIn('handle_feedback["handle-feedback"]', self.lines)
+        self.assertIn('ready_merge("ready-merge")', self.lines)
+        self.assertIn('cleanup("cleanup")', self.lines)
+        self.assertIn('review_findings("review-findings")', self.lines)
+        self.assertIn('review_ci("review-ci")', self.lines)
+        self.assertIn('conflict_review(["conflict-review"])', self.lines)
+
+    def test_class_lines_group_by_kind(self):
+        self.assertIn(
+            "class audit,build,handle_feedback,open_pr,review,watch_pr agent", self.lines
+        )
+        self.assertIn(
+            "class cleanup,ready_merge,review_ci,review_findings human", self.lines
+        )
+        self.assertIn("class conflict_review terminal", self.lines)
+
+    def test_pr_merge_pair_rendered_only_as_dashed_hook_edge(self):
+        self.assertIn("ready_merge -.->|pr_merge: merged| cleanup", self.lines)
+        self.assertNotIn("ready_merge -->|merged| cleanup", self.lines)
+
+    def test_pr_conflict_base_outcome_with_no_edge_produces_nothing(self):
+        for line in self.lines:
+            self.assertNotIn("conflicted", line)
+
+    def test_pr_conflict_cap_and_plain_edge_both_render(self):
+        self.assertIn(
+            "ready_merge -.->|pr_conflict_cap x3: gave-up| conflict_review", self.lines
+        )
+        self.assertIn("ready_merge -->|gave-up| conflict_review", self.lines)
+
+    def test_pr_feedback_edge_has_no_outcome_in_label(self):
+        self.assertIn("ready_merge -.->|pr_feedback| handle_feedback", self.lines)
+
+    def test_ci_failed_cap_edge_carries_count_and_outcome(self):
+        self.assertIn("watch_pr -.->|ci_failed_cap x3: ci-failed| review_ci", self.lines)
+
+    def test_no_phases_means_no_subgraphs(self):
+        for line in self.lines:
+            self.assertNotIn("subgraph", line)
+
+
+class TestRenderWorkflowMermaidPhases(unittest.TestCase):
+    def setUp(self):
+        self.graph = parse_graph(PHASE_GRAPH_TEXT)
+        self.flow = Flow.from_graph(self.graph, PHASE_STEP_METAS)
+        self.lines = render_workflow_mermaid(self.graph, self.flow)
+
+    def test_phased_stages_grouped_into_subgraphs_sorted(self):
+        code_start = self.lines.index('subgraph phase_code["code"]')
+        test_start = self.lines.index('subgraph phase_test["test"]')
+        self.assertLess(code_start, test_start)
+        code_end = self.lines.index("end", code_start)
+        test_end = self.lines.index("end", test_start)
+        self.assertIn('  build["build"]', self.lines[code_start:code_end])
+        self.assertIn('  review["review"]', self.lines[code_start:code_end])
+        self.assertIn('  ship["ship"]', self.lines[test_start:test_end])
+
+    def test_unphased_terminal_declared_outside_every_subgraph(self):
+        terminal_line = 'done_terminal(["done-terminal"])'
+        self.assertIn(terminal_line, self.lines)
+        test_end = self.lines.index("end", self.lines.index('subgraph phase_test["test"]'))
+        self.assertGreater(self.lines.index(terminal_line), test_end)
 
 
 if __name__ == "__main__":
