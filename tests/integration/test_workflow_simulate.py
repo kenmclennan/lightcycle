@@ -193,5 +193,50 @@ class TestTeardownViolationSurfacesFromAStuckWalk(SimulateTestCase):
         self.assertIn("could not claim stage 'review-ci'", output)
 
 
+_HANDOFF_WORKFLOW_TEXT = """entry: build
+
+requires: brief repo
+
+edges:
+  build    done        review
+  build    ci-failed   build
+  review   done        finish
+
+hooks:
+  ci_failed_cap   build   ci-failed   1   gate
+"""
+
+_HANDOFF_STEPS = {
+    "build": "---\nmodel: sonnet\naccepts:\n  brief: required\n---\n\nBuild.\n",
+    "review": "---\nmodel: sonnet\nproduces:\n  widget: required\n---\n\nReview.\n",
+    "finish": "Finish, terminal, no routes.\n",
+    "gate": "---\nmodel: sonnet\naccepts:\n  widget: required\n---\n\nGate.\n",
+}
+
+
+class TestHandoffSatisfactionViolation(SimulateTestCase):
+    def test_a_branch_that_skips_the_producer_is_a_violation(self):
+        selector = self._install(_HANDOFF_WORKFLOW_TEXT, _HANDOFF_STEPS)
+        rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 1)
+
+    def test_use_case_reports_the_offending_claim(self):
+        import io
+        from contextlib import redirect_stderr
+
+        selector = self._install(_HANDOFF_WORKFLOW_TEXT, _HANDOFF_STEPS)
+        err = io.StringIO()
+        with redirect_stderr(err):
+            rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 1)
+        output = err.getvalue()
+        self.assertIn("widget", output)
+        self.assertRegex(
+            output,
+            r"walk \d+: could not claim stage 'gate' \(role=gate\): "
+            r"BLOCKED: missing required input\(s\): widget",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
