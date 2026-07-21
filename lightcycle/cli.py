@@ -1,13 +1,16 @@
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 
 from lightcycle import __version__
+from lightcycle.adapters.simulate import NullWorkers, RecordingGit, SimulateConfig
 from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
@@ -55,6 +58,7 @@ from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
+from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
 from lightcycle.application.flow import (
     AdvanceInput,
@@ -92,7 +96,7 @@ from lightcycle.application.setup import (
     VenvBusyError,
     upgrade,
 )
-from lightcycle.adapters.sqlite_store import LiveStoreRefused
+from lightcycle.adapters.sqlite_store import LiveStoreRefused, SqliteStore
 from lightcycle.config import Config, ConfigError
 from lightcycle.container import Container, make_flow_service, make_worktrees
 
@@ -145,9 +149,10 @@ COMMAND_GROUPS = [
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
-        ("workflow", "<add|upgrade|list|rm|check|describe> ...", "manage workflow sources and "
+        ("workflow", "<add|upgrade|list|rm|check|describe|simulate> ...", "manage workflow sources and "
          "inspect workflows: check <origin>/<name> validates composition, describe <origin>/<name> "
-         "shows its summary/shape - separate from `lc upgrade`, which updates the engine"),
+         "shows its summary/shape, simulate <origin>/<name> dry-runs the bundle through the real "
+         "engine (no LLM/GitHub) to its terminals - separate from `lc upgrade`, which updates the engine"),
     ]),
     ("Start working", [
         ("start", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue"),
@@ -324,6 +329,8 @@ def cmd_workflow(argv):
     p_check.add_argument("--json", action="store_true")
     p_describe = sub.add_parser("describe")
     p_describe.add_argument("workflow")
+    p_simulate = sub.add_parser("simulate")
+    p_simulate.add_argument("workflow")
     p_rm = sub.add_parser("rm")
     p_rm.add_argument("origin")
     a = ap.parse_args(argv)
@@ -334,6 +341,8 @@ def cmd_workflow(argv):
         return _workflow_check(a.workflow, a.json)
     if a.sub == "describe":
         return _workflow_describe(a.workflow)
+    if a.sub == "simulate":
+        return _workflow_simulate(a.workflow)
     c = _container
     try:
         if a.sub == "add":
@@ -637,6 +646,45 @@ def _workflow_describe(selector):
         print("  phases       %s" % ", ".join(phases))
     print("  steps        %s" % ", ".join(assembled.steps()))
     return 0
+
+
+def _workflow_simulate(selector):
+    c = _container
+    scratch = tempfile.mkdtemp(prefix="lc-simulate-")
+    try:
+        store_home = os.path.join(scratch, "home")
+        specs_root = os.path.join(scratch, "specs")
+        projects_root = os.path.join(scratch, "projects")
+        os.makedirs(store_home, exist_ok=True)
+        os.makedirs(specs_root, exist_ok=True)
+        os.makedirs(projects_root, exist_ok=True)
+        cfg_path = os.path.join(store_home, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: SIM\n")
+        store_config = Config(environ={"LC_HOME": store_home, "LC_CONFIG": cfg_path})
+        store = SqliteStore(store_config)
+        sim_config = SimulateConfig(c.config, specs_root, projects_root)
+        git = RecordingGit()
+        flow = make_flow_service(c.fs, store, c.config, c.workflow_source)
+        worktrees = make_worktrees(store, git, c.fs, sim_config, flow)
+        claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
+        complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
+        use_case = WorkflowSimulateUseCase(
+            store, flow, worktrees, claim, complete, projects_root, git
+        )
+        try:
+            resp = use_case.execute(SimulateInput(workflow=selector))
+        except (ValueError, UseCaseError) as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        if resp.ok:
+            print("pass")
+            return 0
+        for v in resp.violations:
+            sys.stderr.write("%s\n" % v)
+        return 1
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 def cmd_done(argv):
