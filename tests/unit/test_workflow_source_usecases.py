@@ -16,6 +16,7 @@ class FakeSource:
         self._checkouts = {}
         self.cleaned = []
         self._n = 0
+        self.last_ref = None
 
     def add_remote(self, url, manifest, sha):
         self.remotes[url] = (manifest, sha)
@@ -25,6 +26,7 @@ class FakeSource:
         self._n += 1
         checkout = "checkout-%d" % self._n
         self._checkouts[checkout] = manifest
+        self.last_ref = ref
         return checkout, sha
 
     def read_manifest(self, checkout_dir):
@@ -98,6 +100,13 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(source.read_registry("acme"),
                          {"url": "u", "ref": "main", "current": "sha1"})
         self.assertEqual(source.cleaned, ["checkout-1"])
+
+    def test_no_ref_flows_through_to_fetch_and_registry_unmodified(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        _add(source).execute(url="u", ref=None, name=None)
+        self.assertIsNone(source.last_ref)
+        self.assertIsNone(source.read_registry("acme")["ref"])
 
     def test_name_flag_overrides_manifest_name(self):
         source = FakeSource()

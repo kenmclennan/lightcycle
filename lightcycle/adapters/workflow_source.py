@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import tomllib
 
+from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.ports.workflow_source import WorkflowSourcePort
 
 _MANIFEST = "source.toml"
@@ -50,8 +51,12 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         checkout = tempfile.mkdtemp(prefix="lc-workflow-src-")
         subprocess.run(["git", "clone", "--quiet", url, checkout],
                        check=True, capture_output=True, text=True)
-        subprocess.run(["git", "-C", checkout, "checkout", "--quiet", ref],
-                       check=True, capture_output=True, text=True)
+        if ref:
+            try:
+                subprocess.run(["git", "-C", checkout, "checkout", "--quiet", ref],
+                               check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError:
+                raise WorkflowSourceError("ref %r not found in %s" % (ref, url))
         sha = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"],
                              check=True, capture_output=True, text=True).stdout.strip()
         return checkout, sha
@@ -94,7 +99,7 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
     def write_registry(self, origin, url, ref, current):
         os.makedirs(self._origin_dir(origin), exist_ok=True)
         text = "url = %s\nref = %s\ncurrent = %s\n" % (
-            _toml_str(url), _toml_str(ref), _toml_str(current))
+            _toml_str(url), _toml_str(ref or ""), _toml_str(current))
         with open(os.path.join(self._origin_dir(origin), _REGISTRY), "w") as f:
             f.write(text)
 

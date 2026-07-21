@@ -41,6 +41,7 @@ class FakeSource:
         self.registries = {}
         self._checkouts = {}
         self._n = 0
+        self.last_ref = None
 
     def add_remote(self, url, manifest, sha):
         self.remotes[url] = (manifest, sha)
@@ -50,6 +51,7 @@ class FakeSource:
         self._n += 1
         checkout = "c-%d" % self._n
         self._checkouts[checkout] = manifest
+        self.last_ref = ref
         return checkout, sha
 
     def read_manifest(self, checkout_dir):
@@ -132,6 +134,12 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertIn("acme", out)
         self.assertIn("sha1", out)
         self.assertEqual(self.source.read_registry("acme")["current"], "sha1")
+
+    def test_add_with_no_ref_flag_reaches_the_use_case_as_none(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        rc, out, err = call(cli.cmd_workflow, "add", "u")
+        self.assertEqual(rc, 0)
+        self.assertIsNone(self.source.last_ref)
 
     def test_add_name_override(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")

@@ -319,7 +319,7 @@ def cmd_workflow(argv):
     sub = ap.add_subparsers(dest="sub")
     p_add = sub.add_parser("add")
     p_add.add_argument("url")
-    p_add.add_argument("--ref", default="main")
+    p_add.add_argument("--ref")
     p_add.add_argument("--name")
     p_upgrade = sub.add_parser("upgrade")
     p_upgrade.add_argument("origin", nargs="?")
