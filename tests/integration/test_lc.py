@@ -1749,6 +1749,15 @@ class TestNamedRepo(unittest.TestCase):
         view = self._claim("app")
         self.assertEqual(view["repo_path"], self.app)
 
+    def test_claim_with_absolute_repo_path_creates_worktree_outside_projects_root(self):
+        outside = tempfile.mkdtemp()
+        elsewhere = make_repo(outside, "elsewhere")
+        view = self._claim(elsewhere)
+        self.assertEqual(view["repo_path"], elsewhere)
+        self.assertEqual(view["workspace"], os.path.join(elsewhere, ".worktrees", view["parent"]))
+        self.assertTrue(os.path.isdir(view["workspace"]))
+        self.addCleanup(_reset_git_repo, elsewhere)
+
     def test_file_stores_single_repo_artifact(self):
         theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
         _, out, _ = call(
@@ -2446,6 +2455,9 @@ class TestWorktreePushTarget(unittest.TestCase):
         class _Cfg:
             def projects_root(self):
                 return parent
+
+            def project_path(self, name):
+                return name if os.path.isabs(name) else os.path.join(parent, name)
 
             def engine_root(self):
                 return parent

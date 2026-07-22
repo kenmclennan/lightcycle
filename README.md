@@ -38,7 +38,7 @@ lc config --edit                     # point `projects` + `specs` at your dirs (
 
 # 2. tell lightcycle about a repo you want it to work in
 #    (any git repo under your `projects` dir)
-lc init myapp                        # scaffold projects/myapp/.lightcycle (a per-project shortcode)
+lc init myapp                        # register myapp's shortcode in the central config
 
 # 3. drive some work in
 lc new theme "Add a health endpoint" --workflow lightcycle/spec-driven   # open the focus area; prints a theme id, e.g. MYAPP-1
@@ -71,8 +71,8 @@ Everything is a **node** - `theme`, `item`, or `step` - and the CLI is a small s
 - **Three homes: engine / `~/.lightcycle` / projects.** The **engine** is the pipx-installed package - code plus `prompts/` (the engine-owned agent prompts it spawns directly: `driver.md`, `audit.md`). It ships no workflow library. **`~/.lightcycle/`** is everything that is _yours_: `config`, the store (`store.db`), `logs/`, `.worktrees/`, and the **pulled workflow bundles** under `workflows/<origin>/<sha>/` - independent of the engine, so upgrades never touch it (found by default, or `$LC_HOME`). **`projects/`** holds your repos.
 - **Workflows come from pullable sources, not the engine.** A **workflow source** is a git **origin** holding `source.toml` + `workflows/*.md` + `steps/*.md`; the engine pulls it into an immutable, sha-pinned **bundle**, and each item pins `<origin>/<name>@<sha>` at activation. The loader reads the flow and steps from that pin - there is no `.lightcycle/` override and no resolution chain. `lc init` pulls the built-in `lightcycle` origin (`workflows-remote`); `lc workflow add|upgrade|list|rm` manages origins; author your own with the plugin's `author-workflow` skill.
 - **The config names where your work lives.** `~/.lightcycle/config` (or `$LC_CONFIG`) names `projects` (the dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (base for relative spec paths; default `~/workspace/specs`), plus the global `shortcode` (id prefix), `default-origin`, and `workflows-remote`. There is **no default workflow**: activation requires an explicit or theme-inherited `--workflow <origin>/<name>`. `lc init` seeds it; `lc config [--edit]` shows or edits it.
-- **Per-project `.lightcycle/` (optional).** A project can carry a `projects/<name>/.lightcycle/config` with its own `shortcode` (new theme ids under it mint as `SHORTCODE-N`, and it's the prefix its specs use). A project with no `.lightcycle/` inherits the global defaults; `lc init <project>` scaffolds the folder.
-- **One repo per item, by name.** An item targets exactly one repo, named by a `repo` artifact (`lc attach <item> repo <name>`); the name resolves to `projects/<name>`. Cross-repo work is handled by splitting the spec into one item per repo, never by a multi-repo workspace.
+- **Per-project shortcode, centrally mapped.** A project can have its own `shortcode` (new theme ids under it mint as `SHORTCODE-N`, and it's the prefix its specs use), recorded in the `project-shortcodes` map inside `~/.lightcycle/config` via `lc init <project> [--shortcode X]`. A project absent from the map inherits the global `shortcode`.
+- **One repo per item, anywhere.** An item targets exactly one repo, named by a `repo` artifact (`lc attach <item> repo <name-or-path>`); a bare name resolves to `projects/<name>`, an absolute path is used as-is - repos need not live under `projects/`. Cross-repo work is handled by splitting the spec into one item per repo, never by a multi-repo workspace.
 - **`lc` owns worktree isolation.** On claim, `lc` creates (or reuses) a per-item git worktree of the item's repo on branch `feat/<slug>` (the `branch-prefix` config, default `feat`) from `origin/main`, under `~/.lightcycle/.worktrees/<item>`, and hands the worker its path as the claim JSON's `workspace` field (it also auto-attaches the `branch` artifact). The spec lives under `specs`, so the claim JSON also carries `spec_path` (absolute) - workers read the spec from there and do all git work in the worktree, never touching the primary tree.
 - **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow stage), `project:`/`goal:`. `for:human` steps never auto-run; they surface to you.
 
@@ -144,7 +144,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 
 | Command | What it does |
 | --- | --- |
-| `lc init [<project>]` | no arg: create `~/.lightcycle` (store + config). `<project>`: scaffold its `.lightcycle/` |
+| `lc init [<project>] [--shortcode X]` | no arg: create `~/.lightcycle` (store + config). `<project>`: register its shortcode in the central config |
 | `lc config [--edit]` | show (or `--edit`) the lightcycle config: projects + specs roots |
 | `lc start [--once]` | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue |
 | `lc driver` | open the interactive driver `claude` (your seat) |

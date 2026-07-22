@@ -122,6 +122,9 @@ class FakeConfig:
     def projects_root(self):
         return "/projects"
 
+    def project_path(self, name):
+        return name if os.path.isabs(name) else os.path.join("/projects", name)
+
 
 class TestAdvanceTask(unittest.TestCase):
     def test_creates_next_task(self):
@@ -851,6 +854,14 @@ class TestClaimTask(unittest.TestCase):
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))
         self.assertEqual(resp.repo_path, os.path.join("/projects", "app"))
+
+    def test_resolves_absolute_repo_path_directly(self):
+        s = FakeStore()
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        s.add_artifact(item, "repo", "/elsewhere/app")
+        s.create_step("build: x", step="build", role="coder", parent=item)
+        resp = self._uc(s).execute(ClaimInput(role="coder"))
+        self.assertEqual(resp.repo_path, "/elsewhere/app")
 
     def test_omits_repo_path_when_no_repo_artifact(self):
         s = FakeStore()

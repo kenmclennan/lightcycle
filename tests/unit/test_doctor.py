@@ -21,6 +21,7 @@ _ALL_KEYS = dict(
     poll_seconds="5", worker_history="20", editor="vi", retro_interval_reflections="20",
     backups_dir="/b", backup_interval_minutes="15", backup_retention="96",
     workflow_retention="5", max_title_length="72", personal_origin="",
+    project_shortcodes="",
 )
 
 

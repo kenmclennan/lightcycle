@@ -162,6 +162,7 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("backup-interval-minutes: 15", text)
         self.assertIn("backup-retention: 96", text)
         self.assertIn("max-title-length: 72", text)
+        self.assertIn("project-shortcodes:", text)
 
     def test_tops_up_missing_keys_in_existing_config(self):
         d = tempfile.mkdtemp()
@@ -198,7 +199,7 @@ class TestEnsureConfig(unittest.TestCase):
             "retro-interval-reflections: 20\n"
             "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
             "backup-retention: 96\nworkflow-retention: 5\nmax-title-length: 72\n"
-            "personal-origin: \n"
+            "personal-origin: \nproject-shortcodes: \n"
         )
         Path(p).write_text(all_keys)
         c = Config(environ={"LC_CONFIG": p})
@@ -415,6 +416,37 @@ class TestPersonalOrigin(unittest.TestCase):
         c.set_personal_origin("acme")
         c.set_personal_origin("other")
         self.assertEqual(c.personal_origin(), "other")
+
+
+class TestProjectShortcodes(unittest.TestCase):
+    def test_shortcode_for_reads_from_the_map(self):
+        c = _cfg(shortcode="PROJ", project_shortcodes="\n  horde: HORDE\n")
+        self.assertEqual(c.shortcode_for("horde"), "HORDE")
+
+    def test_shortcode_for_falls_back_to_global_when_project_absent_from_map(self):
+        c = _cfg(shortcode="PROJ", project_shortcodes="\n  horde: HORDE\n")
+        self.assertEqual(c.shortcode_for("other"), "PROJ")
+
+    def test_shortcode_for_falls_back_to_global_when_project_falsy(self):
+        c = _cfg(shortcode="PROJ", project_shortcodes="\n  horde: HORDE\n")
+        self.assertEqual(c.shortcode_for(None), "PROJ")
+        self.assertEqual(c.shortcode_for(""), "PROJ")
+
+    def test_set_project_shortcode_appends_header_when_absent(self):
+        c = _cfg(shortcode="PROJ")
+        c.set_project_shortcode("horde", "HORDE")
+        self.assertEqual(c.project_shortcodes(), {"horde": "HORDE"})
+
+    def test_set_project_shortcode_inserts_alongside_existing_entries(self):
+        c = _cfg(shortcode="PROJ", project_shortcodes="\n  horde: HORDE\n")
+        c.set_project_shortcode("saga", "SAGA")
+        self.assertEqual(c.project_shortcodes(), {"horde": "HORDE", "saga": "SAGA"})
+
+    def test_set_project_shortcode_twice_overwrites_in_place(self):
+        c = _cfg(shortcode="PROJ")
+        c.set_project_shortcode("horde", "HORDE")
+        c.set_project_shortcode("horde", "HORDE2")
+        self.assertEqual(c.project_shortcodes(), {"horde": "HORDE2"})
 
 
 if __name__ == "__main__":

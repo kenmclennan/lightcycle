@@ -1,4 +1,5 @@
 import json
+import os
 import unittest
 
 from lightcycle.application.errors import UseCaseError
@@ -43,6 +44,9 @@ class FakeConfig:
 
     def projects_root(self):
         return self._projects
+
+    def project_path(self, name):
+        return name if os.path.isabs(name) else os.path.join(self._projects, name)
 
     def engine_root(self):
         return self._projects
