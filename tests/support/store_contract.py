@@ -517,5 +517,35 @@ class StoreContractBase:
     def test_resolve_project_path_raises_when_registered_without_a_local_checkout(self):
         s = self.make_store()
         s.add_project("acme/horde", shortcode="HORDE")
-        with self.assertRaises(ProjectResolutionError):
+        with self.assertRaises(ProjectResolutionError) as ctx:
             s.resolve_project_path("horde")
+        self.assertIn("activate the item to clone it automatically", str(ctx.exception))
+
+    def test_find_project_matches_the_exact_owner_slash_name_identity(self):
+        s = self.make_store()
+        s.add_project("acme/horde", local_path="/p/horde")
+        self.assertEqual(s.find_project("acme/horde").identity, "acme/horde")
+
+    def test_find_project_matches_an_unambiguous_bare_name(self):
+        s = self.make_store()
+        s.add_project("acme/horde", local_path="/p/horde")
+        self.assertEqual(s.find_project("horde").identity, "acme/horde")
+
+    def test_find_project_raises_on_an_unregistered_ref(self):
+        s = self.make_store()
+        with self.assertRaises(ProjectResolutionError):
+            s.find_project("ghost")
+
+    def test_find_project_raises_on_an_ambiguous_bare_name(self):
+        s = self.make_store()
+        s.add_project("acme/app", local_path="/p/acme-app")
+        s.add_project("other/app", local_path="/p/other-app")
+        with self.assertRaises(ProjectResolutionError):
+            s.find_project("app")
+
+    def test_find_project_returns_the_entry_with_a_null_local_path_without_raising(self):
+        s = self.make_store()
+        s.add_project("acme/horde", shortcode="HORDE")
+        project = s.find_project("horde")
+        self.assertEqual(project.identity, "acme/horde")
+        self.assertIsNone(project.local_path)

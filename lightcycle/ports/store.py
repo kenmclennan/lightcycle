@@ -198,5 +198,9 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def find_project(self, ref):
+        pass
+
+    @abstractmethod
     def resolve_project_path(self, ref):
         pass

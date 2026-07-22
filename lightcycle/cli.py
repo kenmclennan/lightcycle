@@ -982,7 +982,9 @@ def cmd_set(argv):
         if a.title:
             validate_title(_container.config, a.title)
         if a.state == "active":
-            resp = ActivateItemUseCase(_container.store, _flow()).execute(
+            resp = ActivateItemUseCase(
+                _container.store, _flow(), _container.git, _container.config
+            ).execute(
                 ActivateItemInput(item=a.id, workflow=a.workflow, theme=a.parent, step=a.step)
             )
             print(resp.step)

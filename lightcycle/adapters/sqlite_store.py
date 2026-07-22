@@ -776,9 +776,7 @@ class SqliteStore(StorePort):
             return [p for p in rows if p.identity == ref]
         return [p for p in rows if p.identity.rsplit("/", 1)[-1] == ref]
 
-    def resolve_project_path(self, ref):
-        if os.path.isabs(ref):
-            return ref
+    def find_project(self, ref):
         matches = self._match_projects(ref)
         if not matches:
             raise ProjectResolutionError(
@@ -790,11 +788,16 @@ class SqliteStore(StorePort):
                 "project name '%s' is ambiguous - matches %s; use the full owner/name identity"
                 % (ref, ", ".join(p.identity for p in matches))
             )
-        project = matches[0]
+        return matches[0]
+
+    def resolve_project_path(self, ref):
+        if os.path.isabs(ref):
+            return ref
+        project = self.find_project(ref)
         if not project.local_path:
             raise ProjectResolutionError(
-                "project '%s' is registered but has no local checkout - run "
-                "`lc project add %s --path <dir>` to point at one (cloning on demand is not "
-                "supported yet)" % (project.identity, project.identity)
+                "project '%s' is registered but has no local checkout - activate the item to "
+                "clone it automatically, or run `lc project add %s --path <dir>` to point at an "
+                "existing one" % (project.identity, project.identity)
             )
         return project.local_path

@@ -84,6 +84,10 @@ class RecordingGit(GitPort):
         self._record("clone", url, dest)
         return True
 
+    def clone_identity(self, identity, dest):
+        self._record("clone_identity", identity, dest)
+        return True
+
     def sync_to_default_branch(self, root):
         self._record("sync_to_default_branch", root)
         return True

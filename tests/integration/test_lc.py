@@ -1356,6 +1356,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         write_real_library_bundle(self.root)
         self.store = FakeStore()
+        self.store.add_project("acme/widget", local_path=tempfile.mkdtemp())
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -1734,10 +1735,11 @@ class TestNamedRepo(unittest.TestCase):
         gi = (Path(self.app) / ".gitignore").read_text().splitlines()
         self.assertIn(".worktrees/", [l.strip() for l in gi])
 
-    def test_claim_with_an_unresolvable_named_repo_fails_loudly(self):
+    def test_activating_an_item_with_an_unresolvable_named_repo_fails_loudly(self):
         theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")
-        call(_file_compat, "specs/X.md", "--step", "build", "--theme", theme, "--repo", "ghost")
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        rc, out, err = call(
+            _file_compat, "specs/X.md", "--step", "build", "--theme", theme, "--repo", "ghost"
+        )
         self.assertEqual(rc, 1)
         self.assertIn("ghost", err)
 
@@ -1782,6 +1784,51 @@ class TestNamedRepo(unittest.TestCase):
         self.assertEqual(view["repo_path"], self.app)
         self.assertEqual(view["workspace"], os.path.join(self.app, ".worktrees", view["parent"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
+
+
+class _StubCloneGit(GitAdapter):
+    def clone_identity(self, identity, dest):
+        os.makedirs(dest, exist_ok=True)
+        subprocess.run(["git", "init", "-q", dest], check=True)
+        return True
+
+
+class TestActivationClonesAnAbsentRegisteredProject(unittest.TestCase):
+    def setUp(self):
+        self.projects = tempfile.mkdtemp()
+        self.engine = make_repo(self.projects, "engine")
+        write_steps(self.engine)
+        (Path(self.engine) / "store.db").touch()
+        self.addCleanup(lambda: (Path(self.engine) / "store.db").unlink(missing_ok=True))
+        os.environ["LC_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
+        os.environ["LC_HOME"] = self.engine
+        self.store = FakeStore()
+        self._orig = _cli_mod._container
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, git=_StubCloneGit()))
+        self.addCleanup(lambda: _cli_mod.set_container(self._orig))
+        self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
+
+    def tearDown(self):
+        os.environ["LC_CONFIG"] = _ABSENT_CONFIG
+        _reset_git_repo(self.engine)
+
+    def test_activate_clones_a_registered_project_with_no_local_checkout(self):
+        rc, out, err = call(_cli_mod.cmd_project, "add", "acme3/app3")
+        self.assertEqual(rc, 0, err)
+        self.assertIsNone(self.store.get_project("acme3/app3").local_path)
+
+        item = self.store.create_item("add refunds")
+        self.store.add_artifact(item, "repo", "acme3/app3")
+
+        rc, out, err = call(
+            _cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven"
+        )
+
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(out.strip())
+        expected = os.path.join(self.projects, "acme3", "app3")
+        self.assertEqual(self.store.get_project("acme3/app3").local_path, expected)
+        self.assertTrue(os.path.isdir(expected))
 
 
 class TestUnblock(unittest.TestCase):

@@ -35,6 +35,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def clone_identity(self, identity, dest):
+        pass
+
+    @abstractmethod
     def sync_to_default_branch(self, root):
         pass
 
