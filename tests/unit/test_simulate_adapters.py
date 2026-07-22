@@ -103,12 +103,6 @@ class TestSimulateConfig(unittest.TestCase):
         self.assertEqual(sim.max_agents(), 7)
         self.assertEqual(sim.data_root(), "/real/home")
 
-    def test_project_path_resolves_against_the_scratch_projects_root(self):
-        real = Config(environ={"LC_HOME": "/real/home"})
-        sim = SimulateConfig(real, "/scratch/specs", "/scratch/projects")
-        self.assertEqual(sim.project_path("app"), "/scratch/projects/app")
-        self.assertEqual(sim.project_path("/abs/x"), "/abs/x")
-
 
 if __name__ == "__main__":
     unittest.main()

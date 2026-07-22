@@ -1,4 +1,5 @@
 from lightcycle.domain.work import NodeSpec
+from lightcycle.ports.store import ProjectResolutionError
 
 
 class StoreContractBase:
@@ -447,3 +448,74 @@ class StoreContractBase:
         item = s.create_item("item")
         s.close(item, "done")
         self.assertEqual(s.get_node(item).state, "done")
+
+    def test_add_project_creates_a_new_entry(self):
+        s = self.make_store()
+        s.add_project("acme/horde", shortcode="HORDE", local_path="/p/horde")
+        p = s.get_project("acme/horde")
+        self.assertEqual(p.identity, "acme/horde")
+        self.assertEqual(p.shortcode, "HORDE")
+        self.assertEqual(p.local_path, "/p/horde")
+        self.assertIsNone(p.remote)
+
+    def test_add_project_updating_one_field_leaves_others_alone(self):
+        s = self.make_store()
+        s.add_project("acme/horde", shortcode="HORDE", local_path="/p/horde")
+        s.add_project("acme/horde", local_path="/p/horde-moved")
+        p = s.get_project("acme/horde")
+        self.assertEqual(p.shortcode, "HORDE")
+        self.assertEqual(p.local_path, "/p/horde-moved")
+
+    def test_get_project_returns_none_for_unknown_identity(self):
+        s = self.make_store()
+        self.assertIsNone(s.get_project("acme/ghost"))
+
+    def test_list_projects_round_trips_every_entry(self):
+        s = self.make_store()
+        s.add_project("acme/horde", shortcode="HORDE", local_path="/p/horde")
+        s.add_project("acme/saga", shortcode="SAGA", local_path="/p/saga")
+        identities = {p.identity for p in s.list_projects()}
+        self.assertEqual(identities, {"acme/horde", "acme/saga"})
+
+    def test_remove_project_deletes_the_entry(self):
+        s = self.make_store()
+        s.add_project("acme/horde", shortcode="HORDE")
+        s.remove_project("acme/horde")
+        self.assertIsNone(s.get_project("acme/horde"))
+
+    def test_remove_project_raises_key_error_on_unknown_identity(self):
+        s = self.make_store()
+        with self.assertRaises(KeyError):
+            s.remove_project("acme/ghost")
+
+    def test_resolve_project_path_passes_through_an_absolute_ref_without_a_lookup(self):
+        s = self.make_store()
+        self.assertEqual(s.resolve_project_path("/elsewhere/app"), "/elsewhere/app")
+
+    def test_resolve_project_path_matches_the_exact_owner_slash_name_identity(self):
+        s = self.make_store()
+        s.add_project("acme/horde", local_path="/p/horde")
+        self.assertEqual(s.resolve_project_path("acme/horde"), "/p/horde")
+
+    def test_resolve_project_path_matches_an_unambiguous_bare_name(self):
+        s = self.make_store()
+        s.add_project("acme/horde", local_path="/p/horde")
+        self.assertEqual(s.resolve_project_path("horde"), "/p/horde")
+
+    def test_resolve_project_path_raises_on_an_unregistered_ref(self):
+        s = self.make_store()
+        with self.assertRaises(ProjectResolutionError):
+            s.resolve_project_path("ghost")
+
+    def test_resolve_project_path_raises_on_an_ambiguous_bare_name(self):
+        s = self.make_store()
+        s.add_project("acme/app", local_path="/p/acme-app")
+        s.add_project("other/app", local_path="/p/other-app")
+        with self.assertRaises(ProjectResolutionError):
+            s.resolve_project_path("app")
+
+    def test_resolve_project_path_raises_when_registered_without_a_local_checkout(self):
+        s = self.make_store()
+        s.add_project("acme/horde", shortcode="HORDE")
+        with self.assertRaises(ProjectResolutionError):
+            s.resolve_project_path("horde")

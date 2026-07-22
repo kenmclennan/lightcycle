@@ -20,9 +20,6 @@ class _Cfg:
     def projects_root(self):
         return self._projects_root
 
-    def project_path(self, name):
-        return name if os.path.isabs(name) else os.path.join(self._projects_root, name)
-
     def specs_root(self):
         return self._specs_root
 
@@ -160,6 +157,9 @@ class TestWorktreePath(unittest.TestCase):
     def test_resolves_under_the_items_target_repo_not_data_root(self):
         theme = self.store.create_theme("theme")
         item = self.store.create_item("story", theme=theme)
+        self.store.add_project(
+            "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
+        )
         self.store.add_artifact(item, "repo", "saga")
 
         path = self.svc.worktree_path(item)
@@ -180,8 +180,14 @@ class TestWorktreePath(unittest.TestCase):
     def test_two_items_with_different_repos_resolve_under_their_own_repos(self):
         theme = self.store.create_theme("theme")
         saga_item = self.store.create_item("saga story", theme=theme)
+        self.store.add_project(
+            "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
+        )
         self.store.add_artifact(saga_item, "repo", "saga")
         horde_item = self.store.create_item("horde story", theme=theme)
+        self.store.add_project(
+            "acme/horde", local_path=os.path.join("/home/u/workspace/projects", "horde")
+        )
         self.store.add_artifact(horde_item, "repo", "horde")
 
         saga_path = self.svc.worktree_path(saga_item)
@@ -198,6 +204,9 @@ class TestWorktreePath(unittest.TestCase):
 
     def test_two_phases_in_the_same_repo_get_distinct_worktrees_and_branches(self):
         item = self.store.create_item("Login feature", theme=self.store.create_theme("t"))
+        self.store.add_project(
+            "acme/app", local_path=os.path.join("/home/u/workspace/projects", "app")
+        )
         self.store.add_artifact(item, "repo", "app")
         cfg = _Cfg("/home/u/workspace/projects")
 
@@ -263,6 +272,9 @@ class TestSpecsWorkspace(unittest.TestCase):
     def test_target_repo_is_projects_root_repo_when_workflow_omits_workspace(self):
         theme = self.store.create_theme("theme")
         item = self.store.create_item("story", theme=theme)
+        self.store.add_project(
+            "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
+        )
         self.store.add_artifact(item, "repo", "saga")
         svc = WorktreeService(
             self.store, git=None, fs=None,
@@ -276,6 +288,9 @@ class TestSpecsWorkspace(unittest.TestCase):
     def test_target_repo_without_a_flow_falls_back_to_project(self):
         theme = self.store.create_theme("theme")
         item = self.store.create_item("story", theme=theme)
+        self.store.add_project(
+            "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
+        )
         self.store.add_artifact(item, "repo", "saga")
         svc = WorktreeService(
             self.store, git=None, fs=None, config=_Cfg("/home/u/workspace/projects")
@@ -345,6 +360,7 @@ class TestRemovePhaseScoped(unittest.TestCase):
     def _item(self):
         store = FakeStore()
         item = store.create_item("Login", theme=store.create_theme("t"))
+        store.add_project("acme/app", local_path=os.path.join("/projects", "app"))
         store.add_artifact(item, "repo", "app")
         return store, item
 
@@ -422,6 +438,7 @@ class TestRemoveNeverActivatedItem(unittest.TestCase):
         store = FakeStore()
         theme = store.create_theme("theme")
         item = store.create_item("story", theme=theme)
+        store.add_project("acme/saga", local_path=os.path.join("/projects", "saga"))
         store.add_artifact(item, "repo", "saga")
         store.add_artifact(item, "branch", "feat/my-branch")
         git = _FakeGit()
@@ -489,6 +506,7 @@ class TestEnsureNoSilentFailure(unittest.TestCase):
     def test_ensure_raises_when_repo_present_but_not_a_git_repo(self):
         theme = self.store.create_theme("theme")
         item = self.store.create_item("story", theme=theme)
+        self.store.add_project("acme/saga", local_path=os.path.join("/projects", "saga"))
         self.store.add_artifact(item, "repo", "saga")
         git = _FakeGit(git_repos=())
         svc = WorktreeService(self.store, git, fs=None, config=_Cfg("/projects"))
@@ -506,6 +524,9 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
     def _item_with_repo(self, repo="saga"):
         theme = self.store.create_theme("theme")
         item = self.store.create_item("story", theme=theme)
+        self.store.add_project(
+            "acme/%s" % repo, local_path=os.path.join(self.projects_root, repo)
+        )
         self.store.add_artifact(item, "repo", repo)
         return item
 

@@ -122,9 +122,6 @@ class FakeConfig:
     def projects_root(self):
         return "/projects"
 
-    def project_path(self, name):
-        return name if os.path.isabs(name) else os.path.join("/projects", name)
-
 
 class TestAdvanceTask(unittest.TestCase):
     def test_creates_next_task(self):
@@ -850,6 +847,7 @@ class TestClaimTask(unittest.TestCase):
     def test_resolves_repo_path_against_projects_root(self):
         s = FakeStore()
         item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        s.add_project("acme/app", local_path=os.path.join("/projects", "app"))
         s.add_artifact(item, "repo", "app")
         s.create_step("build: x", step="build", role="coder", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="coder"))

@@ -93,9 +93,11 @@ from lightcycle.application.pool import (
     TickUseCase,
 )
 from lightcycle.application.setup import (
+    AddProjectInput,
+    AddProjectUseCase,
     InitGridUseCase,
-    InitProjectInput,
-    InitProjectUseCase,
+    ListProjectsUseCase,
+    RemoveProjectUseCase,
     VenvBusyError,
     upgrade,
 )
@@ -147,9 +149,9 @@ def require_store():
 
 COMMAND_GROUPS = [
     ("Setup", [
-        ("init", "[<project>] [--shortcode X]", "no arg: create the lightcycle store + seed the "
-         "HOME config (run once). <project>: register/record that project's shortcode in the "
-         "central config"),
+        ("init", "", "create the lightcycle store + seed the HOME config (run once)."),
+        ("project", "<add|list|rm> ...", "manage the project registry: add <owner/name> "
+         "[--shortcode X] [--path P], list, rm <owner/name>"),
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
@@ -1238,27 +1240,55 @@ def cmd_driver(argv):
 
 def cmd_init(argv):
     ap = argparse.ArgumentParser(prog="lc init")
-    ap.add_argument("project", nargs="?")
-    ap.add_argument("--shortcode")
-    a = ap.parse_args(argv)
-    if a.project:
-        try:
-            r = InitProjectUseCase(_container.config, _container.fs).execute(
-                InitProjectInput(project=a.project, shortcode=a.shortcode)
-            )
-        except UseCaseError as e:
-            sys.stderr.write("%s\n" % e)
-            return 1
-        if r.changed:
-            print("%s -> shortcode %s" % (r.project, r.shortcode))
-        else:
-            print("%s already mapped to %s" % (r.project, r.shortcode))
-        return 0
+    ap.parse_args(argv)
     r = InitGridUseCase(_container.store, _container.fs, _container.config).execute()
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
     _init_pull_default_origin()
     return 0
+
+
+def cmd_project(argv):
+    ap = argparse.ArgumentParser(prog="lc project")
+    sub = ap.add_subparsers(dest="sub")
+    p_add = sub.add_parser("add")
+    p_add.add_argument("identity")
+    p_add.add_argument("--shortcode")
+    p_add.add_argument("--path")
+    sub.add_parser("list")
+    p_rm = sub.add_parser("rm")
+    p_rm.add_argument("identity")
+    a = ap.parse_args(argv)
+    if a.sub is None:
+        ap.print_help()
+        return 2
+    c = _container
+    try:
+        if a.sub == "add":
+            r = AddProjectUseCase(c.store, c.git, c.config, c.fs).execute(
+                AddProjectInput(identity=a.identity, shortcode=a.shortcode, path=a.path)
+            )
+            if r.changed:
+                print("%s -> shortcode %s%s" % (
+                    r.identity, r.shortcode,
+                    " at %s" % r.local_path if r.local_path else " (no local checkout)"
+                ))
+            else:
+                print("%s already registered (shortcode %s)" % (r.identity, r.shortcode))
+            return 0
+        if a.sub == "list":
+            for p in ListProjectsUseCase(c.store).execute():
+                print("%s\t%s\t%s" % (
+                    p.identity, p.shortcode or "-", p.local_path or "(not checked out)"
+                ))
+            return 0
+        if a.sub == "rm":
+            RemoveProjectUseCase(c.store).execute(a.identity)
+            print("removed %s" % a.identity)
+            return 0
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
 
 
 def _init_pull_default_origin():
