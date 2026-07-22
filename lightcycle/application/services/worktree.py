@@ -5,6 +5,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.work import Item, State
 from lightcycle.domain.workspace import Branch, Worktree
+from lightcycle.ports.store import ProjectResolutionError
 
 
 class WorktreeService:
@@ -52,7 +53,13 @@ class WorktreeService:
     def target_repo(self, item):
         if self._uses_specs_workspace(item):
             return self._config.specs_root()
-        return self._config.project_path(self.item_repo(item))
+        return self._resolve_repo(self.item_repo(item))
+
+    def _resolve_repo(self, repo):
+        try:
+            return self._store.resolve_project_path(repo)
+        except ProjectResolutionError as e:
+            raise UseCaseError(str(e))
 
     def _recorded_branches(self, item):
         return [(a.label, a.value) for a in self._item(item).artifacts if a.type == "branch"]
@@ -62,7 +69,7 @@ class WorktreeService:
             node = self._store.get_node(item)
             if self._flow.workspace_for_phase(node, phase) == SPECS_WORKSPACE:
                 return self._config.specs_root()
-        return self._config.project_path(self.item_repo(item))
+        return self._resolve_repo(self.item_repo(item))
 
     def worktree_path(self, item):
         return Worktree(item, self._phase(item)).path_in(self.target_repo(item))

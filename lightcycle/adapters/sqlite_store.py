@@ -4,7 +4,7 @@ import sqlite3
 
 from lightcycle.domain.work import Artifact, Node, NodeView, State, derive_state
 from lightcycle.domain.workspace.isolation import refuses_live_store
-from lightcycle.ports.store import StorePort
+from lightcycle.ports.store import ProjectEntry, ProjectResolutionError, StorePort
 
 _DB_FILENAME = "store.db"
 
@@ -78,6 +78,13 @@ CREATE TABLE IF NOT EXISTS history (
     seq INTEGER NOT NULL,
     state TEXT NOT NULL,
     ts TEXT
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+    identity   TEXT PRIMARY KEY,
+    shortcode  TEXT,
+    local_path TEXT,
+    remote     TEXT
 );
 """
 
@@ -653,8 +660,16 @@ class SqliteStore(StorePort):
         self._conn.commit()
         return tid
 
+    def _shortcode_for(self, project):
+        if not project:
+            return self._config.shortcode()
+        matches = self._match_projects(project)
+        if len(matches) == 1 and matches[0].shortcode:
+            return matches[0].shortcode
+        return self._config.shortcode()
+
     def create_theme(self, title, *, project=None, goal=None, workflow=None, id=None):
-        tid = self._mint_or_adopt(id, None, shortcode=self._config.shortcode_for(project))
+        tid = self._mint_or_adopt(id, None, shortcode=self._shortcode_for(project))
         self._conn.execute(
             "INSERT INTO nodes (id, type, title, state, project, goal, workflow, created_at) "
             "VALUES (?, 'theme', ?, 'backlogged', ?, ?, ?, ?)",
@@ -713,3 +728,73 @@ class SqliteStore(StorePort):
         self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))
         self._conn.execute("DELETE FROM history WHERE node_id = ?", (tid,))
         self._conn.commit()
+
+    def add_project(self, identity, *, shortcode=None, local_path=None, remote=None):
+        row = self._conn.execute(
+            "SELECT shortcode, local_path, remote FROM projects WHERE identity = ?", (identity,)
+        ).fetchone()
+        if row is None:
+            self._conn.execute(
+                "INSERT INTO projects (identity, shortcode, local_path, remote) "
+                "VALUES (?, ?, ?, ?)",
+                (identity, shortcode, local_path, remote),
+            )
+        else:
+            merged = (
+                shortcode if shortcode is not None else row[0],
+                local_path if local_path is not None else row[1],
+                remote if remote is not None else row[2],
+            )
+            self._conn.execute(
+                "UPDATE projects SET shortcode = ?, local_path = ?, remote = ? WHERE identity = ?",
+                (*merged, identity),
+            )
+        self._conn.commit()
+
+    def get_project(self, identity):
+        row = self._conn.execute(
+            "SELECT identity, shortcode, local_path, remote FROM projects WHERE identity = ?",
+            (identity,),
+        ).fetchone()
+        return ProjectEntry(*row) if row else None
+
+    def list_projects(self):
+        rows = self._conn.execute(
+            "SELECT identity, shortcode, local_path, remote FROM projects ORDER BY identity"
+        ).fetchall()
+        return [ProjectEntry(*row) for row in rows]
+
+    def remove_project(self, identity):
+        cur = self._conn.execute("DELETE FROM projects WHERE identity = ?", (identity,))
+        self._conn.commit()
+        if cur.rowcount == 0:
+            raise KeyError("project not registered: %s" % identity)
+
+    def _match_projects(self, ref):
+        rows = self.list_projects()
+        if "/" in ref:
+            return [p for p in rows if p.identity == ref]
+        return [p for p in rows if p.identity.rsplit("/", 1)[-1] == ref]
+
+    def resolve_project_path(self, ref):
+        if os.path.isabs(ref):
+            return ref
+        matches = self._match_projects(ref)
+        if not matches:
+            raise ProjectResolutionError(
+                "project '%s' is not registered - run `lc project add <owner/name> --path <dir>`"
+                % ref
+            )
+        if len(matches) > 1:
+            raise ProjectResolutionError(
+                "project name '%s' is ambiguous - matches %s; use the full owner/name identity"
+                % (ref, ", ".join(p.identity for p in matches))
+            )
+        project = matches[0]
+        if not project.local_path:
+            raise ProjectResolutionError(
+                "project '%s' is registered but has no local checkout - run "
+                "`lc project add %s --path <dir>` to point at one (cloning on demand is not "
+                "supported yet)" % (project.identity, project.identity)
+            )
+        return project.local_path

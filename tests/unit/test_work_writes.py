@@ -1,5 +1,4 @@
 import json
-import os
 import unittest
 
 from lightcycle.application.errors import UseCaseError
@@ -44,9 +43,6 @@ class FakeConfig:
 
     def projects_root(self):
         return self._projects
-
-    def project_path(self, name):
-        return name if os.path.isabs(name) else os.path.join(self._projects, name)
 
     def engine_root(self):
         return self._projects
@@ -400,6 +396,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
     def test_remove_requests_remote_branch_delete(self):
         s = FakeStore()
         sid = s.create_item("my item", theme=s.create_theme("theme"))
+        s.add_project("acme/app", local_path="/projects/app")
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
         git = FakeGitRemove(repos={"/projects/app"})
@@ -410,6 +407,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
     def test_remove_skips_remote_delete_when_not_git_repo(self):
         s = FakeStore()
         sid = s.create_item("my item", theme=s.create_theme("theme"))
+        s.add_project("acme/app", local_path="/projects/app")
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
         git = FakeGitRemove(repos=set())

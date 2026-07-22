@@ -69,7 +69,9 @@ class WorkflowSimulateUseCase:
         entry_meta = self._flow.meta_for_step(graph.entry, pin)
         needed = set(graph.requires) | StepContract.from_meta(entry_meta).required_inputs()
         repo_name = "repo-%s" % item_id.replace("/", "-")
-        os.makedirs(os.path.join(self._projects_root, repo_name), exist_ok=True)
+        repo_path = os.path.join(self._projects_root, repo_name)
+        os.makedirs(repo_path, exist_ok=True)
+        self._store.add_project("simulate/%s" % repo_name, local_path=repo_path)
         self._store.add_artifact(item_id, "repo", repo_name)
         for req in sorted(needed):
             if req == "repo":

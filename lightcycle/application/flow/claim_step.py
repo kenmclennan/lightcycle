@@ -2,8 +2,10 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeView, State
+from lightcycle.ports.store import ProjectResolutionError
 
 
 @dataclass(frozen=True)
@@ -101,7 +103,10 @@ class ClaimStepUseCase:
         repo = next((a.value for a in view.item_artifacts if a.type == "repo"), None)
         repo_path = None
         if repo:
-            repo_path = self._config.project_path(repo)
+            try:
+                repo_path = self._store.resolve_project_path(repo)
+            except ProjectResolutionError as e:
+                raise UseCaseError(str(e))
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
         phase = self._flow.phase_for(t)
         return ClaimResponse(

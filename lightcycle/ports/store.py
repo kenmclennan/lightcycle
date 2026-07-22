@@ -1,4 +1,12 @@
 from abc import ABC, abstractmethod
+from collections import namedtuple
+
+
+ProjectEntry = namedtuple("ProjectEntry", "identity shortcode local_path remote")
+
+
+class ProjectResolutionError(Exception):
+    pass
 
 
 class StorePort(ABC):
@@ -171,4 +179,24 @@ class StorePort(ABC):
 
     @abstractmethod
     def delete(self, tid):
+        pass
+
+    @abstractmethod
+    def add_project(self, identity, *, shortcode=None, local_path=None, remote=None):
+        pass
+
+    @abstractmethod
+    def get_project(self, identity):
+        pass
+
+    @abstractmethod
+    def list_projects(self):
+        pass
+
+    @abstractmethod
+    def remove_project(self, identity):
+        pass
+
+    @abstractmethod
+    def resolve_project_path(self, ref):
         pass

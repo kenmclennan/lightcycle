@@ -1518,6 +1518,7 @@ class TestWorktree(unittest.TestCase):
         )
         os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
+        self.store.add_project("acme/engine", local_path=self.root)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -1693,6 +1694,7 @@ class TestNamedRepo(unittest.TestCase):
         os.environ["LC_CONFIG"] = write_config(projects=self.projects, specs=self.engine)
         os.environ["LC_HOME"] = self.engine
         self.store = FakeStore()
+        self.store.add_project("acme/app", local_path=self.app)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -1767,6 +1769,20 @@ class TestNamedRepo(unittest.TestCase):
         repos = [a.value for a in arts if a.type == "repo"]
         self.assertEqual(repos, ["app"])
 
+    def test_lc_project_add_registers_a_project_the_claim_then_resolves(self):
+        (Path(self.engine) / "store.db").touch()
+        self.addCleanup(lambda: (Path(self.engine) / "store.db").unlink(missing_ok=True))
+
+        rc, out, err = call(_cli_mod.cmd_project, "add", "acme2/app2", "--path", self.app)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("acme2/app2", out)
+
+        view = self._claim("acme2/app2")
+
+        self.assertEqual(view["repo_path"], self.app)
+        self.assertEqual(view["workspace"], os.path.join(self.app, ".worktrees", view["parent"]))
+        self.assertTrue(os.path.isdir(view["workspace"]))
+
 
 class TestUnblock(unittest.TestCase):
     def setUp(self):
@@ -1811,6 +1827,7 @@ class TestCloseWorktree(unittest.TestCase):
         os.environ["LC_CONFIG"] = write_config(projects=parent, specs=self.root)
         os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
+        self.store.add_project("acme/engine", local_path=self.root)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2456,9 +2473,6 @@ class TestWorktreePushTarget(unittest.TestCase):
             def projects_root(self):
                 return parent
 
-            def project_path(self, name):
-                return name if os.path.isabs(name) else os.path.join(parent, name)
-
             def engine_root(self):
                 return parent
 
@@ -2476,6 +2490,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 
     def _make_store(self, branch="feat/my-feat"):
         store = FakeStore()
+        store.add_project("acme/app", local_path=self.repo)
         sid = store.create_item("my-feat", theme=store.create_theme("theme", workflow="lightcycle/spec-driven"))
         store.add_artifact(sid, "repo", "app")
         store.add_artifact(sid, "branch", branch)

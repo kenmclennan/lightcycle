@@ -2,7 +2,7 @@ import datetime
 import os
 import uuid
 
-from lightcycle.ports.store import StorePort
+from lightcycle.ports.store import ProjectEntry, ProjectResolutionError, StorePort
 from lightcycle.domain.work import Artifact, Node, NodeView, State, derive_state
 
 
@@ -79,6 +79,7 @@ class FakeStore(StorePort):
         self._records = {}
         self._deps = {}
         self._history = {}
+        self._projects = {}
         self._now = now or (lambda: datetime.datetime.now().isoformat())
 
     def _new_record(self, **fields):
@@ -448,3 +449,53 @@ class FakeStore(StorePort):
         self._records.pop(tid, None)
         self._deps.pop(tid, None)
         self._history.pop(tid, None)
+
+    def add_project(self, identity, *, shortcode=None, local_path=None, remote=None):
+        existing = self._projects.get(identity)
+        merged = ProjectEntry(
+            identity=identity,
+            shortcode=shortcode if shortcode is not None else (existing.shortcode if existing else None),
+            local_path=local_path if local_path is not None else (existing.local_path if existing else None),
+            remote=remote if remote is not None else (existing.remote if existing else None),
+        )
+        self._projects[identity] = merged
+
+    def get_project(self, identity):
+        return self._projects.get(identity)
+
+    def list_projects(self):
+        return sorted(self._projects.values(), key=lambda p: p.identity)
+
+    def remove_project(self, identity):
+        if identity not in self._projects:
+            raise KeyError("project not registered: %s" % identity)
+        del self._projects[identity]
+
+    def _match_projects(self, ref):
+        rows = self.list_projects()
+        if "/" in ref:
+            return [p for p in rows if p.identity == ref]
+        return [p for p in rows if p.identity.rsplit("/", 1)[-1] == ref]
+
+    def resolve_project_path(self, ref):
+        if os.path.isabs(ref):
+            return ref
+        matches = self._match_projects(ref)
+        if not matches:
+            raise ProjectResolutionError(
+                "project '%s' is not registered - run `lc project add <owner/name> --path <dir>`"
+                % ref
+            )
+        if len(matches) > 1:
+            raise ProjectResolutionError(
+                "project name '%s' is ambiguous - matches %s; use the full owner/name identity"
+                % (ref, ", ".join(p.identity for p in matches))
+            )
+        project = matches[0]
+        if not project.local_path:
+            raise ProjectResolutionError(
+                "project '%s' is registered but has no local checkout - run "
+                "`lc project add %s --path <dir>` to point at one (cloning on demand is not "
+                "supported yet)" % (project.identity, project.identity)
+            )
+        return project.local_path
