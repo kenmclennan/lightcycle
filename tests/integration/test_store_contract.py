@@ -253,7 +253,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
         theme = s.create_theme("payments")
         item = s.create_item("add refunds")
-        resp = ActivateItemUseCase(s, flow).execute(
+        resp = ActivateItemUseCase(s, flow, None, None).execute(
             ActivateItemInput(item=item, workflow="standard", theme=theme)
         )
 

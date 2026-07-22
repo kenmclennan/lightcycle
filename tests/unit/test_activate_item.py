@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 
 from lightcycle.application.errors import UseCaseError
@@ -17,7 +18,7 @@ class TestActivateItem(unittest.TestCase):
     def test_activation_files_the_entry_step_and_flips_state(self):
         s = FakeStore()
         item = s.create_item("add refunds")
-        resp = ActivateItemUseCase(s, _flow(s)).execute(
+        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "ready")
@@ -31,7 +32,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         theme = s.create_theme("payments")
         item = s.create_item("add refunds")
-        ActivateItemUseCase(s, _flow(s)).execute(
+        ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard", theme=theme)
         )
         self.assertEqual(s.get_node(item).theme, theme)
@@ -40,14 +41,16 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("x")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s)).execute(ActivateItemInput(item=item))
+            ActivateItemUseCase(s, _flow(s), None, None).execute(ActivateItemInput(item=item))
 
     def test_refuses_to_activate_a_non_todo(self):
         s = FakeStore()
         item = s.create_item("x")
-        ActivateItemUseCase(s, _flow(s)).execute(ActivateItemInput(item=item, workflow="standard"))
+        ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=item, workflow="standard")
+        )
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s)).execute(
+            ActivateItemUseCase(s, _flow(s), None, None).execute(
                 ActivateItemInput(item=item, workflow="standard")
             )
 
@@ -55,7 +58,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("add refunds")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s, requires={"repo"})).execute(
+            ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None).execute(
                 ActivateItemInput(item=item, workflow="standard")
             )
         self.assertEqual(s.get_node(item).state, "backlogged")
@@ -64,7 +67,8 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("add refunds")
         s.add_artifact(item, "repo", "saga")
-        resp = ActivateItemUseCase(s, _flow(s, requires={"repo"})).execute(
+        s.add_project("acme/saga", local_path=tempfile.mkdtemp())
+        resp = ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "ready")
@@ -73,7 +77,7 @@ class TestActivateItem(unittest.TestCase):
     def test_workflow_with_no_required_inputs_activates_repo_less_item(self):
         s = FakeStore()
         item = s.create_item("trend audit")
-        resp = ActivateItemUseCase(s, _flow(s)).execute(
+        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "ready")

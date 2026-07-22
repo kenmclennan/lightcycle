@@ -49,6 +49,14 @@ def clone(url, dest):
     return proc.returncode == 0
 
 
+def clone_identity(identity, dest):
+    os.makedirs(os.path.dirname(dest.rstrip(os.sep)) or ".", exist_ok=True)
+    proc = subprocess.run(
+        ["gh", "repo", "clone", identity, dest], capture_output=True, text=True
+    )
+    return proc.returncode == 0
+
+
 def sync_to_default_branch(root):
     if not git_ok(root, "fetch", "origin"):
         return False
@@ -124,6 +132,9 @@ class GitAdapter(GitPort):
 
     def clone(self, url, dest):
         return clone(url, dest)
+
+    def clone_identity(self, identity, dest):
+        return clone_identity(identity, dest)
 
     def sync_to_default_branch(self, root):
         return sync_to_default_branch(root)
