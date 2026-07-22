@@ -883,6 +883,32 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(arts, [])
 
 
+class TestProjectScanCli(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_scan_lists_a_found_repo_and_json_round_trips(self):
+        tree = tempfile.mkdtemp()
+        repo = os.path.join(tree, "found")
+        os.makedirs(repo)
+        subprocess.run(["git", "init", "-q", repo], check=True)
+        subprocess.run(
+            ["git", "-C", repo, "remote", "add", "origin", "git@github.com:acme/found.git"],
+            check=True,
+        )
+
+        rc, out, err = call(_cli_mod.cmd_project, "scan", tree)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("acme/found", out)
+
+        rc2, out2, err2 = call(_cli_mod.cmd_project, "scan", tree, "--json")
+        self.assertEqual(rc2, 0, err2)
+        data = json.loads(out2)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["identity"], "acme/found")
+        self.assertEqual(data[0]["status"], "new")
+
+
 class TestArtifacts(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()

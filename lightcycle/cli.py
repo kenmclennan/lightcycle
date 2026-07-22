@@ -98,6 +98,7 @@ from lightcycle.application.setup import (
     InitGridUseCase,
     ListProjectsUseCase,
     RemoveProjectUseCase,
+    ScanProjectsUseCase,
     VenvBusyError,
     upgrade,
 )
@@ -150,8 +151,9 @@ def require_store():
 COMMAND_GROUPS = [
     ("Setup", [
         ("init", "", "create the lightcycle store + seed the HOME config (run once)."),
-        ("project", "<add|list|rm> ...", "manage the project registry: add <owner/name> "
-         "[--shortcode X] [--path P], list, rm <owner/name>"),
+        ("project", "<add|list|rm|scan> ...", "manage the project registry: add <owner/name> "
+         "[--shortcode X] [--path P], list, rm <owner/name>, scan [dir] [--json] lists git repos "
+         "under dir (default cwd) as registration candidates - read-only, registers nothing"),
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
@@ -1260,6 +1262,9 @@ def cmd_project(argv):
     sub.add_parser("list")
     p_rm = sub.add_parser("rm")
     p_rm.add_argument("identity")
+    p_scan = sub.add_parser("scan")
+    p_scan.add_argument("dir", nargs="?", default=".")
+    p_scan.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     if a.sub is None:
         ap.print_help()
@@ -1287,6 +1292,22 @@ def cmd_project(argv):
         if a.sub == "rm":
             RemoveProjectUseCase(c.store).execute(a.identity)
             print("removed %s" % a.identity)
+            return 0
+        if a.sub == "scan":
+            candidates = ScanProjectsUseCase(c.store, c.git, c.config, c.fs).execute(a.dir)
+            if a.json:
+                print(json.dumps([dict(cand._asdict()) for cand in candidates], indent=2))
+                return 0
+            for cand in candidates:
+                if cand.status == "no-remote":
+                    print("no-remote\t%s\t(%s)" % (cand.path, cand.remote or "no origin"))
+                elif cand.status == "already-registered":
+                    print("already-registered\t%s\t%s\tproposed %s\tregistered at %s (shortcode %s)" % (
+                        cand.identity, cand.path, cand.shortcode,
+                        cand.registered_path or "(no local checkout)", cand.registered_shortcode or "-",
+                    ))
+                else:
+                    print("new\t%s\t%s\tshortcode %s" % (cand.identity, cand.path, cand.shortcode))
             return 0
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
