@@ -1,4 +1,6 @@
 import io
+import os
+import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
@@ -113,8 +115,29 @@ class FakeStore:
 
 
 class FakeConfig:
+    def __init__(self, projects_root="/projects"):
+        self._projects_root = projects_root
+        self.personal_origin_set = None
+
     def workflow_retention(self):
         return 5
+
+    def projects_root(self):
+        return self._projects_root
+
+    def set_personal_origin(self, name):
+        self.personal_origin_set = name
+
+
+class FakeGit:
+    def __init__(self):
+        self.calls = []
+
+    def git(self, root, *args):
+        self.calls.append(("git", root, args))
+
+    def commit_all(self, root, message):
+        self.calls.append(("commit_all", root, message))
 
 
 class FakeContainer:
@@ -123,6 +146,7 @@ class FakeContainer:
         self.store = store
         self.config = FakeConfig()
         self.fs = FakeFs()
+        self.git = FakeGit()
 
 
 class TestCmdWorkflow(unittest.TestCase):
@@ -274,6 +298,37 @@ class TestCmdWorkflow(unittest.TestCase):
         flow = Flow.from_graph(graph, STEP_METAS)
         self.assertEqual(out.splitlines(), render_workflow_mermaid(graph, flow))
         self.assertEqual(out.splitlines()[0], "flowchart TD")
+
+
+class TestCmdWorkflowInit(unittest.TestCase):
+    def setUp(self):
+        self.source = FakeSource()
+        self.store = FakeStore()
+        self.root = tempfile.mkdtemp()
+        self.container = FakeContainer(self.source, self.store)
+        self.container.config = FakeConfig(projects_root=self.root)
+        cli.set_container(self.container)
+
+    def test_init_creates_scaffold_registers_and_sets_personal_origin(self):
+        project_dir = os.path.join(self.root, "acme")
+        self.source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
+        rc, out, err = call(cli.cmd_workflow, "init", "acme")
+        self.assertEqual(rc, 0)
+        self.assertIn("acme", out)
+        self.assertIn("sha1", out)
+        self.assertTrue(os.path.isfile(os.path.join(project_dir, "source.toml")))
+        self.assertEqual(self.source.read_registry("acme")["current"], "sha1")
+        self.assertEqual(self.source.last_ref, "HEAD")
+        self.assertEqual(self.container.config.personal_origin_set, "acme")
+        self.assertIn(("git", project_dir, ("init", "-q", "-b", "main")), self.container.git.calls)
+
+    def test_init_refuses_when_project_dir_exists(self):
+        project_dir = os.path.join(self.root, "acme")
+        os.makedirs(project_dir)
+        rc, out, err = call(cli.cmd_workflow, "init", "acme")
+        self.assertEqual(rc, 1)
+        self.assertIn(project_dir, err)
+        self.assertEqual(self.source.list_origins(), [])
 
 
 if __name__ == "__main__":

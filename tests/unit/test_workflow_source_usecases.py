@@ -1,7 +1,10 @@
+import os
+import tempfile
 import unittest
 
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.errors import WorkflowSourceError
+from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
@@ -78,11 +81,30 @@ class FakeStore:
 
 
 class FakeConfig:
-    def __init__(self, retention=3):
+    def __init__(self, retention=3, projects_root="/projects"):
         self._retention = retention
+        self._projects_root = projects_root
+        self.personal_origin_set = None
 
     def workflow_retention(self):
         return self._retention
+
+    def projects_root(self):
+        return self._projects_root
+
+    def set_personal_origin(self, name):
+        self.personal_origin_set = name
+
+
+class FakeGit:
+    def __init__(self):
+        self.calls = []
+
+    def git(self, root, *args):
+        self.calls.append(("git", root, args))
+
+    def commit_all(self, root, message):
+        self.calls.append(("commit_all", root, message))
 
 
 def _add(source, store=None, config=None, fs=None):
@@ -223,6 +245,50 @@ class TestList(unittest.TestCase):
         self.assertEqual(view.url, "u")
         self.assertEqual(set(view.pinned), {"sha1"})
         self.assertEqual(set(view.versions), {"sha1", "sha2"})
+
+
+class TestInit(unittest.TestCase):
+    def test_refuses_when_project_dir_already_exists(self):
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "acme"))
+        cfg = FakeConfig(projects_root=root)
+        git = FakeGit()
+        with self.assertRaises(WorkflowSourceError):
+            InitWorkflowOriginUseCase(cfg, git, FakeSource(), FakeStore(), FakeFs()).execute("acme")
+        self.assertEqual(git.calls, [])
+
+    def test_creates_scaffold_registers_with_head_ref_and_sets_personal_origin(self):
+        root = tempfile.mkdtemp()
+        project_dir = os.path.join(root, "acme")
+        cfg = FakeConfig(projects_root=root)
+        source = FakeSource()
+        source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
+        git = FakeGit()
+        resp = InitWorkflowOriginUseCase(cfg, git, source, FakeStore(), FakeFs()).execute("acme")
+        self.assertEqual(resp.project_dir, project_dir)
+        self.assertEqual(resp.origin, "acme")
+        self.assertEqual(resp.sha, "sha1")
+        self.assertTrue(os.path.isfile(os.path.join(project_dir, "source.toml")))
+        self.assertTrue(os.path.isfile(os.path.join(project_dir, "CLAUDE.md")))
+        self.assertTrue(os.path.isfile(os.path.join(project_dir, ".github", "workflows", "simulate.yml")))
+        self.assertTrue(os.path.isfile(os.path.join(project_dir, "README.md")))
+        self.assertEqual(source.last_ref, "HEAD")
+        self.assertEqual(source.read_registry("acme")["current"], "sha1")
+        self.assertEqual(cfg.personal_origin_set, "acme")
+        self.assertIn(("git", project_dir, ("init", "-q", "-b", "main")), git.calls)
+        self.assertIn(("commit_all", project_dir, "scaffold workflow-origin repo"), git.calls)
+
+    def test_scaffold_contains_no_hardcoded_name(self):
+        root = tempfile.mkdtemp()
+        project_dir = os.path.join(root, "acme")
+        cfg = FakeConfig(projects_root=root)
+        source = FakeSource()
+        source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
+        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), FakeFs()).execute("acme")
+        for fname in ("source.toml", "README.md"):
+            with open(os.path.join(project_dir, fname)) as f:
+                text = f.read()
+            self.assertNotIn("lightcycle-workflows", text)
 
 
 if __name__ == "__main__":
