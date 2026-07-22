@@ -58,6 +58,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.errors import WorkflowSourceError
+from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
@@ -323,6 +324,8 @@ def cmd_workflow(argv):
     p_add.add_argument("url")
     p_add.add_argument("--ref")
     p_add.add_argument("--name")
+    p_init = sub.add_parser("init")
+    p_init.add_argument("name")
     p_upgrade = sub.add_parser("upgrade")
     p_upgrade.add_argument("origin", nargs="?")
     sub.add_parser("list")
@@ -355,6 +358,11 @@ def cmd_workflow(argv):
             if resp.pruned:
                 msg += " (pruned %d)" % len(resp.pruned)
             print(msg)
+            return 0
+        if a.sub == "init":
+            resp = InitWorkflowOriginUseCase(c.config, c.git, c.workflow_source, c.store, c.fs).execute(a.name)
+            print("created %s, registered as %s @ %s, personal-origin set" % (
+                resp.project_dir, resp.origin, resp.sha))
             return 0
         if a.sub == "upgrade":
             origins = [a.origin] if a.origin else c.workflow_source.list_origins()

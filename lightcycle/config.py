@@ -26,6 +26,7 @@ _SEED_KEYS = [
     ("backup-retention", "96"),
     ("workflow-retention", "5"),
     ("max-title-length", "72"),
+    ("personal-origin", ""),
 ]
 
 
@@ -287,6 +288,25 @@ class Config:
 
     def max_title_length(self):
         return self._required_int("max-title-length")
+
+    def personal_origin(self):
+        v = self.load_config().get("personal-origin")
+        return v or None
+
+    def set_personal_origin(self, name):
+        p = self.config_path()
+        lines = []
+        if os.path.exists(p):
+            with open(p) as f:
+                lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.split(":", 1)[0].strip() == "personal-origin":
+                lines[i] = "personal-origin: %s\n" % name
+                break
+        else:
+            lines.append("personal-origin: %s\n" % name)
+        with open(p, "w") as f:
+            f.writelines(lines)
 
     def spawn_id(self):
         return self._env("LC_SPAWNID")

@@ -198,6 +198,7 @@ class TestEnsureConfig(unittest.TestCase):
             "retro-interval-reflections: 20\n"
             "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
             "backup-retention: 96\nworkflow-retention: 5\nmax-title-length: 72\n"
+            "personal-origin: \n"
         )
         Path(p).write_text(all_keys)
         c = Config(environ={"LC_CONFIG": p})
@@ -394,6 +395,26 @@ def test_legacy_grid_config_is_no_longer_read(monkeypatch, tmp_path):
     assert cfg.config_path() == os.path.join(str(new_home), "config")
     assert not hasattr(cfg, "legacy_data_root")
     assert not hasattr(cfg, "legacy_config_path")
+
+
+class TestPersonalOrigin(unittest.TestCase):
+    def test_returns_none_when_absent(self):
+        self.assertIsNone(_cfg().personal_origin())
+
+    def test_returns_none_when_seeded_empty(self):
+        self.assertIsNone(_cfg(personal_origin="").personal_origin())
+
+    def test_set_replaces_seeded_empty_key_in_place_leaving_others_untouched(self):
+        c = _cfg(shortcode="PROJ", personal_origin="")
+        c.set_personal_origin("acme")
+        self.assertEqual(c.personal_origin(), "acme")
+        self.assertEqual(c.shortcode(), "PROJ")
+
+    def test_set_again_with_a_different_name_overwrites(self):
+        c = _cfg(shortcode="PROJ", personal_origin="")
+        c.set_personal_origin("acme")
+        c.set_personal_origin("other")
+        self.assertEqual(c.personal_origin(), "other")
 
 
 if __name__ == "__main__":

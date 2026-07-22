@@ -56,12 +56,14 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 | `retro-interval-reflections` | reflections pending across un-retroed items, between engine retro audits |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |
+| `personal-origin` | the user's own workflow-origin repo, set by `lc workflow init`. Optional - unset (empty) until one exists |
 
 ## Workflow sources
 
 Workflows come from pullable git **origins**, not the engine. `lc init` pulls the built-in `lightcycle` origin (from `workflows-remote`) into an immutable, sha-pinned bundle under `~/.lightcycle/workflows/<origin>/<sha>/`. Manage them with:
 
 ```
+lc workflow init <name>       # scaffold + register a personal workflow-origin repo
 lc workflow add <url>         # register + pull an origin
 lc workflow upgrade <origin>  # pull the latest, re-pin
 lc workflow list              # origins + on-disk bundle paths
