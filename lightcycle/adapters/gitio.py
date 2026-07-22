@@ -16,6 +16,11 @@ def is_git_repo(root):
     return git_ok(root, "rev-parse", "--git-dir")
 
 
+def is_repo_root(root):
+    dotgit = os.path.join(root, ".git")
+    return os.path.isdir(dotgit) or os.path.isfile(dotgit)
+
+
 def remote_url(root):
     proc = git(root, "remote", "get-url", "origin")
     if proc.returncode != 0:
@@ -117,6 +122,9 @@ class GitAdapter(GitPort):
 
     def is_git_repo(self, root):
         return is_git_repo(root)
+
+    def is_repo_root(self, root):
+        return is_repo_root(root)
 
     def remote_url(self, root):
         return remote_url(root)

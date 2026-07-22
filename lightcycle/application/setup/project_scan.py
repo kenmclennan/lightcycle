@@ -41,7 +41,7 @@ class ScanProjectsUseCase:
         if real in seen or real == data_home:
             return []
         seen.add(real)
-        if self._git.is_git_repo(path):
+        if self._git.is_repo_root(path):
             return [self._candidate(path)]
         candidates = []
         for name in self._fs.list_dir(path):

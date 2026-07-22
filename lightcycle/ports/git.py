@@ -15,6 +15,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def is_repo_root(self, root):
+        pass
+
+    @abstractmethod
     def remote_url(self, root):
         pass
 

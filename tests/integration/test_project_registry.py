@@ -182,3 +182,26 @@ class TestScanProjects(unittest.TestCase):
 
         self.assertEqual(by_path[noremote_repo].status, "no-remote")
         self.assertIsNone(by_path[noremote_repo].identity)
+
+    def test_nested_repo_inside_an_outer_repo_is_found_not_the_outer(self):
+        config, fs, _ = _env()
+        store = _store(config)
+        root = tempfile.mkdtemp()
+        _repo_at(root)
+
+        projects = os.path.join(root, "projects")
+        os.makedirs(projects)
+
+        nested = os.path.join(projects, "lightcycle")
+        _repo_at(nested, "git@github.com:acme/lightcycle.git")
+
+        candidates = ScanProjectsUseCase(store, GitAdapter(), config, fs).execute(projects)
+        [cand] = candidates
+        self.assertEqual(cand.path, nested)
+        self.assertEqual(cand.identity, "acme/lightcycle")
+
+    def test_is_repo_root_recognises_dotgit_as_a_file(self):
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, ".git"), "w") as f:
+            f.write("gitdir: /elsewhere/.git/worktrees/x\n")
+        self.assertTrue(GitAdapter().is_repo_root(d))
