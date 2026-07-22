@@ -1,6 +1,5 @@
 import os
 from dataclasses import dataclass
-from typing import List
 
 from lightcycle.application.errors import UseCaseError
 
@@ -8,12 +7,14 @@ from lightcycle.application.errors import UseCaseError
 @dataclass(frozen=True)
 class InitProjectInput:
     project: str
+    shortcode: str = None
 
 
 @dataclass(frozen=True)
 class InitProjectResponse:
-    project_dir: str
-    created: List[str]
+    project: str
+    shortcode: str
+    changed: bool
 
 
 class InitProjectUseCase:
@@ -29,23 +30,12 @@ class InitProjectUseCase:
 
     def execute(self, input: InitProjectInput) -> InitProjectResponse:
         self._require_global()
-        proj_dir = os.path.join(self._config.projects_root(), input.project)
-        if not os.path.isdir(proj_dir):
-            raise UseCaseError(
-                "unknown project '%s' under %s" % (input.project, self._config.projects_root())
-            )
-        project_dir = os.path.join(proj_dir, ".lightcycle")
-        os.makedirs(project_dir, exist_ok=True)
-        created = []
-        cfg = os.path.join(project_dir, "config")
-        if not os.path.exists(cfg):
-            shortcode = input.project.rstrip("/").split("/")[-1].upper()
-            with open(cfg, "w") as f:
-                f.write("shortcode: %s\n" % shortcode)
-            created.append("config")
-        gitignore = os.path.join(project_dir, ".gitignore")
-        if not os.path.exists(gitignore):
-            with open(gitignore, "w") as f:
-                f.write("scratch-*.md\n")
-            created.append(".gitignore")
-        return InitProjectResponse(project_dir=project_dir, created=created)
+        existing = self._config.project_shortcodes().get(input.project)
+        shortcode = (
+            input.shortcode or existing
+            or input.project.rstrip("/").split("/")[-1].upper()
+        )
+        changed = shortcode != existing
+        if changed:
+            self._config.set_project_shortcode(input.project, shortcode)
+        return InitProjectResponse(project=input.project, shortcode=shortcode, changed=changed)

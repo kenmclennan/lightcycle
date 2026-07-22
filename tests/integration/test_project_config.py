@@ -6,28 +6,21 @@ from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.config import Config
 
 
-def _config():
+def _config(project_shortcodes=""):
     root = tempfile.mkdtemp()
     projects = tempfile.mkdtemp()
     cfg = Path(tempfile.mkdtemp()) / "config"
     cfg.write_text(
-        "projects: %s\nspecs: %s\nshortcode: xy\ndefault-workflow: standard\n"
-        % (projects, projects)
+        "projects: %s\nspecs: %s\nshortcode: xy\ndefault-workflow: standard\n%s"
+        % (projects, projects, project_shortcodes)
     )
     config = Config(environ={"LC_HOME": root, "LC_CONFIG": str(cfg)})
     return config, projects
 
 
-def _project(projects, name, body):
-    d = Path(projects) / name / ".lightcycle"
-    d.mkdir(parents=True)
-    (d / "config").write_text(body)
-
-
 class TestProjectShortcode(unittest.TestCase):
     def test_epic_id_uses_the_projects_shortcode(self):
-        config, projects = _config()
-        _project(projects, "horde", "shortcode: HORDE\n")
+        config, projects = _config(project_shortcodes="project-shortcodes:\n  horde: HORDE\n")
         eid = SqliteStore(config).create_theme("x", project="horde")
         self.assertTrue(eid.startswith("HORDE-"), eid)
 
@@ -42,11 +35,8 @@ class TestProjectShortcode(unittest.TestCase):
         self.assertTrue(eid.startswith("xy-"), eid)
 
     def test_stories_nest_under_the_epic_id(self):
-        config, projects = _config()
-        _project(projects, "horde", "shortcode: HORDE\n")
+        config, projects = _config(project_shortcodes="project-shortcodes:\n  horde: HORDE\n")
         store = SqliteStore(config)
         theme = store.create_theme("x", project="horde")
         item = store.create_item("s", theme=theme)
         self.assertTrue(item.startswith(theme + "."), item)
-
-

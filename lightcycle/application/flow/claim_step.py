@@ -101,9 +101,7 @@ class ClaimStepUseCase:
         repo = next((a.value for a in view.item_artifacts if a.type == "repo"), None)
         repo_path = None
         if repo:
-            repo_path = (
-                repo if os.path.isabs(repo) else os.path.join(self._config.projects_root(), repo)
-            )
+            repo_path = self._config.project_path(repo)
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
         phase = self._flow.phase_for(t)
         return ClaimResponse(

@@ -1,3 +1,5 @@
+import os
+
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import Comment, GitHubEventsPort
 from lightcycle.ports.workers import WorkersPort
@@ -201,6 +203,9 @@ class SimulateConfig:
 
     def projects_root(self):
         return self._projects_root
+
+    def project_path(self, name):
+        return name if os.path.isabs(name) else os.path.join(self._projects_root, name)
 
     def spawn_id(self):
         return None

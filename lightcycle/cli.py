@@ -147,8 +147,9 @@ def require_store():
 
 COMMAND_GROUPS = [
     ("Setup", [
-        ("init", "[<project>]", "no arg: create the lightcycle store + seed the HOME config (run once). "
-         "<project>: scaffold that project's .lightcycle/ (workflows, config with a shortcode)"),
+        ("init", "[<project>] [--shortcode X]", "no arg: create the lightcycle store + seed the "
+         "HOME config (run once). <project>: register/record that project's shortcode in the "
+         "central config"),
         ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
@@ -1238,19 +1239,20 @@ def cmd_driver(argv):
 def cmd_init(argv):
     ap = argparse.ArgumentParser(prog="lc init")
     ap.add_argument("project", nargs="?")
+    ap.add_argument("--shortcode")
     a = ap.parse_args(argv)
     if a.project:
         try:
             r = InitProjectUseCase(_container.config, _container.fs).execute(
-                InitProjectInput(project=a.project)
+                InitProjectInput(project=a.project, shortcode=a.shortcode)
             )
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
-        if r.created:
-            print("scaffolded %s (%s)" % (r.project_dir, ", ".join(r.created)))
+        if r.changed:
+            print("%s -> shortcode %s" % (r.project, r.shortcode))
         else:
-            print("%s already scaffolded" % r.project_dir)
+            print("%s already mapped to %s" % (r.project, r.shortcode))
         return 0
     r = InitGridUseCase(_container.store, _container.fs, _container.config).execute()
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")

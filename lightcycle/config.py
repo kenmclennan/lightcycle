@@ -27,6 +27,7 @@ _SEED_KEYS = [
     ("workflow-retention", "5"),
     ("max-title-length", "72"),
     ("personal-origin", ""),
+    ("project-shortcodes", ""),
 ]
 
 
@@ -208,17 +209,45 @@ class Config:
     def workflows_remote(self):
         return self._required_str("workflows-remote")
 
-    def project_config(self, project):
-        if not project:
-            return {}
-        p = os.path.join(self.projects_root(), project, ".lightcycle", "config")
-        if not os.path.exists(p):
-            return {}
-        with open(p) as f:
-            return frontmatter.parse_frontmatter(f.read())
+    def project_path(self, name):
+        return name if os.path.isabs(name) else os.path.join(self.projects_root(), name)
+
+    def project_shortcodes(self):
+        return self.load_config().get("project-shortcodes") or {}
 
     def shortcode_for(self, project):
-        return self.project_config(project).get("shortcode") or self.shortcode()
+        if not project:
+            return self.shortcode()
+        return self.project_shortcodes().get(project) or self.shortcode()
+
+    def set_project_shortcode(self, project, shortcode):
+        p = self.config_path()
+        lines = []
+        if os.path.exists(p):
+            with open(p) as f:
+                lines = f.readlines()
+        header = None
+        for i, line in enumerate(lines):
+            if line.split(":", 1)[0].strip() == "project-shortcodes":
+                header = i
+                break
+        if header is None:
+            if lines and not lines[-1].endswith("\n"):
+                lines[-1] += "\n"
+            lines.append("project-shortcodes:\n")
+            lines.append("  %s: %s\n" % (project, shortcode))
+        else:
+            end = header + 1
+            while end < len(lines) and lines[end][:1] in (" ", "\t"):
+                if lines[end].split(":", 1)[0].strip() == project:
+                    lines[end] = "  %s: %s\n" % (project, shortcode)
+                    with open(p, "w") as f:
+                        f.writelines(lines)
+                    return
+                end += 1
+            lines.insert(end, "  %s: %s\n" % (project, shortcode))
+        with open(p, "w") as f:
+            f.writelines(lines)
 
     def max_agents(self):
         env = self._env_int("LC_MAX_AGENTS", None)

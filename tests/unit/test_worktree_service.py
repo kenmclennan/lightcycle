@@ -20,6 +20,9 @@ class _Cfg:
     def projects_root(self):
         return self._projects_root
 
+    def project_path(self, name):
+        return name if os.path.isabs(name) else os.path.join(self._projects_root, name)
+
     def specs_root(self):
         return self._specs_root
 
@@ -164,6 +167,15 @@ class TestWorktreePath(unittest.TestCase):
         self.assertEqual(
             path, os.path.join("/home/u/workspace/projects", "saga", ".worktrees", item)
         )
+
+    def test_absolute_repo_artifact_resolves_directly_not_under_projects_root(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("story", theme=theme)
+        self.store.add_artifact(item, "repo", "/elsewhere/app")
+
+        path = self.svc.worktree_path(item)
+
+        self.assertEqual(path, os.path.join("/elsewhere/app", ".worktrees", item))
 
     def test_two_items_with_different_repos_resolve_under_their_own_repos(self):
         theme = self.store.create_theme("theme")
