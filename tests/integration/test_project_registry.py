@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ from lightcycle.application.setup import (
     AddProjectUseCase,
     ListProjectsUseCase,
     RemoveProjectUseCase,
+    ScanProjectsUseCase,
 )
 from lightcycle.config import Config
 
@@ -136,3 +138,47 @@ class TestRemoveProject(unittest.TestCase):
         store = _store(config)
         with self.assertRaises(UseCaseError):
             RemoveProjectUseCase(store).execute("acme/ghost")
+
+
+def _repo_at(path, remote_url=None):
+    os.makedirs(path, exist_ok=True)
+    subprocess.run(["git", "init", "-q", path], check=True)
+    if remote_url:
+        subprocess.run(["git", "-C", path, "remote", "add", "origin", remote_url], check=True)
+
+
+class TestScanProjects(unittest.TestCase):
+    def test_scan_reports_new_registered_and_no_remote_and_skips_node_modules(self):
+        config, fs, _ = _env()
+        store = _store(config)
+        root = tempfile.mkdtemp()
+
+        new_repo = os.path.join(root, "new")
+        _repo_at(new_repo, "git@github.com:acme/new.git")
+
+        registered_repo = os.path.join(root, "registered")
+        _repo_at(registered_repo, "git@github.com:acme/registered.git")
+        AddProjectUseCase(store, GitAdapter(), config, fs).execute(
+            AddProjectInput(identity="acme/registered", path=registered_repo)
+        )
+
+        noremote_repo = os.path.join(root, "noremote")
+        _repo_at(noremote_repo)
+
+        nested_in_node_modules = os.path.join(root, "node_modules", "nested")
+        _repo_at(nested_in_node_modules, "git@github.com:acme/nested.git")
+
+        candidates = ScanProjectsUseCase(store, GitAdapter(), config, fs).execute(root)
+        by_path = {c.path: c for c in candidates}
+
+        self.assertNotIn(nested_in_node_modules, by_path)
+
+        self.assertEqual(by_path[new_repo].identity, "acme/new")
+        self.assertEqual(by_path[new_repo].status, "new")
+
+        self.assertEqual(by_path[registered_repo].status, "already-registered")
+        self.assertEqual(by_path[registered_repo].registered_path, registered_repo)
+        self.assertEqual(by_path[registered_repo].registered_shortcode, "REGISTERED")
+
+        self.assertEqual(by_path[noremote_repo].status, "no-remote")
+        self.assertIsNone(by_path[noremote_repo].identity)
