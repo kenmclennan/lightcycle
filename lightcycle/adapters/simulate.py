@@ -64,6 +64,10 @@ class RecordingGit(GitPort):
         self._record("is_git_repo", root)
         return True
 
+    def is_repo_root(self, root):
+        self._record("is_repo_root", root)
+        return True
+
     def remote_url(self, root):
         self._record("remote_url", root)
         return None

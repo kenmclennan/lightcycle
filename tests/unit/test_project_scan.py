@@ -13,7 +13,7 @@ class _FakeGit:
         self._git_repos = set(git_repos)
         self._remotes = remotes or {}
 
-    def is_git_repo(self, path):
+    def is_repo_root(self, path):
         return path in self._git_repos
 
     def remote_url(self, path):
