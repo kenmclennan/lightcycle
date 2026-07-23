@@ -164,8 +164,6 @@ COMMAND_GROUPS = [
     ]),
     ("Start working", [
         ("start", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue"),
-        ("driver", "[claude-flags]", "open the interactive driver - your seat to shape and file "
-         "work; extra flags pass through to claude (e.g. --resume, --dangerously-skip-permissions)"),
     ]),
     ("See what's happening", [
         ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),
@@ -1213,33 +1211,6 @@ def cmd_start(argv):
         return 0
     finally:
         ReleaseRunLockUseCase(_container.lock).execute()
-
-
-def cmd_driver(argv):
-    if not require_store():
-        return 1
-    root = _container.config.data_root()
-    seat = _container.fs.read_md("driver.md", _container.config.prompts_root())
-    if seat is None or not seat["meta"].get("model"):
-        sys.stderr.write("driver.md is missing or has no 'model' in frontmatter\n")
-        return 1
-    body = seat["body"]
-    show_banner()
-    os.execvp(
-        "claude",
-        [
-            "claude",
-            "--model",
-            seat["meta"]["model"],
-            "--name",
-            "driver",
-            "--append-system-prompt",
-            body,
-            "--add-dir",
-            root,
-            *argv,
-        ],
-    )
 
 
 def cmd_init(argv):

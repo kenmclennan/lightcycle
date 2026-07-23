@@ -16,7 +16,9 @@ The live backlog and roadmap live in the store - run `lc backlog` for open items
 
 ## Install
 
-lightcycle is a pipx-installable package with an `lc` console entry point:
+The canonical way onto a machine is the **[lightcycle-plugin](https://github.com/kenmclennan/lightcycle-plugin)** for Claude Code: it bootstraps this engine (pipx install / upgrade / `lc init`) and ships a `setup` skill that walks you through onboarding - prerequisites, config, registering your repos, an optional personal workflow origin. Start there; its README is the getting-started guide.
+
+To install the engine **directly** - for engine development, or a host without Claude Code:
 
 ```bash
 pipx install git+https://github.com/kenmclennan/lightcycle   # lc + lightcycle on PATH
@@ -36,9 +38,9 @@ pipx install git+https://github.com/kenmclennan/lightcycle
 lc init                              # creates ~/.lightcycle (store + config); pulls the built-in workflow origin
 lc config --edit                     # point `projects` + `specs` at your dirs (defaults: ~/workspace/{projects,specs})
 
-# 2. tell lightcycle about a repo you want it to work in
-#    (any git repo under your `projects` dir)
-lc project add owner/myapp --path ./myapp   # register a project in the registry
+# 2. register a repo you want it to work in - any git repo, anywhere on disk
+#    (or let the plugin's `setup` skill discover and register them for you via `lc project scan`)
+lc project add owner/myapp --path ./myapp   # a project is its github identity in the registry
 
 # 3. drive some work in
 lc new theme "Add a health endpoint" --workflow lightcycle/spec-driven   # open the focus area; prints a theme id, e.g. MYAPP-1
@@ -50,10 +52,9 @@ lc set $item --state active                    # files spec-writer; it authors t
 # 4. run the pool (separate terminal) and watch
 lc start                             # the agent loop: claims ready steps, spawns workers, advances the flow
 lc status                            # inbox / active / queue / blocked, all at once
-lc driver                            # your interactive seat to shape specs and clear gates
 ```
 
-`lc start` runs in the foreground and shows the neon banner as it comes online; Ctrl-C stops it (workers are ephemeral and exit on their own). The pool runs the agent steps; you drive from `lc driver` and clear the human gates (the spec PR, `await-merge`) that surface in `lc inbox`.
+`lc start` runs in the foreground and shows the neon banner as it comes online; Ctrl-C stops it (workers are ephemeral and exit on their own). The pool runs the agent steps; you drive from the **`driver` skill** (in the lightcycle plugin - invoke it in your Claude Code session) and clear the human gates (the spec PR, `await-merge`) that surface in `lc inbox`.
 
 **Developing the engine itself?** Work in a checkout and run it directly (`python -m lightcycle.cli …`, or the `bin/lc` shim) so you dogfood your changes; use `bin/setup` for the dev environment (`uv` + tests). See [DEVELOPING.md](DEVELOPING.md).
 
@@ -68,7 +69,7 @@ Everything is a **node** - `theme`, `item`, or `step` - and the CLI is a small s
 - **A step is a stage running.** "write-code", "open-pr", "review-code" are steps chained by dependencies; closing one makes its dependents ready. Which step is ready IS the stage. The chain is defined by the **workflow graph** (see [Workflows](#workflows)), not by the steps: a workflow file names the entry stage, the `outcome -> next-stage` edges, and which step file performs each stage. `lc` resolves each step's workflow (from its item) and routes its outcome through that graph - the next performer is the step file the target stage maps to (an unowned target is a `for:human` terminal). `lc workflow check` prints the graph.
 - **`lc` owns the domain and the processes.** It is the only caller of the store. It spawns/tracks workers and runs the loop. No tmux required.
 - **Workers are ephemeral and claim their own step.** The loop spawns a role (`write-code`/`open-pr`/`watch-ci`/`review-code`); the worker's first act is `lc claim <role>` (atomic), then it works and exits. A worker that dies before claiming leaves nothing stuck. Human steps (`await-merge`/`cleanup`) are never spawned; they surface in `lc inbox`.
-- **Three homes: engine / `~/.lightcycle` / projects.** The **engine** is the pipx-installed package - code plus `prompts/` (the engine-owned agent prompts it spawns directly: `driver.md`, `audit.md`). It ships no workflow library. **`~/.lightcycle/`** is everything that is _yours_: `config`, the store (`store.db`), `logs/`, `.worktrees/`, and the **pulled workflow bundles** under `workflows/<origin>/<sha>/` - independent of the engine, so upgrades never touch it (found by default, or `$LC_HOME`). **`projects/`** is the conventional default location for your repo checkouts - it's just where `lc project add --path` and `lc workflow init` conventionally point; the engine does not require repos to live there (see the project registry below).
+- **Three homes: engine / `~/.lightcycle` / projects.** The **engine** is the pipx-installed package - code plus `prompts/` (the engine-owned agent prompt it spawns directly: `prompts/steps/audit.md`, the periodic retro). It ships no workflow library. **`~/.lightcycle/`** is everything that is _yours_: `config`, the store (`store.db`), `logs/`, `.worktrees/`, and the **pulled workflow bundles** under `workflows/<origin>/<sha>/` - independent of the engine, so upgrades never touch it (found by default, or `$LC_HOME`). **`projects/`** is the conventional default location for your repo checkouts - it's just where `lc project add --path` and `lc workflow init` conventionally point; the engine does not require repos to live there (see the project registry below).
 - **Workflows come from pullable sources, not the engine.** A **workflow source** is a git **origin** holding `source.toml` + `workflows/*.md` + `steps/*.md`; the engine pulls it into an immutable, sha-pinned **bundle**, and each item pins `<origin>/<name>@<sha>` at activation. The loader reads the flow and steps from that pin - there is no `.lightcycle/` override and no resolution chain. `lc init` pulls the built-in `lightcycle` origin (`workflows-remote`); `lc workflow add|upgrade|list|rm` manages origins; author your own with the plugin's `author-workflow` skill.
 - **The config names where your work lives.** `~/.lightcycle/config` (or `$LC_CONFIG`) names `projects` (the dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (base for relative spec paths; default `~/workspace/specs`), plus the global `shortcode` (id prefix), `default-origin`, and `workflows-remote`. There is **no default workflow**: activation requires an explicit or theme-inherited `--workflow <origin>/<name>`. `lc init` seeds it; `lc config [--edit]` shows or edits it.
 - **The project registry: a project is its GitHub identity.** A project is registered by its `owner/name` GitHub identity in the store's `projects` table, via `lc project add <owner/name> [--shortcode X] [--path P]`; `lc project list` shows every registered project and its checkout status, `lc project rm <owner/name>` unregisters one (the checkout on disk is left alone). A registered project can have its own `shortcode` (new theme ids under it mint as `SHORTCODE-N`, and it's the prefix its specs use); a project absent from the registry, or matched ambiguously, inherits the global `shortcode`. `lc project scan [dir]` walks `dir` (default the current directory) for git repos and lists each as a candidate - its derived `owner/name`, a proposed shortcode, and whether it's new, already registered, or has no usable GitHub remote; `--json` emits the same list as structured data (`identity`, `path`, `shortcode`, `status`, `remote`, `registered_path`, `registered_shortcode` - `null` where not applicable). It never registers anything itself.
@@ -148,7 +149,6 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc project <add\|list\|rm\|scan>` | manage the project registry: `add <owner/name> [--shortcode X] [--path P]`, `list`, `rm <owner/name>`, `scan [dir] [--json]` discovers git repos under `dir` (default cwd) as registration candidates - read-only |
 | `lc config [--edit]` | show (or `--edit`) the lightcycle config: projects + specs roots |
 | `lc start [--once]` | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue |
-| `lc driver` | open the interactive driver `claude` (your seat) |
 | `lc status` | all buckets: inbox / active / queue / blocked |
 | `lc inbox [N]` / `lc backlog [N]` | what needs you now (gates + blocked) / todo items to develop later |
 | `lc active` / `lc queue [N]` / `lc ps` | steps running now / next N agent steps / running workers |
@@ -164,7 +164,7 @@ Every file in `steps/` is a reusable step prompt (routing lives in the [workflow
 - **`model:` present** - an **ephemeral agent**. `lc` spawns a fresh `claude` (the file body is its system prompt), it does the step and exits. The example pipeline uses `opus` for review-code, `sonnet` for write-code/open-pr/watch-ci.
 - **no `model:`** - **you + the Driver**. The step surfaces in `lc inbox`; the file body is a Driver skill for helping you do it (`await-merge`, `cleanup`, `review-conflict`). These are never spawned.
 
-The Driver is the human's interactive seat and the performer of the human steps - it composes its instructions from `driver.md` plus those step skills. It is defined separately in `driver.md` (not under `steps/`, since it is not a single step); `lc driver` launches it.
+The Driver is the human's interactive seat and the performer of the human steps. It is **not** a `lc` command - it lives in the lightcycle plugin as the `driver` skill, which you invoke in your Claude Code session; the playbook there composes with the human-step skills above.
 
 ## Telemetry / logs
 
