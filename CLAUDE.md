@@ -11,7 +11,7 @@ lightcycle is four coordinated repos. This one is the engine; a change that span
 - **lightcycle-specs** - design docs (`lightcycle/*.md`) and briefs (`lightcycle/<ID>-brief.md`, recorded beside each spec). Specs land there through the spec-PR review gate before code is built.
 - **lightcycle-plugin** - the Claude Code companion: a marketplace repo whose SessionStart hook bootstraps the engine (pipx) and whose skills (e.g. `author-workflow`) help you work with it.
 
-The engine is agnostic about _which_ origin it pulls; the four-repo map above is the canonical lightcycle deployment, documented here so cross-repo work is legible - it is not an assumption baked into the code. (How work moves across these repos - PR-flow, coupled changes - is a driver operation, kept in `prompts/driver.md`, not here.)
+The engine is agnostic about _which_ origin it pulls; the four-repo map above is the canonical lightcycle deployment, documented here so cross-repo work is legible - it is not an assumption baked into the code. (How work moves across these repos - PR-flow, coupled changes - is a driver operation, kept in the `driver` skill (lightcycle-plugin), not here.)
 
 ## Architecture: hexagonal (DDD)
 
@@ -26,7 +26,7 @@ Dependencies point inward; the domain depends on nothing.
 
 Business logic stranded in `cli.py` or an adapter is the most common defect here; it belongs in a use case (`application/`), and any pure rule belongs in `domain/`.
 
-**Fast-path verification boundary.** Runtime source for CI/review fast-path purposes is `lightcycle/` (the package) excluding `lightcycle/prompts/` (the engine-owned agent prompts - `driver.md`, `audit.md` - content rather than code), plus `tests/`. A diff touching only files outside that boundary (`lightcycle/prompts/**`, docs, specs, README, this file, `.github/**`) is docs-only: the reviewer/watch-ci fast path applies, and CI's `integration` job is skipped.
+**Fast-path verification boundary.** Runtime source for CI/review fast-path purposes is `lightcycle/` (the package) excluding `lightcycle/prompts/` (the engine-owned agent prompt - `prompts/steps/audit.md` - content rather than code), plus `tests/`. A diff touching only files outside that boundary (`lightcycle/prompts/**`, docs, specs, README, this file, `.github/**`) is docs-only: the reviewer/watch-ci fast path applies, and CI's `integration` job is skipped.
 
 Next-step resolution has one home: a use case must not inline `flow_next` -> `create_step` or reimplement the transition / ci-failed-cap logic; it routes through the shared resolver (`application/flow/next_step.py`).
 
