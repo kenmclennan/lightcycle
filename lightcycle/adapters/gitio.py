@@ -113,6 +113,16 @@ def commit_all(root, message):
     return git_ok(root, "commit", "-m", message)
 
 
+def common_dir(root):
+    proc = git(root, "rev-parse", "--git-common-dir")
+    if proc.returncode != 0:
+        return None
+    path = proc.stdout.strip()
+    if not os.path.isabs(path):
+        path = os.path.join(root, path)
+    return os.path.normpath(path)
+
+
 class GitAdapter(GitPort):
     def git(self, root, *args):
         return git(root, *args)
@@ -164,3 +174,6 @@ class GitAdapter(GitPort):
 
     def commit_all(self, root, message):
         return commit_all(root, message)
+
+    def common_dir(self, root):
+        return common_dir(root)

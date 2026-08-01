@@ -1607,11 +1607,12 @@ class TestWorktree(unittest.TestCase):
         self.assertEqual(len(branches), 1)
         self.assertEqual(branches[0].value, "feat/%s-w" % sid)
 
-    def test_worktrees_dir_gitignored(self):
+    def test_worktrees_dir_excluded_via_git_info_exclude(self):
         self._file()
         call(_cli_mod.cmd_claim, "coder")
-        gi = (Path(self.root) / ".gitignore").read_text().splitlines()
-        self.assertIn(".worktrees/", [l.strip() for l in gi])
+        exclude = (Path(self.root) / ".git" / "info" / "exclude").read_text().splitlines()
+        self.assertIn(".worktrees/", [l.strip() for l in exclude])
+        self.assertFalse((Path(self.root) / ".gitignore").exists())
 
     def test_reclaim_reuses_existing_branch(self):
         sid = self._file()
@@ -1758,8 +1759,9 @@ class TestNamedRepo(unittest.TestCase):
         self.assertTrue(os.path.isdir(view["workspace"]))
         self.assertTrue(self._has_branch(self.app, branch))
         self.assertFalse(self._has_branch(self.engine, branch))
-        gi = (Path(self.app) / ".gitignore").read_text().splitlines()
-        self.assertIn(".worktrees/", [l.strip() for l in gi])
+        exclude = (Path(self.app) / ".git" / "info" / "exclude").read_text().splitlines()
+        self.assertIn(".worktrees/", [l.strip() for l in exclude])
+        self.assertFalse((Path(self.app) / ".gitignore").exists())
 
     def test_activating_an_item_with_an_unresolvable_named_repo_fails_loudly(self):
         theme = self.store.create_theme("theme", workflow="lightcycle/spec-driven")

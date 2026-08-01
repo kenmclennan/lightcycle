@@ -95,16 +95,18 @@ def ensure_logs_dir(root):
     return d
 
 
-def ensure_worktrees_ignored(root):
-    gi = os.path.join(root, ".gitignore")
+def ensure_worktrees_ignored(git_dir):
+    info_dir = os.path.join(git_dir, "info")
+    os.makedirs(info_dir, exist_ok=True)
+    exclude = os.path.join(info_dir, "exclude")
     line = ".worktrees/"
     existing = ""
-    if os.path.exists(gi):
-        with open(gi) as f:
+    if os.path.exists(exclude):
+        with open(exclude) as f:
             existing = f.read()
     if line in (l.strip() for l in existing.splitlines()):
         return
-    with open(gi, "a") as f:
+    with open(exclude, "a") as f:
         if existing and not existing.endswith("\n"):
             f.write("\n")
         f.write(line + "\n")
@@ -147,5 +149,5 @@ class FsAdapter(FsPort):
     def ensure_logs_dir(self):
         return ensure_logs_dir(self._config.data_root())
 
-    def ensure_worktrees_ignored(self, root):
-        return ensure_worktrees_ignored(root)
+    def ensure_worktrees_ignored(self, git_dir):
+        return ensure_worktrees_ignored(git_dir)

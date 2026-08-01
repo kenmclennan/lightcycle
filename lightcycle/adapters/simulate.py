@@ -1,3 +1,5 @@
+import os
+
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import Comment, GitHubEventsPort
 from lightcycle.ports.workers import WorkersPort
@@ -117,6 +119,10 @@ class RecordingGit(GitPort):
 
     def commit_all(self, root, message):
         self._record("commit_all", root, message)
+
+    def common_dir(self, root):
+        self._record("common_dir", root)
+        return os.path.join(root, ".git")
 
 
 class ScriptedGitHub(GitHubEventsPort):
