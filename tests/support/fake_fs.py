@@ -114,5 +114,5 @@ class FakeFs:
     def ensure_logs_dir(self):
         return "/tmp/fake-logs"
 
-    def ensure_worktrees_ignored(self, root):
+    def ensure_worktrees_ignored(self, git_dir):
         pass

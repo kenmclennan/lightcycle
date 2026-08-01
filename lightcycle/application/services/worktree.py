@@ -122,7 +122,7 @@ class WorktreeService:
         else:
             add_args = ["worktree", "add", path, branch]
         os.makedirs(self._fs.worktrees_dir(target), exist_ok=True)
-        self._fs.ensure_worktrees_ignored(target)
+        self._fs.ensure_worktrees_ignored(self._git.common_dir(target))
         retries = self._config.worktree_retries()
         backoff = self._config.worktree_retry_sleep()
         self._git.git(target, "worktree", "prune")

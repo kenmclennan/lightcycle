@@ -47,5 +47,5 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
-    def ensure_worktrees_ignored(self, root):
+    def ensure_worktrees_ignored(self, git_dir):
         pass

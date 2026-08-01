@@ -137,6 +137,10 @@ class _FakeGit:
         self.calls.append(("git", root) + args)
         return _GitResult()
 
+    def common_dir(self, root):
+        self.calls.append(("common_dir", root))
+        return os.path.join(root, ".git")
+
     def remove_worktree(self, root, path):
         self.calls.append(("remove_worktree", root, path))
 

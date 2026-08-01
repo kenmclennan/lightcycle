@@ -69,3 +69,7 @@ class GitPort(ABC):
     @abstractmethod
     def commit_all(self, root, message):
         pass
+
+    @abstractmethod
+    def common_dir(self, root):
+        pass
