@@ -44,7 +44,7 @@ confirm it matches the design.
 
 ## Style
 
-Hyphens not emdashes. Format every file with `npx prettier --write` **except** `workflows/*.md` \
+Format every file with `npx prettier --write` **except** `workflows/*.md` \
 - its `entry`/`requires`/`workspace`/`phase`/`nodes`/`edges`/`hooks`/`signals` blocks are a \
 structured graph grammar, not prose, and prettier's markdown formatter reflows them.
 """
