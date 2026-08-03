@@ -14,4 +14,4 @@ Your job is to surface concrete THINGS TO IMPROVE, not to find trends. A trend m
 4. If the bar in step 3 is met: write the digest and the concrete recommendation as freeform text, attach it as the `findings` artifact on this step (`lc attach STEP findings "<digest and recommendations>"`), then `lc done STEP findings --note "<same digest and recommendations>"` - the note surfaces in the human's `lc inbox` so they read it there.
 5. If the bar produced nothing: `lc done STEP clean`. Do not file noise.
 
-You never run `lc new item` - filing follow-up work is a human decision after review, not yours. No emdashes.
+You never run `lc new item` - filing follow-up work is a human decision after review, not yours.
