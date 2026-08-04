@@ -16,8 +16,11 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_retro_allowed_for_the_audit_worker(self):
         self.assertTrue(_worker_permitted("retro", ["--pending"]))
 
+    def test_backlog_allowed_for_the_audit_worker(self):
+        self.assertTrue(_worker_permitted("backlog", []))
+
     def test_destructive_verbs_forbidden(self):
-        for v in ("rm", "init", "new", "start", "sweep", "dep", "backlog", "config",
+        for v in ("rm", "init", "new", "start", "sweep", "dep", "config",
                   "workflow"):
             self.assertFalse(_worker_permitted(v, ["x"]), v)
 

@@ -255,7 +255,7 @@ def cmd_upgrade(argv):
     return 0
 
 
-_WORKER_VERBS = ("claim", "done", "show", "attach", "retro")
+_WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog")
 _SET_FORBIDDEN_FLAGS = (
     "--parent", "--title", "--desc", "--description", "--goal", "--project",
     "--workflow", "--backlog", "--label", "--step",
@@ -310,7 +310,7 @@ def main(argv=None):
     ):
         sys.stderr.write(
             "lc: workers may not run '%s' - permitted: claim, done, show, attach, "
-            "set --state blocked\n" % cmd
+            "backlog, set --state blocked\n" % cmd
         )
         return 1
     fn = globals().get("cmd_" + cmd.replace("-", "_"))
