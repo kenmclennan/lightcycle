@@ -651,7 +651,7 @@ class SqliteStore(StorePort):
         return effective_id
 
     def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
-        tid = self._mint_or_adopt(id, theme)
+        tid = self._mint_or_adopt(id, theme, shortcode=self._shortcode_for(project))
         self._conn.execute(
             "INSERT INTO nodes (id, type, title, state, parent, project, goal, workflow, "
             "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?, ?)",

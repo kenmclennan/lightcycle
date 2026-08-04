@@ -43,3 +43,38 @@ class TestProjectShortcode(unittest.TestCase):
         theme = store.create_theme("x", project="horde")
         item = store.create_item("s", theme=theme)
         self.assertTrue(item.startswith(theme + "."), item)
+
+    def test_top_level_item_uses_the_projects_shortcode(self):
+        config, projects = _config()
+        store = SqliteStore(config)
+        store.add_project("acme/horde", shortcode="HORDE")
+        iid = store.create_item("x", project="horde")
+        self.assertTrue(iid.startswith("HORDE-"), iid)
+
+    def test_top_level_item_without_project_config_uses_global_shortcode(self):
+        config, projects = _config()
+        iid = SqliteStore(config).create_item("y", project="plain")
+        self.assertTrue(iid.startswith("xy-"), iid)
+
+    def test_top_level_item_with_no_project_uses_global_shortcode(self):
+        config, _ = _config()
+        iid = SqliteStore(config).create_item("z")
+        self.assertTrue(iid.startswith("xy-"), iid)
+
+    def test_themed_item_ignores_the_projects_shortcode(self):
+        config, projects = _config()
+        store = SqliteStore(config)
+        store.add_project("acme/horde", shortcode="HORDE")
+        theme = store.create_theme("x")
+        item = store.create_item("s", theme=theme, project="horde")
+        self.assertTrue(item.startswith(theme + "."), item)
+
+    def test_projects_with_different_shortcodes_get_independent_counters(self):
+        config, projects = _config()
+        store = SqliteStore(config)
+        store.add_project("acme/horde", shortcode="HORDE")
+        store.add_project("acme/saga", shortcode="SAGA")
+        horde_first = store.create_item("h1", project="horde")
+        saga_first = store.create_item("s1", project="saga")
+        self.assertEqual(horde_first, "HORDE-1")
+        self.assertEqual(saga_first, "SAGA-1")
