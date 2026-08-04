@@ -63,10 +63,17 @@ The periodic retro **audit** is no longer a workflow step - it is an **engine se
 - **data home** (`~/.lightcycle`, named by `LC_HOME`) - the store (`store.db`), config, logs, worktrees, and the pulled workflow bundles under `workflows/<origin>/<sha>/`. Never touched by `lc upgrade`.
 - **workflow source** - a git repo (an **origin**) holding a `source.toml` manifest plus `workflows/*.md` and `steps/*.md`. The engine pulls it into an immutable, sha-pinned **bundle**; each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves the flow and steps from that pin. Managed with `lc workflow add|upgrade|list|rm`. There is no `.lightcycle/` step/workflow override and no resolution chain - a pinned bundle is self-contained.
 
+## Project registry
+
+- **project** - a registered codebase lightcycle files work against: an **identity**, a **shortcode**, a local path, and a remote URL. Stored in the project registry, managed with `lc project add|list|rm`.
+- **identity** - the canonical `owner/name` string parsed from a repo's GitHub remote (SSH or HTTPS); the registry's lookup key. A path with no parseable GitHub remote has no identity and cannot be registered.
+- **shortcode** - the id prefix items registered under a project nest beneath (see "Identity" below). Explicit at registration (`--shortcode`) or defaulted from identity's name segment, uppercased. Per-project, not engine-wide.
+- **scan** - `lc project scan [dir]`, read-only: walks a directory tree for git repos, classifying each as `new` (identity resolved, not yet registered), `already-registered`, or `no-remote` (no parseable GitHub remote). Registers nothing itself - a human or `lc project add` acts on its output.
+
 ## Identity
 
-- **shortcode** - the id prefix (`LC`).
-- **id nesting** - ids nest by parent: `LC-3` (theme), `LC-3.1` (item), `LC-3.1.1` (step). A standalone item takes a top-level id.
+- **shortcode** - a project's id prefix (see "Project registry" above); every registered project has its own, not one engine-wide constant.
+- **id nesting** - ids nest by parent: `LC-3` (theme), `LC-3.1` (item), `LC-3.1.1` (step) - `LC` here is one project's shortcode. A standalone item takes a top-level id.
 
 ## Naming discipline
 
