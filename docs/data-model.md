@@ -30,9 +30,12 @@ LC-3             theme
     LC-3.1.1     step (write-code)
 ```
 
-The prefix is the project **shortcode** (`shortcode: LC` in the config). Because a theme is optional,
-a top-level `LC-N` may be a theme or a standalone item - the type comes from the node, not the id
-shape. (Aligning spec/branch/PR identity to the item id is tracked as a backlog item.)
+The prefix is the owning project's **shortcode** (see "Project registry" in
+[ontology.md](ontology.md)) - explicit at registration or defaulted from the project's identity,
+uppercased. Every registered project has its own; it is not a single engine-wide config value.
+Because a theme is optional, a top-level `<shortcode>-N` may be a theme or a standalone item - the
+type comes from the node, not the id shape. (Aligning spec/branch/PR identity to the item id is
+tracked as a backlog item.)
 
 ## The one lifecycle field: `state`
 
