@@ -58,6 +58,20 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(resp.steps[0].id, k)
         self.assertEqual(resp.steps[0].log, "/l/k.log")
 
+    def test_step_role_survives_to_the_trace(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        s.create_step("build: x", step="build", role="coder", parent=sid)
+        resp = TraceUseCase(s, _Workers([])).execute(TraceInput(item=sid))
+        self.assertEqual(resp.steps[0].role, "coder")
+
+    def test_human_role_survives_to_the_trace_unchanged(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        s.create_step("ready-merge: x", step="ready-merge", role="human", parent=sid)
+        resp = TraceUseCase(s, _Workers([])).execute(TraceInput(item=sid))
+        self.assertEqual(resp.steps[0].role, "human")
+
 
 def _seed_mixed_store():
     s = FakeStore()
