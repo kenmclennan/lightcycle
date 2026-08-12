@@ -20,7 +20,7 @@ Dependencies point inward; the domain depends on nothing.
 - `lightcycle/domain/` - the typed, IO-free model: entities (`Node`) and value objects (`Status`), plus the pure logic (flow assembly, artifact contracts, node projections/buckets, retro signals, worklog, workspace). **Stdlib only, no IO**: no subprocess, filesystem, network, env, and no ambient `time`/`uuid`/`random` (pass those in as explicit inputs). Unit-tests in milliseconds.
 - `lightcycle/ports/` - the abstract interfaces (`StorePort`, `GitPort`, `FsPort`, `WorkersPort`, `SpawnerPort`) the application depends on; adapters implement them.
 - `lightcycle/application/` - use cases (one action each, grouped by activity: `inspect`, `intake`, `flow`, `pool`, `feedback`, `setup`) + cross-cutting services (`FlowService`, `WorktreeService`). Depend on ports, not concrete adapters. This is the home for business logic.
-- `lightcycle/adapters/` - all IO: the sqlite store (`SqliteStore`), git, the worker spawner, the workers registry, the filesystem. The only callers of `sqlite3` / `git` / `subprocess`.
+- `lightcycle/adapters/` - every adapter, driven and driving. Driven adapters are all IO: the sqlite store (`SqliteStore`), git, the worker spawner, the workers registry, the filesystem - the only callers of `sqlite3` / `git` / `subprocess`. Driving adapters call *into* the application layer from outside (the TUI under `adapters/tui/`); like `cli.py`, they invoke use cases and never touch IO primitives directly.
 - `lightcycle/config.py` - the single boundary to the environment and the config file (the only reader of `os.environ`); required values fail fast. `lightcycle/container.py` - the composition root that builds Config + the adapters and injects them.
 - `lightcycle/cli.py` - thin: parse args, pick a use case, render the result. **No business logic.**
 
@@ -81,7 +81,7 @@ Two craft checks that belong here, not in the step prompts: **no broken windows*
 - No comments and no docstrings: zero `#` comments and zero docstrings anywhere. The "why" goes in commit messages and test names.
 - No emdashes anywhere - use hyphens.
 - Python modules are `snake_case.py`; step files are `kebab-case.md`.
-- **The engine ships zero runtime dependencies.** Code under `lightcycle/` imports the stdlib only - no third-party `import` ever reaches the shipped engine (it keeps the fork portable, the trust surface small, and "clone and run" true). **Dev/test tooling is separate and pragmatic**: it lives in `pyproject.toml`'s dev group, managed by `uv`, and never imported by `lightcycle/` (currently `pytest` + `pytest-bdd`). The hard line is _runtime_, not _tooling_.
+- **The unattended path ships zero third-party dependencies.** Code that runs unattended - the pool loop and everything a worker touches via `lc claim`/`lc done` - imports the stdlib only (it keeps the fork portable, the trust surface small, and "clone and run" true for the code that executes without a human watching). A **driving adapter a human launches interactively** (the TUI under `lightcycle/adapters/tui/`) sits outside that line: it may carry its own runtime dependencies (`textual`), declared normally in `pyproject.toml`, never extras-gated - and the unattended path never imports it. **Dev/test tooling is separate and pragmatic**: it lives in `pyproject.toml`'s dev group, managed by `uv`, and never imported by `lightcycle/` (currently `pytest` + `pytest-bdd` + `ruff`). The hard line is _what runs unattended_, not the package boundary.
 
 ## The agnostic rule (do not break it)
 
