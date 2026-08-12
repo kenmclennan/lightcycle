@@ -23,3 +23,16 @@ class ReleaseRunLockUseCase:
 
     def execute(self):
         self._lock.release()
+
+
+@dataclass(frozen=True)
+class PoolRunningResponse:
+    running: bool
+
+
+class PoolRunningUseCase:
+    def __init__(self, lock):
+        self._lock = lock
+
+    def execute(self) -> PoolRunningResponse:
+        return PoolRunningResponse(running=self._lock.is_running())

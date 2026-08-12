@@ -4,7 +4,6 @@ Feature: Read-only pool-running-state use case
   or removes the run lock file, so it can never block a real `lc start` from
   later acquiring that same lock.
 
-  @wip
   Scenario Outline: Reading the pool-running state reports status without touching the lock file
     Given <lock_state>
     When the pool-running state is read
@@ -17,7 +16,6 @@ Feature: Read-only pool-running-state use case
       | no run lock file exists                                           | not running |
       | the run lock file records the pid of a process that is not alive  | not running |
 
-  @wip
   Scenario: Reading the pool-running state repeatedly never blocks a later real lock acquisition
     Given no run lock file exists
     When the pool-running state is read 3 times
