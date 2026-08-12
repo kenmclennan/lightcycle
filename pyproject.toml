@@ -3,8 +3,9 @@ name = "lightcycle"
 dynamic = ["version"]
 description = "A workflow-agnostic agent-pipeline engine: lc fronts a pipeline of ephemeral claude workers."
 requires-python = ">=3.11"
-# Runtime: ZERO third-party dependencies. The shipped engine imports stdlib only.
-dependencies = []
+# Runtime: the unattended path (pool loop, worker-touched code) imports stdlib only.
+# textual serves only the interactive TUI driving adapter (adapters/tui/) - see CLAUDE.md.
+dependencies = ["textual"]
 
 [project.scripts]
 lc = "lightcycle.cli:main"
