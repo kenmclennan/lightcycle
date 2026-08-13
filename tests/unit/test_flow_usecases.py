@@ -734,12 +734,7 @@ class TestClaimTask(unittest.TestCase):
         self.assertEqual(resp.view.step.id, fresh)
 
     def test_resume_after_a_real_claim_ready_agrees_on_owner(self):
-        prior = os.environ.get("LC_SPAWNID")
-        os.environ["LC_SPAWNID"] = "sp1"
-        self.addCleanup(
-            lambda: os.environ.__setitem__("LC_SPAWNID", prior) if prior is not None
-            else os.environ.pop("LC_SPAWNID", None))
-        s = FakeStore()
+        s = FakeStore(config=FakeConfig(spawn="sp1"))
         step = s.create_step("build: x", step="build", role="coder")
         workers = FakeWorkers()
         uc = ClaimStepUseCase(

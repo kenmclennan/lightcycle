@@ -61,6 +61,8 @@ def inject_container(test, *, store, home, config_path, extra_env=None, github=N
     if extra_env:
         overrides.update(extra_env)
     config = Config(environ=_GuardedEnviron(overrides))
+    if hasattr(store, "bind_config"):
+        store.bind_config(config)
     orig = cli._container
     cli.set_container(Container(store=store, config=config, github=github))
     if hasattr(test, "addCleanup"):
