@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
@@ -10,9 +11,10 @@ _REJECTED = (
 
 
 class FakeWorkers:
-    def __init__(self, workers=None, alive_pids=()):
+    def __init__(self, workers=None, alive_pids=(), log_mtimes=None):
         self._workers = workers or []
         self._alive = set(alive_pids)
+        self._log_mtimes = log_mtimes or {}
         self.killed = []
         self.checked = []
 
@@ -34,6 +36,9 @@ class FakeWorkers:
             if w.get("spawnid") == spawnid:
                 w["checked"] = True
 
+    def log_mtime(self, path):
+        return self._log_mtimes.get(path)
+
 
 class FakeBreakerPort:
     def __init__(self, state=None):
@@ -46,6 +51,22 @@ class FakeBreakerPort:
         self._state = dict(state)
 
 
+class FakeConfig:
+    def __init__(self, max_boot_seconds=120, stall_seconds=1800, probe_cooldown_seconds=1800):
+        self._max_boot_seconds = max_boot_seconds
+        self._stall_seconds = stall_seconds
+        self._probe_cooldown_seconds = probe_cooldown_seconds
+
+    def max_boot_seconds(self):
+        return self._max_boot_seconds
+
+    def stall_seconds(self):
+        return self._stall_seconds
+
+    def probe_cooldown_seconds(self):
+        return self._probe_cooldown_seconds
+
+
 class TestBreakerGateUseCase(unittest.TestCase):
     def test_no_signal_stays_closed(self):
         workers = FakeWorkers(
@@ -53,7 +74,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": b'{"type":"result"}'})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=100)
         self.assertFalse(result.breaker.is_open)
         self.assertFalse(result.opened)
         self.assertEqual(workers.killed, [])
@@ -69,7 +90,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/dead.log": (_REJECTED % 500).encode()})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=100)
         self.assertTrue(result.opened)
         self.assertTrue(result.breaker.is_open)
         self.assertEqual(result.breaker.reset_at, 500)
@@ -82,7 +103,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
-        result = BreakerGateUseCase(workers, fs, breaker_port).execute(now=500)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=500)
         self.assertTrue(result.closed)
         self.assertFalse(result.breaker.is_open)
         self.assertEqual(breaker_port.load(), {"open": False, "reset_at": None})
@@ -93,7 +114,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/probe.log": (_REJECTED % 900).encode()})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
-        result = BreakerGateUseCase(workers, fs, breaker_port).execute(now=500)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=500)
         self.assertTrue(result.opened)
         self.assertTrue(result.breaker.is_open)
         self.assertEqual(result.breaker.reset_at, 900)
@@ -112,7 +133,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/old.log": (_REJECTED % 500).encode()})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=100)
         self.assertFalse(result.breaker.is_open)
         self.assertEqual(workers.checked, [])
 
@@ -122,9 +143,133 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=100)
         self.assertFalse(result.breaker.is_open)
         self.assertEqual(workers.checked, ["sp-1"])
+
+    def test_a_stalled_probe_rearms_the_reset_time_by_the_probe_cooldown(self):
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                }
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
+        )
+        fs = FakeFs(files={})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=1000)
+        self.assertTrue(result.rearmed)
+        self.assertFalse(result.closed)
+        self.assertFalse(result.opened)
+        self.assertTrue(result.breaker.is_open)
+        self.assertEqual(result.breaker.reset_at, 1000 + 1800)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(workers.checked, [])
+
+    def test_a_probe_log_within_the_stall_threshold_is_left_alone(self):
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                }
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 1000 - 1800 + 1},
+        )
+        fs = FakeFs(files={})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=1000)
+        self.assertFalse(result.rearmed)
+        self.assertEqual(result.breaker.reset_at, 500)
+
+    def test_a_stalled_worker_with_a_terminal_marker_is_not_treated_as_a_stalled_probe(self):
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                }
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
+        )
+        log_line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [{"type": "tool_use", "input": {"command": "lc done t done"}}]
+                },
+            }
+        )
+        fs = FakeFs(files={"/l/probe.log": log_line.encode()})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=1000)
+        self.assertFalse(result.rearmed)
+
+    def test_rearming_only_happens_while_actually_probing(self):
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                }
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 0},
+        )
+        fs = FakeFs(files={})
+        for state in ({"open": False, "reset_at": None}, {"open": True, "reset_at": 2000}):
+            breaker_port = FakeBreakerPort(state)
+            result = BreakerGateUseCase(
+                workers, fs, breaker_port, FakeConfig()
+            ).execute(now=1000)
+            self.assertFalse(result.rearmed)
+
+    def test_a_concurrent_rejection_takes_precedence_over_a_stalled_probe(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "dead-sp", "pid": 1, "log": "/l/dead.log", "started": 0},
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                },
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
+        )
+        fs = FakeFs(files={"/l/dead.log": (_REJECTED % 5000).encode()})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=1000)
+        self.assertTrue(result.opened)
+        self.assertEqual(result.breaker.reset_at, 5000)
+        self.assertFalse(result.rearmed)
 
 
 if __name__ == "__main__":

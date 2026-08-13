@@ -27,5 +27,8 @@ class Breaker:
     def trip(self, reset_at) -> "Breaker":
         return Breaker(is_open=True, reset_at=reset_at)
 
+    def rearm(self, reset_at) -> "Breaker":
+        return Breaker(is_open=True, reset_at=reset_at)
+
     def close(self) -> "Breaker":
         return Breaker(is_open=False, reset_at=None)

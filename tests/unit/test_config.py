@@ -105,6 +105,7 @@ class TestTunables(unittest.TestCase):
             worktree_retry_sleep="0.25",
             max_boot_seconds="120",
             stall_seconds="1800",
+            probe_cooldown_seconds="1800",
             poll_seconds="5",
             worker_history="20",
             editor="vi",
@@ -116,6 +117,7 @@ class TestTunables(unittest.TestCase):
         self.assertEqual(c.worktree_retry_sleep(), 0.25)
         self.assertEqual(c.max_boot_seconds(), 120)
         self.assertEqual(c.stall_seconds(), 1800)
+        self.assertEqual(c.probe_cooldown_seconds(), 1800)
         self.assertEqual(c.poll_seconds(), 5)
         self.assertEqual(c.worker_history(), 20)
         self.assertEqual(c.editor(), "vi")
@@ -129,25 +131,34 @@ class TestTunables(unittest.TestCase):
             _cfg().editor()
         with self.assertRaises(ConfigError):
             _cfg().stall_seconds()
+        with self.assertRaises(ConfigError):
+            _cfg().probe_cooldown_seconds()
 
     def test_env_overrides(self):
         c = self._full_cfg({"LC_WORKTREE_RETRIES": "3", "LC_POLL_SECONDS": "1",
-                            "EDITOR": "nano", "LC_STALL_SECONDS": "900"})
+                            "EDITOR": "nano", "LC_STALL_SECONDS": "900",
+                            "LC_PROBE_COOLDOWN_SECONDS": "900"})
         self.assertEqual(c.worktree_retries(), 3)
         self.assertEqual(c.poll_seconds(), 1)
         self.assertEqual(c.editor(), "nano")
         self.assertEqual(c.stall_seconds(), 900)
+        self.assertEqual(c.probe_cooldown_seconds(), 900)
 
     def test_env_override_without_config_key(self):
         self.assertEqual(_cfg({"LC_WORKER_HISTORY": "10"}).worker_history(), 10)
         self.assertEqual(_cfg({"EDITOR": "emacs"}).editor(), "emacs")
         self.assertEqual(_cfg({"LC_STALL_SECONDS": "900"}).stall_seconds(), 900)
+        self.assertEqual(
+            _cfg({"LC_PROBE_COOLDOWN_SECONDS": "900"}).probe_cooldown_seconds(), 900
+        )
 
     def test_malformed_tunable_fails_fast(self):
         with self.assertRaises(ConfigError):
             _cfg({"LC_POLL_SECONDS": "soon"}).poll_seconds()
         with self.assertRaises(ConfigError):
             _cfg({"LC_STALL_SECONDS": "soon"}).stall_seconds()
+        with self.assertRaises(ConfigError):
+            _cfg({"LC_PROBE_COOLDOWN_SECONDS": "soon"}).probe_cooldown_seconds()
 
 
 class TestEnsureConfig(unittest.TestCase):
@@ -201,7 +212,7 @@ class TestEnsureConfig(unittest.TestCase):
             "default-origin: lightcycle\n"
             "workflows-remote: git@github.com:kenmclennan/lightcycle-workflows.git\nmax-agents: 5\n"
             "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
-            "max-session-seconds: 1800\nstall-seconds: 1800\n"
+            "max-session-seconds: 1800\nstall-seconds: 1800\nprobe-cooldown-seconds: 1800\n"
             "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
             "retro-interval-reflections: 20\n"
             "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
