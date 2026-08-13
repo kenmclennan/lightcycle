@@ -176,6 +176,7 @@ COMMAND_GROUPS = [
         ("show", "<id>", "one step or item as JSON (artifacts, resume-state)"),
         ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
+        ("tui", "", "launch the interactive dashboard (priority list + pool/breaker status)"),
     ]),
     ("Node primitives", [
         ("new", "<type> \"title\" [--parent/--workflow/--goal/--project]",
@@ -896,6 +897,13 @@ def cmd_queue(argv):
     steps = QueueUseCase(_container.store).execute(QueueInput(n=a.n)).steps
     for line in render_queue(steps, _container.config.max_title_length()):
         print(line)
+    return 0
+
+
+def cmd_tui(argv):
+    argparse.ArgumentParser(prog="lc tui").parse_args(argv)
+    from lightcycle.adapters.tui.app import run
+    run(_container)
     return 0
 
 
