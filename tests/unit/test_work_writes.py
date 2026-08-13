@@ -243,6 +243,38 @@ class TestLinkArtifact(unittest.TestCase):
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].value, "specs/new.md")
 
+    def test_declared_kind_is_persisted(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/1", kind="something-explicit")
+        )
+        self.assertEqual(s.item_artifacts(sid)[0].kind, "something-explicit")
+
+    def test_undeclared_kind_resolves_from_type_default(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/1")
+        )
+        self.assertEqual(s.item_artifacts(sid)[0].kind, "url")
+
+    def test_internal_defaults_false(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/1")
+        )
+        self.assertFalse(s.item_artifacts(sid)[0].internal)
+
+    def test_internal_true_is_persisted(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/1", internal=True)
+        )
+        self.assertTrue(s.item_artifacts(sid)[0].internal)
+
 
 class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):

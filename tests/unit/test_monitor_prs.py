@@ -712,6 +712,11 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertNotEqual(store.get_node(step).state, "done")
         watched = [a for a in store.item_artifacts(spawned[0].id) if a.type == "watched-step"]
         self.assertEqual([a.value for a in watched], [step])
+        self.assertTrue(watched[0].internal)
+        spawn_mark = [
+            a for a in store.item_artifacts(step) if a.type == "feedback-spawned-through"
+        ]
+        self.assertTrue(spawn_mark[0].internal)
 
     def test_inline_comment_without_mention_token_still_spawns(self):
         url = "https://github.com/x/y/pull/30-inline"

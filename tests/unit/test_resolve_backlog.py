@@ -24,6 +24,13 @@ class TestLinkResolves(unittest.TestCase):
         self.assertIn("does-not-exist", str(ctx.exception))
         self.assertEqual(s.item_artifacts(theme), [])
 
+    def test_resolves_artifact_is_internal(self):
+        s = FakeStore()
+        theme = s.create_theme("theme")
+        b1 = s.create_step("backlog one", role="human")
+        link_resolves(s, theme, [b1])
+        self.assertTrue(s.item_artifacts(theme)[0].internal)
+
 
 class TestRetireResolved(unittest.TestCase):
     def test_closes_every_linked_backlog_item_not_already_done(self):
@@ -41,6 +48,14 @@ class TestRetireResolved(unittest.TestCase):
         self.assertEqual(
             [(a.type, a.value) for a in s.item_artifacts(b2)], [("resolved-by", theme)]
         )
+
+    def test_resolved_by_artifact_is_internal(self):
+        s = FakeStore()
+        theme = s.create_theme("theme")
+        b1 = s.create_step("backlog one", role="human")
+        link_resolves(s, theme, [b1])
+        retire_resolved(s, theme)
+        self.assertTrue(s.item_artifacts(b1)[0].internal)
 
     def test_already_done_backlog_item_is_left_alone(self):
         s = FakeStore()

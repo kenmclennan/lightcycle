@@ -166,9 +166,9 @@ class MonitorPrsUseCase:
                             "%s: %s" % (feedback_step, title), step=feedback_step,
                             role=role, parent=step.parent,
                         )
-                        self._store.add_artifact(tid, "watched-step", step.id)
+                        self._store.add_artifact(tid, "watched-step", step.id, internal=True)
                         self._store.replace_artifact(
-                            step.id, _SPAWN_MARK_ARTIFACT, str(newest)
+                            step.id, _SPAWN_MARK_ARTIFACT, str(newest), internal=True
                         )
                         reworked.append(step.parent)
             if not advanced and conflict_outcome and self._github.is_conflicted(pr_value):

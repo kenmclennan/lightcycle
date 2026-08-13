@@ -962,6 +962,16 @@ class TestLink(unittest.TestCase):
         self.assertEqual(arts[0].value, "https://gh/9")
         self.assertEqual(arts[0].label, "PR 9")
 
+    def test_attach_internal_and_kind_flags_round_trip(self):
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
+        rc, out, err = call(
+            _cli_mod.cmd_attach, sid, "pr", "https://gh/9", "--internal", "--kind", "sometext"
+        )
+        self.assertEqual(rc, 0, err)
+        arts = self.store.item_artifacts(sid)
+        self.assertEqual(arts[0].kind, "sometext")
+        self.assertTrue(arts[0].internal)
+
     def test_attach_replace_replaces_same_type(self):
         sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         call(_cli_mod.cmd_attach, sid, "spec", "specs/old.md")

@@ -25,7 +25,10 @@ class TestExportSnapshot(unittest.TestCase):
 
         story_row = rows[item]
         self.assertEqual(story_row["type"], "item")
-        self.assertEqual(story_row["artifacts"], [{"type": "spec", "value": "/specs/GRID-059.md"}])
+        self.assertEqual(
+            story_row["artifacts"],
+            [{"type": "spec", "value": "/specs/GRID-059.md", "kind": "filepath"}],
+        )
 
         task_row = rows[step]
         self.assertEqual(task_row["parent"], item)

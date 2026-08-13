@@ -3,7 +3,7 @@ import os
 import uuid
 
 from lightcycle.ports.store import ProjectEntry, ProjectResolutionError, StorePort
-from lightcycle.domain.work import Artifact, Node, NodeView, State, derive_state
+from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
 
 
 def _new_id():
@@ -124,24 +124,30 @@ class FakeStore(StorePort):
         b = self._get(item_id)
         return [Artifact.from_dict(a) for a in ((b.get("metadata") or {}).get("artifacts") or [])]
 
-    def add_artifact(self, item_id, atype, value, label=None):
+    def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         b = self._get(item_id)
         meta = dict(b.get("metadata") or {})
         artifacts = list(meta.get("artifacts") or [])
-        entry = {"type": atype, "value": value}
+        resolved_kind = kind if kind is not None else default_kind_for(atype)
+        entry = {"type": atype, "value": value, "kind": resolved_kind}
         if label:
             entry["label"] = label
+        if internal:
+            entry["internal"] = internal
         artifacts.append(entry)
         meta["artifacts"] = artifacts
         b["metadata"] = meta
 
-    def replace_artifact(self, item_id, atype, value, label=None):
+    def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         b = self._get(item_id)
         meta = dict(b.get("metadata") or {})
         artifacts = [a for a in (meta.get("artifacts") or []) if a.get("type") != atype]
-        entry = {"type": atype, "value": value}
+        resolved_kind = kind if kind is not None else default_kind_for(atype)
+        entry = {"type": atype, "value": value, "kind": resolved_kind}
         if label:
             entry["label"] = label
+        if internal:
+            entry["internal"] = internal
         artifacts.append(entry)
         meta["artifacts"] = artifacts
         b["metadata"] = meta

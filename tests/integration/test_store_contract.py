@@ -497,5 +497,78 @@ class TestSqliteStoreCloseReasonMigration(unittest.TestCase):
         self.assertIn("outcome", cols)
 
 
+class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def _seed_legacy_store(self, root):
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.executescript(_PRE_OUTCOME_NODES_SCHEMA)
+        conn.execute("INSERT INTO nodes (id, type, state) VALUES ('i-1', 'item', 'ready')")
+        conn.executemany(
+            "INSERT INTO artifacts (item_id, atype, value, label) VALUES (?, ?, ?, ?)",
+            [
+                ("i-1", "pr", "https://example.com/pr/1", None),
+                ("i-1", "spec", "specs/foo.md", None),
+                ("i-1", "repo", "grid", None),
+                ("i-1", "reflection", "{}", None),
+                ("i-1", "resolves", "b-1", None),
+                ("i-1", "resolved-by", "s-1", None),
+                ("i-1", "watched-step", "s-2", None),
+                ("i-1", "feedback-spawned-through", "s-3", None),
+                ("i-1", "feedback-watermark", "s-3", None),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+    def test_backfills_kind_from_the_default_kind_table(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        store = SqliteStore(self._config(root))
+
+        arts = {a.type: a for a in store.item_artifacts("i-1")}
+        self.assertEqual(arts["pr"].kind, "url")
+        self.assertEqual(arts["spec"].kind, "filepath")
+        self.assertEqual(arts["repo"].kind, "text")
+        self.assertEqual(arts["reflection"].kind, "text")
+
+    def test_backfills_internal_true_only_for_bookkeeping_types(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        store = SqliteStore(self._config(root))
+
+        arts = {a.type: a for a in store.item_artifacts("i-1")}
+        for atype in (
+            "reflection", "resolves", "resolved-by", "watched-step",
+            "feedback-spawned-through", "feedback-watermark",
+        ):
+            self.assertTrue(arts[atype].internal, atype)
+        for atype in ("pr", "spec", "repo"):
+            self.assertFalse(arts[atype].internal, atype)
+
+    def test_migration_is_idempotent_on_reopen(self):
+        root = tempfile.mkdtemp()
+        self._seed_legacy_store(root)
+        SqliteStore(self._config(root))
+        store = SqliteStore(self._config(root))
+
+        arts = {a.type: a for a in store.item_artifacts("i-1")}
+        self.assertEqual(arts["pr"].kind, "url")
+        self.assertTrue(arts["reflection"].internal)
+
+    def test_fresh_store_artifact_has_declared_kind_and_internal(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        store.add_artifact("i-1", "pr", "https://example.com/pr/1")
+
+        art = store.item_artifacts("i-1")[0]
+        self.assertEqual(art.kind, "url")
+        self.assertFalse(art.internal)
+
+
 if __name__ == "__main__":
     unittest.main()
