@@ -1,5 +1,9 @@
 from lightcycle.application.pool.backup import BackupResponse, BackupUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateResponse, BreakerGateUseCase
+from lightcycle.application.pool.breaker_status import (
+    BreakerStatusResponse,
+    BreakerStatusUseCase,
+)
 from lightcycle.application.pool.hook_completions import (
     HookCompletionsResponse,
     HookCompletionsUseCase,
@@ -25,6 +29,8 @@ __all__ = [
     "BackupUseCase",
     "BreakerGateResponse",
     "BreakerGateUseCase",
+    "BreakerStatusResponse",
+    "BreakerStatusUseCase",
     "HookCompletionsResponse",
     "HookCompletionsUseCase",
     "LC_MARKER",
