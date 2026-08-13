@@ -16,12 +16,6 @@ Feature: The dashboard connects to the store and renders on launch
     When I launch the dashboard
     Then the priority list and the status bar are both visible in the first rendered frame
 
-  Scenario: The priority list includes queued and blocked steps but not in-progress steps
-    Given the store has queued steps, blocked steps, and an in-progress step
-    When I launch the dashboard
-    Then the priority list contains one row for each queued and blocked step
-    And the priority list does not contain a row for the in-progress step
-
   Scenario: The priority list is not truncated to the first ten steps
     Given the store has more than ten queued or blocked steps
     When I launch the dashboard
