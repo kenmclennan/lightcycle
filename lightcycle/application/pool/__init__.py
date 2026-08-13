@@ -11,6 +11,8 @@ from lightcycle.application.pool.retro_cadence import RetroCadenceResponse, Retr
 from lightcycle.application.pool.run_lock import (
     AcquireRunLockResponse,
     AcquireRunLockUseCase,
+    PoolRunningResponse,
+    PoolRunningUseCase,
     ReleaseRunLockUseCase,
 )
 from lightcycle.application.pool.sweep import SweepUseCase
@@ -28,6 +30,8 @@ __all__ = [
     "LC_MARKER",
     "ListWorkersUseCase",
     "MonitorPrsUseCase",
+    "PoolRunningResponse",
+    "PoolRunningUseCase",
     "ReleaseRunLockUseCase",
     "ResolveLogInput",
     "ResolveLogUseCase",
