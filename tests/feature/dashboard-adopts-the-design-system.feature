@@ -8,13 +8,11 @@ Feature: The dashboard adopts the design system's visual vocabulary
   the dashboard is framed, and what shared token values are available to
   render into.
 
-  @wip
   Scenario: The dashboard renders inside a bordered frame
     Given the lightcycle store is reachable
     When I launch the dashboard
     Then the screen is framed on all four edges by a solid border in the border colour
 
-  @wip
   Scenario: The tab strip shows the current-work tab emphasised and the backlog tab dim
     Given the lightcycle store is reachable
     When I launch the dashboard
@@ -22,20 +20,17 @@ Feature: The dashboard adopts the design system's visual vocabulary
     And the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
 
-  @wip
   Scenario: Pressing Tab does not change which tab is emphasised
     Given the dashboard has launched
     When Tab is pressed
     Then the "Current work" tab is still the emphasised tab
 
-  @wip
   Scenario: A table's selection cursor uses the design system's selected-row styling
     Given the lightcycle store is reachable
     When I launch the dashboard
     Then a selected row's background is the selected-row colour
     And a selected row's foreground is the cyan colour
 
-  @wip
   Scenario: The footer occupies two lines styled by the design system
     Given the lightcycle store is reachable
     When I launch the dashboard
@@ -43,7 +38,6 @@ Feature: The dashboard adopts the design system's visual vocabulary
     And the footer's top border is in the border colour
     And the footer's background is the bg colour, not the panel colour
 
-  @wip
   Scenario Outline: Each state's shared vocabulary pairs a colour with its own glyph
     Given the shared state vocabulary
     When the glyph and colour for the "<state>" state are looked up
@@ -56,20 +50,17 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | active          | ▸     | cyan   |
       | queued          | ○     | dim    |
 
-  @wip
   Scenario: The dependency-blocked needs-attention state adds the amber chain-link without losing the red dot
     Given the shared state vocabulary
     When the glyph and colour for the dependency-blocked needs-attention state are looked up
     Then its first glyph and colour are the same red dot as the plain needs-attention state
     And it additionally carries an amber chain-link glyph
 
-  @wip
   Scenario: The shared vocabulary defines the priority list's column order
     Given the shared column grids
     When the priority list's column order is read
     Then it is cursor, icon, id, project, title, step, time
 
-  @wip
   Scenario: The shared vocabulary defines the backlog's column order
     Given the shared column grids
     When the backlog's column order is read

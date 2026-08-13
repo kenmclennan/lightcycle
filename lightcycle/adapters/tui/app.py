@@ -1,10 +1,32 @@
 from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical
+from textual.theme import Theme
 from textual.widgets import DataTable, Static
 
+from lightcycle.adapters.tui import tokens
 from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
 from lightcycle.application.work import QueueInput, QueueUseCase
 
 POLL_INTERVAL_SECONDS = 10
+
+THEME = Theme(
+    name="lightcycle",
+    primary=tokens.CYAN,
+    warning=tokens.AMBER,
+    error=tokens.RED,
+    foreground=tokens.TEXT,
+    background=tokens.BG,
+    panel=tokens.PANEL,
+    surface=tokens.BG,
+    dark=True,
+    variables={
+        "border": tokens.BORDER,
+        "dim": tokens.DIM,
+        "selected-bg": tokens.SELECTED_BG,
+        "block-cursor-background": tokens.SELECTED_BG,
+        "block-cursor-foreground": tokens.CYAN,
+    },
+)
 
 
 class StatusBar(Static):
@@ -20,16 +42,60 @@ class StatusBar(Static):
         self.update(self.status_text)
 
 
+class TabStrip(Horizontal):
+    pass
+
+
+class FooterGroup(Vertical):
+    pass
+
+
+class ShortcutBar(Static):
+    pass
+
+
 class LightcycleApp(App):
     CSS = """
-    StatusBar {
-        dock: bottom;
+    Screen {
+        border: solid $border;
+    }
+    TabStrip {
+        dock: top;
         height: 1;
+    }
+    TabStrip > Static {
+        width: auto;
+    }
+    .tab-active {
+        color: $primary;
+        text-style: bold;
+    }
+    .tab-inactive {
+        color: $dim;
+    }
+    .tab-sep {
+        color: $dim;
+        padding: 0 1;
+    }
+    FooterGroup {
+        dock: bottom;
+        height: 2;
+        border-top: solid $border;
+        background: $background;
+    }
+    StatusBar {
+        height: 1;
+    }
+    ShortcutBar {
+        height: 1;
+        color: $dim;
     }
     """
 
     def __init__(self, container):
         super().__init__()
+        self.register_theme(THEME)
+        self.theme = "lightcycle"
         self._container = container
 
     @property
@@ -37,8 +103,14 @@ class LightcycleApp(App):
         return self._container
 
     def compose(self) -> ComposeResult:
+        with TabStrip():
+            yield Static("Current work", classes="tab-active")
+            yield Static("·", classes="tab-sep")
+            yield Static("Backlog", classes="tab-inactive")
         yield DataTable(id="priority-list")
-        yield StatusBar(id="status-bar")
+        with FooterGroup():
+            yield StatusBar(id="status-bar")
+            yield ShortcutBar(id="shortcut-bar")
 
     def on_mount(self) -> None:
         self.query_one(DataTable).add_columns("id", "role", "state", "title")
