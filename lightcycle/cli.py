@@ -478,7 +478,7 @@ def cmd_logs(argv):
     ap.add_argument("-f", action="store_true")
     a = ap.parse_args(argv)
     path = (
-        ResolveLogUseCase(_container.workers, _container.config)
+        ResolveLogUseCase(_container.store, _container.workers, _container.config)
         .execute(ResolveLogInput(target=a.target))
         .path
     )
@@ -750,7 +750,9 @@ def cmd_trace(argv):
     ap.add_argument("item")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    resp = TraceUseCase(_container.store, _container.workers).execute(TraceInput(item=a.item))
+    resp = TraceUseCase(_container.store, _container.workers, _container.config).execute(
+        TraceInput(item=a.item)
+    )
     if a.json:
         print(json.dumps(resp.as_dict(), indent=2))
     else:

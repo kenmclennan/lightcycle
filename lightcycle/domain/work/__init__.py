@@ -9,8 +9,9 @@ from lightcycle.domain.work.node_queue import NodeQueue
 from lightcycle.domain.work.node_spec import NodeSpec
 from lightcycle.domain.work.node_view import NodeView
 from lightcycle.domain.work.projected_step import ProjectedStep
+from lightcycle.domain.work.worker_log import worker_log_filename
 
 __all__ = [
     "Artifact", "default_kind_for", "Lane", "State", "lane_for", "roll_up", "derive_state",
-    "Item", "Node", "NodeQueue", "NodeSpec", "NodeView", "ProjectedStep",
+    "Item", "Node", "NodeQueue", "NodeSpec", "NodeView", "ProjectedStep", "worker_log_filename",
 ]

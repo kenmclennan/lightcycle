@@ -10,7 +10,6 @@ Feature: A step's log is found even after its worker registry entry is pruned
     Given a flow where the coder builds the item
     And the item "specs/login.md" is filed at step "build"
 
-  @wip
   Scenario Outline: A step whose worker registry entry is still present resolves its log unchanged
     Given worker "sp1" has claimed and completed the build step with outcome "done"
     When the build step's log is resolved via <surface>
@@ -21,7 +20,6 @@ Feature: A step's log is found even after its worker registry entry is pruned
       | the trace read path |
       | the logs command    |
 
-  @wip
   Scenario Outline: A done step whose worker registry entry has been pruned still resolves its log from disk
     Given worker "sp1" has claimed and completed the build step with outcome "done"
     And the worker registry no longer has an entry for worker "sp1"
@@ -34,7 +32,6 @@ Feature: A step's log is found even after its worker registry entry is pruned
       | the trace read path |
       | the logs command    |
 
-  @wip
   Scenario Outline: A pruned step whose log file is also gone from disk resolves to no log
     Given worker "sp1" has claimed and completed the build step with outcome "done"
     And the worker registry no longer has an entry for worker "sp1"
@@ -47,7 +44,6 @@ Feature: A step's log is found even after its worker registry entry is pruned
       | the trace read path |
       | the logs command    |
 
-  @wip
   Scenario Outline: A step that has never been claimed by a worker resolves to no log
     Given the build step has never been claimed by a worker
     When the build step's log is resolved via <surface>
@@ -58,7 +54,6 @@ Feature: A step's log is found even after its worker registry entry is pruned
       | the trace read path |
       | the logs command    |
 
-  @wip
   Scenario: Resolving a log by role alone never falls back past the live registry
     Given worker "sp1" has claimed and completed the build step with outcome "done"
     And the worker registry no longer has an entry for worker "sp1"
