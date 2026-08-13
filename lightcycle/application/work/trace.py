@@ -1,7 +1,8 @@
+import os
 from dataclasses import dataclass
 from typing import List, Optional
 
-from lightcycle.domain.work import Artifact, Node
+from lightcycle.domain.work import Artifact, Node, worker_log_filename
 
 
 @dataclass(frozen=True)
@@ -39,14 +40,21 @@ class TraceResponse:
 
 
 class TraceUseCase:
-    def __init__(self, store, workers):
+    def __init__(self, store, workers, config):
         self._store = store
         self._workers = workers
+        self._config = config
 
-    def _log_for_step(self, tid):
+    def _log_for_step(self, node):
         for w in reversed(self._workers.workers_state()):
-            if w.get("step") == tid:
+            if w.get("step") == node.id:
                 return w.get("log")
+        if node.role and node.claimed_by:
+            candidate = os.path.join(
+                self._config.data_root(), "logs", worker_log_filename(node.role, node.claimed_by)
+            )
+            if os.path.exists(candidate):
+                return candidate
         return None
 
     def execute(self, input: TraceInput) -> TraceResponse:
@@ -54,7 +62,7 @@ class TraceUseCase:
         artifacts = self._store.item_artifacts(input.item)
         steps = [
             TraceNode(
-                id=kt.id, step=kt.step, state=kt.state, log=self._log_for_step(kt.id),
+                id=kt.id, step=kt.step, state=kt.state, log=self._log_for_step(kt),
                 role=kt.role,
             )
             for kt in self._store.children(input.item)

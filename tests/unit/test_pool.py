@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 import unittest
 
 from lightcycle.application.pool import (
@@ -150,7 +152,7 @@ class TestListWorkers(unittest.TestCase):
 
 class TestResolveLog(unittest.TestCase):
     def test_run_target(self):
-        resp = ResolveLogUseCase(FakeWorkers(), FakeConfig(root="/grid")).execute(
+        resp = ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeConfig(root="/grid")).execute(
             ResolveLogInput(target="run")
         )
         self.assertEqual(resp.path, "/grid/logs/run.log")
@@ -163,20 +165,50 @@ class TestResolveLog(unittest.TestCase):
             ]
         )
         self.assertEqual(
-            ResolveLogUseCase(workers, FakeConfig()).execute(ResolveLogInput(target="b1")).path,
+            ResolveLogUseCase(FakeStore(), workers, FakeConfig())
+            .execute(ResolveLogInput(target="b1")).path,
             "/l/old.log",
         )
         self.assertEqual(
-            ResolveLogUseCase(workers, FakeConfig()).execute(ResolveLogInput(target="coder")).path,
+            ResolveLogUseCase(FakeStore(), workers, FakeConfig())
+            .execute(ResolveLogInput(target="coder")).path,
             "/l/new.log",
         )
 
     def test_unknown_target_is_none(self):
         self.assertIsNone(
-            ResolveLogUseCase(FakeWorkers(), FakeConfig())
+            ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeConfig())
             .execute(ResolveLogInput(target="nope"))
             .path
         )
+
+    def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
+        s = FakeStore()
+        step_id = s.create_step("build: x", step="build", role="coder")
+        s.assign(step_id, "sp1")
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "logs"))
+        log_path = os.path.join(root, "logs", "worker-coder-sp1.log")
+        with open(log_path, "w") as f:
+            f.write("log\n")
+        resp = ResolveLogUseCase(s, FakeWorkers(), FakeConfig(root=root)).execute(
+            ResolveLogInput(target=step_id)
+        )
+        self.assertEqual(resp.path, log_path)
+
+    def test_role_only_target_is_not_covered_by_the_durable_fallback(self):
+        resp = ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeConfig()).execute(
+            ResolveLogInput(target="coder")
+        )
+        self.assertIsNone(resp.path)
+
+    def test_step_never_claimed_by_a_spawned_worker_is_none(self):
+        s = FakeStore()
+        step_id = s.create_step("build: x", step="build", role="coder")
+        resp = ResolveLogUseCase(s, FakeWorkers(), FakeConfig()).execute(
+            ResolveLogInput(target=step_id)
+        )
+        self.assertIsNone(resp.path)
 
 
 class TestSweep(unittest.TestCase):

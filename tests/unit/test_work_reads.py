@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 
 from lightcycle.application.work import (
@@ -35,6 +37,14 @@ class _Workers:
         return self._workers
 
 
+class _Config:
+    def __init__(self, root="/grid"):
+        self._root = root
+
+    def data_root(self):
+        return self._root
+
+
 class TestShowNode(unittest.TestCase):
     def test_returns_task_view(self):
         s = FakeStore()
@@ -52,7 +62,7 @@ class TestTrace(unittest.TestCase):
         s.add_artifact(sid, "spec", "specs/x.md")
         k = s.create_step("build: x", step="build", role="coder", parent=sid)
         workers = _Workers([{"role": "coder", "step": k, "log": "/l/k.log"}])
-        resp = TraceUseCase(s, workers).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, workers, _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.item.id, sid)
         self.assertEqual(resp.artifacts[0].type, "spec")
         self.assertEqual(resp.steps[0].id, k)
@@ -62,15 +72,45 @@ class TestTrace(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", theme=s.create_theme("theme"))
         s.create_step("build: x", step="build", role="coder", parent=sid)
-        resp = TraceUseCase(s, _Workers([])).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "coder")
 
     def test_human_role_survives_to_the_trace_unchanged(self):
         s = FakeStore()
         sid = s.create_item("st", theme=s.create_theme("theme"))
         s.create_step("ready-merge: x", step="ready-merge", role="human", parent=sid)
-        resp = TraceUseCase(s, _Workers([])).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "human")
+
+    def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        k = s.create_step("build: x", step="build", role="coder", parent=sid)
+        s.assign(k, "sp1")
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "logs"))
+        log_path = os.path.join(root, "logs", "worker-coder-sp1.log")
+        with open(log_path, "w") as f:
+            f.write("log\n")
+        resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
+        self.assertEqual(resp.steps[0].log, log_path)
+
+    def test_resolves_no_log_when_pruned_and_nothing_on_disk(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        k = s.create_step("build: x", step="build", role="coder", parent=sid)
+        s.assign(k, "sp1")
+        root = tempfile.mkdtemp()
+        resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
+        self.assertIsNone(resp.steps[0].log)
+
+    def test_resolves_no_log_for_a_step_never_claimed(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        s.create_step("build: x", step="build", role="coder", parent=sid)
+        root = tempfile.mkdtemp()
+        resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
+        self.assertIsNone(resp.steps[0].log)
 
 
 def _seed_mixed_store():

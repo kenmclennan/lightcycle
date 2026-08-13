@@ -6,6 +6,7 @@ import time
 import uuid
 
 from lightcycle.adapters.workers import process_start_time, register_worker
+from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.ports.spawner import SpawnerPort
 
 
@@ -22,7 +23,7 @@ def capture_pid_started(proc, get_start=process_start_time, sleep=time.sleep, at
 def spawn_worker(config, role):
     root = config.data_root()
     spawnid = uuid.uuid4().hex[:8]
-    log = os.path.join(root, "logs", "worker-%s-%s.log" % (role, spawnid))
+    log = os.path.join(root, "logs", worker_log_filename(role, spawnid))
     os.makedirs(os.path.dirname(log), exist_ok=True)
     logf = open(log, "a")
     env = dict(config.base_env(), LC_HOME=root,
