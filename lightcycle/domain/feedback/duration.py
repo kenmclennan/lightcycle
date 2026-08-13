@@ -14,6 +14,12 @@ class Duration:
             return None
         return self._parse(finished) - self._parse(claimed)
 
+    def elapsed_since_claim(self, now):
+        claimed = self._first(State.IN_PROGRESS)
+        if claimed is None or self._last(State.DONE) is not None:
+            return None
+        return self._parse(now) - self._parse(claimed)
+
     def _first(self, status):
         for s, ts in self._transitions:
             if s == status:
