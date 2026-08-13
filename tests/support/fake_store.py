@@ -32,7 +32,7 @@ def labels_for(*, role=None, step=None, project=None, goal=None, attention=False
     return parts
 
 
-def record_to_node(record):
+def record_to_node(record, blocked_by=None):
     labels = record.get("labels") or []
     role = _label_value(labels, "for:")
     meta = record.get("metadata") or {}
@@ -62,6 +62,7 @@ def record_to_node(record):
         needs=meta.get("needs"),
         outcome=record.get("outcome"),
         deps=record.get("dep_count") or 0,
+        blocked_by=list(blocked_by or []),
         notes=record.get("notes"),
         claimed_by=record.get("assignee"),
         workflow=record.get("workflow"),
@@ -108,7 +109,12 @@ class FakeStore(StorePort):
             raise KeyError("step not found: %s" % tid)
 
     def _to_node(self, record):
-        node = record_to_node(record)
+        blocked_by = [
+            bid
+            for bid in self._deps.get(record["id"], ())
+            if bid in self._records and self._records[bid].get("state") != "done"
+        ]
+        node = record_to_node(record, blocked_by)
         if node.state is None:
             child_states = [
                 self._to_node(r).state
