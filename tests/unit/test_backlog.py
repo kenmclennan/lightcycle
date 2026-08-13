@@ -1,6 +1,11 @@
 import unittest
 
-from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
+from lightcycle.application.work.backlog import (
+    BacklogCountsResponse,
+    BacklogInput,
+    BacklogUseCase,
+    ProjectCount,
+)
 from tests.support.fake_store import FakeStore
 
 
@@ -128,6 +133,78 @@ class TestBacklogN(unittest.TestCase):
         resp = BacklogUseCase(s, None).execute(BacklogInput(project="proj-a", n=1))
         self.assertEqual(len(resp.rows), 1)
         self.assertEqual(resp.rows[0].step.id, sorted([a, b])[0])
+
+
+class TestBacklogCounts(unittest.TestCase):
+    def test_mixed_projects_and_unscoped(self):
+        s = FakeStore()
+        s.add_project("org-a/proj-a")
+        s.add_project("org-b/proj-b")
+        s.add_project("org-c/proj-c")
+        a1 = s.create_item("a1")
+        s.add_artifact(a1, "repo", "proj-a")
+        a2 = s.create_item("a2")
+        s.add_artifact(a2, "repo", "proj-a")
+        b1 = s.create_item("b1")
+        s.add_artifact(b1, "repo", "proj-b")
+        s.create_item("no repo")
+        resp = BacklogUseCase(s, None).counts()
+        by_project = {p.project: p.count for p in resp.projects}
+        self.assertEqual(by_project, {"proj-a": 2, "proj-b": 1, "proj-c": 0})
+        self.assertEqual(resp.unscoped, 1)
+
+    def test_project_with_zero_items_still_appears(self):
+        s = FakeStore()
+        s.add_project("org-c/proj-c")
+        resp = BacklogUseCase(s, None).counts()
+        self.assertEqual(resp.projects, [ProjectCount(project="proj-c", count=0)])
+
+    def test_matched_by_bare_last_segment_of_identity(self):
+        s = FakeStore()
+        s.add_project("org-a/proj-a")
+        item = s.create_item("item")
+        s.add_artifact(item, "repo", "proj-a")
+        resp = BacklogUseCase(s, None).counts()
+        self.assertEqual(resp.projects, [ProjectCount(project="proj-a", count=1)])
+
+    def test_project_value_round_trips_into_execute_filter(self):
+        s = FakeStore()
+        s.add_project("org-a/proj-a")
+        s.add_project("org-b/proj-b")
+        a1 = s.create_item("a1")
+        s.add_artifact(a1, "repo", "proj-a")
+        a2 = s.create_item("a2")
+        s.add_artifact(a2, "repo", "proj-a")
+        b1 = s.create_item("b1")
+        s.add_artifact(b1, "repo", "proj-b")
+        uc = BacklogUseCase(s, None)
+        counts = uc.counts()
+        for p in counts.projects:
+            resp = uc.execute(BacklogInput(project=p.project))
+            self.assertEqual(len(resp.rows), p.count)
+
+    def test_total_includes_items_matching_no_registered_project(self):
+        s = FakeStore()
+        s.add_project("org-a/proj-a")
+        s.add_project("org-b/proj-b")
+        a1 = s.create_item("a1")
+        s.add_artifact(a1, "repo", "proj-a")
+        a2 = s.create_item("a2")
+        s.add_artifact(a2, "repo", "proj-a")
+        b1 = s.create_item("b1")
+        s.add_artifact(b1, "repo", "proj-b")
+        s.create_item("no repo")
+        typo = s.create_item("typo")
+        s.add_artifact(typo, "repo", "typo-project")
+        resp = BacklogUseCase(s, None).counts()
+        self.assertEqual(resp.total, 5)
+        bucketed = sum(p.count for p in resp.projects) + resp.unscoped
+        self.assertGreater(resp.total, bucketed)
+
+    def test_empty_store_returns_empty_counts(self):
+        s = FakeStore()
+        resp = BacklogUseCase(s, None).counts()
+        self.assertEqual(resp, BacklogCountsResponse(projects=[], unscoped=0, total=0))
 
 
 if __name__ == "__main__":

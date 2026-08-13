@@ -26,16 +26,26 @@ class BacklogResponse:
     groups: Optional[List[ThemeGroup]] = None
 
 
+@dataclass(frozen=True)
+class ProjectCount:
+    project: str
+    count: int
+
+
+@dataclass(frozen=True)
+class BacklogCountsResponse:
+    projects: List[ProjectCount]
+    unscoped: int
+    total: int
+
+
 class BacklogUseCase:
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
 
     def execute(self, input: BacklogInput) -> BacklogResponse:
-        items = [
-            n for n in self._store.all_nodes()
-            if n.type == "item" and n.state == State.BACKLOGGED
-        ]
+        items = self._backlogged_items()
         if input.project is not None:
             items = [t for t in items if project_of(self._store, t) == input.project]
         items.sort(key=lambda t: t.id)
@@ -48,6 +58,27 @@ class BacklogUseCase:
         if not input.themes:
             return BacklogResponse(rows=rows)
         return BacklogResponse(rows=rows, groups=self._grouped(rows))
+
+    def counts(self) -> BacklogCountsResponse:
+        items = self._backlogged_items()
+        projects = [
+            ProjectCount(
+                project=p.identity.rsplit("/", 1)[-1],
+                count=sum(
+                    1 for t in items
+                    if project_of(self._store, t) == p.identity.rsplit("/", 1)[-1]
+                ),
+            )
+            for p in self._store.list_projects()
+        ]
+        unscoped = sum(1 for t in items if project_of(self._store, t) is None)
+        return BacklogCountsResponse(projects=projects, unscoped=unscoped, total=len(items))
+
+    def _backlogged_items(self):
+        return [
+            n for n in self._store.all_nodes()
+            if n.type == "item" and n.state == State.BACKLOGGED
+        ]
 
     def _grouped(self, rows):
         by_theme, order, no_theme = {}, [], []
