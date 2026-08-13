@@ -108,6 +108,7 @@ def write_config(projects=None, specs=None):
         "worktree-retries: 6",
         "worktree-retry-sleep: 0.25",
         "max-boot-seconds: 120",
+        "stall-seconds: 1800",
         "poll-seconds: 5",
         "worker-history: 20",
         "editor: vi",

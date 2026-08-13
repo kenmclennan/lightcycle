@@ -1,3 +1,4 @@
+import json
 import re
 
 _TERMINAL = re.compile(r"\blc\s+(?:done|block)\b")
@@ -9,6 +10,27 @@ CLOSE = "close"
 
 def is_terminal_command(command):
     return bool(command) and _TERMINAL.search(command) is not None
+
+
+def saw_terminal_command(text):
+    if not text:
+        return False
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(data, dict) or data.get("type") != "assistant":
+            continue
+        for c in data.get("message", {}).get("content", []) or []:
+            if c.get("type") == "tool_use":
+                cmd = str((c.get("input") or {}).get("command", ""))
+                if is_terminal_command(cmd):
+                    return True
+    return False
 
 
 class SessionPolicy:

@@ -1146,6 +1146,12 @@ class FakeWorkers:
     def prune_workers(self):
         return 0
 
+    def mark_checked(self, spawnid):
+        pass
+
+    def log_mtime(self, path):
+        return None
+
 
 class FakeSpawner:
     def __init__(self):
@@ -1161,6 +1167,9 @@ class FakeConfig:
 
     def max_boot_seconds(self):
         return 120
+
+    def stall_seconds(self):
+        return 1800
 
     def engine_root(self):
         return "/grid"

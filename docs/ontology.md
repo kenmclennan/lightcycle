@@ -25,8 +25,9 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **claim** - a worker atomically takes the next ready step for a role (`lc claim <role>`).
 - **done** / **close** - close a node with an outcome (`lc done <id> <outcome>`); a step's outcome advances the flow.
 - **advance** - file the next step for an outcome without closing (plumbing).
-- **sweep** - reclaim orphaned step claims and prune dead worker records.
+- **sweep** - reclaim orphaned or stalled step claims and prune dead worker records.
 - **reclaim** - return a stalled or dead worker's step to `ready`.
+- **stalled** - a claimed worker, past its boot window, whose log has not grown for longer than `stall-seconds` and has not yet issued a terminal command; killed on the next sweep.
 - **retro** - gather a theme's child feedback and signals into a digest.
 - **read** - `show` (one node as JSON), `trace` (an item end-to-end: artifacts + child steps + logs), `status` / `inbox` / `backlog` / `active` / `queue` (lane views), `flow` (the assembled workflow), `worklog`.
 

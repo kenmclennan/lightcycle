@@ -37,13 +37,13 @@ class TickResponse:
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
-        hook_completions=None, worktrees=None, git=None, backup_gate=None,
+        hook_completions=None, worktrees=None, git=None, backup_gate=None, fs=None,
     ):
         self._store = store
         self._workers = workers
         self._spawner = spawner
         self._config = config
-        self._sweep = SweepUseCase(store, workers, worktrees, git)
+        self._sweep = SweepUseCase(store, workers, worktrees, git, fs)
         self._monitor = monitor
         self._cadence_gate = cadence_gate
         self._breaker_gate = breaker_gate
@@ -64,7 +64,9 @@ class TickUseCase:
         breaker_result = self._breaker_gate.execute(input.now) if self._breaker_gate else None
         breaker = breaker_result.breaker if breaker_result else Breaker()
         backup_result = self._backup_gate.execute(input.now) if self._backup_gate else None
-        swept = self._sweep.execute(input.now, self._config.max_boot_seconds())
+        swept = self._sweep.execute(
+            input.now, self._config.max_boot_seconds(), self._config.stall_seconds()
+        )
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
         max_agents = self._config.max_agents()

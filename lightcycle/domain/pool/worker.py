@@ -31,3 +31,11 @@ class Worker:
 
     def is_booting(self, now, max_boot):
         return self.step is None and (now - self.started) < max_boot
+
+    def is_stalled(self, now, max_boot, stall_seconds, mtime_probe):
+        if self.step is None or self.is_booting(now, max_boot):
+            return False
+        mtime = mtime_probe(self.log)
+        if mtime is None:
+            return False
+        return (now - mtime) > stall_seconds
