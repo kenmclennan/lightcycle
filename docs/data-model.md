@@ -37,6 +37,12 @@ Because a theme is optional, a top-level `<shortcode>-N` may be a theme or a sta
 type comes from the node, not the id shape. (Aligning spec/branch/PR identity to the item id is
 tracked as a backlog item.)
 
+A **planned step**'s id (see "The model (nouns)" in [ontology.md](ontology.md)) follows the same
+`parent.N` nesting as a real step's id, but is advisory, not guaranteed: it is computed positionally
+from the item's currently-filed step count, and the store's id counter does not roll back when a
+step is deleted. It matches the id the engine later mints for that position only when no step under
+the item has ever been deleted.
+
 ## The one lifecycle field: `state`
 
 Every node has a single `state` (see [state-lifecycle.md](state-lifecycle.md)):
