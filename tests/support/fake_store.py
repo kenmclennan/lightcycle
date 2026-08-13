@@ -76,12 +76,16 @@ def record_to_node(record, blocked_by=None):
 
 
 class FakeStore(StorePort):
-    def __init__(self, now=None):
+    def __init__(self, now=None, config=None):
         self._records = {}
         self._deps = {}
         self._history = {}
         self._projects = {}
         self._now = now or (lambda: datetime.datetime.now().isoformat())
+        self._config = config
+
+    def bind_config(self, config):
+        self._config = config
 
     def _new_record(self, **fields):
         b = {
@@ -326,7 +330,8 @@ class FakeStore(StorePort):
         if not candidates:
             return None
         b = candidates[0]
-        b["assignee"] = os.environ.get("LC_SPAWNID") or role
+        spawn_id = self._config.spawn_id() if self._config else None
+        b["assignee"] = spawn_id or role
         b["state"] = "in_progress"
         self._record_history(b["id"], State.IN_PROGRESS)
         return self._to_node(b)

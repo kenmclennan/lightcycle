@@ -66,7 +66,6 @@ def _claimed_and_completed(ctx, spawnid, outcome):
         "spawnid": spawnid, "role": role, "pid": os.getpid(), "pid_started": None,
         "log": log_path, "step": None, "started": 0,
     })
-    os.environ["LC_SPAWNID"] = spawnid
     rc, out, err = h.run_as_worker(spawnid, "claim", role)
     assert rc == 0, err
     claimed = json.loads(out)
