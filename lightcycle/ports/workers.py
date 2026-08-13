@@ -37,3 +37,7 @@ class WorkersPort(ABC):
     @abstractmethod
     def mark_checked(self, spawnid):
         pass
+
+    @abstractmethod
+    def log_mtime(self, path):
+        pass

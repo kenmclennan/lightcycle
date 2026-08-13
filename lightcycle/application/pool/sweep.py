@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.domain.pool import WorkerPool
+from lightcycle.domain.pool.worker_session import saw_terminal_command
 
 
 @dataclass(frozen=True)
@@ -14,11 +15,12 @@ class SweepResponse:
 
 
 class SweepUseCase:
-    def __init__(self, store, workers, worktrees=None, git=None):
+    def __init__(self, store, workers, worktrees=None, git=None, fs=None):
         self._store = store
         self._workers = workers
         self._worktrees = worktrees
         self._git = git
+        self._fs = fs
 
     def _capture(self, t):
         if self._worktrees is None or self._git is None:
@@ -34,18 +36,35 @@ class SweepUseCase:
         message = "wip: preserved %s on reclaim" % t.id
         return self._git.commit_all(path, message)
 
-    def execute(self, now, max_boot) -> SweepResponse:
+    def _saw_terminal_command(self, log):
+        if self._fs is None:
+            return False
+        data = self._fs.read_bytes(log)
+        if data is None:
+            return False
+        return saw_terminal_command(data.decode("utf-8", errors="replace"))
+
+    def execute(self, now, max_boot, stall_seconds) -> SweepResponse:
         probe = self._workers.pid_alive
         pool = WorkerPool.from_state(self._workers.workers_state())
         claimed = self._store.claimed_steps()
         claimed_ids = {t.id for t in claimed}
         covered = pool.covered_steps(probe)
         booting = pool.any_booting(probe, now, max_boot)
+        stalled = [
+            w
+            for w in pool.stalled(probe, now, max_boot, stall_seconds, self._workers.log_mtime)
+            if not self._saw_terminal_command(w.log)
+        ]
+        stalled_ids = {w.step for w in stalled}
+        for w in stalled:
+            self._workers.kill(w.pid)
+            self._workers.mark_checked(w.spawnid)
         swept = []
         preserved = []
         capture_failed = []
         for t in claimed:
-            if t.id in covered or booting:
+            if t.id not in stalled_ids and (t.id in covered or booting):
                 continue
             captured = self._capture(t)
             if captured is True:
@@ -59,7 +78,7 @@ class SweepUseCase:
             self._workers.kill(w.pid)
         return SweepResponse(
             swept=swept,
-            killed=[w.spawnid for w in orphans],
+            killed=[w.spawnid for w in orphans] + [w.spawnid for w in stalled],
             pruned=self._workers.prune_workers(),
             preserved=preserved,
             capture_failed=capture_failed,

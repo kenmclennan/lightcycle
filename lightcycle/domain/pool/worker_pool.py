@@ -40,5 +40,10 @@ class WorkerPool:
             and (w.step is None or w.step not in claimed_ids)
         ]
 
+    def stalled(self, probe, now, max_boot, stall_seconds, mtime_probe):
+        return [
+            w for w in self.alive(probe) if w.is_stalled(now, max_boot, stall_seconds, mtime_probe)
+        ]
+
     def dead_unchecked(self, probe):
         return [w for w in self._workers if w.spawnid and not w.checked and not w.is_alive(probe)]

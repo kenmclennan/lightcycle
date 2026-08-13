@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from lightcycle.application.pool import (
@@ -19,13 +20,15 @@ from tests.support.fake_store import FakeStore
 
 
 class FakeWorkers:
-    def __init__(self, workers=None, alive_pids=(), pruned=0):
+    def __init__(self, workers=None, alive_pids=(), pruned=0, log_mtimes=None):
         self._workers = workers or []
         self._alive = set(alive_pids)
         self._pruned = pruned
+        self._log_mtimes = log_mtimes or {}
         self.killed = []
         self.reaped = 0
         self.calls = []
+        self.checked = []
 
     def workers_state(self):
         return self._workers
@@ -45,7 +48,10 @@ class FakeWorkers:
         return self._pruned
 
     def mark_checked(self, spawnid):
-        pass
+        self.checked.append(spawnid)
+
+    def log_mtime(self, path):
+        return self._log_mtimes.get(path)
 
 
 class FakeBreakerGate:
@@ -108,9 +114,10 @@ class FakeSpawner:
 
 
 class FakeConfig:
-    def __init__(self, max_agents=4, max_boot=120, root="/grid"):
+    def __init__(self, max_agents=4, max_boot=120, stall_seconds=1800, root="/grid"):
         self._ma = max_agents
         self._mb = max_boot
+        self._ss = stall_seconds
         self._root = root
 
     def max_agents(self):
@@ -118,6 +125,9 @@ class FakeConfig:
 
     def max_boot_seconds(self):
         return self._mb
+
+    def stall_seconds(self):
+        return self._ss
 
     def engine_root(self):
         return self._root
@@ -183,7 +193,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={111},
             pruned=2,
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(result.swept, [orphan])
         self.assertEqual(result.pruned, 2)
         self.assertEqual(s.get_node(orphan).state, "ready")
@@ -196,7 +206,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={222},
             pruned=1,
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [222])
         self.assertEqual(result.killed, ["zombie-sp"])
         self.assertEqual(result.pruned, 1)
@@ -207,7 +217,7 @@ class TestSweep(unittest.TestCase):
             workers=[{"spawnid": "booting-sp", "pid": 333, "step": None, "started": 950}],
             alive_pids={333},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
 
@@ -220,7 +230,7 @@ class TestSweep(unittest.TestCase):
             workers=[{"spawnid": "busy-sp", "pid": 444, "step": held, "started": 100}],
             alive_pids={444},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
 
@@ -232,7 +242,7 @@ class TestSweep(unittest.TestCase):
             workers=[{"spawnid": "sp", "pid": 555, "step": held, "started": 100}],
             alive_pids={555},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
         self.assertIn(held, [t.id for t in s.claimed_steps()])
@@ -249,7 +259,7 @@ class TestSweep(unittest.TestCase):
         )
         CloseItemUseCase(s, FakeWorktrees()).execute(CloseItemInput(item=item, reason="merged"))
 
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
 
         self.assertEqual(workers.killed, [888])
         self.assertEqual(result.killed, ["live-sp"])
@@ -262,7 +272,7 @@ class TestSweep(unittest.TestCase):
             workers=[{"spawnid": "boot", "pid": 666, "step": None, "started": 950}],
             alive_pids={666},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(result.swept, [])
         self.assertIn(t, [n.id for n in s.claimed_steps()])
 
@@ -276,7 +286,7 @@ class TestSweep(unittest.TestCase):
         git = FakeCaptureGit(dirty={"/worktrees/%s" % item})
 
         result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
-            now=1000, max_boot=120
+            now=1000, max_boot=120, stall_seconds=1800
         )
 
         self.assertEqual(result.swept, [step])
@@ -294,7 +304,7 @@ class TestSweep(unittest.TestCase):
         git = FakeCaptureGit()
 
         result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
-            now=1000, max_boot=120
+            now=1000, max_boot=120, stall_seconds=1800
         )
 
         self.assertEqual(result.swept, [step])
@@ -312,7 +322,7 @@ class TestSweep(unittest.TestCase):
         git = FakeCaptureGit(non_git={"/worktrees/%s" % item})
 
         result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
-            now=1000, max_boot=120
+            now=1000, max_boot=120, stall_seconds=1800
         )
 
         self.assertEqual(result.swept, [step])
@@ -326,7 +336,7 @@ class TestSweep(unittest.TestCase):
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
 
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
 
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
@@ -341,7 +351,7 @@ class TestSweep(unittest.TestCase):
         git = FakeCaptureGit()
 
         result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
-            now=1000, max_boot=120
+            now=1000, max_boot=120, stall_seconds=1800
         )
 
         self.assertEqual(result.swept, [step])
@@ -359,7 +369,7 @@ class TestSweep(unittest.TestCase):
         git = FakeCaptureGit(dirty={"/worktrees/%s" % item}, fail={"/worktrees/%s" % item})
 
         result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
-            now=1000, max_boot=120
+            now=1000, max_boot=120, stall_seconds=1800
         )
 
         self.assertEqual(result.swept, [step])
@@ -388,9 +398,122 @@ class TestSweep(unittest.TestCase):
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
         git = OrderTrackingGit(dirty={"/worktrees/%s" % item})
 
-        SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(now=1000, max_boot=120)
+        SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
+            now=1000, max_boot=120, stall_seconds=1800
+        )
 
         self.assertEqual(events, [("commit", "/worktrees/%s" % item), ("reclaim", step)])
+
+    def test_kills_a_stalled_worker_marks_checked_and_reclaims_its_step(self):
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="coder")
+        s.update_state(step, "in_progress")
+        s.assign(step, "stalled-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "stalled-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
+            ],
+            alive_pids={999},
+            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [999])
+        self.assertEqual(workers.checked, ["stalled-sp"])
+        self.assertIn(step, result.swept)
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_leaves_a_worker_alone_whose_log_grew_within_the_stall_threshold(self):
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="coder")
+        s.update_state(step, "in_progress")
+        s.assign(step, "busy-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "busy-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
+            ],
+            alive_pids={999},
+            log_mtimes={"/l/1.log": 1000 - 1800 + 1},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.swept, [])
+        self.assertEqual(s.get_node(step).state, "in_progress")
+
+    def test_a_worker_still_in_its_boot_window_is_never_evaluated_for_staleness(self):
+        s = FakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "boot-sp", "pid": 999, "step": None, "started": 950, "log": "/l/1.log"}],
+            alive_pids={999},
+            log_mtimes={"/l/1.log": 0},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.killed, [])
+
+    def test_a_stalled_worker_with_a_terminal_marker_in_its_log_is_not_killed_for_staleness(self):
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="coder")
+        s.update_state(step, "in_progress")
+        s.assign(step, "closing-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "closing-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
+            ],
+            alive_pids={999},
+            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
+        )
+        log_line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [{"type": "tool_use", "input": {"command": "lc done t done"}}]
+                },
+            }
+        )
+        fs = FakeFs(files={"/l/1.log": log_line.encode()})
+        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.swept, [])
+        self.assertEqual(s.get_node(step).state, "in_progress")
+
+    def test_a_stalled_worker_with_no_mtime_available_is_left_alone_this_tick(self):
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="coder")
+        s.update_state(step, "in_progress")
+        s.assign(step, "unreadable-sp")
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "unreadable-sp",
+                    "pid": 999,
+                    "step": step,
+                    "started": 100,
+                    "log": "/l/missing.log",
+                }
+            ],
+            alive_pids={999},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.swept, [])
+        self.assertEqual(s.get_node(step).state, "in_progress")
+
+    def test_a_stalled_worker_is_killed_even_when_fs_is_not_wired(self):
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="coder")
+        s.update_state(step, "in_progress")
+        s.assign(step, "stalled-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "stalled-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
+            ],
+            alive_pids={999},
+            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [999])
+        self.assertIn(step, result.swept)
+        self.assertEqual(s.get_node(step).state, "ready")
 
 
 class TestTick(unittest.TestCase):

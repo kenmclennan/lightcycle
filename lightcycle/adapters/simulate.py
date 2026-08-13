@@ -200,6 +200,9 @@ class NullWorkers(WorkersPort):
     def mark_checked(self, spawnid):
         self._refuse("mark_checked")
 
+    def log_mtime(self, path):
+        self._refuse("log_mtime")
+
 
 class SimulateConfig:
     def __init__(self, real_config, specs_root, projects_root):

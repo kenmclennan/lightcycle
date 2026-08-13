@@ -768,8 +768,8 @@ def cmd_trace(argv):
 
 def cmd_sweep(argv):
     result = SweepUseCase(
-        _container.store, _container.workers, _worktrees(), _container.git
-    ).execute(time.time(), _container.config.max_boot_seconds())
+        _container.store, _container.workers, _worktrees(), _container.git, _container.fs
+    ).execute(time.time(), _container.config.max_boot_seconds(), _container.config.stall_seconds())
     for bid in result.swept:
         print("swept %s" % bid)
     for bid in result.preserved:
@@ -1186,6 +1186,7 @@ def cmd_start(argv):
             worktrees=_worktrees(),
             git=_container.git,
             backup_gate=backup_gate,
+            fs=_container.fs,
         )
         if a.once:
             now = time.time()

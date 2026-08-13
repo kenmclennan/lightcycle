@@ -53,6 +53,7 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 | `poll-seconds` | pool tick interval |
 | `branch-prefix` | prefix for worktree branches |
 | `max-boot-seconds` / `max-session-seconds` | worker boot and session caps |
+| `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step |
 | `retro-interval-reflections` | reflections pending across un-retroed items, between engine retro audits |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |

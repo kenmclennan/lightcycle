@@ -47,6 +47,15 @@ def write_workers(root, workers):
     os.replace(tmp, p)
 
 
+def log_mtime(path):
+    if not path:
+        return None
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
 def pid_alive(pid):
     try:
         os.kill(int(pid), 0)
@@ -178,3 +187,6 @@ class WorkersAdapter(WorkersPort):
 
     def mark_checked(self, spawnid):
         return mark_checked(self._config.data_root(), spawnid)
+
+    def log_mtime(self, path):
+        return log_mtime(path)
