@@ -50,6 +50,16 @@ class TuiSession:
         task = self._loop.create_task(coro, context=self._ctx)
         return self._loop.run_until_complete(task)
 
+    def run(self, func):
+        async def _call():
+            return func()
+
+        return self._run(_call())
+
+    def press(self, key):
+        self._run(self.pilot.press(key))
+        self.pause()
+
     def pause(self):
         self._run(self.pilot.pause())
 
