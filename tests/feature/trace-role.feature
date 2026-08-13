@@ -1,4 +1,3 @@
-@wip
 Feature: The trace read path exposes each step's role
   The Hierarchy tab and Node Hub render a step's role (write-code, review-code, human, ...)
   from the same read path that already returns its id, state, and log. This is the

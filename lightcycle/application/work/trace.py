@@ -15,9 +15,13 @@ class TraceNode:
     step: Optional[str]
     state: str
     log: Optional[str]
+    role: Optional[str]
 
     def as_dict(self):
-        return {"id": self.id, "step": self.step, "state": self.state, "log": self.log}
+        return {
+            "id": self.id, "step": self.step, "state": self.state, "log": self.log,
+            "role": self.role,
+        }
 
 
 @dataclass(frozen=True)
@@ -49,7 +53,10 @@ class TraceUseCase:
         item = self._store.get_node(input.item)
         artifacts = self._store.item_artifacts(input.item)
         steps = [
-            TraceNode(id=kt.id, step=kt.step, state=kt.state, log=self._log_for_step(kt.id))
+            TraceNode(
+                id=kt.id, step=kt.step, state=kt.state, log=self._log_for_step(kt.id),
+                role=kt.role,
+            )
             for kt in self._store.children(input.item)
         ]
         return TraceResponse(item=item, artifacts=artifacts, steps=steps)
