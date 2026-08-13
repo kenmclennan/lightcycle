@@ -168,6 +168,55 @@ class StoreContractBase:
         self.assertTrue(s.dep_remove(blocked, blocker))
         self.assertFalse(s.dep_remove(blocked, blocker))
 
+    def test_blocked_by_names_a_single_unresolved_dependency(self):
+        s = self.make_store()
+        dep1 = s.create_step("dep1", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        s.dep_add(blocked, dep1)
+        node = s.get_node(blocked)
+        self.assertEqual(set(node.blocked_by), {dep1})
+        self.assertEqual(node.deps, 1)
+
+    def test_blocked_by_names_every_unresolved_dependency_at_once(self):
+        s = self.make_store()
+        dep1 = s.create_step("dep1", role="coder")
+        dep2 = s.create_step("dep2", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        s.dep_add(blocked, dep1)
+        s.dep_add(blocked, dep2)
+        node = s.get_node(blocked)
+        self.assertEqual(set(node.blocked_by), {dep1, dep2})
+        self.assertEqual(node.deps, 2)
+
+    def test_blocked_by_drops_only_the_dependency_that_closed(self):
+        s = self.make_store()
+        dep1 = s.create_step("dep1", role="coder")
+        dep2 = s.create_step("dep2", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        s.dep_add(blocked, dep1)
+        s.dep_add(blocked, dep2)
+        s.close(dep1, "done")
+        node = s.get_node(blocked)
+        self.assertEqual(set(node.blocked_by), {dep2})
+        self.assertEqual(node.deps, 1)
+
+    def test_blocked_by_drops_a_deleted_dependency(self):
+        s = self.make_store()
+        dep1 = s.create_step("dep1", role="coder")
+        blocked = s.create_step("blocked", role="coder")
+        s.dep_add(blocked, dep1)
+        s.delete(dep1)
+        node = s.get_node(blocked)
+        self.assertEqual(node.blocked_by, [])
+        self.assertEqual(node.deps, 0)
+
+    def test_blocked_by_empty_when_no_dependencies(self):
+        s = self.make_store()
+        tid = s.create_step("t", role="coder")
+        node = s.get_node(tid)
+        self.assertEqual(node.blocked_by, [])
+        self.assertEqual(node.deps, 0)
+
     def test_dep_remove_leaves_unrelated_deps_untouched(self):
         s = self.make_store()
         blocker1 = s.create_step("blocker1", role="coder")

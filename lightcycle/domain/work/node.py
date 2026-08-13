@@ -21,6 +21,7 @@ class Node:
     needs: Optional[str] = None
     outcome: Optional[str] = None
     deps: int = 0
+    blocked_by: List[str] = field(default_factory=list)
     notes: Optional[str] = None
     claimed_by: Optional[str] = None
     theme: Optional[str] = None
@@ -54,6 +55,7 @@ class Node:
             "artifacts": [a.as_dict() for a in self.artifacts],
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
+            "blocked_by": self.blocked_by,
             "notes": self.notes, "theme": self.theme, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
             "model": self.model,

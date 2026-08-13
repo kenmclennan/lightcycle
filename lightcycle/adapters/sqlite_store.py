@@ -205,8 +205,9 @@ class SqliteStore(StorePort):
                     (default_kind_for(atype), atype),
                 )
 
-    def _row_to_node(self, row, artifacts, deps):
+    def _row_to_node(self, row, artifacts, blocked_by):
         d = dict(zip(_COLUMNS, row))
+        deps = len(blocked_by)
         closed = d["state"] == "done"
         if d["type"] == "step" or closed:
             state = derive_state(d["type"], closed, d["assignee"], deps, [])
@@ -227,6 +228,7 @@ class SqliteStore(StorePort):
             needs=d["needs"],
             outcome=d["outcome"],
             deps=deps,
+            blocked_by=blocked_by,
             notes=d["notes"],
             claimed_by=d["assignee"],
             theme=d["parent"] if d["type"] == "item" else d["theme"],
@@ -254,17 +256,16 @@ class SqliteStore(StorePort):
                 Artifact(type=atype, value=value, label=label, internal=bool(internal), kind=kind)
             )
 
-        deps_by_id = dict(
-            self._conn.execute(
-                "SELECT d.node_id, COUNT(*) FROM deps d JOIN nodes t ON t.id = d.blocked_by "
-                "WHERE t.state != 'done' AND d.node_id IN (%s) GROUP BY d.node_id"
-                % placeholders,
-                ids,
-            ).fetchall()
-        )
+        deps_by_id = {}
+        for node_id, blocker_id in self._conn.execute(
+            "SELECT d.node_id, d.blocked_by FROM deps d JOIN nodes t ON t.id = d.blocked_by "
+            "WHERE t.state != 'done' AND d.node_id IN (%s)" % placeholders,
+            ids,
+        ).fetchall():
+            deps_by_id.setdefault(node_id, []).append(blocker_id)
 
         nodes = [
-            self._row_to_node(row, artifacts_by_id.get(row[0], []), deps_by_id.get(row[0], 0))
+            self._row_to_node(row, artifacts_by_id.get(row[0], []), deps_by_id.get(row[0], []))
             for row in rows
         ]
         for node in nodes:
