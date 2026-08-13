@@ -36,19 +36,6 @@ def _reachable(ctx):
     ctx["store"] = store
 
 
-@given("the store has queued steps, blocked steps, and an in-progress step")
-def _mixed(ctx):
-    store = FakeStore()
-    queued = store.create_step("queued", step="build", role="coder")
-    blocker = store.create_step("blocker", step="build", role="coder")
-    blocked = store.create_step("blocked", step="build", role="coder", deps=[blocker])
-    running = store.create_step("running", step="build", role="coder")
-    store.assign(running, "worker-1")
-    ctx["store"] = store
-    ctx["queued_ids"] = [queued, blocker, blocked]
-    ctx["running_id"] = running
-
-
 @given("the store has more than ten queued or blocked steps")
 def _many(ctx):
     store = FakeStore()
@@ -128,9 +115,10 @@ def _list_rendered(ctx):
     from lightcycle.domain.work import NodeQueue
 
     lanes = NodeQueue(ctx["store"].all_steps()).by_lane()
-    expected = len(lanes["queue"]) + len(lanes["blocked"])
+    expected_ids = {n.id for n in lanes["queue"]} | {n.id for n in lanes["blocked"]}
     table = ctx["session"].app.query_one(DataTable)
-    assert table.row_count == expected
+    actual_ids = {k.value for k in table.rows if not str(k.value).startswith("__gap")}
+    assert actual_ids == expected_ids
 
 
 @then("the priority list and the status bar are both visible in the first rendered frame")
@@ -140,20 +128,6 @@ def _both_visible(ctx):
     assert table.is_mounted
     assert status_bar.is_mounted
     assert status_bar.status_text != ""
-
-
-@then("the priority list contains one row for each queued and blocked step")
-def _contains_queued_and_blocked(ctx):
-    table = ctx["session"].app.query_one(DataTable)
-    assert table.row_count == len(ctx["queued_ids"])
-    for tid in ctx["queued_ids"]:
-        assert tid in table.rows
-
-
-@then("the priority list does not contain a row for the in-progress step")
-def _excludes_in_progress(ctx):
-    table = ctx["session"].app.query_one(DataTable)
-    assert ctx["running_id"] not in table.rows
 
 
 @then("the priority list contains a row for every one of them")
