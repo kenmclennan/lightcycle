@@ -1130,6 +1130,9 @@ def _format_tick(result, prev_snapshot, now):
         lines.append("%s  %-7s  %s" % (ts, "breaker", "opened until %s" % reset_ts))
     if result.breaker_closed:
         lines.append("%s  %-7s  %s" % (ts, "breaker", "closed"))
+    if result.breaker_rearmed:
+        reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
+        lines.append("%s  %-7s  %s" % (ts, "breaker", "probe stalled, retrying after %s" % reset_ts))
     cur = (result.alive, result.max_agents, result.ready, result.inflight_count)
     if cur != prev_snapshot or result.pruned:
         state = "active=%d/%d ready=%d inflight=%d" % (
@@ -1173,7 +1176,9 @@ def cmd_start(argv):
             _container.store, _container.github, _worktrees(), flow_service, complete
         )
         cadence_gate = RetroCadenceUseCase(_container.store, _container.config)
-        breaker_gate = BreakerGateUseCase(_container.workers, _container.fs, _container.breaker)
+        breaker_gate = BreakerGateUseCase(
+            _container.workers, _container.fs, _container.breaker, _container.config
+        )
         hook_completions = HookCompletionsUseCase(_container.store, flow_service)
         backup_gate = BackupUseCase(_container.backup, _container.config)
         tick = TickUseCase(

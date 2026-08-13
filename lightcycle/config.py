@@ -18,6 +18,7 @@ _SEED_KEYS = [
     ("max-boot-seconds", "120"),
     ("max-session-seconds", "1800"),
     ("stall-seconds", "1800"),
+    ("probe-cooldown-seconds", "1800"),
     ("poll-seconds", "5"),
     ("worker-history", "20"),
     ("editor", "vi"),
@@ -244,6 +245,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("stall-seconds")
+
+    def probe_cooldown_seconds(self):
+        env = self._env_int("LC_PROBE_COOLDOWN_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("probe-cooldown-seconds")
 
     def poll_seconds(self):
         env = self._env_int("LC_POLL_SECONDS", None)

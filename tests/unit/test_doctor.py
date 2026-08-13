@@ -18,7 +18,7 @@ _ALL_KEYS = dict(
     projects="/p", specs="/s", specs_remote="git@x", branch_prefix="feat", shortcode="PROJ",
     default_origin="acme", workflows_remote="git@y", max_agents="5", worktree_retries="6",
     worktree_retry_sleep="0.25", max_boot_seconds="120", max_session_seconds="1800",
-    stall_seconds="1800",
+    stall_seconds="1800", probe_cooldown_seconds="1800",
     poll_seconds="5", worker_history="20", editor="vi", retro_interval_reflections="20",
     backups_dir="/b", backup_interval_minutes="15", backup_retention="96",
     workflow_retention="5", max_title_length="72", personal_origin="",

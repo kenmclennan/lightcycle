@@ -32,6 +32,7 @@ class TickResponse:
     breaker_reset_at: Optional[float] = None
     breaker_opened: bool = False
     breaker_closed: bool = False
+    breaker_rearmed: bool = False
 
 
 class TickUseCase:
@@ -104,4 +105,5 @@ class TickUseCase:
             breaker_reset_at=breaker.reset_at,
             breaker_opened=breaker_result.opened if breaker_result else False,
             breaker_closed=breaker_result.closed if breaker_result else False,
+            breaker_rearmed=breaker_result.rearmed if breaker_result else False,
         )

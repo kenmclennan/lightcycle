@@ -40,6 +40,16 @@ class TestBreaker(unittest.TestCase):
         self.assertIsNone(b.reset_at)
         self.assertIsNone(b.spawn_cap(now=600, alive_count=0))
 
+    def test_rearm_stays_open_with_the_new_reset_at(self):
+        b = Breaker().trip(500).rearm(900)
+        self.assertTrue(b.is_open)
+        self.assertEqual(b.reset_at, 900)
+
+    def test_rearm_on_a_closed_breaker_still_opens_it(self):
+        b = Breaker().rearm(900)
+        self.assertTrue(b.is_open)
+        self.assertEqual(b.reset_at, 900)
+
 
 if __name__ == "__main__":
     unittest.main()

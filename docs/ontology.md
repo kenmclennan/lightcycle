@@ -28,6 +28,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **sweep** - reclaim orphaned or stalled step claims and prune dead worker records.
 - **reclaim** - return a stalled or dead worker's step to `ready`.
 - **stalled** - a claimed worker, past its boot window, whose log has not grown for longer than `stall-seconds` and has not yet issued a terminal command; killed on the next sweep.
+- **probe cooldown** - after the breaker's own rate-limit probe is killed for stalling, `reset_at` is re-armed `probe-cooldown-seconds` forward rather than left at its stale value; a stall is inconclusive, never treated as a successful probe.
 - **retro** - gather a theme's child feedback and signals into a digest.
 - **read** - `show` (one node as JSON), `trace` (an item end-to-end: artifacts + child steps + logs), `status` / `inbox` / `backlog` / `active` / `queue` (lane views), `flow` (the assembled workflow), `worklog`.
 
