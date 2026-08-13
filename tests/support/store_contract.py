@@ -228,6 +228,47 @@ class StoreContractBase:
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].value, "app-new")
 
+    def test_add_artifact_declared_kind_overrides_type_default(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "pr", "https://gh/1", kind="text")
+        arts = s.item_artifacts(sid)
+        self.assertEqual(arts[0].kind, "text")
+
+    def test_add_artifact_undeclared_kind_resolves_from_type_table(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "pr", "https://gh/1")
+        s.add_artifact(sid, "spec", "specs/foo.md")
+        s.add_artifact(sid, "brief", "specs/foo-brief.md")
+        s.add_artifact(sid, "repo", "app")
+        s.add_artifact(sid, "branch", "feat/x")
+        s.add_artifact(sid, "resolves", "OTHER-1")
+        kinds = {a.type: a.kind for a in s.item_artifacts(sid)}
+        self.assertEqual(kinds, {
+            "pr": "url", "spec": "filepath", "brief": "filepath",
+            "repo": "text", "branch": "text", "resolves": "text",
+        })
+
+    def test_add_artifact_internal_defaults_false_and_persists_true(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "pr", "https://gh/1")
+        s.add_artifact(sid, "reflection", "{}", internal=True)
+        arts = {a.type: a for a in s.item_artifacts(sid)}
+        self.assertFalse(arts["pr"].internal)
+        self.assertTrue(arts["reflection"].internal)
+
+    def test_replace_artifact_applies_declared_and_default_kind_and_internal(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "pr", "https://gh/1")
+        s.replace_artifact(sid, "pr", "https://gh/2", kind="text", internal=True)
+        arts = [a for a in s.item_artifacts(sid) if a.type == "pr"]
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].kind, "text")
+        self.assertTrue(arts[0].internal)
+
     def test_create_epic_creates_epic_typed_task(self):
         s = self.make_store()
         eid = s.create_theme("objective")

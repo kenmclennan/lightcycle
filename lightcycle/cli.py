@@ -184,7 +184,7 @@ COMMAND_GROUPS = [
          "update a node; --parent moves it; --state active activates an item (files the entry step)"),
         ("rm", "<id> [--force]", "delete a node; refuses on structural children, a live "
          "worker, or a dirty worktree - --force overrides the dirty worktree and stale claims"),
-        ("attach", "<id> <type> <value> [--label]", "attach an artifact"),
+        ("attach", "<id> <type> <value> [--label] [--internal] [--kind K]", "attach an artifact"),
         ("dep", "<id> --needs <id> | --remove <id>", "add or remove a blocker on a node"),
     ]),
     ("Agent verbs (workers call these)", [
@@ -1029,6 +1029,8 @@ def cmd_attach(argv):
     group.add_argument("--file")
     ap.add_argument("--label")
     ap.add_argument("--replace", action="store_true")
+    ap.add_argument("--internal", action="store_true")
+    ap.add_argument("--kind")
     a = ap.parse_args(argv)
     value = a.value
     if a.file:
@@ -1043,7 +1045,10 @@ def cmd_attach(argv):
         )
         return 0
     LinkArtifactUseCase(_container.store).execute(
-        LinkArtifactInput(item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace)
+        LinkArtifactInput(
+            item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace,
+            internal=a.internal, kind=a.kind,
+        )
     )
     return 0
 

@@ -50,6 +50,13 @@ class TestReflect(unittest.TestCase):
         refl = json.loads(s.item_artifacts(k)[0].value)
         self.assertEqual(refl["spec_hash"], "unknown")
 
+    def test_reflection_artifact_is_internal(self):
+        s = FakeStore()
+        k = s.create_step("loose step", role="human")
+        ReflectUseCase(s, FakeFs()).execute(ReflectInput(step=k, feedback="fb"))
+        arts = [a for a in s.item_artifacts(k) if a.type == "reflection"]
+        self.assertTrue(arts[0].internal)
+
 
 class TestRetroEpicScope(unittest.TestCase):
     def test_gathers_feedback_and_signals(self):

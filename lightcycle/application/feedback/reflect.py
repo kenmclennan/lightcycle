@@ -29,5 +29,7 @@ class ReflectUseCase:
 
     def execute(self, input: ReflectInput) -> ReflectResponse:
         reflection = Reflection.create(input.step, input.feedback, self._spec_hash(input.step))
-        self._store.add_artifact(input.step, "reflection", json.dumps(reflection.as_dict()))
+        self._store.add_artifact(
+            input.step, "reflection", json.dumps(reflection.as_dict()), internal=True
+        )
         return ReflectResponse(reflection=reflection)

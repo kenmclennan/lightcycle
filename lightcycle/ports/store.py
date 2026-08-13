@@ -15,11 +15,11 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def add_artifact(self, item_id, atype, value, label=None):
+    def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         pass
 
     @abstractmethod
-    def replace_artifact(self, item_id, atype, value, label=None):
+    def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         pass
 
     @abstractmethod

@@ -2,7 +2,7 @@ import datetime
 import os
 import sqlite3
 
-from lightcycle.domain.work import Artifact, Node, NodeView, State, derive_state
+from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import ProjectEntry, ProjectResolutionError, StorePort
 
@@ -60,7 +60,9 @@ CREATE TABLE IF NOT EXISTS artifacts (
     item_id TEXT NOT NULL,
     atype TEXT NOT NULL,
     value TEXT NOT NULL,
-    label TEXT
+    label TEXT,
+    internal INTEGER NOT NULL DEFAULT 0,
+    kind TEXT
 );
 
 CREATE TABLE IF NOT EXISTS labels (
@@ -107,6 +109,11 @@ _LEGACY_ROLE_NAMES = ("coder", "reviewer", "auditor", "watch-pr", "resolve")
 
 _ID_BEARING_ARTIFACT_TYPES = {"branch", "pr", "spec", "resolves", "filed-from", "brief"}
 
+_INTERNAL_ARTIFACT_TYPES = (
+    "reflection", "resolves", "resolved-by", "watched-step",
+    "feedback-spawned-through", "feedback-watermark",
+)
+
 
 class SqliteStore(StorePort):
     def __init__(self, config, now=None, package_root=None, default_data_root=None):
@@ -122,6 +129,7 @@ class SqliteStore(StorePort):
         self._conn.executescript(_SCHEMA)
         self._apply_schema_version_floor()
         self._migrate_close_reason_to_outcome()
+        self._migrate_artifact_fields()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -175,6 +183,28 @@ class SqliteStore(StorePort):
         if "close_reason" in cols and "outcome" not in cols:
             self._conn.execute("ALTER TABLE nodes RENAME COLUMN close_reason TO outcome")
 
+    def _migrate_artifact_fields(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(artifacts)").fetchall()}
+        if "internal" not in cols:
+            self._conn.execute(
+                "ALTER TABLE artifacts ADD COLUMN internal INTEGER NOT NULL DEFAULT 0"
+            )
+            self._conn.execute(
+                "UPDATE artifacts SET internal = 1 WHERE atype IN (%s)"
+                % ",".join("?" * len(_INTERNAL_ARTIFACT_TYPES)),
+                _INTERNAL_ARTIFACT_TYPES,
+            )
+        if "kind" not in cols:
+            self._conn.execute("ALTER TABLE artifacts ADD COLUMN kind TEXT")
+            atypes = [
+                r[0] for r in self._conn.execute("SELECT DISTINCT atype FROM artifacts").fetchall()
+            ]
+            for atype in atypes:
+                self._conn.execute(
+                    "UPDATE artifacts SET kind = ? WHERE atype = ?",
+                    (default_kind_for(atype), atype),
+                )
+
     def _row_to_node(self, row, artifacts, deps):
         d = dict(zip(_COLUMNS, row))
         closed = d["state"] == "done"
@@ -215,13 +245,13 @@ class SqliteStore(StorePort):
         placeholders = ", ".join("?" * len(ids))
 
         artifacts_by_id = {}
-        for item_id, atype, value, label in self._conn.execute(
-            "SELECT item_id, atype, value, label FROM artifacts "
+        for item_id, atype, value, label, internal, kind in self._conn.execute(
+            "SELECT item_id, atype, value, label, internal, kind FROM artifacts "
             "WHERE item_id IN (%s) ORDER BY rowid" % placeholders,
             ids,
         ).fetchall():
             artifacts_by_id.setdefault(item_id, []).append(
-                Artifact(type=atype, value=value, label=label)
+                Artifact(type=atype, value=value, label=label, internal=bool(internal), kind=kind)
             )
 
         deps_by_id = dict(
@@ -306,26 +336,34 @@ class SqliteStore(StorePort):
 
     def item_artifacts(self, item_id):
         rows = self._conn.execute(
-            "SELECT atype, value, label FROM artifacts WHERE item_id = ? ORDER BY rowid",
+            "SELECT atype, value, label, internal, kind FROM artifacts "
+            "WHERE item_id = ? ORDER BY rowid",
             (item_id,),
         ).fetchall()
-        return [Artifact(type=r[0], value=r[1], label=r[2]) for r in rows]
+        return [
+            Artifact(type=r[0], value=r[1], label=r[2], internal=bool(r[3]), kind=r[4])
+            for r in rows
+        ]
 
-    def add_artifact(self, item_id, atype, value, label=None):
+    def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
+        resolved_kind = kind if kind is not None else default_kind_for(atype)
         self._conn.execute(
-            "INSERT INTO artifacts (item_id, atype, value, label) VALUES (?, ?, ?, ?)",
-            (item_id, atype, value, label),
+            "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (item_id, atype, value, label, internal, resolved_kind),
         )
         self._conn.commit()
 
-    def replace_artifact(self, item_id, atype, value, label=None):
+    def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
+        resolved_kind = kind if kind is not None else default_kind_for(atype)
         self._conn.execute(
             "DELETE FROM artifacts WHERE item_id = ? AND atype = ?",
             (item_id, atype),
         )
         self._conn.execute(
-            "INSERT INTO artifacts (item_id, atype, value, label) VALUES (?, ?, ?, ?)",
-            (item_id, atype, value, label),
+            "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (item_id, atype, value, label, internal, resolved_kind),
         )
         self._conn.commit()
 
