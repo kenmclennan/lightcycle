@@ -436,5 +436,72 @@ class TestPersonalOrigin(unittest.TestCase):
         self.assertEqual(c.personal_origin(), "other")
 
 
+class TestResolvedSettings(unittest.TestCase):
+    def test_freshly_seeded_config_reports_all_keys_as_default(self):
+        c = _cfg()
+        c.ensure_config()
+        settings = c.resolved_settings()
+        self.assertEqual(len(settings), len(_SEED_KEYS))
+        for s in settings:
+            self.assertEqual(s.state, "default", s.key)
+
+    def test_missing_keys_of_different_shapes_still_report_every_key(self):
+        c = _cfg()
+        c.ensure_config()
+        text = Path(c.config_path()).read_text()
+        text = "\n".join(
+            line for line in text.splitlines()
+            if not line.startswith(("max-agents:", "backups-dir:", "editor:"))
+        ) + "\n"
+        Path(c.config_path()).write_text(text)
+        settings = {s.key: s for s in c.resolved_settings()}
+        self.assertEqual(len(settings), len(_SEED_KEYS))
+        for key in ("max-agents", "backups-dir", "editor"):
+            self.assertEqual(settings[key].state, "unset")
+            self.assertIsNotNone(settings[key].error)
+        for key, s in settings.items():
+            if key not in ("max-agents", "backups-dir", "editor"):
+                self.assertEqual(s.state, "default", key)
+
+    def test_env_override_reports_env_state_and_value(self):
+        c = _cfg({"LC_MAX_AGENTS": "9"}, max_agents="5")
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["max-agents"]
+        self.assertEqual(s.state, "env")
+        self.assertEqual(s.env_var, "LC_MAX_AGENTS")
+        self.assertEqual(s.value, 9)
+
+    def test_editor_env_override_uses_editor_var_not_lc_prefixed(self):
+        c = _cfg({"EDITOR": "nano"})
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["editor"]
+        self.assertEqual(s.state, "env")
+        self.assertEqual(s.env_var, "EDITOR")
+        self.assertEqual(s.value, "nano")
+
+    def test_file_override_without_env_reports_file_state(self):
+        c = _cfg(max_agents="9")
+        settings = {s.key: s for s in c.resolved_settings()}
+        self.assertEqual(settings["max-agents"].state, "file")
+        self.assertEqual(settings["max-agents"].value, 9)
+
+    def test_untouched_personal_origin_reports_default_and_none(self):
+        c = _cfg()
+        c.ensure_config()
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["personal-origin"]
+        self.assertEqual(s.state, "default")
+        self.assertIsNone(s.value)
+
+    def test_path_keys_at_literal_seed_default_report_default_state(self):
+        c = _cfg()
+        c.ensure_config()
+        settings = {s.key: s for s in c.resolved_settings()}
+        for key in ("projects", "specs", "backups-dir"):
+            s = settings[key]
+            self.assertEqual(s.state, "default", key)
+            self.assertTrue(os.path.isabs(s.value), key)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,40 @@
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from lightcycle.adapters import frontmatter
+
+
+_GETTER_NAME_OVERRIDES = {
+    "projects": "projects_root",
+    "specs": "specs_root",
+}
+
+_ENV_OVERRIDE_VARS = {
+    "max-agents": "LC_MAX_AGENTS",
+    "worktree-retries": "LC_WORKTREE_RETRIES",
+    "worktree-retry-sleep": "LC_WORKTREE_RETRY_SLEEP",
+    "max-boot-seconds": "LC_MAX_BOOT_SECONDS",
+    "max-session-seconds": "LC_MAX_SESSION_SECONDS",
+    "stall-seconds": "LC_STALL_SECONDS",
+    "probe-cooldown-seconds": "LC_PROBE_COOLDOWN_SECONDS",
+    "poll-seconds": "LC_POLL_SECONDS",
+    "worker-history": "LC_WORKER_HISTORY",
+    "editor": "EDITOR",
+    "retro-interval-reflections": "LC_RETRO_INTERVAL_REFLECTIONS",
+}
+
+_BLANK = (None, "", {})
+
+
+@dataclass(frozen=True)
+class ResolvedSetting:
+    key: str
+    value: object
+    error: Optional[str]
+    state: str
+    env_var: Optional[str]
 
 
 _SEED_KEYS = [
@@ -125,6 +158,30 @@ class Config:
 
     def missing_config_keys(self):
         return tuple(k for k, v in self._missing_seed_keys(self.load_config()))
+
+    def resolved_settings(self):
+        raw = self.load_config()
+        entries = []
+        for key, default in _SEED_KEYS:
+            getter = getattr(self, _GETTER_NAME_OVERRIDES.get(key, key.replace("-", "_")))
+            try:
+                value = getter()
+            except ConfigError as e:
+                entries.append(ResolvedSetting(
+                    key=key, value=None, error=str(e), state="unset", env_var=None))
+                continue
+            env_var = _ENV_OVERRIDE_VARS.get(key)
+            if env_var and self._env(env_var) is not None:
+                entries.append(ResolvedSetting(
+                    key=key, value=value, error=None, state="env", env_var=env_var))
+                continue
+            raw_value = raw.get(key)
+            norm_raw = "" if raw_value in _BLANK else raw_value
+            norm_default = "" if default in _BLANK else default
+            state = "default" if norm_raw == norm_default else "file"
+            entries.append(ResolvedSetting(
+                key=key, value=value, error=None, state=state, env_var=None))
+        return entries
 
     def ensure_config(self):
         p = self.config_path()
