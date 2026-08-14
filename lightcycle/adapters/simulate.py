@@ -168,6 +168,12 @@ class ScriptedGitHub(GitHubEventsPort):
     def reviews(self, pr, since):
         return []
 
+    def head_sha(self, pr):
+        return ""
+
+    def changed_files(self, pr, sha):
+        return frozenset()
+
 
 class NullWorkers(WorkersPort):
     def _refuse(self, name):

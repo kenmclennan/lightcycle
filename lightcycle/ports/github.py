@@ -50,3 +50,11 @@ class GitHubEventsPort(ABC):
     @abstractmethod
     def reviews(self, pr: str, since: float) -> List[Review]:
         pass
+
+    @abstractmethod
+    def head_sha(self, pr: str) -> str:
+        pass
+
+    @abstractmethod
+    def changed_files(self, pr: str, sha: str) -> frozenset:
+        pass
