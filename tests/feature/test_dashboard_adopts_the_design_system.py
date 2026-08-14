@@ -158,11 +158,12 @@ def _selected_row_background(ctx):
     assert style.background.hex.lower() == COLOURS["selected-bg"].lower()
 
 
-@then("a selected row's foreground is the cyan colour")
-def _selected_row_foreground(ctx):
+@then("the selection cursor glyph is rendered in the cyan colour")
+def _selection_cursor_glyph_cyan(ctx):
     table = ctx["session"].app.query_one(DataTable)
-    style = table.get_component_styles("datatable--cursor")
-    assert style.color.hex.lower() == COLOURS["cyan"].lower()
+    row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+    glyph = table.get_cell(row_key, "cursor")
+    assert glyph.style == COLOURS["cyan"]
 
 
 @then("the footer occupies two one-row lines, a status line above a shortcut line")

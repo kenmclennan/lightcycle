@@ -39,8 +39,8 @@ def make_test_container(store=None, lock=None, breaker=None):
 
 
 class TuiSession:
-    def __init__(self, container):
-        self.app = LightcycleApp(container)
+    def __init__(self, container, now=None):
+        self.app = LightcycleApp(container, now=now)
         self._loop = asyncio.new_event_loop()
         self._ctx = contextvars.copy_context()
         self._run_test_cm = self.app.run_test()
@@ -72,7 +72,7 @@ class TuiSession:
         self._loop.close()
 
 
-def launch(container):
-    session = TuiSession(container)
+def launch(container, now=None):
+    session = TuiSession(container, now=now)
     session.pause()
     return session
