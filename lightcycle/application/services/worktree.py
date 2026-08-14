@@ -2,7 +2,7 @@ import os
 import time
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.flow.flow import SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.work import Item, State
 from lightcycle.domain.workspace import Branch, Worktree, current_run_index, phase_key
 from lightcycle.ports.store import ProjectResolutionError
@@ -34,10 +34,23 @@ class WorktreeService:
     def _workspace_node(self, item):
         return self._active_step(item) or self._store.get_node(item)
 
-    def _uses_specs_workspace(self, item):
+    def _workspace_of(self, item):
         if self._flow is None:
-            return False
-        return self._flow.workspace_for_node(self._workspace_node(item)) == SPECS_WORKSPACE
+            return PROJECT_WORKSPACE
+        return self._flow.workspace_for_node(self._workspace_node(item)) or PROJECT_WORKSPACE
+
+    def _uses_specs_workspace(self, item):
+        return self._workspace_of(item) == SPECS_WORKSPACE
+
+    def _uses_item_repo(self, item):
+        return self._workspace_of(item) == PROJECT_WORKSPACE
+
+    def _repo_for_workspace(self, item, workspace):
+        if workspace == SPECS_WORKSPACE:
+            return self._config.specs_root()
+        if workspace == PROJECT_WORKSPACE:
+            return self._resolve_repo(self.item_repo(item))
+        return self._resolve_repo(workspace)
 
     def _phase(self, item):
         if self._flow is None:
@@ -51,9 +64,7 @@ class WorktreeService:
         return repo
 
     def target_repo(self, item):
-        if self._uses_specs_workspace(item):
-            return self._config.specs_root()
-        return self._resolve_repo(self.item_repo(item))
+        return self._repo_for_workspace(item, self._workspace_of(item))
 
     def _resolve_repo(self, repo):
         try:
@@ -65,11 +76,11 @@ class WorktreeService:
         return [(a.label, a.value) for a in self._item(item).artifacts if a.type == "branch"]
 
     def _target_for_phase(self, item, phase):
-        if self._flow is not None:
-            node = self._store.get_node(item)
-            if self._flow.workspace_for_phase(node, phase) == SPECS_WORKSPACE:
-                return self._config.specs_root()
-        return self._resolve_repo(self.item_repo(item))
+        if self._flow is None:
+            return self._resolve_repo(self.item_repo(item))
+        node = self._store.get_node(item)
+        workspace = self._flow.workspace_for_phase(node, phase) or PROJECT_WORKSPACE
+        return self._repo_for_workspace(item, workspace)
 
     def _step_phases(self, item):
         if self._flow is None:
@@ -114,14 +125,14 @@ class WorktreeService:
         self._store.replace_artifact(item, "branch", branch, label=self._phase(item))
 
     def ensure(self, item):
-        specs_workspace = self._uses_specs_workspace(item)
-        if not specs_workspace and not self.has_repo(item):
+        if self._uses_item_repo(item) and not self.has_repo(item):
             return None
         target = self.target_repo(item)
         if not self._git.is_git_repo(target):
+            named = self.item_repo(item) if self._uses_item_repo(item) else target
             raise UseCaseError(
                 "cannot set up workspace for %s: '%s' is not a git repo at %s"
-                % (item, target if specs_workspace else self.item_repo(item), target)
+                % (item, named, target)
             )
         branch = self._branch_for(item)
         path = self.worktree_path(item)

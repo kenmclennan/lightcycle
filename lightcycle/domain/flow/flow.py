@@ -2,6 +2,7 @@ from lightcycle.domain.flow.step_def import CiCap, StepDef
 from lightcycle.domain.flow.transition import Transition
 
 SPECS_WORKSPACE = "specs"
+PROJECT_WORKSPACE = "project"
 
 
 class Flow:
