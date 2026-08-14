@@ -1,17 +1,20 @@
-def current_run_index(phases):
-    ordered = list(phases)
-    if not ordered:
-        return 1
-    target = ordered[-1]
+def runs_of(phases, target):
     if target is None:
-        return 1
+        return 0
     runs = 0
     previous = object()
-    for phase in ordered:
+    for phase in phases:
         if phase == target and previous != target:
             runs += 1
         previous = phase
-    return runs or 1
+    return runs
+
+
+def current_run_index(phases):
+    ordered = list(phases)
+    if not ordered or ordered[-1] is None:
+        return 1
+    return runs_of(ordered, ordered[-1]) or 1
 
 
 def phase_key(phase, run_index):

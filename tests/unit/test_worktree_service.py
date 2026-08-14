@@ -657,8 +657,9 @@ class TestPhaseReEntry(unittest.TestCase):
         self.store = FakeStore()
         self.phases = {"spec-writer": "spec", "build": "code"}
         self.flow = _LoopFlow(self.phases)
+        self.git = _FakeGit(git_repos={os.path.join("/home/u/workspace/projects", "saga")})
         self.svc = WorktreeService(
-            self.store, git=None, fs=None,
+            self.store, git=self.git, fs=None,
             config=_Cfg("/home/u/workspace/projects"), flow=self.flow,
         )
         self.theme = self.store.create_theme("theme")
@@ -724,6 +725,28 @@ class TestPhaseReEntry(unittest.TestCase):
         self.assertNotIn("spec-2", self.svc.item_branch(self.item))
         self.assertTrue(self.svc.worktree_path(self.item).endswith("%s-spec" % self.item))
 
+
+    def test_a_superseded_run_has_its_worktree_and_branch_released(self):
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        spent = self.svc.item_branch(self.item)
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+
+        saga = os.path.join("/home/u/workspace/projects", "saga")
+        self.assertIn(
+            ("remove_worktree", saga, os.path.join(saga, ".worktrees", "%s-spec" % self.item)),
+            self.git.calls,
+        )
+        self.assertIn(("delete_branch", saga, spent), self.git.calls)
+
+    def test_a_first_run_releases_nothing(self):
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+
+        self.assertFalse([c for c in self.git.calls if c[0] == "remove_worktree"])
 
 class TestNamedWorkspace(unittest.TestCase):
     def setUp(self):
