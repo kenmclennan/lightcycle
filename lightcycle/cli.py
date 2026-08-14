@@ -927,6 +927,7 @@ def cmd_new(argv):
     ap.add_argument("--description")
     ap.add_argument("--backlog", action="append")
     ap.add_argument("--inbox", action="store_true", dest="attention")
+    ap.add_argument("--step")
     a = ap.parse_args(argv)
     if a.type not in _NODE_TYPES:
         sys.stderr.write(
@@ -975,9 +976,43 @@ def cmd_new(argv):
                 return 1
         print(tid)
     else:
+        if not a.step:
+            sys.stderr.write(
+                "--step <name> is required for 'lc new step'; it determines the owning role\n"
+            )
+            return 2
+        flow_service = _flow()
+        flow = None
+        if a.workflow:
+            try:
+                selected = flow_service.resolve_selection(a.workflow)
+                flow = flow_service.load_flow(selected)
+            except (UseCaseError, ValueError) as e:
+                sys.stderr.write("%s\n" % e)
+                return 1
+        elif a.parent:
+            try:
+                parent = _container.store.get_node(a.parent)
+            except KeyError:
+                sys.stderr.write("unknown parent '%s'\n" % a.parent)
+                return 1
+            flow = flow_service.flow_for(parent)
+        if flow is None or not flow.steps():
+            sys.stderr.write(
+                "no workflow to resolve --step against; pass --workflow <origin>/<name> "
+                "or --parent <item pinned to one>\n"
+            )
+            return 2
+        role = flow.owner_of(a.step)
+        if not role:
+            sys.stderr.write(
+                "step '%s' is not owned in this workflow; owned steps: %s\n"
+                % (a.step, ", ".join(flow.steps()) or "(none)")
+            )
+            return 1
         print(_container.store.create_step(
-            a.title, parent=a.parent, project=a.project, goal=a.goal, description=a.description,
-            attention=a.attention))
+            a.title, step=a.step, role=role, parent=a.parent, project=a.project, goal=a.goal,
+            description=a.description, attention=a.attention))
     return 0
 
 

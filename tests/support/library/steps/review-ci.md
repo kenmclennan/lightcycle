@@ -8,7 +8,7 @@ failure notes and decide what happens next.
    shows every prior `ci-failed` note in sequence, so you can see whether it is the same
    failure repeating or a new one each time.
 2. Decide: fix it by hand and push to the branch yourself; leave it blocked; abandon the item;
-   or re-arm the coder - `lc new step "write-code: <title>" --parent ITEM` (or `lc set STEP
+   or re-arm the coder - `lc new step "<title>" --step write-code --parent ITEM` (or `lc set STEP
    --state ready` style unblock) once you know what should change, with a note on what to try
    differently so the next write-code pass does not repeat the same failure.
 3. `lc done STEP reviewed` either way - reviewing it is the acknowledgement.
