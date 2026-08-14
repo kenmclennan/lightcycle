@@ -40,6 +40,7 @@ class Flow:
         for stage in owner:
             routes[stage] = dict(graph.edges.get(stage) or {})
 
+        primary = dict(graph.primary)
         pr_merge, pr_close, pr_feedback = {}, {}, {}
         pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
         outcome_hooks = {
@@ -79,7 +80,7 @@ class Flow:
             set(owner) | set(workspaces) | set(phases) | set(pr_merge) | set(pr_close)
             | set(pr_feedback) | set(pr_conflict) | set(pr_conflict_cap)
             | set(pr_conflict_escalate) | set(mention_token) | set(review_bot_allowlist)
-            | set(ci_cap) | set(step_hooks)
+            | set(ci_cap) | set(step_hooks) | set(primary)
         )
         for stage in all_stages:
             steps[stage] = StepDef(
@@ -97,6 +98,7 @@ class Flow:
                 workspace=workspaces.get(stage),
                 phase=phases.get(stage),
                 hooks=frozenset(step_hooks.get(stage, set())),
+                primary=primary.get(stage),
             )
         return cls(steps, graph.workspace)
 
@@ -174,6 +176,10 @@ class Flow:
     def ci_failed_cap_target(self, step):
         sd = self._steps.get(step)
         return sd.ci_cap.target if sd and sd.ci_cap else None
+
+    def primary_outcome(self, step):
+        sd = self._steps.get(step)
+        return sd.primary if sd else None
 
     def effective_transition(self, transition, outcome, prior_count):
         if transition is None:

@@ -25,3 +25,4 @@ class StepDef:
     workspace: Optional[str] = None
     phase: Optional[str] = None
     hooks: frozenset = frozenset()
+    primary: Optional[str] = None

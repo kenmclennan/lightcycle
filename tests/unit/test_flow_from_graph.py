@@ -15,7 +15,7 @@ edges:
   build        done      review
   review       done      open-pr
   review       rejected  build
-  open-pr      done      watch-pr
+  open-pr      done      watch-pr  primary
   watch-pr     done      ready-merge
   ready-merge  merged    cleanup
   ready-merge  gave-up   conflict-review
@@ -126,3 +126,9 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_effective_transition_none_transition_stays_none(self):
         self.assertIsNone(self.flow.effective_transition(None, "ci-failed", 5))
+
+    def test_primary_outcome_returns_the_marked_outcome(self):
+        self.assertEqual(self.flow.primary_outcome("open-pr"), "done")
+
+    def test_primary_outcome_absent_by_default(self):
+        self.assertIsNone(self.flow.primary_outcome("review"))
