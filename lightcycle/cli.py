@@ -64,7 +64,7 @@ from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCa
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
-from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
+from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourcesUseCase
 from lightcycle.application.flow import (
     AdvanceInput,
     AdvanceStepUseCase,
@@ -363,17 +363,18 @@ def cmd_workflow(argv):
                 resp.project_dir, resp.origin, resp.sha))
             return 0
         if a.sub == "upgrade":
-            origins = [a.origin] if a.origin else c.workflow_source.list_origins()
-            if not origins:
+            resp = UpgradeWorkflowSourcesUseCase(c.workflow_source, c.store, c.config, c.fs).execute(a.origin)
+            if not resp.results and not resp.failures:
                 print("no workflow sources registered")
                 return 0
-            for origin in origins:
-                resp = UpgradeWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.fs).execute(origin)
-                if resp.changed:
-                    print("upgraded %s @ %s" % (resp.origin, resp.sha))
+            for r in resp.results:
+                if r.changed:
+                    print("upgraded %s @ %s" % (r.origin, r.sha))
                 else:
-                    print("%s already current (%s)" % (resp.origin, resp.sha))
-            return 0
+                    print("%s already current (%s)" % (r.origin, r.sha))
+            for f in resp.failures:
+                sys.stderr.write("lc workflow: %s: %s\n" % (f.origin, f.error))
+            return 1 if resp.failures else 0
         if a.sub == "list":
             resp = ListWorkflowSourcesUseCase(c.workflow_source, c.store, c.fs).execute()
             if not resp.origins:

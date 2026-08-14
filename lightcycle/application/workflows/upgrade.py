@@ -1,3 +1,4 @@
+import subprocess
 from dataclasses import dataclass, field
 from typing import List
 
@@ -14,6 +15,18 @@ class UpgradeResponse:
     sha: str
     changed: bool
     pruned: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class UpgradeOriginFailure:
+    origin: str
+    error: str
+
+
+@dataclass(frozen=True)
+class UpgradeAllResponse:
+    results: List[UpgradeResponse] = field(default_factory=list)
+    failures: List[UpgradeOriginFailure] = field(default_factory=list)
 
 
 class UpgradeWorkflowSourceUseCase:
@@ -52,3 +65,20 @@ class UpgradeWorkflowSourceUseCase:
         finally:
             self._source.cleanup(checkout)
         return UpgradeResponse(origin=origin, sha=sha, changed=(sha != previous), pruned=pruned)
+
+
+class UpgradeWorkflowSourcesUseCase:
+    def __init__(self, source, store, config, fs):
+        self._source = source
+        self._single = UpgradeWorkflowSourceUseCase(source, store, config, fs)
+
+    def execute(self, origin=None) -> UpgradeAllResponse:
+        origins = [origin] if origin else self._source.list_origins()
+        results = []
+        failures = []
+        for o in origins:
+            try:
+                results.append(self._single.execute(o))
+            except (WorkflowSourceError, subprocess.CalledProcessError) as e:
+                failures.append(UpgradeOriginFailure(origin=o, error=str(e)))
+        return UpgradeAllResponse(results=results, failures=failures)
