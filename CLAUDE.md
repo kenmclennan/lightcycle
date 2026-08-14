@@ -7,7 +7,7 @@ Rules for anyone (human or agent) writing code in this repo. `claude -p` loads t
 lightcycle is four coordinated repos. This one is the engine; a change that spans repos lands in tandem.
 
 - **lightcycle** (this repo) - the `lc` engine: CLI, agent pool, and store. Pipx-installed, zero runtime deps, workflow-agnostic. The only home for engine code.
-- **lightcycle-workflows** - the built-in workflow origin: pullable bundles (`source.toml` + `workflows/*.md` + `steps/*.md`) the engine turns into sha-pinned, per-item pins. Content, not engine code. The engine defines the grammar; the bundles are agnostic to it.
+- **lightcycle-workflows** - the built-in workflow origin: pullable bundles (`source.toml` + `workflows/*.md` + `steps/*.md`) the engine turns into sha-pinned, per-item pins. Content, not engine code. The engine defines the grammar; the bundles are agnostic to it. Its `.github/workflows/simulate.yml` is the canonical CI job for a workflow origin; `_SIMULATE_YML` in `lightcycle/application/workflows/init_origin.py` is a copy of it, so a change to either requires the same change in the other - kept in sync by hand, not by a mechanism.
 - **lightcycle-specs** - design docs (`lightcycle/*.md`) and briefs (`lightcycle/<ID>-brief.md`, recorded beside each spec). Specs land there through the spec-PR review gate before code is built.
 - **lightcycle-plugin** - the Claude Code companion: a marketplace repo whose SessionStart hook bootstraps the engine (pipx) and whose skills (e.g. `author-workflow`) help you work with it.
 
