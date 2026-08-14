@@ -357,10 +357,16 @@ class SqliteStore(StorePort):
 
     def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         resolved_kind = kind if kind is not None else default_kind_for(atype)
-        self._conn.execute(
-            "DELETE FROM artifacts WHERE item_id = ? AND atype = ?",
-            (item_id, atype),
-        )
+        if label is None:
+            self._conn.execute(
+                "DELETE FROM artifacts WHERE item_id = ? AND atype = ? AND label IS NULL",
+                (item_id, atype),
+            )
+        else:
+            self._conn.execute(
+                "DELETE FROM artifacts WHERE item_id = ? AND atype = ? AND label = ?",
+                (item_id, atype, label),
+            )
         self._conn.execute(
             "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
             "VALUES (?, ?, ?, ?, ?, ?)",

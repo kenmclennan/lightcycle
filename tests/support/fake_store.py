@@ -151,7 +151,10 @@ class FakeStore(StorePort):
     def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         b = self._get(item_id)
         meta = dict(b.get("metadata") or {})
-        artifacts = [a for a in (meta.get("artifacts") or []) if a.get("type") != atype]
+        artifacts = [
+            a for a in (meta.get("artifacts") or [])
+            if not (a.get("type") == atype and a.get("label") == label)
+        ]
         resolved_kind = kind if kind is not None else default_kind_for(atype)
         entry = {"type": atype, "value": value, "kind": resolved_kind}
         if label:

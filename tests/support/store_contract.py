@@ -639,3 +639,25 @@ class StoreContractBase:
         project = s.find_project("horde")
         self.assertEqual(project.identity, "acme/horde")
         self.assertIsNone(project.local_path)
+
+    def test_replace_artifact_only_replaces_the_matching_label(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "branch", "feat/spec", label="spec")
+        s.add_artifact(sid, "branch", "feat/code", label="code")
+
+        s.replace_artifact(sid, "branch", "feat/spec-2", label="spec")
+
+        got = {(a.label, a.value) for a in s.item_artifacts(sid) if a.type == "branch"}
+        self.assertEqual(got, {("spec", "feat/spec-2"), ("code", "feat/code")})
+
+    def test_replace_artifact_without_a_label_leaves_labelled_ones_alone(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(sid, "pr", "https://gh/spec", label="spec")
+        s.add_artifact(sid, "pr", "https://gh/plain")
+
+        s.replace_artifact(sid, "pr", "https://gh/plain-2")
+
+        got = {(a.label, a.value) for a in s.item_artifacts(sid) if a.type == "pr"}
+        self.assertEqual(got, {("spec", "https://gh/spec"), (None, "https://gh/plain-2")})
