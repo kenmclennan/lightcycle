@@ -4,7 +4,9 @@ import time
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.work import Item, State
-from lightcycle.domain.workspace import Branch, Worktree, current_run_index, phase_key
+from lightcycle.domain.workspace import (
+    Branch, Worktree, current_run_index, phase_key, runs_of,
+)
 from lightcycle.ports.store import ProjectResolutionError
 
 
@@ -115,14 +117,30 @@ class WorktreeService:
         minted = self._minted_branch(item)
         return recorded if recorded == minted else minted
 
+    def _run_for_phase(self, item, phase):
+        return max(1, runs_of(self._step_phases(item), phase))
+
+    def _release_run(self, item, phase, run_index, branch):
+        if run_index < 1 or branch is None:
+            return
+        target = self._target_for_phase(item, phase)
+        if not self._git.is_git_repo(target):
+            return
+        path = Worktree(item, phase_key(phase, run_index)).path_in(target)
+        self._git.remove_worktree(target, path)
+        self._git.delete_branch(target, branch)
+        self._git.delete_remote_branch(target, branch)
+
     def _ensure_branch_artifact(self, item, branch):
         recorded = self.item_branch(item)
         if recorded == branch:
             return
+        phase = self._phase(item)
         if recorded is None:
-            self._store.add_artifact(item, "branch", branch, label=self._phase(item))
+            self._store.add_artifact(item, "branch", branch, label=phase)
             return
-        self._store.replace_artifact(item, "branch", branch, label=self._phase(item))
+        self._release_run(item, phase, current_run_index(self._step_phases(item)) - 1, recorded)
+        self._store.replace_artifact(item, "branch", branch, label=phase)
 
     def ensure(self, item):
         if self._uses_item_repo(item) and not self.has_repo(item):
@@ -197,9 +215,4 @@ class WorktreeService:
         if not self._uses_specs_workspace(item) and not self.has_repo(item):
             return
         for phase, branch in self._recorded_branches(item):
-            target = self._target_for_phase(item, phase)
-            if not self._git.is_git_repo(target):
-                continue
-            self._git.remove_worktree(target, Worktree(item, phase).path_in(target))
-            self._git.delete_branch(target, branch)
-            self._git.delete_remote_branch(target, branch)
+            self._release_run(item, phase, self._run_for_phase(item, phase), branch)
