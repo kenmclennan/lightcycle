@@ -39,6 +39,25 @@ _NO_ESCALATE_EDGE_WORKFLOW_TEXT = _WORKFLOW_TEXT.replace(
     "  await-merge       gave-up      review-conflict\n", ""
 )
 
+_STUCK_LOOP_WORKFLOW_TEXT = """entry: build
+
+requires: brief repo
+
+edges:
+  build   done   review
+  review  done   finish
+  review  loop   stuck
+  stuck   done   stuck
+"""
+
+_STUCK_LOOP_STEPS = {
+    "build": "---\nmodel: sonnet\naccepts:\n  brief: required\nproduces:\n  branch: required\n"
+             "---\n\nBuild.\n",
+    "review": "---\nmodel: sonnet\naccepts:\n  branch: required\n---\n\nReview.\n",
+    "finish": "Finish, terminal, no routes.\n",
+    "stuck": "---\nmodel: sonnet\n---\n\nStuck.\n",
+}
+
 _STEPS = {
     "write-code": "---\nmodel: sonnet\naccepts:\n  brief: required\nproduces:\n  branch: required\n"
                   "---\n\nWrite the code.\n",
@@ -191,6 +210,22 @@ class TestTeardownViolationSurfacesFromAStuckWalk(SimulateTestCase):
         output = err.getvalue()
         self.assertIn("teardown", output)
         self.assertIn("could not claim stage 'review-ci'", output)
+
+
+class TestPlannerIncompleteWalkIsNotADrivingFailure(SimulateTestCase):
+    def test_a_walk_with_no_reachable_terminal_is_reported_without_driving(self):
+        import io
+        from contextlib import redirect_stderr
+
+        selector = self._install(_STUCK_LOOP_WORKFLOW_TEXT, _STUCK_LOOP_STEPS)
+        err = io.StringIO()
+        with redirect_stderr(err):
+            rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 1)
+        output = err.getvalue()
+        self.assertIn("stuck", output)
+        self.assertNotIn("did not terminate", output)
+        self.assertNotIn("teardown:", output)
 
 
 _HANDOFF_WORKFLOW_TEXT = """entry: build
