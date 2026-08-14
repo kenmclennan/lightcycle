@@ -52,23 +52,40 @@ structured graph grammar, not prose, and prettier's markdown formatter reflows t
 _SIMULATE_YML = """name: simulate
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
 
 jobs:
   simulate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pipx install git+https://github.com/kenmclennan/lightcycle
-      - run: lc workflow add "$GITHUB_WORKSPACE" --name ci-bundle --ref HEAD
-      - run: |
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install the lc engine
+        run: pip install "git+https://github.com/kenmclennan/lightcycle@main"
+
+      - name: Dry-run every workflow in this bundle through the real engine
+        run: |
+          set -euo pipefail
+          export LC_HOME="$(mktemp -d)"
+          lc init >/dev/null 2>&1 || true
+          lc workflow add "$GITHUB_WORKSPACE" --name ci-bundle --ref HEAD
+          fail=0
           for f in workflows/*.md; do
-            name=$(basename "$f" .md)
-            lc workflow check "ci-bundle/$name"
-            lc workflow simulate "ci-bundle/$name"
+            name="$(basename "$f" .md)"
+            echo "== lc workflow check ci-bundle/$name =="
+            lc workflow check "ci-bundle/$name" || fail=1
+            echo "== lc workflow simulate ci-bundle/$name =="
+            lc workflow simulate "ci-bundle/$name" || fail=1
+            echo "== lc workflow describe ci-bundle/$name --mermaid =="
+            lc workflow describe "ci-bundle/$name" --mermaid || fail=1
           done
+          exit "$fail"
 """
 
 _README_MD = """# %s

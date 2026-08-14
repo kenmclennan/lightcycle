@@ -278,6 +278,54 @@ class TestInit(unittest.TestCase):
         self.assertIn(("git", project_dir, ("init", "-q", "-b", "main")), git.calls)
         self.assertIn(("commit_all", project_dir, "scaffold workflow-origin repo"), git.calls)
 
+    def test_scaffold_writes_canonical_simulate_yml(self):
+        root = tempfile.mkdtemp()
+        project_dir = os.path.join(root, "acme")
+        cfg = FakeConfig(projects_root=root)
+        source = FakeSource()
+        source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
+        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), FakeFs()).execute("acme")
+        with open(os.path.join(project_dir, ".github", "workflows", "simulate.yml")) as f:
+            content = f.read()
+        self.assertEqual(content, """name: simulate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install the lc engine
+        run: pip install "git+https://github.com/kenmclennan/lightcycle@main"
+
+      - name: Dry-run every workflow in this bundle through the real engine
+        run: |
+          set -euo pipefail
+          export LC_HOME="$(mktemp -d)"
+          lc init >/dev/null 2>&1 || true
+          lc workflow add "$GITHUB_WORKSPACE" --name ci-bundle --ref HEAD
+          fail=0
+          for f in workflows/*.md; do
+            name="$(basename "$f" .md)"
+            echo "== lc workflow check ci-bundle/$name =="
+            lc workflow check "ci-bundle/$name" || fail=1
+            echo "== lc workflow simulate ci-bundle/$name =="
+            lc workflow simulate "ci-bundle/$name" || fail=1
+            echo "== lc workflow describe ci-bundle/$name --mermaid =="
+            lc workflow describe "ci-bundle/$name" --mermaid || fail=1
+          done
+          exit "$fail"
+""")
+
     def test_scaffold_contains_no_hardcoded_name(self):
         root = tempfile.mkdtemp()
         project_dir = os.path.join(root, "acme")
