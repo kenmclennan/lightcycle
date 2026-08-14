@@ -7,7 +7,9 @@ from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
-from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
+from lightcycle.application.workflows.upgrade import (
+    UpgradeWorkflowSourceUseCase, UpgradeWorkflowSourcesUseCase,
+)
 from tests.support.fake_fs import FakeFs
 
 
@@ -20,11 +22,17 @@ class FakeSource:
         self.cleaned = []
         self._n = 0
         self.last_ref = None
+        self.failing = {}
 
     def add_remote(self, url, manifest, sha):
         self.remotes[url] = (manifest, sha)
 
+    def fail_remote(self, url, message):
+        self.failing[url] = message
+
     def fetch(self, url, ref):
+        if url in self.failing:
+            raise WorkflowSourceError(self.failing[url])
         manifest, sha = self.remotes[url]
         self._n += 1
         checkout = "checkout-%d" % self._n
@@ -204,6 +212,24 @@ class TestUpgrade(unittest.TestCase):
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha3")
         UpgradeWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute("acme")
         self.assertEqual(set(source.materialized["acme"]), {"sha1", "sha3"})
+
+
+class TestUpgradeAll(unittest.TestCase):
+    def test_execute_reports_healthy_results_and_failures_separately(self):
+        source = FakeSource()
+        source.add_remote("u1", 'name = "healthy"\ncontract = 1\n', "sha1")
+        _add(source).execute(url="u1", ref="main", name=None)
+        source.add_remote("u2", 'name = "broken"\ncontract = 1\n', "sha1")
+        _add(source).execute(url="u2", ref="main", name=None)
+        source.add_remote("u1", 'name = "healthy"\ncontract = 1\n', "sha2")
+        source.fail_remote("u2", "ref 'branch-x' not found in u2")
+        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), FakeConfig(), FakeFs()).execute()
+        self.assertEqual(len(resp.results), 1)
+        self.assertEqual(resp.results[0].origin, "healthy")
+        self.assertEqual(resp.results[0].sha, "sha2")
+        self.assertEqual(len(resp.failures), 1)
+        self.assertEqual(resp.failures[0].origin, "broken")
+        self.assertEqual(resp.failures[0].error, "ref 'branch-x' not found in u2")
 
 
 class TestRemove(unittest.TestCase):

@@ -5,6 +5,7 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
+from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
@@ -48,11 +49,17 @@ class FakeSource:
         self._checkouts = {}
         self._n = 0
         self.last_ref = None
+        self.failing = {}
 
     def add_remote(self, url, manifest, sha):
         self.remotes[url] = (manifest, sha)
 
+    def fail_remote(self, url, message):
+        self.failing[url] = message
+
     def fetch(self, url, ref):
+        if url in self.failing:
+            raise WorkflowSourceError(self.failing[url])
         manifest, sha = self.remotes[url]
         self._n += 1
         checkout = "c-%d" % self._n
@@ -241,6 +248,57 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("sha2", out)
         self.assertEqual(self.source.read_registry("acme")["current"], "sha2")
+
+    def test_upgrade_reports_every_origin_even_when_one_fails(self):
+        self.source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha1")
+        self.source.add_remote("u2", 'name = "second"\ncontract = 1\n', "sha1")
+        self.source.add_remote("u3", 'name = "third"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u1")
+        call(cli.cmd_workflow, "add", "u2")
+        call(cli.cmd_workflow, "add", "u3")
+        self.source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha2")
+        self.source.add_remote("u3", 'name = "third"\ncontract = 1\n', "sha2")
+        self.source.fail_remote("u2", "ref 'branch-x' not found in u2")
+        first_before = dict(self.source.read_registry("first"))
+        second_before = dict(self.source.read_registry("second"))
+        third_before = dict(self.source.read_registry("third"))
+        rc, out, err = call(cli.cmd_workflow, "upgrade")
+        self.assertEqual(rc, 1)
+        self.assertIn("upgraded first @ sha2", out)
+        self.assertIn("upgraded third @ sha2", out)
+        self.assertIn("second", err)
+        self.assertIn("ref 'branch-x' not found in u2", err)
+        self.assertEqual(self.source.read_registry("first"), {**first_before, "current": "sha2"})
+        self.assertEqual(self.source.read_registry("second"), second_before)
+        self.assertEqual(self.source.read_registry("third"), {**third_before, "current": "sha2"})
+
+    def test_upgrade_all_origins_failing_reports_each_and_exits_nonzero(self):
+        self.source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha1")
+        self.source.add_remote("u2", 'name = "second"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u1")
+        call(cli.cmd_workflow, "add", "u2")
+        self.source.fail_remote("u1", "boom-first")
+        self.source.fail_remote("u2", "boom-second")
+        rc, out, err = call(cli.cmd_workflow, "upgrade")
+        self.assertEqual(rc, 1)
+        self.assertIn("first", err)
+        self.assertIn("boom-first", err)
+        self.assertIn("second", err)
+        self.assertIn("boom-second", err)
+
+    def test_upgrade_explicit_failing_origin_reports_and_exits_nonzero(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u")
+        self.source.fail_remote("u", "ref 'branch-x' not found in u")
+        rc, out, err = call(cli.cmd_workflow, "upgrade", "acme")
+        self.assertEqual(rc, 1)
+        self.assertIn("acme", err)
+        self.assertIn("ref 'branch-x' not found in u", err)
+
+    def test_upgrade_no_origins_registered_reports_and_exits_zero(self):
+        rc, out, err = call(cli.cmd_workflow, "upgrade")
+        self.assertEqual(rc, 0)
+        self.assertIn("no workflow sources registered", out)
 
     def test_list_shows_origin_and_current(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
