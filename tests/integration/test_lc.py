@@ -1184,6 +1184,94 @@ class TestFileItem(unittest.TestCase):
         self.assertEqual(nt["item_artifacts"][0]["value"], "specs/X.md")
 
 
+class TestNewStep(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self, steps=True)
+
+    def _active_item(self):
+        theme = self.store.create_theme("theme", workflow=_DEFAULT_WORKFLOW)
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--parent", theme)
+        self.assertEqual(rc, 0, err)
+        item = item.strip()
+        rc, entry_step, err = call(_cli_mod.cmd_set, item, "--state", "active")
+        self.assertEqual(rc, 0, err)
+        self.store.close(entry_step.strip(), "done")
+        return item
+
+    def test_missing_step_flag_refuses_and_creates_nothing(self):
+        item = self._active_item()
+        before = {c.id for c in self.store.children(item)}
+        rc, out, err = call(_cli_mod.cmd_new, "step", "rework it", "--parent", item)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--step", err)
+        after = {c.id for c in self.store.children(item)}
+        self.assertEqual(after, before)
+
+    def test_step_resolves_role_from_parents_pinned_workflow(self):
+        item = self._active_item()
+        rc, out, err = call(
+            _cli_mod.cmd_new, "step", "rework it", "--step", "build", "--parent", item)
+        self.assertEqual(rc, 0, err)
+        sid = out.strip()
+        node = self.store.get_node(sid)
+        self.assertEqual(node.step, "build")
+        self.assertEqual(node.role, "coder")
+        self.assertEqual(node.title, "rework it")
+        self.assertEqual(node.parent, item)
+        claimed = self.store.claim_ready("coder")
+        self.assertEqual(claimed.id, sid)
+
+    def test_unknown_step_name_refuses_and_lists_owned_steps(self):
+        item = self._active_item()
+        before = {c.id for c in self.store.children(item)}
+        rc, out, err = call(
+            _cli_mod.cmd_new, "step", "rework it", "--step", "nope", "--parent", item)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("nope", err)
+        self.assertIn("build", err)
+        after = {c.id for c in self.store.children(item)}
+        self.assertEqual(after, before)
+
+    def test_neither_parent_nor_workflow_refuses(self):
+        rc, out, err = call(_cli_mod.cmd_new, "step", "rework it", "--step", "build")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--workflow", err)
+        self.assertIn("--parent", err)
+
+    def test_explicit_workflow_resolves_role_without_parent(self):
+        rc, out, err = call(
+            _cli_mod.cmd_new, "step", "rework it", "--step", "build",
+            "--workflow", _DEFAULT_WORKFLOW)
+        self.assertEqual(rc, 0, err)
+        sid = out.strip()
+        node = self.store.get_node(sid)
+        self.assertEqual(node.role, "coder")
+        self.assertIsNone(node.parent)
+
+    def test_step_owned_by_human_is_created_not_refused(self):
+        root = tempfile.mkdtemp()
+        make_syncable_git_repo(root)
+        cfg = write_config(projects=root, specs=root)
+        wdir = _workflows_dir(root)
+        wdir.mkdir(parents=True, exist_ok=True)
+        (wdir / "spec-driven.md").write_text("entry: build\n\nedges:\n  build  gate  approve\n")
+        _write_origin(root)
+        adir = _steps_dir(root)
+        adir.mkdir(parents=True, exist_ok=True)
+        (adir / "coder.md").write_text("---\nmodel: sonnet\nstep: build\n---\n# coder\nstub\n")
+        (adir / "approve.md").write_text("---\nstep: approve\n---\n# approve\nstub\n")
+        store = FakeStore()
+        inject_container(self, store=store, home=root, config_path=cfg)
+        item = store.create_item("an item", workflow=_DEFAULT_WORKFLOW)
+        rc, out, err = call(
+            _cli_mod.cmd_new, "step", "approve it", "--step", "approve", "--parent", item)
+        self.assertEqual(rc, 0, err)
+        sid = out.strip()
+        node = store.get_node(sid)
+        self.assertEqual(node.step, "approve")
+        self.assertEqual(node.role, "human")
+
+
 class TestFileBlockedBy(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self, steps=True)

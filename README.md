@@ -132,7 +132,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 
 | Command | What it does |
 | --- | --- |
-| `lc new <type> "<title>" [--parent/--workflow/--goal/--project]` | create a node; `<type>` is `theme`\|`item`\|`step` (validated) |
+| `lc new <type> "<title>" [--parent/--workflow/--goal/--project]` | create a node; `<type>` is `theme`\|`item`\|`step` (validated); `<type> step` also requires `--step <name>`, the workflow step name that determines `role` (resolved against `--workflow`, or `--parent`'s pinned workflow) |
 | `lc set <id> [--parent/--state/--workflow/--title/--goal/--label]` | update a node; `--parent` **moves** it; `--state active` plans an item (files its entry step); `--state ready`/`blocked` unblocks/escalates a step |
 | `lc show <id>` | one node as JSON (artifacts, resume-state) |
 | `lc done <id> [<outcome>]` | close a node; a **step** done-with-outcome advances the flow; an item/theme cascades |
