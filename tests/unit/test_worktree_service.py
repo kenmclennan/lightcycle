@@ -574,7 +574,10 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
 
     def test_sync_is_keyed_on_the_resolved_target_not_a_hardcoded_workspace_name(self):
         item = self._item_with_repo()
-        target = os.path.join(self.projects_root, "saga")
+        self.store.add_project(
+            "acme/staging", local_path=os.path.join(self.projects_root, "staging")
+        )
+        target = os.path.join(self.projects_root, "staging")
         git = _FakeGit(git_repos={target}, sync_result=True, base="origin/main")
         svc = WorktreeService(
             self.store, git, FakeFs(), _Cfg(self.projects_root), flow=_FakeFlow(workspace="staging")
@@ -720,3 +723,50 @@ class TestPhaseReEntry(unittest.TestCase):
 
         self.assertNotIn("spec-2", self.svc.item_branch(self.item))
         self.assertTrue(self.svc.worktree_path(self.item).endswith("%s-spec" % self.item))
+
+
+class TestNamedWorkspace(unittest.TestCase):
+    def setUp(self):
+        self.projects_root = "/home/u/workspace/projects"
+        self.store = FakeStore()
+        theme = self.store.create_theme("theme")
+        self.item = self.store.create_item("story", theme=theme)
+        self.store.add_project(
+            "acme/saga", local_path=os.path.join(self.projects_root, "saga")
+        )
+        self.store.add_project(
+            "acme/blueprints", local_path=os.path.join(self.projects_root, "blueprints")
+        )
+        self.store.add_artifact(self.item, "repo", "saga")
+
+    def _svc(self, workspace):
+        return WorktreeService(
+            self.store, git=None, fs=None, config=_Cfg(self.projects_root),
+            flow=_FakeFlow(workspace=workspace),
+        )
+
+    def test_a_named_workspace_resolves_to_that_registered_project(self):
+        target = self._svc("blueprints").target_repo(self.item)
+
+        self.assertEqual(target, os.path.join(self.projects_root, "blueprints"))
+
+    def test_the_default_workspace_still_uses_the_items_own_repo(self):
+        target = self._svc("project").target_repo(self.item)
+
+        self.assertEqual(target, os.path.join(self.projects_root, "saga"))
+
+    def test_specs_remains_an_alias_for_the_configured_specs_root(self):
+        target = self._svc("specs").target_repo(self.item)
+
+        self.assertEqual(target, "/specs")
+
+    def test_an_unregistered_workspace_name_fails_rather_than_silently_using_the_item_repo(self):
+        with self.assertRaises(UseCaseError):
+            self._svc("not-a-project").target_repo(self.item)
+
+    def test_a_named_workspace_needs_no_repo_artifact_on_the_item(self):
+        bare = self.store.create_item("no repo", theme=None)
+
+        target = self._svc("blueprints").target_repo(bare)
+
+        self.assertEqual(target, os.path.join(self.projects_root, "blueprints"))
