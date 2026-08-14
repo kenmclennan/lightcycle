@@ -35,7 +35,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
     Given the lightcycle store is reachable
     When I launch the dashboard
     Then a selected row's background is the selected-row colour
-    And a selected row's foreground is the cyan colour
+    And the selection cursor glyph is rendered in the cyan colour
 
   Scenario: The footer occupies two lines styled by the design system
     Given the lightcycle store is reachable

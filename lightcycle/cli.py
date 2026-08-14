@@ -26,6 +26,7 @@ from lightcycle.application.feedback import (
     WorklogInput,
     WorklogUseCase,
 )
+from lightcycle.domain.feedback import format_elapsed
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.project_of import project_of
 from lightcycle.application.work.resolve_backlog import link_resolves
@@ -1400,9 +1401,11 @@ def _print_retro(resp, interval=None):
     print("\nPer-item signals:")
     for row in resp.item_signals:
         sig_str = "  ".join(_fmt_signal(k, row.signals[k]) for k in sorted(row.signals))
+        duration = row.total_duration()
+        duration_str = "unknown" if duration is None else format_elapsed(duration)
         print(
             "  %-20s  %s  (N=%d)  duration=%s"
-            % (row.item.id, sig_str, row.reflections, _fmt_duration(row.total_duration()))
+            % (row.item.id, sig_str, row.reflections, duration_str)
         )
 
 
@@ -1412,17 +1415,6 @@ def _fmt_signal(name, by_model):
         return "%s=%d" % (name, total)
     breakdown = ",".join("%s:%d" % (m, by_model[m]) for m in sorted(by_model))
     return "%s=%d(%s)" % (name, total, breakdown)
-
-
-def _fmt_duration(seconds):
-    if seconds is None:
-        return "unknown"
-    total = int(seconds)
-    hours, rem = divmod(total, 3600)
-    minutes, _ = divmod(rem, 60)
-    if hours:
-        return "%dh%02dm" % (hours, minutes)
-    return "%dm" % minutes
 
 
 def cmd_retro(argv):
