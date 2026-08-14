@@ -23,6 +23,8 @@ class PlannedStep:
 @dataclass(frozen=True)
 class PlannedWalk:
     steps: Tuple[PlannedStep, ...]
+    incomplete: bool = False
+    stuck_at: Optional[str] = None
 
     def covered(self):
         return {s.key() for s in self.steps}
@@ -116,30 +118,67 @@ def _bfs_path(graph, start, goal):
     return None
 
 
+def _bfs_to_terminal(graph, start):
+    q = deque([start])
+    prev = {start: None}
+    while q:
+        cur = q.popleft()
+        for outcome, target in sorted((graph.edges.get(cur) or {}).items()):
+            if not target or target in prev:
+                continue
+            prev[target] = (cur, outcome)
+            if not _outgoing(graph, target):
+                path = []
+                node = target
+                while prev[node] is not None:
+                    p, o = prev[node]
+                    path.append(PlannedStep(stage=p, kind="edge", outcome=o))
+                    node = p
+                path.reverse()
+                return path
+            q.append(target)
+    return None
+
+
 def _walk_from_entry(graph, entry, remaining, bound):
     still_open = set(remaining)
     steps = []
     stage = entry
     visited = set()
     n = 0
-    while stage is not None and n < bound:
+    while n < bound:
         n += 1
         visited.add(stage)
         options = _outgoing(graph, stage)
         if not options:
-            break
+            return PlannedWalk(tuple(steps))
 
         def score(opt):
             target = _target_of(graph, opt)
             in_remaining = opt.key() in still_open
             revisits = target in visited
-            return (0 if in_remaining else 1, 1 if revisits else 0, opt.kind, opt.outcome or "")
+            is_primary = graph.primary_outcome(stage) == opt.outcome
+            return (
+                0 if in_remaining else 1,
+                1 if revisits else 0,
+                0 if is_primary else 1,
+                opt.kind,
+                opt.outcome or "",
+            )
 
         options.sort(key=score)
         chosen = options[0]
         steps.append(chosen)
         still_open.discard(chosen.key())
         stage = _target_of(graph, chosen)
+
+    if not _outgoing(graph, stage):
+        return PlannedWalk(tuple(steps))
+
+    completion = _bfs_to_terminal(graph, stage)
+    if completion is None:
+        return PlannedWalk(tuple(steps), incomplete=True, stuck_at=stage)
+    steps.extend(completion)
     return PlannedWalk(tuple(steps))
 
 
@@ -177,7 +216,7 @@ def _feedback_walk(graph, entry, stage, feedback_step, bound):
     steps.append(PlannedStep(stage=stage, kind="hook", hook="pr_feedback", outcome=feedback_step))
     resume = _walk_from_entry(graph, stage, set(), bound)
     steps.extend(resume.steps)
-    return PlannedWalk(tuple(steps))
+    return PlannedWalk(tuple(steps), incomplete=resume.incomplete, stuck_at=resume.stuck_at)
 
 
 def build_coverage_plan(graph, flow):

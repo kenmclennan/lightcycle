@@ -66,6 +66,12 @@ class WorkflowSimulateUseCase:
         trace = []
         violations = []
         for index, walk in enumerate(plan.walks):
+            if walk.incomplete:
+                violations.append(
+                    "walk %d: coverage planner found no path from '%s' to a terminal stage "
+                    "(workflow graph issue, not a driving failure)" % (index, walk.stuck_at)
+                )
+                continue
             item_id = self._seed_item(pin, graph)
             github = ScriptedGitHub()
             monitor = MonitorPrsUseCase(self._store, github, self._worktrees, self._flow,

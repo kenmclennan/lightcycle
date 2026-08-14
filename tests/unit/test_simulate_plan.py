@@ -5,7 +5,7 @@ from lightcycle.application.workflows.simulate import _named_workspaces
 
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.flow.simulate_plan import build_coverage_plan
+from lightcycle.domain.flow.simulate_plan import build_coverage_plan, _walk_from_entry, _feedback_walk
 
 CONTRACT_METAS = {
     "coder": {
@@ -145,6 +145,123 @@ class TestUnboundedLoopIsBounded(unittest.TestCase):
         self.assertTrue(plan.walks)
         for walk in plan.walks:
             self.assertLess(len(walk.steps), 1000)
+
+    def test_a_walk_with_no_reachable_terminal_is_reported_incomplete(self):
+        plan, graph, flow = _plan(_UNBOUNDED_LOOP_GRAPH, _UNBOUNDED_LOOP_METAS)
+        stuck_walks = [w for w in plan.walks if w.incomplete]
+        self.assertEqual(len(stuck_walks), 1)
+        walk = stuck_walks[0]
+        self.assertEqual(walk.stuck_at, "build")
+
+
+_TIE_BREAK_GRAPH = """
+entry: start
+
+edges:
+  start   done       decide
+  decide  zzz-alt    term-a
+  decide  aaa-first  term-b
+"""
+
+_TIE_BREAK_PRIMARY_GRAPH = """
+entry: start
+
+edges:
+  start   done       decide
+  decide  zzz-alt    term-a   primary
+  decide  aaa-first  term-b
+"""
+
+_TIE_BREAK_METAS = {
+    "coder": {"step": "start"},
+    "decider": {"step": "decide"},
+}
+
+
+class TestPrimaryEdgeTieBreak(unittest.TestCase):
+    def test_with_no_primary_marker_the_alphabetically_first_outcome_wins_the_tie(self):
+        plan, _, _ = _plan(_TIE_BREAK_GRAPH, _TIE_BREAK_METAS)
+        first_walk = plan.walks[0]
+        decide_step = [s for s in first_walk.steps if s.stage == "decide"][0]
+        self.assertEqual(decide_step.outcome, "aaa-first")
+
+    def test_a_primary_marked_outcome_wins_the_tie_regardless_of_its_name(self):
+        plan, _, _ = _plan(_TIE_BREAK_PRIMARY_GRAPH, _TIE_BREAK_METAS)
+        first_walk = plan.walks[0]
+        decide_step = [s for s in first_walk.steps if s.stage == "decide"][0]
+        self.assertEqual(decide_step.outcome, "zzz-alt")
+
+
+_LONG_DETOUR_GRAPH = """
+entry: a
+
+edges:
+  a   done   b
+  b   done   c
+  c   done   d
+  d   done   e
+"""
+
+
+class TestTruncatedWalkCompletesToTheNearestTerminal(unittest.TestCase):
+    def test_a_walk_that_hits_a_small_bound_still_reaches_the_terminal(self):
+        graph = parse_graph(_LONG_DETOUR_GRAPH)
+        walk = _walk_from_entry(graph, "a", set(), bound=2)
+        self.assertFalse(walk.incomplete)
+        self.assertIsNone(walk.stuck_at)
+        self.assertEqual(walk.steps[-1].stage, "d")
+        self.assertEqual(walk.steps[-1].outcome, "done")
+
+
+_TWO_STEP_GRAPH = """
+entry: a
+
+edges:
+  a  done  b
+  b  done  c
+"""
+
+
+class TestBoundHitExactlyOnArrivalAtARealTerminalIsComplete(unittest.TestCase):
+    def test_a_walk_that_reaches_a_real_terminal_exactly_at_the_bound_is_not_incomplete(self):
+        graph = parse_graph(_TWO_STEP_GRAPH)
+        walk = _walk_from_entry(graph, "a", set(), bound=2)
+        self.assertFalse(walk.incomplete)
+        self.assertIsNone(walk.stuck_at)
+        self.assertEqual(walk.steps[-1].stage, "b")
+        self.assertEqual(walk.steps[-1].outcome, "done")
+
+
+_FEEDBACK_STUCK_GRAPH = """
+entry: build
+
+edges:
+  build   done   review
+  review  loop   build
+
+hooks:
+  pr_feedback   build   review
+"""
+
+
+class TestFeedbackWalkPropagatesIncomplete(unittest.TestCase):
+    def test_a_feedback_walk_whose_resume_segment_cannot_reach_a_terminal_is_incomplete(self):
+        graph = parse_graph(_FEEDBACK_STUCK_GRAPH)
+        walk = _feedback_walk(graph, "build", "build", "review", bound=8)
+        self.assertTrue(walk.incomplete)
+        self.assertIsNotNone(walk.stuck_at)
+
+
+class TestExistingBundlesRemainComplete(unittest.TestCase):
+    def test_branch_ci_cap_and_pr_conflict_fixtures_produce_no_incomplete_walks(self):
+        for text, metas in (
+            (_BRANCH_GRAPH, CONTRACT_METAS),
+            (_CI_CAP_GRAPH, _CI_CAP_METAS),
+            (_PR_CONFLICT_GRAPH, _PR_CONFLICT_METAS),
+        ):
+            plan, _, _ = _plan(text, metas)
+            for walk in plan.walks:
+                self.assertFalse(walk.incomplete)
 
 
 if __name__ == "__main__":

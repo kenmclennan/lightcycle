@@ -15,9 +15,13 @@ class WorkflowGraph:
     signals: dict = field(default_factory=dict)
     workspaces: dict = field(default_factory=dict)
     phases: dict = field(default_factory=dict)
+    primary: dict = field(default_factory=dict)
 
     def file_for(self, stage):
         return self.nodes.get(stage, stage)
+
+    def primary_outcome(self, stage):
+        return self.primary.get(stage)
 
     def workspace_for(self, stage):
         return self.workspaces.get(stage, self.workspace)
@@ -43,6 +47,7 @@ def parse_graph(text):
     requires = frozenset()
     workspace = "project"
     nodes, edges, hooks, signals, workspaces, phases = {}, {}, {}, {}, {}, {}
+    primary = {}
     section = None
     for line in text.splitlines():
         if not line.strip():
@@ -73,6 +78,8 @@ def parse_graph(text):
             frm, outcome = parts[0], parts[1]
             target = parts[2] if len(parts) > 2 else None
             edges.setdefault(frm, {})[outcome] = target
+            if len(parts) > 3 and parts[3] == "primary":
+                primary[frm] = outcome
         elif section == "hooks":
             hooks.setdefault(parts[0], []).append(parts[1:])
         elif section == "signals":
@@ -87,5 +94,5 @@ def parse_graph(text):
     return WorkflowGraph(
         entry=entry, requires=requires, workspace=workspace,
         nodes=nodes, edges=edges, hooks=hooks, signals=signals,
-        workspaces=workspaces, phases=phases
+        workspaces=workspaces, phases=phases, primary=primary
     )
