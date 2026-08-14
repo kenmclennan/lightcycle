@@ -27,4 +27,7 @@ def _normal_outcome(flow, stage):
         remaining = [o for o in outcomes if o != cap_outcome]
         if len(remaining) == 1:
             return remaining[0]
+    primary = flow.primary_outcome(stage)
+    if primary is not None:
+        return primary
     return None

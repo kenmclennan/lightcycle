@@ -11,6 +11,7 @@ class TestStepDef(unittest.TestCase):
         self.assertEqual(sd.routes, {})
         self.assertIsNone(sd.ci_cap)
         self.assertEqual(sd.hooks, frozenset())
+        self.assertIsNone(sd.primary)
 
     def test_ci_cap_holds_outcome_n_target(self):
         cap = CiCap("ci-failed", 3, "review-ci")

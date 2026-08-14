@@ -109,6 +109,26 @@ UNDETERMINABLE_METAS = {
     "watcher": {"model": "sonnet"},
 }
 
+PRIMARY_MARKED_GRAPH_TEXT = """
+entry: build
+
+nodes:
+  build     coder
+  open-pr   opener
+  watch-ci  watcher
+
+edges:
+  build     done        open-pr
+  open-pr   done        watch-ci  primary
+  open-pr   conflicted  build
+"""
+
+PRIMARY_MARKED_METAS = {
+    "coder": {"model": "sonnet"},
+    "opener": {"model": "sonnet"},
+    "watcher": {"model": "sonnet"},
+}
+
 
 class TestPlannedPathSingleOutcomeChain(unittest.TestCase):
     def test_returns_every_stage_up_to_the_terminal_edge_in_order(self):
@@ -141,6 +161,15 @@ class TestPlannedPathUndeterminableBranch(unittest.TestCase):
     def test_stops_at_the_undeterminable_branch_without_raising(self):
         flow = Flow.from_graph(parse_graph(UNDETERMINABLE_GRAPH_TEXT), UNDETERMINABLE_METAS)
         self.assertEqual(planned_path(flow, "build"), [("open-pr", "opener")])
+
+
+class TestPlannedPathPrimaryMarkedBranch(unittest.TestCase):
+    def test_follows_the_primary_marked_outcome_past_the_branch(self):
+        flow = Flow.from_graph(parse_graph(PRIMARY_MARKED_GRAPH_TEXT), PRIMARY_MARKED_METAS)
+        self.assertEqual(
+            planned_path(flow, "build"),
+            [("open-pr", "opener"), ("watch-ci", "watcher")],
+        )
 
 
 if __name__ == "__main__":

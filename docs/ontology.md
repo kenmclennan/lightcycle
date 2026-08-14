@@ -38,7 +38,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **step file** / **step markdown** - the prompt for a stage (`steps/<name>.md`, in a workflow source). Workflow policy and conventions live here; the engine stays agnostic.
 - **entry** - the step filed when an item is activated.
 - **edge** - `step  outcome  next-step`; a `next-step`-less edge declares the outcome terminal (closes, no new step).
-- **primary edge** - `step  outcome  next-step  primary`; marks which of a stage's outgoing outcomes is its main line, for a consumer that must pick one edge among several with no hook backing to disambiguate them (e.g. the simulate coverage planner's tie-break). It is workflow-authored content like every other `edges:` token - the engine does not know or care what the marked outcome is named, and it never changes a real step's routing.
+- **primary edge** - `step  outcome  next-step  primary`; marks which of a stage's outgoing outcomes is its main line, for a consumer that must pick one edge among several with no hook backing to disambiguate them (e.g. the simulate coverage planner's tie-break, or planned-step projection's normal-completion edge). It is workflow-authored content like every other `edges:` token - the engine does not know or care what the marked outcome is named, and it never changes a real step's routing.
 - **hook** - an external event (a PR merge, close, or comment) mapped to a transition.
 - **gate** - a human step that must close before downstream proceeds (e.g. the spec-phase `await-merge`, the spec-PR review gate).
 - **signal** - a per-step counter or condition feeding cadence or escalation.
