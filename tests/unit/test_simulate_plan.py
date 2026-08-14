@@ -1,4 +1,7 @@
 import unittest
+from types import SimpleNamespace
+
+from lightcycle.application.workflows.simulate import _named_workspaces
 
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
@@ -146,3 +149,30 @@ class TestUnboundedLoopIsBounded(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNamedWorkspaceSeeding(unittest.TestCase):
+    def _graph(self, workspaces, default="project"):
+        return SimpleNamespace(workspaces=workspaces, workspace=default)
+
+    def test_a_named_workspace_is_reported_for_seeding(self):
+        graph = self._graph({"audit-design": "blueprints"})
+
+        self.assertEqual(_named_workspaces(graph), {"blueprints"})
+
+    def test_the_item_repo_and_specs_need_no_seeding(self):
+        graph = self._graph({"spec-writer": "specs", "build": "project"})
+
+        self.assertEqual(_named_workspaces(graph), set())
+
+    def test_a_named_default_workspace_is_seeded_too(self):
+        graph = self._graph({}, default="blueprints")
+
+        self.assertEqual(_named_workspaces(graph), {"blueprints"})
+
+    def test_every_distinct_named_workspace_is_reported_once(self):
+        graph = self._graph(
+            {"a": "blueprints", "b": "blueprints", "c": "docs", "d": "specs"}
+        )
+
+        self.assertEqual(_named_workspaces(graph), {"blueprints", "docs"})

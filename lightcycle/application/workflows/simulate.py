@@ -9,6 +9,7 @@ from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.contracts import FlowContracts, StepContract
+from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.state import State
@@ -26,6 +27,14 @@ class SimulateResponse:
     ok: bool
     trace: List[str] = field(default_factory=list)
     violations: List[str] = field(default_factory=list)
+
+
+def _named_workspaces(graph):
+    declared = set(graph.workspaces.values()) | {graph.workspace}
+    return {
+        w for w in declared
+        if w and w not in (PROJECT_WORKSPACE, SPECS_WORKSPACE)
+    }
 
 
 class WorkflowSimulateUseCase:
@@ -52,6 +61,7 @@ class WorkflowSimulateUseCase:
                     % (input.workflow, contracts.as_dict())
                 ],
             )
+        self._seed_named_workspaces(graph)
         plan = build_coverage_plan(graph, dom_flow)
         trace = []
         violations = []
@@ -63,6 +73,12 @@ class WorkflowSimulateUseCase:
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
         violations += self._check_teardown_invariant()
         return SimulateResponse(ok=not violations, trace=trace, violations=violations)
+
+    def _seed_named_workspaces(self, graph):
+        for workspace in sorted(_named_workspaces(graph)):
+            path = os.path.join(self._projects_root, workspace)
+            os.makedirs(path, exist_ok=True)
+            self._store.add_project("simulate/%s" % workspace, local_path=path)
 
     def _seed_item(self, pin, graph):
         item_id = self._store.create_item("simulate: %s" % pin, workflow=pin)
