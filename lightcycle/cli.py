@@ -121,14 +121,6 @@ def container():
     return _container
 
 
-def projects_root():
-    return _container.config.projects_root()
-
-
-def specs_root():
-    return _container.config.specs_root()
-
-
 def _flow():
     return make_flow_service(
         _container.fs, _container.store, _container.config, _container.workflow_source)
@@ -156,7 +148,7 @@ COMMAND_GROUPS = [
         ("project", "<add|list|rm|scan> ...", "manage the project registry: add <owner/name> "
          "[--shortcode X] [--path P], list, rm <owner/name>, scan [dir] [--json] lists git repos "
          "under dir (default cwd) as registration candidates - read-only, registers nothing"),
-        ("config", "[--edit]", "show or edit the lightcycle config (projects + specs roots)"),
+        ("config", "[--edit]", "show every resolved config setting, or edit the config file"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
         ("workflow", "<add|upgrade|list|rm|check|describe|simulate> ...", "manage workflow sources and "
@@ -1412,11 +1404,17 @@ def cmd_config(argv):
     p = _container.config.config_path()
     print("config: %s" % p)
     print("exists" if os.path.exists(p) else "not found - run `lc init` to seed it")
-    for key, getter in (("projects", projects_root), ("specs", specs_root)):
-        try:
-            print("%s: %s" % (key, getter()))
-        except ConfigError:
-            print("%s: (not set - run `lc init`)" % key)
+    for s in _container.config.resolved_settings():
+        if s.key == "personal-origin" and not s.value:
+            print("%s: (not set)" % s.key)
+        elif s.state == "unset":
+            print("%s: (not set - run `lc init`)" % s.key)
+        elif s.state == "env":
+            print("%s: %s (env: %s)" % (s.key, s.value, s.env_var))
+        elif s.state == "default":
+            print("%s: %s (default)" % (s.key, s.value))
+        else:
+            print("%s: %s" % (s.key, s.value))
     return 0
 
 
