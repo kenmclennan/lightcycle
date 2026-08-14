@@ -4,7 +4,7 @@ import time
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.work import Item, State
-from lightcycle.domain.workspace import Branch, Worktree
+from lightcycle.domain.workspace import Branch, Worktree, current_run_index, phase_key
 from lightcycle.ports.store import ProjectResolutionError
 
 
@@ -71,25 +71,47 @@ class WorktreeService:
                 return self._config.specs_root()
         return self._resolve_repo(self.item_repo(item))
 
+    def _step_phases(self, item):
+        if self._flow is None:
+            return []
+        return [
+            self._flow.phase_for(child)
+            for child in self._store.children(item)
+            if getattr(child, "type", None) == "step"
+        ]
+
+    def _phase_key(self, item):
+        return phase_key(self._phase(item), current_run_index(self._step_phases(item)))
+
     def worktree_path(self, item):
-        return Worktree(item, self._phase(item)).path_in(self.target_repo(item))
+        return Worktree(item, self._phase_key(item)).path_in(self.target_repo(item))
 
     def item_branch(self, item):
         return self._item(item).artifact_of("branch", label=self._phase(item))
 
+    def _minted_branch(self, item):
+        return Branch.for_feature(
+            self._store.get_node(item).title, self._config.branch_prefix(),
+            ident=item, phase=self._phase_key(item)
+        ).name
+
     def _branch_for(self, item):
-        return (
-            self.item_branch(item)
-            or Branch.for_feature(
-                self._store.get_node(item).title, self._config.branch_prefix(),
-                ident=item, phase=self._phase(item)
-            ).name
-        )
+        recorded = self.item_branch(item)
+        if recorded is None:
+            return self._minted_branch(item)
+        if current_run_index(self._step_phases(item)) <= 1:
+            return recorded
+        minted = self._minted_branch(item)
+        return recorded if recorded == minted else minted
 
     def _ensure_branch_artifact(self, item, branch):
-        if self.item_branch(item) is not None:
+        recorded = self.item_branch(item)
+        if recorded == branch:
             return
-        self._store.add_artifact(item, "branch", branch, label=self._phase(item))
+        if recorded is None:
+            self._store.add_artifact(item, "branch", branch, label=self._phase(item))
+            return
+        self._store.replace_artifact(item, "branch", branch, label=self._phase(item))
 
     def ensure(self, item):
         specs_workspace = self._uses_specs_workspace(item)

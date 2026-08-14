@@ -41,6 +41,8 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **hook** - an external event (a PR merge, close, or comment) mapped to a transition.
 - **gate** - a human step that must close before downstream proceeds (e.g. the spec-phase `await-merge`, the spec-PR review gate).
 - **signal** - a per-step counter or condition feeding cadence or escalation.
+- **phase** - a group of stages sharing one PR and one worktree (spec, feature, code). It names _which_ gate, not when.
+- **phase run** - one pass of an item through a phase. A workflow that loops re-enters a phase, and each run gets its own branch and worktree; the first run keys on the bare phase name, later runs carry their index (`spec-2`). Phase alone identifies a gate, never a pass.
 
 ## The spec-driven pipeline (steps)
 

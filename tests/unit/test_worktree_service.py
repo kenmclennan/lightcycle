@@ -627,3 +627,96 @@ class TestSyncSpecs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _LoopFlow:
+    def __init__(self, phase_by_step):
+        self._phase_by_step = phase_by_step
+
+    def workflow_for(self, node):
+        return "loop"
+
+    def load_graph(self, name=None):
+        return _Graph("project")
+
+    def workspace_for_node(self, node):
+        return "project"
+
+    def phase_for(self, node):
+        return self._phase_by_step.get(getattr(node, "step", None))
+
+    def workspace_for_phase(self, node, phase):
+        return "project"
+
+
+class TestPhaseReEntry(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.phases = {"spec-writer": "spec", "build": "code"}
+        self.flow = _LoopFlow(self.phases)
+        self.svc = WorktreeService(
+            self.store, git=None, fs=None,
+            config=_Cfg("/home/u/workspace/projects"), flow=self.flow,
+        )
+        self.theme = self.store.create_theme("theme")
+        self.item = self.store.create_item("deliver the blueprint", theme=self.theme)
+        self.store.add_project(
+            "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
+        )
+        self.store.add_artifact(self.item, "repo", "saga")
+
+    def _step(self, step):
+        return self.store.create_step("%s: work" % step, step=step, parent=self.item)
+
+    def _close(self, sid):
+        self.store.update_state(sid, "done")
+
+    def test_a_second_pass_through_a_phase_mints_a_new_branch(self):
+        first = self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        first_branch = self.svc.item_branch(self.item)
+        self._close(first)
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+
+        self.assertNotEqual(self.svc.item_branch(self.item), first_branch)
+        self.assertIn("spec-2", self.svc.item_branch(self.item))
+
+    def test_steps_within_one_pass_share_the_phases_branch(self):
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        branch = self.svc.item_branch(self.item)
+
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+
+        self.assertEqual(self.svc.item_branch(self.item), branch)
+
+    def test_the_phases_branch_artifact_is_replaced_not_accumulated(self):
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        self._close(self._step("build"))
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+
+        branches = [
+            a for a in self.store.item_artifacts(self.item) if a.type == "branch"
+        ]
+        self.assertEqual(len(branches), 1)
+
+    def test_a_second_pass_gets_its_own_worktree_path(self):
+        self._step("spec-writer")
+        first_path = self.svc.worktree_path(self.item)
+        self._close(self._step("build"))
+        self._step("spec-writer")
+
+        self.assertNotEqual(self.svc.worktree_path(self.item), first_path)
+
+    def test_a_single_pass_workflow_is_unchanged(self):
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+
+        self.assertNotIn("spec-2", self.svc.item_branch(self.item))
+        self.assertTrue(self.svc.worktree_path(self.item).endswith("%s-spec" % self.item))
