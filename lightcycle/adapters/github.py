@@ -146,6 +146,48 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
         return result
 
+    def head_sha(self, pr: str) -> str:
+        result = subprocess.run(
+            ["gh", "pr", "view", pr, "--json", "headRefOid"], capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return ""
+        try:
+            data = json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ""
+        return data.get("headRefOid", "")
+
+    def changed_files(self, pr: str, sha: str) -> frozenset:
+        parts = _repo_parts(pr)
+        if not parts:
+            return frozenset()
+        owner, repo, number = parts
+        result = subprocess.run(
+            ["gh", "pr", "view", pr, "--json", "baseRefName"], capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return frozenset()
+        try:
+            base = json.loads(result.stdout).get("baseRefName", "")
+        except (json.JSONDecodeError, ValueError):
+            return frozenset()
+        if not base:
+            return frozenset()
+        r = subprocess.run(
+            ["gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha)],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            return frozenset()
+        try:
+            data = json.loads(r.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return frozenset()
+        return frozenset(
+            f.get("filename") for f in (data.get("files") or []) if f.get("filename")
+        )
+
     def reviews(self, pr: str, since: float):
         parts = _repo_parts(pr)
         if not parts:

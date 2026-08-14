@@ -8,6 +8,7 @@ from lightcycle.domain.work import Item, State
 LC_MARKER = "<!-- lc -->"
 _WATERMARK_ARTIFACT = "feedback-watermark"
 _SPAWN_MARK_ARTIFACT = "feedback-spawned-through"
+_CONTENT_PIN_ARTIFACT = "content-pin"
 
 
 def _is_bot(author):
@@ -98,6 +99,44 @@ class MonitorPrsUseCase:
                 return child
         return None
 
+    def _active_step_any(self, item_id):
+        for child in self._store.children(item_id):
+            if child.type == "step" and child.state != State.DONE:
+                return child
+        return None
+
+    def _check_content_pin(self, item, pr_value, phase):
+        head = self._github.head_sha(pr_value)
+        pin = next(
+            (a.value for a in self._store.item_artifacts(item.id)
+             if a.type == _CONTENT_PIN_ARTIFACT and a.label == phase),
+            None,
+        )
+        if pin is None:
+            self._store.replace_artifact(
+                item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
+            )
+            return
+        if pin == head:
+            return
+        old_files = self._github.changed_files(pr_value, pin)
+        new_files = self._github.changed_files(pr_value, head)
+        dropped = old_files - new_files
+        if dropped:
+            note = (
+                "PR head moved from %s to %s and dropped: %s - a previously-reviewed change "
+                "may have been lost; verify before merging."
+                % (pin, head, ", ".join(sorted(dropped)))
+            )
+            step = self._active_step_any(item.id)
+            if step is not None and step.state != State.IN_PROGRESS:
+                self._store.route_to_human(step.id, note)
+            else:
+                self._store.note(item.id, note)
+        self._store.replace_artifact(
+            item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
+        )
+
     def execute(self) -> MonitorPrsResponse:
         merged, abandoned, reworked, conflicted = [], [], [], []
         close = CloseItemUseCase(self._store, self._worktrees)
@@ -114,6 +153,7 @@ class MonitorPrsUseCase:
                 pr_value = Item(item.id, artifacts).artifact_of("pr", label=phase)
                 if pr_value is None:
                     continue
+                self._check_content_pin(item, pr_value, phase)
                 merge_outcome = flow.merge_outcome(stage)
                 close_outcome = flow.close_outcome(stage)
                 if merge_outcome and self._github.is_merged(pr_value):

@@ -3,13 +3,15 @@ from lightcycle.ports.github import GitHubEventsPort
 
 class FakeGitHub(GitHubEventsPort):
     def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
-                 timed_comments=None, timed_reviews=None):
+                 timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None):
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
         self._conflicted = set(conflicted_prs)
         self._push_time = push_time
         self._timed_comments = timed_comments or []
         self._timed_reviews = timed_reviews or []
+        self._head_shas = head_shas or {}
+        self._files_by_sha = files_by_sha or {}
 
     def is_merged(self, pr):
         return pr in self._merged
@@ -31,3 +33,9 @@ class FakeGitHub(GitHubEventsPort):
 
     def reviews(self, pr, since):
         return [r for ts, r in self._timed_reviews if ts > since]
+
+    def head_sha(self, pr):
+        return self._head_shas.get(pr, "")
+
+    def changed_files(self, pr, sha):
+        return self._files_by_sha.get((pr, sha), frozenset())

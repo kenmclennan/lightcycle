@@ -4,6 +4,7 @@ from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.pool import LC_MARKER, MonitorPrsUseCase, TickInput, TickUseCase
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, flow_from_metas
+from lightcycle.domain.work import State
 from lightcycle.ports.github import Comment, Review
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -1128,6 +1129,152 @@ class TestMonitorPrsConflict(unittest.TestCase):
 
         self.assertEqual(result.conflicted, [item])
         self.assertEqual(store.get_node(step).outcome, "conflicted")
+
+
+class TestMonitorPrsContentPin(unittest.TestCase):
+    _URL = "https://github.com/x/y/pull/70"
+
+    def _setup(self, github, flow=None):
+        f = flow or _FLOW
+        store = FakeStore()
+        item = store.create_item("guarded feature", theme=store.create_theme("theme"))
+        store.add_artifact(item, "pr", self._URL)
+        step = store.create_step("build: guarded feature", step="build", role="coder", parent=item)
+        worktrees = FakeWorktrees()
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f))
+        return store, item, step, uc
+
+    def _pin(self, store, item):
+        return next(a.value for a in store.item_artifacts(item) if a.type == "content-pin")
+
+    def test_first_observation_pins_without_escalating(self):
+        gh = FakeGitHub(head_shas={self._URL: "sha1"})
+        store, item, step, uc = self._setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha1")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(store.get_node(step).role, "coder")
+
+    def test_forward_progress_updates_pin_without_escalating(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py", "b.py"})
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha2")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(store.get_node(step).role, "coder")
+
+    def test_regression_routes_the_active_step_to_a_human(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"steps/a.md", "steps/b.md"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha2")
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("sha1", node.notes)
+        self.assertIn("sha2", node.notes)
+        self.assertIn("steps/a.md", node.notes)
+        self.assertIn("steps/b.md", node.notes)
+
+    def test_running_again_after_escalation_does_not_refire(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.md"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+        uc.execute()
+        notes_after_first_regression = store.get_node(step).notes
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).notes, notes_after_first_regression)
+
+    def test_mixed_change_escalates_naming_only_the_dropped_file(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"kept.py", "dropped.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"kept.py", "new.py"})
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("dropped.py", node.notes)
+        self.assertNotIn("new.py", node.notes)
+
+    def test_in_progress_step_is_not_reassigned_but_item_is_noted(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+        store.assign(step, "worker1")
+        store.update_state(step, State.IN_PROGRESS)
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.state, "in_progress")
+        self.assertEqual(node.role, "coder")
+        self.assertIsNone(node.notes)
+        self.assertIn("a.py", store.get_node(item).notes)
+
+    def test_no_active_step_notes_the_item(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+        store.close(step, "done")
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        self.assertIn("a.py", store.get_node(item).notes)
+
+    def test_unchanged_head_is_a_no_op(self):
+        gh = FakeGitHub(head_shas={self._URL: "sha1"})
+        store, item, step, uc = self._setup(gh)
+
+        uc.execute()
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha1")
+        self.assertIsNone(store.get_node(step).notes)
 
 
 class FakeWorkers:
