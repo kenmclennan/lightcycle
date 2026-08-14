@@ -28,6 +28,7 @@ class TickResponse:
     max_agents: int = 0
     ready: int = 0
     inflight_count: int = 0
+    free_slots: int = 0
     breaker_open: bool = False
     breaker_reset_at: Optional[float] = None
     breaker_opened: bool = False
@@ -101,6 +102,7 @@ class TickUseCase:
             max_agents=max_agents,
             ready=ready_count,
             inflight_count=inflight_total,
+            free_slots=slots,
             breaker_open=breaker.is_open,
             breaker_reset_at=breaker.reset_at,
             breaker_opened=breaker_result.opened if breaker_result else False,

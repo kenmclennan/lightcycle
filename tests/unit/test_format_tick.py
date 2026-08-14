@@ -1,7 +1,7 @@
 import unittest
 
 from lightcycle.application.pool.tick import TickResponse
-from lightcycle.cli import _format_tick
+from lightcycle.cli import _format_tick, _idle_reason, _run_log_lines
 
 _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 
@@ -9,7 +9,7 @@ _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 def _result(**kw):
     defaults = dict(swept=[], pruned=0, spawned=[], merged=[], abandoned=[], reworked=[],
                     hook_completed=[], cadence_fired=[], alive=0, max_agents=4, ready=0,
-                    inflight_count=0)
+                    inflight_count=0, breaker_open=False, free_slots=0)
     defaults.update(kw)
     return TickResponse(**defaults)
 
@@ -134,6 +134,49 @@ class TestFormatTick(unittest.TestCase):
         result = _result(cadence_fired=[])
         lines, _ = _format_tick(result, None, _NOW)
         self.assertEqual([l for l in lines if "audit" in l], [])
+
+
+class TestIdleReason(unittest.TestCase):
+    def test_no_ready_steps_returns_none(self):
+        result = _result(ready=0, spawned=[], breaker_open=True, free_slots=0)
+        self.assertIsNone(_idle_reason(result))
+
+    def test_something_spawned_returns_none(self):
+        result = _result(spawned=["coder"], ready=1)
+        self.assertIsNone(_idle_reason(result))
+
+    def test_breaker_open_returns_breaker_open(self):
+        result = _result(ready=2, spawned=[], breaker_open=True)
+        self.assertEqual(_idle_reason(result), "breaker-open")
+
+    def test_no_free_slots_returns_no_free_slots(self):
+        result = _result(ready=2, spawned=[], breaker_open=False, free_slots=0)
+        self.assertEqual(_idle_reason(result), "no-free-slots")
+
+    def test_free_slots_but_nothing_spawned_returns_ready_role_already_inflight(self):
+        result = _result(ready=2, spawned=[], breaker_open=False, free_slots=3)
+        self.assertEqual(_idle_reason(result), "ready-role-already-inflight")
+
+
+class TestRunLogLines(unittest.TestCase):
+    def test_idle_tick_still_produces_a_state_line(self):
+        result = _result(ready=0, spawned=[])
+        text = _run_log_lines(result, _NOW)
+        state_lines = [l for l in text.splitlines() if "state" in l]
+        self.assertEqual(len(state_lines), 1)
+        self.assertTrue(text.endswith("\n"))
+
+    def test_spawned_tick_omits_reason(self):
+        result = _result(spawned=["coder"], ready=1, breaker_open=False, free_slots=0)
+        text = _run_log_lines(result, _NOW)
+        state_line = [l for l in text.splitlines() if "state" in l][0]
+        self.assertNotIn("reason=", state_line)
+
+    def test_breaker_open_tick_includes_reason(self):
+        result = _result(ready=2, spawned=[], breaker_open=True)
+        text = _run_log_lines(result, _NOW)
+        state_line = [l for l in text.splitlines() if "state" in l][0]
+        self.assertIn("reason=breaker-open", state_line)
 
 
 if __name__ == "__main__":
