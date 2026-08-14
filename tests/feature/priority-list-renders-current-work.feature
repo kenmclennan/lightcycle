@@ -142,3 +142,81 @@ Feature: Priority list renders current work
     Given the store has a step already in the blocked lane
     When I launch the dashboard
     Then the terminal bell has not rung
+
+  @wip
+  Scenario: Down moves the selection to the next row
+    Given the store has three queued steps
+    When I launch the dashboard
+    And Down is pressed
+    Then the selection has moved to the second row
+
+  @wip
+  Scenario: Up does not wrap the selection past the first row
+    Given the store has three queued steps
+    When I launch the dashboard
+    And Up is pressed
+    Then the selection has not moved from the first row
+
+  @wip
+  Scenario: Down does not wrap the selection past the last row
+    Given the store has three queued steps
+    When I launch the dashboard
+    And the selection is on the last row
+    And Down is pressed
+    Then the selection has not moved past the last row
+
+  @wip
+  Scenario: Ctrl-D jumps the selection forward by the same amount as Page Down
+    Given the store has more queued steps than fit on one screen
+    When I launch the dashboard
+    And Ctrl-D is pressed
+    Then the selection has moved forward by the same amount Page Down would move it
+
+  @wip
+  Scenario: Ctrl-U jumps the selection back by the same amount as Page Up
+    Given the store has more queued steps than fit on one screen
+    When I launch the dashboard
+    And Ctrl-D is pressed
+    And Ctrl-U is pressed
+    Then the selection is back on the row it started on
+
+  @wip
+  Scenario: The selection follows a selected step that moves group between polls
+    Given the dashboard has launched with a selected queued step
+    When that step is claimed and becomes active
+    And one poll interval elapses
+    Then the selection is still on that step, now in the active group
+
+  @wip
+  Scenario: The selection falls to a nearby remaining row when the selected step leaves the list
+    Given the dashboard has launched with a selected step
+    When that step is completed
+    And one poll interval elapses
+    Then the selection is on a remaining row near the previous position
+    And the selection is not on a blank separator row
+
+  @wip
+  Scenario: A needs-attention row sourced from the blocked lane shows the dependency chain-link icon and the blocking item's id
+    Given the store has a step blocked on another item's completion
+    When I launch the dashboard
+    Then that step's row shows the dependency chain-link icon alongside its needs-attention icon
+    And that step's row shows the blocking item's id in its step cell
+
+  @wip
+  Scenario: A needs-attention row sourced from the inbox lane shows no dependency indicator
+    Given the store has a step in the inbox lane
+    When I launch the dashboard
+    Then that step's row shows no dependency chain-link icon
+
+  @wip
+  Scenario: A calm message replaces the priority list when nothing needs attention, is active, or is queued
+    Given the store has no steps in any lane
+    When I launch the dashboard
+    Then a calm message is shown in place of the priority list
+
+  @wip
+  Scenario: The calm message is replaced by the priority list once work appears
+    Given the dashboard has launched with no steps in any lane
+    When a new step is created into the queue
+    And one poll interval elapses
+    Then the priority list is shown in place of the calm message
