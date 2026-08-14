@@ -45,6 +45,7 @@ ignore = ["E501", "E741", "E702", "E402"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib -m 'not wip'"
+markers = ["wip: a scenario written ahead of its step definitions"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
