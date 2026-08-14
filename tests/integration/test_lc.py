@@ -677,11 +677,20 @@ class TestRun(unittest.TestCase):
     def _preset_worker(self, **w):
         (Path(self.root) / "logs" / "workers.json").write_text(json.dumps([w]))
 
+    def _run_log(self):
+        return (Path(self.root) / "logs" / "run.log").read_text()
+
     def test_run_once_spawns_for_ready_role(self):
         self.store.create_step("build: t", step="build", role="coder")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertTrue(any(w["role"] == "coder" for w in self._workers()))
+        self.assertTrue((Path(self.root) / "logs" / "run.log").exists())
+        run_log = self._run_log()
+        self.assertIn("state", run_log)
+        self.assertIn("active=", run_log)
+        self.assertIn("ready=", run_log)
+        self.assertIn("inflight=", run_log)
 
     def test_queue_lists_ready(self):
         c = self.store.create_step("build: y", step="build", role="coder")
@@ -702,6 +711,7 @@ class TestRun(unittest.TestCase):
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 1)
+        self.assertIn("reason=ready-role-already-inflight", self._run_log())
 
     def test_run_pool_fills_up_to_max_agents(self):
         for i in range(7):
@@ -750,6 +760,43 @@ class TestRun(unittest.TestCase):
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(self._workers(), [])
+        self.assertIn("reason=breaker-open", self._run_log())
+
+    def test_run_no_free_slots_logs_reason(self):
+        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("review: t", step="review", role="reviewer")
+        claimed = self.store.claim_ready("reviewer")
+        self._preset_worker(
+            spawnid="boot",
+            role="reviewer",
+            pid=os.getpid(),
+            pid_started=process_start_time(os.getpid()),
+            log="x",
+            step=claimed.id,
+            started=time.time(),
+        )
+        os.environ["LC_MAX_AGENTS"] = "1"
+        self.addCleanup(lambda: os.environ.pop("LC_MAX_AGENTS", None))
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        self.assertIn("reason=no-free-slots", self._run_log())
+
+    def test_run_once_tick_exception_is_logged_and_reraised(self):
+        with patch.object(_cli_mod.TickUseCase, "execute", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                _cli_mod.cmd_start(["--once"])
+        run_log = self._run_log()
+        self.assertIn("tick raised", run_log)
+        self.assertIn("RuntimeError: boom", run_log)
+        self.assertFalse((Path(self.root) / ".lc-run.pid").exists())
+
+    def test_lc_logs_run_returns_content_after_a_tick(self):
+        self.store.create_step("build: t", step="build", role="coder")
+        rc, _, err = self._run_once()
+        self.assertEqual(rc, 0, err)
+        rc, out, err = call(_cli_mod.cmd_logs, "run")
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(out.strip())
 
     def test_run_loop_first_tick_does_not_replay_old_hook_completions(self):
         (_steps_dir(self.root) / "auditor.md").write_text(

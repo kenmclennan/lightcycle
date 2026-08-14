@@ -49,3 +49,7 @@ class FsPort(ABC):
     @abstractmethod
     def ensure_worktrees_ignored(self, git_dir):
         pass
+
+    @abstractmethod
+    def append_run_log(self, text):
+        pass

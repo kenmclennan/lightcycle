@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import urllib.error
 
 from lightcycle import __version__
@@ -1109,8 +1110,7 @@ def cmd_rm(argv):
 
 
 
-def _format_tick(result, prev_snapshot, now):
-    ts = time.strftime("%H:%M:%S", time.localtime(now))
+def _tick_event_lines(result, ts):
     lines = []
     for role in result.spawned:
         lines.append("%s  %-7s  %s" % (ts, "spawn", role))
@@ -1142,14 +1142,57 @@ def _format_tick(result, prev_snapshot, now):
     if result.breaker_rearmed:
         reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
         lines.append("%s  %-7s  %s" % (ts, "breaker", "probe stalled, retrying after %s" % reset_ts))
+    return lines
+
+
+def _state_line(result, ts, reason=None):
+    state = "active=%d/%d ready=%d inflight=%d" % (
+        result.alive, result.max_agents, result.ready, result.inflight_count)
+    if result.pruned:
+        state += " pruned=%d" % result.pruned
+    if reason:
+        state += " reason=%s" % reason
+    return "%s  %-7s  %s" % (ts, "state", state)
+
+
+def _idle_reason(result):
+    if result.spawned or not result.ready:
+        return None
+    if result.breaker_open:
+        return "breaker-open"
+    if result.free_slots <= 0:
+        return "no-free-slots"
+    return "ready-role-already-inflight"
+
+
+def _format_tick(result, prev_snapshot, now):
+    ts = time.strftime("%H:%M:%S", time.localtime(now))
+    lines = _tick_event_lines(result, ts)
     cur = (result.alive, result.max_agents, result.ready, result.inflight_count)
     if cur != prev_snapshot or result.pruned:
-        state = "active=%d/%d ready=%d inflight=%d" % (
-            result.alive, result.max_agents, result.ready, result.inflight_count)
-        if result.pruned:
-            state += " pruned=%d" % result.pruned
-        lines.append("%s  %-7s  %s" % (ts, "state", state))
+        lines.append(_state_line(result, ts))
     return lines, cur
+
+
+def _run_log_lines(result, now):
+    ts = time.strftime("%H:%M:%S", time.localtime(now))
+    lines = _tick_event_lines(result, ts) + [_state_line(result, ts, reason=_idle_reason(result))]
+    return "\n".join(lines) + "\n"
+
+
+def _run_log_error(now):
+    ts = time.strftime("%H:%M:%S", time.localtime(now))
+    return "%s  %-7s  tick raised, process exiting:\n%s" % (ts, "error", traceback.format_exc())
+
+
+def _run_tick(tick, fs, tick_input, now):
+    try:
+        result = tick.execute(tick_input)
+    except Exception:
+        fs.append_run_log(_run_log_error(now))
+        raise
+    fs.append_run_log(_run_log_lines(result, now))
+    return result
 
 
 def _upgrade_notice(check=lambda: upgrade(__version__, check_only=True)):
@@ -1206,7 +1249,7 @@ def cmd_start(argv):
         )
         if a.once:
             now = time.time()
-            result = tick.execute(TickInput(now=now))
+            result = _run_tick(tick, _container.fs, TickInput(now=now), now)
             lines, _ = _format_tick(result, None, now)
             for line in lines:
                 print(line)
@@ -1222,7 +1265,7 @@ def cmd_start(argv):
         prev_now = time.time()
         while True:
             now = time.time()
-            result = tick.execute(TickInput(now=now, since=prev_now))
+            result = _run_tick(tick, _container.fs, TickInput(now=now, since=prev_now), now)
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
             for line in lines:
                 print(line)

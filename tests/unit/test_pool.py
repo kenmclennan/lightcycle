@@ -584,6 +584,7 @@ class TestTick(unittest.TestCase):
         )
         self.assertEqual(spawner.spawned, [])
         self.assertEqual(result.spawned, [])
+        self.assertEqual(result.free_slots, 0)
 
     def test_breaker_open_pre_reset_spawns_nothing(self):
         s = FakeStore()
@@ -596,6 +597,26 @@ class TestTick(unittest.TestCase):
         self.assertEqual(spawner.spawned, [])
         self.assertTrue(result.breaker_open)
         self.assertEqual(result.breaker_reset_at, 2000.0)
+        self.assertEqual(result.free_slots, 0)
+
+    def test_free_slots_reflects_available_capacity(self):
+        result = TickUseCase(
+            FakeStore(), FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4)
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.free_slots, 4)
+
+    def test_free_slots_positive_when_ready_role_already_has_an_inflight_worker(self):
+        s = FakeStore()
+        s.create_step("b1", step="build", role="coder")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "boot", "role": "coder", "pid": 1, "step": None, "started": 1000.0}],
+            alive_pids={1},
+        )
+        result = TickUseCase(
+            s, workers, FakeSpawner(), FakeConfig(max_agents=4)
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.spawned, [])
+        self.assertEqual(result.free_slots, 3)
 
     def test_breaker_half_open_spawns_exactly_one_probe(self):
         s = FakeStore()

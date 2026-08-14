@@ -95,6 +95,16 @@ def ensure_logs_dir(root):
     return d
 
 
+def run_log_path(root):
+    return os.path.join(root, "logs", "run.log")
+
+
+def append_run_log(root, text):
+    os.makedirs(os.path.join(root, "logs"), exist_ok=True)
+    with open(run_log_path(root), "a") as f:
+        f.write(text)
+
+
 def ensure_worktrees_ignored(git_dir):
     info_dir = os.path.join(git_dir, "info")
     os.makedirs(info_dir, exist_ok=True)
@@ -151,3 +161,6 @@ class FsAdapter(FsPort):
 
     def ensure_worktrees_ignored(self, git_dir):
         return ensure_worktrees_ignored(git_dir)
+
+    def append_run_log(self, text):
+        return append_run_log(self._config.data_root(), text)
