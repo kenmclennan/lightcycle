@@ -138,6 +138,29 @@ class TestStatus(unittest.TestCase):
         self.assertEqual([t.id for t in lanes["inbox"]], [human])
         self.assertEqual([t.id for t in lanes["active"]], [running])
 
+    def test_watched_step_leaves_the_inbox_lane_while_its_feedback_step_is_open(self):
+        s = FakeStore()
+        watched = s.create_step("await-merge: thing", step="await-merge", role="human")
+        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+                           parent=s.get_node(watched).parent)
+        s.add_artifact(fb, "watched-step", watched)
+
+        lanes = StatusUseCase(s).execute().lanes
+
+        self.assertNotIn(watched, [t.id for t in lanes["inbox"]])
+
+    def test_watched_step_returns_to_the_inbox_lane_once_its_feedback_step_closes(self):
+        s = FakeStore()
+        watched = s.create_step("await-merge: thing", step="await-merge", role="human")
+        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+                           parent=s.get_node(watched).parent)
+        s.add_artifact(fb, "watched-step", watched)
+        s.close(fb, "done")
+
+        lanes = StatusUseCase(s).execute().lanes
+
+        self.assertIn(watched, [t.id for t in lanes["inbox"]])
+
     def test_dep_blocked_task_lands_in_blocked_not_queue(self):
         s = FakeStore()
         blocker = s.create_step("blocker", step="build", role="coder")

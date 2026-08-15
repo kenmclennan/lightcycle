@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
+from lightcycle.application.work.watched_steps import watched_step_ids
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.work import Item, NodeQueue
 
@@ -25,21 +26,11 @@ class InboxUseCase:
 
     def execute(self, input: InboxInput) -> InboxResponse:
         resolver = self._resolver()
-        watched = self._watched_step_ids()
+        watched = watched_step_ids(self._store)
         steps = [t for t in self._store.all_steps() if t.id not in watched]
         rows = NodeQueue(steps).for_human(
             resolver, {"action", "blocked", "triage"}, input.n)
         return InboxResponse(rows=[self._row(k, o, t, resolver) for (k, o), t in rows])
-
-    def _watched_step_ids(self):
-        watched = set()
-        for n in self._store.all_nodes():
-            if n.type != "step":
-                continue
-            for a in self._store.item_artifacts(n.id):
-                if a.type == "watched-step":
-                    watched.add(a.value)
-        return watched
 
     def _resolver(self):
         cache = {}
