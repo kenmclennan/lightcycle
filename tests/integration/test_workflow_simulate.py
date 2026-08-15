@@ -117,6 +117,52 @@ def _write_bundle(home, origin, sha, workflow_text, steps):
     )
 
 
+_TWO_PHASE_WORKFLOW_TEXT = """entry: spec-writer
+
+requires: brief repo
+
+phase:
+  spec-writer       spec
+  spec-open-pr      spec
+  spec-await-merge  spec
+  write-code        code
+  code-open-pr      code
+  code-await-merge  code
+  cleanup           code
+
+nodes:
+  spec-open-pr      open-pr
+  code-open-pr      open-pr
+  spec-await-merge  await-merge
+  code-await-merge  await-merge
+
+edges:
+  spec-writer       done         spec-open-pr
+  spec-open-pr      done         spec-await-merge
+  spec-await-merge  spec-merged  write-code
+  spec-await-merge  changes      spec-writer
+  write-code        done         code-open-pr
+  code-open-pr      done         code-await-merge
+  code-await-merge  merged       cleanup
+  code-await-merge  changes      write-code
+
+hooks:
+  pr_merge  spec-await-merge  spec-merged
+  pr_merge  code-await-merge  merged
+"""
+
+_TWO_PHASE_STEPS = {
+    "spec-writer": "---\nmodel: sonnet\naccepts:\n  brief: required\nproduces:\n  spec: required\n"
+                   "---\n\nWrite the spec.\n",
+    "write-code": "---\nmodel: sonnet\naccepts:\n  spec: required\nproduces:\n  branch: required\n"
+                  "---\n\nWrite the code.\n",
+    "open-pr": "---\nmodel: sonnet\naccepts:\n  branch: optional\nproduces:\n  pr: required\n"
+               "  branch: required\n---\n\nOpen a PR.\n",
+    "await-merge": "Await merge.\n",
+    "cleanup": "Cleanup, terminal, no routes.\n",
+}
+
+
 class SimulateTestCase(unittest.TestCase):
     def setUp(self):
         self._orig = cli._container
@@ -275,3 +321,12 @@ class TestHandoffSatisfactionViolation(SimulateTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTwoPhaseBundleSeedsAPrPerPhase(SimulateTestCase):
+    def test_merging_one_phases_pr_does_not_merge_the_other_phases(self):
+        selector = self._install(_TWO_PHASE_WORKFLOW_TEXT, _TWO_PHASE_STEPS)
+
+        rc = cli._workflow_simulate(selector)
+
+        self.assertEqual(rc, 0)

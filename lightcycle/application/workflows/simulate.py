@@ -15,6 +15,7 @@ from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.state import State
 
 _ADVANCING_HOOKS = ("pr_merge", "pr_conflict")
+_PHASE_SCOPED_ARTIFACTS = ("pr", "branch")
 
 
 @dataclass(frozen=True)
@@ -137,11 +138,13 @@ class WorkflowSimulateUseCase:
     def _synthesize_produces(self, item_id, pin, stage):
         meta = self._flow.meta_for_step(stage, pin)
         contract = StepContract.from_meta(meta)
-        present = {a.type for a in self._store.item_artifacts(item_id)}
+        phase = self._flow.load_graph(pin).phase_for(stage)
+        present = {(a.type, a.label) for a in self._store.item_artifacts(item_id)}
         for req in contract.produces:
-            if req.type not in present:
-                self._store.add_artifact(item_id, req.type, "<simulated>")
-                present.add(req.type)
+            label = phase if req.type in _PHASE_SCOPED_ARTIFACTS else None
+            if (req.type, label) not in present:
+                self._store.add_artifact(item_id, req.type, "<simulated>", label=label)
+                present.add((req.type, label))
 
     def _pr_value(self, item_id, graph, stage):
         phase = graph.phase_for(stage)
