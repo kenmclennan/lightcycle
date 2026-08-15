@@ -12,7 +12,11 @@ Feature: The dashboard adopts the design system's visual vocabulary
   the only reachable screen, so what renders is the global keyboard
   shortcuts list, in order, exactly as the wireframe's own footer shows it.
   No behaviour changes: only how the dashboard is framed, and what shared
-  token values are available to render into.
+  token values are available to render into. The tab strip's own emphasis
+  is chrome too: which of its two tabs is bold-and-cyan versus dim follows
+  whichever top-level screen Tab last switched to, a behaviour the backlog
+  screen (see the-backlog-screen.feature) introduces once a second top-level
+  screen exists for Tab to switch to.
 
   Scenario: The dashboard renders inside a bordered frame
     Given the lightcycle store is reachable
@@ -26,10 +30,20 @@ Feature: The dashboard adopts the design system's visual vocabulary
     And the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
 
-  Scenario: Pressing Tab does not change which tab is emphasised
+  @wip
+  Scenario: Pressing Tab moves the emphasis from the Current work tab to the Backlog tab
     Given the dashboard has launched
     When Tab is pressed
-    Then the "Current work" tab is still the emphasised tab
+    Then the "Backlog" tab is bold and in the cyan colour
+    And the "Current work" tab is in the dim colour
+
+  @wip
+  Scenario: Pressing Tab again moves the emphasis back to the Current work tab
+    Given the dashboard has launched
+    When Tab is pressed
+    And Tab is pressed
+    Then the "Current work" tab is bold and in the cyan colour
+    And the "Backlog" tab is in the dim colour
 
   Scenario: A table's selection cursor uses the design system's selected-row styling
     Given the lightcycle store is reachable
