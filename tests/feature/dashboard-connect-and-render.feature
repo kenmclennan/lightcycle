@@ -42,25 +42,21 @@ Feature: The dashboard connects to the store and renders on launch
     When I launch the dashboard
     Then the status bar reports the breaker as open with that reset time
 
-  @wip
   Scenario: The status bar always shows the installed version
     Given the lightcycle store is reachable
     When I launch the dashboard
     Then the status bar shows the installed version
 
-  @wip
   Scenario: The status bar shows the upgrade indicator when a newer version is available
     Given a newer version is available
     When I launch the dashboard
     Then the status bar shows the upgrade indicator with that version
 
-  @wip
   Scenario: The status bar shows no upgrade indicator when the installed version is current
     Given no newer version is available
     When I launch the dashboard
     Then the status bar shows no upgrade indicator
 
-  @wip
   Scenario: The status bar shows no upgrade indicator when the upgrade check fails
     Given the upgrade check fails
     When I launch the dashboard

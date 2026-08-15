@@ -22,6 +22,14 @@ STATE_GLYPHS = {
 
 DEPENDENCY_BLOCKED_EXTRA_GLYPH = Glyph("⛓", "amber")
 
+FOOTER_GLYPHS = {
+    "pool-running": Glyph("●", "cyan"),
+    "pool-stopped": Glyph("○", "dim"),
+    "claude-available": Glyph("●", "cyan"),
+    "claude-unavailable": Glyph("⊘", "red"),
+    "upgrade-available": Glyph("⬆", "amber"),
+}
+
 CURSOR_GLYPH = Glyph("❯", "cyan")
 
 COLUMN_GRIDS = {

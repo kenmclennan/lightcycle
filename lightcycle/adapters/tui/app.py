@@ -1,4 +1,5 @@
 import datetime
+import time
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -7,15 +8,18 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Static
 from textual.widgets.data_table import CellDoesNotExist
 
+from lightcycle import __version__
 from lightcycle.adapters.tui.design_system import (
     COLOURS,
     COLUMN_GRIDS,
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
+    FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
 )
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows, is_gap_key
 from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
+from lightcycle.application.setup import upgrade
 from lightcycle.application.work import StatusUseCase
 
 POLL_INTERVAL_SECONDS = 10
@@ -25,17 +29,39 @@ DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "time")
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
 
-class StatusBar(Static):
-    status_text = ""
+class StatusBar(Horizontal):
+    def compose(self) -> ComposeResult:
+        yield Static(id="status-pool")
+        yield Static(id="status-claude")
+        yield Static(id="status-version")
+        yield Static(id="status-upgrade")
 
-    def report(self, *, running, is_open, reset_at):
-        pool_text = "pool: running" if running else "pool: stopped"
-        if is_open:
-            breaker_text = "breaker: open (resets %s)" % reset_at
+    def report(self, *, pool_running, breaker_is_open, breaker_reset_at, version, upgrade_version):
+        pool_glyph, pool_colour = FOOTER_GLYPHS["pool-running" if pool_running else "pool-stopped"]
+        pool_text = "%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running")
+        self.query_one("#status-pool", Static).update(Text(pool_text, style=COLOURS[pool_colour]))
+
+        if breaker_is_open:
+            resume_ts = time.strftime("%H:%M:%S", time.localtime(breaker_reset_at))
+            claude_glyph, claude_colour = FOOTER_GLYPHS["claude-unavailable"]
+            claude_text = "%s claude unavailable · resumes %s" % (claude_glyph, resume_ts)
         else:
-            breaker_text = "breaker: closed"
-        self.status_text = "%s   %s" % (pool_text, breaker_text)
-        self.update(self.status_text)
+            claude_glyph, claude_colour = FOOTER_GLYPHS["claude-available"]
+            claude_text = "%s claude available" % claude_glyph
+        self.query_one("#status-claude", Static).update(Text(claude_text, style=COLOURS[claude_colour]))
+
+        self.query_one("#status-version", Static).update(Text("v%s" % version, style=COLOURS["dim"]))
+
+        upgrade_widget = self.query_one("#status-upgrade", Static)
+        if upgrade_version is not None:
+            upgrade_glyph, upgrade_colour = FOOTER_GLYPHS["upgrade-available"]
+            upgrade_widget.update(
+                Text("%s v%s available" % (upgrade_glyph, upgrade_version), style=COLOURS[upgrade_colour])
+            )
+            upgrade_widget.display = True
+        else:
+            upgrade_widget.update("")
+            upgrade_widget.display = False
 
 
 class TabStrip(Horizontal):
@@ -147,6 +173,16 @@ class LightcycleApp(App):
     StatusBar {{
         height: 1;
     }}
+    StatusBar Static {{
+        width: auto;
+        margin-right: 2;
+    }}
+    StatusBar #status-version {{
+        width: 1fr;
+    }}
+    StatusBar #status-upgrade {{
+        margin-right: 0;
+    }}
     ShortcutBar {{
         height: 1;
     }}
@@ -164,10 +200,17 @@ class LightcycleApp(App):
     }}
     """
 
-    def __init__(self, container, now=None):
+    BINDINGS = [
+        Binding("q", "quit", "Quit", show=False, priority=True),
+        Binding("ctrl+c", "quit", "Quit", show=False, priority=True),
+    ]
+
+    def __init__(self, container, now=None, upgrade_check=None):
         super().__init__()
         self._container = container
         self._now = now or datetime.datetime.now
+        self._upgrade_check = upgrade_check or (lambda: upgrade(__version__, check_only=True))
+        self._upgrade_version = None
         self._last_shape = None
         self._last_attention_ids = None
         self._selected_flat_index = 0
@@ -186,8 +229,18 @@ class LightcycleApp(App):
         table = self.query_one(PriorityTable)
         table.cursor_type = "row"
         table.show_header = False
+        self._upgrade_version = self._check_upgrade()
         self.call_after_refresh(self._refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self._refresh)
+
+    def _check_upgrade(self):
+        try:
+            response = self._upgrade_check()
+        except Exception:
+            return None
+        if not response.available:
+            return None
+        return response.remote
 
     def _refresh(self) -> None:
         lanes = StatusUseCase(self._container.store).execute().lanes
@@ -219,7 +272,11 @@ class LightcycleApp(App):
         running = PoolRunningUseCase(self._container.lock).execute().running
         breaker = BreakerStatusUseCase(self._container.breaker).execute()
         self.query_one(StatusBar).report(
-            running=running, is_open=breaker.is_open, reset_at=breaker.reset_at
+            pool_running=running,
+            breaker_is_open=breaker.is_open,
+            breaker_reset_at=breaker.reset_at,
+            version=__version__,
+            upgrade_version=self._upgrade_version,
         )
 
     def _toggle_empty_state(self, empty) -> None:

@@ -1,10 +1,16 @@
 import asyncio
 import contextvars
 
+from lightcycle import __version__
+from lightcycle.application.setup import UpgradeResponse
 from lightcycle.config import Config
 from lightcycle.container import Container
 from lightcycle.adapters.tui.app import LightcycleApp
 from tests.support.fake_store import FakeStore
+
+
+def _no_upgrade_available():
+    return UpgradeResponse(current=__version__, remote=__version__, available=False, applied=False)
 
 
 class FakeLock:
@@ -39,11 +45,11 @@ def make_test_container(store=None, lock=None, breaker=None):
 
 
 class TuiSession:
-    def __init__(self, container, now=None):
-        self.app = LightcycleApp(container, now=now)
+    def __init__(self, container, now=None, upgrade_check=None, size=None):
+        self.app = LightcycleApp(container, now=now, upgrade_check=upgrade_check or _no_upgrade_available)
         self._loop = asyncio.new_event_loop()
         self._ctx = contextvars.copy_context()
-        self._run_test_cm = self.app.run_test()
+        self._run_test_cm = self.app.run_test(size=size) if size else self.app.run_test()
         self.pilot = self._run(self._run_test_cm.__aenter__())
 
     def _run(self, coro):
@@ -72,7 +78,7 @@ class TuiSession:
         self._loop.close()
 
 
-def launch(container, now=None):
-    session = TuiSession(container, now=now)
+def launch(container, now=None, upgrade_check=None, size=None):
+    session = TuiSession(container, now=now, upgrade_check=upgrade_check, size=size)
     session.pause()
     return session

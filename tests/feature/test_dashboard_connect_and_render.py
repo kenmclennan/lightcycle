@@ -1,8 +1,11 @@
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
+from lightcycle import __version__
 from lightcycle.adapters.tui.app import POLL_INTERVAL_SECONDS, StatusBar
+from lightcycle.adapters.tui.design_system import COLOURS, FOOTER_GLYPHS
+from lightcycle.application.setup import UpgradeResponse
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import FakeBreakerPort, FakeLock, launch, make_test_container
 
@@ -18,12 +21,29 @@ def ctx():
         session.close()
 
 
+def _rendered_segment(session, widget_id):
+    widget = session.app.query_one(widget_id, Static)
+    strip = widget.render_line(0)
+    text = "".join(segment.text for segment in strip)
+    style = None
+    for segment in strip:
+        if segment.text.strip():
+            style = segment.style
+            break
+    return widget, text, style
+
+
+def _colour_of(style):
+    return style.color.get_truecolor().hex.lower()
+
+
 def _launch(ctx):
     store = ctx.get("store") or FakeStore()
+    ctx["store"] = store
     container = make_test_container(
         store=store, lock=ctx.get("lock"), breaker=ctx.get("breaker")
     )
-    ctx["session"] = launch(container)
+    ctx["session"] = launch(container, upgrade_check=ctx.get("upgrade_check"))
 
 
 @given("the lightcycle store is reachable")
@@ -57,6 +77,29 @@ def _breaker_closed(ctx):
 def _breaker_open(ctx):
     ctx["reset_at"] = 1234567890.0
     ctx["breaker"] = FakeBreakerPort(is_open=True, reset_at=ctx["reset_at"])
+
+
+@given("a newer version is available")
+def _newer_version_available(ctx):
+    ctx["remote_version"] = "9.9.9"
+    ctx["upgrade_check"] = lambda: UpgradeResponse(
+        current=__version__, remote=ctx["remote_version"], available=True, applied=False
+    )
+
+
+@given("no newer version is available")
+def _no_newer_version(ctx):
+    ctx["upgrade_check"] = lambda: UpgradeResponse(
+        current=__version__, remote=__version__, available=False, applied=False
+    )
+
+
+@given("the upgrade check fails")
+def _upgrade_check_fails(ctx):
+    def _raise():
+        raise RuntimeError("network down")
+
+    ctx["upgrade_check"] = _raise
 
 
 @given("the dashboard has launched")
@@ -127,7 +170,8 @@ def _both_visible(ctx):
     status_bar = ctx["session"].app.query_one(StatusBar)
     assert table.is_mounted
     assert status_bar.is_mounted
-    assert status_bar.status_text != ""
+    _, version_text, _ = _rendered_segment(ctx["session"], "#status-version")
+    assert version_text.strip() != ""
 
 
 @then("the priority list contains a row for every one of them")
@@ -140,22 +184,56 @@ def _contains_all(ctx):
 
 @then(parsers.parse("the status bar reports the pool as {state}"))
 def _reports_pool(ctx, state):
-    status_bar = ctx["session"].app.query_one(StatusBar)
-    expected = "pool: running" if state == "running" else "pool: stopped"
-    assert expected in status_bar.status_text
+    _, text, style = _rendered_segment(ctx["session"], "#status-pool")
+    if state == "running":
+        assert text == "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph
+        assert _colour_of(style) == COLOURS["cyan"].lower()
+    else:
+        assert text == "%s pool not running" % FOOTER_GLYPHS["pool-stopped"].glyph
+        assert _colour_of(style) == COLOURS["dim"].lower()
 
 
 @then("the status bar reports the breaker as closed")
 def _reports_breaker_closed(ctx):
-    status_bar = ctx["session"].app.query_one(StatusBar)
-    assert "breaker: closed" in status_bar.status_text
+    _, text, style = _rendered_segment(ctx["session"], "#status-claude")
+    assert text == "%s claude available" % FOOTER_GLYPHS["claude-available"].glyph
+    assert _colour_of(style) == COLOURS["cyan"].lower()
 
 
 @then("the status bar reports the breaker as open with that reset time")
 def _reports_breaker_open(ctx):
-    status_bar = ctx["session"].app.query_one(StatusBar)
-    assert "breaker: open" in status_bar.status_text
-    assert str(ctx["reset_at"]) in status_bar.status_text
+    import time
+
+    _, text, style = _rendered_segment(ctx["session"], "#status-claude")
+    expected_ts = time.strftime("%H:%M:%S", time.localtime(ctx["reset_at"]))
+    assert text == "%s claude unavailable · resumes %s" % (
+        FOOTER_GLYPHS["claude-unavailable"].glyph, expected_ts
+    )
+    assert _colour_of(style) == COLOURS["red"].lower()
+
+
+@then("the status bar shows the installed version")
+def _shows_installed_version(ctx):
+    _, text, style = _rendered_segment(ctx["session"], "#status-version")
+    assert text == "v%s" % __version__
+    assert _colour_of(style) == COLOURS["dim"].lower()
+
+
+@then("the status bar shows the upgrade indicator with that version")
+def _shows_upgrade_indicator(ctx):
+    widget, text, style = _rendered_segment(ctx["session"], "#status-upgrade")
+    assert widget.display
+    assert text == "%s v%s available" % (
+        FOOTER_GLYPHS["upgrade-available"].glyph, ctx["remote_version"]
+    )
+    assert _colour_of(style) == COLOURS["amber"].lower()
+
+
+@then("the status bar shows no upgrade indicator")
+def _shows_no_upgrade_indicator(ctx):
+    widget, text, _ = _rendered_segment(ctx["session"], "#status-upgrade")
+    assert not widget.display
+    assert text.strip() == ""
 
 
 @then("the priority list reflects the changed queue")
@@ -166,7 +244,7 @@ def _reflects_changed_queue(ctx):
 
 @then("the status bar reflects the changed state")
 def _reflects_changed_state(ctx):
-    status_bar = ctx["session"].app.query_one(StatusBar)
-    assert "pool: running" in status_bar.status_text
-    assert "breaker: open" in status_bar.status_text
-    assert "999.0" in status_bar.status_text
+    _, pool_text, _ = _rendered_segment(ctx["session"], "#status-pool")
+    _, claude_text, _ = _rendered_segment(ctx["session"], "#status-claude")
+    assert pool_text == "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph
+    assert "claude unavailable" in claude_text
