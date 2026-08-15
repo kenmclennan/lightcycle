@@ -270,6 +270,74 @@ _SPEC_DRIVEN = (
 )
 
 
+_LOOPING = (
+    "entry: plan-next\n\n"
+    "requires: brief repo\n\n"
+    "phase:\n"
+    "  plan-next         plan\n"
+    "  write-code        code\n"
+    "  code-open-pr      code\n"
+    "  code-await-merge  code\n"
+    "  cleanup           code\n\n"
+    "nodes:\n"
+    "  plan-next         planner\n"
+    "  write-code        coder\n"
+    "  code-await-merge  await-merge\n"
+    "  cleanup           cleanup\n\n"
+    "edges:\n"
+    "  plan-next         item-selected  write-code\n"
+    "  write-code        done           code-open-pr\n"
+    "  code-await-merge  merged         cleanup\n"
+    "  code-await-merge  changes        write-code\n"
+    "  cleanup           done           plan-next\n\n"
+    "hooks:\n"
+    "  pr_merge  code-await-merge  merged\n"
+)
+
+
+class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
+    def _setup(self):
+        fs = FakeFs(
+            metas={
+                "planner": {"model": "sonnet"},
+                "coder": {"model": "sonnet"},
+                "await-merge": {"step": "await-merge"},
+                "cleanup": {"step": "cleanup"},
+            },
+            workflow={"looping": _LOOPING},
+        )
+        store = FakeStore()
+        flow_service = FlowService(fs, store)
+        item = store.create_item(
+            "deliver the plan", theme=store.create_theme("theme"),
+            workflow="looping", project="lightcycle",
+        )
+        store.add_artifact(item, "repo", "lightcycle")
+        url = "https://github.com/x/y/pull/77"
+        store.add_artifact(item, "pr", url, label="code")
+        step = store.create_step(
+            "code-await-merge: deliver the plan", step="code-await-merge",
+            role="human", parent=item,
+        )
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={url}), FakeWorktrees(), flow_service,
+            CompleteStepUseCase(store, flow_service),
+        )
+        return store, item, step, uc
+
+    def test_merge_routes_to_the_human_cleanup_stage_and_leaves_the_item_open(self):
+        store, item, step, uc = self._setup()
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, "done")
+        self.assertEqual(store.get_node(step).outcome, "merged")
+        self.assertEqual(store.get_node(item).state, "in_progress")
+        created = [n for n in store.all_steps() if n.step == "cleanup" and n.parent == item]
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0].role, "human")
+
+
 class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
     def _setup(self):
         fs = FakeFs(

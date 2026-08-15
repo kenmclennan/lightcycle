@@ -10,6 +10,7 @@ class Transition:
     outcome: str
     to_step: str
     to_role: str
+    to_terminal: bool = False
 
     def next_step_spec(self, step) -> NodeSpec:
         title = re.sub(r"^[a-z-]+:\s*", "", step.title)

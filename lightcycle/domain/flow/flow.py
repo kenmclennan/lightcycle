@@ -196,6 +196,7 @@ class Flow:
             outcome=outcome,
             to_step=cap.target,
             to_role=self.owner_of(cap.target) or "human",
+            to_terminal=self.owner_of(cap.target) is None,
         )
 
     def pr_conflict_transition(self, step, conflict_outcome, prior_count):
@@ -228,4 +229,5 @@ class Flow:
             outcome=outcome,
             to_step=target,
             to_role=self.owner_of(target) or "human",
+            to_terminal=self.owner_of(target) is None,
         )
