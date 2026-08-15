@@ -1,11 +1,14 @@
 import datetime
+import time
 import unittest
 from unittest.mock import patch
 
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
+from lightcycle import __version__
 from lightcycle.adapters.tui.app import POLL_INTERVAL_SECONDS, LightcycleApp, StatusBar
-from lightcycle.adapters.tui.design_system import COLOURS, CURSOR_GLYPH, STATE_GLYPHS
+from lightcycle.adapters.tui.design_system import COLOURS, CURSOR_GLYPH, FOOTER_GLYPHS, STATE_GLYPHS
+from lightcycle.application.setup import UpgradeResponse
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import FakeBreakerPort, FakeLock, launch, make_test_container
@@ -23,6 +26,39 @@ def _cell(session, row_id, column):
 def _row_order(session):
     table = session.app.query_one(DataTable)
     return [row.key.value for row in table.ordered_rows]
+
+
+def _rendered_segment(session, widget_id):
+    widget = session.app.query_one(widget_id, Static)
+    strip = widget.render_line(0)
+    text = "".join(segment.text for segment in strip)
+    style = None
+    for segment in strip:
+        if segment.text.strip():
+            style = segment.style
+            break
+    return widget, text, style
+
+
+def _colour_of(style):
+    return style.color.get_truecolor().hex.lower()
+
+
+def _painted_row(session, y):
+    return session.app.screen._compositor.render_strips()[y]
+
+
+def _painted_spans(strip):
+    x = 0
+    spans = []
+    for segment in strip:
+        text = segment.text
+        if text.strip():
+            style = segment.style
+            colour = _colour_of(style) if style is not None and style.color is not None else None
+            spans.append((x, x + len(text) - 1, colour))
+        x += len(text)
+    return spans
 
 
 class TestPollInterval(unittest.TestCase):
@@ -45,8 +81,9 @@ class TestDashboardScaffold(unittest.TestCase):
         table = session.app.query_one(DataTable)
         self.assertGreater(table.row_count, 0)
 
-        status_bar = session.app.query_one(StatusBar)
-        self.assertNotEqual(status_bar.status_text, "")
+        session.app.query_one(StatusBar)
+        _, version_text, _ = _rendered_segment(session, "#status-version")
+        self.assertNotEqual(version_text.strip(), "")
 
     def test_priority_list_is_not_truncated_to_ten(self):
         store = FakeStore()
@@ -58,16 +95,6 @@ class TestDashboardScaffold(unittest.TestCase):
         self.assertEqual(table.row_count, 12)
         for tid in ids:
             self.assertIn(tid, table.rows)
-
-    def test_status_bar_reflects_running_pool_and_open_breaker(self):
-        session = self._launch(
-            lock=FakeLock(running=True), breaker=FakeBreakerPort(is_open=True, reset_at=500.0)
-        )
-
-        status_bar = session.app.query_one(StatusBar)
-        self.assertIn("pool: running", status_bar.status_text)
-        self.assertIn("breaker: open", status_bar.status_text)
-        self.assertIn("500.0", status_bar.status_text)
 
     def test_header_row_is_not_shown(self):
         store = FakeStore()
@@ -509,3 +536,183 @@ class TestBell(unittest.TestCase):
             self._launch(store)
 
         self.assertEqual(calls["count"], 0)
+
+
+class TestFooterVersionSegment(unittest.TestCase):
+    def _launch(self, **kwargs):
+        session = launch(make_test_container(**kwargs))
+        self.addCleanup(session.close)
+        return session
+
+    def test_always_renders_installed_version_in_dim(self):
+        session = self._launch(
+            lock=FakeLock(running=True), breaker=FakeBreakerPort(is_open=True, reset_at=500.0)
+        )
+
+        _, text, style = _rendered_segment(session, "#status-version")
+
+        self.assertEqual(text, "v%s" % __version__)
+        self.assertEqual(_colour_of(style), COLOURS["dim"].lower())
+
+
+class TestFooterUpgradeSegment(unittest.TestCase):
+    def _launch(self, upgrade_check, size=None):
+        session = launch(make_test_container(), upgrade_check=upgrade_check, size=size)
+        self.addCleanup(session.close)
+        return session
+
+    def test_upgrade_segment_is_right_aligned_against_the_frame_edge(self):
+        def upgrade_check():
+            return UpgradeResponse(current=__version__, remote="9.9.9", available=True, applied=False)
+
+        for width in (80, 120):
+            session = self._launch(upgrade_check, size=(width, 24))
+
+            status_bar = session.app.query_one(StatusBar)
+            spans = _painted_spans(_painted_row(session, status_bar.region.y))
+
+            border_start, border_end, border_colour = spans[-1]
+            self.assertEqual(border_colour, COLOURS["border"].lower())
+            self.assertEqual(border_start, width - 1)
+            self.assertEqual(border_end, width - 1)
+
+            amber_spans = [span for span in spans if span[2] == COLOURS["amber"].lower()]
+            dim_spans = [span for span in spans if span[2] == COLOURS["dim"].lower()]
+            self.assertTrue(amber_spans)
+            self.assertTrue(dim_spans)
+
+            upgrade_start, upgrade_end, _ = amber_spans[-1]
+            version_end = dim_spans[-1][1]
+
+            self.assertEqual(upgrade_end, border_start - 1)
+            self.assertLess(version_end, upgrade_start)
+
+    def test_upgrade_available_renders_glyph_and_version(self):
+        session = self._launch(
+            lambda: UpgradeResponse(current=__version__, remote="9.9.9", available=True, applied=False)
+        )
+
+        widget, text, style = _rendered_segment(session, "#status-upgrade")
+
+        self.assertTrue(widget.display)
+        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+
+    def test_no_newer_version_renders_no_upgrade_segment(self):
+        session = self._launch(
+            lambda: UpgradeResponse(
+                current=__version__, remote=__version__, available=False, applied=False
+            )
+        )
+
+        widget, text, _ = _rendered_segment(session, "#status-upgrade")
+
+        self.assertFalse(widget.display)
+        self.assertEqual(text.strip(), "")
+
+    def test_failed_upgrade_check_renders_no_upgrade_segment_and_rest_of_footer_still_renders(self):
+        def _raising_check():
+            raise RuntimeError("network down")
+
+        session = self._launch(_raising_check)
+
+        widget, text, _ = _rendered_segment(session, "#status-upgrade")
+        self.assertFalse(widget.display)
+        self.assertEqual(text.strip(), "")
+
+        _, pool_text, _ = _rendered_segment(session, "#status-pool")
+        _, claude_text, _ = _rendered_segment(session, "#status-claude")
+        _, version_text, _ = _rendered_segment(session, "#status-version")
+        self.assertNotEqual(pool_text.strip(), "")
+        self.assertNotEqual(claude_text.strip(), "")
+        self.assertNotEqual(version_text.strip(), "")
+
+
+class TestFooterPoolSegment(unittest.TestCase):
+    def _launch(self, **kwargs):
+        session = launch(make_test_container(**kwargs))
+        self.addCleanup(session.close)
+        return session
+
+    def test_pool_running_renders_cyan_dot(self):
+        session = self._launch(lock=FakeLock(running=True))
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+
+        self.assertEqual(text, "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
+
+    def test_pool_not_running_renders_dim_circle_never_blank(self):
+        session = self._launch()
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+
+        self.assertEqual(text, "%s pool not running" % FOOTER_GLYPHS["pool-stopped"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["dim"].lower())
+
+    def test_pool_state_change_reflects_without_restart(self):
+        lock = FakeLock(running=False)
+        session = self._launch(lock=lock)
+
+        lock.set_running(True)
+        session.poll_tick()
+
+        _, text, _ = _rendered_segment(session, "#status-pool")
+        self.assertEqual(text, "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph)
+
+
+class TestFooterClaudeSegment(unittest.TestCase):
+    def _launch(self, **kwargs):
+        session = launch(make_test_container(**kwargs))
+        self.addCleanup(session.close)
+        return session
+
+    def test_closed_breaker_renders_claude_available(self):
+        session = self._launch(breaker=FakeBreakerPort(is_open=False))
+
+        _, text, style = _rendered_segment(session, "#status-claude")
+
+        self.assertEqual(text, "%s claude available" % FOOTER_GLYPHS["claude-available"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
+
+    def test_open_breaker_renders_claude_unavailable_with_resume_time(self):
+        reset_at = 1234567890.0
+        session = self._launch(breaker=FakeBreakerPort(is_open=True, reset_at=reset_at))
+
+        _, text, style = _rendered_segment(session, "#status-claude")
+
+        expected_ts = time.strftime("%H:%M:%S", time.localtime(reset_at))
+        self.assertEqual(
+            text,
+            "%s claude unavailable · resumes %s"
+            % (FOOTER_GLYPHS["claude-unavailable"].glyph, expected_ts),
+        )
+        self.assertEqual(_colour_of(style), COLOURS["red"].lower())
+
+    def test_breaker_closing_returns_to_claude_available_without_restart(self):
+        breaker = FakeBreakerPort(is_open=True, reset_at=1234567890.0)
+        session = self._launch(breaker=breaker)
+
+        breaker.save({"open": False, "reset_at": None})
+        session.poll_tick()
+
+        _, text, style = _rendered_segment(session, "#status-claude")
+        self.assertEqual(text, "%s claude available" % FOOTER_GLYPHS["claude-available"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
+
+
+class TestQuit(unittest.TestCase):
+    def _launch(self):
+        session = launch(make_test_container())
+        self.addCleanup(session.close)
+        return session
+
+    def test_q_exits_the_dashboard(self):
+        session = self._launch()
+        session.press("q")
+        self.assertFalse(session.app.is_running)
+
+    def test_ctrl_c_exits_the_dashboard(self):
+        session = self._launch()
+        session.press("ctrl+c")
+        self.assertFalse(session.app.is_running)

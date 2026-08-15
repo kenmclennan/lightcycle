@@ -7,6 +7,7 @@ from lightcycle.adapters.tui.design_system import (
     COLOURS,
     COLUMN_GRIDS,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
+    FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
     STATE_GLYPHS,
 )
@@ -61,6 +62,11 @@ def _column_grids(ctx):
     pass
 
 
+@given("the shared footer status vocabulary")
+def _footer_status_vocabulary(ctx):
+    pass
+
+
 @when("I launch the dashboard")
 def _when_launch(ctx):
     if "session" not in ctx:
@@ -95,6 +101,11 @@ def _read_colour_token(ctx, token):
 @when(parsers.parse('the glyph and colour for the "{state}" state are looked up'))
 def _lookup_state_glyph(ctx, state):
     ctx["glyph_result"] = STATE_GLYPHS[state]
+
+
+@when(parsers.parse('the glyph and colour for the "{token}" footer status are looked up'))
+def _lookup_footer_glyph(ctx, token):
+    ctx["glyph_result"] = FOOTER_GLYPHS[token]
 
 
 @when("the glyph and colour for the dependency-blocked needs-attention state are looked up")

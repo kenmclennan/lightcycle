@@ -113,7 +113,6 @@ Feature: The dashboard adopts the design system's visual vocabulary
     When the backlog's column order is read
     Then it is cursor, id, project, title
 
-  @wip
   Scenario Outline: The footer's shared vocabulary pairs a colour with its own glyph for each status token
     Given the shared footer status vocabulary
     When the glyph and colour for the "<token>" footer status are looked up
