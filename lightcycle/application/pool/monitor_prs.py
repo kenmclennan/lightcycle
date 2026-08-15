@@ -158,7 +158,7 @@ class MonitorPrsUseCase:
                 close_outcome = flow.close_outcome(stage)
                 if merge_outcome and self._github.is_merged(pr_value):
                     nxt = flow.next(stage, merge_outcome)
-                    if nxt and nxt.to_step and nxt.to_role != "human":
+                    if nxt and nxt.to_step and not nxt.to_terminal:
                         step = self._active_step_at(item.id, stage)
                         if step is None:
                             continue
