@@ -49,3 +49,23 @@ GLOBAL_SHORTCUTS = (
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
+
+BACKLOG_SHORTCUTS = (
+    ("↑↓", "move"),
+    ("enter/→", "explore in tree"),
+    ("f", "filter"),
+    ("tab", "current work"),
+    ("ctrl-u/ctrl-d", "scroll"),
+    ("q", "quit"),
+)
+
+BACKLOG_EMPTY_SHORTCUTS = (
+    ("tab", "current work"),
+    ("q", "quit"),
+)
+
+BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
+    ("f", "filter"),
+    ("tab", "current work"),
+    ("q", "quit"),
+)

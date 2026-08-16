@@ -12,56 +12,47 @@ Feature: The backlog screen
   into the node hub, and the Tab jump to this screen from several levels
   deep, are not part of this screen and belong to later work.
 
-  @wip
   Scenario: Todo items are listed once the backlog is shown
     Given the store has a todo item
     When I switch to the backlog
     Then the todo item is listed as a row
 
-  @wip
   Scenario: A todo item that is later activated no longer appears in the backlog
     Given the backlog is shown with a todo item
     When that item is activated
     And one poll interval elapses
     Then the item no longer appears in the backlog
 
-  @wip
   Scenario: Ctrl-D jumps the backlog selection forward by the same amount as Page Down
     Given the backlog is shown with more todo items than fit on one screen
     When Ctrl-D is pressed
     Then the selection has moved forward by the same amount Page Down would move it
 
-  @wip
   Scenario: Ctrl-U jumps the backlog selection back by the same amount as Page Up
     Given the backlog is shown with more todo items than fit on one screen
     When Ctrl-D is pressed
     And Ctrl-U is pressed
     Then the selection is back on the row it started on
 
-  @wip
   Scenario: A backlog row for an item tagged to a registered project shows the shortened project label in cyan
     Given the backlog is shown with a todo item whose repo is "kenmclennan/lightcycle" under the registered project "kenmclennan/lightcycle"
     Then that item's row shows "lightcycle" as its project, in the cyan colour
 
-  @wip
   Scenario: A backlog row for an item with no registered project shows a blank project field
     Given the backlog is shown with a todo item with no registered project
     Then that item's row shows a blank project field
 
-  @wip
   Scenario: Pressing Tab from the priority list shows the backlog in its place
     Given the dashboard has launched
     When Tab is pressed
     Then the backlog is shown in place of the priority list
 
-  @wip
   Scenario: Pressing Tab again from the backlog returns to the priority list in its place
     Given the dashboard has launched
     When Tab is pressed
     And Tab is pressed
     Then the priority list is shown in place of the backlog
 
-  @wip
   Scenario: Pressing f opens the project filter picker listing All and every registered project with its own count
     Given the backlog is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with backlogged items
     When f is pressed
@@ -70,20 +61,17 @@ Feature: The backlog screen
     And the picker shows "proj-a" with its own item count
     And the picker shows "proj-b" with its own item count
 
-  @wip
   Scenario: The picker includes a registered project with no backlogged items, showing a zero count
     Given the backlog is shown with the registered project "org-c/proj-c" and no backlogged items under it
     When f is pressed
     Then the picker shows "proj-c" with count 0
 
-  @wip
   Scenario: Down moves the picker's highlighted option to the next entry
     Given the backlog is shown with the registered project "org-a/proj-a"
     When f is pressed
     And Down is pressed
     Then the picker's highlighted option is "proj-a"
 
-  @wip
   Scenario: Up moves the picker's highlighted option back to the previous entry
     Given the backlog is shown with the registered project "org-a/proj-a"
     When f is pressed
@@ -91,7 +79,6 @@ Feature: The backlog screen
     And Up is pressed
     Then the picker's highlighted option is "All"
 
-  @wip
   Scenario: Selecting a project and pressing Enter filters the backlog to it immediately and closes the picker
     Given the backlog is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with backlogged items
     When f is pressed
@@ -100,7 +87,6 @@ Feature: The backlog screen
     Then the picker is closed
     And the backlog is filtered to "proj-a" without a poll interval elapsing
 
-  @wip
   Scenario: Pressing Esc closes the picker without changing the filter
     Given the backlog is shown with the registered project "org-a/proj-a"
     When f is pressed
@@ -108,7 +94,6 @@ Feature: The backlog screen
     Then the picker is closed
     And the backlog is still filtered to "All"
 
-  @wip
   Scenario: While the picker is closed, the filter bar shows only the active filter's own count, not a breakdown of every project
     Given the backlog is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with backlogged items
     When f is pressed
@@ -117,39 +102,33 @@ Feature: The backlog screen
     Then the filter bar's right label reads "1 items"
     And the filter bar does not show proj-b's own count
 
-  @wip
   Scenario: The filter bar shows "PROJECT: All" and the total item count while unfiltered
     Given the backlog is shown with 3 todo items
     Then the filter bar's left label reads "PROJECT: All"
     And the filter bar's right label reads "3 items"
 
-  @wip
   Scenario: The filter bar's item count is plural even when it is zero
     Given the store has no todo items anywhere
     When I switch to the backlog
     Then the filter bar's right label reads "0 items"
 
-  @wip
   Scenario: An overall-empty backlog shows a calm message instead of a blank area
     Given the store has no todo items anywhere
     When I switch to the backlog
     Then the message "Nothing in the backlog." is shown in place of the list
 
-  @wip
   Scenario: A backlog filtered to a project with no items shows a message naming the filtered project, not the overall-empty message
     Given the store has todo items, all belonging to a project other than "lightcycle"
     When the backlog is filtered to "lightcycle"
     Then the message "No backlog items for lightcycle." is shown, with "lightcycle" in the text colour and the rest of the message in the dim colour
     And the hint "Press f to check All." is shown below the message
 
-  @wip
   Scenario: An item becoming available under the active filter replaces the filtered-empty message with the list
     Given the backlog is shown, filtered to "lightcycle", with no items matching that filter
     When a todo item under "lightcycle" is created
     And one poll interval elapses
     Then the list is shown in place of the message, with a row for the new item
 
-  @wip
   Scenario Outline: Each shortcut for the backlog with rows present appears in the footer, in order
     Given the backlog is shown with a todo item
     When the shortcut at position <position> in the footer's shortcut line is read
@@ -165,7 +144,6 @@ Feature: The backlog screen
       | 5        | ctrl-u/ctrl-d | scroll          |
       | 6        | q             | quit            |
 
-  @wip
   Scenario Outline: Each shortcut for the overall-empty backlog appears in the footer, in order
     Given the store has no todo items anywhere
     And I switch to the backlog
@@ -178,7 +156,6 @@ Feature: The backlog screen
       | 1        | tab | current work |
       | 2        | q   | quit         |
 
-  @wip
   Scenario Outline: Each shortcut for the filtered-empty backlog appears in the footer, in order
     Given the backlog is shown, filtered to "lightcycle", with no items matching that filter
     When the shortcut at position <position> in the footer's shortcut line is read
@@ -191,7 +168,6 @@ Feature: The backlog screen
       | 2        | tab | current work |
       | 3        | q   | quit         |
 
-  @wip
   Scenario: The picker's own footer shows its own key hints while it is open
     Given the backlog is shown with the registered project "org-a/proj-a"
     When f is pressed
