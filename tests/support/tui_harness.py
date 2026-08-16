@@ -70,7 +70,7 @@ class TuiSession:
         self._run(self.pilot.pause())
 
     def poll_tick(self):
-        self.app._refresh()
+        self.run(self.app._refresh)
         self.pause()
 
     def close(self):

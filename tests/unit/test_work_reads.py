@@ -17,6 +17,7 @@ from lightcycle.application.work import (
     TraceUseCase,
 )
 from lightcycle.application.services.flow import FlowService
+from lightcycle.application.work.project_of import short_project_label
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
@@ -429,6 +430,20 @@ class TestInboxProjectAndPr(unittest.TestCase):
         s.close(fb, "done")
         resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
         self.assertIn(watched, [r.step.id for r in resp.rows])
+
+
+class TestShortProjectLabel(unittest.TestCase):
+    def test_shortens_a_slash_qualified_value(self):
+        self.assertEqual(short_project_label("kenmclennan/lightcycle"), "lightcycle")
+
+    def test_leaves_a_bare_value_unchanged(self):
+        self.assertEqual(short_project_label("lightcycle"), "lightcycle")
+
+    def test_empty_for_none(self):
+        self.assertEqual(short_project_label(None), "")
+
+    def test_empty_for_empty_string(self):
+        self.assertEqual(short_project_label(""), "")
 
 
 if __name__ == "__main__":

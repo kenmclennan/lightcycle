@@ -206,6 +206,16 @@ class TestBacklogCounts(unittest.TestCase):
         resp = BacklogUseCase(s, None).counts()
         self.assertEqual(resp, BacklogCountsResponse(projects=[], unscoped=0, total=0))
 
+    def test_slash_qualified_repo_is_counted_and_matched_by_its_registered_project(self):
+        s = FakeStore()
+        s.add_project("org/proj")
+        item = s.create_item("item")
+        s.add_artifact(item, "repo", "org/proj")
+        resp = BacklogUseCase(s, None).counts()
+        self.assertEqual(resp.projects, [ProjectCount(project="proj", count=1)])
+        filtered = BacklogUseCase(s, None).execute(BacklogInput(project="proj"))
+        self.assertEqual([r.step.id for r in filtered.rows], [item])
+
 
 if __name__ == "__main__":
     unittest.main()

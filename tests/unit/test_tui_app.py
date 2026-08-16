@@ -6,8 +6,27 @@ from unittest.mock import patch
 from textual.widgets import DataTable, Static
 
 from lightcycle import __version__
-from lightcycle.adapters.tui.app import POLL_INTERVAL_SECONDS, LightcycleApp, StatusBar
-from lightcycle.adapters.tui.design_system import COLOURS, CURSOR_GLYPH, FOOTER_GLYPHS, STATE_GLYPHS
+from lightcycle.adapters.tui.app import (
+    POLL_INTERVAL_SECONDS,
+    BacklogTable,
+    BacklogView,
+    LightcycleApp,
+    PickerOption,
+    PriorityTable,
+    ProjectFilterPicker,
+    ShortcutBar,
+    StatusBar,
+)
+from lightcycle.adapters.tui.design_system import (
+    BACKLOG_EMPTY_SHORTCUTS,
+    BACKLOG_FILTERED_EMPTY_SHORTCUTS,
+    BACKLOG_SHORTCUTS,
+    COLOURS,
+    CURSOR_GLYPH,
+    FOOTER_GLYPHS,
+    GLOBAL_SHORTCUTS,
+    STATE_GLYPHS,
+)
 from lightcycle.application.setup import UpgradeResponse
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
@@ -716,3 +735,377 @@ class TestQuit(unittest.TestCase):
         session = self._launch()
         session.press("ctrl+c")
         self.assertFalse(session.app.is_running)
+
+
+def _launch_backlog(store, **kwargs):
+    session = launch(make_test_container(store=store, **kwargs))
+    session.press("tab")
+    return session
+
+
+def _backlog_cell(session, row_id, column):
+    table = session.app.query_one(BacklogTable)
+    return _cell_text(table.get_cell(row_id, column))
+
+
+def _rendered_text(widget):
+    strip = widget.render_line(0)
+    return "".join(segment.text for segment in strip)
+
+
+def _picker_option_by_label(screen, label):
+    for option in screen.query(PickerOption):
+        text = _rendered_text(option.query_one("#picker-option-label", Static))
+        if text.replace(CURSOR_GLYPH.glyph, "").strip() == label:
+            return option
+    raise AssertionError("no picker option labelled %r" % label)
+
+
+class TestBacklogRows(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_todo_items_render_as_rows_once_backlog_is_current(self):
+        store = FakeStore()
+        item = store.create_item("todo item")
+
+        session = self._launch(store)
+
+        table = session.app.query_one(BacklogTable)
+        self.assertIn(item, table.rows)
+        self.assertEqual(_backlog_cell(session, item, "id"), item)
+        self.assertEqual(_backlog_cell(session, item, "title"), "todo item")
+
+    def test_item_activated_disappears_from_backlog_without_restart(self):
+        store = FakeStore()
+        item = store.create_item("todo item")
+        session = self._launch(store)
+        self.assertIn(item, session.app.query_one(BacklogTable).rows)
+
+        store.create_step("first step", step="build", role="coder", parent=item)
+        session.poll_tick()
+
+        self.assertNotIn(item, session.app.query_one(BacklogTable).rows)
+
+    def test_ctrl_u_and_ctrl_d_page_a_long_backlog(self):
+        store = FakeStore()
+        for i in range(60):
+            store.create_item("todo %d" % i)
+
+        session = self._launch(store)
+        table = session.app.query_one(BacklogTable)
+        session.press("ctrl+d")
+        self.assertGreater(table.cursor_row, 0)
+        session.press("ctrl+u")
+        self.assertEqual(table.cursor_row, 0)
+
+
+class TestBacklogTableColumnWidth(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_title_column_is_not_clamped_to_one_char_right_after_tab(self):
+        store = FakeStore()
+        store.create_item("a reasonably long backlog title")
+
+        session = self._launch(store)
+
+        table = session.app.query_one(BacklogTable)
+        rendered = "".join(segment.text for segment in table.render_line(0))
+        self.assertIn("a reasonably long backlog title", rendered)
+
+    def test_title_width_defers_instead_of_clamping_to_one_while_hidden(self):
+        store = FakeStore()
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+
+        view = session.app.query_one(BacklogView)
+        table = session.app.query_one(BacklogTable)
+
+        self.assertEqual(table.size.width, 0)
+        self.assertIsNone(view._title_width(table))
+
+
+class TestBacklogProjectColumn(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_unscoped_item_shows_blank_project(self):
+        store = FakeStore()
+        item = store.create_item("todo item")
+
+        session = self._launch(store)
+
+        self.assertEqual(_backlog_cell(session, item, "project"), "")
+
+    def test_slash_qualified_repo_shows_shortened_label_in_cyan(self):
+        store = FakeStore()
+        item = store.create_item("todo item")
+        store.add_artifact(item, "repo", "kenmclennan/lightcycle")
+
+        session = self._launch(store)
+
+        table = session.app.query_one(BacklogTable)
+        cell = table.get_cell(item, "project")
+        self.assertEqual(cell.plain, "lightcycle")
+        self.assertEqual(cell.style, COLOURS["cyan"])
+
+
+class TestBacklogTabSwitch(unittest.TestCase):
+    def _launch(self, store=None):
+        session = launch(make_test_container(store=store or FakeStore()))
+        self.addCleanup(session.close)
+        return session
+
+    def test_tab_shows_backlog_in_place_of_priority_list(self):
+        session = self._launch()
+
+        session.press("tab")
+
+        self.assertTrue(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
+
+    def test_tab_again_returns_to_priority_list(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+
+        self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-backlog").classes)
+
+
+class TestBacklogPicker(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def _store_with_two_projects(self):
+        store = FakeStore()
+        store.add_project("org-a/proj-a")
+        store.add_project("org-b/proj-b")
+        a = store.create_item("a item")
+        store.add_artifact(a, "repo", "org-a/proj-a")
+        b = store.create_item("b item")
+        store.add_artifact(b, "repo", "org-b/proj-b")
+        return store
+
+    def test_f_opens_a_picker_listing_all_and_every_project_with_its_own_count(self):
+        session = self._launch(self._store_with_two_projects())
+
+        session.press("f")
+
+        screen = session.app.screen
+        self.assertIsInstance(screen, ProjectFilterPicker)
+        head = _rendered_text(screen.query_one("#picker-head", Static)).strip()
+        self.assertEqual(head, "Filter by project")
+        all_option = _picker_option_by_label(screen, "All")
+        self.assertEqual(
+            _rendered_text(all_option.query_one(".picker-option-count", Static)).strip(), "2"
+        )
+        proj_a = _picker_option_by_label(screen, "proj-a")
+        self.assertEqual(
+            _rendered_text(proj_a.query_one(".picker-option-count", Static)).strip(), "1"
+        )
+
+    def test_zero_count_project_is_included(self):
+        store = FakeStore()
+        store.add_project("org-c/proj-c")
+
+        session = self._launch(store)
+        session.press("f")
+
+        option = _picker_option_by_label(session.app.screen, "proj-c")
+        self.assertEqual(
+            _rendered_text(option.query_one(".picker-option-count", Static)).strip(), "0"
+        )
+
+    def test_down_and_up_move_the_highlighted_option(self):
+        store = FakeStore()
+        store.add_project("org-a/proj-a")
+
+        session = self._launch(store)
+        session.press("f")
+        session.press("down")
+
+        option = _picker_option_by_label(session.app.screen, "proj-a")
+        self.assertIn("picker-option-selected", option.classes)
+
+        session.press("up")
+
+        all_option = _picker_option_by_label(session.app.screen, "All")
+        self.assertIn("picker-option-selected", all_option.classes)
+
+    def test_enter_applies_the_highlighted_project_and_closes_the_picker_immediately(self):
+        session = self._launch(self._store_with_two_projects())
+
+        session.press("f")
+        session.press("down")
+        session.press("enter")
+
+        self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
+        _, left, _ = _rendered_segment(session, "#backlog-filter-left")
+        self.assertEqual(left, "PROJECT: proj-a")
+        self.assertEqual(session.app.query_one(BacklogTable).row_count, 1)
+
+    def test_esc_closes_the_picker_without_changing_the_filter(self):
+        store = FakeStore()
+        store.add_project("org-a/proj-a")
+
+        session = self._launch(store)
+        session.press("f")
+        session.press("escape")
+
+        self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
+        _, left, _ = _rendered_segment(session, "#backlog-filter-left")
+        self.assertEqual(left, "PROJECT: All")
+
+    def test_filter_bar_shows_only_the_active_filters_own_count(self):
+        session = self._launch(self._store_with_two_projects())
+
+        session.press("f")
+        session.press("down")
+        session.press("enter")
+
+        _, right, _ = _rendered_segment(session, "#backlog-filter-right")
+        self.assertEqual(right, "1 items")
+
+
+class TestBacklogFilterBar(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_shows_all_and_the_total_count_while_unfiltered(self):
+        store = FakeStore()
+        for i in range(3):
+            store.create_item("todo %d" % i)
+
+        session = self._launch(store)
+
+        _, left, _ = _rendered_segment(session, "#backlog-filter-left")
+        _, right, _ = _rendered_segment(session, "#backlog-filter-right")
+        self.assertEqual(left, "PROJECT: All")
+        self.assertEqual(right, "3 items")
+
+    def test_count_is_plural_even_when_zero(self):
+        session = self._launch(FakeStore())
+
+        _, right, _ = _rendered_segment(session, "#backlog-filter-right")
+        self.assertEqual(right, "0 items")
+
+
+class TestBacklogEmptyStates(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def _filter_to_lightcycle(self, session):
+        session.app._backlog_project_filter = "lightcycle"
+        session.run(session.app._refresh)
+        session.pause()
+
+    def test_overall_empty_shows_a_calm_message_instead_of_a_blank_area(self):
+        session = self._launch(FakeStore())
+
+        table = session.app.query_one(BacklogTable)
+        self.assertFalse(table.display)
+        widget = session.app.query_one("#backlog-empty-overall", Static)
+        self.assertTrue(widget.display)
+        self.assertEqual(_rendered_text(widget).strip(), "Nothing in the backlog.")
+
+    def test_filtered_empty_names_the_project_with_a_colour_split_and_a_hint(self):
+        store = FakeStore()
+        store.add_project("lightcycle")
+        other = store.create_item("other project item")
+        store.add_artifact(other, "repo", "other")
+        session = self._launch(store)
+
+        self._filter_to_lightcycle(session)
+
+        message_widget = session.app.query_one("#backlog-empty-filtered-message", Static)
+        self.assertTrue(message_widget.display)
+        strip = message_widget.render_line(0)
+        rendered = "".join(segment.text for segment in strip)
+        self.assertEqual(rendered.strip(), "No backlog items for lightcycle.")
+        project_style = next(s.style for s in strip if "lightcycle" in s.text)
+        rest_style = next(s.style for s in strip if s.text.strip() and "lightcycle" not in s.text)
+        self.assertEqual(_colour_of(project_style), COLOURS["text"].lower())
+        self.assertEqual(_colour_of(rest_style), COLOURS["dim"].lower())
+
+        hint_widget = session.app.query_one("#backlog-empty-filtered-hint", Static)
+        self.assertTrue(hint_widget.display)
+        self.assertEqual(_rendered_text(hint_widget).strip(), "Press f to check All.")
+
+    def test_item_becoming_available_replaces_the_filtered_empty_message_with_the_list(self):
+        store = FakeStore()
+        store.add_project("lightcycle")
+        other = store.create_item("other project item")
+        store.add_artifact(other, "repo", "other")
+        session = self._launch(store)
+        self._filter_to_lightcycle(session)
+
+        new_item = store.create_item("new item")
+        store.add_artifact(new_item, "repo", "lightcycle")
+        session.poll_tick()
+
+        table = session.app.query_one(BacklogTable)
+        self.assertTrue(table.display)
+        self.assertIn(new_item, table.rows)
+        self.assertFalse(session.app.query_one("#backlog-empty-filtered-message", Static).display)
+
+
+class TestBacklogFooter(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_rows_present_shows_the_backlog_shortcuts(self):
+        store = FakeStore()
+        store.create_item("todo item")
+
+        session = self._launch(store)
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, BACKLOG_SHORTCUTS)
+
+    def test_overall_empty_shows_the_trimmed_shortcuts(self):
+        session = self._launch(FakeStore())
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, BACKLOG_EMPTY_SHORTCUTS)
+
+    def test_filtered_empty_shows_the_filter_reachable_shortcuts(self):
+        store = FakeStore()
+        store.add_project("lightcycle")
+        other = store.create_item("other project item")
+        store.add_artifact(other, "repo", "other")
+        session = self._launch(store)
+
+        session.app._backlog_project_filter = "lightcycle"
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(
+            session.app.query_one(ShortcutBar).shortcuts, BACKLOG_FILTERED_EMPTY_SHORTCUTS
+        )
+
+    def test_returning_to_priority_list_restores_the_global_shortcuts(self):
+        store = FakeStore()
+        store.create_item("todo item")
+        session = self._launch(store)
+
+        session.press("tab")
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)

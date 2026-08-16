@@ -30,14 +30,12 @@ Feature: The dashboard adopts the design system's visual vocabulary
     And the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
 
-  @wip
   Scenario: Pressing Tab moves the emphasis from the Current work tab to the Backlog tab
     Given the dashboard has launched
     When Tab is pressed
     Then the "Backlog" tab is bold and in the cyan colour
     And the "Current work" tab is in the dim colour
 
-  @wip
   Scenario: Pressing Tab again moves the emphasis back to the Current work tab
     Given the dashboard has launched
     When Tab is pressed
