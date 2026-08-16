@@ -319,6 +319,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+
+env:
+  ENGINE_PIN: main
 
 jobs:
   simulate:
@@ -331,7 +336,18 @@ jobs:
           python-version: "3.x"
 
       - name: Install the lc engine
-        run: pip install "git+https://github.com/kenmclennan/lightcycle@main"
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            ref=main
+            echo "scheduled run: tracking the engine's main to surface upstream drift"
+          else
+            ref="$ENGINE_PIN"
+            echo "gate run: engine $ref, so this result depends only on this diff"
+          fi
+          echo "ENGINE_REF=$ref" >> "$GITHUB_ENV"
+          pip install "git+https://github.com/kenmclennan/lightcycle@$ref"
+          lc --version
 
       - name: Dry-run every workflow in this bundle through the real engine
         run: |

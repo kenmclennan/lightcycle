@@ -39,8 +39,11 @@ and its neighbors are the engine's own prompts, not a workflow template).
 
 `lc workflow check <origin>/<name>` (static composition) and the `simulate` CI job \
 (`.github/workflows/simulate.yml`) are what a PR touching `workflows/*.md` or `steps/*.md` must \
-pass. `lc workflow describe <origin>/<name> --mermaid` renders the built graph so a reviewer can \
-confirm it matches the design.
+pass. That gate installs the engine at `ENGINE_PIN`, which starts as `main` - set it to a SHA you \
+have watched pass every bundle here, so a PR's result depends only on its own diff. The nightly run \
+always tracks the engine's `main`, so upstream drift surfaces as a scheduled failure rather than as \
+a false `ci-failed` rework on an unrelated PR. `lc workflow describe <origin>/<name> --mermaid` \
+renders the built graph so a reviewer can confirm it matches the design.
 
 ## Style
 
@@ -55,6 +58,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+
+env:
+  ENGINE_PIN: main
 
 jobs:
   simulate:
@@ -67,7 +75,18 @@ jobs:
           python-version: "3.x"
 
       - name: Install the lc engine
-        run: pip install "git+https://github.com/kenmclennan/lightcycle@main"
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            ref=main
+            echo "scheduled run: tracking the engine's main to surface upstream drift"
+          else
+            ref="$ENGINE_PIN"
+            echo "gate run: engine $ref, so this result depends only on this diff"
+          fi
+          echo "ENGINE_REF=$ref" >> "$GITHUB_ENV"
+          pip install "git+https://github.com/kenmclennan/lightcycle@$ref"
+          lc --version
 
       - name: Dry-run every workflow in this bundle through the real engine
         run: |
