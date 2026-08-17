@@ -1,5 +1,4 @@
 import datetime
-import time
 
 from rich.text import Text
 from textual import events
@@ -20,9 +19,10 @@ from lightcycle.adapters.tui.design_system import (
     COLUMN_GRIDS,
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
-    FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
 )
+from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
+from lightcycle.adapters.tui.hub import NodeHubScreen
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows, is_gap_key
 from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
 from lightcycle.application.setup import upgrade
@@ -36,41 +36,6 @@ BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
 PICKER_CANCELLED = object()
-
-
-class StatusBar(Horizontal):
-    def compose(self) -> ComposeResult:
-        yield Static(id="status-pool")
-        yield Static(id="status-claude")
-        yield Static(id="status-version")
-        yield Static(id="status-upgrade")
-
-    def report(self, *, pool_running, breaker_is_open, breaker_reset_at, version, upgrade_version):
-        pool_glyph, pool_colour = FOOTER_GLYPHS["pool-running" if pool_running else "pool-stopped"]
-        pool_text = "%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running")
-        self.query_one("#status-pool", Static).update(Text(pool_text, style=COLOURS[pool_colour]))
-
-        if breaker_is_open:
-            resume_ts = time.strftime("%H:%M:%S", time.localtime(breaker_reset_at))
-            claude_glyph, claude_colour = FOOTER_GLYPHS["claude-unavailable"]
-            claude_text = "%s claude unavailable · resumes %s" % (claude_glyph, resume_ts)
-        else:
-            claude_glyph, claude_colour = FOOTER_GLYPHS["claude-available"]
-            claude_text = "%s claude available" % claude_glyph
-        self.query_one("#status-claude", Static).update(Text(claude_text, style=COLOURS[claude_colour]))
-
-        self.query_one("#status-version", Static).update(Text("v%s" % version, style=COLOURS["dim"]))
-
-        upgrade_widget = self.query_one("#status-upgrade", Static)
-        if upgrade_version is not None:
-            upgrade_glyph, upgrade_colour = FOOTER_GLYPHS["upgrade-available"]
-            upgrade_widget.update(
-                Text("%s v%s available" % (upgrade_glyph, upgrade_version), style=COLOURS[upgrade_colour])
-            )
-            upgrade_widget.display = True
-        else:
-            upgrade_widget.update("")
-            upgrade_widget.display = False
 
 
 class TabStrip(Horizontal):
@@ -89,37 +54,13 @@ class TabStrip(Horizontal):
         backlog.set_class(on_priority, "tab-dim")
 
 
-class ShortcutBar(Horizontal):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._shortcuts = ()
-
-    def set_shortcuts(self, shortcuts):
-        self._shortcuts = tuple(shortcuts)
-        for child in list(self.children):
-            child.remove()
-        for key, action in self._shortcuts:
-            self.mount(Static(key, classes="shortcut-key"))
-            self.mount(Static(action, classes="shortcut-action"))
-
-    @property
-    def shortcuts(self):
-        return self._shortcuts
-
-
-class DashboardFooter(Vertical):
-    def compose(self) -> ComposeResult:
-        yield StatusBar(id="status-bar")
-        yield ShortcutBar(id="shortcut-bar")
-
-    def on_mount(self) -> None:
-        self.query_one(ShortcutBar).set_shortcuts(GLOBAL_SHORTCUTS)
-
-
 class PagingTable(DataTable):
-    BINDINGS = DataTable.BINDINGS + [
+    _BASE_BINDINGS = [b for b in DataTable.BINDINGS if b.key != "right"]
+
+    BINDINGS = _BASE_BINDINGS + [
         Binding("ctrl+u", "page_up", "Page up", show=False),
         Binding("ctrl+d", "page_down", "Page down", show=False),
+        Binding("right", "select_cursor", "Open", show=False),
     ]
 
     def __init__(self, *args, **kwargs):
@@ -504,6 +445,10 @@ class LightcycleApp(App):
     def container(self):
         return self._container
 
+    @property
+    def upgrade_version(self):
+        return self._upgrade_version
+
     def compose(self) -> ComposeResult:
         yield TabStrip(id="tab-strip")
         yield PriorityTable(id="priority-list")
@@ -568,9 +513,12 @@ class LightcycleApp(App):
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
 
+        if isinstance(self.screen, NodeHubScreen):
+            self.screen.poll_refresh()
+
         running = PoolRunningUseCase(self._container.lock).execute().running
         breaker = BreakerStatusUseCase(self._container.breaker).execute()
-        self.query_one(StatusBar).report(
+        self.screen_stack[0].query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
             breaker_reset_at=breaker.reset_at,
@@ -594,12 +542,14 @@ class LightcycleApp(App):
         return BACKLOG_SHORTCUTS
 
     def _sync_footer_shortcuts(self) -> None:
-        shortcut_bar = self.query_one(ShortcutBar)
+        shortcut_bar = self.screen_stack[0].query_one(ShortcutBar)
         desired = self._desired_shortcuts()
         if shortcut_bar.shortcuts != desired:
             shortcut_bar.set_shortcuts(desired)
 
     def action_toggle_view(self) -> None:
+        while len(self.screen_stack) > 1:
+            self.pop_screen()
         self._view = "backlog" if self._view == "priority" else "priority"
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
@@ -608,6 +558,24 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(PriorityTable))
         else:
             self.set_focus(self.query_one(BacklogTable))
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if self.screen is not self.screen_stack[0]:
+            return
+        table = event.data_table
+        row_id = event.row_key.value
+        if row_id is None:
+            return
+        if table.id == "priority-list":
+            event.stop()
+            if is_gap_key(row_id):
+                return
+            node = self._container.store.get_node(row_id)
+            owning_id = node.parent if node.type == "step" else node.id
+            self.push_screen(NodeHubScreen(self._container, owning_id, self._now))
+        elif table.id == "backlog-table":
+            event.stop()
+            self.push_screen(NodeHubScreen(self._container, row_id, self._now))
 
     def action_open_picker(self) -> None:
         if self._view != "backlog" or self._picker_open:

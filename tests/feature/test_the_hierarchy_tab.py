@@ -1,0 +1,668 @@
+import pytest
+from pytest_bdd import given, parsers, scenarios, then, when
+from textual.widgets import Static
+
+from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
+from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
+from tests.support.fake_store import FakeStore
+from tests.support.tui_harness import launch, make_test_container
+
+scenarios("the-hierarchy-tab.feature")
+
+
+@pytest.fixture
+def ctx():
+    state = {}
+    yield state
+    session = state.get("session")
+    if session is not None:
+        session.close()
+
+
+def _launch(ctx, store, node_id):
+    ctx["store"] = store
+    session = launch(make_test_container(store=store))
+    ctx["session"] = session
+    session.run(
+        lambda: session.app.push_screen(NodeHubScreen(session.app.container, node_id, session.app._now))
+    )
+    session.pause()
+    screen = session.app.screen
+    screen._active_tab = "hierarchy"
+    screen._apply_tab_visibility()
+    screen._focus_active_tab()
+    session.pause()
+    ctx["hub_screen"] = screen
+    ctx["start_row"] = _table(ctx).cursor_row
+    return session
+
+
+def _table(ctx):
+    return ctx["session"].app.screen.query_one(HierarchyPagingTable)
+
+
+def _row_ids(ctx):
+    return [row.key.value for row in _table(ctx).ordered_rows]
+
+
+def _rendered_icon_style(ctx, row_id, glyph):
+    table = _table(ctx)
+    strip = table.render_line(table.get_row_index(row_id))
+    for segment in strip:
+        if segment.text.strip() == glyph:
+            return segment.style
+    return None
+
+
+def _rendered_cell_text(ctx, row_id, column_key):
+    table = _table(ctx)
+    strip = table.render_line(table.get_row_index(row_id))
+    pad = table.cell_padding
+    offset = 0
+    for column in table.ordered_columns:
+        start = offset + pad
+        end = start + column.width
+        if column.key.value == column_key:
+            return "".join(segment.text for segment in strip.crop(start, end))
+        offset = end + pad
+    raise AssertionError("column %r not found" % column_key)
+
+
+def _rendered_text(widget):
+    strip = widget.render_line(0)
+    return "".join(segment.text for segment in strip)
+
+
+@given("a node with an artifact whose internal flag is false")
+def _node_with_visible_artifact(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    store.add_artifact(item, "repo", "org/repo")
+    ctx["node_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("a node with only internal-flagged artifacts")
+def _node_with_only_internal_artifacts(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    store.add_artifact(item, "reflection", "text", internal=True)
+    ctx["node_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("a node with no artifacts")
+def _node_with_no_artifacts(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    ctx["node_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("a node showing a content indicator")
+def _node_showing_content_indicator(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    store.add_artifact(item, "repo", "org/repo")
+    ctx["node_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("an item under a theme")
+def _item_under_theme(ctx):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    item = store.create_item("Item", theme=theme)
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    ctx["theme_id"] = theme
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    ctx["node_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("a themeless item")
+def _themeless_item(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    ctx["node_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("the hierarchy is showing a theme, one of its items, and one of that item's steps")
+def _hierarchy_theme_item_step(ctx):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    item = store.create_item("Item", theme=theme)
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    ctx["theme_id"] = theme
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given("a node in the hierarchy")
+def _a_node_in_the_hierarchy(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    store.claim_ready("write-code")
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given("the hierarchy is open, showing a queued step")
+def _hierarchy_open_queued_step(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="build", role="coder", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given(parsers.parse('a step performed by the role "{role}"'))
+def _step_performed_by_role(ctx, role):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step=role, role=role, parent=item)
+    store.claim_ready(role)
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given(parsers.parse('a step whose role is "{role}"'))
+def _step_whose_role_is(ctx, role):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="await-merge", role=role, parent=item)
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given("a step blocked on another item's completion")
+def _step_blocked_on_dependency(ctx):
+    store = FakeStore()
+    blocker = store.create_step("blocker", step="build", role="coder")
+    item = store.create_item("Item")
+    step = store.create_step("s", step="build", role="coder", parent=item, deps=[blocker])
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+def _build_long_store(n=30):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    item = store.create_item("Item", theme=theme)
+    for i in range(n):
+        store.create_step("s%d" % i, step="build", role="coder", parent=item)
+    return store, theme, item
+
+
+@given("the hierarchy has more rows than fit on one screen")
+def _hierarchy_more_rows_than_fit(ctx):
+    store, theme, item = _build_long_store()
+    ctx["item_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("the selection is not on the first node")
+def _selection_not_on_first(ctx):
+    ctx["session"].press("down")
+    ctx["session"].press("down")
+    ctx["start_row"] = _table(ctx).cursor_row
+
+
+@given("the selection is on the last node in the hierarchy")
+def _selection_on_last(ctx):
+    store, theme, item = _build_long_store()
+    ctx["item_id"] = item
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=table.row_count - 1)
+
+
+@given("the selection is on the first node in the hierarchy")
+def _selection_on_first(ctx):
+    store, theme, item = _build_long_store()
+    ctx["item_id"] = item
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=0)
+
+
+@given("the hierarchy is longer than one screen")
+def _hierarchy_longer_than_one_screen(ctx):
+    store, theme, item = _build_long_store()
+    ctx["item_id"] = item
+    _launch(ctx, store, item)
+
+
+@given(parsers.parse('a "{node_type}" is highlighted in the hierarchy'))
+def _node_type_highlighted(ctx, node_type):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    item = store.create_item("Item", theme=theme)
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    ids = {"theme": theme, "item": item, "step": step}
+    ctx["target_id"] = ids[node_type]
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    row_ids = _row_ids(ctx)
+    table.move_cursor(row=row_ids.index(ids[node_type]))
+
+
+@given("I opened a node from the Hierarchy tab")
+def _opened_node_from_hierarchy(ctx):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    item = store.create_item("Item", theme=theme)
+    other = store.create_item("Other", theme=theme)
+    store.create_step("s", step="write-code", role="write-code", parent=other)
+    ctx["item_id"] = item
+    ctx["other_id"] = other
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    row_ids = _row_ids(ctx)
+    table.move_cursor(row=row_ids.index(other))
+    ctx["session"].press("enter")
+
+
+@given("the hierarchy is scrolled past a node's parent item or theme")
+def _hierarchy_scrolled_past_ancestor(ctx):
+    store, theme, item = _build_long_store(40)
+    ctx["item_id"] = item
+    ctx["theme_id"] = theme
+    _launch(ctx, store, item)
+
+
+@given("an ancestor's row is pinned to the top because it scrolled out of view")
+def _ancestor_pinned(ctx):
+    store, theme, item = _build_long_store(40)
+    ctx["item_id"] = item
+    ctx["theme_id"] = theme
+    _launch(ctx, store, item)
+    for _ in range(30):
+        ctx["session"].press("down")
+    banner = ctx["hub_screen"].query_one("#pinned-ancestor", Static)
+    assert banner.display
+
+
+@given("a node is highlighted in the hierarchy, not yet opened")
+def _node_highlighted_not_opened(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    store.add_artifact(item, "repo", "org/repo")
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=_row_ids(ctx).index(step))
+
+
+@given("an active step is highlighted in the hierarchy")
+def _active_step_highlighted(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    store.claim_ready("write-code")
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=_row_ids(ctx).index(step))
+
+
+@given("a done step is highlighted in the hierarchy")
+def _done_step_highlighted(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    store.create_step("o", step="review-code", role="review-code", parent=item)
+    store.close(step, "done")
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=_row_ids(ctx).index(step))
+
+
+@given("a human step is highlighted in the hierarchy")
+def _human_step_highlighted(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="await-merge", role="human", parent=item)
+    store.close(step, "done")
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=_row_ids(ctx).index(step))
+
+
+@given("a queued step is highlighted in the hierarchy")
+def _queued_step_highlighted(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="build", role="coder", parent=item)
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=_row_ids(ctx).index(step))
+
+
+@given("the current node is a themeless root item")
+def _current_node_themeless_root(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    ctx["item_id"] = item
+    _launch(ctx, store, item)
+
+
+@given("the current node is a step nested under an item under a theme")
+def _current_node_nested_step(ctx):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    item = store.create_item("Item", theme=theme)
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    ctx["step_id"] = step
+    _launch(ctx, store, step)
+
+
+@when("it appears in the hierarchy")
+def _it_appears(ctx):
+    pass
+
+
+@when("I open that node")
+def _open_that_node(ctx):
+    ctx["session"].press("enter")
+
+
+@when(parsers.parse('I open the hierarchy from it or one of its steps'))
+def _open_hierarchy_from_it(ctx):
+    pass
+
+
+@when("I look at each node")
+def _look_at_each_node(ctx):
+    pass
+
+
+@when("it renders")
+def _it_renders(ctx):
+    pass
+
+
+@when("that step is claimed and becomes active")
+def _step_claimed_becomes_active(ctx):
+    ctx["store"].claim_ready("coder")
+
+
+@when("one poll interval elapses")
+def _one_poll_interval(ctx):
+    ctx["session"].poll_tick()
+
+
+@when("it renders in the hierarchy")
+def _it_renders_in_hierarchy(ctx):
+    pass
+
+
+@when("Down is pressed")
+def _down_pressed(ctx):
+    ctx["session"].press("down")
+
+
+@when("Up is pressed")
+def _up_pressed(ctx):
+    ctx["session"].press("up")
+
+
+@when("Ctrl-D is pressed")
+def _ctrl_d_pressed(ctx):
+    ctx["session"].press("ctrl+d")
+
+
+@when("Ctrl-U is pressed")
+def _ctrl_u_pressed(ctx):
+    ctx["session"].press("ctrl+u")
+
+
+@when(parsers.parse("Enter or {arrow} is pressed"))
+def _enter_or_arrow_pressed(ctx, arrow):
+    ctx["session"].press("enter")
+
+
+@when("I close it with Esc or ←")
+def _close_with_esc(ctx):
+    ctx["session"].press("escape")
+
+
+@when("that ancestor leaves the visible scroll area")
+def _ancestor_leaves_view(ctx):
+    for _ in range(30):
+        ctx["session"].press("down")
+
+
+@when("I scroll back up to where its actual row is")
+def _scroll_back_to_ancestor(ctx):
+    for _ in range(31):
+        ctx["session"].press("up")
+
+
+@when("a is pressed")
+def _a_pressed(ctx):
+    ctx["session"].press("a")
+
+
+@when("l is pressed")
+def _l_pressed(ctx):
+    ctx["session"].press("l")
+
+
+@when("I view the Hierarchy tab")
+def _view_hierarchy_tab(ctx):
+    pass
+
+
+@then("it shows a content indicator")
+def _shows_content_indicator(ctx):
+    text = _rendered_cell_text(ctx, ctx["node_id"], "content")
+    assert text.strip() != ""
+
+
+@then("no content indicator is shown")
+def _no_content_indicator(ctx):
+    text = _rendered_cell_text(ctx, ctx["node_id"], "content")
+    assert text.strip() == ""
+
+
+@then("at least one artifact I can actually view is there")
+def _artifact_viewable(ctx):
+    store = ctx["store"]
+    artifacts = store.item_artifacts(ctx["node_id"])
+    assert any(not a.internal for a in artifacts)
+
+
+@then("the theme is shown at the top, with all its items and their steps below")
+def _theme_at_top(ctx):
+    ids = _row_ids(ctx)
+    assert ids[0] == ctx["theme_id"]
+    assert ctx["item_id"] in ids
+    assert ctx["step_id"] in ids
+    assert ids.index(ctx["theme_id"]) < ids.index(ctx["item_id"]) < ids.index(ctx["step_id"])
+
+
+@then("that item is shown as the root, with its steps below, and no blank or missing theme row")
+def _item_is_root(ctx):
+    ids = _row_ids(ctx)
+    assert ids[0] == ctx["item_id"]
+    assert ctx["step_id"] in ids
+    assert None not in ids
+    assert "" not in ids
+
+
+@then("its depth - theme, item, or step - is visible by indentation")
+def _depth_visible_by_indentation(ctx):
+    theme_title = _rendered_cell_text(ctx, ctx["theme_id"], "title")
+    item_title = _rendered_cell_text(ctx, ctx["item_id"], "title")
+    step_title = _rendered_cell_text(ctx, ctx["step_id"], "title")
+    theme_indent = len(theme_title) - len(theme_title.lstrip(" "))
+    item_indent = len(item_title) - len(item_title.lstrip(" "))
+    step_indent = len(step_title) - len(step_title.lstrip(" "))
+    assert theme_indent < item_indent < step_indent
+
+
+@then("its own real id is shown alongside its title")
+def _own_real_id_shown(ctx):
+    ids = _row_ids(ctx)
+    assert ctx["item_id"] in ids
+
+
+@then("its current state is shown using the same icon and colour as the priority list")
+def _state_shown_same_icon(ctx):
+    glyph = STATE_GLYPHS["active"]
+    icon_text = _rendered_cell_text(ctx, ctx["item_id"], "icon")
+    assert glyph.glyph in icon_text
+    style = _rendered_icon_style(ctx, ctx["item_id"], glyph.glyph)
+    assert style.color.get_truecolor().hex.lower() == COLOURS[glyph.colour].lower()
+
+
+@then("the step's row shows the active state, without a manual refresh")
+def _step_row_shows_active(ctx):
+    glyph = STATE_GLYPHS["active"]
+    icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
+    assert glyph.glyph in icon_text
+
+
+@then(parsers.parse('its role "{role}" is shown alongside its state'))
+def _role_shown_alongside_state(ctx, role):
+    role_text = _rendered_cell_text(ctx, ctx["step_id"], "role")
+    assert role_text.strip() == role
+
+
+@then(parsers.parse('"{role}" is shown as its role'))
+def _role_shown_as(ctx, role):
+    role_text = _rendered_cell_text(ctx, ctx["step_id"], "role")
+    assert role_text.strip() == role
+
+
+@then("a dependency indicator is shown alongside its state")
+def _dependency_indicator_shown(ctx):
+    icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
+    assert DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph in icon_text
+
+
+@then("that indicator is distinct from a step that is blocked for any other reason")
+def _indicator_distinct(ctx):
+    icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
+    assert STATE_GLYPHS["needs-attention"].glyph in icon_text
+    assert DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph in icon_text
+
+
+@then("the selection has moved to the next node, scrolling as needed")
+def _selection_moved_next(ctx):
+    table = _table(ctx)
+    assert table.cursor_row == ctx["start_row"] + 1
+
+
+@then("the selection has moved to the previous node")
+def _selection_moved_previous(ctx):
+    table = _table(ctx)
+    assert table.cursor_row == ctx["start_row"] - 1
+
+
+@then("the selection has not moved past the last node")
+def _selection_not_past_last(ctx):
+    table = _table(ctx)
+    assert table.cursor_row == table.row_count - 1
+
+
+@then("the selection has not moved past the first node")
+def _selection_not_past_first(ctx):
+    table = _table(ctx)
+    assert table.cursor_row == 0
+
+
+@then("the view has jumped forward by roughly a full screen")
+def _view_jumped_forward(ctx):
+    table = _table(ctx)
+    assert table.cursor_row > ctx["start_row"] + 1
+
+
+@then("the selection is back on the row it started on")
+def _selection_back_on_start(ctx):
+    table = _table(ctx)
+    assert table.cursor_row == ctx["start_row"]
+
+
+@then("it opens into its own tabbed hub, landing on the tab that matches its state")
+def _opens_into_own_hub(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["target_id"]
+
+
+@then("the Hierarchy tab reappears with that node still selected, scrolled to the same position")
+def _hierarchy_reappears_same_position(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._active_tab == "hierarchy"
+    table = _table(ctx)
+    ids = [row.key.value for row in table.ordered_rows]
+    assert ids[table.cursor_row] == ctx["other_id"]
+
+
+@then("its row stays pinned to the top instead of scrolling away")
+def _row_pinned_to_top(ctx):
+    banner = ctx["hub_screen"].query_one("#pinned-ancestor", Static)
+    assert banner.display
+    assert ctx["item_id"] in _rendered_text(banner)
+
+
+@then("the pinned duplicate is no longer shown")
+def _pinned_duplicate_gone(ctx):
+    banner = ctx["hub_screen"].query_one("#pinned-ancestor", Static)
+    assert not banner.display
+
+
+@then("its Artifacts tab opens directly, skipping its own contextual default")
+def _artifacts_tab_opens_directly(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._active_tab == "artifacts"
+
+
+@then("its Log tab opens directly, showing the live tail")
+def _log_tab_opens_live(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._active_tab == "log"
+
+
+@then("its Log tab opens directly, showing its past log")
+def _log_tab_opens_past(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._active_tab == "log"
+
+
+@then("nothing happens, since there is no log to show")
+def _nothing_happens_no_log(ctx):
+    assert ctx["session"].app.screen is ctx["hub_screen"]
+
+
+@then("it is highlighted at the top row")
+def _highlighted_at_top_row(ctx):
+    table = _table(ctx)
+    assert table.cursor_row == 0
+
+
+@then("it is highlighted at its actual depth, not the top row")
+def _highlighted_at_actual_depth(ctx):
+    table = _table(ctx)
+    ids = [row.key.value for row in table.ordered_rows]
+    assert ids[table.cursor_row] == ctx["step_id"]
+    assert table.cursor_row > 0

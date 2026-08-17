@@ -22,6 +22,10 @@ STATE_GLYPHS = {
 
 DEPENDENCY_BLOCKED_EXTRA_GLYPH = Glyph("⛓", "amber")
 
+DONE_GLYPH = Glyph("○", "dim")
+
+CONTENT_GLYPH = Glyph("•", "cyan")
+
 FOOTER_GLYPHS = {
     "pool-running": Glyph("●", "cyan"),
     "pool-stopped": Glyph("○", "dim"),
@@ -39,6 +43,9 @@ COLUMN_GRIDS = {
     ),
     "backlog": (
         ("cursor", "2ch"), ("id", "9ch"), ("project", "10ch"), ("title", "1fr"),
+    ),
+    "hierarchy": (
+        ("icon", "4ch"), ("content", "2ch"), ("id", "13ch"), ("title", "1fr"), ("role", "14ch"),
     ),
 }
 
@@ -67,5 +74,14 @@ BACKLOG_EMPTY_SHORTCUTS = (
 BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("tab", "current work"),
+    ("q", "quit"),
+)
+
+HUB_SHORTCUTS = (
+    ("[/]", "switch tab"),
+    ("↑↓", "scroll"),
+    ("enter/→", "open node"),
+    ("esc/←", "back"),
+    ("tab", "backlog"),
     ("q", "quit"),
 )
