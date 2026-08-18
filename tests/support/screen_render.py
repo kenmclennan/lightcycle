@@ -2,7 +2,9 @@ import argparse
 import datetime
 import sys
 
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.fake_workers import FakeWorkers
 from tests.support.tui_harness import FakeBreakerPort, FakeLock, launch, make_test_container
 
 NOW = datetime.datetime(2026, 1, 1, 14, 16, 0)
@@ -141,7 +143,7 @@ def _long_hierarchy_store(passes=4):
     return store, item
 
 
-def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE):
+def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None):
     container = make_test_container(
         store=store,
         lock=FakeLock(running=lock_running),
@@ -149,6 +151,8 @@ def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE):
             is_open=breaker_open,
             reset_at=(NOW + datetime.timedelta(minutes=4)).timestamp() if breaker_open else None,
         ),
+        fs=fs,
+        workers=workers,
     )
     return launch(container, now=lambda: NOW, size=size)
 
@@ -221,9 +225,39 @@ def _hub_hierarchy(size):
     return _open_hub(_launch(store, size=size), scan, tab="hierarchy")
 
 
+_LOG_PATH = "/fake/logs/worker-write-code.log"
+
+
 def _hub_active_log(size):
-    store, _theme, scan, _coding = _populated_store()
-    return _open_hub(_launch(store, size=size), scan, tab="log")
+    store, _theme, scan, coding = _populated_store()
+    fs = FakeFs(files={_LOG_PATH: (
+        b"14:02:11 reading lightcycle/adapters/sqlite_store.py\n"
+        b"14:02:14 adding project registry table migration\n"
+        b"14:03:02 writing tests/unit/test_project_registry.py\n"
+        b"14:03:47 running fast tier...\n"
+    )})
+    workers = FakeWorkers(
+        workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
+                  "log": _LOG_PATH}],
+        alive_pids={4242},
+    )
+    return _open_hub(_launch(store, size=size, fs=fs, workers=workers), scan, tab="log")
+
+
+def _hub_log_finished(size):
+    store, _theme, scan, coding = _populated_store()
+    fs = FakeFs(files={_LOG_PATH: (
+        b"14:02:11 reading lightcycle/adapters/sqlite_store.py\n"
+        b"14:02:14 adding project registry table migration\n"
+        b"14:03:02 writing tests/unit/test_project_registry.py\n"
+        b"14:04:19 fast tier green, opening PR\n"
+    )})
+    workers = FakeWorkers(
+        workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
+                  "log": _LOG_PATH}],
+        alive_pids=set(),
+    )
+    return _open_hub(_launch(store, size=size, fs=fs, workers=workers), scan, tab="log")
 
 
 def _hub_artifacts(size):
@@ -279,6 +313,7 @@ SCREENS = {
     "backlog#claude-unavailable": _backlog_claude_unavailable,
     "hub#hierarchy": _hub_hierarchy,
     "hub#active-log": _hub_active_log,
+    "hub#log-finished": _hub_log_finished,
     "hub#artifacts": _hub_artifacts,
     "hub#theme": _hub_theme,
     "hub#done-item": _hub_done_item,
@@ -307,7 +342,6 @@ def _coloured_row(strip):
 
 
 UNRENDERABLE = {
-    "hub#log-finished": "the Log tab has no entries to render yet; it is still an empty state",
     "artifact-viewer#normal": "the artifact viewer screen does not exist yet",
 }
 

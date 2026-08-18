@@ -7,7 +7,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, RichLog, Static
 from textual.widgets.data_table import CellDoesNotExist
 
 from lightcycle import __version__
@@ -21,13 +21,21 @@ from lightcycle.adapters.tui.design_system import (
     STATE_GLYPHS,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, StatusBar
-from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
+from lightcycle.application.pool import (
+    BreakerStatusUseCase,
+    PoolRunningUseCase,
+    TailLogInput,
+    TailLogUseCase,
+)
 from lightcycle.application.work import HierarchyInput, HierarchyUseCase
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.work import Item, State, display_role, has_content, landing_tab, row_bucket
 
 POLL_INTERVAL_SECONDS = 10
+LOG_TAIL_INTERVAL_SECONDS = 1
+LOG_NO_STREAM_MESSAGE = "Nothing live to stream."
+LOG_FINISHED_MESSAGE = "✓ step finished"
 
 _TAB_ORDER = ("hierarchy", "log", "artifacts")
 _TAB_LABELS = {"hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts"}
@@ -53,6 +61,24 @@ def landing_node(store, node):
         return node
     cur = current_step(store, node.id)
     return cur if cur is not None else node
+
+
+def log_target_node(store, node):
+    if node.type == "step":
+        return node
+    if node.type == "item":
+        return current_step(store, node.id)
+    return None
+
+
+def log_tab_mode(node):
+    if node is None or node.role == "human":
+        return "no-log"
+    if node.state == State.IN_PROGRESS:
+        return "live"
+    if node.state == State.DONE:
+        return "historical"
+    return "no-log"
 
 
 def _elapsed(store, node, now):
@@ -253,6 +279,23 @@ class HubTabStrip(Horizontal):
             widget.set_class(tab != active, "tab-dim")
 
 
+class LogPane(RichLog):
+    BINDINGS = [
+        Binding("up", "scroll_up", "Scroll up", show=False),
+        Binding("down", "scroll_down", "Scroll down", show=False),
+        Binding("ctrl+u", "page_up", "Page up", show=False),
+        Binding("ctrl+d", "page_down", "Page down", show=False),
+    ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.live = False
+
+    def watch_scroll_y(self, old, new) -> None:
+        super().watch_scroll_y(old, new)
+        self.auto_scroll = self.is_vertical_scroll_end
+
+
 class HierarchyPagingTable(DataTable):
     _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
 
@@ -260,7 +303,6 @@ class HierarchyPagingTable(DataTable):
         Binding("ctrl+u", "page_up", "Page up", show=False),
         Binding("ctrl+d", "page_down", "Page down", show=False),
         Binding("right", "select_cursor", "Open", show=False),
-        Binding("left", "close_hub", "Back", show=False),
         Binding("a", "jump_artifacts", "Artifacts", show=False),
         Binding("l", "jump_log", "Log", show=False),
     ]
@@ -278,10 +320,6 @@ class HierarchyPagingTable(DataTable):
         super().watch_cursor_coordinate(old_coordinate, new_coordinate)
         if isinstance(self.screen, NodeHubScreen):
             self.screen.update_pinned_ancestor()
-
-    def action_close_hub(self) -> None:
-        if isinstance(self.screen, NodeHubScreen):
-            self.screen.close_hub()
 
     def _highlighted_id(self):
         if self.row_count == 0:
@@ -303,11 +341,7 @@ class HierarchyPagingTable(DataTable):
             return
         screen = self.screen
         node = screen.container.store.get_node(row_id)
-        if (
-            node.type != "step"
-            or node.role == "human"
-            or node.state not in (State.IN_PROGRESS, State.DONE)
-        ):
+        if node.type != "step" or log_tab_mode(node) == "no-log":
             return
         screen.open_at(row_id, initial_tab="log")
 
@@ -320,6 +354,7 @@ class HierarchyPagingTable(DataTable):
 class NodeHubScreen(Screen):
     BINDINGS = [
         Binding("escape", "close_hub", "Back", show=False),
+        Binding("left", "close_hub", "Back", show=False),
         Binding("[", "prev_tab", "Prev tab", show=False),
         Binding("]", "next_tab", "Next tab", show=False),
     ]
@@ -347,6 +382,9 @@ class NodeHubScreen(Screen):
         height: 1fr;
         color: {COLOURS["dim"]};
     }}
+    LogPane {{
+        height: 1fr;
+    }}
     #pinned-ancestor {{
         height: 1;
         background: {COLOURS["border"]};
@@ -363,6 +401,11 @@ class NodeHubScreen(Screen):
         self._active_tab = None
         self._last_hierarchy_shape = None
         self._last_rows = []
+        self._log_mode = None
+        self._log_target = None
+        self._log_offset = 0
+        self._log_finished = False
+        self._log_timer = None
 
     @property
     def container(self):
@@ -373,7 +416,8 @@ class NodeHubScreen(Screen):
         yield HubTabStrip(id="hub-tabs")
         yield Static(id="pinned-ancestor")
         yield HierarchyPagingTable(id="hierarchy-table")
-        yield Static("Nothing to show yet.", id="hub-log-empty")
+        yield LogPane(id="hub-log-view", highlight=False, markup=False)
+        yield Static(LOG_NO_STREAM_MESSAGE, id="hub-log-empty")
         yield Static("Nothing to show yet.", id="hub-artifacts-empty")
         yield DashboardFooter(id="hub-footer", shortcuts=HUB_SHORTCUTS)
 
@@ -384,8 +428,53 @@ class NodeHubScreen(Screen):
         store = self._container.store
         node = store.get_node(self._node_id)
         self._active_tab = self._forced_initial_tab or landing_tab(landing_node(store, node))
+        self._setup_log_tab()
         self.call_after_refresh(self._initial_refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self.poll_refresh)
+
+    def _setup_log_tab(self) -> None:
+        store = self._container.store
+        node = store.get_node(self._node_id)
+        log_node = log_target_node(store, node)
+        mode = log_tab_mode(log_node)
+        self._log_mode = mode
+        empty = self.query_one("#hub-log-empty", Static)
+        if mode == "no-log":
+            empty.update(LOG_NO_STREAM_MESSAGE)
+            return
+        self._log_target = log_node.id
+        log_pane = self.query_one(LogPane)
+        log_pane.live = mode == "live"
+        log_pane.auto_scroll = mode == "live"
+        result = self._run_tail(0)
+        if result.path is None:
+            self._log_mode = "no-log"
+            empty.update(LOG_NO_STREAM_MESSAGE)
+            return
+        self._apply_tail_result(result)
+        if self._log_mode == "live" and not self._log_finished:
+            self._log_timer = self.set_interval(LOG_TAIL_INTERVAL_SECONDS, self._tail_tick)
+
+    def _run_tail(self, offset):
+        use_case = TailLogUseCase(
+            self._container.store, self._container.workers, self._container.fs, self._container.config
+        )
+        return use_case.execute(TailLogInput(target=self._log_target, offset=offset))
+
+    def _tail_tick(self) -> None:
+        self._apply_tail_result(self._run_tail(self._log_offset))
+
+    def _apply_tail_result(self, result) -> None:
+        self._log_offset = result.offset
+        log_pane = self.query_one(LogPane)
+        if result.data:
+            log_pane.write(Text(result.data.decode("utf-8", errors="replace"), style=COLOURS["dim"]))
+        if self._log_mode == "live" and not result.live and not self._log_finished:
+            self._log_finished = True
+            log_pane.live = False
+            log_pane.write(Text(LOG_FINISHED_MESSAGE, style=COLOURS["cyan"]))
+            if self._log_timer is not None:
+                self._log_timer.stop()
 
     def _initial_refresh(self) -> None:
         self._refresh(initial=True)
@@ -501,7 +590,9 @@ class NodeHubScreen(Screen):
 
     def _apply_tab_visibility(self) -> None:
         self.query_one(HierarchyPagingTable).display = self._active_tab == "hierarchy"
-        self.query_one("#hub-log-empty", Static).display = self._active_tab == "log"
+        log_active = self._active_tab == "log"
+        self.query_one(LogPane).display = log_active and self._log_mode != "no-log"
+        self.query_one("#hub-log-empty", Static).display = log_active and self._log_mode == "no-log"
         self.query_one("#hub-artifacts-empty", Static).display = self._active_tab == "artifacts"
         self.update_pinned_ancestor()
 
@@ -511,6 +602,8 @@ class NodeHubScreen(Screen):
             self.set_focus(panel)
         elif self._active_tab == "hierarchy":
             self.set_focus(self.query_one(HierarchyPagingTable))
+        elif self._active_tab == "log" and self._log_mode != "no-log":
+            self.set_focus(self.query_one(LogPane))
         else:
             self.set_focus(None)
 

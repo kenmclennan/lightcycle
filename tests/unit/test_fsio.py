@@ -52,5 +52,48 @@ class TestWorkflowNames(unittest.TestCase):
         self.assertEqual(FakeFs().workflow_names(), [])
 
 
+class TestReadFrom(unittest.TestCase):
+    def test_reads_from_the_start_when_offset_is_zero(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "w") as f:
+            f.write("line one\nline two\n")
+        adapter = FsAdapter(None)
+        data, offset = adapter.read_from(path, 0)
+        self.assertEqual(data, b"line one\nline two\n")
+        self.assertEqual(offset, len(b"line one\nline two\n"))
+
+    def test_reads_only_the_bytes_written_since_the_offset(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "w") as f:
+            f.write("line one\n")
+        adapter = FsAdapter(None)
+        _data, offset = adapter.read_from(path, 0)
+        with open(path, "a") as f:
+            f.write("line two\n")
+        data, new_offset = adapter.read_from(path, offset)
+        self.assertEqual(data, b"line two\n")
+        self.assertEqual(new_offset, offset + len(b"line two\n"))
+
+    def test_missing_file_reads_nothing_and_keeps_the_offset(self):
+        adapter = FsAdapter(None)
+        data, offset = adapter.read_from(os.path.join(tempfile.mkdtemp(), "gone.log"), 5)
+        self.assertEqual(data, b"")
+        self.assertEqual(offset, 5)
+
+    def test_fake_fs_slices_seeded_content_from_the_offset(self):
+        fs = FakeFs(files={"/l/worker.log": b"line one\nline two\n"})
+        data, offset = fs.read_from("/l/worker.log", len(b"line one\n"))
+        self.assertEqual(data, b"line two\n")
+        self.assertEqual(offset, len(b"line one\nline two\n"))
+
+    def test_fake_fs_unknown_path_reads_nothing(self):
+        fs = FakeFs()
+        data, offset = fs.read_from("/l/missing.log", 0)
+        self.assertEqual(data, b"")
+        self.assertEqual(offset, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

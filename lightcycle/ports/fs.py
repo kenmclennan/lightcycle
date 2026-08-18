@@ -39,6 +39,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def read_from(self, path, offset):
+        pass
+
+    @abstractmethod
     def list_dir(self, path):
         pass
 
