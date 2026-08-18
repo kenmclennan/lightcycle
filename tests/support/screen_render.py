@@ -192,6 +192,17 @@ def _backlog_empty(size):
     return session
 
 
+def _backlog_empty_filtered(size):
+    store = _backlog_store()
+    store.item("LC-999", "An item in another project", project="horde")
+    session = _launch(store, size=size)
+    session.press("tab")
+    session.app._backlog_project_filter = "horde"
+    session.run(session.app._refresh)
+    session.pause()
+    return session
+
+
 def _backlog_picker_open(size):
     session = _backlog_normal(size)
     session.press("f")
@@ -257,6 +268,7 @@ SCREENS = {
     "priority-list#claude-unavailable": _priority_claude_unavailable,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
+    "backlog#empty-filtered": _backlog_empty_filtered,
     "backlog#picker-open": _backlog_picker_open,
     "backlog#claude-unavailable": _backlog_claude_unavailable,
     "hub#hierarchy": _hub_hierarchy,
@@ -287,7 +299,15 @@ def _coloured_row(strip):
     return "".join(out).rstrip()
 
 
+UNRENDERABLE = {
+    "hub#log-finished": "the Log tab has no entries to render yet; it is still an empty state",
+    "artifact-viewer#normal": "the artifact viewer screen does not exist yet",
+}
+
+
 def render(state, size=DEFAULT_SIZE, colour=False):
+    if state in UNRENDERABLE:
+        raise KeyError("%s cannot be rendered yet: %s" % (state, UNRENDERABLE[state]))
     if state not in SCREENS:
         raise KeyError(
             "unknown state %r; known states: %s" % (state, ", ".join(sorted(SCREENS)))
@@ -317,8 +337,16 @@ def main(argv=None):
         print("states this codebase can render:")
         for name in sorted(SCREENS):
             print("  %s" % name)
+        print("\nstates the design names that this codebase cannot render yet:")
+        for name in sorted(UNRENDERABLE):
+            print("  %s - %s" % (name, UNRENDERABLE[name]))
         print("\nrender one with: bash tests/render.sh <state> [--size 100x30] [--colour]")
         return 0
+
+    if args.state in UNRENDERABLE:
+        print("%s cannot be rendered yet: %s" % (args.state, UNRENDERABLE[args.state]),
+              file=sys.stderr)
+        return 2
 
     if args.state not in SCREENS:
         print("unknown state %r" % args.state, file=sys.stderr)

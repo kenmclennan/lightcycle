@@ -1,6 +1,6 @@
 import pytest
 
-from tests.support.screen_render import SCREENS, render
+from tests.support.screen_render import SCREENS, UNRENDERABLE, render
 
 
 @pytest.mark.parametrize("state", sorted(SCREENS))
@@ -19,6 +19,20 @@ def test_a_state_the_codebase_cannot_render_names_the_ones_it_can():
         render("hub#not-a-state")
 
     assert "hub#hierarchy" in str(excinfo.value)
+
+
+def test_a_state_the_design_names_but_the_code_cannot_render_says_why():
+    assert UNRENDERABLE
+
+    for state, reason in UNRENDERABLE.items():
+        assert state not in SCREENS
+        assert reason.strip()
+
+    state, reason = sorted(UNRENDERABLE.items())[0]
+    with pytest.raises(KeyError) as excinfo:
+        render(state)
+
+    assert reason in str(excinfo.value)
 
 
 def test_colour_carries_the_state_tokens_the_plain_frame_drops():
