@@ -7,7 +7,7 @@ Feature: The node hub
   first backing out through Esc. Closing the hub always returns to wherever
   it was opened from - the priority list or the backlog - at the same
   position. What each tab renders beyond its shell is this item's own to
-  build for Hierarchy; Log and Artifacts land as empty states here, their
+  build for Hierarchy and Log; Artifacts lands as an empty state here, its
   real content built by later work.
 
   Scenario Outline: Confirming a selected row opens its hub, replacing the list
@@ -183,11 +183,6 @@ Feature: The node hub
     Given an item's step was active when the breaker tripped and killed its worker, and was reclaimed to ready
     When I open it with Enter or →
     Then the header and the hierarchy show the step as queued, not active
-
-  Scenario: The Log tab renders as an empty state
-    Given a node's hub is open, on the Log tab
-    When I look at it
-    Then it shows an empty state placeholder
 
   Scenario: The Artifacts tab renders as an empty state
     Given a node's hub is open, on the Artifacts tab
