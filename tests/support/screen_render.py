@@ -104,6 +104,42 @@ def _backlog_store():
     return store
 
 
+LONG_ITEM_TITLE = "Deliver the operator-monitors-the-pipeline Blueprint"
+LONG_THEME_TITLE = "Operator monitors the pipeline - deliver the node hub and tabs"
+
+_LOOP = [
+    ("plan-next", "plan-next"),
+    ("feature-writer", "feature-writer"),
+    ("feature-open-pr", "open-pr"),
+    ("feature-watch-ci", "watch-ci"),
+    ("review-features", "review-features"),
+    ("implement-features", "implement-features"),
+    ("code-open-pr", "open-pr"),
+    ("code-watch-ci", "watch-ci"),
+    ("review-code", "review-code"),
+    ("code-await-merge", "human"),
+    ("handle-feedback", "handle-feedback"),
+]
+
+
+def _long_hierarchy_store(passes=4):
+    store = DemoStore(now=lambda: _at(2))
+    theme = store.theme("LC-290", LONG_THEME_TITLE, project="lightcycle")
+    item = store.item("LC-290.1", LONG_ITEM_TITLE, theme=theme)
+    n = 0
+    for _ in range(passes):
+        for step, role in _LOOP:
+            n += 1
+            store.step(
+                "LC-290.1.%d" % n,
+                "%s: %s" % (step, LONG_ITEM_TITLE),
+                step=step,
+                role=role,
+                parent=item,
+            )
+    return store, item
+
+
 def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE):
     container = make_test_container(
         store=store,
@@ -205,6 +241,11 @@ def _hub_needs_attention_human(size):
     return _open_hub(_launch(store, size=size), item)
 
 
+def _hub_hierarchy_scrolled(size):
+    store, item = _long_hierarchy_store()
+    return _open_hub(_launch(store, size=size), item, tab="hierarchy")
+
+
 def _hub_claude_unavailable(size):
     store, _theme, scan, _coding = _populated_store()
     return _open_hub(_launch(store, breaker_open=True, size=size), scan)
@@ -225,6 +266,7 @@ SCREENS = {
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
     "hub#needs-attention-human": _hub_needs_attention_human,
+    "hub#hierarchy-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
 }
 
