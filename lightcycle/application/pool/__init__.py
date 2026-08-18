@@ -20,6 +20,7 @@ from lightcycle.application.pool.run_lock import (
     ReleaseRunLockUseCase,
 )
 from lightcycle.application.pool.sweep import SweepUseCase
+from lightcycle.application.pool.tail_log import TailLogInput, TailLogResult, TailLogUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
 
 __all__ = [
@@ -44,6 +45,9 @@ __all__ = [
     "RetroCadenceResponse",
     "RetroCadenceUseCase",
     "SweepUseCase",
+    "TailLogInput",
+    "TailLogResult",
+    "TailLogUseCase",
     "TickInput",
     "TickUseCase",
 ]

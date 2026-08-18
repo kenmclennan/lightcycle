@@ -108,6 +108,13 @@ class FakeFs:
     def read_bytes(self, path):
         return self._files.get(path)
 
+    def read_from(self, path, offset):
+        content = self._files.get(path)
+        if content is None:
+            return b"", offset
+        data = content[offset:]
+        return data, offset + len(data)
+
     def list_dir(self, path):
         return sorted(self._dirs.get(path, []))
 

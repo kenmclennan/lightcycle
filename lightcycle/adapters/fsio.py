@@ -83,6 +83,15 @@ def read_bytes(path):
         return f.read()
 
 
+def read_from(path, offset):
+    if not path or not os.path.exists(path):
+        return b"", offset
+    with open(path, "rb") as f:
+        f.seek(offset)
+        data = f.read()
+    return data, offset + len(data)
+
+
 def list_dir(path):
     if not os.path.isdir(path):
         return []
@@ -152,6 +161,9 @@ class FsAdapter(FsPort):
 
     def read_bytes(self, path):
         return read_bytes(path)
+
+    def read_from(self, path, offset):
+        return read_from(path, offset)
 
     def list_dir(self, path):
         return list_dir(path)

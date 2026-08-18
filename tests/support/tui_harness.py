@@ -6,7 +6,9 @@ from lightcycle.application.setup import UpgradeResponse
 from lightcycle.config import Config
 from lightcycle.container import Container
 from lightcycle.adapters.tui.app import LightcycleApp
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.fake_workers import FakeWorkers
 
 
 def _no_upgrade_available():
@@ -35,11 +37,13 @@ class FakeBreakerPort:
         self._state = dict(state)
 
 
-def make_test_container(store=None, lock=None, breaker=None):
+def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None):
     return Container(
         store=store or FakeStore(),
         lock=lock or FakeLock(running=False),
         breaker=breaker or FakeBreakerPort(),
+        fs=fs or FakeFs(),
+        workers=workers or FakeWorkers(),
         config=Config(environ={}),
     )
 
