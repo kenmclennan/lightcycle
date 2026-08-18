@@ -1,0 +1,29 @@
+import pytest
+
+from tests.support.screen_render import SCREENS, render
+
+
+@pytest.mark.parametrize("state", sorted(SCREENS))
+def test_every_registered_state_renders_a_full_frame(state):
+    frame = render(state, size=(100, 30))
+    rows = frame.split("\n")
+
+    assert len(rows) == 30
+    assert rows[0].startswith("┌") and rows[0].endswith("┐")
+    assert rows[-1].startswith("└") and rows[-1].endswith("┘")
+    assert any(row.strip("│ ") for row in rows[1:-1])
+
+
+def test_a_state_the_codebase_cannot_render_names_the_ones_it_can():
+    with pytest.raises(KeyError) as excinfo:
+        render("hub#not-a-state")
+
+    assert "hub#hierarchy" in str(excinfo.value)
+
+
+def test_colour_carries_the_state_tokens_the_plain_frame_drops():
+    plain = render("priority-list#normal")
+    coloured = render("priority-list#normal", colour=True)
+
+    assert "\x1b[38;2;" in coloured
+    assert "\x1b[" not in plain
