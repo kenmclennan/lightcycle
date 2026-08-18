@@ -41,3 +41,16 @@ def test_colour_carries_the_state_tokens_the_plain_frame_drops():
 
     assert "\x1b[38;2;" in coloured
     assert "\x1b[" not in plain
+
+
+HEADER_FIELDS = ("project:", "theme:", "workflow:", "STEP:", "ROLE:", "ELAPSED:", "STATE:")
+
+
+def test_the_demo_fixtures_exercise_every_header_field_the_hub_can_render():
+    hub_frames = "\n".join(render(s) for s in sorted(SCREENS) if s.startswith("hub#"))
+    missing = [f for f in HEADER_FIELDS if f not in hub_frames]
+
+    assert not missing, (
+        "no demo fixture populates %s, so no rendered frame can ever show it "
+        "and every comparison against the design silently omits it" % missing
+    )

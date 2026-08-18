@@ -42,13 +42,14 @@ THEME_TITLE = "Project model: github-identity registry"
 REGISTRY_TITLE = "Registry table and identity-based repo resolution"
 CLONE_TITLE = "Clone-on-demand: fetch an absent project on resolve"
 SCAN_TITLE = "lc project scan: recursive discovery by git remote"
+WORKFLOW = "lightcycle/spec-driven@abfb01d"
 
 
 def _populated_store(claimed_minutes_ago=14):
     store = DemoStore(now=lambda: _at(claimed_minutes_ago))
     theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
 
-    scan = store.item("LC-143.3", SCAN_TITLE, theme=theme)
+    scan = store.item("LC-143.3", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
     store.edit_node(
         scan,
         description="Phase 3 of the registry work. lc project scan walks a tree recursively "
@@ -63,10 +64,10 @@ def _populated_store(claimed_minutes_ago=14):
     store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=scan)
     store.claim_ready("write-code")
 
-    registry = store.item("LC-143.1", REGISTRY_TITLE, theme=theme)
+    registry = store.item("LC-143.1", REGISTRY_TITLE, theme=theme, workflow=WORKFLOW)
     store.step("LC-143.1.4", "write the code", step="write-code", role="write-code", parent=registry)
 
-    clone = store.item("LC-143.2", CLONE_TITLE, theme=theme)
+    clone = store.item("LC-143.2", CLONE_TITLE, theme=theme, workflow=WORKFLOW)
     store.step("LC-143.2.4", "write the code", step="write-code", role="write-code", parent=clone)
 
     store.add_artifact(scan, "repo", "kenmclennan/lightcycle")
@@ -78,10 +79,10 @@ def _populated_store(claimed_minutes_ago=14):
 def _blocked_store():
     store = DemoStore(now=lambda: _at(3))
     theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
-    blocker = store.item("LC-143.1", REGISTRY_TITLE, theme=theme)
+    blocker = store.item("LC-143.1", REGISTRY_TITLE, theme=theme, workflow=WORKFLOW)
     blocking_step = store.step("LC-143.1.4", "write the code", step="write-code",
                                role="write-code", parent=blocker)
-    waiting = store.item("LC-143.2", CLONE_TITLE, theme=theme)
+    waiting = store.item("LC-143.2", CLONE_TITLE, theme=theme, workflow=WORKFLOW)
     store.step("LC-143.2.4", "write the code", step="write-code", role="write-code",
                parent=waiting, deps=[blocking_step])
     return store, waiting
@@ -90,7 +91,7 @@ def _blocked_store():
 def _human_step_store():
     store = DemoStore(now=lambda: _at(6))
     theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
-    item = store.item("LC-143.3", SCAN_TITLE, theme=theme)
+    item = store.item("LC-143.3", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
     store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item,
                attention=True)
     return store, item
@@ -125,7 +126,7 @@ _LOOP = [
 def _long_hierarchy_store(passes=4):
     store = DemoStore(now=lambda: _at(2))
     theme = store.theme("LC-290", LONG_THEME_TITLE, project="lightcycle")
-    item = store.item("LC-290.1", LONG_ITEM_TITLE, theme=theme)
+    item = store.item("LC-290.1", LONG_ITEM_TITLE, theme=theme, workflow="flynns-workflows/blueprint-delivery@0333918")
     n = 0
     for _ in range(passes):
         for step, role in _LOOP:
@@ -252,6 +253,11 @@ def _hub_needs_attention_human(size):
     return _open_hub(_launch(store, size=size), item)
 
 
+def _hub_step_node(size):
+    store, _theme, _scan, coding = _populated_store()
+    return _open_hub(_launch(store, size=size), coding)
+
+
 def _hub_hierarchy_scrolled(size):
     store, item = _long_hierarchy_store()
     return _open_hub(_launch(store, size=size), item, tab="hierarchy")
@@ -278,6 +284,7 @@ SCREENS = {
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
     "hub#needs-attention-human": _hub_needs_attention_human,
+    "hub#step-node": _hub_step_node,
     "hub#hierarchy-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
 }
