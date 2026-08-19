@@ -83,6 +83,10 @@ def read_bytes(path):
         return f.read()
 
 
+def exists(path):
+    return bool(path) and os.path.exists(path)
+
+
 def read_from(path, offset):
     if not path or not os.path.exists(path):
         return b"", offset
@@ -161,6 +165,9 @@ class FsAdapter(FsPort):
 
     def read_bytes(self, path):
         return read_bytes(path)
+
+    def exists(self, path):
+        return exists(path)
 
     def read_from(self, path, offset):
         return read_from(path, offset)

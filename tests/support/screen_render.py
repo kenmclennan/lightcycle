@@ -5,7 +5,7 @@ import sys
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
-from tests.support.tui_harness import FakeBreakerPort, FakeLock, launch, make_test_container
+from tests.support.tui_harness import FakeBreakerPort, FakeLauncher, FakeLock, launch, make_test_container
 
 NOW = datetime.datetime(2026, 1, 1, 14, 16, 0)
 DEFAULT_SIZE = (100, 30)
@@ -143,7 +143,8 @@ def _long_hierarchy_store(passes=4):
     return store, item
 
 
-def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None):
+def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None,
+            launcher=None):
     container = make_test_container(
         store=store,
         lock=FakeLock(running=lock_running),
@@ -153,6 +154,7 @@ def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, 
         ),
         fs=fs,
         workers=workers,
+        launcher=launcher,
     )
     return launch(container, now=lambda: NOW, size=size)
 
@@ -265,6 +267,67 @@ def _hub_artifacts(size):
     return _open_hub(_launch(store, size=size), scan, tab="artifacts")
 
 
+FINDINGS_TEXT = (
+    "Lightcycle trend audit - N=93 closed items, batch: 1nu, 33j, tg-2, tg-18, tg-20,\n"
+    "LC-4.1, LC-8.1, LC-3.1, LC-10, LC-5.1, LC-7.1, LC-7.2, LC-18, LC-19, LC-13.1, LC-20, LC-13.4, LC-21.\n"
+    "\n"
+    "FINDING 1: Recurring missed version bump causes avoidable review-reject/rework cycles.\n"
+    "The version-bump CI gate was missed by build/implementation steps at least twice independently."
+)
+BRIEF_PATH = "/Users/kenmclennan/workspace/specs/GRID-012-agents-report-tool-friction.md"
+
+
+def _artifact_viewer_store():
+    store = DemoStore(now=lambda: _at(2))
+    item = store.item("LC-45", "Lightcycle trend audit", project="lightcycle")
+    store.add_artifact(item, "findings", FINDINGS_TEXT, kind="text")
+    store.add_artifact(
+        item, "watched-prs",
+        "lightcycle/pull/277\nlightcycle/pull/281\nlightcycle-specs/pull/61",
+        kind="list",
+    )
+    store.add_artifact(item, "pr", "https://github.com/kenmclennan/lightcycle/pull/277", kind="url")
+    store.add_artifact(item, "brief", BRIEF_PATH, kind="filepath")
+    return store, item
+
+
+def _open_artifact_at(session, item, tab_row):
+    from lightcycle.adapters.tui.hub import ArtifactsTable
+
+    session = _open_hub(session, item, tab="artifacts")
+    table = session.app.screen.query_one(ArtifactsTable)
+    session.run(lambda: table.move_cursor(row=tab_row))
+    session.press("enter")
+    session.pause()
+    session.pause()
+    session.pause()
+    session.pause()
+    return session
+
+
+def _artifact_viewer_text(size):
+    store, item = _artifact_viewer_store()
+    return _open_artifact_at(_launch(store, size=size), item, 0)
+
+
+def _artifact_viewer_list(size):
+    store, item = _artifact_viewer_store()
+    return _open_artifact_at(_launch(store, size=size), item, 1)
+
+
+def _artifact_viewer_url_toast(size):
+    store, item = _artifact_viewer_store()
+    launcher = FakeLauncher(url_succeeds=True)
+    return _open_artifact_at(_launch(store, size=size, launcher=launcher), item, 2)
+
+
+def _artifact_viewer_filepath_toast(size):
+    store, item = _artifact_viewer_store()
+    fs = FakeFs(files={BRIEF_PATH: b"content"})
+    launcher = FakeLauncher(path_succeeds=True)
+    return _open_artifact_at(_launch(store, size=size, fs=fs, launcher=launcher), item, 3)
+
+
 def _hub_theme(size):
     store, theme, _scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), theme)
@@ -315,6 +378,10 @@ SCREENS = {
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
     "hub#artifacts": _hub_artifacts,
+    "artifact-viewer#text": _artifact_viewer_text,
+    "artifact-viewer#list": _artifact_viewer_list,
+    "artifact-viewer#url-toast": _artifact_viewer_url_toast,
+    "artifact-viewer#filepath-toast": _artifact_viewer_filepath_toast,
     "hub#theme": _hub_theme,
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
@@ -341,9 +408,7 @@ def _coloured_row(strip):
     return "".join(out).rstrip()
 
 
-UNRENDERABLE = {
-    "artifact-viewer#normal": "the artifact viewer screen does not exist yet",
-}
+UNRENDERABLE = {}
 
 
 def render(state, size=DEFAULT_SIZE, colour=False):

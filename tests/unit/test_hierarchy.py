@@ -1,7 +1,9 @@
 import unittest
 
 from lightcycle.application.work.hierarchy import HierarchyInput, HierarchyUseCase
-from lightcycle.domain.work import display_role, has_content, landing_tab, row_bucket
+from lightcycle.domain.work import (
+    display_role, has_content, landing_tab, row_bucket, viewable_artifacts,
+)
 from tests.support.fake_store import FakeStore
 
 
@@ -139,3 +141,18 @@ class TestHasContent(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item")
         self.assertFalse(has_content(s.get_node(item)))
+
+
+class TestViewableArtifacts(unittest.TestCase):
+    def test_internal_artifacts_are_excluded(self):
+        s = FakeStore()
+        item = s.create_item("item")
+        s.add_artifact(item, "repo", "org/repo")
+        s.add_artifact(item, "reflection", "text", internal=True)
+        result = viewable_artifacts(s.get_node(item))
+        self.assertEqual([a.type for a in result], ["repo"])
+
+    def test_no_artifacts_is_an_empty_list(self):
+        s = FakeStore()
+        item = s.create_item("item")
+        self.assertEqual(viewable_artifacts(s.get_node(item)), [])

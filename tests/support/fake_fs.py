@@ -108,6 +108,9 @@ class FakeFs:
     def read_bytes(self, path):
         return self._files.get(path)
 
+    def exists(self, path):
+        return path in self._files or path in self._dirs
+
     def read_from(self, path, offset):
         content = self._files.get(path)
         if content is None:

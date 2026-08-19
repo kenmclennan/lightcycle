@@ -11,45 +11,38 @@ Feature: The Artifacts tab
   file, not here. Closing the list with Esc or ← returns to the node's hub
   exactly as it was.
 
-  @wip
   Scenario: Each non-internal artifact is labeled by its own type
     Given a node has artifacts of type "spec", "branch", and "pr"
     When I open its Artifacts tab
     Then each is shown labeled by its own type
 
-  @wip
   Scenario: Internal artifacts never appear in the list
     Given a node has both an internal artifact and a non-internal artifact
     When I open its Artifacts tab
     Then only the non-internal artifact is shown
     And the internal artifact does not appear
 
-  @wip
   Scenario: A node with no viewable artifacts shows a calm message in place of the list
     Given a node has no non-internal artifacts
     When I open its Artifacts tab
     Then a calm message is shown in place of the list, not a blank area
 
-  @wip
   Scenario: The Artifacts tab is present even on a node with no viewable artifacts
     Given a node has no non-internal artifacts
     When its hub is open
     Then the Artifacts tab is present, alongside Hierarchy and Log
 
-  @wip
   Scenario: Down moves the artifact selection to the next entry
     Given the artifact list has more than one entry
     When Down is pressed
     Then the selection has moved to the next entry
 
-  @wip
   Scenario: Up moves the artifact selection to the previous entry
     Given the artifact list has more than one entry
     And the selection is not on the first entry
     When Up is pressed
     Then the selection has moved to the previous entry
 
-  @wip
   Scenario Outline: Confirming a selected artifact opens it in the viewer appropriate for its kind
     Given an artifact is selected in the list
     When <key> is pressed
@@ -60,7 +53,6 @@ Feature: The Artifacts tab
       | Enter |
       | →     |
 
-  @wip
   Scenario Outline: Closing the artifact list returns to the hub view as it was
     Given I opened the artifact list from a node's hub view
     When I close it with <key>
