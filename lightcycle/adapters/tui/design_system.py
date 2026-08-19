@@ -47,6 +47,9 @@ COLUMN_GRIDS = {
     "hierarchy": (
         ("icon", "4ch"), ("content", "2ch"), ("id", "13ch"), ("title", "1fr"), ("role", "14ch"),
     ),
+    "artifacts": (
+        ("type", "10ch"), ("value", "1fr"),
+    ),
 }
 
 GLOBAL_SHORTCUTS = (
@@ -82,6 +85,21 @@ HUB_SHORTCUTS = (
     ("↑↓", "scroll"),
     ("enter/→", "open node"),
     ("esc/←", "back"),
+    ("tab", "backlog"),
+    ("q", "quit"),
+)
+
+TEXT_ARTIFACT_SHORTCUTS = (
+    ("↑↓", "scroll"),
+    ("ctrl-u/ctrl-d", "page"),
+    ("esc/←", "back to artifacts"),
+    ("tab", "backlog"),
+    ("q", "quit"),
+)
+
+LIST_ARTIFACT_SHORTCUTS = (
+    ("↑↓", "scroll"),
+    ("esc/←", "back to artifacts"),
     ("tab", "backlog"),
     ("q", "quit"),
 )

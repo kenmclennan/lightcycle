@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.work import Artifact, default_kind_for
+from lightcycle.domain.work import Artifact, default_kind_for, type_label
 
 
 class TestArtifact(unittest.TestCase):
@@ -47,6 +47,15 @@ class TestDefaultKindFor(unittest.TestCase):
 
     def test_unlisted_type_defaults_to_text(self):
         self.assertEqual(default_kind_for("resolves"), "text")
+
+
+class TestTypeLabel(unittest.TestCase):
+    def test_type_alone_when_no_label(self):
+        self.assertEqual(type_label(Artifact(type="repo", value="x")), "repo")
+
+    def test_type_and_label_when_label_present(self):
+        a = Artifact(type="pr", value="x", label="spec")
+        self.assertEqual(type_label(a), "pr (spec)")
 
 
 if __name__ == "__main__":

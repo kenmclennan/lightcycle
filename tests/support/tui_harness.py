@@ -37,13 +37,30 @@ class FakeBreakerPort:
         self._state = dict(state)
 
 
-def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None):
+class FakeLauncher:
+    def __init__(self, url_succeeds=True, path_succeeds=True):
+        self.url_succeeds = url_succeeds
+        self.path_succeeds = path_succeeds
+        self.opened_urls = []
+        self.opened_paths = []
+
+    def open_url(self, url):
+        self.opened_urls.append(url)
+        return self.url_succeeds
+
+    def open_path(self, path):
+        self.opened_paths.append(path)
+        return self.path_succeeds
+
+
+def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None, launcher=None):
     return Container(
         store=store or FakeStore(),
         lock=lock or FakeLock(running=False),
         breaker=breaker or FakeBreakerPort(),
         fs=fs or FakeFs(),
         workers=workers or FakeWorkers(),
+        launcher=launcher or FakeLauncher(),
         config=Config(environ={}),
     )
 

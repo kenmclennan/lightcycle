@@ -14,6 +14,10 @@ def default_kind_for(atype: str) -> str:
     return _KIND_DEFAULTS.get(atype, "text")
 
 
+def type_label(artifact) -> str:
+    return "%s (%s)" % (artifact.type, artifact.label) if artifact.label else artifact.type
+
+
 @dataclass(frozen=True)
 class Artifact:
     type: str

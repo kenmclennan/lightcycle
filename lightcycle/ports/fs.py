@@ -39,6 +39,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def exists(self, path):
+        pass
+
+    @abstractmethod
     def read_from(self, path, offset):
         pass
 

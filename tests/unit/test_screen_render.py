@@ -22,11 +22,12 @@ def test_a_state_the_codebase_cannot_render_names_the_ones_it_can():
 
 
 def test_a_state_the_design_names_but_the_code_cannot_render_says_why():
-    assert UNRENDERABLE
-
     for state, reason in UNRENDERABLE.items():
         assert state not in SCREENS
         assert reason.strip()
+
+    if not UNRENDERABLE:
+        return
 
     state, reason = sorted(UNRENDERABLE.items())[0]
     with pytest.raises(KeyError) as excinfo:
@@ -54,3 +55,12 @@ def test_the_demo_fixtures_exercise_every_header_field_the_hub_can_render():
         "no demo fixture populates %s, so no rendered frame can ever show it "
         "and every comparison against the design silently omits it" % missing
     )
+
+
+def test_the_artifact_viewer_header_shows_its_kind_id_and_count():
+    text_frame = render("artifact-viewer#text")
+    list_frame = render("artifact-viewer#list")
+
+    assert "findings · LC-45" in text_frame
+    assert "watched-prs · LC-45" in list_frame
+    assert "3 items" in list_frame

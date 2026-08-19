@@ -14,7 +14,6 @@ Feature: The Artifact viewer
   selected. Tab still jumps straight to the backlog, or back to current work,
   from here too, the same as from any other depth in the map.
 
-  @wip
   Scenario Outline: A text artifact opens full-screen when selected
     Given an artifact declares kind "text"
     When I select it with <key>
@@ -26,13 +25,11 @@ Feature: The Artifact viewer
       | Enter |
       | →     |
 
-  @wip
   Scenario: Scrolling a text artifact reaches the end without truncation
     Given a text artifact longer than one page is open
     When I scroll to the end
     Then the whole artifact can be read without truncation
 
-  @wip
   Scenario Outline: An artifact of an unrecognised kind opens in the text viewer instead of failing
     Given an artifact declares a kind the TUI does not recognise
     When I select it with <key>
@@ -43,7 +40,6 @@ Feature: The Artifact viewer
       | Enter |
       | →     |
 
-  @wip
   Scenario Outline: A URL artifact opens in the system's default browser when selected
     Given an artifact declares kind "url"
     When I select it with <key>
@@ -54,20 +50,17 @@ Feature: The Artifact viewer
       | Enter |
       | →     |
 
-  @wip
   Scenario: Opening a URL artifact successfully shows a confirmation toast and returns to the list
     Given a URL artifact opens successfully in the browser
     When that happens
     Then a brief confirmation toast is shown
     And the artifact list reappears
 
-  @wip
   Scenario: A URL artifact that fails to open shows a clear message instead of failing silently
     Given a URL artifact fails to open, e.g. no browser is available
     When that happens
     Then a clear message is shown, not a silent failure
 
-  @wip
   Scenario Outline: A file-path artifact opens via the OS's default handler when selected
     Given an artifact declares kind "filepath"
     When I select it with <key>
@@ -78,14 +71,12 @@ Feature: The Artifact viewer
       | Enter |
       | →     |
 
-  @wip
   Scenario: Opening a file-path artifact successfully shows a confirmation toast and returns to the list
     Given a file-path artifact opens successfully in its application
     When that happens
     Then a brief confirmation toast is shown
     And the artifact list reappears
 
-  @wip
   Scenario Outline: A file-path artifact whose file no longer exists shows a clear message instead of failing silently
     Given a file-path artifact whose file no longer exists at that path
     When I select it with <key>
@@ -96,7 +87,6 @@ Feature: The Artifact viewer
       | Enter |
       | →     |
 
-  @wip
   Scenario Outline: A list artifact displays as its own scrollable list, not raw text
     Given an artifact declares kind "list"
     When I select it with <key>
@@ -107,13 +97,11 @@ Feature: The Artifact viewer
       | Enter |
       | →     |
 
-  @wip
   Scenario: Scrolling a list artifact longer than one screen reaches every item
     Given a list artifact with more items than fit on one screen is open
     When I scroll to the end
     Then every item can be reached
 
-  @wip
   Scenario Outline: Closing an open artifact returns to the list with it still selected
     Given I opened a "<kind>" artifact from the list
     When I close it with <key>
@@ -126,7 +114,6 @@ Feature: The Artifact viewer
       | list | Esc |
       | list | ←   |
 
-  @wip
   Scenario: Tab jumps straight to the backlog from an open artifact viewer, bypassing Esc/← back-navigation
     Given the artifact viewer is open, showing a text artifact
     When Tab is pressed
