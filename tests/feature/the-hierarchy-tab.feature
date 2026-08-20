@@ -67,6 +67,45 @@ Feature: The hierarchy tab
     When it renders in the hierarchy
     Then "human" is shown as its role
 
+  @wip
+  Scenario Outline: The id column widens to fit the longest id in the tree, whatever produced it, without truncating or wrapping it
+    Given a node in the hierarchy with id "<id>" (<id source>)
+    When it renders in the hierarchy
+    Then its id is shown in full, on one line
+
+    Examples:
+      | id source                                    | id                |
+      | this project's own shortcode                 | LC-290.1.86       |
+      | the engine's default, unshortened shortcode  | LIGHTCYCLE-3.1.1  |
+
+  @wip
+  Scenario: Two distinct nodes whose ids would collide if truncated render in full and stay distinguishable
+    Given an item "LIGHTCYCLE-3.1" and its own step "LIGHTCYCLE-3.1.1" both shown in the hierarchy
+    When they render
+    Then both ids are shown in full
+    And the item's row and the step's row are distinguishable from each other
+
+  @wip
+  Scenario Outline: The role column widens to fit a role name longer than its historical fixed width, without clipping it
+    Given a step performed by the role "<role>"
+    When it renders in the hierarchy
+    Then its role "<role>" is shown in full, on one line
+
+    Examples:
+      | role               |
+      | implement-features |
+      | handle-feedback    |
+      | resolve-conflict   |
+      | review-conflict    |
+      | feature-writer     |
+
+  @wip
+  Scenario: When a hierarchy row cannot fit unstacked, the title moves to a continuation line indented past the row's own depth
+    Given a hierarchy row whose atomic and glyph columns leave less than the flexible minimum for the title
+    When it renders in the hierarchy
+    Then the icon, content indicator, id and role remain on the row's first line, with the role right-aligned
+    And the title appears on a continuation line indented to the row's own depth plus 2 characters
+
   Scenario: A node blocked on a dependency shows a dependency indicator distinct from other blocked reasons
     Given a step blocked on another item's completion
     When it renders in the hierarchy
