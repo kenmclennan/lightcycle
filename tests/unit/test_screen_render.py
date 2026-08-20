@@ -1,6 +1,6 @@
 import pytest
 
-from tests.support.screen_render import SCREENS, UNRENDERABLE, render
+from tests.support.screen_render import DEFAULT_SIZE, SCREENS, UNRENDERABLE, render
 
 
 @pytest.mark.parametrize("state", sorted(SCREENS))
@@ -12,6 +12,17 @@ def test_every_registered_state_renders_a_full_frame(state):
     assert rows[0].startswith("┌") and rows[0].endswith("┐")
     assert rows[-1].startswith("└") and rows[-1].endswith("┘")
     assert any(row.strip("│ ") for row in rows[1:-1])
+
+
+@pytest.mark.parametrize("state", sorted(SCREENS))
+def test_every_registered_screen_fits_the_viewport_without_scrolling(state):
+    session = SCREENS[state](DEFAULT_SIZE)
+    try:
+        virtual_height = session.run(lambda: session.app.screen.virtual_size.height)
+        viewport_height = session.run(lambda: session.app.screen.size.height)
+        assert virtual_height <= viewport_height
+    finally:
+        session.close()
 
 
 def test_a_state_the_codebase_cannot_render_names_the_ones_it_can():

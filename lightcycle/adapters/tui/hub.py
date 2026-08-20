@@ -6,6 +6,7 @@ from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.geometry import Size
 from textual.screen import Screen
 from textual.widgets import DataTable, RichLog, Static
 from textual.widgets.data_table import CellDoesNotExist
@@ -51,6 +52,8 @@ TOAST_DURATION_SECONDS = 2.0
 TOAST_SUCCESS_PREFIX = "↗ "
 TOAST_FAILURE_PREFIX = "⚠ "
 TOAST_SUB_CAPTION = "back to the artifact list automatically"
+TOAST_URL_SUB_SUFFIX = "nothing more to show here"
+TOAST_FILEPATH_DESTINATION = "in its default application"
 
 _TAB_ORDER = ("hierarchy", "log", "artifacts")
 _TAB_LABELS = {"hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts"}
@@ -222,12 +225,18 @@ def artifact_row_cells(artifact):
     )
 
 
-def toast_text(success, message):
+def toast_text(success, message, kind, value):
     prefix = TOAST_SUCCESS_PREFIX if success else TOAST_FAILURE_PREFIX
     colour = COLOURS["cyan"] if success else COLOURS["red"]
-    text = Text(prefix + message, style=colour)
+    main, sub = message, TOAST_SUB_CAPTION
+    if success and kind == "url":
+        sub = "%s - %s" % (TOAST_SUB_CAPTION, TOAST_URL_SUB_SUFFIX)
+    elif success and kind == "filepath":
+        main = "Opened %s" % value
+        sub = "%s - %s" % (TOAST_FILEPATH_DESTINATION, TOAST_SUB_CAPTION)
+    text = Text(prefix + main, style=colour)
     text.append("\n")
-    text.append(TOAST_SUB_CAPTION, style=COLOURS["dim"])
+    text.append(sub, style=COLOURS["dim"])
     return text
 
 
@@ -381,6 +390,52 @@ class HierarchyPagingTable(DataTable):
         if isinstance(screen, NodeHubScreen):
             screen.refresh_hierarchy_width()
 
+    def _page_height(self) -> int:
+        height = self.scrollable_content_region.height - (
+            self.header_height if self.show_header else 0
+        )
+        if isinstance(self.screen, NodeHubScreen):
+            banner = self.screen.query_one("#pinned-ancestor", Static)
+            if banner.display:
+                height += 1
+        return height
+
+    def action_page_down(self) -> None:
+        self._set_hover_cursor(False)
+        if self.show_cursor and self.cursor_type in ("cell", "row"):
+            height = self._page_height()
+            offset = 0
+            rows_to_scroll = 0
+            row_index, _ = self.cursor_coordinate
+            for ordered_row in self.ordered_rows[row_index:]:
+                offset += ordered_row.height
+                rows_to_scroll += 1
+                if offset > height:
+                    break
+            target_row = row_index + rows_to_scroll - 1
+            self.scroll_relative(y=height, animate=False, force=True)
+            self.move_cursor(row=target_row, scroll=False)
+        else:
+            super().action_page_down()
+
+    def action_page_up(self) -> None:
+        self._set_hover_cursor(False)
+        if self.show_cursor and self.cursor_type in ("cell", "row"):
+            height = self._page_height()
+            offset = 0
+            rows_to_scroll = 0
+            row_index, _ = self.cursor_coordinate
+            for ordered_row in self.ordered_rows[: row_index + 1]:
+                offset += ordered_row.height
+                rows_to_scroll += 1
+                if offset > height:
+                    break
+            target_row = row_index - rows_to_scroll + 1
+            self.scroll_relative(y=-height, animate=False)
+            self.move_cursor(row=target_row, scroll=False)
+        else:
+            super().action_page_up()
+
 
 class ArtifactsTable(DataTable):
     _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
@@ -394,6 +449,11 @@ class ArtifactsTable(DataTable):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("cursor_foreground_priority", "renderable")
         super().__init__(*args, **kwargs)
+
+    def on_resize(self, event: events.Resize) -> None:
+        screen = self.screen
+        if isinstance(screen, NodeHubScreen):
+            screen.refresh_artifacts_width()
 
 
 class ArtifactTextBody(RichLog):
@@ -514,6 +574,9 @@ class NodeHubScreen(Screen):
     CSS = f"""
     HubHeader {{
         height: auto;
+    }}
+    HierarchyPagingTable, ArtifactsTable {{
+        height: 1fr;
     }}
     HubTabStrip {{
         height: 3;
@@ -683,8 +746,30 @@ class NodeHubScreen(Screen):
 
     def refresh_hierarchy_width(self) -> None:
         table = self.query_one(HierarchyPagingTable)
-        if table.row_count:
-            self._render_hierarchy(self._last_rows or [], initial=False, force=True)
+        if not table.row_count:
+            return
+        width = self._title_width(table)
+        if width is not None:
+            self._resize_column(table, "title", width)
+
+    def refresh_artifacts_width(self) -> None:
+        table = self.query_one(ArtifactsTable)
+        if not table.row_count:
+            return
+        width = self._artifacts_value_width(table)
+        if width is not None:
+            self._resize_column(table, "value", width)
+
+    def _resize_column(self, table, column_key, new_width) -> None:
+        column = table.columns.get(column_key)
+        if column is None or column.width == new_width:
+            return
+        delta = new_width - column.width
+        column.width = new_width
+        virtual_width, virtual_height = table.virtual_size
+        table.virtual_size = Size(virtual_width + delta, virtual_height)
+        table._clear_caches()
+        table.refresh()
 
     def _selected_id(self, table):
         if table.row_count == 0:
@@ -695,11 +780,11 @@ class NodeHubScreen(Screen):
             return None
         return cell_key.row_key.value
 
-    def _render_hierarchy(self, rows, initial, force=False) -> None:
+    def _render_hierarchy(self, rows, initial) -> None:
         self._last_rows = rows
         table = self.query_one(HierarchyPagingTable)
         shape = tuple(r.node.id for r in rows)
-        if shape == self._last_hierarchy_shape and not initial and not force:
+        if shape == self._last_hierarchy_shape and not initial:
             self._update_hierarchy_cells(table, rows)
             return
 
@@ -749,12 +834,12 @@ class NodeHubScreen(Screen):
         value = cell_key.row_key.value
         return int(value) if value is not None else None
 
-    def _render_artifacts(self, artifacts, initial, force=False) -> None:
+    def _render_artifacts(self, artifacts, initial) -> None:
         self._last_artifacts = artifacts
         self._has_artifacts = bool(artifacts)
         table = self.query_one(ArtifactsTable)
         shape = tuple((a.type, a.value, a.label, a.kind) for a in artifacts)
-        if shape == self._last_artifacts_shape and not initial and not force:
+        if shape == self._last_artifacts_shape and not initial:
             self._update_artifact_cells(table, artifacts)
             return
 
@@ -853,6 +938,8 @@ class NodeHubScreen(Screen):
         self._focus_active_tab()
 
     def action_close_hub(self) -> None:
+        if self._toast_active:
+            return
         self.close_hub()
 
     def close_hub(self) -> None:
@@ -889,10 +976,10 @@ class NodeHubScreen(Screen):
     def _open_external_artifact(self, kind, value) -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
         result = use_case.execute(OpenArtifactInput(kind=kind, value=value))
-        self._show_toast(result.success, result.message)
+        self._show_toast(result.success, result.message, kind, value)
 
-    def _show_toast(self, success, message) -> None:
-        self.query_one("#hub-artifacts-toast", Static).update(toast_text(success, message))
+    def _show_toast(self, success, message, kind, value) -> None:
+        self.query_one("#hub-artifacts-toast", Static).update(toast_text(success, message, kind, value))
         self._toast_active = True
         self._apply_tab_visibility()
         if self._toast_timer is not None:
