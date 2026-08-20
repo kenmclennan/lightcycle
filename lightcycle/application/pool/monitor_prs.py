@@ -9,6 +9,7 @@ LC_MARKER = "<!-- lc -->"
 _WATERMARK_ARTIFACT = "feedback-watermark"
 _SPAWN_MARK_ARTIFACT = "feedback-spawned-through"
 _CONTENT_PIN_ARTIFACT = "content-pin"
+_CONTENT_PIN_PR_ARTIFACT = "content-pin-pr"
 
 
 def _is_bot(author):
@@ -107,32 +108,45 @@ class MonitorPrsUseCase:
 
     def _check_content_pin(self, item, pr_value, phase):
         head = self._github.head_sha(pr_value)
-        pin = next(
-            (a.value for a in self._store.item_artifacts(item.id)
-             if a.type == _CONTENT_PIN_ARTIFACT and a.label == phase),
+        artifacts = tuple(self._store.item_artifacts(item.id))
+        pinned_pr = next(
+            (a.value for a in artifacts
+             if a.type == _CONTENT_PIN_PR_ARTIFACT and a.label == phase),
             None,
         )
-        if pin is None:
+        if pinned_pr != pr_value:
+            self._store.replace_artifact(
+                item.id, _CONTENT_PIN_PR_ARTIFACT, pr_value, label=phase, internal=True
+            )
             self._store.replace_artifact(
                 item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
             )
             return
+        pin = next(
+            (a.value for a in artifacts
+             if a.type == _CONTENT_PIN_ARTIFACT and a.label == phase),
+            None,
+        )
         if pin == head:
             return
         old_files = self._github.changed_files(pr_value, pin)
         new_files = self._github.changed_files(pr_value, head)
         dropped = old_files - new_files
         if dropped:
-            note = (
+            base_note = (
                 "PR head moved from %s to %s and dropped: %s - a previously-reviewed change "
                 "may have been lost; verify before merging."
                 % (pin, head, ", ".join(sorted(dropped)))
             )
             step = self._active_step_any(item.id)
             if step is not None and step.state != State.IN_PROGRESS:
+                note = base_note + (
+                    " If this is a false positive, `lc set %s --state ready` returns the step "
+                    "to its agent lane." % step.id
+                )
                 self._store.route_to_human(step.id, note)
             else:
-                self._store.note(item.id, note)
+                self._store.note(item.id, base_note)
         self._store.replace_artifact(
             item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
         )

@@ -1,6 +1,10 @@
 import unittest
 
-from lightcycle.application.flow import CompleteStepUseCase
+from lightcycle.application.flow import (
+    CompleteStepUseCase,
+    UnblockInput,
+    UnblockStepUseCase,
+)
 from lightcycle.application.pool import LC_MARKER, MonitorPrsUseCase, TickInput, TickUseCase
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, flow_from_metas
@@ -1262,6 +1266,85 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("sha2", node.notes)
         self.assertIn("steps/a.md", node.notes)
         self.assertIn("steps/b.md", node.notes)
+        self.assertIn("lc set %s --state ready" % step, node.notes)
+
+    def test_pr_replaced_between_polls_does_not_report_the_old_prs_files_as_dropped(self):
+        old_url = self._URL
+        new_url = "https://github.com/x/y/pull/71"
+        gh = FakeGitHub(
+            head_shas={old_url: "sha1", new_url: "sha9"},
+            files_by_sha={
+                (old_url, "sha1"): frozenset({"a.py", "b.py"}),
+                (new_url, "sha1"): frozenset({"a.py", "b.py"}),
+                (new_url, "sha9"): frozenset({"c.py"}),
+            },
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        store.replace_artifact(item, "pr", new_url)
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha9")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(store.get_node(step).role, "coder")
+
+    def test_a_real_drop_on_the_new_pr_after_a_replacement_still_escalates(self):
+        old_url = self._URL
+        new_url = "https://github.com/x/y/pull/71"
+        gh = FakeGitHub(
+            head_shas={old_url: "sha1", new_url: "sha9"},
+            files_by_sha={
+                (old_url, "sha1"): frozenset({"a.py", "b.py"}),
+                (new_url, "sha9"): frozenset({"c.py", "d.py"}),
+            },
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        store.replace_artifact(item, "pr", new_url)
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha9")
+        self.assertIsNone(store.get_node(step).notes)
+
+        gh._head_shas[new_url] = "sha10"
+        gh._files_by_sha[(new_url, "sha10")] = frozenset({"c.py"})
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha10")
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("sha9", node.notes)
+        self.assertIn("sha10", node.notes)
+        self.assertIn("d.py", node.notes)
+        self.assertIn("lc set %s --state ready" % step, node.notes)
+
+    def test_escalated_step_returns_to_its_lane_via_unblock(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        flow = flow_from_metas({
+            "coder": {
+                "model": "sonnet", "step": "build", "routes": {"done": "review"},
+                "on_pr_merge": "done",
+            },
+        })
+        store, item, step, uc = self._setup(gh, flow=flow)
+        uc.execute()
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+
+        resp = UnblockStepUseCase(store, _FlowAdapter(flow)).execute(UnblockInput(step=step))
+
+        self.assertEqual(resp.role, "coder")
+        self.assertEqual(store.get_node(step).role, "coder")
 
     def test_running_again_after_escalation_does_not_refire(self):
         gh = FakeGitHub(
