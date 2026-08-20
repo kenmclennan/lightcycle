@@ -91,6 +91,31 @@ Feature: Priority list renders current work
       | active          |
       | queued          |
 
+  @wip
+  Scenario Outline: The id column widens to fit the longest id in the list, whatever produced it, without truncating or wrapping it
+    Given the store has a queued step with id "<id>" (<id source>)
+    When I launch the dashboard
+    Then that step's row shows "<id>" as its id, in full, on one line
+
+    Examples:
+      | id source                                    | id                |
+      | this project's own shortcode                 | LC-143.3.6        |
+      | a plain generated id                         | fake-56f47088     |
+      | the engine's default, unshortened shortcode  | LIGHTCYCLE-3.1.1  |
+
+  @wip
+  Scenario: The id column's width already accounts for an id further down the list than the visible rows
+    Given the store has more queued steps than fit on one screen, one of which has a longer id than any visible row
+    When I launch the dashboard
+    Then the id column is already wide enough for that off-screen id, before it is scrolled into view
+
+  @wip
+  Scenario: When a row cannot fit unstacked, the title moves to an indented continuation line beneath cursor, icon, id, project, step and time
+    Given a row whose atomic and glyph columns leave less than the flexible minimum for the title
+    When I launch the dashboard
+    Then the cursor, icon, id, project and step remain on the row's first line, with time right-aligned alongside them
+    And the title appears on a continuation line indented to where it starts in the unstacked grid
+
   Scenario: Every row shows the project it belongs to
     Given the store has a step in the blocked lane, an active step, and a queued step, each belonging to the registered project "lightcycle"
     When I launch the dashboard

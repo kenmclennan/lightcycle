@@ -125,6 +125,62 @@ Feature: The dashboard adopts the design system's visual vocabulary
     When the backlog's column order is read
     Then it is cursor, id, project, title
 
+  @wip
+  Scenario Outline: The shared vocabulary classifies each row-grid column as glyph, atomic, or flexible
+    Given the shared row-grid sizing rule
+    When the "<column>" column's kind is looked up
+    Then its kind is <kind>
+
+    Examples:
+      | column  | kind     |
+      | cursor  | glyph    |
+      | icon    | glyph    |
+      | content | glyph    |
+      | id      | atomic   |
+      | project | atomic   |
+      | step    | atomic   |
+      | role    | atomic   |
+      | type    | atomic   |
+      | time    | atomic   |
+      | title   | flexible |
+      | value   | flexible |
+
+  @wip
+  Scenario: A glyph column's width is fixed and can never overflow
+    Given the shared row-grid sizing rule
+    Then the cursor column's width is fixed at 2 characters
+    And the icon column's width is fixed at 4 characters
+    And the content column's width is fixed at 2 characters
+
+  @wip
+  Scenario: An atomic column's width is the longest value across the whole list, not just the rows currently on screen
+    Given the shared row-grid sizing rule
+    Then an atomic column's width is recomputed from every row in the list, not only the rows currently visible
+
+  @wip
+  Scenario: An atomic column never truncates and never wraps its content, however long
+    Given the shared row-grid sizing rule
+    Then an atomic column has no overflow behaviour that cuts or wraps a value
+
+  @wip
+  Scenario: A flexible column never narrows below its 24-character minimum
+    Given the shared row-grid sizing rule
+    Then a flexible column's minimum width is 24 characters
+
+  @wip
+  Scenario Outline: A terminal too narrow for a grid's stacked layout shows a message instead of a corrupted grid
+    Given the <screen> is open
+    When the terminal is narrower than the grid's floor width
+    Then a single message, centred and in the dim colour, names the width the grid needs
+    And the footer is still shown, so the operator can still quit
+
+    Examples:
+      | screen        |
+      | Priority List |
+      | Backlog       |
+      | Hierarchy tab |
+      | Artifacts tab |
+
   Scenario Outline: The footer's shared vocabulary pairs a colour with its own glyph for each status token
     Given the shared footer status vocabulary
     When the glyph and colour for the "<token>" footer status are looked up
