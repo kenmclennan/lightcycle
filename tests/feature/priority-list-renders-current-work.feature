@@ -107,11 +107,18 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the id column is already wide enough for that off-screen id, before it is scrolled into view
 
-  Scenario: When a row cannot fit unstacked, the title moves to an indented continuation line beneath cursor, icon, id, project, step and time
-    Given a row whose atomic and glyph columns leave less than the flexible minimum for the title
+  @wip
+  Scenario Outline: When a row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width and spanning the row without wrapping mid-word
+    Given a row whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When I launch the dashboard
-    Then the cursor, icon, id, project and step remain on the row's first line, with time right-aligned alongside them
-    And the title appears on a continuation line indented to where it starts in the unstacked grid
+    Then the cursor, icon, id, project and step remain on the row's first line, each padded to its atomic width, with time right-aligned alongside them
+    And the title appears on a continuation line indented 6 characters - the row's glyph width, not where the title column starts in the unstacked grid
+    And no fragment of the title's prose is split mid-word
+
+    Examples:
+      | at a width                            |
+      | just narrow enough to force stacking  |
+      | just wide enough to clear the floor   |
 
   Scenario: Every row shows the project it belongs to
     Given the store has a step in the blocked lane, an active step, and a queued step, each belonging to the registered project "lightcycle"

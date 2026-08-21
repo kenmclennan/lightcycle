@@ -27,11 +27,18 @@ Feature: The Artifacts tab
     When I open its Artifacts tab
     Then that artifact is shown labeled by its full type "code-review-findings"
 
-  Scenario: When an artifact row cannot fit unstacked, the value moves to an indented continuation line beneath the type
-    Given an artifact row whose type and the flexible minimum for value together exceed the row budget
+  @wip
+  Scenario Outline: When an artifact row cannot fit unstacked, the value moves to a continuation line indented 2 characters and spanning the row without wrapping mid-word
+    Given an artifact row whose type and the flexible minimum for value together exceed the row budget, on a terminal <at a width>
     When I open its Artifacts tab
     Then the type remains alone on the row's first line
-    And the value appears on a continuation line indented beneath it
+    And the value appears on a continuation line indented 2 characters
+    And no fragment of the value's prose is split mid-word
+
+    Examples:
+      | at a width                            |
+      | just narrow enough to force stacking  |
+      | just wide enough to clear the floor   |
 
   Scenario: A node with no viewable artifacts shows a calm message in place of the list
     Given a node has no non-internal artifacts

@@ -53,10 +53,17 @@ Feature: The backlog screen
     Then both ids are shown in full
     And the two rows' ids are distinguishable from each other
 
-  Scenario: When a backlog row cannot fit unstacked, the title moves to an indented continuation line beneath the cursor, id and project
-    Given a backlog row whose atomic and glyph columns leave less than the flexible minimum for the title
-    Then the cursor, id and project remain on the row's first line
-    And the title appears on a continuation line indented to where it starts in the unstacked grid
+  @wip
+  Scenario Outline: When a backlog row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width and spanning the row without wrapping mid-word
+    Given a backlog row whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
+    Then the cursor, id and project remain on the row's first line, each padded to its atomic width
+    And the title appears on a continuation line indented 2 characters - the row's glyph width, not where the title column starts in the unstacked grid
+    And no fragment of the title's prose is split mid-word
+
+    Examples:
+      | at a width                            |
+      | just narrow enough to force stacking  |
+      | just wide enough to clear the floor   |
 
   Scenario: A backlog row for an item with no registered project shows a blank project field
     Given the backlog is shown with a todo item with no registered project
