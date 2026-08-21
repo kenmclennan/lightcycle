@@ -27,19 +27,16 @@ Feature: The Log tab
     And the worker writes a new line to the log
     Then the new line appears without a manual refresh
 
-  @wip
   Scenario: No cursor is shown before anything has been tailed
     Given the current step is being performed by a worker
     When I open its Log tab
     Then no cursor glyph is shown
 
-  @wip
   Scenario: The most recently tailed line carries the live cursor, from the first frame the tab renders
     Given the live log is open and following the tail
     Then the last line of the log ends with a trailing cursor glyph in the cyan colour
     And every displayed log line renders in the text colour, not the dim colour
 
-  @wip
   Scenario: The live cursor moves to the newest line as new lines arrive, without any colour change
     Given the live log is open and following the tail
     When a new line arrives
@@ -47,7 +44,6 @@ Feature: The Log tab
     And the line that previously carried the cursor no longer carries it
     And that previous line still renders in the text colour, not the dim colour
 
-  @wip
   Scenario: The live cursor disappears once the step finishes
     Given the live log is open and following the tail
     When the worker completes
