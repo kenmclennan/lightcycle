@@ -25,6 +25,23 @@ def _rendered_text(widget):
     return "".join(segment.text for segment in strip)
 
 
+def _rendered_line_text(widget, y):
+    strip = widget.render_line(y)
+    return "".join(segment.text for segment in strip)
+
+
+def _segment_style_for_substring(widget, y, substring):
+    strip = widget.render_line(y)
+    for segment in strip:
+        if substring in segment.text:
+            return segment.style
+    return None
+
+
+def _rendered_panel_text(panel):
+    return "\n".join(_rendered_line_text(panel, y) for y in range(panel.size.height))
+
+
 def _text(screen, selector):
     widget = screen.query_one(selector, Static)
     if not widget.display:
@@ -614,7 +631,7 @@ def _escalation_names_blocking_item(ctx):
     screen = ctx["session"].app.screen
     panel = screen.query_one(EscalationPanel)
     assert panel.display
-    assert ctx["blocker_id"] in _rendered_text(panel)
+    assert ctx["blocker_id"] in _rendered_panel_text(panel)
 
 
 @then("the escalation reason names what's being asked of the operator")
@@ -622,7 +639,7 @@ def _escalation_names_ask(ctx):
     screen = ctx["session"].app.screen
     panel = screen.query_one(EscalationPanel)
     assert panel.display
-    assert "Resolve the merge conflict manually" in _rendered_text(panel)
+    assert "Resolve the merge conflict manually" in _rendered_panel_text(panel)
 
 
 @then("no escalation reason is shown")
@@ -630,6 +647,44 @@ def _no_escalation_reason(ctx):
     screen = ctx["session"].app.screen
     panel = screen.query_one(EscalationPanel)
     assert not panel.display
+
+
+@then(parsers.parse('the escalation panel shows a bold amber tag reading "{tag}" on its own line'))
+def _escalation_tag_bold_amber(ctx, tag):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert panel.display
+    assert _rendered_line_text(panel, 0).strip() == tag
+    style = _segment_style_for_substring(panel, 0, tag)
+    assert style is not None
+    assert style.bold
+    assert style.color.get_truecolor().hex.lower() == COLOURS["amber"].lower()
+
+
+@then("the reason is shown on a second line below the tag, in the text colour")
+def _escalation_reason_second_line(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    text_colour = COLOURS["text"].lower()
+    cyan = COLOURS["cyan"].lower()
+    found_text_colour = False
+    for segment in panel.render_line(1):
+        if not segment.text.strip():
+            continue
+        colour = segment.style.color.get_truecolor().hex.lower()
+        assert colour in (text_colour, cyan)
+        if colour == text_colour:
+            found_text_colour = True
+    assert found_text_colour
+
+
+@then("the blocking item's id within the reason is coloured as a link, in the cyan colour")
+def _escalation_link_cyan(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    style = _segment_style_for_substring(panel, 1, ctx["blocker_id"])
+    assert style is not None
+    assert style.color.get_truecolor().hex.lower() == COLOURS["cyan"].lower()
 
 
 @then("the blocking item's own hub opens")

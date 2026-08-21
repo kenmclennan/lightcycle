@@ -94,8 +94,9 @@ def _human_step_store():
     store = DemoStore(now=lambda: _at(6))
     theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
     item = store.item("LC-143.3", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
-    store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item,
-               attention=True)
+    step = store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human",
+                      parent=item, attention=True)
+    store.update_metadata(step, {"needs": "Resolve the merge conflict manually"})
     return store, item
 
 

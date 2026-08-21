@@ -99,6 +99,14 @@ def log_target_node(store, node):
         return node
     if node.type == "item":
         return current_step(store, node.id)
+    if node.type == "theme":
+        for child in store.children(node.id):
+            if child.type != "item":
+                continue
+            cur = current_step(store, child.id)
+            if cur is not None and cur.state == State.IN_PROGRESS:
+                return cur
+        return None
     return None
 
 
@@ -257,6 +265,22 @@ def toast_text(success, message, kind, value):
     return text
 
 
+ESCALATION_TAG = "⚠ needs you"
+
+
+def escalation_panel_text(header):
+    text = Text(ESCALATION_TAG, style="bold %s" % COLOURS["amber"])
+    text.append("\n")
+    reason_start = len(text)
+    text.append(header.escalation_text, style=COLOURS["text"])
+    if header.escalation_target:
+        idx = header.escalation_text.find(header.escalation_target)
+        if idx != -1:
+            start = reason_start + idx
+            text.stylize(COLOURS["cyan"], start, start + len(header.escalation_target))
+    return text
+
+
 class EscalationPanel(Static):
     can_focus = True
 
@@ -306,7 +330,7 @@ class HubHeader(Vertical):
 
         panel = self.query_one(EscalationPanel)
         if header.escalation_text:
-            panel.update(Text(header.escalation_text, style=COLOURS["amber"]))
+            panel.update(escalation_panel_text(header))
             panel.target_id = header.escalation_target
             panel.display = True
         else:
@@ -397,9 +421,15 @@ class HierarchyPagingTable(DataTable):
         if row_id is None or not isinstance(self.screen, NodeHubScreen):
             return
         screen = self.screen
-        node = screen.container.store.get_node(row_id)
-        if node.type != "step" or log_tab_mode(node) == "no-log":
-            return
+        store = screen.container.store
+        node = store.get_node(row_id)
+        if node.type == "step":
+            if log_tab_mode(node) == "no-log":
+                return
+        else:
+            target = log_target_node(store, node)
+            if target is None or target.state != State.IN_PROGRESS:
+                return
         screen.open_at(row_id, initial_tab="log")
 
     def on_resize(self, event: events.Resize) -> None:
@@ -592,7 +622,14 @@ class NodeHubScreen(Screen):
     HubHeader {{
         height: auto;
     }}
-    HierarchyPagingTable, ArtifactsTable {{
+    HierarchyPagingTable {{
+        height: 1fr;
+        background: {COLOURS["bg"]};
+    }}
+    HierarchyPagingTable:focus {{
+        background-tint: transparent;
+    }}
+    ArtifactsTable {{
         height: 1fr;
     }}
     HubTabStrip {{
@@ -606,7 +643,7 @@ class NodeHubScreen(Screen):
         margin-right: 3;
     }}
     #hub-escalation {{
-        height: 1;
+        height: 2;
         display: none;
     }}
     #hub-log-empty, #hub-artifacts-empty {{
@@ -960,7 +997,10 @@ class NodeHubScreen(Screen):
         if ancestor is None:
             banner.display = False
             return
-        banner.update(Text("%s  %s" % (ancestor.node.id, ancestor.node.title), style=COLOURS["dim"]))
+        glyph = _state_glyph(ancestor.node)
+        text = Text(glyph.glyph + "  ", style=COLOURS[glyph.colour])
+        text.append("%s  %s" % (ancestor.node.id, ancestor.node.title), style=COLOURS["dim"])
+        banner.update(text)
         banner.display = True
 
     def _apply_tab_visibility(self) -> None:

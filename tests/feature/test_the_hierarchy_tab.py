@@ -73,6 +73,22 @@ def _rendered_text(widget):
     return "".join(segment.text for segment in strip)
 
 
+def _painted_bg_colours(ctx):
+    table = _table(ctx)
+    region = table.region
+    session = ctx["session"]
+    strips = session.run(lambda: session.app.screen._compositor.render_strips())
+    colours = []
+    for y in range(region.y, region.y + region.height):
+        if y >= len(strips):
+            continue
+        for segment in strips[y].crop(region.x, region.x + region.width):
+            bg = segment.style.bgcolor if segment.style else None
+            if bg is not None:
+                colours.append(bg.get_truecolor().hex.lower())
+    return colours
+
+
 def _rendered_cell_text_at(table, strip, column_key):
     pad = table.cell_padding
     offset = 0
@@ -180,6 +196,35 @@ def _a_node_in_the_hierarchy(ctx):
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
+
+
+@given("the hierarchy tab is open")
+def _hierarchy_tab_is_open(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="build", role="coder", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given(parsers.parse("a {node_type} whose current step is active, highlighted in the hierarchy"))
+def _type_with_active_current_step_highlighted(ctx, node_type):
+    store = FakeStore()
+    if node_type == "item":
+        node_id = store.create_item("Item")
+        step = store.create_step("s", step="build", role="coder", parent=node_id)
+    elif node_type == "theme":
+        node_id = store.create_theme("Theme")
+        item = store.create_item("Item", theme=node_id)
+        step = store.create_step("s", step="build", role="coder", parent=item)
+        ctx["item_id"] = item
+    else:
+        raise AssertionError("unhandled node type %r" % node_type)
+    store.claim_ready("coder")
+    ctx["node_id"] = node_id
+    ctx["step_id"] = step
+    _launch(ctx, store, node_id)
 
 
 @given("the hierarchy is open, showing a queued step")
@@ -595,6 +640,16 @@ def _state_shown_same_icon(ctx):
     assert style.color.get_truecolor().hex.lower() == COLOURS[glyph.colour].lower()
 
 
+@then("the row area's background matches the same bg colour as the rest of the frame")
+def _row_area_bg_matches_frame(ctx):
+    colours = _painted_bg_colours(ctx)
+    assert colours, "expected some painted cells in the hierarchy row area"
+    bg = COLOURS["bg"].lower()
+    selected = COLOURS["selected-bg"].lower()
+    assert all(c in (bg, selected) for c in colours)
+    assert bg in colours
+
+
 @then("the step's row shows the active state, without a manual refresh")
 def _step_row_shows_active(ctx):
     glyph = STATE_GLYPHS["active"]
@@ -755,6 +810,22 @@ def _pinned_duplicate_gone(ctx):
     assert not banner.display
 
 
+@then("its row shows its own state icon, using the same icon and colour vocabulary as every other row")
+def _pinned_ancestor_shows_state_icon(ctx):
+    banner = ctx["hub_screen"].query_one("#pinned-ancestor", Static)
+    assert banner.display
+    assert ctx["item_id"] in _rendered_text(banner)
+    glyph = STATE_GLYPHS["queued"]
+    strip = banner.render_line(0)
+    found = None
+    for segment in strip:
+        if glyph.glyph in segment.text:
+            found = segment
+            break
+    assert found is not None
+    assert found.style.color.get_truecolor().hex.lower() == COLOURS[glyph.colour].lower()
+
+
 @then("its Artifacts tab opens directly, skipping its own contextual default")
 def _artifacts_tab_opens_directly(ctx):
     screen = ctx["session"].app.screen
@@ -779,6 +850,14 @@ def _log_tab_opens_past(ctx):
 @then("nothing happens, since there is no log to show")
 def _nothing_happens_no_log(ctx):
     assert ctx["session"].app.screen is ctx["hub_screen"]
+
+
+@then("its current step's Log tab opens directly, showing the live tail")
+def _current_step_log_tab_opens_live(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["node_id"]
+    assert screen._active_tab == "log"
 
 
 @then("it is highlighted at the top row")

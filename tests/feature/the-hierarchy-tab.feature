@@ -51,7 +51,6 @@ Feature: The hierarchy tab
     Then its own real id is shown alongside its title
     And its current state is shown using the same icon and colour as the priority list
 
-  @wip
   Scenario: The hierarchy tree's row area shares the frame's own background, not an unnamed default
     Given the hierarchy tab is open
     When it renders
@@ -172,7 +171,6 @@ Feature: The hierarchy tab
     When I scroll back up to where its actual row is
     Then the pinned duplicate is no longer shown
 
-  @wip
   Scenario: A pinned ancestor's row shows its own state icon, like every other row
     Given an ancestor's row is pinned to the top because it scrolled out of view
     When it renders
@@ -203,7 +201,6 @@ Feature: The hierarchy tab
     When l is pressed
     Then nothing happens, since there is no log to show
 
-  @wip
   Scenario Outline: Pressing l on a highlighted item or theme with a live current step opens that step's log directly, consistent with Enter
     Given a <type> whose current step is active, highlighted in the hierarchy
     When l is pressed
