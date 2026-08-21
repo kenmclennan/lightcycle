@@ -101,7 +101,6 @@ Feature: The hierarchy tab
       | review-conflict    |
       | feature-writer     |
 
-  @wip
   Scenario Outline: When a hierarchy row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width plus the row's own depth, spanning the row without wrapping mid-word
     Given a hierarchy row at depth <depth> whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When it renders in the hierarchy

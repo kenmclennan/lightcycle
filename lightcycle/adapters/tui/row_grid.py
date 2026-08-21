@@ -1,5 +1,7 @@
+import textwrap
 from dataclasses import dataclass
 
+from rich.text import Text
 from textual.geometry import Size
 
 GLYPH_WIDTHS = {"cursor": 2, "icon": 4, "content": 2}
@@ -68,11 +70,50 @@ def row_budget_for(table, num_columns):
     return table.size.width - padding
 
 
+def render_row_budget(table, layout, num_columns):
+    if layout.stacked:
+        return row_budget_for(table, 1)
+    return row_budget_for(table, num_columns)
+
+
 def floor_message(layout, table, num_columns):
     padding = 2 * table.cell_padding * num_columns
     chrome = table.screen.outer_size.width - table.screen.size.width
     needed = layout.floor_width + padding + chrome
     return "Widen the terminal to at least %d columns to show this list." % needed
+
+
+def pad_field(value, width):
+    text = value if isinstance(value, Text) else Text(str(value))
+    pad_len = max(0, width - len(text.plain))
+    return text + Text(" " * pad_len) if pad_len else text
+
+
+def pad_field_right(value, width):
+    text = value if isinstance(value, Text) else Text(str(value))
+    pad_len = max(0, width - len(text.plain))
+    return Text(" " * pad_len) + text if pad_len else text
+
+
+def wrap_continuation(prose, available_width):
+    width = max(1, available_width)
+    lines = textwrap.wrap(prose, width=width, break_long_words=False, break_on_hyphens=False)
+    if not lines:
+        return [""]
+    result = []
+    for line in lines:
+        if len(line) <= width:
+            result.append(line)
+            continue
+        result.extend(textwrap.wrap(line, width=width, break_long_words=True, break_on_hyphens=False))
+    return result
+
+
+def stacked_cell(first_line, indent, prose, row_budget, prose_style=None):
+    cell = Text() + first_line
+    for line in wrap_continuation(prose, row_budget - indent):
+        cell = cell + Text("\n" + " " * indent) + Text(line, style=prose_style)
+    return cell
 
 
 def apply_widths(table, widths):

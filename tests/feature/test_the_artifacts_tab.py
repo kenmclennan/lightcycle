@@ -2,7 +2,13 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
-from lightcycle.adapters.tui.hub import ArtifactsTable, NodeHubScreen, TextArtifactViewerScreen
+from lightcycle.adapters.tui.hub import (
+    ARTIFACTS_CONTINUATION_INDENT,
+    ArtifactsTable,
+    NodeHubScreen,
+    TextArtifactViewerScreen,
+)
+from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, atomic_column_width
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -72,13 +78,13 @@ def _open_hub_on_artifacts(ctx, node_id):
     return session
 
 
-def _launch_with_item(ctx, artifacts):
+def _launch_with_item(ctx, artifacts, size=None):
     store = FakeStore()
     item = store.create_item("Item")
     for atype, value, kind, internal in artifacts:
         store.add_artifact(item, atype, value, internal=internal, kind=kind)
     ctx["store"] = store
-    ctx["session"] = launch(make_test_container(store=store))
+    ctx["session"] = launch(make_test_container(store=store), size=size)
     _open_hub_on_artifacts(ctx, item)
     return ctx["session"]
 
@@ -111,15 +117,30 @@ def _artifact_of_type(ctx, atype):
     _launch_with_item(ctx, [(atype, "some value", "text", False)])
 
 
-@given(
-    "an artifact row whose type and the flexible minimum for value together exceed the row budget"
-)
-def _artifact_row_forces_stacking(ctx):
-    long_type = "A" * 55
-    value = "short-value"
-    ctx["artifact_type"] = long_type
-    ctx["artifact_value"] = value
-    _launch_with_item(ctx, [(long_type, value, "text", False)])
+_ARTIFACTS_TYPE = "code-review-findings"
+_ARTIFACTS_VALUE = "A value long enough to need a continuation line for real"
+_ARTIFACTS_NUM_COLUMNS = 2
+
+
+def _artifacts_stack_terminal_width(mode):
+    atomic_total = max(1, atomic_column_width([_ARTIFACTS_TYPE]))
+    floor_width = max(atomic_total, ARTIFACTS_CONTINUATION_INDENT + FLEXIBLE_MINIMUM)
+    breakpoint_width = atomic_total + FLEXIBLE_MINIMUM
+    row_budget = floor_width if mode == "just wide enough to clear the floor" else breakpoint_width - 1
+    return row_budget + 2 + 2 * _ARTIFACTS_NUM_COLUMNS
+
+
+@given(parsers.parse(
+    "an artifact row whose type and the flexible minimum for value together exceed the row "
+    "budget, on a terminal {mode}"
+))
+def _artifact_row_forces_stacking(ctx, mode):
+    ctx["artifact_type"] = _ARTIFACTS_TYPE
+    ctx["artifact_value"] = _ARTIFACTS_VALUE
+    _launch_with_item(
+        ctx, [(_ARTIFACTS_TYPE, _ARTIFACTS_VALUE, "text", False)],
+        size=(_artifacts_stack_terminal_width(mode), 24),
+    )
 
 
 @given("the artifact list has more than one entry")
@@ -197,21 +218,39 @@ def _artifact_labeled_full_type(ctx, atype):
 def _type_alone_on_first_line(ctx):
     table = ctx["session"].app.screen.query_one(ArtifactsTable)
     lines = _row_lines(table, "0")
-    assert len(lines) == 2
+    assert len(lines) > 1
     first_line_text = "".join(segment.text for segment in lines[0])
     assert ctx["artifact_type"] in first_line_text
     assert ctx["artifact_value"] not in first_line_text
 
 
-@then("the value appears on a continuation line indented beneath it")
-def _value_continuation_indented(ctx):
+def _artifacts_stacked_cell_text(table, strip):
+    pad = table.cell_padding
+    column = table.ordered_columns[0]
+    start = pad
+    end = start + column.width
+    return "".join(segment.text for segment in strip.crop(start, end))
+
+
+@then(parsers.parse("the value appears on a continuation line indented {indent:d} characters"))
+def _value_continuation_indented(ctx, indent):
     table = ctx["session"].app.screen.query_one(ArtifactsTable)
     lines = _row_lines(table, "0")
-    value_line_text = _rendered_cell_text_at(table, lines[1], "value")
-    stripped = value_line_text.lstrip(" ")
-    indent = len(value_line_text) - len(stripped)
-    assert indent > 0
-    assert stripped.startswith(ctx["artifact_value"])
+    assert len(lines) > 1
+    words = []
+    for line in lines[1:]:
+        text = _artifacts_stacked_cell_text(table, line)
+        stripped = text.rstrip()
+        leading = len(stripped) - len(stripped.lstrip(" "))
+        assert leading == indent
+        words.extend(stripped.strip().split())
+    assert words == ctx["artifact_value"].split()
+    ctx["_continuation_words"] = words
+
+
+@then("no fragment of the value's prose is split mid-word")
+def _no_mid_word_split_artifacts(ctx):
+    assert ctx["_continuation_words"] == ctx["artifact_value"].split()
 
 
 @then("only the non-internal artifact is shown")

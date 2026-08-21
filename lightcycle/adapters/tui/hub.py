@@ -28,7 +28,11 @@ from lightcycle.adapters.tui.row_grid import (
     apply_widths,
     compute_layout,
     floor_message,
+    pad_field,
+    pad_field_right,
+    render_row_budget,
     row_budget_for,
+    stacked_cell,
 )
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
@@ -64,12 +68,9 @@ TOAST_FILEPATH_DESTINATION = "in its default application"
 _TAB_ORDER = ("hierarchy", "log", "artifacts")
 _TAB_LABELS = {"hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts"}
 
-
-def _stacked_safe_width(layout, row_budget, glyph_total):
-    if not layout.stacked:
-        return layout.flexible_width
-    atomic_total = sum(layout.atomic_widths.values())
-    return max(1, row_budget - glyph_total - atomic_total)
+STACKED_COLUMN_KEY = "row"
+HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+ARTIFACTS_CONTINUATION_INDENT = 2
 
 
 def _owning_id(node):
@@ -223,8 +224,34 @@ def _state_glyph(node):
     return STATE_GLYPHS["queued"]
 
 
-def hierarchy_row_cells(row, stacked=False):
+def _hierarchy_stacked_first_line(row, layout, row_budget):
     node = row.node
+    glyph = _state_glyph(node)
+    icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
+    if node.blocked_by:
+        icon_cell = icon_cell + Text(
+            DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
+        )
+    icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
+    content_cell = (
+        Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else Text("")
+    )
+    content_field = pad_field(content_cell, GLYPH_WIDTHS["content"])
+    id_field = pad_field(node.id, layout.atomic_widths["id"])
+    content_so_far = icon_field + content_field + id_field
+    role_cell = (
+        Text(display_role(node.role), style=COLOURS["dim"]) if node.type == "step" else Text("")
+    )
+    role_area = max(0, row_budget - len(content_so_far.plain))
+    return content_so_far + pad_field_right(role_cell, role_area)
+
+
+def hierarchy_row_cells(row, layout=None, row_budget=None):
+    node = row.node
+    if layout is not None and layout.stacked:
+        first_line = _hierarchy_stacked_first_line(row, layout, row_budget)
+        indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
+        return (stacked_cell(first_line, indent, node.title, row_budget),)
     glyph = _state_glyph(node)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
@@ -234,19 +261,23 @@ def hierarchy_row_cells(row, stacked=False):
     content_cell = (
         Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else ""
     )
-    if stacked:
-        title_cell = "\n" + (" " * (2 * row.depth + 2)) + node.title
-    else:
-        title_cell = ("  " * row.depth) + node.title
+    title_cell = ("  " * row.depth) + node.title
     role_cell = Text(display_role(node.role), style=COLOURS["dim"]) if node.type == "step" else ""
     return (icon_cell, content_cell, node.id, title_cell, role_cell)
 
 
-def artifact_row_cells(artifact, stacked=False):
-    value_cell = ("\n  " + artifact.value) if stacked else artifact.value
+def artifact_row_cells(artifact, layout=None, row_budget=None):
+    if layout is not None and layout.stacked:
+        type_field = pad_field(Text(type_label(artifact), style=COLOURS["dim"]), layout.atomic_widths["type"])
+        return (
+            stacked_cell(
+                type_field, ARTIFACTS_CONTINUATION_INDENT, artifact.value, row_budget,
+                prose_style=COLOURS["cyan"],
+            ),
+        )
     return (
         Text(type_label(artifact), style=COLOURS["dim"]),
-        Text(value_cell, style=COLOURS["cyan"]),
+        Text(artifact.value, style=COLOURS["cyan"]),
     )
 
 
@@ -830,29 +861,15 @@ class NodeHubScreen(Screen):
         }
         row_budget = row_budget_for(table, len(COLUMN_GRIDS["hierarchy"]))
         max_depth = max((r.depth for r in rows), default=0)
-        indent = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"] + 2 * max_depth + 2
+        indent = HIERARCHY_CONTINUATION_BASE_INDENT + max_depth
         return compute_layout(row_budget, ["icon", "content"], atomic_values, indent)
-
-    def _hierarchy_widths(self, table, layout):
-        title_width = _stacked_safe_width(
-            layout,
-            row_budget_for(table, len(COLUMN_GRIDS["hierarchy"])),
-            GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"],
-        )
-        return {
-            "icon": GLYPH_WIDTHS["icon"],
-            "content": GLYPH_WIDTHS["content"],
-            "id": layout.atomic_widths["id"],
-            "title": title_width,
-            "role": layout.atomic_widths["role"],
-        }
 
     def refresh_hierarchy_width(self) -> None:
         table = self.query_one(HierarchyPagingTable)
         if not self._last_rows:
             return
         layout = self._hierarchy_layout(table, self._last_rows)
-        if layout.floor != self._hierarchy_floor or layout.stacked != self._hierarchy_stacked:
+        if layout.floor != self._hierarchy_floor or layout.stacked != self._hierarchy_stacked or layout.stacked:
             self._render_hierarchy(self._last_rows, initial=True)
             self._apply_tab_visibility()
             return
@@ -861,14 +878,21 @@ class NodeHubScreen(Screen):
                 Text(floor_message(layout, table, len(COLUMN_GRIDS["hierarchy"])), style=COLOURS["dim"])
             )
             return
-        apply_widths(table, self._hierarchy_widths(table, layout))
+        widths = {
+            "icon": GLYPH_WIDTHS["icon"],
+            "content": GLYPH_WIDTHS["content"],
+            "id": layout.atomic_widths["id"],
+            "title": layout.flexible_width,
+            "role": layout.atomic_widths["role"],
+        }
+        apply_widths(table, widths)
 
     def refresh_artifacts_width(self) -> None:
         table = self.query_one(ArtifactsTable)
         if not self._last_artifacts:
             return
         layout = self._artifacts_layout(table, self._last_artifacts)
-        if layout.floor != self._artifacts_floor or layout.stacked != self._artifacts_stacked:
+        if layout.floor != self._artifacts_floor or layout.stacked != self._artifacts_stacked or layout.stacked:
             self._render_artifacts(self._last_artifacts, initial=True)
             self._apply_tab_visibility()
             return
@@ -877,10 +901,7 @@ class NodeHubScreen(Screen):
                 Text(floor_message(layout, table, len(COLUMN_GRIDS["artifacts"])), style=COLOURS["dim"])
             )
             return
-        value_width = _stacked_safe_width(
-            layout, row_budget_for(table, len(COLUMN_GRIDS["artifacts"])), 0
-        )
-        apply_widths(table, {"type": layout.atomic_widths["type"], "value": value_width})
+        apply_widths(table, {"type": layout.atomic_widths["type"], "value": layout.flexible_width})
 
     def _selected_id(self, table):
         if table.row_count == 0:
@@ -913,15 +934,25 @@ class NodeHubScreen(Screen):
 
         selected_id = self._node_id if initial else self._selected_id(table)
         table.clear(columns=True)
-        widths = self._hierarchy_widths(table, layout)
-        for key in COLUMN_GRIDS["hierarchy"]:
-            table.add_column(key, width=widths[key], key=key)
+        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["hierarchy"]))
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+        else:
+            widths = {
+                "icon": GLYPH_WIDTHS["icon"],
+                "content": GLYPH_WIDTHS["content"],
+                "id": layout.atomic_widths["id"],
+                "title": layout.flexible_width,
+                "role": layout.atomic_widths["role"],
+            }
+            for key in COLUMN_GRIDS["hierarchy"]:
+                table.add_column(key, width=widths[key], key=key)
 
         ids = [r.node.id for r in rows]
         index = ids.index(selected_id) if selected_id in ids else 0
         for row in rows:
             table.add_row(
-                *hierarchy_row_cells(row, stacked=layout.stacked), height=None, key=row.node.id
+                *hierarchy_row_cells(row, layout, row_budget), height=None, key=row.node.id
             )
 
         self._last_hierarchy_shape = shape
@@ -930,15 +961,21 @@ class NodeHubScreen(Screen):
         self.update_pinned_ancestor()
 
     def _update_hierarchy_cells(self, table, rows) -> None:
+        table_ = self.query_one(HierarchyPagingTable)
+        layout = self._hierarchy_layout(table_, rows)
+        row_budget = render_row_budget(table_, layout, len(COLUMN_GRIDS["hierarchy"]))
         for row in rows:
-            cells = hierarchy_row_cells(row, stacked=self._hierarchy_stacked)
+            cells = hierarchy_row_cells(row, layout, row_budget)
+            if layout.stacked:
+                table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
+                continue
             for key, value in zip(COLUMN_GRIDS["hierarchy"], cells):
                 table.update_cell(row.node.id, key, value)
 
     def _artifacts_layout(self, table, artifacts):
         atomic_values = {"type": [type_label(a) for a in artifacts]}
         row_budget = row_budget_for(table, len(COLUMN_GRIDS["artifacts"]))
-        return compute_layout(row_budget, [], atomic_values, indent=2)
+        return compute_layout(row_budget, [], atomic_values, indent=ARTIFACTS_CONTINUATION_INDENT)
 
     def _selected_artifact_index(self, table):
         if table.row_count == 0:
@@ -973,16 +1010,17 @@ class NodeHubScreen(Screen):
 
         selected_index = self._selected_artifact_index(table)
         table.clear(columns=True)
-        value_width = _stacked_safe_width(
-            layout, row_budget_for(table, len(COLUMN_GRIDS["artifacts"])), 0
-        )
-        widths = {"type": layout.atomic_widths["type"], "value": value_width}
-        for key in COLUMN_GRIDS["artifacts"]:
-            table.add_column(key, width=widths[key], key=key)
+        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+        else:
+            widths = {"type": layout.atomic_widths["type"], "value": layout.flexible_width}
+            for key in COLUMN_GRIDS["artifacts"]:
+                table.add_column(key, width=widths[key], key=key)
 
         for index, artifact in enumerate(artifacts):
             table.add_row(
-                *artifact_row_cells(artifact, stacked=layout.stacked), height=None, key=str(index)
+                *artifact_row_cells(artifact, layout, row_budget), height=None, key=str(index)
             )
 
         self._last_artifacts_shape = shape
@@ -991,8 +1029,13 @@ class NodeHubScreen(Screen):
             table.move_cursor(row=selected_index if has_selection else 0)
 
     def _update_artifact_cells(self, table, artifacts) -> None:
+        layout = self._artifacts_layout(table, artifacts)
+        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
         for index, artifact in enumerate(artifacts):
-            cells = artifact_row_cells(artifact, stacked=self._artifacts_stacked)
+            cells = artifact_row_cells(artifact, layout, row_budget)
+            if layout.stacked:
+                table.update_cell(str(index), STACKED_COLUMN_KEY, cells[0])
+                continue
             for key, value in zip(COLUMN_GRIDS["artifacts"], cells):
                 table.update_cell(str(index), key, value)
 

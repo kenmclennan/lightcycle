@@ -4,6 +4,7 @@ from textual.widgets import Static
 
 from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
+from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -274,19 +275,46 @@ def _colliding_ids(ctx):
     _launch(ctx, store, item)
 
 
-@given(
-    "a hierarchy row whose atomic and glyph columns leave less than the flexible minimum for the title"
-)
-def _row_leaves_less_than_flexible_minimum(ctx):
+_HSTACK_TITLE = "A title long enough to need a continuation line for real"
+_HIERARCHY_NUM_COLUMNS = 5
+
+
+def _hierarchy_stack_terminal_width(mode, ids, roles, max_depth):
+    glyph_total = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+    atomic_values = {"id": ids, "role": roles}
+    atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
+    first_line_width = glyph_total + atomic_total
+    indent = glyph_total + max_depth
+    floor_width = max(first_line_width, indent + FLEXIBLE_MINIMUM)
+    breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
+    row_budget = floor_width if mode == "just wide enough to clear the floor" else breakpoint_width - 1
+    return row_budget + 2 + 2 * _HIERARCHY_NUM_COLUMNS
+
+
+@given(parsers.parse(
+    "a hierarchy row at depth {depth:d} whose atomic and glyph columns leave less than the "
+    "flexible minimum for the title, on a terminal {mode}"
+))
+def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
     store = FakeStore()
-    item = store.create_item("Item", id="LIGHTCYCLE-30.100")
-    step = store.create_step(
-        "Some step title", step="build", role="implement-features",
-        parent=item, id="LIGHTCYCLE-30.100.100",
-    )
-    ctx["item_id"] = item
-    ctx["step_id"] = step
-    _launch(ctx, store, item)
+    if depth == 0:
+        item = store.create_item(_HSTACK_TITLE, id="LC-30.100")
+        ctx["item_id"] = item
+        ctx["target_id"] = item
+        width = _hierarchy_stack_terminal_width(mode, ["LC-30.100"], [], 0)
+    else:
+        theme = store.create_theme("Theme")
+        item = store.create_item("Item", theme=theme, id="LC-30.100")
+        step = store.create_step(
+            _HSTACK_TITLE, step="build", role="coder", parent=item, id="LC-30.100.100",
+        )
+        ctx["item_id"] = item
+        ctx["target_id"] = step
+        width = _hierarchy_stack_terminal_width(
+            mode, [theme, "LC-30.100", "LC-30.100.100"], ["coder"], depth
+        )
+    ctx["target_depth"] = depth
+    _launch(ctx, store, item, size=(width, 24))
 
 
 @given("a step blocked on another item's completion")
@@ -701,34 +729,52 @@ def _role_shown_in_full_one_line(ctx, role):
     assert text.strip() == role
 
 
+def _hierarchy_stacked_cell_text(table, strip):
+    pad = table.cell_padding
+    column = table.ordered_columns[0]
+    start = pad
+    end = start + column.width
+    return "".join(segment.text for segment in strip.crop(start, end))
+
+
 @then(
-    "the icon, content indicator, id and role remain on the row's first line, with the role "
-    "right-aligned"
+    "the icon, content indicator, id and role remain on the row's first line, each padded to "
+    "its atomic width, with the role right-aligned"
 )
 def _first_line_role_right_aligned(ctx):
     table = _table(ctx)
-    lines = _row_lines(ctx, ctx["step_id"])
-    assert len(lines) == 2
-    first_line_text = "".join(segment.text for segment in lines[0])
-    assert ctx["step_id"] in first_line_text
-    assert "implement-features" in first_line_text
-    assert ctx["session"].app.container.store.get_node(ctx["step_id"]).title not in first_line_text
-    trailing = first_line_text[len(first_line_text.rstrip()):]
-    assert len(trailing) <= table.cell_padding
+    lines = _row_lines(ctx, ctx["target_id"])
+    assert len(lines) > 1
+    content = _hierarchy_stacked_cell_text(table, lines[0])
+    rest = content[GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]:]
+    assert rest.startswith(ctx["target_id"])
+    if ctx["target_depth"] != 0:
+        assert content.rstrip().endswith("coder")
 
 
-@then("the title appears on a continuation line indented to the row's own depth plus 2 characters")
-def _title_continuation_indented(ctx):
+@then(parsers.parse(
+    "the title appears on a continuation line indented {indent:d} characters plus the row's "
+    "own depth indent of {depth:d}"
+))
+def _title_continuation_indented(ctx, indent, depth):
     table = _table(ctx)
-    lines = _row_lines(ctx, ctx["step_id"])
-    assert len(lines) == 2
-    title_line_text = _rendered_cell_text_at(table, lines[1], "title")
-    row = next(r for r in ctx["hub_screen"]._last_rows if r.node.id == ctx["step_id"])
-    expected_indent = 2 * row.depth + 2
-    stripped = title_line_text.lstrip(" ")
-    indent = len(title_line_text) - len(stripped)
-    assert indent == expected_indent
-    assert stripped.startswith(row.node.title)
+    lines = _row_lines(ctx, ctx["target_id"])
+    assert len(lines) > 1
+    total_indent = indent + depth
+    words = []
+    for line in lines[1:]:
+        text = _hierarchy_stacked_cell_text(table, line)
+        stripped = text.rstrip()
+        leading = len(stripped) - len(stripped.lstrip(" "))
+        assert leading == total_indent
+        words.extend(stripped.strip().split())
+    assert words == _HSTACK_TITLE.split()
+    ctx["_continuation_words"] = words
+
+
+@then("no fragment of the title's prose is split mid-word")
+def _no_mid_word_split_hierarchy(ctx):
+    assert ctx["_continuation_words"] == _HSTACK_TITLE.split()
 
 
 @then("a dependency indicator is shown alongside its state")
