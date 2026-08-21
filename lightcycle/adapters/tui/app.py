@@ -323,6 +323,9 @@ class ProjectFilterPicker(ModalScreen):
         height: 1;
         padding: 0 1;
     }}
+    #picker-option-label {{
+        width: 1fr;
+    }}
     .picker-option-count {{
         width: 1fr;
         content-align: right middle;

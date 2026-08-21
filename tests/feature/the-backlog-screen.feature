@@ -92,7 +92,6 @@ Feature: The backlog screen
     When f is pressed
     Then the picker shows "proj-c" with count 0
 
-  @wip
   Scenario: The picker paints every row's count in full, right-aligned alongside its label, on the actual composited frame
     Given the backlog is shown with the registered project "lightcycle" and 13 todo items in total, 1 of them under "lightcycle"
     When f is pressed

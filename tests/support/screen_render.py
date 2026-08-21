@@ -102,9 +102,11 @@ def _human_step_store():
 
 def _backlog_store():
     store = DemoStore()
-    store.item("LC-273", "Row title repeats the step name", project="lightcycle")
+    lc273 = store.item("LC-273", "Row title repeats the step name", project="lightcycle")
     store.item("LC-275", "Active glyph unreadable at terminal size", project="lightcycle")
     store.item("LC-277", "Human-facing step display names", project="saga")
+    store.add_project("kenmclennan/lightcycle")
+    store.add_artifact(lc273, "repo", "kenmclennan/lightcycle")
     return store
 
 

@@ -189,7 +189,7 @@ def _backlog_shown_two_projects(ctx, project_a, project_b):
     _launch_and_switch(ctx, store)
 
 
-@given(parsers.parse('the backlog is shown with the registered project "{project}"'))
+@given(parsers.re(r'the backlog is shown with the registered project "(?P<project>[^"]+)"$'))
 def _backlog_shown_one_project(ctx, project):
     store = FakeStore()
     store.add_project(project)
@@ -198,6 +198,25 @@ def _backlog_shown_one_project(ctx, project):
     short = project.rsplit("/", 1)[-1]
     ctx["expected_counts"] = {short: 1}
     ctx["expected_total"] = 1
+    _launch_and_switch(ctx, store)
+
+
+@given(parsers.re(
+    r'the backlog is shown with the registered project "(?P<project>[^"]+)" and '
+    r'(?P<total>\d+) todo items in total, (?P<count>\d+) of them under "(?P=project)"'
+))
+def _backlog_shown_project_with_totals(ctx, project, total, count):
+    total, count = int(total), int(count)
+    store = FakeStore()
+    store.add_project(project)
+    for _ in range(count):
+        item = store.create_item("under item")
+        store.add_artifact(item, "repo", project)
+    for i in range(total - count):
+        store.create_item("other item %d" % i)
+    short = project.rsplit("/", 1)[-1]
+    ctx["expected_counts"] = {short: count}
+    ctx["expected_total"] = total
     _launch_and_switch(ctx, store)
 
 
@@ -502,6 +521,45 @@ def _picker_shows_own_count(ctx, label):
 @then(parsers.parse('the picker shows "{label}" with count {count:d}'))
 def _picker_shows_count(ctx, label, count):
     _assert_picker_option_count(ctx, label, count)
+
+
+def _painted_option_row(ctx, label):
+    screen = ctx["session"].app.screen
+    option = _picker_option_by_label(screen, label)
+    region = option.region
+    strips = screen._compositor.render_strips()
+    return "".join(
+        seg.text for seg in strips[region.y].crop(region.x, region.x + region.width)
+    )
+
+
+def _assert_composited_option_count(ctx, label, expected):
+    row = _painted_option_row(ctx, label)
+    stripped = row.rstrip()
+    assert stripped.endswith(str(expected)), (
+        "row %r for %r does not end with its count %r" % (row, label, expected)
+    )
+    before_count = stripped[: -len(str(expected))]
+    assert label in before_count
+    assert before_count.rstrip() != before_count, (
+        "row %r has no gap between %r's label and its count" % (row, label)
+    )
+
+
+@then(parsers.parse(
+    'the picker\'s composited frame shows "{label}" with its total item count, '
+    "right-aligned alongside its label"
+))
+def _picker_composited_total(ctx, label):
+    _assert_composited_option_count(ctx, label, ctx["expected_total"])
+
+
+@then(parsers.parse(
+    'the picker\'s composited frame shows "{label}" with its own item count, '
+    "right-aligned alongside its label"
+))
+def _picker_composited_own_count(ctx, label):
+    _assert_composited_option_count(ctx, label, ctx["expected_counts"][label])
 
 
 @then(parsers.parse('the picker\'s highlighted option is "{label}"'))
