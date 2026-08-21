@@ -57,6 +57,7 @@ POLL_INTERVAL_SECONDS = 10
 LOG_TAIL_INTERVAL_SECONDS = 1
 LOG_NO_STREAM_MESSAGE = "Nothing live to stream."
 LOG_FINISHED_MESSAGE = "✓ step finished"
+LOG_CURSOR_GLYPH = "▌"
 ARTIFACTS_EMPTY_MESSAGE = "This node has no artifacts to view yet."
 TOAST_DURATION_SECONDS = 2.0
 TOAST_SUCCESS_PREFIX = "↗ "
@@ -407,6 +408,14 @@ class LogPane(RichLog):
         super().watch_scroll_y(old, new)
         self.auto_scroll = self.is_vertical_scroll_end
 
+    def replace_last_line(self, content) -> None:
+        if self._deferred_renders:
+            self._deferred_renders.pop()
+        elif self.lines:
+            self.lines.pop()
+        self._line_cache.clear()
+        self.write(content, scroll_end=False)
+
 
 class HierarchyPagingTable(DataTable):
     _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
@@ -740,6 +749,8 @@ class NodeHubScreen(Screen):
         self._log_offset = 0
         self._log_finished = False
         self._log_timer = None
+        self._log_cursor_active = False
+        self._log_cursor_text = ""
         self._last_artifacts_shape = None
         self._last_artifacts = []
         self._has_artifacts = False
@@ -816,13 +827,37 @@ class NodeHubScreen(Screen):
         self._log_offset = result.offset
         log_pane = self.query_one(LogPane)
         if result.data:
-            log_pane.write(Text(result.data.decode("utf-8", errors="replace"), style=COLOURS["dim"]))
+            self._write_tail_data(log_pane, result.data.decode("utf-8", errors="replace"))
         if self._log_mode == "live" and not result.live and not self._log_finished:
+            self._clear_log_cursor(log_pane)
             self._log_finished = True
             log_pane.live = False
             log_pane.write(Text(LOG_FINISHED_MESSAGE, style=COLOURS["cyan"]))
             if self._log_timer is not None:
                 self._log_timer.stop()
+
+    def _write_tail_data(self, log_pane, text) -> None:
+        lines = text.split("\n")
+        if lines and lines[-1] == "":
+            lines.pop()
+        if not lines:
+            return
+        live = self._log_mode == "live" and not self._log_finished
+        if live:
+            self._clear_log_cursor(log_pane)
+        for index, line in enumerate(lines):
+            content = Text(line, style=COLOURS["text"])
+            if live and index == len(lines) - 1:
+                content.append(LOG_CURSOR_GLYPH, style=COLOURS["cyan"])
+                self._log_cursor_text = line
+                self._log_cursor_active = True
+            log_pane.write(content)
+
+    def _clear_log_cursor(self, log_pane) -> None:
+        if not self._log_cursor_active:
+            return
+        log_pane.replace_last_line(Text(self._log_cursor_text, style=COLOURS["text"]))
+        self._log_cursor_active = False
 
     def _initial_refresh(self) -> None:
         self._refresh(initial=True)

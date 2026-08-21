@@ -1,8 +1,10 @@
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
+from rich.color import Color
 from textual.widgets import Static
 
-from lightcycle.adapters.tui.hub import LogPane, NodeHubScreen
+from lightcycle.adapters.tui.design_system import COLOURS
+from lightcycle.adapters.tui.hub import LOG_CURSOR_GLYPH, LOG_FINISHED_MESSAGE, LogPane, NodeHubScreen
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -32,6 +34,19 @@ def _running_step(lines=b""):
     workers = FakeWorkers(
         workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
         alive_pids={WORKER_PID},
+    )
+    fs = FakeFs(files={LOG_PATH: lines})
+    return store, item, step, fs, workers
+
+
+def _running_step_worker_already_dead(lines):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="coder", role="coder", parent=item)
+    store.claim_ready("coder")
+    workers = FakeWorkers(
+        workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
+        alive_pids=set(),
     )
     fs = FakeFs(files={LOG_PATH: lines})
     return store, item, step, fs, workers
@@ -98,6 +113,49 @@ def _painted_lines(session, widget):
 
 def _log_text(ctx):
     return "\n".join(_painted_lines(ctx["session"], _log_pane(ctx)))
+
+
+def _rgb(hex_colour):
+    return Color.parse(hex_colour).get_truecolor()
+
+
+def _painted_segments(ctx):
+    widget = _log_pane(ctx)
+    region = widget.region
+    strips = ctx["session"].app.screen._compositor.render_strips()
+    rows = []
+    for y in range(region.y, region.y + region.height):
+        row = []
+        for seg in strips[y].crop(region.x, region.x + region.width):
+            colour = seg.style.color if seg.style else None
+            row.append((seg.text, colour.get_truecolor() if colour else None))
+        rows.append(row)
+    return rows
+
+
+def _nonblank_rows(rows):
+    return [row for row in rows if "".join(text for text, _ in row).strip()]
+
+
+def _row_text(row):
+    return "".join(text for text, _ in row)
+
+
+def _find_row_starting_with(rows, prefix):
+    for row in rows:
+        if _row_text(row).startswith(prefix):
+            return row
+    return None
+
+
+def _assert_row_is_text_coloured(row):
+    text_rgb = _rgb(COLOURS["text"])
+    dim_rgb = _rgb(COLOURS["dim"])
+    for text, rgb in row:
+        if text.strip() == "" or text == LOG_CURSOR_GLYPH:
+            continue
+        assert rgb != dim_rgb
+        assert rgb == text_rgb
 
 
 def _empty_text(ctx):
@@ -216,6 +274,9 @@ def _when_worker_writes_line(ctx):
 
 @when("a new line arrives")
 def _when_new_line_arrives(ctx):
+    rows = _nonblank_rows(_painted_segments(ctx))
+    if rows:
+        ctx["previous_cursor_row_text"] = _row_text(rows[-1]).replace(LOG_CURSOR_GLYPH, "").rstrip()
     _write_line(ctx, "14:04:19 a new line\n")
     _tick(ctx)
 
@@ -263,6 +324,50 @@ def _then_lines_already_shown(ctx):
 @then("the new line appears without a manual refresh")
 def _then_new_line_appears(ctx):
     assert "a new line" in _log_text(ctx)
+
+
+@then("no cursor glyph is shown")
+def _then_no_cursor_glyph_shown(ctx):
+    assert LOG_CURSOR_GLYPH not in _log_text(ctx)
+
+
+@then("no line carries the cursor glyph")
+def _then_no_line_carries_cursor(ctx):
+    assert LOG_CURSOR_GLYPH not in _log_text(ctx)
+
+
+@then("the last line of the log ends with a trailing cursor glyph in the cyan colour")
+def _then_last_line_ends_with_cursor(ctx):
+    rows = _nonblank_rows(_painted_segments(ctx))
+    text, rgb = [seg for seg in rows[-1] if seg[0].strip() != ""][-1]
+    assert text == LOG_CURSOR_GLYPH
+    assert rgb == _rgb(COLOURS["cyan"])
+
+
+@then("the new last line ends with a trailing cursor glyph in the cyan colour")
+def _then_new_last_line_ends_with_cursor(ctx):
+    _then_last_line_ends_with_cursor(ctx)
+
+
+@then("every displayed log line renders in the text colour, not the dim colour")
+def _then_every_line_text_coloured(ctx):
+    for row in _nonblank_rows(_painted_segments(ctx)):
+        _assert_row_is_text_coloured(row)
+
+
+@then("the line that previously carried the cursor no longer carries it")
+def _then_previous_cursor_line_cleared(ctx):
+    row = _find_row_starting_with(
+        _nonblank_rows(_painted_segments(ctx)), ctx["previous_cursor_row_text"]
+    )
+    assert row is not None
+    assert LOG_CURSOR_GLYPH not in _row_text(row)
+    ctx["previous_cursor_row"] = row
+
+
+@then("that previous line still renders in the text colour, not the dim colour")
+def _then_previous_cursor_line_text_coloured(ctx):
+    _assert_row_is_text_coloured(ctx["previous_cursor_row"])
 
 
 @then("the view auto-scrolls to keep it visible")
@@ -379,3 +484,17 @@ def test_escape_closes_the_hub_from_the_no_log_state(ctx):
     session.press("escape")
 
     assert not isinstance(session.app.screen, NodeHubScreen)
+
+
+def test_first_mount_on_a_still_in_progress_step_whose_worker_already_died(ctx):
+    _prepare(ctx, *_running_step_worker_already_dead(SEEDED_LINES))
+
+    _open(ctx)
+
+    rows = _nonblank_rows(_painted_segments(ctx))
+    row_texts = [_row_text(row) for row in rows]
+    finished_rows = [text for text in row_texts if LOG_FINISHED_MESSAGE in text]
+    last_line_rows = [text for text in row_texts if "running suite" in text]
+    assert len(finished_rows) == 1
+    assert len(last_line_rows) == 1
+    assert LOG_CURSOR_GLYPH not in _log_text(ctx)
