@@ -51,6 +51,12 @@ Feature: The hierarchy tab
     Then its own real id is shown alongside its title
     And its current state is shown using the same icon and colour as the priority list
 
+  @wip
+  Scenario: The hierarchy tree's row area shares the frame's own background, not an unnamed default
+    Given the hierarchy tab is open
+    When it renders
+    Then the row area's background matches the same bg colour as the rest of the frame
+
   Scenario: The hierarchy updates without a manual refresh when a node's state changes
     Given the hierarchy is open, showing a queued step
     When that step is claimed and becomes active
@@ -166,6 +172,12 @@ Feature: The hierarchy tab
     When I scroll back up to where its actual row is
     Then the pinned duplicate is no longer shown
 
+  @wip
+  Scenario: A pinned ancestor's row shows its own state icon, like every other row
+    Given an ancestor's row is pinned to the top because it scrolled out of view
+    When it renders
+    Then its row shows its own state icon, using the same icon and colour vocabulary as every other row
+
   Scenario: Pressing a on a highlighted node opens its Artifacts tab directly
     Given a node is highlighted in the hierarchy, not yet opened
     When a is pressed
@@ -190,6 +202,17 @@ Feature: The hierarchy tab
     Given a queued step is highlighted in the hierarchy
     When l is pressed
     Then nothing happens, since there is no log to show
+
+  @wip
+  Scenario Outline: Pressing l on a highlighted item or theme with a live current step opens that step's log directly, consistent with Enter
+    Given a <type> whose current step is active, highlighted in the hierarchy
+    When l is pressed
+    Then its current step's Log tab opens directly, showing the live tail
+
+    Examples:
+      | type  |
+      | item  |
+      | theme |
 
   Scenario: A root node with no parent is highlighted at the top row
     Given the current node is a themeless root item

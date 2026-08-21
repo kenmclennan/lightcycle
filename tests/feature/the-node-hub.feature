@@ -137,6 +137,21 @@ Feature: The node hub
     When I open it with Enter or →
     Then the escalation reason names what's being asked of the operator
 
+  @wip
+  Scenario: A dependency-blocked item's escalation panel shows the tagged two-line treatment
+    Given an item blocked on another item's completion
+    When I open it with Enter or →
+    Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
+    And the reason is shown on a second line below the tag, in the text colour
+    And the blocking item's id within the reason is coloured as a link, in the cyan colour
+
+  @wip
+  Scenario: An escalated step's escalation panel shows the tagged two-line treatment
+    Given an item whose current step is escalated, needing rework
+    When I open it with Enter or →
+    Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
+    And the reason is shown on a second line below the tag, in the text colour
+
   Scenario Outline: An item that is not needs-attention shows no escalation reason
     Given an item that is "<status>"
     When I open it with Enter or →
