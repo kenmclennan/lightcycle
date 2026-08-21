@@ -10,6 +10,12 @@ Feature: The Log tab
   a running tail, and Ctrl-U/Ctrl-D fast-scroll a full screen at a time in either state,
   live or historical.
 
+  Every log line - live or historical, most-recently-tailed or not - renders in the
+  same text colour; brightness carries no meaning in the log. The one visual cue that
+  a tail is live at all is a trailing cursor glyph in the cyan colour, carried by
+  whichever line was written most recently, moving to each new line as it arrives and
+  disappearing once the step finishes.
+
   Scenario: Opening a running step's Log tab shows the output already written, not just new lines
     Given the current step is being performed by a worker and has already written several lines
     When I open its Log tab
@@ -20,6 +26,32 @@ Feature: The Log tab
     When I open its Log tab
     And the worker writes a new line to the log
     Then the new line appears without a manual refresh
+
+  @wip
+  Scenario: No cursor is shown before anything has been tailed
+    Given the current step is being performed by a worker
+    When I open its Log tab
+    Then no cursor glyph is shown
+
+  @wip
+  Scenario: The most recently tailed line carries the live cursor, from the first frame the tab renders
+    Given the live log is open and following the tail
+    Then the last line of the log ends with a trailing cursor glyph in the cyan colour
+    And every displayed log line renders in the text colour, not the dim colour
+
+  @wip
+  Scenario: The live cursor moves to the newest line as new lines arrive, without any colour change
+    Given the live log is open and following the tail
+    When a new line arrives
+    Then the new last line ends with a trailing cursor glyph in the cyan colour
+    And the line that previously carried the cursor no longer carries it
+    And that previous line still renders in the text colour, not the dim colour
+
+  @wip
+  Scenario: The live cursor disappears once the step finishes
+    Given the live log is open and following the tail
+    When the worker completes
+    Then no line carries the cursor glyph
 
   Scenario: The live tail auto-scrolls to keep a new line visible
     Given the live log is open and following the tail
