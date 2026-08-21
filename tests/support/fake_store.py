@@ -343,8 +343,8 @@ class FakeStore(StorePort):
         return list(self._history.get(tid, []))
 
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None, description=None, attention=False):
-        b = self._new_record(
+                    project=None, goal=None, description=None, attention=False, id=None):
+        fields = dict(
             title=title,
             type="step",
             parent=parent,
@@ -352,6 +352,9 @@ class FakeStore(StorePort):
                               attention=attention),
             description=description,
         )
+        if id is not None:
+            fields["id"] = id
+        b = self._new_record(**fields)
         tid = b["id"]
         self._records[tid] = b
         self._deps[tid] = set()
@@ -385,8 +388,8 @@ class FakeStore(StorePort):
             b["workflow"] = workflow
         return tid
 
-    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None):
-        b = self._new_record(
+    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
+        fields = dict(
             title=title,
             type="item",
             parent=theme,
@@ -394,6 +397,9 @@ class FakeStore(StorePort):
             workflow=workflow,
             state="backlogged",
         )
+        if id is not None:
+            fields["id"] = id
+        b = self._new_record(**fields)
         tid = b["id"]
         self._records[tid] = b
         return tid

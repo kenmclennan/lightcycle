@@ -823,11 +823,10 @@ class TestBacklogTableColumnWidth(unittest.TestCase):
         session = launch(make_test_container(store=store))
         self.addCleanup(session.close)
 
-        view = session.app.query_one(BacklogView)
         table = session.app.query_one(BacklogTable)
 
         self.assertEqual(table.size.width, 0)
-        self.assertIsNone(view._title_width(table))
+        self.assertEqual(len(table.columns), 0)
 
 
 class TestBacklogProjectColumn(unittest.TestCase):

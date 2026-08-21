@@ -36,6 +36,32 @@ def _rendered_cell_text(table, row_key, column_key):
     raise AssertionError("column %r not found" % column_key)
 
 
+def _rendered_cell_text_at(table, strip, column_key):
+    pad = table.cell_padding
+    offset = 0
+    for column in table.ordered_columns:
+        start = offset + pad
+        end = start + column.width
+        if column.key.value == column_key:
+            return "".join(segment.text for segment in strip.crop(start, end))
+        offset = end + pad
+    raise AssertionError("column %r not found" % column_key)
+
+
+def _row_lines(table, row_key):
+    y = 0
+    target = None
+    height = 1
+    for r in table.ordered_rows:
+        if r.key.value == row_key:
+            target = y
+            height = r.height
+            break
+        y += r.height
+    assert target is not None
+    return [table.render_line(target + i) for i in range(height)]
+
+
 def _open_hub_on_artifacts(ctx, node_id):
     session = ctx["session"]
     screen = NodeHubScreen(session.app.container, node_id, session.app._now, initial_tab="artifacts")
@@ -77,6 +103,23 @@ def _internal_and_non_internal(ctx):
 @given("a node has no non-internal artifacts")
 def _no_viewable_artifacts(ctx):
     _launch_with_item(ctx, [])
+
+
+@given(parsers.parse('a node has an artifact of type "{atype}"'))
+def _artifact_of_type(ctx, atype):
+    ctx["artifact_type"] = atype
+    _launch_with_item(ctx, [(atype, "some value", "text", False)])
+
+
+@given(
+    "an artifact row whose type and the flexible minimum for value together exceed the row budget"
+)
+def _artifact_row_forces_stacking(ctx):
+    long_type = "A" * 55
+    value = "short-value"
+    ctx["artifact_type"] = long_type
+    ctx["artifact_value"] = value
+    _launch_with_item(ctx, [(long_type, value, "text", False)])
 
 
 @given("the artifact list has more than one entry")
@@ -139,6 +182,36 @@ def _each_labeled_by_type(ctx):
     assert table.row_count == 3
     types = [_rendered_cell_text(table, str(i), "type") for i in range(3)]
     assert types == ["spec", "branch", "pr"]
+
+
+@then(parsers.parse('that artifact is shown labeled by its full type "{atype}"'))
+def _artifact_labeled_full_type(ctx, atype):
+    table = ctx["session"].app.screen.query_one(ArtifactsTable)
+    lines = _row_lines(table, "0")
+    assert len(lines) == 1
+    text = _rendered_cell_text(table, "0", "type")
+    assert text == atype
+
+
+@then("the type remains alone on the row's first line")
+def _type_alone_on_first_line(ctx):
+    table = ctx["session"].app.screen.query_one(ArtifactsTable)
+    lines = _row_lines(table, "0")
+    assert len(lines) == 2
+    first_line_text = "".join(segment.text for segment in lines[0])
+    assert ctx["artifact_type"] in first_line_text
+    assert ctx["artifact_value"] not in first_line_text
+
+
+@then("the value appears on a continuation line indented beneath it")
+def _value_continuation_indented(ctx):
+    table = ctx["session"].app.screen.query_one(ArtifactsTable)
+    lines = _row_lines(table, "0")
+    value_line_text = _rendered_cell_text_at(table, lines[1], "value")
+    stripped = value_line_text.lstrip(" ")
+    indent = len(value_line_text) - len(stripped)
+    assert indent > 0
+    assert stripped.startswith(ctx["artifact_value"])
 
 
 @then("only the non-internal artifact is shown")

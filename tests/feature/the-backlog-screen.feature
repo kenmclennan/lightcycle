@@ -38,7 +38,6 @@ Feature: The backlog screen
     Given the backlog is shown with a todo item whose repo is "kenmclennan/lightcycle" under the registered project "kenmclennan/lightcycle"
     Then that item's row shows "lightcycle" as its project, in the cyan colour
 
-  @wip
   Scenario Outline: The id column widens to fit the longest id in the backlog, whatever produced it, without truncating or wrapping it
     Given the backlog is shown with a todo item with id "<id>" (<id source>)
     Then that item's row shows "<id>" as its id, in full, on one line
@@ -49,13 +48,11 @@ Feature: The backlog screen
       | a plain generated id                         | fake-a72427b9     |
       | the engine's default, unshortened shortcode  | LIGHTCYCLE-3.1    |
 
-  @wip
   Scenario: Two ids that would look identical if truncated both render in full and stay distinguishable
     Given the backlog is shown with two todo items whose ids are "LC-1234.1" and "LC-1234.10"
     Then both ids are shown in full
     And the two rows' ids are distinguishable from each other
 
-  @wip
   Scenario: When a backlog row cannot fit unstacked, the title moves to an indented continuation line beneath the cursor, id and project
     Given a backlog row whose atomic and glyph columns leave less than the flexible minimum for the title
     Then the cursor, id and project remain on the row's first line

@@ -16,7 +16,6 @@ from lightcycle.adapters.tui.design_system import (
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
     BACKLOG_SHORTCUTS,
     COLOURS,
-    COLUMN_GRIDS,
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     GLOBAL_SHORTCUTS,
@@ -24,6 +23,13 @@ from lightcycle.adapters.tui.design_system import (
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.hub import NodeHubScreen
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows, is_gap_key
+from lightcycle.adapters.tui.row_grid import (
+    GLYPH_WIDTHS,
+    apply_widths,
+    compute_layout,
+    floor_message,
+    row_budget_for,
+)
 from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
 from lightcycle.application.setup import upgrade
 from lightcycle.application.work import BacklogInput, BacklogUseCase, StatusUseCase
@@ -36,6 +42,13 @@ BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
 PICKER_CANCELLED = object()
+
+
+def _stacked_safe_width(layout, row_budget, glyph_total):
+    if not layout.stacked:
+        return layout.flexible_width
+    atomic_total = sum(layout.atomic_widths.values())
+    return max(1, row_budget - glyph_total - atomic_total)
 
 
 class TabStrip(Horizontal):
@@ -69,6 +82,11 @@ class PagingTable(DataTable):
 
 
 class PriorityTable(PagingTable):
+    def on_resize(self, event: events.Resize) -> None:
+        app = self.app
+        if isinstance(app, LightcycleApp):
+            app.refresh_priority_layout()
+
     def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
         super().watch_cursor_coordinate(old_coordinate, new_coordinate)
         if old_coordinate.row != new_coordinate.row:
@@ -116,16 +134,20 @@ class BacklogTable(PagingTable):
             pass
 
 
-def _backlog_row_cells(row, cursor=False):
+def _backlog_row_cells(row, cursor=False, stacked=False):
     cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
     project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
-    return (cursor_cell, row.id, project_cell, row.title)
+    title_cell = ("\n" + row.title) if stacked else row.title
+    return (cursor_cell, row.id, project_cell, title_cell)
 
 
 class BacklogView(Vertical):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._rows = ()
+        self._floor = False
+        self._total = 0
+        self._project_filter = None
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
@@ -134,6 +156,7 @@ class BacklogView(Vertical):
             id="backlog-filter-bar",
         )
         yield BacklogTable(id="backlog-table")
+        yield Static(id="backlog-floor")
         yield Static(id="backlog-empty-overall")
         yield Static(id="backlog-empty-filtered-message")
         yield Static(id="backlog-empty-filtered-hint")
@@ -145,12 +168,15 @@ class BacklogView(Vertical):
 
     def apply_rows(self, rows, total, project_filter) -> None:
         self._rows = rows
+        self._total = total
+        self._project_filter = project_filter
         self._render_filter_bar(project_filter, len(rows))
         self._rebuild_table(rows)
         self._toggle_state(total, len(rows), project_filter)
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
+        self._toggle_state(self._total, len(self._rows), self._project_filter)
 
     def _render_filter_bar(self, project_filter, count) -> None:
         left = self.query_one("#backlog-filter-left", Static)
@@ -167,30 +193,49 @@ class BacklogView(Vertical):
             return None
         return cell_key.row_key.value
 
-    def _title_width(self, table):
-        grid = dict(COLUMN_GRIDS["backlog"])
-        padding = 2 * table.cell_padding * len(BACKLOG_COLUMNS)
-        fixed = sum(int(grid[key][:-2]) for key in BACKLOG_COLUMNS if key != "title") + padding
-        width = table.size.width - fixed
-        return width if width > 0 else None
+    def _layout(self, table):
+        atomic_values = {
+            "id": [row.id for row in self._rows],
+            "project": [row.project for row in self._rows],
+        }
+        row_budget = row_budget_for(table, len(BACKLOG_COLUMNS))
+        indent = GLYPH_WIDTHS["cursor"]
+        return compute_layout(row_budget, ["cursor"], atomic_values, indent)
 
     def _rebuild_table(self, rows) -> None:
         table = self.query_one(BacklogTable)
-        title_width = self._title_width(table)
-        if title_width is None:
+        if table.size.width == 0:
+            return
+        layout = self._layout(table)
+        self._floor = bool(rows) and layout.floor
+        floor_widget = self.query_one("#backlog-floor", Static)
+        if self._floor:
+            floor_widget.update(
+                Text(floor_message(layout, table, len(BACKLOG_COLUMNS)), style=COLOURS["dim"])
+            )
             return
         selected_id = self._selected_row_id(table)
 
         table.clear(columns=True)
-        grid = dict(COLUMN_GRIDS["backlog"])
+        title_width = _stacked_safe_width(
+            layout, row_budget_for(table, len(BACKLOG_COLUMNS)), GLYPH_WIDTHS["cursor"]
+        )
+        widths = {
+            "cursor": GLYPH_WIDTHS["cursor"],
+            "id": layout.atomic_widths["id"],
+            "project": layout.atomic_widths["project"],
+            "title": title_width,
+        }
         for key in BACKLOG_COLUMNS:
-            width = title_width if key == "title" else int(grid[key][:-2])
-            table.add_column(key, width=width, key=key)
+            table.add_column(key, width=widths[key], key=key)
 
         ids = [row.id for row in rows]
         new_index = ids.index(selected_id) if selected_id in ids else 0
         for index, row in enumerate(rows):
-            table.add_row(*_backlog_row_cells(row, cursor=index == new_index), key=row.id)
+            table.add_row(
+                *_backlog_row_cells(row, cursor=index == new_index, stacked=layout.stacked),
+                height=None, key=row.id,
+            )
         if rows:
             table.move_cursor(row=new_index)
 
@@ -198,7 +243,9 @@ class BacklogView(Vertical):
         overall_empty = total == 0
         filtered_empty = not overall_empty and filtered_count == 0
         table = self.query_one(BacklogTable)
-        table.display = filtered_count > 0
+        showing_floor = self._floor and filtered_count > 0
+        table.display = filtered_count > 0 and not showing_floor
+        self.query_one("#backlog-floor", Static).display = showing_floor
         overall_widget = self.query_one("#backlog-empty-overall", Static)
         message_widget = self.query_one("#backlog-empty-filtered-message", Static)
         hint_widget = self.query_one("#backlog-empty-filtered-hint", Static)
@@ -350,7 +397,20 @@ class LightcycleApp(App):
         display: none;
     }}
 
+    #priority-list-floor {{
+        color: {COLOURS["dim"]};
+        content-align: center middle;
+        height: 1fr;
+        display: none;
+    }}
+
     BacklogView {{
+        display: none;
+    }}
+    #backlog-floor {{
+        color: {COLOURS["dim"]};
+        content-align: center middle;
+        height: 1fr;
         display: none;
     }}
     #backlog-filter-bar {{
@@ -436,6 +496,9 @@ class LightcycleApp(App):
         self._selected_flat_index = 0
         self._view = "priority"
         self._priority_empty = True
+        self._priority_floor = False
+        self._priority_stacked = False
+        self._last_priority_rows = []
         self._backlog_project_filter = None
         self._backlog_total = 0
         self._backlog_filtered_count = 0
@@ -453,6 +516,7 @@ class LightcycleApp(App):
         yield TabStrip(id="tab-strip")
         yield PriorityTable(id="priority-list")
         yield Static(EMPTY_STATE_MESSAGE, id="empty-state")
+        yield Static(id="priority-list-floor")
         yield BacklogView(id="backlog-view")
         yield DashboardFooter(id="footer")
 
@@ -528,8 +592,12 @@ class LightcycleApp(App):
 
     def _apply_view_visibility(self) -> None:
         on_priority = self._view == "priority"
-        self.query_one(PriorityTable).display = on_priority and not self._priority_empty
+        showing_floor = on_priority and self._priority_floor and not self._priority_empty
+        self.query_one(PriorityTable).display = (
+            on_priority and not self._priority_empty and not showing_floor
+        )
         self.query_one("#empty-state", Static).display = on_priority and self._priority_empty
+        self.query_one("#priority-list-floor", Static).display = showing_floor
         self.query_one(BacklogView).display = not on_priority
 
     def _desired_shortcuts(self):
@@ -595,20 +663,35 @@ class LightcycleApp(App):
         self._refresh()
         self.set_focus(self.query_one(BacklogTable))
 
-    def _title_width(self, table) -> int:
-        grid = dict(COLUMN_GRIDS["priority-list"])
-        padding = 2 * table.cell_padding * len(DATA_COLUMNS)
-        fixed = sum(int(grid[key][:-2]) for key in DATA_COLUMNS if key != "title") + padding
-        width = table.size.width - fixed
-        return width if width > 0 else 1
+    def _priority_layout(self, table, rows):
+        real_rows = [row for row in rows if row.group != "gap"]
+        atomic_values = {
+            "id": [row.id for row in real_rows],
+            "project": [row.project for row in real_rows],
+            "step": [row.step for row in real_rows],
+            "time": [row.time for row in real_rows],
+        }
+        row_budget = row_budget_for(table, len(DATA_COLUMNS)) if table.size.width else None
+        indent = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
+        return compute_layout(row_budget, ["cursor", "icon"], atomic_values, indent)
 
-    def _add_columns(self, table, title_width) -> None:
-        grid = dict(COLUMN_GRIDS["priority-list"])
+    def _add_columns(self, table, layout) -> None:
+        title_width = _stacked_safe_width(
+            layout, row_budget_for(table, len(DATA_COLUMNS)), GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
+        )
+        widths = {
+            "cursor": GLYPH_WIDTHS["cursor"],
+            "icon": GLYPH_WIDTHS["icon"],
+            "id": layout.atomic_widths["id"],
+            "project": layout.atomic_widths["project"],
+            "step": layout.atomic_widths["step"],
+            "time": layout.atomic_widths["time"],
+            "title": title_width,
+        }
         for key in DATA_COLUMNS:
-            width = title_width if key == "title" else int(grid[key][:-2])
-            table.add_column(key, width=width, key=key)
+            table.add_column(key, width=widths[key], key=key)
 
-    def _row_cells(self, row, cursor=False):
+    def _row_cells(self, row, cursor=False, stacked=False):
         if row.group == "gap":
             return ("", "", "", "", "", "", "")
         cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
@@ -620,13 +703,14 @@ class LightcycleApp(App):
         step_cell = Text(row.step, style=COLOURS[row.step_colour])
         project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
-        return (cursor_cell, icon_cell, row.id, project_cell, row.title, step_cell, time_cell)
+        title_cell = ("\n" + row.title) if stacked else row.title
+        return (cursor_cell, icon_cell, row.id, project_cell, title_cell, step_cell, time_cell)
 
     def _update_cells(self, table, rows) -> None:
         for row in rows:
             if row.group == "gap":
                 continue
-            for key, value in zip(DATA_COLUMNS, self._row_cells(row)):
+            for key, value in zip(DATA_COLUMNS, self._row_cells(row, stacked=self._priority_stacked)):
                 if key == "cursor":
                     continue
                 table.update_cell(row.id, key, value)
@@ -659,12 +743,21 @@ class LightcycleApp(App):
         return index
 
     def _rebuild_table(self, table, rows) -> None:
+        self._last_priority_rows = rows
+        layout = self._priority_layout(table, rows)
+        self._priority_floor = bool(rows) and layout.floor
+        self._priority_stacked = layout.stacked
+        if self._priority_floor:
+            self.query_one("#priority-list-floor", Static).update(
+                Text(floor_message(layout, table, len(DATA_COLUMNS)), style=COLOURS["dim"])
+            )
+            return
+
         has_prior = self._last_shape is not None
         selected_id = self._selected_row_id(table) if has_prior else None
 
-        title_width = self._title_width(table)
         table.clear(columns=True)
-        self._add_columns(table, title_width)
+        self._add_columns(table, layout)
 
         new_index = 0
         if has_prior and rows:
@@ -676,11 +769,43 @@ class LightcycleApp(App):
                 new_index = self._nearest_real_index(rows, clamped)
 
         for index, row in enumerate(rows):
-            table.add_row(*self._row_cells(row, cursor=index == new_index), height=None, key=row.id)
+            table.add_row(
+                *self._row_cells(row, cursor=index == new_index, stacked=layout.stacked),
+                height=None, key=row.id,
+            )
 
         self._selected_flat_index = new_index
         if rows:
             table.move_cursor(row=new_index)
+
+    def refresh_priority_layout(self) -> None:
+        table = self.query_one(PriorityTable)
+        if self._priority_empty or not self._last_priority_rows:
+            return
+        layout = self._priority_layout(table, self._last_priority_rows)
+        if bool(self._last_priority_rows) and layout.floor != self._priority_floor:
+            self._rebuild_table(table, self._last_priority_rows)
+            self._apply_view_visibility()
+            return
+        if layout.floor:
+            self.query_one("#priority-list-floor", Static).update(
+                Text(floor_message(layout, table, len(DATA_COLUMNS)), style=COLOURS["dim"])
+            )
+            return
+        if layout.stacked != self._priority_stacked:
+            self._rebuild_table(table, self._last_priority_rows)
+            return
+        title_width = _stacked_safe_width(
+            layout, row_budget_for(table, len(DATA_COLUMNS)), GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
+        )
+        widths = {
+            "id": layout.atomic_widths["id"],
+            "project": layout.atomic_widths["project"],
+            "step": layout.atomic_widths["step"],
+            "time": layout.atomic_widths["time"],
+            "title": title_width,
+        }
+        apply_widths(table, widths)
 
 
 def run(container):
