@@ -28,7 +28,11 @@ from lightcycle.adapters.tui.row_grid import (
     apply_widths,
     compute_layout,
     floor_message,
+    pad_field,
+    pad_field_right,
+    render_row_budget,
     row_budget_for,
+    stacked_cell,
 )
 from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
 from lightcycle.application.setup import upgrade
@@ -43,12 +47,9 @@ EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queu
 
 PICKER_CANCELLED = object()
 
-
-def _stacked_safe_width(layout, row_budget, glyph_total):
-    if not layout.stacked:
-        return layout.flexible_width
-    atomic_total = sum(layout.atomic_widths.values())
-    return max(1, row_budget - glyph_total - atomic_total)
+STACKED_COLUMN_KEY = "row"
+PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
+BACKLOG_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
 
 
 class TabStrip(Horizontal):
@@ -99,6 +100,9 @@ class PriorityTable(PagingTable):
         row_key = self.ordered_rows[row_index].key
         if row_key.value is None or is_gap_key(row_key.value):
             return
+        if getattr(self, "_stacked_mode", False):
+            _repaint_stacked_cursor(self, row_key, show)
+            return
         value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
         try:
             self.update_cell(row_key, "cursor", value)
@@ -127,6 +131,9 @@ class BacklogTable(PagingTable):
         if row_index < 0 or row_index >= len(self.ordered_rows):
             return
         row_key = self.ordered_rows[row_index].key
+        if getattr(self, "_stacked_mode", False):
+            _repaint_stacked_cursor(self, row_key, show)
+            return
         value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
         try:
             self.update_cell(row_key, "cursor", value)
@@ -134,11 +141,35 @@ class BacklogTable(PagingTable):
             pass
 
 
-def _backlog_row_cells(row, cursor=False, stacked=False):
+def _repaint_stacked_cursor(table, row_key, show) -> None:
+    variant_pair = getattr(table, "_stacked_variants", {}).get(row_key.value)
+    if variant_pair is None:
+        return
+    value = variant_pair[1] if show else variant_pair[0]
+    try:
+        table.update_cell(row_key, STACKED_COLUMN_KEY, value)
+    except CellDoesNotExist:
+        pass
+
+
+def _backlog_stacked_first_line(row, cursor, layout):
+    cursor_field = pad_field(
+        Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else Text(""),
+        GLYPH_WIDTHS["cursor"],
+    )
+    id_field = pad_field(row.id, layout.atomic_widths["id"])
+    project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else Text("")
+    project_field = pad_field(project_cell, layout.atomic_widths["project"])
+    return cursor_field + id_field + project_field
+
+
+def _backlog_row_cells(row, layout, row_budget, cursor=False):
+    if layout.stacked:
+        first_line = _backlog_stacked_first_line(row, cursor, layout)
+        return (stacked_cell(first_line, BACKLOG_CONTINUATION_INDENT, row.title, row_budget),)
     cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
     project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
-    title_cell = ("\n" + row.title) if stacked else row.title
-    return (cursor_cell, row.id, project_cell, title_cell)
+    return (cursor_cell, row.id, project_cell, row.title)
 
 
 class BacklogView(Vertical):
@@ -199,7 +230,7 @@ class BacklogView(Vertical):
             "project": [row.project for row in self._rows],
         }
         row_budget = row_budget_for(table, len(BACKLOG_COLUMNS))
-        indent = GLYPH_WIDTHS["cursor"]
+        indent = BACKLOG_CONTINUATION_INDENT
         return compute_layout(row_budget, ["cursor"], atomic_values, indent)
 
     def _rebuild_table(self, rows) -> None:
@@ -217,25 +248,33 @@ class BacklogView(Vertical):
         selected_id = self._selected_row_id(table)
 
         table.clear(columns=True)
-        title_width = _stacked_safe_width(
-            layout, row_budget_for(table, len(BACKLOG_COLUMNS)), GLYPH_WIDTHS["cursor"]
-        )
-        widths = {
-            "cursor": GLYPH_WIDTHS["cursor"],
-            "id": layout.atomic_widths["id"],
-            "project": layout.atomic_widths["project"],
-            "title": title_width,
-        }
-        for key in BACKLOG_COLUMNS:
-            table.add_column(key, width=widths[key], key=key)
+        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+        else:
+            widths = {
+                "cursor": GLYPH_WIDTHS["cursor"],
+                "id": layout.atomic_widths["id"],
+                "project": layout.atomic_widths["project"],
+                "title": layout.flexible_width,
+            }
+            for key in BACKLOG_COLUMNS:
+                table.add_column(key, width=widths[key], key=key)
 
         ids = [row.id for row in rows]
         new_index = ids.index(selected_id) if selected_id in ids else 0
+        table._stacked_mode = layout.stacked
+        variants = {}
         for index, row in enumerate(rows):
-            table.add_row(
-                *_backlog_row_cells(row, cursor=index == new_index, stacked=layout.stacked),
-                height=None, key=row.id,
-            )
+            is_cursor = index == new_index
+            cells = _backlog_row_cells(row, layout, row_budget, cursor=is_cursor)
+            if layout.stacked:
+                variants[row.id] = (
+                    _backlog_row_cells(row, layout, row_budget, cursor=False)[0],
+                    _backlog_row_cells(row, layout, row_budget, cursor=True)[0],
+                )
+            table.add_row(*cells, height=None, key=row.id)
+        table._stacked_variants = variants
         if rows:
             table.move_cursor(row=new_index)
 
@@ -672,13 +711,12 @@ class LightcycleApp(App):
             "time": [row.time for row in real_rows],
         }
         row_budget = row_budget_for(table, len(DATA_COLUMNS)) if table.size.width else None
-        indent = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
-        return compute_layout(row_budget, ["cursor", "icon"], atomic_values, indent)
+        return compute_layout(row_budget, ["cursor", "icon"], atomic_values, PRIORITY_CONTINUATION_INDENT)
 
-    def _add_columns(self, table, layout) -> None:
-        title_width = _stacked_safe_width(
-            layout, row_budget_for(table, len(DATA_COLUMNS)), GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
-        )
+    def _add_columns(self, table, layout, row_budget) -> None:
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+            return
         widths = {
             "cursor": GLYPH_WIDTHS["cursor"],
             "icon": GLYPH_WIDTHS["icon"],
@@ -686,12 +724,39 @@ class LightcycleApp(App):
             "project": layout.atomic_widths["project"],
             "step": layout.atomic_widths["step"],
             "time": layout.atomic_widths["time"],
-            "title": title_width,
+            "title": layout.flexible_width,
         }
         for key in DATA_COLUMNS:
             table.add_column(key, width=widths[key], key=key)
 
-    def _row_cells(self, row, cursor=False, stacked=False):
+    def _stacked_first_line(self, row, cursor, layout, row_budget):
+        cursor_field = pad_field(
+            Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else Text(""),
+            GLYPH_WIDTHS["cursor"],
+        )
+        icon_cell = Text(row.icon, style=COLOURS[row.icon_colour])
+        if row.dependency_icon:
+            icon_cell = icon_cell + Text(
+                row.dependency_icon, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
+            )
+        icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
+        id_field = pad_field(row.id, layout.atomic_widths["id"])
+        project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else Text("")
+        project_field = pad_field(project_cell, layout.atomic_widths["project"])
+        step_field = pad_field(
+            Text(row.step, style=COLOURS[row.step_colour]), layout.atomic_widths["step"]
+        )
+        content_so_far = cursor_field + icon_field + id_field + project_field + step_field
+        time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else Text("")
+        time_area = max(0, row_budget - len(content_so_far.plain))
+        return content_so_far + pad_field_right(time_cell, time_area)
+
+    def _row_cells(self, row, layout, row_budget, cursor=False):
+        if layout.stacked:
+            if row.group == "gap":
+                return (Text(""),)
+            first_line = self._stacked_first_line(row, cursor, layout, row_budget)
+            return (stacked_cell(first_line, PRIORITY_CONTINUATION_INDENT, row.title, row_budget),)
         if row.group == "gap":
             return ("", "", "", "", "", "", "")
         cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
@@ -703,14 +768,19 @@ class LightcycleApp(App):
         step_cell = Text(row.step, style=COLOURS[row.step_colour])
         project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
-        title_cell = ("\n" + row.title) if stacked else row.title
-        return (cursor_cell, icon_cell, row.id, project_cell, title_cell, step_cell, time_cell)
+        return (cursor_cell, icon_cell, row.id, project_cell, row.title, step_cell, time_cell)
 
     def _update_cells(self, table, rows) -> None:
+        layout = self._priority_layout(table, rows)
+        row_budget = render_row_budget(table, layout, len(DATA_COLUMNS))
         for row in rows:
             if row.group == "gap":
                 continue
-            for key, value in zip(DATA_COLUMNS, self._row_cells(row, stacked=self._priority_stacked)):
+            cells = self._row_cells(row, layout, row_budget, cursor=False)
+            if layout.stacked:
+                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                continue
+            for key, value in zip(DATA_COLUMNS, cells):
                 if key == "cursor":
                     continue
                 table.update_cell(row.id, key, value)
@@ -757,7 +827,8 @@ class LightcycleApp(App):
         selected_id = self._selected_row_id(table) if has_prior else None
 
         table.clear(columns=True)
-        self._add_columns(table, layout)
+        row_budget = render_row_budget(table, layout, len(DATA_COLUMNS))
+        self._add_columns(table, layout, row_budget)
 
         new_index = 0
         if has_prior and rows:
@@ -768,11 +839,18 @@ class LightcycleApp(App):
                 clamped = min(max(self._selected_flat_index, 0), len(rows) - 1)
                 new_index = self._nearest_real_index(rows, clamped)
 
+        table._stacked_mode = layout.stacked
+        variants = {}
         for index, row in enumerate(rows):
-            table.add_row(
-                *self._row_cells(row, cursor=index == new_index, stacked=layout.stacked),
-                height=None, key=row.id,
-            )
+            is_cursor = index == new_index
+            cells = self._row_cells(row, layout, row_budget, cursor=is_cursor)
+            if layout.stacked and row.group != "gap":
+                variants[row.id] = (
+                    self._row_cells(row, layout, row_budget, cursor=False)[0],
+                    self._row_cells(row, layout, row_budget, cursor=True)[0],
+                )
+            table.add_row(*cells, height=None, key=row.id)
+        table._stacked_variants = variants
 
         self._selected_flat_index = new_index
         if rows:
@@ -792,18 +870,15 @@ class LightcycleApp(App):
                 Text(floor_message(layout, table, len(DATA_COLUMNS)), style=COLOURS["dim"])
             )
             return
-        if layout.stacked != self._priority_stacked:
+        if layout.stacked or layout.stacked != self._priority_stacked:
             self._rebuild_table(table, self._last_priority_rows)
             return
-        title_width = _stacked_safe_width(
-            layout, row_budget_for(table, len(DATA_COLUMNS)), GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
-        )
         widths = {
             "id": layout.atomic_widths["id"],
             "project": layout.atomic_widths["project"],
             "step": layout.atomic_widths["step"],
             "time": layout.atomic_widths["time"],
-            "title": title_width,
+            "title": layout.flexible_width,
         }
         apply_widths(table, widths)
 

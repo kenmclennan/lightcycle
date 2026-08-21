@@ -107,7 +107,6 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the id column is already wide enough for that off-screen id, before it is scrolled into view
 
-  @wip
   Scenario Outline: When a row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width and spanning the row without wrapping mid-word
     Given a row whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When I launch the dashboard

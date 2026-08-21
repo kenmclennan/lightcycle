@@ -8,6 +8,7 @@ from textual.widgets import DataTable
 from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
 from lightcycle.adapters.tui.priority_list import is_gap_key
+from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -100,10 +101,15 @@ class Clock:
 BASE_TIME = datetime.datetime(2026, 1, 1, 12, 0, 0)
 
 
+DEFAULT_SIZE = (120, 24)
+
+
 def _launch(ctx):
     store = ctx.get("store") or FakeStore()
     now = ctx["clock"].now if "clock" in ctx else None
-    ctx["session"] = launch(make_test_container(store=store), now=now, size=ctx.get("size"))
+    ctx["session"] = launch(
+        make_test_container(store=store), now=now, size=ctx.get("size") or DEFAULT_SIZE
+    )
 
 
 def _rendered_cell_text_at(table, strip, column_key):
@@ -380,20 +386,47 @@ def _g_more_than_screen_with_deep_long_id(ctx):
     ctx["store"] = store
 
 
-@given("a row whose atomic and glyph columns leave less than the flexible minimum for the title")
-def _g_row_forces_stacked(ctx):
-    clock = Clock(BASE_TIME - datetime.timedelta(minutes=14))
+_STACK_ID = "LC-290.1.90"
+_STACK_PROJECT = "lightcycle"
+_STACK_STEP = "code-review-rounds"
+_STACK_TIME_MINUTES = 14
+_STACK_TIME_TEXT = "14m"
+_STACK_TITLE = "A title long enough to need a continuation line for real"
+_PRIORITY_NUM_COLUMNS = 7
+
+
+def _priority_stack_terminal_width(mode):
+    glyph_total = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
+    atomic_values = {
+        "id": [_STACK_ID],
+        "project": [_STACK_PROJECT],
+        "step": [_STACK_STEP],
+        "time": [_STACK_TIME_TEXT],
+    }
+    atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
+    first_line_width = glyph_total + atomic_total
+    floor_width = max(first_line_width, glyph_total + FLEXIBLE_MINIMUM)
+    breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
+    row_budget = floor_width if mode == "just wide enough to clear the floor" else breakpoint_width - 1
+    return row_budget + 2 + 2 * _PRIORITY_NUM_COLUMNS
+
+
+@given(parsers.parse(
+    "a row whose atomic and glyph columns leave less than the flexible minimum for the title, "
+    "on a terminal {mode}"
+))
+def _g_row_forces_stacked(ctx, mode):
+    clock = Clock(BASE_TIME - datetime.timedelta(minutes=_STACK_TIME_MINUTES))
     store = FakeStore(now=lambda: clock.now().isoformat())
-    tid = store.create_step(
-        "A title long enough to need a continuation line for real", step="build", role="coder"
-    )
+    tid = store.create_step(_STACK_TITLE, step=_STACK_STEP, role="coder", id=_STACK_ID)
+    store.add_artifact(tid, "repo", _STACK_PROJECT)
     store.assign(tid, "worker-1")
     store.update_state(tid, State.IN_PROGRESS)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
     ctx["target_id"] = tid
-    ctx["size"] = (50, 24)
+    ctx["size"] = (_priority_stack_terminal_width(mode), 24)
 
 
 @given("the dashboard has launched with a selected queued step")
@@ -742,35 +775,56 @@ def _t_id_column_wide_enough_offscreen(ctx):
     assert table.columns.get("id").width >= len(ctx["long_id"])
 
 
+def _stacked_cell_text(table, strip):
+    pad = table.cell_padding
+    column = table.ordered_columns[0]
+    start = pad
+    end = start + column.width
+    return "".join(segment.text for segment in strip.crop(start, end))
+
+
 @then(
-    "the cursor, icon, id, project and step remain on the row's first line, with time "
-    "right-aligned alongside them"
+    "the cursor, icon, id, project and step remain on the row's first line, each padded to "
+    "its atomic width, with time right-aligned alongside them"
 )
 def _t_stacked_first_line(ctx):
     session = ctx["session"]
     table = session.app.query_one(DataTable)
     lines = _row_lines(session, ctx["target_id"])
     assert len(lines) > 1
-    first = lines[0]
-    assert _rendered_cell_text_at(table, first, "id").strip() == ctx["target_id"]
-    assert _rendered_cell_text_at(table, first, "step").strip() == "build"
-    assert _rendered_cell_text_at(table, first, "time").strip() == "14m"
-    assert _rendered_cell_text_at(table, first, "title").strip() == ""
+    content = _stacked_cell_text(table, lines[0])
+    rest = content[GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]:]
+    assert rest.startswith(_STACK_ID)
+    rest = rest[len(_STACK_ID):]
+    assert rest.startswith(_STACK_PROJECT)
+    rest = rest[len(_STACK_PROJECT):]
+    assert rest.startswith(_STACK_STEP)
+    assert content.endswith(_STACK_TIME_TEXT)
 
 
-@then("the title appears on a continuation line indented to where it starts in the unstacked grid")
-def _t_stacked_continuation(ctx):
+@then(parsers.parse(
+    "the title appears on a continuation line indented {indent:d} characters - the row's "
+    "glyph width, not where the title column starts in the unstacked grid"
+))
+def _t_stacked_continuation(ctx, indent):
     session = ctx["session"]
     table = session.app.query_one(DataTable)
     lines = _row_lines(session, ctx["target_id"])
     assert len(lines) > 1
-    second = lines[1]
-    assert _rendered_cell_text_at(table, second, "title").strip() != ""
-    for column in ("id", "project", "step", "time"):
-        assert _rendered_cell_text_at(table, second, column).strip() == ""
-    continuation = "".join(_rendered_cell_text_at(table, line, "title") for line in lines[1:])
-    expected = "A title long enough to need a continuation line for real"
-    assert "".join(continuation.split()) == "".join(expected.split())
+    words = []
+    for line in lines[1:]:
+        text = _stacked_cell_text(table, line)
+        stripped = text.rstrip()
+        leading = len(stripped) - len(stripped.lstrip(" "))
+        assert leading == indent
+        words.extend(stripped.strip().split())
+    assert words == _STACK_TITLE.split()
+    ctx["_continuation_words"] = words
+
+
+@then("no fragment of the title's prose is split mid-word")
+def _t_no_mid_word_split(ctx):
+    assert ctx["_continuation_words"] == _STACK_TITLE.split()
 
 
 @then("the terminal bell has rung once")

@@ -8,6 +8,7 @@ from lightcycle.adapters.tui.app import (
     ProjectFilterPicker,
     ShortcutBar,
 )
+from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -136,14 +137,33 @@ def _backlog_shown_two_colliding_ids(ctx, id_a, id_b):
     _launch_and_switch(ctx, store)
 
 
-@given("a backlog row whose atomic and glyph columns leave less than the flexible minimum for the title")
-def _backlog_row_forces_stacked(ctx):
+_STACK_ID = "LC-1234.10"
+_STACK_PROJECT = "lightcycle"
+_STACK_TITLE = "A title long enough to need a continuation line for real"
+_BACKLOG_NUM_COLUMNS = 4
+
+
+def _backlog_stack_terminal_width(mode):
+    glyph_total = GLYPH_WIDTHS["cursor"]
+    atomic_values = {"id": [_STACK_ID], "project": [_STACK_PROJECT]}
+    atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
+    first_line_width = glyph_total + atomic_total
+    floor_width = max(first_line_width, glyph_total + FLEXIBLE_MINIMUM)
+    breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
+    row_budget = floor_width if mode == "just wide enough to clear the floor" else breakpoint_width - 1
+    return row_budget + 2 + 2 * _BACKLOG_NUM_COLUMNS
+
+
+@given(parsers.parse(
+    "a backlog row whose atomic and glyph columns leave less than the flexible minimum for the "
+    "title, on a terminal {mode}"
+))
+def _backlog_row_forces_stacked(ctx, mode):
     store = FakeStore()
-    item = store.create_item(
-        "A title long enough to need a continuation line for real", id="LC-1234.10"
-    )
+    item = store.create_item(_STACK_TITLE, id=_STACK_ID)
+    store.add_artifact(item, "repo", _STACK_PROJECT)
     ctx["item_id"] = item
-    _launch_and_switch(ctx, store, size=(40, 24))
+    _launch_and_switch(ctx, store, size=(_backlog_stack_terminal_width(mode), 24))
 
 
 @given("the dashboard has launched")
@@ -393,30 +413,48 @@ def _rows_ids_distinguishable(ctx):
     assert text_a != text_b
 
 
-@then("the cursor, id and project remain on the row's first line")
+def _stacked_cell_text(table, strip):
+    pad = table.cell_padding
+    column = table.ordered_columns[0]
+    start = pad
+    end = start + column.width
+    return "".join(segment.text for segment in strip.crop(start, end))
+
+
+@then("the cursor, id and project remain on the row's first line, each padded to its atomic width")
 def _backlog_stacked_first_line(ctx):
     table = ctx["session"].app.query_one(BacklogTable)
     lines = _row_lines(table, ctx["item_id"])
     assert len(lines) > 1
-    first = lines[0]
-    assert _rendered_cell_text_at(table, first, "id").strip() == ctx["item_id"]
-    assert _rendered_cell_text_at(table, first, "title").strip() == ""
+    content = _stacked_cell_text(table, lines[0])
+    rest = content[GLYPH_WIDTHS["cursor"]:]
+    assert rest.startswith(_STACK_ID)
+    rest = rest[len(_STACK_ID):]
+    assert rest.startswith(_STACK_PROJECT)
 
 
-@then(
-    "the title appears on a continuation line indented to where it starts in the unstacked grid"
-)
-def _backlog_stacked_continuation(ctx):
+@then(parsers.parse(
+    "the title appears on a continuation line indented {indent:d} characters - the row's "
+    "glyph width, not where the title column starts in the unstacked grid"
+))
+def _backlog_stacked_continuation(ctx, indent):
     table = ctx["session"].app.query_one(BacklogTable)
     lines = _row_lines(table, ctx["item_id"])
     assert len(lines) > 1
-    second = lines[1]
-    assert _rendered_cell_text_at(table, second, "title").strip() != ""
-    for column in ("id", "project"):
-        assert _rendered_cell_text_at(table, second, column).strip() == ""
-    continuation = "".join(_rendered_cell_text_at(table, line, "title") for line in lines[1:])
-    expected = "A title long enough to need a continuation line for real"
-    assert "".join(continuation.split()) == "".join(expected.split())
+    words = []
+    for line in lines[1:]:
+        text = _stacked_cell_text(table, line)
+        stripped = text.rstrip()
+        leading = len(stripped) - len(stripped.lstrip(" "))
+        assert leading == indent
+        words.extend(stripped.strip().split())
+    assert words == _STACK_TITLE.split()
+    ctx["_continuation_words"] = words
+
+
+@then("no fragment of the title's prose is split mid-word")
+def _backlog_no_mid_word_split(ctx):
+    assert ctx["_continuation_words"] == _STACK_TITLE.split()
 
 
 @then("the backlog is shown in place of the priority list")

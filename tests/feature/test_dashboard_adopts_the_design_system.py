@@ -37,7 +37,7 @@ def ctx():
 def _launch(ctx):
     store = ctx.get("store") or FakeStore()
     container = make_test_container(store=store)
-    ctx["session"] = launch(container)
+    ctx["session"] = launch(container, size=(120, 24))
 
 
 def _widget_rendered_text(ctx, widget):

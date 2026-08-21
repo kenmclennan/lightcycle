@@ -27,7 +27,6 @@ Feature: The Artifacts tab
     When I open its Artifacts tab
     Then that artifact is shown labeled by its full type "code-review-findings"
 
-  @wip
   Scenario Outline: When an artifact row cannot fit unstacked, the value moves to a continuation line indented 2 characters and spanning the row without wrapping mid-word
     Given an artifact row whose type and the flexible minimum for value together exceed the row budget, on a terminal <at a width>
     When I open its Artifacts tab

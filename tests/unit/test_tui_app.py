@@ -139,7 +139,7 @@ class TestDashboardScaffold(unittest.TestCase):
 
 class TestNeedsAttentionGroup(unittest.TestCase):
     def _launch(self, store):
-        session = launch(make_test_container(store=store))
+        session = launch(make_test_container(store=store), size=(120, 24))
         self.addCleanup(session.close)
         return session
 
@@ -242,7 +242,7 @@ class TestActiveGroup(unittest.TestCase):
 
 class TestQueuedGroup(unittest.TestCase):
     def _launch(self, store):
-        session = launch(make_test_container(store=store))
+        session = launch(make_test_container(store=store), size=(120, 24))
         self.addCleanup(session.close)
         return session
 
