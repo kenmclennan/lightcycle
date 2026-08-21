@@ -25,20 +25,20 @@ class TestFooterGlyphs(unittest.TestCase):
         self.assertEqual(FOOTER_GLYPHS["upgrade-available"], ("⬆", "amber"))
 
 
-class TestColumnGridWidths(unittest.TestCase):
-    def test_priority_list_grid_widths(self):
+class TestColumnGridOrder(unittest.TestCase):
+    def test_priority_list_grid_order(self):
         self.assertEqual(
             COLUMN_GRIDS["priority-list"],
-            (
-                ("cursor", "2ch"), ("icon", "4ch"), ("id", "9ch"), ("project", "10ch"),
-                ("title", "1fr"), ("step", "16ch"), ("time", "8ch"),
-            ),
+            ("cursor", "icon", "id", "project", "title", "step", "time"),
         )
 
-    def test_backlog_grid_widths(self):
+    def test_backlog_grid_order(self):
+        self.assertEqual(COLUMN_GRIDS["backlog"], ("cursor", "id", "project", "title"))
+
+    def test_hierarchy_grid_order(self):
         self.assertEqual(
-            COLUMN_GRIDS["backlog"],
-            (
-                ("cursor", "2ch"), ("id", "9ch"), ("project", "10ch"), ("title", "1fr"),
-            ),
+            COLUMN_GRIDS["hierarchy"], ("icon", "content", "id", "title", "role")
         )
+
+    def test_artifacts_grid_order(self):
+        self.assertEqual(COLUMN_GRIDS["artifacts"], ("type", "value"))

@@ -94,6 +94,10 @@ class TuiSession:
         self.run(self.app._refresh)
         self.pause()
 
+    def resize(self, width, height):
+        self._run(self.pilot.resize_terminal(width, height))
+        self.pause()
+
     def close(self):
         self._run(self._run_test_cm.__aexit__(None, None, None))
         self._loop.close()

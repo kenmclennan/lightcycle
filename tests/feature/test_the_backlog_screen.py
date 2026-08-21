@@ -23,15 +23,41 @@ def ctx():
         session.close()
 
 
-def _launch_and_switch(ctx, store):
+def _launch_and_switch(ctx, store, size=None):
     ctx["store"] = store
-    ctx["session"] = launch(make_test_container(store=store))
+    ctx["session"] = launch(make_test_container(store=store), size=size)
     ctx["session"].press("tab")
 
 
 def _rendered_text(widget):
     strip = widget.render_line(0)
     return "".join(segment.text for segment in strip)
+
+
+def _rendered_cell_text_at(table, strip, column_key):
+    pad = table.cell_padding
+    offset = 0
+    for column in table.ordered_columns:
+        start = offset + pad
+        end = start + column.width
+        if column.key.value == column_key:
+            return "".join(segment.text for segment in strip.crop(start, end))
+        offset = end + pad
+    raise AssertionError("column %r not found" % column_key)
+
+
+def _row_lines(table, row_id):
+    y = 0
+    target = None
+    height = 1
+    for r in table.ordered_rows:
+        if r.key.value == row_id:
+            target = y
+            height = r.height
+            break
+        y += r.height
+    assert target is not None
+    return [table.render_line(target + i) for i in range(height)]
 
 
 def _colour_of(style):
@@ -92,6 +118,32 @@ def _backlog_shown_unscoped_item(ctx):
     item = store.create_item("unscoped item")
     ctx["item_id"] = item
     _launch_and_switch(ctx, store)
+
+
+@given(parsers.parse('the backlog is shown with a todo item with id "{id}" ({source})'))
+def _backlog_shown_item_with_id(ctx, id, source):
+    store = FakeStore()
+    item = store.create_item("todo item", id=id)
+    ctx["item_id"] = item
+    _launch_and_switch(ctx, store)
+
+
+@given(parsers.parse('the backlog is shown with two todo items whose ids are "{id_a}" and "{id_b}"'))
+def _backlog_shown_two_colliding_ids(ctx, id_a, id_b):
+    store = FakeStore()
+    ctx["id_a"] = store.create_item("todo a", id=id_a)
+    ctx["id_b"] = store.create_item("todo b", id=id_b)
+    _launch_and_switch(ctx, store)
+
+
+@given("a backlog row whose atomic and glyph columns leave less than the flexible minimum for the title")
+def _backlog_row_forces_stacked(ctx):
+    store = FakeStore()
+    item = store.create_item(
+        "A title long enough to need a continuation line for real", id="LC-1234.10"
+    )
+    ctx["item_id"] = item
+    _launch_and_switch(ctx, store, size=(40, 24))
 
 
 @given("the dashboard has launched")
@@ -307,6 +359,64 @@ def _row_blank_project(ctx):
     cell = table.get_cell(ctx["item_id"], "project")
     text = cell.plain if hasattr(cell, "plain") else cell
     assert text == ""
+
+
+@then(parsers.parse('that item\'s row shows "{id}" as its id, in full, on one line'))
+def _row_shows_id_in_full(ctx, id):
+    table = ctx["session"].app.query_one(BacklogTable)
+    row = next(r for r in table.ordered_rows if r.key.value == ctx["item_id"])
+    assert row.height == 1
+    lines = _row_lines(table, ctx["item_id"])
+    text = _rendered_cell_text_at(table, lines[0], "id")
+    assert text.strip() == id
+
+
+@then("both ids are shown in full")
+def _both_ids_shown_in_full(ctx):
+    table = ctx["session"].app.query_one(BacklogTable)
+    for key in ("id_a", "id_b"):
+        row_id = ctx[key]
+        row = next(r for r in table.ordered_rows if r.key.value == row_id)
+        assert row.height == 1
+        lines = _row_lines(table, row_id)
+        text = _rendered_cell_text_at(table, lines[0], "id")
+        assert text.strip() == row_id
+
+
+@then("the two rows' ids are distinguishable from each other")
+def _rows_ids_distinguishable(ctx):
+    table = ctx["session"].app.query_one(BacklogTable)
+    lines_a = _row_lines(table, ctx["id_a"])
+    lines_b = _row_lines(table, ctx["id_b"])
+    text_a = _rendered_cell_text_at(table, lines_a[0], "id").strip()
+    text_b = _rendered_cell_text_at(table, lines_b[0], "id").strip()
+    assert text_a != text_b
+
+
+@then("the cursor, id and project remain on the row's first line")
+def _backlog_stacked_first_line(ctx):
+    table = ctx["session"].app.query_one(BacklogTable)
+    lines = _row_lines(table, ctx["item_id"])
+    assert len(lines) > 1
+    first = lines[0]
+    assert _rendered_cell_text_at(table, first, "id").strip() == ctx["item_id"]
+    assert _rendered_cell_text_at(table, first, "title").strip() == ""
+
+
+@then(
+    "the title appears on a continuation line indented to where it starts in the unstacked grid"
+)
+def _backlog_stacked_continuation(ctx):
+    table = ctx["session"].app.query_one(BacklogTable)
+    lines = _row_lines(table, ctx["item_id"])
+    assert len(lines) > 1
+    second = lines[1]
+    assert _rendered_cell_text_at(table, second, "title").strip() != ""
+    for column in ("id", "project"):
+        assert _rendered_cell_text_at(table, second, column).strip() == ""
+    continuation = "".join(_rendered_cell_text_at(table, line, "title") for line in lines[1:])
+    expected = "A title long enough to need a continuation line for real"
+    assert "".join(continuation.split()) == "".join(expected.split())
 
 
 @then("the backlog is shown in place of the priority list")

@@ -22,13 +22,11 @@ Feature: The Artifacts tab
     Then only the non-internal artifact is shown
     And the internal artifact does not appear
 
-  @wip
   Scenario: The type column widens to fit a type name longer than its historical fixed width, without truncating it
     Given a node has an artifact of type "code-review-findings"
     When I open its Artifacts tab
     Then that artifact is shown labeled by its full type "code-review-findings"
 
-  @wip
   Scenario: When an artifact row cannot fit unstacked, the value moves to an indented continuation line beneath the type
     Given an artifact row whose type and the flexible minimum for value together exceed the row budget
     When I open its Artifacts tab

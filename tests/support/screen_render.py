@@ -107,6 +107,47 @@ def _backlog_store():
     return store
 
 
+STACKED_TITLE = "A title long enough to need a continuation line for real"
+
+
+def _stacked_priority_store():
+    from lightcycle.domain.work import State
+
+    store = DemoStore(now=lambda: _at(14))
+    step = store.step(
+        "LC-3900.100.100", STACKED_TITLE, step="handle-feedback", role="handle-feedback",
+    )
+    store.assign(step, "worker-1")
+    store.update_state(step, State.IN_PROGRESS)
+    return store
+
+
+def _stacked_backlog_store():
+    store = DemoStore()
+    store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
+    return store
+
+
+def _stacked_hierarchy_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-290.1", LONG_ITEM_TITLE, project="lightcycle")
+    step = store.step(
+        "LC-290.1.86", STACKED_TITLE, step="implement-features", role="implement-features",
+        parent=item,
+    )
+    return store, item, step
+
+
+def _stacked_artifacts_store():
+    store = DemoStore()
+    item = store.item("LC-45", "Lightcycle trend audit", project="lightcycle")
+    store.add_artifact(
+        item, "code-review-findings-and-remediation-plan-notes",
+        "feat/LC-290.1-code-3-deliver-the-operator",
+    )
+    return store, item
+
+
 LONG_ITEM_TITLE = "Deliver the operator-monitors-the-pipeline Blueprint"
 LONG_THEME_TITLE = "Operator monitors the pipeline - deliver the node hub and tabs"
 
@@ -187,8 +228,18 @@ def _priority_claude_unavailable(size):
     return _launch(store, breaker_open=True, size=size)
 
 
+def _priority_stacked(size):
+    return _launch(_stacked_priority_store(), size=size)
+
+
 def _backlog_normal(size):
     session = _launch(_backlog_store(), size=size)
+    session.press("tab")
+    return session
+
+
+def _backlog_stacked(size):
+    session = _launch(_stacked_backlog_store(), size=size)
     session.press("tab")
     return session
 
@@ -225,6 +276,11 @@ def _backlog_claude_unavailable(size):
 def _hub_hierarchy(size):
     store, _theme, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="hierarchy")
+
+
+def _hub_hierarchy_stacked(size):
+    store, item, _step = _stacked_hierarchy_store()
+    return _open_hub(_launch(store, size=size), item, tab="hierarchy")
 
 
 _LOG_PATH = "/fake/logs/worker-write-code.log"
@@ -265,6 +321,11 @@ def _hub_log_finished(size):
 def _hub_artifacts(size):
     store, _theme, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="artifacts")
+
+
+def _hub_artifacts_stacked(size):
+    store, item = _stacked_artifacts_store()
+    return _open_hub(_launch(store, size=size), item, tab="artifacts")
 
 
 FINDINGS_TEXT = (
@@ -369,15 +430,19 @@ SCREENS = {
     "priority-list#normal": _priority_normal,
     "priority-list#empty": _priority_empty,
     "priority-list#claude-unavailable": _priority_claude_unavailable,
+    "priority-list#stacked": _priority_stacked,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,
     "backlog#picker-open": _backlog_picker_open,
     "backlog#claude-unavailable": _backlog_claude_unavailable,
+    "backlog#stacked": _backlog_stacked,
     "hub#hierarchy": _hub_hierarchy,
+    "hub#hierarchy-stacked": _hub_hierarchy_stacked,
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
     "hub#artifacts": _hub_artifacts,
+    "hub#artifacts-stacked": _hub_artifacts_stacked,
     "artifact-viewer#text": _artifact_viewer_text,
     "artifact-viewer#list": _artifact_viewer_list,
     "artifact-viewer#url-toast": _artifact_viewer_url_toast,

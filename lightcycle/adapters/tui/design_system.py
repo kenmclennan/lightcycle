@@ -37,19 +37,10 @@ FOOTER_GLYPHS = {
 CURSOR_GLYPH = Glyph("❯", "cyan")
 
 COLUMN_GRIDS = {
-    "priority-list": (
-        ("cursor", "2ch"), ("icon", "4ch"), ("id", "9ch"), ("project", "10ch"),
-        ("title", "1fr"), ("step", "16ch"), ("time", "8ch"),
-    ),
-    "backlog": (
-        ("cursor", "2ch"), ("id", "9ch"), ("project", "10ch"), ("title", "1fr"),
-    ),
-    "hierarchy": (
-        ("icon", "4ch"), ("content", "2ch"), ("id", "13ch"), ("title", "1fr"), ("role", "14ch"),
-    ),
-    "artifacts": (
-        ("type", "10ch"), ("value", "1fr"),
-    ),
+    "priority-list": ("cursor", "icon", "id", "project", "title", "step", "time"),
+    "backlog": ("cursor", "id", "project", "title"),
+    "hierarchy": ("icon", "content", "id", "title", "role"),
+    "artifacts": ("type", "value"),
 }
 
 GLOBAL_SHORTCUTS = (

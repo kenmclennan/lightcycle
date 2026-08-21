@@ -1,6 +1,6 @@
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
 from lightcycle.adapters.tui.app import DashboardFooter, ShortcutBar, StatusBar, TabStrip
 from lightcycle.adapters.tui.design_system import (
@@ -10,6 +10,14 @@ from lightcycle.adapters.tui.design_system import (
     FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
     STATE_GLYPHS,
+)
+from lightcycle.adapters.tui.hub import NodeHubScreen
+from lightcycle.adapters.tui.row_grid import (
+    FLEXIBLE_MINIMUM,
+    GLYPH_WIDTHS,
+    atomic_column_width,
+    column_kind,
+    compute_layout,
 )
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -30,6 +38,76 @@ def _launch(ctx):
     store = ctx.get("store") or FakeStore()
     container = make_test_container(store=store)
     ctx["session"] = launch(container)
+
+
+def _widget_rendered_text(ctx, widget):
+    lines = []
+    compositor = ctx["session"].app.screen._compositor
+    strips = compositor.render_strips()
+    start, end = widget.region.x, widget.region.x + widget.region.width
+    for y in range(widget.region.y, widget.region.y + widget.region.height):
+        lines.append("".join(segment.text for segment in strips[y].crop(start, end)))
+    return lines
+
+
+def _open_priority_list(ctx):
+    store = FakeStore()
+    long_id = "P" * 48
+    store.create_step(long_id, step="build", role="coder", id=long_id)
+    ctx["store"] = store
+    ctx["session"] = launch(make_test_container(store=store))
+    ctx["floor_widget_id"] = "#priority-list-floor"
+
+
+def _open_backlog(ctx):
+    store = FakeStore()
+    long_id = "B" * 68
+    store.create_item("An item", id=long_id)
+    ctx["store"] = store
+    ctx["session"] = launch(make_test_container(store=store))
+    ctx["session"].press("tab")
+    ctx["floor_widget_id"] = "#backlog-floor"
+
+
+def _open_hierarchy_tab(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    long_id = "H" * 50
+    store.create_step("s", step="build", role="coder", parent=item, id=long_id)
+    ctx["store"] = store
+    session = launch(make_test_container(store=store))
+    ctx["session"] = session
+    session.run(
+        lambda: session.app.push_screen(NodeHubScreen(session.app.container, item, session.app._now))
+    )
+    session.pause()
+    ctx["floor_widget_id"] = "#hierarchy-floor"
+
+
+def _open_artifacts_tab(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    long_type = "A" * 69
+    store.add_artifact(item, long_type, "value")
+    ctx["store"] = store
+    session = launch(make_test_container(store=store))
+    ctx["session"] = session
+    session.run(
+        lambda: session.app.push_screen(
+            NodeHubScreen(session.app.container, item, session.app._now, initial_tab="artifacts")
+        )
+    )
+    session.pause()
+    session.pause()
+    ctx["floor_widget_id"] = "#artifacts-floor"
+
+
+_FLOOR_SCREEN_SETUP = {
+    "Priority List": _open_priority_list,
+    "Backlog": _open_backlog,
+    "Hierarchy tab": _open_hierarchy_tab,
+    "Artifacts tab": _open_artifacts_tab,
+}
 
 
 @given("the lightcycle store is reachable")
@@ -65,6 +143,16 @@ def _column_grids(ctx):
 @given("the shared footer status vocabulary")
 def _footer_status_vocabulary(ctx):
     pass
+
+
+@given("the shared row-grid sizing rule")
+def _row_grid_sizing_rule(ctx):
+    pass
+
+
+@given(parsers.parse("the {screen} is open"))
+def _floor_screen_open(ctx, screen):
+    _FLOOR_SCREEN_SETUP[screen](ctx)
 
 
 @when("I launch the dashboard")
@@ -116,12 +204,17 @@ def _lookup_dependency_blocked_glyph(ctx):
 
 @when("the priority list's column order is read")
 def _read_priority_list_columns(ctx):
-    ctx["columns"] = tuple(name for name, width in COLUMN_GRIDS["priority-list"])
+    ctx["columns"] = tuple(COLUMN_GRIDS["priority-list"])
 
 
 @when("the backlog's column order is read")
 def _read_backlog_columns(ctx):
-    ctx["columns"] = tuple(name for name, width in COLUMN_GRIDS["backlog"])
+    ctx["columns"] = tuple(COLUMN_GRIDS["backlog"])
+
+
+@when("the terminal is narrower than the grid's floor width")
+def _terminal_narrower_than_floor(ctx):
+    ctx["session"].resize(72, 24)
 
 
 @then("the screen is framed on all four edges by a solid border in the border colour")
@@ -282,3 +375,69 @@ def _priority_list_column_order(ctx):
 @then("it is cursor, id, project, title")
 def _backlog_column_order(ctx):
     assert ctx["columns"] == ("cursor", "id", "project", "title")
+
+
+@when(parsers.parse('the "{column}" column\'s kind is looked up'))
+def _lookup_column_kind(ctx, column):
+    ctx["kind"] = column_kind(column)
+
+
+@then(parsers.parse("its kind is {kind}"))
+def _kind_is(ctx, kind):
+    assert ctx["kind"] == kind
+
+
+@then(parsers.parse("the {column} column's width is fixed at {width:d} characters"))
+def _glyph_width_fixed(ctx, column, width):
+    assert GLYPH_WIDTHS[column] == width
+
+
+@then(
+    "an atomic column's width is recomputed from every row in the list, not only the rows "
+    "currently visible"
+)
+def _atomic_width_whole_list(ctx):
+    many_values = ["short"] * 50 + ["a-much-longer-value-far-down-the-list"] + ["short"] * 50
+    visible_slice = many_values[:20]
+    assert atomic_column_width(visible_slice) != atomic_column_width(many_values)
+    assert atomic_column_width(many_values) == len("a-much-longer-value-far-down-the-list")
+
+
+@then("an atomic column has no overflow behaviour that cuts or wraps a value")
+def _atomic_never_cuts(ctx):
+    long_value = "LIGHTCYCLE-3.1.1" * 3
+    layout = compute_layout(10, ["cursor"], {"id": [long_value]}, indent=0)
+    assert layout.atomic_widths["id"] == len(long_value)
+
+
+@then("a flexible column's minimum width is 24 characters")
+def _flexible_minimum(ctx):
+    assert FLEXIBLE_MINIMUM == 24
+
+
+@then("a single message, centred and in the dim colour, names the width the grid needs")
+def _floor_message_shown(ctx):
+    widget = ctx["session"].app.screen.query_one(ctx["floor_widget_id"], Static)
+    assert widget.display
+    assert widget.styles.color.hex.lower() == COLOURS["dim"].lower()
+    assert widget.styles.content_align == ("center", "middle")
+    lines = _widget_rendered_text(ctx, widget)
+    message_line = next((line for line in lines if line.strip()), "")
+    assert "Widen the terminal to at least" in message_line
+    assert any(char.isdigit() for char in message_line)
+    stripped = message_line.strip()
+    leading = message_line.index(stripped)
+    trailing = len(message_line) - leading - len(stripped)
+    assert leading > 0
+    assert trailing > 0
+
+
+@then("the footer is still shown, so the operator can still quit")
+def _floor_footer_still_shown(ctx):
+    footer = ctx["session"].app.screen.query_one(DashboardFooter)
+    assert footer.display is not False
+    status_bar, shortcut_bar = footer.children
+    status_lines = _widget_rendered_text(ctx, status_bar)
+    shortcut_lines = _widget_rendered_text(ctx, shortcut_bar)
+    assert any(line.strip() for line in status_lines)
+    assert any(line.strip() for line in shortcut_lines)

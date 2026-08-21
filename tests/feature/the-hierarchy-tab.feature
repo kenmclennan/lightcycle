@@ -67,7 +67,6 @@ Feature: The hierarchy tab
     When it renders in the hierarchy
     Then "human" is shown as its role
 
-  @wip
   Scenario Outline: The id column widens to fit the longest id in the tree, whatever produced it, without truncating or wrapping it
     Given a node in the hierarchy with id "<id>" (<id source>)
     When it renders in the hierarchy
@@ -78,14 +77,12 @@ Feature: The hierarchy tab
       | this project's own shortcode                 | LC-290.1.86       |
       | the engine's default, unshortened shortcode  | LIGHTCYCLE-3.1.1  |
 
-  @wip
   Scenario: Two distinct nodes whose ids would collide if truncated render in full and stay distinguishable
     Given an item "LIGHTCYCLE-3.1" and its own step "LIGHTCYCLE-3.1.1" both shown in the hierarchy
     When they render
     Then both ids are shown in full
     And the item's row and the step's row are distinguishable from each other
 
-  @wip
   Scenario Outline: The role column widens to fit a role name longer than its historical fixed width, without clipping it
     Given a step performed by the role "<role>"
     When it renders in the hierarchy
@@ -99,7 +96,6 @@ Feature: The hierarchy tab
       | review-conflict    |
       | feature-writer     |
 
-  @wip
   Scenario: When a hierarchy row cannot fit unstacked, the title moves to a continuation line indented past the row's own depth
     Given a hierarchy row whose atomic and glyph columns leave less than the flexible minimum for the title
     When it renders in the hierarchy

@@ -103,7 +103,34 @@ BASE_TIME = datetime.datetime(2026, 1, 1, 12, 0, 0)
 def _launch(ctx):
     store = ctx.get("store") or FakeStore()
     now = ctx["clock"].now if "clock" in ctx else None
-    ctx["session"] = launch(make_test_container(store=store), now=now)
+    ctx["session"] = launch(make_test_container(store=store), now=now, size=ctx.get("size"))
+
+
+def _rendered_cell_text_at(table, strip, column_key):
+    pad = table.cell_padding
+    offset = 0
+    for column in table.ordered_columns:
+        start = offset + pad
+        end = start + column.width
+        if column.key.value == column_key:
+            return "".join(segment.text for segment in strip.crop(start, end))
+        offset = end + pad
+    raise AssertionError("column %r not found" % column_key)
+
+
+def _row_lines(session, row_id):
+    table = session.app.query_one(DataTable)
+    y = 0
+    target = None
+    height = 1
+    for r in table.ordered_rows:
+        if r.key.value == row_id:
+            target = y
+            height = r.height
+            break
+        y += r.height
+    assert target is not None
+    return [table.render_line(target + i) for i in range(height)]
 
 
 @given("the store has a step in the inbox lane, an active step, and a queued step")
@@ -329,6 +356,44 @@ def _g_more_than_one_screen(ctx):
 
     ctx["build_store"] = build
     ctx["store"] = build()
+
+
+@given(parsers.parse('the store has a queued step with id "{id}" ({source})'))
+def _g_queued_step_with_id(ctx, id, source):
+    store = FakeStore()
+    ctx["target_id"] = store.create_step("queued item", step="build", role="coder", id=id)
+    ctx["store"] = store
+
+
+@given(
+    "the store has more queued steps than fit on one screen, one of which has a longer id "
+    "than any visible row"
+)
+def _g_more_than_screen_with_deep_long_id(ctx):
+    store = FakeStore()
+    for i in range(60):
+        store.create_step("q%d" % i, step="build", role="coder")
+    ctx["long_id"] = "LIGHTCYCLE-999.10.10"
+    ctx["target_id"] = store.create_step(
+        "deep item", step="build", role="coder", id=ctx["long_id"]
+    )
+    ctx["store"] = store
+
+
+@given("a row whose atomic and glyph columns leave less than the flexible minimum for the title")
+def _g_row_forces_stacked(ctx):
+    clock = Clock(BASE_TIME - datetime.timedelta(minutes=14))
+    store = FakeStore(now=lambda: clock.now().isoformat())
+    tid = store.create_step(
+        "A title long enough to need a continuation line for real", step="build", role="coder"
+    )
+    store.assign(tid, "worker-1")
+    store.update_state(tid, State.IN_PROGRESS)
+    clock.set(BASE_TIME)
+    ctx["store"] = store
+    ctx["clock"] = clock
+    ctx["target_id"] = tid
+    ctx["size"] = (50, 24)
 
 
 @given("the dashboard has launched with a selected queued step")
@@ -659,6 +724,53 @@ def _t_every_row_shows_project(ctx, project):
 @then("that step's row shows a blank project field")
 def _t_blank_project(ctx):
     assert _cell(ctx["session"], ctx["target_id"], "project") == ""
+
+
+@then(parsers.parse('that step\'s row shows "{id}" as its id, in full, on one line'))
+def _t_row_shows_id_in_full(ctx, id):
+    session = ctx["session"]
+    table = session.app.query_one(DataTable)
+    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    assert row.height == 1
+    lines = _row_lines(session, ctx["target_id"])
+    assert _rendered_cell_text_at(table, lines[0], "id").strip() == id
+
+
+@then("the id column is already wide enough for that off-screen id, before it is scrolled into view")
+def _t_id_column_wide_enough_offscreen(ctx):
+    table = ctx["session"].app.query_one(DataTable)
+    assert table.columns.get("id").width >= len(ctx["long_id"])
+
+
+@then(
+    "the cursor, icon, id, project and step remain on the row's first line, with time "
+    "right-aligned alongside them"
+)
+def _t_stacked_first_line(ctx):
+    session = ctx["session"]
+    table = session.app.query_one(DataTable)
+    lines = _row_lines(session, ctx["target_id"])
+    assert len(lines) > 1
+    first = lines[0]
+    assert _rendered_cell_text_at(table, first, "id").strip() == ctx["target_id"]
+    assert _rendered_cell_text_at(table, first, "step").strip() == "build"
+    assert _rendered_cell_text_at(table, first, "time").strip() == "14m"
+    assert _rendered_cell_text_at(table, first, "title").strip() == ""
+
+
+@then("the title appears on a continuation line indented to where it starts in the unstacked grid")
+def _t_stacked_continuation(ctx):
+    session = ctx["session"]
+    table = session.app.query_one(DataTable)
+    lines = _row_lines(session, ctx["target_id"])
+    assert len(lines) > 1
+    second = lines[1]
+    assert _rendered_cell_text_at(table, second, "title").strip() != ""
+    for column in ("id", "project", "step", "time"):
+        assert _rendered_cell_text_at(table, second, column).strip() == ""
+    continuation = "".join(_rendered_cell_text_at(table, line, "title") for line in lines[1:])
+    expected = "A title long enough to need a continuation line for real"
+    assert "".join(continuation.split()) == "".join(expected.split())
 
 
 @then("the terminal bell has rung once")

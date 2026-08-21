@@ -6,7 +6,6 @@ from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.geometry import Size
 from textual.screen import Screen
 from textual.widgets import DataTable, RichLog, Static
 from textual.widgets.data_table import CellDoesNotExist
@@ -24,6 +23,13 @@ from lightcycle.adapters.tui.design_system import (
     TEXT_ARTIFACT_SHORTCUTS,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, StatusBar
+from lightcycle.adapters.tui.row_grid import (
+    GLYPH_WIDTHS,
+    apply_widths,
+    compute_layout,
+    floor_message,
+    row_budget_for,
+)
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
     PoolRunningUseCase,
@@ -57,6 +63,13 @@ TOAST_FILEPATH_DESTINATION = "in its default application"
 
 _TAB_ORDER = ("hierarchy", "log", "artifacts")
 _TAB_LABELS = {"hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts"}
+
+
+def _stacked_safe_width(layout, row_budget, glyph_total):
+    if not layout.stacked:
+        return layout.flexible_width
+    atomic_total = sum(layout.atomic_widths.values())
+    return max(1, row_budget - glyph_total - atomic_total)
 
 
 def _owning_id(node):
@@ -202,7 +215,7 @@ def _state_glyph(node):
     return STATE_GLYPHS["queued"]
 
 
-def hierarchy_row_cells(row):
+def hierarchy_row_cells(row, stacked=False):
     node = row.node
     glyph = _state_glyph(node)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
@@ -213,15 +226,19 @@ def hierarchy_row_cells(row):
     content_cell = (
         Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else ""
     )
-    title_cell = ("  " * row.depth) + node.title
+    if stacked:
+        title_cell = "\n" + (" " * (2 * row.depth + 2)) + node.title
+    else:
+        title_cell = ("  " * row.depth) + node.title
     role_cell = Text(display_role(node.role), style=COLOURS["dim"]) if node.type == "step" else ""
     return (icon_cell, content_cell, node.id, title_cell, role_cell)
 
 
-def artifact_row_cells(artifact):
+def artifact_row_cells(artifact, stacked=False):
+    value_cell = ("\n  " + artifact.value) if stacked else artifact.value
     return (
         Text(type_label(artifact), style=COLOURS["dim"]),
-        Text(artifact.value, style=COLOURS["cyan"]),
+        Text(value_cell, style=COLOURS["cyan"]),
     )
 
 
@@ -597,6 +614,12 @@ class NodeHubScreen(Screen):
         height: 1fr;
         color: {COLOURS["dim"]};
     }}
+    #hierarchy-floor, #artifacts-floor {{
+        content-align: center middle;
+        height: 1fr;
+        color: {COLOURS["dim"]};
+        display: none;
+    }}
     #hub-artifacts-toast {{
         content-align: center middle;
         height: 1fr;
@@ -621,6 +644,8 @@ class NodeHubScreen(Screen):
         self._active_tab = None
         self._last_hierarchy_shape = None
         self._last_rows = []
+        self._hierarchy_floor = False
+        self._hierarchy_stacked = False
         self._log_mode = None
         self._log_target = None
         self._log_offset = 0
@@ -629,6 +654,8 @@ class NodeHubScreen(Screen):
         self._last_artifacts_shape = None
         self._last_artifacts = []
         self._has_artifacts = False
+        self._artifacts_floor = False
+        self._artifacts_stacked = False
         self._toast_active = False
         self._toast_timer = None
 
@@ -641,9 +668,11 @@ class NodeHubScreen(Screen):
         yield HubTabStrip(id="hub-tabs")
         yield Static(id="pinned-ancestor")
         yield HierarchyPagingTable(id="hierarchy-table")
+        yield Static(id="hierarchy-floor")
         yield LogPane(id="hub-log-view", highlight=False, markup=False)
         yield Static(LOG_NO_STREAM_MESSAGE, id="hub-log-empty")
         yield ArtifactsTable(id="hub-artifacts-table")
+        yield Static(id="artifacts-floor")
         yield Static(ARTIFACTS_EMPTY_MESSAGE, id="hub-artifacts-empty")
         yield Static(id="hub-artifacts-toast")
         yield DashboardFooter(id="hub-footer", shortcuts=HUB_SHORTCUTS)
@@ -736,40 +765,64 @@ class NodeHubScreen(Screen):
             upgrade_version=self.app.upgrade_version,
         )
 
-    def _title_width(self, table):
-        grid = dict(COLUMN_GRIDS["hierarchy"])
-        columns = [key for key, _ in COLUMN_GRIDS["hierarchy"]]
-        padding = 2 * table.cell_padding * len(columns)
-        fixed = sum(int(grid[key][:-2]) for key in columns if key != "title") + padding
-        width = table.size.width - fixed
-        return width if width > 0 else None
+    def _hierarchy_layout(self, table, rows):
+        atomic_values = {
+            "id": [r.node.id for r in rows],
+            "role": [display_role(r.node.role) for r in rows if r.node.type == "step"],
+        }
+        row_budget = row_budget_for(table, len(COLUMN_GRIDS["hierarchy"]))
+        max_depth = max((r.depth for r in rows), default=0)
+        indent = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"] + 2 * max_depth + 2
+        return compute_layout(row_budget, ["icon", "content"], atomic_values, indent)
+
+    def _hierarchy_widths(self, table, layout):
+        title_width = _stacked_safe_width(
+            layout,
+            row_budget_for(table, len(COLUMN_GRIDS["hierarchy"])),
+            GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"],
+        )
+        return {
+            "icon": GLYPH_WIDTHS["icon"],
+            "content": GLYPH_WIDTHS["content"],
+            "id": layout.atomic_widths["id"],
+            "title": title_width,
+            "role": layout.atomic_widths["role"],
+        }
 
     def refresh_hierarchy_width(self) -> None:
         table = self.query_one(HierarchyPagingTable)
-        if not table.row_count:
+        if not self._last_rows:
             return
-        width = self._title_width(table)
-        if width is not None:
-            self._resize_column(table, "title", width)
+        layout = self._hierarchy_layout(table, self._last_rows)
+        if layout.floor != self._hierarchy_floor or layout.stacked != self._hierarchy_stacked:
+            self._render_hierarchy(self._last_rows, initial=True)
+            self._apply_tab_visibility()
+            return
+        if layout.floor:
+            self.query_one("#hierarchy-floor", Static).update(
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["hierarchy"])), style=COLOURS["dim"])
+            )
+            return
+        apply_widths(table, self._hierarchy_widths(table, layout))
 
     def refresh_artifacts_width(self) -> None:
         table = self.query_one(ArtifactsTable)
-        if not table.row_count:
+        if not self._last_artifacts:
             return
-        width = self._artifacts_value_width(table)
-        if width is not None:
-            self._resize_column(table, "value", width)
-
-    def _resize_column(self, table, column_key, new_width) -> None:
-        column = table.columns.get(column_key)
-        if column is None or column.width == new_width:
+        layout = self._artifacts_layout(table, self._last_artifacts)
+        if layout.floor != self._artifacts_floor or layout.stacked != self._artifacts_stacked:
+            self._render_artifacts(self._last_artifacts, initial=True)
+            self._apply_tab_visibility()
             return
-        delta = new_width - column.width
-        column.width = new_width
-        virtual_width, virtual_height = table.virtual_size
-        table.virtual_size = Size(virtual_width + delta, virtual_height)
-        table._clear_caches()
-        table.refresh()
+        if layout.floor:
+            self.query_one("#artifacts-floor", Static).update(
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["artifacts"])), style=COLOURS["dim"])
+            )
+            return
+        value_width = _stacked_safe_width(
+            layout, row_budget_for(table, len(COLUMN_GRIDS["artifacts"])), 0
+        )
+        apply_widths(table, {"type": layout.atomic_widths["type"], "value": value_width})
 
     def _selected_id(self, table):
         if table.row_count == 0:
@@ -787,22 +840,31 @@ class NodeHubScreen(Screen):
         if shape == self._last_hierarchy_shape and not initial:
             self._update_hierarchy_cells(table, rows)
             return
+        if table.size.width == 0:
+            return
 
-        title_width = self._title_width(table)
-        if title_width is None:
+        layout = self._hierarchy_layout(table, rows)
+        self._hierarchy_floor = bool(rows) and layout.floor
+        self._hierarchy_stacked = layout.stacked
+        if self._hierarchy_floor:
+            self.query_one("#hierarchy-floor", Static).update(
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["hierarchy"])), style=COLOURS["dim"])
+            )
+            self._last_hierarchy_shape = shape
             return
 
         selected_id = self._node_id if initial else self._selected_id(table)
         table.clear(columns=True)
-        grid = dict(COLUMN_GRIDS["hierarchy"])
-        for key, _ in COLUMN_GRIDS["hierarchy"]:
-            width = title_width if key == "title" else int(grid[key][:-2])
-            table.add_column(key, width=width, key=key)
+        widths = self._hierarchy_widths(table, layout)
+        for key in COLUMN_GRIDS["hierarchy"]:
+            table.add_column(key, width=widths[key], key=key)
 
         ids = [r.node.id for r in rows]
         index = ids.index(selected_id) if selected_id in ids else 0
         for row in rows:
-            table.add_row(*hierarchy_row_cells(row), height=1, key=row.node.id)
+            table.add_row(
+                *hierarchy_row_cells(row, stacked=layout.stacked), height=None, key=row.node.id
+            )
 
         self._last_hierarchy_shape = shape
         if rows:
@@ -810,19 +872,15 @@ class NodeHubScreen(Screen):
         self.update_pinned_ancestor()
 
     def _update_hierarchy_cells(self, table, rows) -> None:
-        columns = [key for key, _ in COLUMN_GRIDS["hierarchy"]]
         for row in rows:
-            cells = hierarchy_row_cells(row)
-            for key, value in zip(columns, cells):
+            cells = hierarchy_row_cells(row, stacked=self._hierarchy_stacked)
+            for key, value in zip(COLUMN_GRIDS["hierarchy"], cells):
                 table.update_cell(row.node.id, key, value)
 
-    def _artifacts_value_width(self, table):
-        grid = dict(COLUMN_GRIDS["artifacts"])
-        columns = [key for key, _ in COLUMN_GRIDS["artifacts"]]
-        padding = 2 * table.cell_padding * len(columns)
-        fixed = sum(int(grid[key][:-2]) for key in columns if key != "value") + padding
-        width = table.size.width - fixed
-        return width if width > 0 else None
+    def _artifacts_layout(self, table, artifacts):
+        atomic_values = {"type": [type_label(a) for a in artifacts]}
+        row_budget = row_budget_for(table, len(COLUMN_GRIDS["artifacts"]))
+        return compute_layout(row_budget, [], atomic_values, indent=2)
 
     def _selected_artifact_index(self, table):
         if table.row_count == 0:
@@ -842,20 +900,32 @@ class NodeHubScreen(Screen):
         if shape == self._last_artifacts_shape and not initial:
             self._update_artifact_cells(table, artifacts)
             return
+        if table.size.width == 0:
+            return
 
-        value_width = self._artifacts_value_width(table)
-        if value_width is None:
+        layout = self._artifacts_layout(table, artifacts)
+        self._artifacts_floor = bool(artifacts) and layout.floor
+        self._artifacts_stacked = layout.stacked
+        if self._artifacts_floor:
+            self.query_one("#artifacts-floor", Static).update(
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["artifacts"])), style=COLOURS["dim"])
+            )
+            self._last_artifacts_shape = shape
             return
 
         selected_index = self._selected_artifact_index(table)
         table.clear(columns=True)
-        grid = dict(COLUMN_GRIDS["artifacts"])
-        for key, _ in COLUMN_GRIDS["artifacts"]:
-            width = value_width if key == "value" else int(grid[key][:-2])
-            table.add_column(key, width=width, key=key)
+        value_width = _stacked_safe_width(
+            layout, row_budget_for(table, len(COLUMN_GRIDS["artifacts"])), 0
+        )
+        widths = {"type": layout.atomic_widths["type"], "value": value_width}
+        for key in COLUMN_GRIDS["artifacts"]:
+            table.add_column(key, width=widths[key], key=key)
 
         for index, artifact in enumerate(artifacts):
-            table.add_row(*artifact_row_cells(artifact), height=1, key=str(index))
+            table.add_row(
+                *artifact_row_cells(artifact, stacked=layout.stacked), height=None, key=str(index)
+            )
 
         self._last_artifacts_shape = shape
         if artifacts:
@@ -863,15 +933,14 @@ class NodeHubScreen(Screen):
             table.move_cursor(row=selected_index if has_selection else 0)
 
     def _update_artifact_cells(self, table, artifacts) -> None:
-        columns = [key for key, _ in COLUMN_GRIDS["artifacts"]]
         for index, artifact in enumerate(artifacts):
-            cells = artifact_row_cells(artifact)
-            for key, value in zip(columns, cells):
+            cells = artifact_row_cells(artifact, stacked=self._artifacts_stacked)
+            for key, value in zip(COLUMN_GRIDS["artifacts"], cells):
                 table.update_cell(str(index), key, value)
 
     def update_pinned_ancestor(self) -> None:
         banner = self.query_one("#pinned-ancestor", Static)
-        if self._active_tab != "hierarchy" or not self._last_rows:
+        if self._active_tab != "hierarchy" or not self._last_rows or self._hierarchy_floor:
             banner.display = False
             return
         table = self.query_one(HierarchyPagingTable)
@@ -895,15 +964,20 @@ class NodeHubScreen(Screen):
         banner.display = True
 
     def _apply_tab_visibility(self) -> None:
-        self.query_one(HierarchyPagingTable).display = self._active_tab == "hierarchy"
+        hierarchy_active = self._active_tab == "hierarchy"
+        showing_hierarchy_floor = hierarchy_active and self._hierarchy_floor
+        self.query_one(HierarchyPagingTable).display = hierarchy_active and not showing_hierarchy_floor
+        self.query_one("#hierarchy-floor", Static).display = showing_hierarchy_floor
         log_active = self._active_tab == "log"
         self.query_one(LogPane).display = log_active and self._log_mode != "no-log"
         self.query_one("#hub-log-empty", Static).display = log_active and self._log_mode == "no-log"
         artifacts_active = self._active_tab == "artifacts"
         showing_toast = artifacts_active and self._toast_active
+        showing_artifacts_floor = artifacts_active and self._artifacts_floor and not showing_toast
         self.query_one(ArtifactsTable).display = (
-            artifacts_active and self._has_artifacts and not showing_toast
+            artifacts_active and self._has_artifacts and not showing_toast and not showing_artifacts_floor
         )
+        self.query_one("#artifacts-floor", Static).display = showing_artifacts_floor
         self.query_one("#hub-artifacts-empty", Static).display = (
             artifacts_active and not self._has_artifacts and not showing_toast
         )
@@ -914,11 +988,16 @@ class NodeHubScreen(Screen):
         panel = self.query_one(EscalationPanel)
         if self._active_tab == "hierarchy" and panel.display:
             self.set_focus(panel)
-        elif self._active_tab == "hierarchy":
+        elif self._active_tab == "hierarchy" and not self._hierarchy_floor:
             self.set_focus(self.query_one(HierarchyPagingTable))
         elif self._active_tab == "log" and self._log_mode != "no-log":
             self.set_focus(self.query_one(LogPane))
-        elif self._active_tab == "artifacts" and self._has_artifacts and not self._toast_active:
+        elif (
+            self._active_tab == "artifacts"
+            and self._has_artifacts
+            and not self._toast_active
+            and not self._artifacts_floor
+        ):
             self.set_focus(self.query_one(ArtifactsTable))
         else:
             self.set_focus(None)

@@ -19,9 +19,9 @@ def ctx():
         session.close()
 
 
-def _launch(ctx, store, node_id):
+def _launch(ctx, store, node_id, size=None):
     ctx["store"] = store
-    session = launch(make_test_container(store=store))
+    session = launch(make_test_container(store=store), size=size)
     ctx["session"] = session
     session.run(
         lambda: session.app.push_screen(NodeHubScreen(session.app.container, node_id, session.app._now))
@@ -71,6 +71,33 @@ def _rendered_cell_text(ctx, row_id, column_key):
 def _rendered_text(widget):
     strip = widget.render_line(0)
     return "".join(segment.text for segment in strip)
+
+
+def _rendered_cell_text_at(table, strip, column_key):
+    pad = table.cell_padding
+    offset = 0
+    for column in table.ordered_columns:
+        start = offset + pad
+        end = start + column.width
+        if column.key.value == column_key:
+            return "".join(segment.text for segment in strip.crop(start, end))
+        offset = end + pad
+    raise AssertionError("column %r not found" % column_key)
+
+
+def _row_lines(ctx, row_id):
+    table = _table(ctx)
+    y = 0
+    target = None
+    height = 1
+    for r in table.ordered_rows:
+        if r.key.value == row_id:
+            target = y
+            height = r.height
+            break
+        y += r.height
+    assert target is not None
+    return [table.render_line(target + i) for i in range(height)]
 
 
 @given("a node with an artifact whose internal flag is false")
@@ -180,6 +207,39 @@ def _step_whose_role_is(ctx, role):
     store = FakeStore()
     item = store.create_item("Item")
     step = store.create_step("s", step="await-merge", role=role, parent=item)
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given(parsers.parse('a node in the hierarchy with id "{node_id}" ({id_source})'))
+def _node_with_explicit_id(ctx, node_id, id_source):
+    store = FakeStore()
+    item = store.create_item("Item", id=node_id)
+    ctx["node_id"] = item
+    _launch(ctx, store, item)
+
+
+@given('an item "LIGHTCYCLE-3.1" and its own step "LIGHTCYCLE-3.1.1" both shown in the hierarchy')
+def _colliding_ids(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", id="LIGHTCYCLE-3.1")
+    step = store.create_step("Step", step="build", role="coder", parent=item, id="LIGHTCYCLE-3.1.1")
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given(
+    "a hierarchy row whose atomic and glyph columns leave less than the flexible minimum for the title"
+)
+def _row_leaves_less_than_flexible_minimum(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", id="LIGHTCYCLE-30.100")
+    step = store.create_step(
+        "Some step title", step="build", role="implement-features",
+        parent=item, id="LIGHTCYCLE-30.100.100",
+    )
+    ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
 
@@ -410,6 +470,11 @@ def _it_renders_in_hierarchy(ctx):
     pass
 
 
+@when("they render")
+def _they_render(ctx):
+    pass
+
+
 @when("Down is pressed")
 def _down_pressed(ctx):
     ctx["session"].press("down")
@@ -547,6 +612,68 @@ def _role_shown_alongside_state(ctx, role):
 def _role_shown_as(ctx, role):
     role_text = _rendered_cell_text(ctx, ctx["step_id"], "role")
     assert role_text.strip() == role
+
+
+@then("its id is shown in full, on one line")
+def _id_shown_in_full_one_line(ctx):
+    node_id = ctx["node_id"]
+    lines = _row_lines(ctx, node_id)
+    assert len(lines) == 1
+    text = _rendered_cell_text(ctx, node_id, "id")
+    assert text.strip() == node_id
+
+
+@then("both ids are shown in full")
+def _both_ids_shown_in_full(ctx):
+    for node_id in (ctx["item_id"], ctx["step_id"]):
+        text = _rendered_cell_text(ctx, node_id, "id")
+        assert text.strip() == node_id
+
+
+@then("the item's row and the step's row are distinguishable from each other")
+def _rows_distinguishable(ctx):
+    item_text = _rendered_cell_text(ctx, ctx["item_id"], "id").strip()
+    step_text = _rendered_cell_text(ctx, ctx["step_id"], "id").strip()
+    assert item_text != step_text
+
+
+@then(parsers.parse('its role "{role}" is shown in full, on one line'))
+def _role_shown_in_full_one_line(ctx, role):
+    step_id = ctx["step_id"]
+    lines = _row_lines(ctx, step_id)
+    assert len(lines) == 1
+    text = _rendered_cell_text(ctx, step_id, "role")
+    assert text.strip() == role
+
+
+@then(
+    "the icon, content indicator, id and role remain on the row's first line, with the role "
+    "right-aligned"
+)
+def _first_line_role_right_aligned(ctx):
+    table = _table(ctx)
+    lines = _row_lines(ctx, ctx["step_id"])
+    assert len(lines) == 2
+    first_line_text = "".join(segment.text for segment in lines[0])
+    assert ctx["step_id"] in first_line_text
+    assert "implement-features" in first_line_text
+    assert ctx["session"].app.container.store.get_node(ctx["step_id"]).title not in first_line_text
+    trailing = first_line_text[len(first_line_text.rstrip()):]
+    assert len(trailing) <= table.cell_padding
+
+
+@then("the title appears on a continuation line indented to the row's own depth plus 2 characters")
+def _title_continuation_indented(ctx):
+    table = _table(ctx)
+    lines = _row_lines(ctx, ctx["step_id"])
+    assert len(lines) == 2
+    title_line_text = _rendered_cell_text_at(table, lines[1], "title")
+    row = next(r for r in ctx["hub_screen"]._last_rows if r.node.id == ctx["step_id"])
+    expected_indent = 2 * row.depth + 2
+    stripped = title_line_text.lstrip(" ")
+    indent = len(title_line_text) - len(stripped)
+    assert indent == expected_indent
+    assert stripped.startswith(row.node.title)
 
 
 @then("a dependency indicator is shown alongside its state")
