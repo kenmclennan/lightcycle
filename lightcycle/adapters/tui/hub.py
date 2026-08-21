@@ -564,6 +564,25 @@ class ArtifactViewerScreen(Screen):
         self._artifact = artifact
         self._node_id = node_id
 
+    def on_mount(self) -> None:
+        self._refresh_footer()
+        self.set_interval(POLL_INTERVAL_SECONDS, self.poll_refresh)
+
+    def poll_refresh(self) -> None:
+        self._refresh_footer()
+
+    def _refresh_footer(self) -> None:
+        container = self.app.container
+        running = PoolRunningUseCase(container.lock).execute().running
+        breaker = BreakerStatusUseCase(container.breaker).execute()
+        self.query_one(StatusBar).report(
+            pool_running=running,
+            breaker_is_open=breaker.is_open,
+            breaker_reset_at=breaker.reset_at,
+            version=__version__,
+            upgrade_version=self.app.upgrade_version,
+        )
+
     def action_close(self) -> None:
         self.app.pop_screen()
 
@@ -581,6 +600,7 @@ class TextArtifactViewerScreen(ArtifactViewerScreen):
         yield DashboardFooter(id="artifact-viewer-footer", shortcuts=TEXT_ARTIFACT_SHORTCUTS)
 
     def on_mount(self) -> None:
+        super().on_mount()
         kind_text = "%s · %s" % (self._artifact.type, self._node_id)
         self.query_one(ArtifactViewerHeader).update(kind_text, None)
         body = self.query_one(ArtifactTextBody)
@@ -595,6 +615,7 @@ class ListArtifactViewerScreen(ArtifactViewerScreen):
         yield DashboardFooter(id="artifact-viewer-footer", shortcuts=LIST_ARTIFACT_SHORTCUTS)
 
     def on_mount(self) -> None:
+        super().on_mount()
         table = self.query_one(ArtifactListTable)
         table.cursor_type = "row"
         table.show_header = False
