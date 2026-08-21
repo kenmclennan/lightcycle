@@ -123,7 +123,6 @@ Feature: The Artifact viewer
     When Tab is pressed
     Then the backlog is shown in place of the viewer
 
-  @wip
   Scenario Outline: The status bar renders on the Artifact Viewer's first frame, before any poll tick
     Given an artifact declares kind "<kind>"
     When I select it with Enter
@@ -134,7 +133,6 @@ Feature: The Artifact viewer
       | text |
       | list |
 
-  @wip
   Scenario Outline: The status bar shows the upgrade indicator on the Artifact Viewer when a newer version is available
     Given a newer version is available
     And an artifact declares kind "<kind>"
@@ -146,7 +144,6 @@ Feature: The Artifact viewer
       | text |
       | list |
 
-  @wip
   Scenario Outline: The status bar stays live on the Artifact Viewer by polling on the fixed interval
     Given an artifact declares kind "<kind>"
     And I select it with Enter

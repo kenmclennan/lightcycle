@@ -2,7 +2,9 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
+from lightcycle import __version__
 from lightcycle.adapters.tui.app import BacklogView
+from lightcycle.adapters.tui.design_system import COLOURS, FOOTER_GLYPHS
 from lightcycle.adapters.tui.hub import (
     ArtifactListTable,
     ArtifactsTable,
@@ -12,9 +14,10 @@ from lightcycle.adapters.tui.hub import (
     NodeHubScreen,
     TextArtifactViewerScreen,
 )
+from lightcycle.application.setup import UpgradeResponse
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import FakeLauncher, launch, make_test_container
+from tests.support.tui_harness import FakeBreakerPort, FakeLauncher, FakeLock, launch, make_test_container
 
 scenarios("the-artifact-viewer.feature")
 
@@ -42,6 +45,22 @@ def _painted_lines(session, widget):
     ]
 
 
+def _rendered_segment(session, widget_id):
+    widget = session.app.screen.query_one(widget_id, Static)
+    strip = widget.render_line(0)
+    text = "".join(segment.text for segment in strip)
+    style = None
+    for segment in strip:
+        if segment.text.strip():
+            style = segment.style
+            break
+    return widget, text, style
+
+
+def _colour_of(style):
+    return style.color.get_truecolor().hex.lower()
+
+
 def _setup(ctx, artifacts, launcher=None, fs=None, size=None):
     store = FakeStore()
     item = store.create_item("Item")
@@ -49,8 +68,12 @@ def _setup(ctx, artifacts, launcher=None, fs=None, size=None):
         store.add_artifact(item, atype, value, kind=kind)
     ctx["store"] = store
     ctx["launcher"] = launcher or FakeLauncher()
-    container = make_test_container(store=store, fs=fs, launcher=ctx["launcher"])
-    ctx["session"] = launch(container, size=size)
+    ctx["lock"] = ctx.get("lock") or FakeLock()
+    ctx["breaker"] = ctx.get("breaker") or FakeBreakerPort()
+    container = make_test_container(
+        store=store, fs=fs, launcher=ctx["launcher"], lock=ctx["lock"], breaker=ctx["breaker"]
+    )
+    ctx["session"] = launch(container, size=size, upgrade_check=ctx.get("upgrade_check"))
     session = ctx["session"]
     screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="artifacts")
     session.run(lambda: session.app.push_screen(screen))
@@ -142,7 +165,16 @@ def _viewer_open_text(ctx):
     ctx["session"].press("enter")
 
 
+@given("a newer version is available")
+def _newer_version_available(ctx):
+    ctx["remote_version"] = "9.9.9"
+    ctx["upgrade_check"] = lambda: UpgradeResponse(
+        current=__version__, remote=ctx["remote_version"], available=True, applied=False
+    )
+
+
 @when(parsers.parse("I select it with {key}"))
+@given(parsers.parse("I select it with {key}"))
 def _select_it_with(ctx, key):
     keymap = {"Enter": "enter", "→": "right"}
     ctx["session"].press(keymap.get(key, key))
@@ -177,6 +209,19 @@ def _scroll_to_end(ctx):
 @when("Tab is pressed")
 def _tab_is_pressed(ctx):
     ctx["session"].press("tab")
+
+
+@when("the pool or breaker state changes")
+def _pool_or_breaker_state_changes(ctx):
+    ctx["lock"].set_running(True)
+    ctx["breaker"].save({"open": True, "reset_at": 999.0})
+
+
+@when("one poll interval elapses")
+def _one_poll_interval_elapses(ctx):
+    session = ctx["session"]
+    session.run(session.app.screen.poll_refresh)
+    session.pause()
 
 
 @then("it opens full-screen")
@@ -283,3 +328,37 @@ def _backlog_shown_in_place_of_viewer(ctx):
     session = ctx["session"]
     assert not isinstance(session.app.screen, (NodeHubScreen, ArtifactViewerScreen))
     assert session.app.query_one(BacklogView).display
+
+
+@then(
+    "the status bar is not blank, showing the pool status, the Claude-availability status, "
+    "and the installed version"
+)
+def _status_bar_not_blank(ctx):
+    session = ctx["session"]
+    assert isinstance(session.app.screen, ArtifactViewerScreen)
+    _, pool_text, _ = _rendered_segment(session, "#status-pool")
+    _, claude_text, _ = _rendered_segment(session, "#status-claude")
+    _, version_text, _ = _rendered_segment(session, "#status-version")
+    assert pool_text.strip() != ""
+    assert claude_text.strip() != ""
+    assert version_text.strip() == "v%s" % __version__
+
+
+@then("the status bar shows the upgrade indicator with that version")
+def _shows_upgrade_indicator(ctx):
+    widget, text, style = _rendered_segment(ctx["session"], "#status-upgrade")
+    assert widget.display
+    assert text == "%s v%s available" % (
+        FOOTER_GLYPHS["upgrade-available"].glyph, ctx["remote_version"]
+    )
+    assert _colour_of(style) == COLOURS["amber"].lower()
+
+
+@then("the status bar reflects the changed state")
+def _status_bar_reflects_changed_state(ctx):
+    session = ctx["session"]
+    _, pool_text, _ = _rendered_segment(session, "#status-pool")
+    _, claude_text, _ = _rendered_segment(session, "#status-claude")
+    assert pool_text == "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph
+    assert "claude unavailable" in claude_text
