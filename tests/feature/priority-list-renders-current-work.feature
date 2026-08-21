@@ -119,6 +119,19 @@ Feature: Priority list renders current work
       | just narrow enough to force stacking  |
       | just wide enough to clear the floor   |
 
+  @wip
+  Scenario Outline: Every non-cursor row paints the frame's own background, not an unnamed default
+    Given the store has a step in the inbox lane, an active step, and a queued step
+    And the breaker is <breaker state>
+    When I launch the dashboard
+    Then every row outside the selection cursor paints the bg colour as its background, exactly
+    And the cursor row still paints the selected-row colour as its background
+
+    Examples:
+      | breaker state |
+      | closed        |
+      | open          |
+
   Scenario: Every row shows the project it belongs to
     Given the store has a step in the blocked lane, an active step, and a queued step, each belonging to the registered project "lightcycle"
     When I launch the dashboard
