@@ -12,7 +12,11 @@ Feature: The Artifact viewer
   instead of a silent failure or a crash. Closing a sit-in viewer (text or
   list) with Esc or ← returns to the artifact list with that artifact still
   selected. Tab still jumps straight to the backlog, or back to current work,
-  from here too, the same as from any other depth in the map.
+  from here too, the same as from any other depth in the map. Like every
+  other screen, both sit-in viewers carry the shared status bar - pool,
+  Claude availability, version, upgrade-when-available - visible from their
+  own first frame, before any poll tick, and kept live by the same poll the
+  rest of the dashboard uses.
 
   Scenario Outline: A text artifact opens full-screen when selected
     Given an artifact declares kind "text"
@@ -118,3 +122,39 @@ Feature: The Artifact viewer
     Given the artifact viewer is open, showing a text artifact
     When Tab is pressed
     Then the backlog is shown in place of the viewer
+
+  @wip
+  Scenario Outline: The status bar renders on the Artifact Viewer's first frame, before any poll tick
+    Given an artifact declares kind "<kind>"
+    When I select it with Enter
+    Then the status bar is not blank, showing the pool status, the Claude-availability status, and the installed version
+
+    Examples:
+      | kind |
+      | text |
+      | list |
+
+  @wip
+  Scenario Outline: The status bar shows the upgrade indicator on the Artifact Viewer when a newer version is available
+    Given a newer version is available
+    And an artifact declares kind "<kind>"
+    When I select it with Enter
+    Then the status bar shows the upgrade indicator with that version
+
+    Examples:
+      | kind |
+      | text |
+      | list |
+
+  @wip
+  Scenario Outline: The status bar stays live on the Artifact Viewer by polling on the fixed interval
+    Given an artifact declares kind "<kind>"
+    And I select it with Enter
+    When the pool or breaker state changes
+    And one poll interval elapses
+    Then the status bar reflects the changed state
+
+    Examples:
+      | kind |
+      | text |
+      | list |
