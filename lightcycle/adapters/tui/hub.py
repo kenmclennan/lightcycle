@@ -685,10 +685,6 @@ class NodeHubScreen(Screen):
     }}
     HierarchyPagingTable {{
         height: 1fr;
-        background: {COLOURS["bg"]};
-    }}
-    HierarchyPagingTable:focus {{
-        background-tint: transparent;
     }}
     ArtifactsTable {{
         height: 1fr;

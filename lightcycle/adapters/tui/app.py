@@ -428,8 +428,23 @@ class LightcycleApp(App):
         color: {COLOURS["dim"]};
     }}
 
+    DataTable {{
+        background: {COLOURS["bg"]};
+    }}
+    DataTable:focus {{
+        background-tint: transparent;
+    }}
     DataTable > .datatable--cursor {{
         background: {COLOURS["selected-bg"]};
+    }}
+    RichLog {{
+        background: {COLOURS["bg"]};
+        scrollbar-background: {COLOURS["bg"]};
+        scrollbar-background-hover: {COLOURS["bg"]};
+        scrollbar-background-active: {COLOURS["bg"]};
+    }}
+    RichLog:focus {{
+        background-tint: transparent;
     }}
 
     #empty-state {{
