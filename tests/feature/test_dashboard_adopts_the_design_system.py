@@ -1,6 +1,6 @@
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, RichLog, Static
 
 from lightcycle.adapters.tui.app import DashboardFooter, ShortcutBar, StatusBar, TabStrip
 from lightcycle.adapters.tui.design_system import (
@@ -20,9 +20,17 @@ from lightcycle.adapters.tui.row_grid import (
     compute_layout,
 )
 from tests.support.fake_store import FakeStore
+from tests.support.screen_render import DEFAULT_SIZE as RENDER_SIZE
+from tests.support.screen_render import SCREENS as RENDER_SCREENS
 from tests.support.tui_harness import launch, make_test_container
 
 scenarios("dashboard-adopts-the-design-system.feature")
+
+_TOKEN_BACKGROUNDS = {
+    COLOURS["bg"].lower(),
+    COLOURS["panel"].lower(),
+    COLOURS["selected-bg"].lower(),
+}
 
 
 @pytest.fixture
@@ -155,6 +163,12 @@ def _floor_screen_open(ctx, screen):
     _FLOOR_SCREEN_SETUP[screen](ctx)
 
 
+@given(parsers.parse('the "{state}" screen state is rendered'))
+def _screen_state_rendered(ctx, state):
+    ctx["state"] = state
+    ctx["session"] = RENDER_SCREENS[state](RENDER_SIZE)
+
+
 @when("I launch the dashboard")
 def _when_launch(ctx):
     if "session" not in ctx:
@@ -268,6 +282,53 @@ def _selection_cursor_glyph_cyan(ctx):
     row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
     glyph = table.get_cell(row_key, "cursor")
     assert glyph.style == COLOURS["cyan"]
+
+
+def _visible_list_widget(ctx):
+    screen = ctx["session"].app.screen
+    candidates = [widget for widget in screen.query(DataTable) if widget.display]
+    candidates += [widget for widget in screen.query(RichLog) if widget.display]
+    assert len(candidates) == 1, (ctx["state"], candidates)
+    return candidates[0]
+
+
+@then(
+    "every row in its list area, except the one under the selection cursor, has a "
+    "background of the bg colour"
+)
+def _every_row_paints_bg(ctx):
+    session = ctx["session"]
+    region = _visible_list_widget(ctx).region
+    strips = session.app.screen._compositor.render_strips()
+    bg_hex = COLOURS["bg"].lower()
+    selected_hex = COLOURS["selected-bg"].lower()
+    for y in range(region.y, region.y + region.height):
+        strip = strips[y].crop(region.x, region.x + region.width)
+        row_colours = {
+            segment.style.bgcolor.get_truecolor().hex.lower()
+            for segment in strip
+            if segment.style and segment.style.bgcolor
+        }
+        if row_colours == {selected_hex}:
+            continue
+        assert row_colours == {bg_hex}, (ctx["state"], y, row_colours)
+
+
+def test_every_registered_screen_state_paints_only_token_backgrounds():
+    for state, render in RENDER_SCREENS.items():
+        session = render(RENDER_SIZE)
+        try:
+            strips = session.app.screen._compositor.render_strips()
+            for y, strip in enumerate(strips):
+                x = 0
+                for segment in strip:
+                    width = len(segment.text)
+                    if segment.style and segment.style.bgcolor:
+                        hexv = segment.style.bgcolor.get_truecolor().hex.lower()
+                        assert hexv in _TOKEN_BACKGROUNDS, (state, x, y, hexv)
+                    x += width
+        finally:
+            session.close()
 
 
 @then("the footer occupies two one-row lines, a status line above a shortcut line")
