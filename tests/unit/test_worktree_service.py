@@ -688,6 +688,21 @@ class TestPhaseReEntry(unittest.TestCase):
         self.assertNotEqual(self.svc.item_branch(self.item), first_branch)
         self.assertIn("spec-2", self.svc.item_branch(self.item))
 
+    def test_a_second_pass_leaves_the_previous_runs_remote_branch_alone(self):
+        first = self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        first_branch = self.svc.item_branch(self.item)
+        self._close(first)
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+
+        deleted = [c for c in self.git.calls if c[0] == "delete_remote_branch"]
+        self.assertEqual(deleted, [])
+        target = os.path.join("/home/u/workspace/projects", "saga")
+        self.assertIn(("delete_branch", target, first_branch), self.git.calls)
+
     def test_steps_within_one_pass_share_the_phases_branch(self):
         self._step("spec-writer")
         self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
