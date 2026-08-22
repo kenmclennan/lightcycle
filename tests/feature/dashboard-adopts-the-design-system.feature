@@ -55,7 +55,6 @@ Feature: The dashboard adopts the design system's visual vocabulary
     Then a selected row's background is the selected-row colour
     And the selection cursor glyph is rendered in the cyan colour
 
-  @wip
   Scenario Outline: Every row not under the selection cursor paints the shared bg colour, never a widget's own default row surface
     Given the "<state>" screen state is rendered
     Then every row in its list area, except the one under the selection cursor, has a background of the bg colour

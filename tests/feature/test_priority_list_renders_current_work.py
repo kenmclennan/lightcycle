@@ -954,6 +954,6 @@ def test_a_selected_rows_own_state_colour_survives_rendering():
         session, attention_id, STATE_GLYPHS["needs-attention"].glyph
     )
     assert deselected_style.color.get_truecolor().hex.lower() == COLOURS["red"].lower()
-    assert deselected_style.bgcolor.get_truecolor().hex.lower() != COLOURS["selected-bg"].lower()
+    assert deselected_style.bgcolor.get_truecolor().hex.lower() == COLOURS["bg"].lower()
 
     session.close()
