@@ -3,6 +3,11 @@ from lightcycle.application.work.add_item import AddItemInput, AddItemUseCase
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.application.work.reopen_item import (
+    ReopenItemInput,
+    ReopenItemResponse,
+    ReopenItemUseCase,
+)
 from lightcycle.application.work.edit_node import EditNodeInput, EditNodeUseCase
 from lightcycle.application.work.hierarchy import HierarchyInput, HierarchyResponse, HierarchyUseCase
 from lightcycle.application.work.inbox import InboxInput, InboxUseCase
@@ -30,6 +35,9 @@ __all__ = [
     "CloseThemeUseCase",
     "CloseItemInput",
     "CloseItemUseCase",
+    "ReopenItemInput",
+    "ReopenItemResponse",
+    "ReopenItemUseCase",
     "EditNodeInput",
     "EditNodeUseCase",
     "HierarchyInput",

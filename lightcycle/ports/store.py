@@ -75,6 +75,9 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def reopen(self, tid):
+        pass
+
     def close(self, tid, reason):
         pass
 
