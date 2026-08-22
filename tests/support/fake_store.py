@@ -234,6 +234,14 @@ class FakeStore(StorePort):
     def set_notes(self, tid, text):
         self._get(tid)["notes"] = text or None
 
+    def reopen(self, tid):
+        b = self._get(tid)
+        if b.get("state") != "done":
+            return
+        b["state"] = str(State.IN_PROGRESS)
+        b["outcome"] = None
+        b["closed_at"] = None
+
     def close(self, tid, reason):
         b = self._get(tid)
         if b.get("state") == "done":
