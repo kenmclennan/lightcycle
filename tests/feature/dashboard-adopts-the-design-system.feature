@@ -4,9 +4,15 @@ Feature: The dashboard adopts the design system's visual vocabulary
   two-line structure - and the shared state-to-glyph-and-colour, column-grid
   vocabulary itself, belonged to no item. This gives both an owner, so later
   screens render into an existing vocabulary instead of each re-deriving
-  colours, icons, and grids independently. The footer's shortcut line is part
-  of that chrome: rather than a fixed bar showing every key from every
-  screen, or a curated subset the operator can't trust is complete, it
+  colours, icons, and grids independently. That includes the row surface
+  itself: every wireframe gives only the selected row its own background
+  rule and leaves every other row to inherit the terminal's own `--bg`, so a
+  table that sets no background rule of its own is not neutral - it lets
+  whatever the underlying widget defaults to show through instead, and that
+  is this feature's to guard against, not any one screen's own item. The
+  footer's shortcut line is part of that chrome: rather than a fixed bar
+  showing every key from every screen, or a curated subset the operator
+  can't trust is complete, it
   renders whatever is actually valid right now, supplied through a mechanism
   a later screen can call with its own set - at this point the dashboard is
   the only reachable screen, so what renders is the global keyboard
@@ -48,6 +54,20 @@ Feature: The dashboard adopts the design system's visual vocabulary
     When I launch the dashboard
     Then a selected row's background is the selected-row colour
     And the selection cursor glyph is rendered in the cyan colour
+
+  @wip
+  Scenario Outline: Every row not under the selection cursor paints the shared bg colour, never a widget's own default row surface
+    Given the "<state>" screen state is rendered
+    Then every row in its list area, except the one under the selection cursor, has a background of the bg colour
+
+    Examples:
+      | state                             |
+      | priority-list#normal              |
+      | priority-list#claude-unavailable  |
+      | backlog#normal                    |
+      | hub#artifacts                     |
+      | artifact-viewer#list              |
+      | artifact-viewer#text              |
 
   Scenario: The footer occupies two lines styled by the design system
     Given the lightcycle store is reachable
