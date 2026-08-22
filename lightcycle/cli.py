@@ -48,6 +48,8 @@ from lightcycle.application.work import (
     OpenThemeUseCase,
     QueueInput,
     QueueUseCase,
+    ReopenItemInput,
+    ReopenItemUseCase,
     RemoveNodeInput,
     RemoveNodeUseCase,
     ShowNodeInput,
@@ -1041,6 +1043,14 @@ def cmd_set(argv):
         if a.state == "ready":
             UnblockStepUseCase(_container.store, _flow()).execute(UnblockInput(step=a.id))
             return 0
+        if a.state == "in_progress":
+            ReopenItemUseCase(_container.store).execute(ReopenItemInput(item=a.id))
+            return 0
+        if a.state is not None:
+            sys.stderr.write(
+                "unknown --state %r; use active, ready, blocked, or in_progress\n" % a.state
+            )
+            return 2
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1

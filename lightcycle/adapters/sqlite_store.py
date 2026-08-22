@@ -486,6 +486,14 @@ class SqliteStore(StorePort):
         self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (text or None, tid))
         self._conn.commit()
 
+    def reopen(self, tid):
+        self._conn.execute(
+            "UPDATE nodes SET state = 'in_progress', outcome = NULL, closed_at = NULL "
+            "WHERE id = ? AND state = 'done'",
+            (tid,),
+        )
+        self._conn.commit()
+
     def close(self, tid, reason):
         self._conn.execute(
             "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? WHERE id = ? AND state != 'done'",
