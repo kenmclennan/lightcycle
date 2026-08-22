@@ -430,6 +430,13 @@ class LightcycleApp(App):
 
     DataTable {{
         background: {COLOURS["bg"]};
+        scrollbar-background: {COLOURS["bg"]};
+        scrollbar-background-hover: {COLOURS["bg"]};
+        scrollbar-background-active: {COLOURS["bg"]};
+        scrollbar-color: {COLOURS["dim"]};
+        scrollbar-color-hover: {COLOURS["dim"]};
+        scrollbar-color-active: {COLOURS["dim"]};
+        scrollbar-corner-color: {COLOURS["bg"]};
     }}
     DataTable:focus {{
         background-tint: transparent;
@@ -442,6 +449,10 @@ class LightcycleApp(App):
         scrollbar-background: {COLOURS["bg"]};
         scrollbar-background-hover: {COLOURS["bg"]};
         scrollbar-background-active: {COLOURS["bg"]};
+        scrollbar-color: {COLOURS["dim"]};
+        scrollbar-color-hover: {COLOURS["dim"]};
+        scrollbar-color-active: {COLOURS["dim"]};
+        scrollbar-corner-color: {COLOURS["bg"]};
     }}
     RichLog:focus {{
         background-tint: transparent;
