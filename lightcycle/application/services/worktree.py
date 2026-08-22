@@ -120,7 +120,7 @@ class WorktreeService:
     def _run_for_phase(self, item, phase):
         return max(1, runs_of(self._step_phases(item), phase))
 
-    def _release_run(self, item, phase, run_index, branch):
+    def _release_run(self, item, phase, run_index, branch, delete_remote=True):
         if run_index < 1 or branch is None:
             return
         target = self._target_for_phase(item, phase)
@@ -129,7 +129,8 @@ class WorktreeService:
         path = Worktree(item, phase_key(phase, run_index)).path_in(target)
         self._git.remove_worktree(target, path)
         self._git.delete_branch(target, branch)
-        self._git.delete_remote_branch(target, branch)
+        if delete_remote:
+            self._git.delete_remote_branch(target, branch)
 
     def _ensure_branch_artifact(self, item, branch):
         recorded = self.item_branch(item)
@@ -139,7 +140,10 @@ class WorktreeService:
         if recorded is None:
             self._store.add_artifact(item, "branch", branch, label=phase)
             return
-        self._release_run(item, phase, current_run_index(self._step_phases(item)) - 1, recorded)
+        self._release_run(
+            item, phase, current_run_index(self._step_phases(item)) - 1, recorded,
+            delete_remote=False,
+        )
         self._store.replace_artifact(item, "branch", branch, label=phase)
 
     def ensure(self, item):
