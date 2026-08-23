@@ -977,7 +977,7 @@ class TestBacklogPicker(unittest.TestCase):
         session.press("enter")
 
         _, right, _ = _rendered_segment(session, "#backlog-filter-right")
-        self.assertEqual(right, "1 items")
+        self.assertEqual(right.strip(), "1 items")
 
 
 class TestBacklogFilterBar(unittest.TestCase):
@@ -996,13 +996,13 @@ class TestBacklogFilterBar(unittest.TestCase):
         _, left, _ = _rendered_segment(session, "#backlog-filter-left")
         _, right, _ = _rendered_segment(session, "#backlog-filter-right")
         self.assertEqual(left, "PROJECT: All")
-        self.assertEqual(right, "3 items")
+        self.assertEqual(right.strip(), "3 items")
 
     def test_count_is_plural_even_when_zero(self):
         session = self._launch(FakeStore())
 
         _, right, _ = _rendered_segment(session, "#backlog-filter-right")
-        self.assertEqual(right, "0 items")
+        self.assertEqual(right.strip(), "0 items")
 
 
 class TestBacklogEmptyStates(unittest.TestCase):

@@ -144,7 +144,6 @@ Feature: The backlog screen
     When I switch to the backlog
     Then the filter bar's right label reads "0 items"
 
-  @wip
   Scenario Outline: The filter bar's row survives compositing in every backlog state, not just the widgets' own report of themselves
     Given the "<state>" screen state is rendered
     Then the filter bar's composited frame shows the left label's own text

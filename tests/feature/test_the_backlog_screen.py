@@ -10,6 +10,8 @@ from lightcycle.adapters.tui.app import (
 )
 from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
 from tests.support.fake_store import FakeStore
+from tests.support.screen_render import DEFAULT_SIZE as RENDER_SIZE
+from tests.support.screen_render import SCREENS as RENDER_SCREENS
 from tests.support.tui_harness import launch, make_test_container
 
 scenarios("the-backlog-screen.feature")
@@ -33,6 +35,16 @@ def _launch_and_switch(ctx, store, size=None):
 def _rendered_text(widget):
     strip = widget.render_line(0)
     return "".join(segment.text for segment in strip)
+
+
+def _composited_text_at(ctx, widget):
+    region = widget.region
+    if region.height == 0:
+        return ""
+    compositor = ctx["session"].app.screen._compositor
+    strips = compositor.render_strips()
+    start, end = region.x, region.x + region.width
+    return "".join(segment.text for segment in strips[region.y].crop(start, end))
 
 
 def _rendered_cell_text_at(table, strip, column_key):
@@ -169,6 +181,11 @@ def _backlog_row_forces_stacked(ctx, mode):
 @given("the dashboard has launched")
 def _given_dashboard_launched(ctx):
     ctx["session"] = launch(make_test_container(store=FakeStore()))
+
+
+@given(parsers.parse('the "{state}" screen state is rendered'))
+def _screen_state_rendered(ctx, state):
+    ctx["session"] = RENDER_SCREENS[state](RENDER_SIZE)
 
 
 @given(parsers.parse(
@@ -602,6 +619,35 @@ def _filter_bar_left(ctx, text):
 def _filter_bar_right(ctx, text):
     widget = ctx["session"].app.query_one("#backlog-filter-right")
     assert _rendered_text(widget).strip() == text
+
+
+@then("the filter bar's composited frame shows the left label's own text")
+def _filter_bar_composited_left(ctx):
+    bar = ctx["session"].app.query_one("#backlog-filter-bar")
+    left = ctx["session"].app.query_one("#backlog-filter-left")
+    expected = _rendered_text(left).strip()
+    assert expected
+    row = _composited_text_at(ctx, bar)
+    assert row.startswith(expected), (
+        "composited filter bar row %r does not start with the left label %r" % (row, expected)
+    )
+
+
+@then("the filter bar's composited frame shows the right label's own text")
+def _filter_bar_composited_right(ctx):
+    bar = ctx["session"].app.query_one("#backlog-filter-bar")
+    right = ctx["session"].app.query_one("#backlog-filter-right")
+    expected = _rendered_text(right).strip()
+    assert expected
+    row = _composited_text_at(ctx, bar)
+    stripped = row.rstrip()
+    assert stripped.endswith(expected), (
+        "composited filter bar row %r does not end with the right label %r" % (row, expected)
+    )
+    before = stripped[: -len(expected)]
+    assert before.rstrip() != before, (
+        "composited filter bar row %r has no gap between the left and right labels" % row
+    )
 
 
 @then("the filter bar does not show proj-b's own count")
