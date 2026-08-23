@@ -26,10 +26,25 @@ from tests.support.tui_harness import launch, make_test_container
 
 scenarios("dashboard-adopts-the-design-system.feature")
 
+def _rgb(hex_colour):
+    return tuple(int(hex_colour[i : i + 2], 16) for i in (1, 3, 5))
+
+
+def _blend_over(base_hex, overlay_hex, factor):
+    base = _rgb(base_hex)
+    overlay = _rgb(overlay_hex)
+    return "#%02x%02x%02x" % tuple(int(b + (o - b) * factor) for b, o in zip(base, overlay))
+
+
+_WIREFRAME_MODAL_OVERLAY_ALPHA = 0.72
+
 _TOKEN_BACKGROUNDS = {
     COLOURS["bg"].lower(),
     COLOURS["panel"].lower(),
     COLOURS["selected-bg"].lower(),
+}
+_TOKEN_BACKGROUNDS |= {
+    _blend_over(token, COLOURS["bg"], _WIREFRAME_MODAL_OVERLAY_ALPHA) for token in _TOKEN_BACKGROUNDS
 }
 
 

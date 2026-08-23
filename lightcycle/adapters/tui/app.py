@@ -19,6 +19,7 @@ from lightcycle.adapters.tui.design_system import (
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     GLOBAL_SHORTCUTS,
+    MODAL_OVERLAY_ALPHA,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.hub import NodeHubScreen
@@ -305,6 +306,8 @@ class ProjectFilterPicker(ModalScreen):
     CSS = f"""
     ProjectFilterPicker {{
         align: center top;
+        background: {COLOURS["bg"]} {int(MODAL_OVERLAY_ALPHA * 100)}%;
+        border: none;
     }}
     #picker {{
         width: 40;
@@ -482,10 +485,10 @@ class LightcycleApp(App):
         display: none;
     }}
     #backlog-filter-bar {{
-        height: 1;
+        height: 2;
         border-bottom: solid {COLOURS["border"]};
     }}
-    #backlog-filter-bar Static {{
+    #backlog-filter-left {{
         width: auto;
     }}
     #backlog-filter-right {{
