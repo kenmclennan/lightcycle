@@ -219,6 +219,17 @@ Feature: The hierarchy tab
       | item  |
       | theme |
 
+  @wip
+  Scenario Outline: l opens the Log tab for a done item or theme, in the same historical mode as a done step
+    Given a <type> whose every step is done, highlighted in the hierarchy
+    When l is pressed
+    Then its Log tab opens directly, showing its last completed step's log in historical mode
+
+    Examples:
+      | type  |
+      | item  |
+      | theme |
+
   Scenario: A root node with no parent is highlighted at the top row
     Given the current node is a themeless root item
     When I view the Hierarchy tab

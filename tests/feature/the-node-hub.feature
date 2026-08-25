@@ -72,6 +72,33 @@ Feature: The node hub
     Then the header shows its role and its state
     And no theme, workflow, or description fields are shown
 
+  @wip
+  Scenario Outline: A fieldset field's key stays dim while its value renders at full text brightness
+    Given <given>
+    When I open it with Enter or →
+    Then the header's "<key>" key is shown in the dim colour
+    And the header's "<key>" value is shown in the text colour
+
+    Examples:
+      | given                                                              | key     |
+      | an item at step "write-code"                                       | STEP    |
+      | an item at step "write-code" performed by the role "write-code"    | ROLE    |
+      | an active item at step "build" claimed 14 minutes ago              | ELAPSED |
+      | a step is selected, rather than an item or theme                   | STATE   |
+
+  @wip
+  Scenario: A theme's header is its id, its title, and its item count - nothing else
+    Given a theme with 4 items underneath
+    When I open it with Enter or →
+    Then the header shows "theme · 4 items underneath"
+    And no project, theme, workflow, or description line is shown in the header
+
+  @wip
+  Scenario: A theme's header shows no project line, even when its items belong to different projects
+    Given a theme whose items belong to different projects
+    When I open it with Enter or →
+    Then no project line is shown in the header
+
   Scenario Outline: Opening a node lands on the tab that matches its status
     Given a node with the status "<status>"
     When I open it with Enter or →
