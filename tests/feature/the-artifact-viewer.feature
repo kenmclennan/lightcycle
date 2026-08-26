@@ -16,7 +16,11 @@ Feature: The Artifact viewer
   other screen, both sit-in viewers carry the shared status bar - pool,
   Claude availability, version, upgrade-when-available - visible from their
   own first frame, before any poll tick, and kept live by the same poll the
-  rest of the dashboard uses.
+  rest of the dashboard uses. A sit-in viewer's header names the artifact by
+  its type in the cyan colour, its id dim beside it, and carries a
+  right-aligned segment of its own per kind - a list artifact's segment
+  counts the items inside it, and a text artifact's segment shows where it
+  sits among the node's own artifacts.
 
   Scenario Outline: A text artifact opens full-screen when selected
     Given an artifact declares kind "text"
@@ -105,6 +109,30 @@ Feature: The Artifact viewer
     Given a list artifact with more items than fit on one screen is open
     When I scroll to the end
     Then every item can be reached
+
+  @wip
+  Scenario Outline: The header colours only the artifact's type, leaving its id dim
+    Given an artifact declares kind "<kind>"
+    When I select it with Enter
+    Then the header's type segment is shown in the cyan colour
+    And the header's id segment is shown in the dim colour, not cyan
+
+    Examples:
+      | kind |
+      | text |
+      | list |
+
+  @wip
+  Scenario Outline: A text artifact's header shows its position among the node's artifacts
+    Given a node has <total> non-internal artifacts
+    And I open the text artifact at position <position> in that list
+    When it opens
+    Then the header's right-aligned segment reads "<position> / <total>"
+
+    Examples:
+      | position | total |
+      | 1        | 1     |
+      | 2        | 3     |
 
   Scenario Outline: Closing an open artifact returns to the list with it still selected
     Given I opened a "<kind>" artifact from the list
