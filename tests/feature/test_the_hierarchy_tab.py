@@ -228,6 +228,28 @@ def _type_with_active_current_step_highlighted(ctx, node_type):
     _launch(ctx, store, node_id)
 
 
+@given(parsers.parse("a {node_type} whose every step is done, highlighted in the hierarchy"))
+def _type_with_all_steps_done_highlighted(ctx, node_type):
+    store = FakeStore()
+    if node_type == "item":
+        node_id = store.create_item("Item")
+        first = store.create_step("s1", step="build", role="coder", parent=node_id)
+        last = store.create_step("s2", step="write-code", role="write-code", parent=node_id)
+    elif node_type == "theme":
+        node_id = store.create_theme("Theme")
+        item = store.create_item("Item", theme=node_id)
+        first = store.create_step("s1", step="build", role="coder", parent=item)
+        last = store.create_step("s2", step="write-code", role="write-code", parent=item)
+        ctx["item_id"] = item
+    else:
+        raise AssertionError("unhandled node type %r" % node_type)
+    store.close(first, "done")
+    store.close(last, "done")
+    ctx["node_id"] = node_id
+    ctx["last_step_id"] = last
+    _launch(ctx, store, node_id)
+
+
 @given("the hierarchy is open, showing a queued step")
 def _hierarchy_open_queued_step(ctx):
     store = FakeStore()
@@ -904,6 +926,19 @@ def _current_step_log_tab_opens_live(ctx):
     assert isinstance(screen, NodeHubScreen)
     assert screen._node_id == ctx["node_id"]
     assert screen._active_tab == "log"
+
+
+@then("its Log tab opens directly, showing its last completed step's log in historical mode")
+def _log_tab_opens_last_completed_historical(ctx):
+    from lightcycle.adapters.tui.hub import log_tab_mode
+
+    screen = ctx["session"].app.screen
+    store = ctx["store"]
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["node_id"]
+    assert screen._active_tab == "log"
+    assert screen._log_target == ctx["last_step_id"]
+    assert log_tab_mode(store.get_node(ctx["last_step_id"])) == "historical"
 
 
 @then("it is highlighted at the top row")

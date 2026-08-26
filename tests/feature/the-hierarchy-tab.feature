@@ -219,7 +219,6 @@ Feature: The hierarchy tab
       | item  |
       | theme |
 
-  @wip
   Scenario Outline: l opens the Log tab for a done item or theme, in the same historical mode as a done step
     Given a <type> whose every step is done, highlighted in the hierarchy
     When l is pressed

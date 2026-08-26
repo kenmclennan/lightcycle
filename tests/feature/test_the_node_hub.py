@@ -235,6 +235,28 @@ def _step_selected(ctx):
     session.pause()
 
 
+@given("a theme with 4 items underneath")
+def _theme_with_4_items(ctx):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    for i in range(4):
+        store.create_item("Item %d" % i, theme=theme)
+    ctx["node_id"] = theme
+    _launch(ctx, store)
+
+
+@given("a theme whose items belong to different projects")
+def _theme_items_different_projects(ctx):
+    store = FakeStore()
+    theme = store.create_theme("Theme")
+    first = store.create_item("First", theme=theme)
+    store.add_artifact(first, "repo", "org/repo-a")
+    second = store.create_item("Second", theme=theme)
+    store.add_artifact(second, "repo", "org/repo-b")
+    ctx["node_id"] = theme
+    _launch(ctx, store)
+
+
 @given(parsers.parse('a node with the status "{status}"'))
 def _node_with_status(ctx, status):
     store = FakeStore()
@@ -584,6 +606,52 @@ def _header_shows_role_and_state(ctx):
     screen = ctx["session"].app.screen
     assert _text(screen, "#hub-role") == "ROLE: write-code"
     assert _text(screen, "#hub-state") is not None
+
+
+_HEADER_FIELD_SELECTORS = {
+    "STEP": "#hub-step", "ROLE": "#hub-role", "ELAPSED": "#hub-elapsed", "STATE": "#hub-state",
+}
+
+
+@then(parsers.parse("the header's \"{key}\" key is shown in the dim colour"))
+def _header_key_dim_colour(ctx, key):
+    screen = ctx["session"].app.screen
+    widget = screen.query_one(_HEADER_FIELD_SELECTORS[key], Static)
+    style = _segment_style_for_substring(widget, 0, "%s:" % key)
+    assert style is not None
+    assert style.color.get_truecolor().hex.lower() == COLOURS["dim"].lower()
+
+
+@then(parsers.parse("the header's \"{key}\" value is shown in the text colour"))
+def _header_value_text_colour(ctx, key):
+    screen = ctx["session"].app.screen
+    widget = screen.query_one(_HEADER_FIELD_SELECTORS[key], Static)
+    full_text = _rendered_text(widget)
+    value = full_text.split(": ", 1)[1] if ": " in full_text else full_text
+    style = _segment_style_for_substring(widget, 0, value)
+    assert style is not None
+    assert style.color.get_truecolor().hex.lower() == COLOURS["text"].lower()
+
+
+@then(parsers.parse('the header shows "{text}"'))
+def _header_shows_text(ctx, text):
+    screen = ctx["session"].app.screen
+    assert _text(screen, "#hub-item-count") == text
+
+
+@then("no project, theme, workflow, or description line is shown in the header")
+def _no_project_theme_workflow_description(ctx):
+    screen = ctx["session"].app.screen
+    assert _text(screen, "#hub-project") is None
+    assert _text(screen, "#hub-theme") is None
+    assert _text(screen, "#hub-workflow") is None
+    assert _text(screen, "#hub-description") is None
+
+
+@then("no project line is shown in the header")
+def _no_project_line(ctx):
+    screen = ctx["session"].app.screen
+    assert _text(screen, "#hub-project") is None
 
 
 @then("no theme, workflow, or description fields are shown")
