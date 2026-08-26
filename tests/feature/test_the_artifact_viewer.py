@@ -57,6 +57,12 @@ def _rendered_segment(session, widget_id):
     return widget, text, style
 
 
+def _rendered_segments(session, widget_id):
+    widget = session.app.screen.query_one(widget_id, Static)
+    strip = widget.render_line(0)
+    return [(segment.text, segment.style) for segment in strip if segment.text]
+
+
 def _colour_of(style):
     return style.color.get_truecolor().hex.lower()
 
@@ -159,6 +165,20 @@ def _opened_kind_from_list(ctx, kind):
     ctx["session"].press("enter")
 
 
+@given(parsers.parse("a node has {total:d} non-internal artifacts"))
+def _node_has_n_artifacts(ctx, total):
+    artifacts = [("finding-%d" % i, "text %d" % i, "text") for i in range(total)]
+    _setup(ctx, artifacts)
+
+
+@given(parsers.parse("I open the text artifact at position {position:d} in that list"))
+def _open_text_artifact_at_position(ctx, position):
+    table = ctx["session"].app.screen.query_one(ArtifactsTable)
+    ctx["session"].run(lambda: table.move_cursor(row=position - 1))
+    ctx["session"].pause()
+    ctx["session"].press("enter")
+
+
 @given("the artifact viewer is open, showing a text artifact")
 def _viewer_open_text(ctx):
     _setup(ctx, [("finding", "some text", "text")])
@@ -188,6 +208,11 @@ def _close_it_with(ctx, key):
 
 @when("that happens")
 def _that_happens(ctx):
+    pass
+
+
+@when("it opens")
+def _it_opens(ctx):
     pass
 
 
@@ -296,6 +321,25 @@ def _clear_failure_message_crash(ctx):
     assert toast.display
     assert "no longer exists" in _widget_text(toast)
     assert ctx["launcher"].opened_paths == []
+
+
+@then("the header's type segment is shown in the cyan colour")
+def _header_type_cyan(ctx):
+    text, style = _rendered_segments(ctx["session"], "#artifact-viewer-kind")[0]
+    assert _colour_of(style) == COLOURS["cyan"].lower()
+
+
+@then("the header's id segment is shown in the dim colour, not cyan")
+def _header_id_dim(ctx):
+    text, style = _rendered_segments(ctx["session"], "#artifact-viewer-kind")[-1]
+    assert _colour_of(style) == COLOURS["dim"].lower()
+    assert _colour_of(style) != COLOURS["cyan"].lower()
+
+
+@then(parsers.parse('the header\'s right-aligned segment reads "{expected}"'))
+def _header_right_aligned_reads(ctx, expected):
+    _, text, _ = _rendered_segment(ctx["session"], "#artifact-viewer-count")
+    assert text.strip() == expected
 
 
 @then("it displays as its own scrollable list, not as raw text")

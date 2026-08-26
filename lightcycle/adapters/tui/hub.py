@@ -599,10 +599,11 @@ class ArtifactViewerHeader(Horizontal):
         yield Static(id="artifact-viewer-kind")
         yield Static(id="artifact-viewer-count")
 
-    def update(self, kind_text, count_text) -> None:
-        self.query_one("#artifact-viewer-kind", Static).update(
-            Text(kind_text, style=COLOURS["cyan"])
-        )
+    def update(self, artifact_type, node_id, count_text) -> None:
+        kind_text = Text()
+        kind_text.append(artifact_type, style=COLOURS["cyan"])
+        kind_text.append(" · %s" % node_id, style=COLOURS["dim"])
+        self.query_one("#artifact-viewer-kind", Static).update(kind_text)
         self.query_one("#artifact-viewer-count", Static).update(
             Text(count_text, style=COLOURS["dim"]) if count_text else ""
         )
@@ -663,6 +664,11 @@ class TextArtifactViewerScreen(ArtifactViewerScreen):
     }
     """
 
+    def __init__(self, artifact, node_id, position, total):
+        super().__init__(artifact, node_id)
+        self._position = position
+        self._total = total
+
     def compose(self) -> ComposeResult:
         yield ArtifactViewerHeader(id="artifact-viewer-header")
         yield ArtifactTextBody(id="artifact-viewer-body", highlight=False, markup=False, wrap=True)
@@ -670,8 +676,9 @@ class TextArtifactViewerScreen(ArtifactViewerScreen):
 
     def on_mount(self) -> None:
         super().on_mount()
-        kind_text = "%s · %s" % (self._artifact.type, self._node_id)
-        self.query_one(ArtifactViewerHeader).update(kind_text, None)
+        self.query_one(ArtifactViewerHeader).update(
+            self._artifact.type, self._node_id, "%d / %d" % (self._position, self._total)
+        )
         body = self.query_one(ArtifactTextBody)
         body.write(Text(self._artifact.value))
         self.set_focus(body)
@@ -690,7 +697,8 @@ class ListArtifactViewerScreen(ArtifactViewerScreen):
         table.show_header = False
         items = [line for line in self._artifact.value.splitlines() if line.strip()]
         self.query_one(ArtifactViewerHeader).update(
-            "%s · %s" % (self._artifact.type, self._node_id),
+            self._artifact.type,
+            self._node_id,
             "%d item%s" % (len(items), "" if len(items) == 1 else "s"),
         )
         table.add_column("value", key="value")
@@ -1214,7 +1222,11 @@ class NodeHubScreen(Screen):
         elif kind == "list":
             self.app.push_screen(ListArtifactViewerScreen(artifact, self._node_id))
         else:
-            self.app.push_screen(TextArtifactViewerScreen(artifact, self._node_id))
+            self.app.push_screen(
+                TextArtifactViewerScreen(
+                    artifact, self._node_id, index + 1, len(self._last_artifacts)
+                )
+            )
 
     def _open_external_artifact(self, kind, value) -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
