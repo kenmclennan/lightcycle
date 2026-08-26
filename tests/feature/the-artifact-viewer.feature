@@ -110,7 +110,6 @@ Feature: The Artifact viewer
     When I scroll to the end
     Then every item can be reached
 
-  @wip
   Scenario Outline: The header colours only the artifact's type, leaving its id dim
     Given an artifact declares kind "<kind>"
     When I select it with Enter
@@ -122,7 +121,6 @@ Feature: The Artifact viewer
       | text |
       | list |
 
-  @wip
   Scenario Outline: A text artifact's header shows its position among the node's artifacts
     Given a node has <total> non-internal artifacts
     And I open the text artifact at position <position> in that list
