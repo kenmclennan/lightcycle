@@ -89,6 +89,14 @@ def current_step(store, item_id):
     return None
 
 
+def last_completed_step(store, item_id):
+    result = None
+    for child in store.children(item_id):
+        if child.state == State.DONE:
+            result = child
+    return result
+
+
 def landing_node(store, node):
     if node.type != "item" or node.state in (State.DONE, State.IN_PROGRESS) or node.blocked_by:
         return node
@@ -100,15 +108,21 @@ def log_target_node(store, node):
     if node.type == "step":
         return node
     if node.type == "item":
-        return current_step(store, node.id)
+        cur = current_step(store, node.id)
+        return cur if cur is not None else last_completed_step(store, node.id)
     if node.type == "theme":
+        fallback = None
         for child in store.children(node.id):
             if child.type != "item":
                 continue
             cur = current_step(store, child.id)
             if cur is not None and cur.state == State.IN_PROGRESS:
                 return cur
-        return None
+            if cur is None:
+                candidate = last_completed_step(store, child.id)
+                if candidate is not None:
+                    fallback = candidate
+        return fallback
     return None
 
 
@@ -141,17 +155,21 @@ class HeaderData:
     state_field: Optional[str]
     escalation_text: Optional[str]
     escalation_target: Optional[str]
+    item_count_line: Optional[str] = None
 
 
 def build_header(store, node, now):
-    project = project_label(store, node) or None
     if node.type == "theme":
+        count = sum(1 for child in store.children(node.id) if child.type == "item")
+        item_count_line = "theme · %d item%s underneath" % (count, "" if count == 1 else "s")
         return HeaderData(
-            id=node.id, title=node.title, project=project,
+            id=node.id, title=node.title, project=None,
             theme_line=None, workflow_line=None, description=None,
             step_field=None, role_field=None, elapsed_field=None, state_field=None,
             escalation_text=None, escalation_target=None,
+            item_count_line=item_count_line,
         )
+    project = project_label(store, node) or None
     if node.type == "item":
         return _item_header(store, node, now, project)
     return _step_header(store, node, now, project)
@@ -334,6 +352,7 @@ class HubHeader(Vertical):
     def compose(self) -> ComposeResult:
         yield Static(id="hub-id")
         yield Static(id="hub-title")
+        yield Static(id="hub-item-count")
         yield Static(id="hub-project")
         yield Static(id="hub-theme")
         yield Static(id="hub-workflow")
@@ -347,18 +366,17 @@ class HubHeader(Vertical):
     def update(self, header) -> None:
         self.query_one("#hub-id", Static).update(Text(header.id, style=COLOURS["cyan"]))
         self.query_one("#hub-title", Static).update(header.title or "")
+        self._line("#hub-item-count", header.item_count_line)
         self._line("#hub-project", "project: %s" % header.project if header.project else None)
         self._line("#hub-theme", "theme: %s" % header.theme_line if header.theme_line else None)
         self._line(
             "#hub-workflow", "workflow: %s" % header.workflow_line if header.workflow_line else None
         )
         self._line("#hub-description", header.description)
-        self._line("#hub-step", "STEP: %s" % header.step_field if header.step_field else None)
-        self._line("#hub-role", "ROLE: %s" % header.role_field if header.role_field else None)
-        self._line(
-            "#hub-elapsed", "ELAPSED: %s" % header.elapsed_field if header.elapsed_field else None
-        )
-        self._line("#hub-state", "STATE: %s" % header.state_field if header.state_field else None)
+        self._field_line("#hub-step", "STEP", header.step_field)
+        self._field_line("#hub-role", "ROLE", header.role_field)
+        self._field_line("#hub-elapsed", "ELAPSED", header.elapsed_field)
+        self._field_line("#hub-state", "STATE", header.state_field)
 
         panel = self.query_one(EscalationPanel)
         if header.escalation_text:
@@ -374,6 +392,17 @@ class HubHeader(Vertical):
         widget = self.query_one(selector, Static)
         if text:
             widget.update(Text(text, style=COLOURS["dim"]))
+            widget.display = True
+        else:
+            widget.update("")
+            widget.display = False
+
+    def _field_line(self, selector, key, value) -> None:
+        widget = self.query_one(selector, Static)
+        if value:
+            text = Text("%s: " % key, style=COLOURS["dim"])
+            text.append(str(value), style=COLOURS["text"])
+            widget.update(text)
             widget.display = True
         else:
             widget.update("")
@@ -468,7 +497,7 @@ class HierarchyPagingTable(DataTable):
                 return
         else:
             target = log_target_node(store, node)
-            if target is None or target.state != State.IN_PROGRESS:
+            if log_tab_mode(target) == "no-log":
                 return
         screen.open_at(row_id, initial_tab="log")
 
