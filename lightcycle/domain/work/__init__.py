@@ -8,6 +8,7 @@ from lightcycle.domain.work.hierarchy import (
     viewable_artifacts,
 )
 from lightcycle.domain.work.item import Item
+from lightcycle.domain.work.log_line import LogKind, LogLine
 from lightcycle.domain.work.node import Node
 from lightcycle.domain.work.node_queue import NodeQueue
 from lightcycle.domain.work.node_spec import NodeSpec
@@ -20,5 +21,6 @@ __all__ = [
     "derive_state",
     "HierarchyRow", "compose_hierarchy", "display_role", "has_content", "landing_tab",
     "row_bucket", "viewable_artifacts",
-    "Item", "Node", "NodeQueue", "NodeSpec", "NodeView", "ProjectedStep", "worker_log_filename",
+    "Item", "LogKind", "LogLine", "Node", "NodeQueue", "NodeSpec", "NodeView", "ProjectedStep",
+    "worker_log_filename",
 ]

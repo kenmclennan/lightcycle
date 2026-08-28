@@ -11,6 +11,7 @@ from textual.widgets import DataTable, RichLog, Static
 from textual.widgets.data_table import CellDoesNotExist
 
 from lightcycle import __version__
+from lightcycle.adapters.log_parser import LogLineParser
 from lightcycle.adapters.tui.design_system import (
     COLOURS,
     COLUMN_GRIDS,
@@ -49,7 +50,7 @@ from lightcycle.application.work import (
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.work import (
-    Item, State, display_role, has_content, landing_tab, row_bucket, type_label,
+    Item, LogKind, State, display_role, has_content, landing_tab, row_bucket, type_label,
     viewable_artifacts,
 )
 
@@ -430,6 +431,8 @@ class LogPane(RichLog):
     ]
 
     def __init__(self, *args, **kwargs):
+        kwargs.setdefault("wrap", True)
+        kwargs.setdefault("min_width", 0)
         super().__init__(*args, **kwargs)
         self.live = False
 
@@ -437,11 +440,20 @@ class LogPane(RichLog):
         super().watch_scroll_y(old, new)
         self.auto_scroll = self.is_vertical_scroll_end
 
-    def replace_last_line(self, content) -> None:
-        if self._deferred_renders:
-            self._deferred_renders.pop()
-        elif self.lines:
-            self.lines.pop()
+    def write_entry(self, content) -> int:
+        before_deferred = len(self._deferred_renders)
+        before_lines = len(self.lines)
+        self.write(content)
+        if len(self._deferred_renders) > before_deferred:
+            return 1
+        return len(self.lines) - before_lines
+
+    def replace_last_entry(self, row_count, content) -> None:
+        for _ in range(row_count):
+            if self._deferred_renders:
+                self._deferred_renders.pop()
+            elif self.lines:
+                self.lines.pop()
         self._line_cache.clear()
         self.write(content, scroll_end=False)
 
@@ -714,6 +726,7 @@ class NodeHubScreen(Screen):
         Binding("left", "close_hub", "Back", show=False),
         Binding("[", "prev_tab", "Prev tab", show=False),
         Binding("]", "next_tab", "Next tab", show=False),
+        Binding("t", "toggle_thinking", "Thinking", show=False),
     ]
 
     CSS = f"""
@@ -782,8 +795,12 @@ class NodeHubScreen(Screen):
         self._log_offset = 0
         self._log_finished = False
         self._log_timer = None
+        self._log_parser = LogLineParser()
+        self._log_lines = []
+        self._show_thinking = True
         self._log_cursor_active = False
-        self._log_cursor_text = ""
+        self._log_cursor_text = None
+        self._log_cursor_row_count = 0
         self._last_artifacts_shape = None
         self._last_artifacts = []
         self._has_artifacts = False
@@ -830,6 +847,9 @@ class NodeHubScreen(Screen):
         log_node = log_target_node(store, node)
         mode = log_tab_mode(log_node)
         self._log_mode = mode
+        self._log_parser = LogLineParser()
+        self._log_lines = []
+        self._show_thinking = True
         empty = self.query_one("#hub-log-empty", Static)
         if mode == "no-log":
             empty.update(LOG_NO_STREAM_MESSAGE)
@@ -859,8 +879,10 @@ class NodeHubScreen(Screen):
     def _apply_tail_result(self, result) -> None:
         self._log_offset = result.offset
         log_pane = self.query_one(LogPane)
-        if result.data:
-            self._write_tail_data(log_pane, result.data.decode("utf-8", errors="replace"))
+        new_lines = self._log_parser.feed(result.data) if result.data else []
+        if new_lines:
+            self._log_lines.extend(new_lines)
+            self._write_tail_data(log_pane, new_lines)
         if self._log_mode == "live" and not result.live and not self._log_finished:
             self._clear_log_cursor(log_pane)
             self._log_finished = True
@@ -869,28 +891,51 @@ class NodeHubScreen(Screen):
             if self._log_timer is not None:
                 self._log_timer.stop()
 
-    def _write_tail_data(self, log_pane, text) -> None:
-        lines = text.split("\n")
-        if lines and lines[-1] == "":
-            lines.pop()
-        if not lines:
+    def _visible_log_lines(self, lines):
+        if self._show_thinking:
+            return list(lines)
+        return [line for line in lines if line.kind != LogKind.THINKING]
+
+    def _render_log_line(self, line) -> Text:
+        prefix = line.timestamp.astimezone().strftime("%H:%M:%S ") if line.timestamp else ""
+        return Text(prefix + line.text, style=COLOURS["text"])
+
+    def _paint_log_lines(self, log_pane, lines, live) -> None:
+        for index, line in enumerate(lines):
+            content = self._render_log_line(line)
+            if live and index == len(lines) - 1:
+                cursor_content = Text.assemble(content, (LOG_CURSOR_GLYPH, COLOURS["cyan"]))
+                self._log_cursor_row_count = log_pane.write_entry(cursor_content)
+                self._log_cursor_text = content
+                self._log_cursor_active = True
+            else:
+                log_pane.write_entry(content)
+
+    def _write_tail_data(self, log_pane, lines) -> None:
+        visible = self._visible_log_lines(lines)
+        if not visible:
             return
         live = self._log_mode == "live" and not self._log_finished
         if live:
             self._clear_log_cursor(log_pane)
-        for index, line in enumerate(lines):
-            content = Text(line, style=COLOURS["text"])
-            if live and index == len(lines) - 1:
-                content.append(LOG_CURSOR_GLYPH, style=COLOURS["cyan"])
-                self._log_cursor_text = line
-                self._log_cursor_active = True
-            log_pane.write(content)
+        self._paint_log_lines(log_pane, visible, live)
 
     def _clear_log_cursor(self, log_pane) -> None:
         if not self._log_cursor_active:
             return
-        log_pane.replace_last_line(Text(self._log_cursor_text, style=COLOURS["text"]))
+        log_pane.replace_last_entry(self._log_cursor_row_count, self._log_cursor_text)
         self._log_cursor_active = False
+
+    def action_toggle_thinking(self) -> None:
+        if self._active_tab != "log" or self._log_mode == "no-log":
+            return
+        self._show_thinking = not self._show_thinking
+        log_pane = self.query_one(LogPane)
+        log_pane.clear()
+        self._log_cursor_active = False
+        visible = self._visible_log_lines(self._log_lines)
+        live = self._log_mode == "live" and not self._log_finished
+        self._paint_log_lines(log_pane, visible, live)
 
     def _initial_refresh(self) -> None:
         self._refresh(initial=True)

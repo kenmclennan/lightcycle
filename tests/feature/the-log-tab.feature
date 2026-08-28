@@ -120,3 +120,34 @@ Feature: The Log tab
     When Ctrl-D is pressed
     And Ctrl-U is pressed
     Then the view is scrolled back to where it started
+
+  Scenario: A line wider than the pane wraps instead of being cut off
+    Given the current step is being performed by a worker and has already written a line wider than the pane
+    When I open its Log tab
+    Then the wide line's full text is reachable across more than one painted row
+
+  Scenario: A malformed log line is shown instead of crashing the tab or vanishing
+    Given the current step is being performed by a worker and has already written a malformed line
+    When I open its Log tab
+    Then the malformed line is shown as its own line
+
+  Scenario: Thinking lines are shown by default
+    Given the live log is open and following the tail, with a thinking line in its output
+    Then the thinking line is visible
+
+  Scenario: Pressing t hides thinking lines, and pressing it again restores them
+    Given the live log is open and following the tail, with a thinking line in its output
+    When I press t
+    Then the thinking line is hidden
+    When I press t
+    Then the thinking line is visible
+
+  Scenario: The live cursor stays on the last visible line when the newest event is a hidden thinking line
+    Given the live log is open and following the tail, with thinking hidden
+    When a thinking-only line arrives
+    Then the cursor still marks the previous last visible line
+
+  Scenario: The live cursor stays on the last visible line when the newest event produces no line at all
+    Given the live log is open and following the tail
+    When a thinking-token-only event arrives
+    Then the cursor still marks the previous last visible line

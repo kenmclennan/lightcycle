@@ -288,15 +288,18 @@ def _hub_hierarchy_stacked(size):
 
 _LOG_PATH = "/fake/logs/worker-write-code.log"
 
+_LOG_EXCERPT = (
+    b'{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_01Qj4aibXup6tHb3JkcPWr4E","type":"message","role":"assistant","content":[{"type":"text","text":"Now run the tests and linter to verify everything is green."}],"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":555,"cache_read_input_tokens":34014,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":555},"output_tokens":2,"service_tier":"standard","inference_geo":"not_available"},"diagnostics":null,"context_management":null},"parent_tool_use_id":null,"session_id":"7c5f0968-d6de-4df9-b07f-7cdb41e507ea","uuid":"ba202d44-0f04-4e6c-a8f0-536b907d42e9","request_id":"req_011Ccf94gxhJzNgDfMYpLAuR"}\n'
+    b'{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_01Qj4aibXup6tHb3JkcPWr4E","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01WBJE3FNg6fpx4XKdjRLTiP","name":"Bash","input":{"command":"cd /Users/kenmclennan/workspace/projects/the-grid/.worktrees/afo && bash tests/run.sh 2>&1 | tail -20","description":"Run test suite in worktree","timeout":120000},"caller":{"type":"direct"}}],"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":555,"cache_read_input_tokens":34014,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":555},"output_tokens":2,"service_tier":"standard","inference_geo":"not_available"},"diagnostics":null,"context_management":null},"parent_tool_use_id":null,"session_id":"7c5f0968-d6de-4df9-b07f-7cdb41e507ea","uuid":"4e145aef-de3b-4a9a-b43e-88eff6dfca80","request_id":"req_011Ccf94gxhJzNgDfMYpLAuR"}\n'
+    b'{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_01PLhTvEyW3xgFPsEELBUPzK","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_014aTzb2UxU8LkwrHZhR67ox","name":"Bash","input":{"command":"cd /Users/kenmclennan/workspace/projects/the-grid/.worktrees/afo && uv run ruff check .","description":"Run ruff linter in worktree"},"caller":{"type":"direct"}}],"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":262,"cache_read_input_tokens":34569,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":262},"output_tokens":57,"service_tier":"standard","inference_geo":"not_available"},"diagnostics":null,"context_management":null},"parent_tool_use_id":null,"session_id":"7c5f0968-d6de-4df9-b07f-7cdb41e507ea","uuid":"aef1e6e9-82da-4a73-b538-2eaca5200c17","request_id":"req_011Ccf9DmpPneFwYFJ9f2obk"}\n'
+    b'{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_014aTzb2UxU8LkwrHZhR67ox","type":"tool_result","content":"All checks passed!","is_error":false}]},"parent_tool_use_id":null,"session_id":"7c5f0968-d6de-4df9-b07f-7cdb41e507ea","uuid":"06ed7763-87b4-47b7-bc24-745197cd8616","timestamp":"2026-07-03T12:42:28.304Z","tool_use_result":{"stdout":"All checks passed!","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false}}\n'
+    b'{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_01GcoPBSgqJs23gjNYtPeu8E","type":"message","role":"assistant","content":[{"type":"text","text":"Ruff is clean. Waiting for tests."}],"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":222,"cache_read_input_tokens":34831,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":222},"output_tokens":2,"service_tier":"standard","inference_geo":"not_available"},"diagnostics":null,"context_management":null},"parent_tool_use_id":null,"session_id":"7c5f0968-d6de-4df9-b07f-7cdb41e507ea","uuid":"06bf67cc-fc86-48aa-a3e7-3f1742e878ca","request_id":"req_011Ccf9E3mbAc3N22qfPTSyR"}\n'
+)
+
 
 def _hub_active_log(size):
     store, _theme, scan, coding = _populated_store()
-    fs = FakeFs(files={_LOG_PATH: (
-        b"14:02:11 reading lightcycle/adapters/sqlite_store.py\n"
-        b"14:02:14 adding project registry table migration\n"
-        b"14:03:02 writing tests/unit/test_project_registry.py\n"
-        b"14:03:47 running fast tier...\n"
-    )})
+    fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT})
     workers = FakeWorkers(
         workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
                   "log": _LOG_PATH}],
@@ -307,12 +310,7 @@ def _hub_active_log(size):
 
 def _hub_log_finished(size):
     store, _theme, scan, coding = _populated_store()
-    fs = FakeFs(files={_LOG_PATH: (
-        b"14:02:11 reading lightcycle/adapters/sqlite_store.py\n"
-        b"14:02:14 adding project registry table migration\n"
-        b"14:03:02 writing tests/unit/test_project_registry.py\n"
-        b"14:04:19 fast tier green, opening PR\n"
-    )})
+    fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT})
     workers = FakeWorkers(
         workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
                   "log": _LOG_PATH}],
