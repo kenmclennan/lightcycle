@@ -60,6 +60,7 @@ LOG_NO_STREAM_MESSAGE = "Nothing live to stream."
 LOG_FINISHED_MESSAGE = "✓ step finished"
 LOG_CURSOR_GLYPH = "▌"
 ARTIFACTS_EMPTY_MESSAGE = "This node has no artifacts to view yet."
+DESCRIPTION_EMPTY_MESSAGE = "This node has no description to show."
 TOAST_DURATION_SECONDS = 2.0
 TOAST_SUCCESS_PREFIX = "↗ "
 TOAST_FAILURE_PREFIX = "⚠ "
@@ -67,8 +68,10 @@ TOAST_SUB_CAPTION = "back to the artifact list automatically"
 TOAST_URL_SUB_SUFFIX = "nothing more to show here"
 TOAST_FILEPATH_DESTINATION = "in its default application"
 
-_TAB_ORDER = ("hierarchy", "log", "artifacts")
-_TAB_LABELS = {"hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts"}
+_TAB_ORDER = ("hierarchy", "log", "artifacts", "description")
+_TAB_LABELS = {
+    "hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts", "description": "Description",
+}
 
 STACKED_COLUMN_KEY = "row"
 HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
@@ -149,7 +152,6 @@ class HeaderData:
     project: Optional[str]
     theme_line: Optional[str]
     workflow_line: Optional[str]
-    description: Optional[str]
     step_field: Optional[str]
     role_field: Optional[str]
     elapsed_field: Optional[str]
@@ -165,7 +167,7 @@ def build_header(store, node, now):
         item_count_line = "theme · %d item%s underneath" % (count, "" if count == 1 else "s")
         return HeaderData(
             id=node.id, title=node.title, project=None,
-            theme_line=None, workflow_line=None, description=None,
+            theme_line=None, workflow_line=None,
             step_field=None, role_field=None, elapsed_field=None, state_field=None,
             escalation_text=None, escalation_target=None,
             item_count_line=item_count_line,
@@ -182,7 +184,6 @@ def _item_header(store, node, now, project):
         theme = store.get_node(node.parent)
         theme_line = "%s · %s" % (theme.id, theme.title)
     workflow_line = node.workflow or None
-    description = node.description or None
     step_field = role_field = elapsed_field = None
     escalation_text = escalation_target = None
 
@@ -209,7 +210,7 @@ def _item_header(store, node, now, project):
 
     return HeaderData(
         id=node.id, title=node.title, project=project,
-        theme_line=theme_line, workflow_line=workflow_line, description=description,
+        theme_line=theme_line, workflow_line=workflow_line,
         step_field=step_field, role_field=role_field, elapsed_field=elapsed_field,
         state_field=None, escalation_text=escalation_text, escalation_target=escalation_target,
     )
@@ -226,7 +227,7 @@ def _step_header(store, node, now, project):
     elapsed_field = _elapsed(store, node, now) if node.state == State.IN_PROGRESS else None
     return HeaderData(
         id=node.id, title=node.title, project=project,
-        theme_line=None, workflow_line=None, description=None,
+        theme_line=None, workflow_line=None,
         step_field=None, role_field=display_role(node.role), elapsed_field=elapsed_field,
         state_field=row_bucket(node), escalation_text=escalation_text,
         escalation_target=escalation_target,
@@ -357,7 +358,6 @@ class HubHeader(Vertical):
         yield Static(id="hub-project")
         yield Static(id="hub-theme")
         yield Static(id="hub-workflow")
-        yield Static(id="hub-description")
         yield Static(id="hub-step")
         yield Static(id="hub-role")
         yield Static(id="hub-elapsed")
@@ -373,7 +373,6 @@ class HubHeader(Vertical):
         self._line(
             "#hub-workflow", "workflow: %s" % header.workflow_line if header.workflow_line else None
         )
-        self._line("#hub-description", header.description)
         self._field_line("#hub-step", "STEP", header.step_field)
         self._field_line("#hub-role", "ROLE", header.role_field)
         self._field_line("#hub-elapsed", "ELAPSED", header.elapsed_field)
@@ -593,6 +592,15 @@ class ArtifactTextBody(RichLog):
     ]
 
 
+class DescriptionPane(RichLog):
+    BINDINGS = [
+        Binding("up", "scroll_up", "Scroll up", show=False),
+        Binding("down", "scroll_down", "Scroll down", show=False),
+        Binding("ctrl+u", "page_up", "Page up", show=False),
+        Binding("ctrl+d", "page_down", "Page down", show=False),
+    ]
+
+
 class ArtifactListTable(DataTable):
     _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
 
@@ -753,7 +761,7 @@ class NodeHubScreen(Screen):
         height: 2;
         display: none;
     }}
-    #hub-log-empty, #hub-artifacts-empty {{
+    #hub-log-empty, #hub-artifacts-empty, #hub-description-empty {{
         content-align: center middle;
         height: 1fr;
         color: {COLOURS["dim"]};
@@ -770,6 +778,9 @@ class NodeHubScreen(Screen):
         display: none;
     }}
     LogPane {{
+        height: 1fr;
+    }}
+    DescriptionPane {{
         height: 1fr;
     }}
     #pinned-ancestor {{
@@ -808,6 +819,8 @@ class NodeHubScreen(Screen):
         self._artifacts_stacked = False
         self._toast_active = False
         self._toast_timer = None
+        self._has_description = False
+        self._last_description = None
 
     @property
     def container(self):
@@ -825,6 +838,8 @@ class NodeHubScreen(Screen):
         yield Static(id="artifacts-floor")
         yield Static(ARTIFACTS_EMPTY_MESSAGE, id="hub-artifacts-empty")
         yield Static(id="hub-artifacts-toast")
+        yield DescriptionPane(id="hub-description-view", highlight=False, markup=False, wrap=True, auto_scroll=False)
+        yield Static(DESCRIPTION_EMPTY_MESSAGE, id="hub-description-empty")
         yield DashboardFooter(id="hub-footer", shortcuts=HUB_SHORTCUTS)
 
     def on_mount(self) -> None:
@@ -952,6 +967,7 @@ class NodeHubScreen(Screen):
         rows = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id)).rows
         self._render_hierarchy(rows, initial)
         self._render_artifacts(viewable_artifacts(node), initial)
+        self._render_description(node.description)
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
         self._refresh_footer()
@@ -1152,6 +1168,16 @@ class NodeHubScreen(Screen):
             for key, value in zip(COLUMN_GRIDS["artifacts"], cells):
                 table.update_cell(str(index), key, value)
 
+    def _render_description(self, description) -> None:
+        if description == self._last_description:
+            return
+        self._last_description = description
+        self._has_description = bool(description)
+        pane = self.query_one(DescriptionPane)
+        pane.clear()
+        if description:
+            pane.write(Text(description, style=COLOURS["text"]))
+
     def update_pinned_ancestor(self) -> None:
         banner = self.query_one("#pinned-ancestor", Static)
         if self._active_tab != "hierarchy" or not self._last_rows or self._hierarchy_floor:
@@ -1199,6 +1225,11 @@ class NodeHubScreen(Screen):
             artifacts_active and not self._has_artifacts and not showing_toast
         )
         self.query_one("#hub-artifacts-toast", Static).display = showing_toast
+        description_active = self._active_tab == "description"
+        self.query_one(DescriptionPane).display = description_active and self._has_description
+        self.query_one("#hub-description-empty", Static).display = (
+            description_active and not self._has_description
+        )
         self.update_pinned_ancestor()
 
     def _focus_active_tab(self) -> None:
@@ -1216,6 +1247,8 @@ class NodeHubScreen(Screen):
             and not self._artifacts_floor
         ):
             self.set_focus(self.query_one(ArtifactsTable))
+        elif self._active_tab == "description" and self._has_description:
+            self.set_focus(self.query_one(DescriptionPane))
         else:
             self.set_focus(None)
 

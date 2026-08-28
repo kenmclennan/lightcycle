@@ -87,7 +87,10 @@ def _painted_spans(strip):
     return spans
 
 
-_HUB_TABS = (("hierarchy", "Hierarchy"), ("log", "Log"), ("artifacts", "Artifacts"))
+_HUB_TABS = (
+    ("hierarchy", "Hierarchy"), ("log", "Log"), ("artifacts", "Artifacts"),
+    ("description", "Description"),
+)
 
 
 def _assert_tab_strip_rendered(session, active_tab):
@@ -153,25 +156,6 @@ def _item_no_theme(ctx):
 def _item_no_workflow(ctx):
     store = FakeStore()
     item = store.create_item("No workflow item")
-    store.create_step("write code", step="write-code", role="write-code", parent=item)
-    ctx["item_id"] = item
-    _launch(ctx, store)
-
-
-@given("an item with a description")
-def _item_with_description(ctx):
-    store = FakeStore()
-    item = store.create_item("Described item")
-    store.edit_node(item, description="What this item is about.")
-    store.create_step("write code", step="write-code", role="write-code", parent=item)
-    ctx["item_id"] = item
-    _launch(ctx, store)
-
-
-@given("an item with no description")
-def _item_no_description(ctx):
-    store = FakeStore()
-    item = store.create_item("Undescribed item")
     store.create_step("write code", step="write-code", role="write-code", parent=item)
     ctx["item_id"] = item
     _launch(ctx, store)
@@ -559,18 +543,6 @@ def _no_workflow_line(ctx):
     assert _text(screen, "#hub-workflow") is None
 
 
-@then("the description is shown in the header, below the identity fields")
-def _description_shown(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-description") == "What this item is about."
-
-
-@then("no description line is shown in the header")
-def _no_description_line(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-description") is None
-
-
 @then(parsers.parse('the header names "{step}" as the current step'))
 def _header_names_step(ctx, step):
     screen = ctx["session"].app.screen
@@ -639,13 +611,12 @@ def _header_shows_text(ctx, text):
     assert _text(screen, "#hub-item-count") == text
 
 
-@then("no project, theme, workflow, or description line is shown in the header")
-def _no_project_theme_workflow_description(ctx):
+@then("no project, theme, or workflow line is shown in the header")
+def _no_project_theme_workflow(ctx):
     screen = ctx["session"].app.screen
     assert _text(screen, "#hub-project") is None
     assert _text(screen, "#hub-theme") is None
     assert _text(screen, "#hub-workflow") is None
-    assert _text(screen, "#hub-description") is None
 
 
 @then("no project line is shown in the header")
@@ -654,12 +625,11 @@ def _no_project_line(ctx):
     assert _text(screen, "#hub-project") is None
 
 
-@then("no theme, workflow, or description fields are shown")
-def _no_theme_workflow_description(ctx):
+@then("no theme or workflow fields are shown")
+def _no_theme_workflow(ctx):
     screen = ctx["session"].app.screen
     assert _text(screen, "#hub-theme") is None
     assert _text(screen, "#hub-workflow") is None
-    assert _text(screen, "#hub-description") is None
 
 
 @then(parsers.parse('it lands on the "{tab}" tab'))

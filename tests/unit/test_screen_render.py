@@ -75,3 +75,38 @@ def test_the_artifact_viewer_header_shows_its_kind_id_and_count():
     assert "findings · LC-45" in text_frame
     assert "watched-prs · LC-45" in list_frame
     assert "3 items" in list_frame
+
+
+def test_a_long_description_never_grows_the_header():
+    from lightcycle.adapters.tui.hub import HubHeader
+    from tests.support.screen_render import LONG_DESCRIPTION, _launch, _long_description_store, _open_hub
+
+    def header_height(description):
+        store, item = _long_description_store(description=description)
+        session = _open_hub(_launch(store, size=DEFAULT_SIZE), item, tab="description")
+        try:
+            return session.run(lambda: session.app.screen.query_one(HubHeader).region.height)
+        finally:
+            session.close()
+
+    assert header_height(None) == header_height(LONG_DESCRIPTION)
+
+    frame = render("hub#long-description")
+    assert "Description" in frame
+
+
+def test_header_height_reflects_the_fields_a_node_shows():
+    from lightcycle.adapters.tui.hub import HubHeader, HubTabStrip
+
+    def header_height(state):
+        session = SCREENS[state](DEFAULT_SIZE)
+        try:
+            header = session.run(lambda: session.app.screen.query_one(HubHeader))
+            tab_strip = session.run(lambda: session.app.screen.query_one(HubTabStrip))
+            header_bottom = session.run(lambda: header.region.y + header.region.height)
+            assert session.run(lambda: tab_strip.region.y) == header_bottom
+            return header.region.height
+        finally:
+            session.close()
+
+    assert header_height("hub#done-item") < header_height("hub#hierarchy")
