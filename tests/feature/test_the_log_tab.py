@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from rich.color import Color
@@ -14,7 +16,32 @@ scenarios("the-log-tab.feature")
 
 LOG_PATH = "/fake/logs/worker.log"
 WORKER_PID = 111
-SEEDED_LINES = b"14:02:11 reading files\n14:02:14 writing tests\n14:03:02 running suite\n"
+THINKING_TEXT = "considering the approach"
+
+
+def _assistant_text_event(text, ts=None):
+    event = {"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}}
+    if ts:
+        event["timestamp"] = ts
+    return (json.dumps(event) + "\n").encode()
+
+
+def _thinking_event(text, ts=None):
+    event = {"type": "assistant", "message": {"content": [{"type": "thinking", "thinking": text}]}}
+    if ts:
+        event["timestamp"] = ts
+    return (json.dumps(event) + "\n").encode()
+
+
+def _thinking_tokens_event():
+    return (json.dumps({"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 5}) + "\n").encode()
+
+
+SEEDED_LINES = (
+    _assistant_text_event("reading files", "2026-08-19T14:02:11.000Z")
+    + _assistant_text_event("writing tests", "2026-08-19T14:02:14.000Z")
+    + _assistant_text_event("running suite", "2026-08-19T14:03:02.000Z")
+)
 
 
 @pytest.fixture
@@ -67,7 +94,7 @@ def _done_step(lines):
 
 
 def _many_lines(n):
-    return "".join("line %02d\n" % i for i in range(n)).encode()
+    return b"".join(_assistant_text_event("line %02d" % i) for i in range(n))
 
 
 def _prepare(ctx, store, item, step, fs, workers):
@@ -174,7 +201,11 @@ def _tick(ctx):
 
 
 def _write_line(ctx, text):
-    ctx["fs"]._files[LOG_PATH] = ctx["fs"]._files.get(LOG_PATH, b"") + text.encode()
+    ctx["fs"]._files[LOG_PATH] = ctx["fs"]._files.get(LOG_PATH, b"") + _assistant_text_event(text)
+
+
+def _write_raw(ctx, data):
+    ctx["fs"]._files[LOG_PATH] = ctx["fs"]._files.get(LOG_PATH, b"") + data
 
 
 @given("the current step is being performed by a worker and has already written several lines")
@@ -268,7 +299,7 @@ def _when_open_log_tab(ctx):
 
 @when("the worker writes a new line to the log")
 def _when_worker_writes_line(ctx):
-    _write_line(ctx, "14:04:19 a new line\n")
+    _write_line(ctx, "a new line")
     _tick(ctx)
 
 
@@ -277,7 +308,7 @@ def _when_new_line_arrives(ctx):
     rows = _nonblank_rows(_painted_segments(ctx))
     if rows:
         ctx["previous_cursor_row_text"] = _row_text(rows[-1]).replace(LOG_CURSOR_GLYPH, "").rstrip()
-    _write_line(ctx, "14:04:19 a new line\n")
+    _write_line(ctx, "a new line")
     _tick(ctx)
 
 
@@ -456,6 +487,92 @@ def _then_no_live_indicator(ctx):
 @then("there is no auto-scroll, since nothing new will arrive")
 def _then_no_auto_scroll(ctx):
     assert _log_pane(ctx).auto_scroll is False
+
+
+@given("the current step is being performed by a worker and has already written a line wider than the pane")
+def _given_wide_line(ctx):
+    wide_text = "x" * 200
+    _prepare(ctx, *_running_step(lines=_assistant_text_event(wide_text, "2026-08-19T14:02:11.000Z")))
+    ctx["wide_text"] = wide_text
+
+
+@then("the wide line's full text is reachable across more than one painted row")
+def _then_wide_line_wraps(ctx):
+    rows = _nonblank_rows(_painted_segments(ctx))
+    joined = "".join(_row_text(row).rstrip() for row in rows)
+    assert ctx["wide_text"] in joined
+    matching_rows = [row for row in rows if "x" in _row_text(row)]
+    assert len(matching_rows) > 1
+
+
+@given("the current step is being performed by a worker and has already written a malformed line")
+def _given_malformed_line(ctx):
+    lines = _assistant_text_event("reading files", "2026-08-19T14:02:11.000Z") + b'{"type": "assistant", "mess\n'
+    _prepare(ctx, *_running_step(lines=lines))
+
+
+@then("the malformed line is shown as its own line")
+def _then_malformed_shown(ctx):
+    text = _log_text(ctx)
+    assert "reading files" in text
+    assert '{"type": "assistant", "mess' in text
+
+
+@given("the live log is open and following the tail, with a thinking line in its output")
+def _given_live_with_thinking(ctx):
+    lines = (
+        _thinking_event(THINKING_TEXT, "2026-08-19T14:02:00.000Z")
+        + _assistant_text_event("reading files", "2026-08-19T14:02:11.000Z")
+    )
+    _prepare(ctx, *_running_step(lines=lines))
+    _open(ctx)
+
+
+@given("the live log is open and following the tail, with thinking hidden")
+def _given_live_thinking_hidden(ctx):
+    _given_live_with_thinking(ctx)
+    ctx["session"].press("t")
+
+
+@when("I press t")
+def _when_press_t(ctx):
+    ctx["session"].press("t")
+
+
+@when("a thinking-only line arrives")
+def _when_thinking_only_arrives(ctx):
+    rows = _nonblank_rows(_painted_segments(ctx))
+    if rows:
+        ctx["previous_cursor_row_text"] = _row_text(rows[-1]).replace(LOG_CURSOR_GLYPH, "").rstrip()
+    _write_raw(ctx, _thinking_event("more thinking", "2026-08-19T14:02:20.000Z"))
+    _tick(ctx)
+
+
+@when("a thinking-token-only event arrives")
+def _when_thinking_tokens_arrives(ctx):
+    rows = _nonblank_rows(_painted_segments(ctx))
+    if rows:
+        ctx["previous_cursor_row_text"] = _row_text(rows[-1]).replace(LOG_CURSOR_GLYPH, "").rstrip()
+    _write_raw(ctx, _thinking_tokens_event())
+    _tick(ctx)
+
+
+@then("the thinking line is visible")
+def _then_thinking_visible(ctx):
+    assert THINKING_TEXT in _log_text(ctx)
+
+
+@then("the thinking line is hidden")
+def _then_thinking_hidden(ctx):
+    assert THINKING_TEXT not in _log_text(ctx)
+
+
+@then("the cursor still marks the previous last visible line")
+def _then_cursor_still_marks_previous(ctx):
+    rows = _nonblank_rows(_painted_segments(ctx))
+    row = _find_row_starting_with(rows, ctx["previous_cursor_row_text"])
+    assert row is not None
+    assert LOG_CURSOR_GLYPH in _row_text(row)
 
 
 def test_left_closes_the_hub_from_the_no_log_state(ctx):
