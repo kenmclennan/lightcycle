@@ -78,6 +78,21 @@ def _populated_store(claimed_minutes_ago=14):
     return store, theme, scan, coding
 
 
+LONG_DESCRIPTION = (
+    "This item exists to fix a header that grows without bound. " * 50
+).strip()
+
+
+def _long_description_store(description=LONG_DESCRIPTION):
+    store = DemoStore(now=lambda: _at(2))
+    theme = store.theme("LC-319", THEME_TITLE, project="lightcycle")
+    item = store.item("LC-319.1", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
+    if description is not None:
+        store.edit_node(item, description=description)
+    store.step("LC-319.1.4", "write the code", step="write-code", role="write-code", parent=item)
+    return store, item
+
+
 def _blocked_store():
     store = DemoStore(now=lambda: _at(3))
     theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
@@ -427,6 +442,11 @@ def _hub_claude_unavailable(size):
     return _open_hub(_launch(store, breaker_open=True, size=size), scan)
 
 
+def _hub_long_description(size):
+    store, item = _long_description_store()
+    return _open_hub(_launch(store, size=size), item, tab="description")
+
+
 SCREENS = {
     "priority-list#normal": _priority_normal,
     "priority-list#empty": _priority_empty,
@@ -455,6 +475,7 @@ SCREENS = {
     "hub#step-node": _hub_step_node,
     "hub#hierarchy-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
+    "hub#long-description": _hub_long_description,
 }
 
 

@@ -1,13 +1,14 @@
 Feature: The node hub
   Opening any node - theme, item, or step - lands on the hub: a fixed header
-  above three tabs (Hierarchy, Log, Artifacts), landing on whichever tab
-  matches the node's current status. The header stays fixed while ] and [
-  cycle the tabs; Tab keeps its own global meaning, jumping straight to the
-  backlog (or back to current work) from any tab, at any depth, without
-  first backing out through Esc. Closing the hub always returns to wherever
-  it was opened from - the priority list or the backlog - at the same
-  position. Each tab's own content beyond this shared shell is specified in
-  its own feature file - Hierarchy, Log, and Artifacts alike.
+  above four tabs (Hierarchy, Log, Artifacts, Description), landing on
+  whichever tab matches the node's current status. The header stays fixed
+  while ] and [ cycle the tabs; Tab keeps its own global meaning, jumping
+  straight to the backlog (or back to current work) from any tab, at any
+  depth, without first backing out through Esc. Closing the hub always
+  returns to wherever it was opened from - the priority list or the backlog
+  - at the same position. Each tab's own content beyond this shared shell is
+  specified in its own feature file - Hierarchy, Log, Artifacts, and
+  Description alike.
 
   Scenario Outline: Confirming a selected row opens its hub, replacing the list
     Given the priority list is showing with an item
@@ -35,16 +36,6 @@ Feature: The node hub
     When I open it with Enter or →
     Then no workflow line is shown in the header
 
-  Scenario: An item with a description shows it below the identity fields
-    Given an item with a description
-    When I open it with Enter or →
-    Then the description is shown in the header, below the identity fields
-
-  Scenario: An item with no description shows no description line
-    Given an item with no description
-    When I open it with Enter or →
-    Then no description line is shown in the header
-
   Scenario: The header names the current step
     Given an item at step "write-code"
     When I open it with Enter or →
@@ -66,11 +57,11 @@ Feature: The node hub
     Then no role is shown in the header
     And no elapsed time is shown in the header
 
-  Scenario: A selected step's header shows its role and state, not theme, workflow, or description
+  Scenario: A selected step's header shows its role and state, not theme or workflow
     Given a step is selected, rather than an item or theme
     When I open it with Enter or →
     Then the header shows its role and its state
-    And no theme, workflow, or description fields are shown
+    And no theme or workflow fields are shown
 
   Scenario Outline: A fieldset field's key stays dim while its value renders at full text brightness
     Given <given>
@@ -89,7 +80,7 @@ Feature: The node hub
     Given a theme with 4 items underneath
     When I open it with Enter or →
     Then the header shows "theme · 4 items underneath"
-    And no project, theme, workflow, or description line is shown in the header
+    And no project, theme, or workflow line is shown in the header
 
   Scenario: A theme's header shows no project line, even when its items belong to different projects
     Given a theme whose items belong to different projects
@@ -110,27 +101,29 @@ Feature: The node hub
       | done                                  | Artifacts |
       | a theme                               | Hierarchy |
 
-  Scenario Outline: ] cycles forward through the three tabs, wrapping back to Hierarchy
+  Scenario Outline: ] cycles forward through the four tabs, wrapping back to Hierarchy
     Given a node's hub is open, on the "<from>" tab
     When ] is pressed
     Then the "<to>" tab becomes active
 
     Examples:
-      | from      | to        |
-      | Hierarchy | Log       |
-      | Log       | Artifacts |
-      | Artifacts | Hierarchy |
+      | from        | to          |
+      | Hierarchy   | Log         |
+      | Log         | Artifacts   |
+      | Artifacts   | Description |
+      | Description | Hierarchy   |
 
-  Scenario Outline: [ cycles backward through the same three tabs, in reverse
+  Scenario Outline: [ cycles backward through the same four tabs, in reverse
     Given a node's hub is open, on the "<from>" tab
     When [ is pressed
     Then the "<to>" tab becomes active
 
     Examples:
-      | from      | to        |
-      | Hierarchy | Artifacts |
-      | Artifacts | Log       |
-      | Log       | Hierarchy |
+      | from        | to          |
+      | Hierarchy   | Description |
+      | Description | Artifacts   |
+      | Artifacts   | Log         |
+      | Log         | Hierarchy   |
 
   Scenario Outline: Tab jumps straight to the backlog from any tab in an open node's hub, without cycling tabs
     Given the priority list is showing with an item
@@ -140,10 +133,11 @@ Feature: The node hub
     Then the backlog is shown in place of the hub
 
     Examples:
-      | tab       |
-      | Hierarchy |
-      | Log       |
-      | Artifacts |
+      | tab         |
+      | Hierarchy   |
+      | Log         |
+      | Artifacts   |
+      | Description |
 
   Scenario: Tab jumps straight back to current work from a node opened out of the backlog
     Given the backlog is showing with a todo item
