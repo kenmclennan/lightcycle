@@ -5,12 +5,6 @@ from lightcycle.application.work.project_of import project_of, short_project_lab
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.work import Item
 
-GAP_KEY_PREFIX = "__gap-"
-
-
-def is_gap_key(key):
-    return key.startswith(GAP_KEY_PREFIX)
-
 
 @dataclass(frozen=True)
 class PriorityRow:
@@ -119,26 +113,5 @@ def build_priority_rows(store, lanes, now):
     return attention, active, queued
 
 
-def _gap_row(index):
-    return PriorityRow(
-        id="%s%d__" % (GAP_KEY_PREFIX, index),
-        group="gap",
-        icon="",
-        icon_colour="",
-        dependency_icon="",
-        project="",
-        title="",
-        step="",
-        step_colour="",
-        time="",
-    )
-
-
 def assemble_rows(attention_rows, active_rows, queued_rows):
-    groups = [group for group in (attention_rows, active_rows, queued_rows) if group]
-    rows = []
-    for index, group in enumerate(groups):
-        if index:
-            rows.append(_gap_row(index - 1))
-        rows.extend(group)
-    return rows
+    return attention_rows + active_rows + queued_rows

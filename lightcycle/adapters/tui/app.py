@@ -23,7 +23,7 @@ from lightcycle.adapters.tui.design_system import (
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.hub import NodeHubScreen
-from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows, is_gap_key
+from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
     apply_widths,
@@ -104,7 +104,7 @@ class PriorityTable(PagingTable):
         if row_index < 0 or row_index >= len(self.ordered_rows):
             return
         row_key = self.ordered_rows[row_index].key
-        if row_key.value is None or is_gap_key(row_key.value):
+        if row_key.value is None:
             return
         if getattr(self, "_stacked_mode", False):
             _repaint_stacked_cursor(self, row_key, show)
@@ -713,8 +713,6 @@ class LightcycleApp(App):
             return
         if table.id == "priority-list":
             event.stop()
-            if is_gap_key(row_id):
-                return
             node = self._container.store.get_node(row_id)
             self.push_screen(NodeHubScreen(self._container, node.id, self._now))
         elif table.id == "backlog-table":
@@ -740,12 +738,11 @@ class LightcycleApp(App):
         self.set_focus(self.query_one(BacklogTable))
 
     def _priority_layout(self, table, rows):
-        real_rows = [row for row in rows if row.group != "gap"]
         atomic_values = {
-            "id": [row.id for row in real_rows],
-            "project": [row.project for row in real_rows],
-            "step": [row.step for row in real_rows],
-            "time": [row.time for row in real_rows],
+            "id": [row.id for row in rows],
+            "project": [row.project for row in rows],
+            "step": [row.step for row in rows],
+            "time": [row.time for row in rows],
         }
         row_budget = row_budget_for(table, len(DATA_COLUMNS)) if table.size.width else None
         return compute_layout(row_budget, ["cursor", "icon"], atomic_values, PRIORITY_CONTINUATION_INDENT)
@@ -790,12 +787,10 @@ class LightcycleApp(App):
 
     def _row_cells(self, row, layout, row_budget, cursor=False):
         if layout.stacked:
-            if row.group == "gap":
-                return (Text(""),)
             first_line = self._stacked_first_line(row, cursor, layout, row_budget)
-            return (stacked_cell(first_line, PRIORITY_CONTINUATION_INDENT, row.title, row_budget),)
-        if row.group == "gap":
-            return ("", "", "", "", "", "", "")
+            cell = stacked_cell(first_line, PRIORITY_CONTINUATION_INDENT, row.title, row_budget)
+            spacer = Text("\n" + " " * PRIORITY_CONTINUATION_INDENT + " ")
+            return (cell + spacer,)
         cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
         icon_cell = Text(row.icon, style=COLOURS[row.icon_colour])
         if row.dependency_icon:
@@ -805,7 +800,7 @@ class LightcycleApp(App):
         step_cell = Text(row.step, style=COLOURS[row.step_colour])
         project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
-        return (cursor_cell, icon_cell, row.id, project_cell, row.title, step_cell, time_cell)
+        return (cursor_cell, icon_cell, row.id, project_cell, row.title + "\n ", step_cell, time_cell)
 
     def _update_cells(self, table, rows) -> None:
         self._last_priority_rows = rows
@@ -823,8 +818,6 @@ class LightcycleApp(App):
                 },
             )
         for row in rows:
-            if row.group == "gap":
-                continue
             cells = self._row_cells(row, layout, row_budget, cursor=False)
             if layout.stacked:
                 table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
@@ -842,24 +835,9 @@ class LightcycleApp(App):
         except CellDoesNotExist:
             return None
         row_id = cell_key.row_key.value
-        if row_id is None or is_gap_key(row_id):
+        if row_id is None:
             return None
         return row_id
-
-    def _nearest_real_index(self, rows, index):
-        if rows[index].group != "gap":
-            return index
-        i = index - 1
-        while i >= 0:
-            if rows[i].group != "gap":
-                return i
-            i -= 1
-        i = index + 1
-        while i < len(rows):
-            if rows[i].group != "gap":
-                return i
-            i += 1
-        return index
 
     def _rebuild_table(self, table, rows) -> None:
         self._last_priority_rows = rows
@@ -889,15 +867,14 @@ class LightcycleApp(App):
             if selected_id is not None and selected_id in ids:
                 new_index = ids.index(selected_id)
             else:
-                clamped = min(max(self._selected_flat_index, 0), len(rows) - 1)
-                new_index = self._nearest_real_index(rows, clamped)
+                new_index = min(max(self._selected_flat_index, 0), len(rows) - 1)
 
         table._stacked_mode = layout.stacked
         variants = {}
         for index, row in enumerate(rows):
             is_cursor = index == new_index
             cells = self._row_cells(row, layout, row_budget, cursor=is_cursor)
-            if layout.stacked and row.group != "gap":
+            if layout.stacked:
                 variants[row.id] = (
                     self._row_cells(row, layout, row_budget, cursor=False)[0],
                     self._row_cells(row, layout, row_budget, cursor=True)[0],
