@@ -72,6 +72,11 @@ Feature: The hierarchy tab
     When it renders in the hierarchy
     Then "human" is shown as its role
 
+  Scenario: A step row is labelled by its step name, not its stored title, and does not repeat its role
+    Given a step whose stored title is the step name followed by a body
+    When it renders in the hierarchy
+    Then the step's row label is exactly its step name, with no title body and no repetition of the role
+
   Scenario Outline: The id column widens to fit the longest id in the tree, whatever produced it, without truncating or wrapping it
     Given a node in the hierarchy with id "<id>" (<id source>)
     When it renders in the hierarchy

@@ -270,6 +270,18 @@ def _step_performed_by_role(ctx, role):
     _launch(ctx, store, item)
 
 
+@given("a step whose stored title is the step name followed by a body")
+def _step_title_is_step_name_and_body(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step(
+        "implement-features: Deliver the operator-monitoring feature",
+        step="implement-features", role="coder", parent=item,
+    )
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
 @given(parsers.parse('a step whose role is "{role}"'))
 def _step_whose_role_is(ctx, role):
     store = FakeStore()
@@ -328,7 +340,7 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
         theme = store.create_theme("Theme")
         item = store.create_item("Item", theme=theme, id="LC-30.100")
         step = store.create_step(
-            _HSTACK_TITLE, step="build", role="coder", parent=item, id="LC-30.100.100",
+            "s", step=_HSTACK_TITLE, role="coder", parent=item, id="LC-30.100.100",
         )
         ctx["item_id"] = item
         ctx["target_id"] = step
@@ -717,6 +729,15 @@ def _role_shown_alongside_state(ctx, role):
 def _role_shown_as(ctx, role):
     role_text = _rendered_cell_text(ctx, ctx["step_id"], "role")
     assert role_text.strip() == role
+
+
+@then("the step's row label is exactly its step name, with no title body and no repetition of the role")
+def _step_row_label_is_step_name(ctx):
+    title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
+    role_text = _rendered_cell_text(ctx, ctx["step_id"], "role").strip()
+    assert title_text == "implement-features"
+    assert role_text == "coder"
+    assert "Deliver the operator-monitoring feature" not in title_text
 
 
 @then("its id is shown in full, on one line")

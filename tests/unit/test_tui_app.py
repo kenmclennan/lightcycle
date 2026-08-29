@@ -298,12 +298,12 @@ class TestProjectColumn(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story")
         store.add_artifact(item, "repo", "lightcycle")
-        step = store.create_step("build", step="build", role="coder", parent=item)
+        store.create_step("build", step="build", role="coder", parent=item)
 
         session = self._launch(store)
 
         table = session.app.query_one(DataTable)
-        cell = table.get_cell(step, "project")
+        cell = table.get_cell(item, "project")
         self.assertEqual(cell.plain, "lightcycle")
         self.assertEqual(cell.style, COLOURS["cyan"])
 
@@ -319,12 +319,12 @@ class TestProjectColumn(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
-        step = store.create_step("build", step="build", role="coder", parent=item)
+        store.create_step("build", step="build", role="coder", parent=item)
 
         session = self._launch(store)
 
         table = session.app.query_one(DataTable)
-        cell = table.get_cell(step, "project")
+        cell = table.get_cell(item, "project")
         self.assertEqual(cell.plain, "lightcycle")
         self.assertEqual(cell.style, COLOURS["cyan"])
 

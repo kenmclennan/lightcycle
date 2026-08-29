@@ -242,6 +242,33 @@ def _g_active_and_queued(ctx):
     ctx["store"] = store
 
 
+@given("the store has an item with an active step and a queued step of its own")
+def _g_item_active_and_queued_own(ctx):
+    clock = Clock(BASE_TIME - datetime.timedelta(minutes=14))
+    store = FakeStore(now=lambda: clock.now().isoformat())
+    item = store.create_item("An item with two open steps")
+    active = store.create_step("write the code", step="write-code", role="write-code", parent=item)
+    store.assign(active, "worker-1")
+    store.update_state(active, State.IN_PROGRESS)
+    store.create_step("open the pr", step="code-open-pr", role="open-pr", parent=item)
+    clock.set(BASE_TIME)
+    ctx["store"] = store
+    ctx["clock"] = clock
+    ctx["item_id"] = item
+    ctx["item_title"] = "An item with two open steps"
+
+
+@given("the store has an item with a step in the inbox lane and a separate active step of its own")
+def _g_item_inbox_and_active_own(ctx):
+    store = FakeStore()
+    item = store.create_item("An item with an inbox step and an active step")
+    store.create_step("await merge", step="code-await-merge", role="human", parent=item)
+    active = store.create_step("write the code", step="write-code", role="write-code", parent=item)
+    store.assign(active, "worker-1")
+    ctx["store"] = store
+    ctx["item_id"] = item
+
+
 @given(parsers.parse('the store has a queued step at step "{step_name}"'))
 def _g_queued_at_step(ctx, step_name):
     store = FakeStore()
@@ -289,7 +316,7 @@ def _g_three_steps_with_project(ctx, project):
     blocked_item = store.create_item("blocked item")
     store.add_artifact(blocked_item, "repo", project)
     blocker = store.create_step("blocker", step="build", role="coder")
-    blocked = store.create_step(
+    store.create_step(
         "blocked step", step="build", role="coder", deps=[blocker], parent=blocked_item
     )
 
@@ -300,10 +327,10 @@ def _g_three_steps_with_project(ctx, project):
 
     queued_item = store.create_item("queued item")
     store.add_artifact(queued_item, "repo", project)
-    queued = store.create_step("queued step", step="build", role="coder", parent=queued_item)
+    store.create_step("queued step", step="build", role="coder", parent=queued_item)
 
     ctx["store"] = store
-    ctx["row_ids"] = [blocked, active, queued]
+    ctx["row_ids"] = [blocked_item, active_item, queued_item]
 
 
 @given("the store has a queued step with no registered project")
@@ -697,6 +724,40 @@ def _t_in_progress_in_active(ctx):
 @then(parsers.parse('the active row for that step shows "{step_name}" as its step'))
 def _t_active_row_shows_step(ctx, step_name):
     assert _cell(ctx["session"], ctx["target_id"], "step") == step_name
+
+
+@then("that item's row appears exactly once, in the active group")
+def _t_item_once_in_active(ctx):
+    order = _real_row_order(ctx["session"])
+    assert order.count(ctx["item_id"]) == 1
+    assert _icon(ctx["session"], ctx["item_id"]).plain == STATE_GLYPHS["active"].glyph
+
+
+@then("that item's row shows the item's own id and title, not the step's")
+def _t_item_row_shows_item_identity(ctx):
+    session = ctx["session"]
+    assert ctx["item_id"] in _real_row_order(session)
+    assert _cell(session, ctx["item_id"], "title") == ctx["item_title"]
+
+
+@then("the active row for that item shows its active step's own step name and elapsed time")
+def _t_item_active_step_fields(ctx):
+    session = ctx["session"]
+    assert _cell(session, ctx["item_id"], "step") == "write-code"
+    assert _cell(session, ctx["item_id"], "time") == "14m"
+
+
+@then("that item's row appears exactly once, in the needs-attention group")
+def _t_item_once_in_attention(ctx):
+    order = _real_row_order(ctx["session"])
+    assert order.count(ctx["item_id"]) == 1
+    assert _icon(ctx["session"], ctx["item_id"]).plain == STATE_GLYPHS["needs-attention"].glyph
+
+
+@then("that item's row does not also appear in the active group")
+def _t_item_not_in_active(ctx):
+    session = ctx["session"]
+    assert _icon(session, ctx["item_id"]).plain != STATE_GLYPHS["active"].glyph
 
 
 @then(parsers.parse('the active row\'s elapsed time reads "{expected}"'))

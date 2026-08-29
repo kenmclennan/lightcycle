@@ -74,6 +74,19 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the queued row for that step shows "build" as its next step
 
+  Scenario: An item with an active step and a queued step of its own renders exactly one row, in the active group
+    Given the store has an item with an active step and a queued step of its own
+    When I launch the dashboard
+    Then that item's row appears exactly once, in the active group
+    And that item's row shows the item's own id and title, not the step's
+    And the active row for that item shows its active step's own step name and elapsed time
+
+  Scenario: An item with a step in the inbox lane and a separate active step of its own appears only in the needs-attention group
+    Given the store has an item with a step in the inbox lane and a separate active step of its own
+    When I launch the dashboard
+    Then that item's row appears exactly once, in the needs-attention group
+    And that item's row does not also appear in the active group
+
   Scenario: A claimed queued item moves into the active group
     Given the dashboard has launched with a queued step
     When that step is claimed and becomes active
