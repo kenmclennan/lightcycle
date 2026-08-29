@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 
 from lightcycle.domain.work import NodeSpec
@@ -12,10 +11,9 @@ class Transition:
     to_role: str
     to_terminal: bool = False
 
-    def next_step_spec(self, step) -> NodeSpec:
-        title = re.sub(r"^[a-z-]+:\s*", "", step.title)
+    def next_step_spec(self, step, item_title) -> NodeSpec:
         return NodeSpec(
-            title="%s: %s" % (self.to_step, title),
+            title="%s: %s" % (self.to_step, item_title),
             step=self.to_step,
             role=self.to_role,
             parent=step.parent,

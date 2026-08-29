@@ -126,7 +126,8 @@ class FakeConfig:
 class TestAdvanceTask(unittest.TestCase):
     def test_creates_next_task(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         resp = AdvanceStepUseCase(s, flow_for(METAS, s)).execute(
             AdvanceInput(step=bid, outcome="done")
         )
@@ -146,7 +147,8 @@ class TestAdvanceTask(unittest.TestCase):
 class TestCompleteTask(unittest.TestCase):
     def test_closes_and_advances(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
@@ -155,7 +157,8 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_completion_notes_the_outcome_on_the_step(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
@@ -163,7 +166,8 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_worker_with_mismatched_spawn_id_is_fenced_at_the_use_case(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         s.assign(bid, "w1")
         resp = CompleteStepUseCase(
             s, flow_for(METAS, s), config=FakeConfig("w2")
@@ -174,7 +178,8 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_worker_with_matching_spawn_id_completes(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         s.assign(bid, "w1")
         resp = CompleteStepUseCase(
             s, flow_for(METAS, s), config=FakeConfig("w1")
@@ -184,7 +189,8 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_a_worker_can_route_an_unclaimed_step_it_does_not_own(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         resp = CompleteStepUseCase(
             s, flow_for(METAS, s), config=FakeConfig("handle-feedback-worker")
         ).execute(CompleteInput(step=bid, outcome="done"))
@@ -193,7 +199,8 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_completing_already_done_step_is_noop(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="coder", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
@@ -448,7 +455,8 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
 
     def test_allowed_on_outcome_whose_target_does_not_require_the_produce(self):
         s = FakeStore()
-        aid = s.create_step("alpha: x", step="alpha", role="alpha-role")
+        item = s.create_item("st", theme=s.create_theme("theme"), workflow="spec-driven")
+        aid = s.create_step("alpha: x", step="alpha", role="alpha-role", parent=item)
         resp = CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
             CompleteInput(step=aid, outcome="sideways")
         )
@@ -672,6 +680,40 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "review-ci")
         self.assertEqual(s.get_node(resp.next_step).role, "human")
+
+
+class TestNextStepTitleTracksTheItem(unittest.TestCase):
+    CHAIN_METAS = {
+        "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
+        "reviewer": {
+            "model": "opus",
+            "step": "review",
+            "routes": {"done": "open-pr", "rejected": "build"},
+        },
+        "pr-watcher": {"model": "sonnet", "step": "open-pr"},
+    }
+
+    def test_title_derives_from_the_item_through_repeated_rework(self):
+        s = FakeStore()
+        item = s.create_item(
+            "fix auth bug", theme=s.create_theme("theme"), workflow="spec-driven"
+        )
+        bid = s.create_step(
+            "build: consolidated sweep - see PR #349", step="build", role="coder", parent=item
+        )
+        uc = CompleteStepUseCase(s, flow_for(self.CHAIN_METAS, s))
+
+        rid = uc.execute(CompleteInput(step=bid, outcome="done")).next_step
+        self.assertEqual(s.get_node(rid).title, "review: fix auth bug")
+
+        bid2 = uc.execute(CompleteInput(step=rid, outcome="rejected")).next_step
+        self.assertEqual(s.get_node(bid2).title, "build: fix auth bug")
+
+        rid2 = uc.execute(CompleteInput(step=bid2, outcome="done")).next_step
+        self.assertEqual(s.get_node(rid2).title, "review: fix auth bug")
+
+        oid = uc.execute(CompleteInput(step=rid2, outcome="done")).next_step
+        self.assertEqual(s.get_node(oid).title, "open-pr: fix auth bug")
 
 
 class TestClaimTask(unittest.TestCase):

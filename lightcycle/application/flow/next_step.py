@@ -20,4 +20,5 @@ class NextStepResolver:
         return self._flow.effective_transition(transition, outcome, prior, name)
 
     def create(self, t, transition):
-        return self._store.create_step(**transition.next_step_spec(t).as_kwargs())
+        spec = transition.next_step_spec(t, self._store.get_node(t.parent).title)
+        return self._store.create_step(**spec.as_kwargs())
