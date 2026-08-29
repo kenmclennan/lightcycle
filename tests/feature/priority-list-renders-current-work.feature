@@ -23,22 +23,24 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the needs-attention row for that step shows "code-await-merge" as its step
 
-  Scenario: A single blank row separates two adjacent non-empty groups
+  @wip
+  Scenario: A three-group list renders exactly one row per real item, at the spaced height, with no separator row
     Given the store has a step in the inbox lane, an active step, and a queued step
     When I launch the dashboard
-    Then there is exactly one blank separator row between the needs-attention group and the active group
-    And there is exactly one blank separator row between the active group and the queued group
+    Then the table contains exactly 3 rows, one for each step, with no extra row of any kind
+    And each row's key is a real node id
+    And each row's rendered height is 2, one line of content plus one spacer line
 
   Scenario: An empty middle group contributes no rows and no extra gap between the groups either side of it
     Given the store has a step in the inbox lane and a queued step, with no active step
     When I launch the dashboard
     Then the active group renders no rows
-    And there is exactly one blank separator row between the needs-attention group and the queued group
 
-  Scenario: A single group with nothing above or below it has no separator row
+  @wip
+  Scenario: A single non-empty group renders exactly its own rows and nothing else
     Given the store has only a queued step
     When I launch the dashboard
-    Then the priority list has no blank separator row
+    Then the table contains exactly one row, for that queued step, with no extra row of any kind
 
   Scenario: Active items are grouped below needs-attention and above queued, with their own icon and colour
     Given the store has a step in the inbox lane, an active step, and a queued step
@@ -74,12 +76,14 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the queued row for that step shows "build" as its next step
 
+  @wip
   Scenario: An item with an active step and a queued step of its own renders exactly one row, in the active group
     Given the store has an item with an active step and a queued step of its own
     When I launch the dashboard
     Then that item's row appears exactly once, in the active group
     And that item's row shows the item's own id and title, not the step's
     And the active row for that item shows its active step's own step name and elapsed time
+    And that item's row's rendered height includes exactly one spacer line, the same as any other row
 
   Scenario: An item with a step in the inbox lane and a separate active step of its own appears only in the needs-attention group
     Given the store has an item with a step in the inbox lane and a separate active step of its own
@@ -93,10 +97,12 @@ Feature: Priority list renders current work
     And one poll interval elapses
     Then the step's row moves from the queued group into the active group
 
+  @wip
   Scenario Outline: A row whose title is too long to fit wraps instead of being truncated
     Given the store has a <group> step with a title longer than the priority list can fit on one line
     When I launch the dashboard
     Then that step's row wraps its title onto a second line rather than truncating it with an ellipsis
+    And that step's row renders at a height of 3, two wrapped content lines plus one spacer line
 
     Examples:
       | group           |
@@ -120,12 +126,14 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the id column is already wide enough for that off-screen id, before it is scrolled into view
 
+  @wip
   Scenario Outline: When a row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width and spanning the row without wrapping mid-word
     Given a row whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When I launch the dashboard
     Then the cursor, icon, id, project and step remain on the row's first line, each padded to its atomic width, with time right-aligned alongside them
     And the title appears on a continuation line indented 6 characters - the row's glyph width, not where the title column starts in the unstacked grid
     And no fragment of the title's prose is split mid-word
+    And that row renders at a height of 3, the row's first line plus one continuation line plus one spacer line
 
     Examples:
       | at a width                            |
@@ -189,6 +197,22 @@ Feature: Priority list renders current work
     And Down is pressed
     Then the selection has not moved past the last row
 
+  @wip
+  Scenario: Down visits every row's id exactly once, in order, and holds on the last row
+    Given the store has a step in the inbox lane, an active step, and a queued step
+    When I launch the dashboard
+    And Down is pressed 3 times
+    Then the selection has visited the needs-attention row, then the active row, then the queued row, each exactly once
+    When Down is pressed once more
+    Then the selection is still on the queued row
+
+  @wip
+  Scenario: A selected row's highlight covers every line of that row, spacer included
+    Given the store has three queued steps
+    When I launch the dashboard
+    Then every line of the selected row's rendered height carries the same cursor-highlight background colour
+    And that colour differs from an unselected row's background colour
+
   Scenario: Ctrl-D jumps the selection forward by the same amount as Page Down
     Given the store has more queued steps than fit on one screen
     When I launch the dashboard
@@ -213,7 +237,6 @@ Feature: Priority list renders current work
     When that step is completed
     And one poll interval elapses
     Then the selection is on a remaining row near the previous position
-    And the selection is not on a blank separator row
 
   Scenario: A queued row that is dependency-held shows the dependency chain-link icon and the blocking item's id
     Given the store has a step blocked on another item's completion
@@ -230,7 +253,6 @@ Feature: Priority list renders current work
     Given the store has a runnable queued step and a dependency-held queued step
     When I launch the dashboard
     Then the runnable step's row is positioned before the dependency-held step's row
-    And both rows are in the single queued group with no extra separator between them
 
   Scenario: A calm message replaces the priority list when nothing needs attention, is active, or is queued
     Given the store has no steps in any lane
