@@ -2,7 +2,12 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
-from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
+from lightcycle.adapters.tui.design_system import (
+    ACTIVE_GLYPH_REST_INDEX,
+    COLOURS,
+    DEPENDENCY_BLOCKED_EXTRA_GLYPH,
+    STATE_GLYPHS,
+)
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
 from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
 from tests.support.fake_store import FakeStore
@@ -30,7 +35,11 @@ def _launch(ctx, store, node_id, size=None):
     session.pause()
     screen = session.app.screen
     screen._active_tab = "hierarchy"
-    screen._apply_tab_visibility()
+    session.run(screen._apply_tab_visibility)
+    if screen._active_glyph_timer is not None:
+        screen._active_glyph_timer.stop()
+        screen._active_glyph_timer = None
+    screen._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
     screen._focus_active_tab()
     session.pause()
     ctx["hub_screen"] = screen
@@ -255,6 +264,17 @@ def _hierarchy_open_queued_step(ctx):
     store = FakeStore()
     item = store.create_item("Item")
     step = store.create_step("s", step="build", role="coder", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given("the hierarchy is open, showing an active step")
+def _hierarchy_open_active_step(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step="build", role="coder", parent=item)
+    store.claim_ready("coder")
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -717,6 +737,28 @@ def _step_row_shows_active(ctx):
     glyph = STATE_GLYPHS["active"]
     icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
     assert glyph.glyph in icon_text
+
+
+@then("the step's icon rests on the black diamond")
+def _icon_rests_on_black_diamond(ctx):
+    icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
+    assert "◆" in icon_text
+
+
+@when("the active-glyph animation ticks four times")
+def _tick_active_glyph_four_times(ctx):
+    screen = ctx["hub_screen"]
+    session = ctx["session"]
+    frames = []
+    for _ in range(4):
+        session.run(screen._tick_active_glyph)
+        frames.append(_rendered_cell_text(ctx, ctx["step_id"], "icon").strip())
+    ctx["frames"] = frames
+
+
+@then("the step's icon cycles through the diamond pulse frames and returns to the black diamond")
+def _icon_cycles_through_pulse_frames(ctx):
+    assert ctx["frames"] == ["◈", "◇", "◈", "◆"]
 
 
 @then(parsers.parse('its role "{role}" is shown alongside its state'))

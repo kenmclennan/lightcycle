@@ -13,6 +13,9 @@ from textual.widgets.data_table import CellDoesNotExist
 from lightcycle import __version__
 from lightcycle.adapters.log_parser import LogLineParser
 from lightcycle.adapters.tui.design_system import (
+    ACTIVE_GLYPH_FRAMES,
+    ACTIVE_GLYPH_REST_INDEX,
+    ACTIVE_GLYPH_TICKS_PER_SECOND,
     COLOURS,
     COLUMN_GRIDS,
     CONTENT_GLYPH,
@@ -22,6 +25,7 @@ from lightcycle.adapters.tui.design_system import (
     LIST_ARTIFACT_SHORTCUTS,
     STATE_GLYPHS,
     TEXT_ARTIFACT_SHORTCUTS,
+    next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, StatusBar
 from lightcycle.adapters.tui.row_grid import (
@@ -245,9 +249,16 @@ def _state_glyph(node):
     return STATE_GLYPHS["queued"]
 
 
-def _hierarchy_stacked_first_line(row, layout, row_budget):
-    node = row.node
+def _display_glyph(node, active_frame):
     glyph = _state_glyph(node)
+    if active_frame is not None and row_bucket(node) == "active":
+        return glyph._replace(glyph=active_frame)
+    return glyph
+
+
+def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None):
+    node = row.node
+    glyph = _display_glyph(node, active_frame)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
         icon_cell = icon_cell + Text(
@@ -267,14 +278,14 @@ def _hierarchy_stacked_first_line(row, layout, row_budget):
     return content_so_far + pad_field_right(role_cell, role_area)
 
 
-def hierarchy_row_cells(row, layout=None, row_budget=None):
+def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None):
     node = row.node
     if layout is not None and layout.stacked:
-        first_line = _hierarchy_stacked_first_line(row, layout, row_budget)
+        first_line = _hierarchy_stacked_first_line(row, layout, row_budget, active_frame)
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
         label = node.step if node.type == "step" else node.title
         return (stacked_cell(first_line, indent, label, row_budget),)
-    glyph = _state_glyph(node)
+    glyph = _display_glyph(node, active_frame)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
         icon_cell = icon_cell + Text(
@@ -796,6 +807,10 @@ class NodeHubScreen(Screen):
         self._last_rows = []
         self._hierarchy_floor = False
         self._hierarchy_stacked = False
+        self._hierarchy_layout_cache = None
+        self._hierarchy_row_budget_cache = None
+        self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
+        self._active_glyph_timer = None
         self._log_mode = None
         self._log_target = None
         self._log_offset = 0
@@ -848,6 +863,7 @@ class NodeHubScreen(Screen):
         node = store.get_node(self._node_id)
         self._active_tab = self._forced_initial_tab or landing_tab(landing_node(store, node))
         self._setup_log_tab()
+        self.app.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._initial_refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self.poll_refresh)
 
@@ -1038,6 +1054,7 @@ class NodeHubScreen(Screen):
 
     def _render_hierarchy(self, rows, initial) -> None:
         self._last_rows = rows
+        self._sync_active_glyph_animation()
         table = self.query_one(HierarchyPagingTable)
         shape = tuple(r.node.id for r in rows)
         if shape == self._last_hierarchy_shape and not initial:
@@ -1059,6 +1076,8 @@ class NodeHubScreen(Screen):
         selected_id = self._node_id if initial else self._selected_id(table)
         table.clear(columns=True)
         row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["hierarchy"]))
+        self._hierarchy_layout_cache = layout
+        self._hierarchy_row_budget_cache = row_budget
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -1074,9 +1093,11 @@ class NodeHubScreen(Screen):
 
         ids = [r.node.id for r in rows]
         index = ids.index(selected_id) if selected_id in ids else 0
+        active_frame = self._active_glyph_char()
         for row in rows:
             table.add_row(
-                *hierarchy_row_cells(row, layout, row_budget), height=None, key=row.node.id
+                *hierarchy_row_cells(row, layout, row_budget, active_frame=active_frame),
+                height=None, key=row.node.id
             )
 
         self._last_hierarchy_shape = shape
@@ -1088,13 +1109,62 @@ class NodeHubScreen(Screen):
         table_ = self.query_one(HierarchyPagingTable)
         layout = self._hierarchy_layout(table_, rows)
         row_budget = render_row_budget(table_, layout, len(COLUMN_GRIDS["hierarchy"]))
+        self._hierarchy_layout_cache = layout
+        self._hierarchy_row_budget_cache = row_budget
+        active_frame = self._active_glyph_char()
         for row in rows:
-            cells = hierarchy_row_cells(row, layout, row_budget)
+            cells = hierarchy_row_cells(row, layout, row_budget, active_frame=active_frame)
             if layout.stacked:
                 table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
                 continue
             for key, value in zip(COLUMN_GRIDS["hierarchy"], cells):
                 table.update_cell(row.node.id, key, value)
+
+    def _active_glyph_char(self) -> str:
+        return ACTIVE_GLYPH_FRAMES[self._active_glyph_frame]
+
+    def _active_glyph_ids(self):
+        return tuple(r.node.id for r in self._last_rows if row_bucket(r.node) == "active")
+
+    def _sync_active_glyph_animation(self) -> None:
+        should_run = (
+            self._active_tab == "hierarchy"
+            and self.is_current
+            and bool(self._active_glyph_ids())
+            and not self._hierarchy_floor
+        )
+        if should_run and self._active_glyph_timer is None:
+            self._active_glyph_timer = self.set_interval(
+                1 / ACTIVE_GLYPH_TICKS_PER_SECOND, self._tick_active_glyph
+            )
+        elif not should_run and self._active_glyph_timer is not None:
+            self._active_glyph_timer.stop()
+            self._active_glyph_timer = None
+            self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
+
+    def _tick_active_glyph(self) -> None:
+        self._active_glyph_frame = next_active_glyph_frame(self._active_glyph_frame)
+        active_ids = self._active_glyph_ids()
+        if not active_ids or self._hierarchy_layout_cache is None:
+            return
+        table = self.query_one(HierarchyPagingTable)
+        frame = self._active_glyph_char()
+        layout = self._hierarchy_layout_cache
+        row_budget = self._hierarchy_row_budget_cache
+        rows_by_id = {r.node.id: r for r in self._last_rows}
+        for node_id in active_ids:
+            row = rows_by_id.get(node_id)
+            if row is None:
+                continue
+            cells = hierarchy_row_cells(row, layout, row_budget, active_frame=frame)
+            try:
+                if layout.stacked:
+                    table.update_cell(node_id, STACKED_COLUMN_KEY, cells[0])
+                else:
+                    table.update_cell(node_id, "icon", cells[0])
+            except CellDoesNotExist:
+                pass
+        self.update_pinned_ancestor()
 
     def _artifacts_layout(self, table, artifacts):
         atomic_values = {"type": [type_label(a) for a in artifacts]}
@@ -1195,7 +1265,7 @@ class NodeHubScreen(Screen):
         if ancestor is None:
             banner.display = False
             return
-        glyph = _state_glyph(ancestor.node)
+        glyph = _display_glyph(ancestor.node, self._active_glyph_char())
         text = Text(glyph.glyph + "  ", style=COLOURS[glyph.colour])
         text.append("%s  %s" % (ancestor.node.id, ancestor.node.title), style=COLOURS["dim"])
         banner.update(text)
@@ -1226,6 +1296,7 @@ class NodeHubScreen(Screen):
             description_active and not self._has_description
         )
         self.update_pinned_ancestor()
+        self._sync_active_glyph_animation()
 
     def _focus_active_tab(self) -> None:
         if self._active_tab == "hierarchy" and not self._hierarchy_floor:
@@ -1250,6 +1321,7 @@ class NodeHubScreen(Screen):
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
         self._focus_active_tab()
+        self._sync_active_glyph_animation()
 
     def action_prev_tab(self) -> None:
         index = _TAB_ORDER.index(self._active_tab)
@@ -1257,6 +1329,7 @@ class NodeHubScreen(Screen):
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
         self._focus_active_tab()
+        self._sync_active_glyph_animation()
 
     def action_close_hub(self) -> None:
         if self._toast_active:

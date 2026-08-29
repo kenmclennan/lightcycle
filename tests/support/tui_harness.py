@@ -87,8 +87,17 @@ class TuiSession:
         self._run(self.pilot.press(key))
         self.pause()
 
+    def _glyph_timers(self):
+        targets = [self.app, *self.app.screen_stack]
+        return [t._active_glyph_timer for t in targets if getattr(t, "_active_glyph_timer", None) is not None]
+
     def pause(self):
+        timers = self._glyph_timers()
+        for timer in timers:
+            timer.pause()
         self._run(self.pilot.pause())
+        for timer in timers:
+            timer.resume()
 
     def poll_tick(self):
         self.run(self.app._refresh)

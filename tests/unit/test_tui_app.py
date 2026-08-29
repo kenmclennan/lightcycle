@@ -263,6 +263,164 @@ class TestActiveGroup(unittest.TestCase):
         rendered = "".join(segment.text for segment in table.render_line(0))
         self.assertIn("11m", rendered)
 
+    def test_active_row_rests_on_the_black_diamond(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+
+        icon = session.app.query_one(DataTable).get_cell(tid, "icon")
+        self.assertEqual(icon.plain, "◆")
+
+    def test_active_glyph_pulses_through_four_frames_and_returns_to_rest(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        table = session.app.query_one(DataTable)
+
+        frames = []
+        for _ in range(4):
+            session.run(session.app._tick_active_glyph)
+            frames.append(table.get_cell(tid, "icon").plain)
+
+        self.assertEqual(frames, ["◈", "◇", "◈", "◆"])
+
+    def test_active_glyph_animation_does_not_run_without_an_active_row(self):
+        store = FakeStore()
+        store.create_step("queued item", step="build", role="coder")
+
+        session = self._launch(store)
+
+        self.assertIsNone(session.app._active_glyph_timer)
+
+    def test_active_glyph_animation_stops_and_resumes_with_view_toggle(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.press("tab")
+        self.assertIsNone(session.app._active_glyph_timer)
+
+        session.press("tab")
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+    def test_poll_does_not_revert_an_in_flight_pulse(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        table = session.app.query_one(DataTable)
+
+        session.run(session.app._tick_active_glyph)
+        ticked = table.get_cell(tid, "icon").plain
+        self.assertNotEqual(ticked, "◆")
+
+        session.poll_tick()
+
+        self.assertEqual(table.get_cell(tid, "icon").plain, ticked)
+
+    def test_active_glyph_animation_does_not_run_at_the_floor(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.app._priority_floor = True
+        session.run(session.app._sync_active_glyph_animation)
+
+        self.assertIsNone(session.app._active_glyph_timer)
+
+    def test_active_glyph_animation_does_not_run_pending_a_deferred_rebuild(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.app._priority_needs_rebuild = True
+        session.run(session.app._sync_active_glyph_animation)
+
+        self.assertIsNone(session.app._active_glyph_timer)
+
+    def test_active_glyph_animation_restarts_after_floor_recovers_on_width_refresh(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.app._priority_floor = True
+        session.app._active_glyph_timer.stop()
+        session.app._active_glyph_timer = None
+
+        session.run(session.app.refresh_priority_layout)
+
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+    def test_active_glyph_animation_stops_when_hub_screen_is_pushed(self):
+        from lightcycle.adapters.tui.hub import NodeHubScreen
+
+        store = FakeStore()
+        item = store.create_item("active item")
+        tid = store.create_step("build it", step="build", role="coder", parent=item)
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.run(
+            lambda: session.app.push_screen(
+                NodeHubScreen(session.app.container, item, session.app._now)
+            )
+        )
+        session.pause()
+
+        self.assertIsNone(session.app._active_glyph_timer)
+
+    def test_active_glyph_animation_resumes_when_hub_screen_is_popped(self):
+        from lightcycle.adapters.tui.hub import NodeHubScreen
+
+        store = FakeStore()
+        item = store.create_item("active item")
+        tid = store.create_step("build it", step="build", role="coder", parent=item)
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.run(
+            lambda: session.app.push_screen(
+                NodeHubScreen(session.app.container, item, session.app._now)
+            )
+        )
+        session.pause()
+        self.assertIsNone(session.app._active_glyph_timer)
+
+        session.run(session.app.pop_screen)
+        session.pause()
+
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
 
 class TestQueuedGroup(unittest.TestCase):
     def _launch(self, store):
