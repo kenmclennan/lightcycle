@@ -43,6 +43,12 @@ class TestCliPrimitives(unittest.TestCase):
         self._run("set", item, "--parent", theme)
         self.assertEqual(self.h.store.get_node(item).theme, theme)
 
+    def test_set_workflow_on_a_theme_stays_unresolved(self):
+        _, theme, _ = self._run("new", "theme", "payments")
+        rc, _, _ = self._run("set", theme, "--workflow", "lightcycle/spec-driven")
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.h.store.get_node(theme).workflow, "lightcycle/spec-driven")
+
     def test_attach_records_an_artifact(self):
         _, item, _ = self._run("new", "item", "x")
         self._run("attach", item, "spec", "specs/x.md")
