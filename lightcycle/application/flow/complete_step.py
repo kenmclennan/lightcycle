@@ -99,8 +99,9 @@ class CompleteStepUseCase:
     def _complete_engine_audit(self, t, input: CompleteInput) -> CompleteResponse:
         spec = None
         if input.outcome == "findings" and input.note:
+            item_title = self._store.get_node(t.parent).title
             spec = NodeSpec(
-                title="review-findings: pending-feedback", step=FINDINGS_STEP,
+                title="%s: %s" % (FINDINGS_STEP, item_title), step=FINDINGS_STEP,
                 role="human", parent=t.parent, attention=True)
         won, fid = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)

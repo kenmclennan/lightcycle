@@ -299,8 +299,8 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
     def _uc(self, store):
         return CompleteStepUseCase(store, flow_for(METAS, store), FakeWorktrees())
 
-    def _retro_batch(self, store):
-        item = store.create_item("pending-feedback")
+    def _retro_batch(self, store, title="custom batch title"):
+        item = store.create_item(title)
         store.label_add(item, "retro-origin")
         return item
 
@@ -316,8 +316,9 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         return item
 
     def _audit_step(self, store, batch):
+        title = store.get_node(batch).title
         return store.create_step(
-            "audit: pending-feedback", step="audit", role="audit", parent=batch)
+            "audit: %s" % title, step="audit", role="audit", parent=batch)
 
     def test_findings_marks_retroed_and_surfaces_a_human_inbox_step(self):
         s = FakeStore()
@@ -331,6 +332,14 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         self.assertEqual(len(human), 1)
         self.assertTrue(human[0].attention)
         self.assertEqual(human[0].state, "ready")
+
+    def test_findings_step_title_derives_from_the_batch_items_actual_title(self):
+        s = FakeStore()
+        batch = self._retro_batch(s, title="custom batch title")
+        aid = self._audit_step(s, batch)
+        self._uc(s).execute(CompleteInput(step=aid, outcome="findings", note="the digest"))
+        findings = [c for c in s.children(batch) if c.role == "human"][0]
+        self.assertEqual(findings.title, "review-findings: custom batch title")
 
     def test_findings_step_closes_terminally_when_reviewed(self):
         s = FakeStore()
