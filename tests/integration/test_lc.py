@@ -427,7 +427,11 @@ class TestFlow(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_advance_creates_next_step(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        item = self.store.create_item(
+            "st", theme=self.store.create_theme("theme"),
+            workflow="lightcycle/spec-driven@%s" % _SHA
+        )
+        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
         self.store.close(b, "done")
         rc, out, err = call(_cli_mod.cmd_advance, b, "done")
         self.assertEqual(rc, 0, err)
@@ -449,7 +453,11 @@ class TestDoneBlock(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_done_closes_and_advances(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        item = self.store.create_item(
+            "st", theme=self.store.create_theme("theme"),
+            workflow="lightcycle/spec-driven@%s" % _SHA
+        )
+        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
@@ -480,7 +488,11 @@ class TestDoneBlock(unittest.TestCase):
         self.assertIn(b, inbox_out)
 
     def test_done_note_forwards_to_next_task(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        item = self.store.create_item(
+            "st", theme=self.store.create_theme("theme"),
+            workflow="lightcycle/spec-driven@%s" % _SHA
+        )
+        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix the coverage")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -493,7 +505,11 @@ class TestDoneBlock(unittest.TestCase):
         self.assertIn("fix the coverage", shown.get("notes") or "")
 
     def test_done_without_note_unchanged(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        item = self.store.create_item(
+            "st", theme=self.store.create_theme("theme"),
+            workflow="lightcycle/spec-driven@%s" % _SHA
+        )
+        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -501,7 +517,11 @@ class TestDoneBlock(unittest.TestCase):
         self.assertNotIn("from build", self.store.get_node(new).notes or "")
 
     def test_done_note_accepts_unquoted_multiword(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        item = self.store.create_item(
+            "st", theme=self.store.create_theme("theme"),
+            workflow="lightcycle/spec-driven@%s" % _SHA
+        )
+        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix", "the", "flaky", "test")
         self.assertEqual(rc, 0, err)
         notes = self.store.get_node(out.strip()).notes or ""
@@ -1673,7 +1693,11 @@ class TestContractsOptional(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_done_without_contract_needs_no_artifacts(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        item = self.store.create_item(
+            "st", theme=self.store.create_theme("theme"),
+            workflow="lightcycle/spec-driven@%s" % _SHA
+        )
+        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
 
