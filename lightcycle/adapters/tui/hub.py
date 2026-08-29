@@ -272,7 +272,8 @@ def hierarchy_row_cells(row, layout=None, row_budget=None):
     if layout is not None and layout.stacked:
         first_line = _hierarchy_stacked_first_line(row, layout, row_budget)
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
-        return (stacked_cell(first_line, indent, node.title, row_budget),)
+        label = node.step if node.type == "step" else node.title
+        return (stacked_cell(first_line, indent, label, row_budget),)
     glyph = _state_glyph(node)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
@@ -282,7 +283,7 @@ def hierarchy_row_cells(row, layout=None, row_budget=None):
     content_cell = (
         Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else ""
     )
-    title_cell = ("  " * row.depth) + node.title
+    title_cell = ("  " * row.depth) + (node.step if node.type == "step" else node.title)
     role_cell = Text(display_role(node.role), style=COLOURS["dim"]) if node.type == "step" else ""
     return (icon_cell, content_cell, node.id, title_cell, role_cell)
 

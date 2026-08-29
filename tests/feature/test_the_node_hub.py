@@ -478,7 +478,7 @@ def _key_pressed(ctx, key):
 def _select_item_row(ctx):
     table = ctx["session"].app.query_one(PriorityTable)
     ids = [row.key.value for row in table.ordered_rows]
-    table.move_cursor(row=ids.index(ctx["step_id"]))
+    table.move_cursor(row=ids.index(ctx["item_id"]))
 
 
 @when(parsers.parse("I open it with Enter or {arrow}"))

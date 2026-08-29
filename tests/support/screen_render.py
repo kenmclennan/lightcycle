@@ -68,6 +68,7 @@ def _populated_store(claimed_minutes_ago=14):
 
     registry = store.item("LC-143.1", REGISTRY_TITLE, theme=theme, workflow=WORKFLOW)
     store.step("LC-143.1.4", "write the code", step="write-code", role="write-code", parent=registry)
+    store.claim_ready("write-code")
 
     clone = store.item("LC-143.2", CLONE_TITLE, theme=theme, workflow=WORKFLOW)
     store.step("LC-143.2.4", "write the code", step="write-code", role="write-code", parent=clone)

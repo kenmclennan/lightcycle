@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from lightcycle.adapters.tui.design_system import DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
 from lightcycle.application.work.project_of import project_of, short_project_label
@@ -99,11 +99,21 @@ def _queued_row(store, node):
 
 
 def build_priority_rows(store, lanes, now):
-    attention = [_attention_row(store, n, "inbox") for n in lanes["inbox"]] + [
-        _attention_row(store, n, "blocked") for n in lanes["blocked"]
-    ]
-    active = [_active_row(store, n, now) for n in lanes["active"]]
-    queued = [_queued_row(store, n) for n in lanes["queue"]]
+    claimed = set()
+    attention, active, queued = [], [], []
+    for group_rows, nodes_and_row in (
+        (attention, [(n, _attention_row(store, n, "inbox")) for n in lanes["inbox"]]
+         + [(n, _attention_row(store, n, "blocked")) for n in lanes["blocked"]]),
+        (active, [(n, _active_row(store, n, now)) for n in lanes["active"]]),
+        (queued, [(n, _queued_row(store, n)) for n in lanes["queue"]]),
+    ):
+        for node, row in nodes_and_row:
+            owning_id = node.parent or node.id
+            if owning_id in claimed:
+                continue
+            claimed.add(owning_id)
+            owning_node = store.get_node(owning_id)
+            group_rows.append(replace(row, id=owning_node.id, title=owning_node.title))
     return attention, active, queued
 
 

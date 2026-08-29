@@ -710,8 +710,7 @@ class LightcycleApp(App):
             if is_gap_key(row_id):
                 return
             node = self._container.store.get_node(row_id)
-            owning_id = node.parent if node.type == "step" else node.id
-            self.push_screen(NodeHubScreen(self._container, owning_id, self._now))
+            self.push_screen(NodeHubScreen(self._container, node.id, self._now))
         elif table.id == "backlog-table":
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))
