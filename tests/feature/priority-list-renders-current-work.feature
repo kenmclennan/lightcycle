@@ -23,7 +23,6 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the needs-attention row for that step shows "code-await-merge" as its step
 
-  @wip
   Scenario: A three-group list renders exactly one row per real item, at the spaced height, with no separator row
     Given the store has a step in the inbox lane, an active step, and a queued step
     When I launch the dashboard
@@ -36,7 +35,6 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the active group renders no rows
 
-  @wip
   Scenario: A single non-empty group renders exactly its own rows and nothing else
     Given the store has only a queued step
     When I launch the dashboard
@@ -76,7 +74,6 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the queued row for that step shows "build" as its next step
 
-  @wip
   Scenario: An item with an active step and a queued step of its own renders exactly one row, in the active group
     Given the store has an item with an active step and a queued step of its own
     When I launch the dashboard
@@ -97,7 +94,6 @@ Feature: Priority list renders current work
     And one poll interval elapses
     Then the step's row moves from the queued group into the active group
 
-  @wip
   Scenario Outline: A row whose title is too long to fit wraps instead of being truncated
     Given the store has a <group> step with a title longer than the priority list can fit on one line
     When I launch the dashboard
@@ -126,7 +122,6 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the id column is already wide enough for that off-screen id, before it is scrolled into view
 
-  @wip
   Scenario Outline: When a row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width and spanning the row without wrapping mid-word
     Given a row whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When I launch the dashboard
@@ -197,7 +192,6 @@ Feature: Priority list renders current work
     And Down is pressed
     Then the selection has not moved past the last row
 
-  @wip
   Scenario: Down visits every row's id exactly once, in order, and holds on the last row
     Given the store has a step in the inbox lane, an active step, and a queued step
     When I launch the dashboard
@@ -206,7 +200,6 @@ Feature: Priority list renders current work
     When Down is pressed once more
     Then the selection is still on the queued row
 
-  @wip
   Scenario: A selected row's highlight covers every line of that row, spacer included
     Given the store has three queued steps
     When I launch the dashboard

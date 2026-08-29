@@ -7,7 +7,6 @@ from textual.widgets import DataTable
 
 from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
-from lightcycle.adapters.tui.priority_list import is_gap_key
 from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
@@ -53,10 +52,6 @@ def _rendered_icon_style(session, row_id, glyph):
 def _row_order(session):
     table = session.app.query_one(DataTable)
     return [row.key.value for row in table.ordered_rows]
-
-
-def _real_row_order(session):
-    return [rid for rid in _row_order(session) if not is_gap_key(rid)]
 
 
 def _attach_bell_spy(session):
@@ -292,7 +287,7 @@ def _g_launched_with_queued(ctx):
 )
 def _g_long_title_step(ctx, group):
     store = FakeStore()
-    long_title = "word " * 60
+    long_title = ("word " * 20).strip()
     if group == "needs-attention":
         tid = store.create_step(long_title, step="triage", role="human")
     elif group == "active":
@@ -417,7 +412,7 @@ _STACK_PROJECT = "lightcycle"
 _STACK_STEP = "code-review-rounds"
 _STACK_TIME_MINUTES = 14
 _STACK_TIME_TEXT = "14m"
-_STACK_TITLE = "A title long enough to need a continuation line for real"
+_STACK_TITLE = "A title needing one continuation line"
 _PRIORITY_NUM_COLUMNS = 7
 
 
@@ -581,6 +576,28 @@ def _w_press_down(ctx):
     ctx["session"].press("down")
 
 
+def _current_selected_row_id(session):
+    table = session.app.query_one(DataTable)
+    return table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+
+
+@when(parsers.parse("Down is pressed {n:d} times"))
+def _w_press_down_n_times(ctx, n):
+    session = ctx["session"]
+    visited = [_current_selected_row_id(session)]
+    for _ in range(n):
+        session.press("down")
+        visited.append(_current_selected_row_id(session))
+    ctx["down_visits"] = visited
+
+
+@when("Down is pressed once more")
+def _w_press_down_once_more(ctx):
+    session = ctx["session"]
+    session.press("down")
+    ctx["down_visits"].append(_current_selected_row_id(session))
+
+
 @when("Up is pressed")
 def _w_press_up(ctx):
     ctx["session"].press("up")
@@ -649,51 +666,34 @@ def _t_attention_row_shows_step(ctx, step_name):
     assert _cell(ctx["session"], ctx["target_id"], "step") == step_name
 
 
-@then(
-    "there is exactly one blank separator row between the needs-attention group and the "
-    "active group"
-)
-def _t_gap_attention_active(ctx):
+@then("the table contains exactly 3 rows, one for each step, with no extra row of any kind")
+def _t_table_exactly_three_rows(ctx):
     order = _row_order(ctx["session"])
-    start = order.index(ctx["inbox_id"])
-    end = order.index(ctx["active_id"])
-    between = order[start + 1 : end]
-    assert len(between) == 1
-    assert is_gap_key(between[0])
+    assert order == [ctx["inbox_id"], ctx["active_id"], ctx["queued_id"]]
 
 
-@then("there is exactly one blank separator row between the active group and the queued group")
-def _t_gap_active_queued(ctx):
-    order = _row_order(ctx["session"])
-    start = order.index(ctx["active_id"])
-    end = order.index(ctx["queued_id"])
-    between = order[start + 1 : end]
-    assert len(between) == 1
-    assert is_gap_key(between[0])
+@then("each row's key is a real node id")
+def _t_each_row_key_is_real_node_id(ctx):
+    known_ids = {ctx["inbox_id"], ctx["active_id"], ctx["queued_id"]}
+    for row_id in _row_order(ctx["session"]):
+        assert row_id in known_ids
+
+
+@then("each row's rendered height is 2, one line of content plus one spacer line")
+def _t_each_row_height_is_two(ctx):
+    table = ctx["session"].app.query_one(DataTable)
+    for row in table.ordered_rows:
+        assert row.height == 2
+
+
+@then("the table contains exactly one row, for that queued step, with no extra row of any kind")
+def _t_table_exactly_one_row(ctx):
+    assert _row_order(ctx["session"]) == [ctx["queued_id"]]
 
 
 @then("the active group renders no rows")
 def _t_active_group_empty(ctx):
-    assert _real_row_order(ctx["session"]) == [ctx["inbox_id"], ctx["queued_id"]]
-
-
-@then(
-    "there is exactly one blank separator row between the needs-attention group and the "
-    "queued group"
-)
-def _t_gap_attention_queued(ctx):
-    order = _row_order(ctx["session"])
-    start = order.index(ctx["inbox_id"])
-    end = order.index(ctx["queued_id"])
-    between = order[start + 1 : end]
-    assert len(between) == 1
-    assert is_gap_key(between[0])
-
-
-@then("the priority list has no blank separator row")
-def _t_no_gap_row(ctx):
-    order = _row_order(ctx["session"])
-    assert not any(is_gap_key(rid) for rid in order)
+    assert _row_order(ctx["session"]) == [ctx["inbox_id"], ctx["queued_id"]]
 
 
 @then("the active step's row is grouped below the needs-attention group and above the queued group")
@@ -721,7 +721,7 @@ def _t_active_distinct(ctx):
 @then("the priority list contains a row for the in-progress step, in the active group")
 def _t_in_progress_in_active(ctx):
     session = ctx["session"]
-    assert ctx["running_id"] in _real_row_order(session)
+    assert ctx["running_id"] in _row_order(session)
     assert _icon(session, ctx["running_id"]).plain == STATE_GLYPHS["active"].glyph
 
 
@@ -732,7 +732,7 @@ def _t_active_row_shows_step(ctx, step_name):
 
 @then("that item's row appears exactly once, in the active group")
 def _t_item_once_in_active(ctx):
-    order = _real_row_order(ctx["session"])
+    order = _row_order(ctx["session"])
     assert order.count(ctx["item_id"]) == 1
     assert _icon(ctx["session"], ctx["item_id"]).plain == STATE_GLYPHS["active"].glyph
 
@@ -740,8 +740,8 @@ def _t_item_once_in_active(ctx):
 @then("that item's row shows the item's own id and title, not the step's")
 def _t_item_row_shows_item_identity(ctx):
     session = ctx["session"]
-    assert ctx["item_id"] in _real_row_order(session)
-    assert _cell(session, ctx["item_id"], "title") == ctx["item_title"]
+    assert ctx["item_id"] in _row_order(session)
+    assert _cell(session, ctx["item_id"], "title").rstrip() == ctx["item_title"]
 
 
 @then("the active row for that item shows its active step's own step name and elapsed time")
@@ -751,9 +751,16 @@ def _t_item_active_step_fields(ctx):
     assert _cell(session, ctx["item_id"], "time") == "14m"
 
 
+@then("that item's row's rendered height includes exactly one spacer line, the same as any other row")
+def _t_item_row_height_includes_spacer(ctx):
+    table = ctx["session"].app.query_one(DataTable)
+    row = next(r for r in table.ordered_rows if r.key.value == ctx["item_id"])
+    assert row.height == 2
+
+
 @then("that item's row appears exactly once, in the needs-attention group")
 def _t_item_once_in_attention(ctx):
-    order = _real_row_order(ctx["session"])
+    order = _row_order(ctx["session"])
     assert order.count(ctx["item_id"]) == 1
     assert _icon(ctx["session"], ctx["item_id"]).plain == STATE_GLYPHS["needs-attention"].glyph
 
@@ -812,6 +819,13 @@ def _t_title_wraps(ctx):
     assert row.height > 1
 
 
+@then("that step's row renders at a height of 3, two wrapped content lines plus one spacer line")
+def _t_wrapped_row_height_is_three(ctx):
+    table = ctx["session"].app.query_one(DataTable)
+    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    assert row.height == 3
+
+
 @then(parsers.parse('every row shows "{project}" as its project'))
 def _t_every_row_shows_project(ctx, project):
     session = ctx["session"]
@@ -828,8 +842,6 @@ def _t_blank_project(ctx):
 def _t_row_shows_id_in_full(ctx, id):
     session = ctx["session"]
     table = session.app.query_one(DataTable)
-    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
-    assert row.height == 1
     lines = _row_lines(session, ctx["target_id"])
     assert _rendered_cell_text_at(table, lines[0], "id").strip() == id
 
@@ -877,7 +889,7 @@ def _t_stacked_continuation(ctx, indent):
     lines = _row_lines(session, ctx["target_id"])
     assert len(lines) > 1
     words = []
-    for line in lines[1:]:
+    for line in lines[1:-1]:
         text = _stacked_cell_text(table, line)
         stripped = text.rstrip()
         leading = len(stripped) - len(stripped.lstrip(" "))
@@ -890,6 +902,16 @@ def _t_stacked_continuation(ctx, indent):
 @then("no fragment of the title's prose is split mid-word")
 def _t_no_mid_word_split(ctx):
     assert ctx["_continuation_words"] == _STACK_TITLE.split()
+
+
+@then(
+    "that row renders at a height of 3, the row's first line plus one continuation line "
+    "plus one spacer line"
+)
+def _t_stacked_row_height_is_three(ctx):
+    table = ctx["session"].app.query_one(DataTable)
+    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    assert row.height == 3
 
 
 @then("the terminal bell has rung once")
@@ -923,6 +945,55 @@ def _t_selection_first_row(ctx):
 def _t_selection_last_row(ctx):
     table = ctx["session"].app.query_one(DataTable)
     assert table.cursor_row == table.row_count - 1
+
+
+@then(
+    "the selection has visited the needs-attention row, then the active row, then the "
+    "queued row, each exactly once"
+)
+def _t_visited_each_group_once(ctx):
+    visited = ctx["down_visits"]
+    deduped = [visited[0]]
+    for row_id in visited[1:]:
+        if row_id != deduped[-1]:
+            deduped.append(row_id)
+    assert deduped == [ctx["inbox_id"], ctx["active_id"], ctx["queued_id"]]
+
+
+@then("the selection is still on the queued row")
+def _t_selection_still_on_queued(ctx):
+    assert ctx["down_visits"][-1] == ctx["queued_id"]
+
+
+def _row_background_colours(session, row_id):
+    lines = _row_lines(session, row_id)
+    return {
+        segment.style.bgcolor.get_truecolor().hex
+        for strip in lines
+        for segment in strip
+        if segment.style and segment.style.bgcolor
+    }
+
+
+@then("every line of the selected row's rendered height carries the same cursor-highlight background colour")
+def _t_selected_row_highlight_consistent(ctx):
+    session = ctx["session"]
+    selected_id = _current_selected_row_id(session)
+    colours = _row_background_colours(session, selected_id)
+    assert len(colours) == 1
+    ctx["_selected_id"] = selected_id
+    ctx["_selected_bg"] = next(iter(colours))
+
+
+@then("that colour differs from an unselected row's background colour")
+def _t_colour_differs_from_unselected(ctx):
+    session = ctx["session"]
+    table = session.app.query_one(DataTable)
+    other_id = next(
+        r.key.value for r in table.ordered_rows if r.key.value != ctx["_selected_id"]
+    )
+    other_colours = _row_background_colours(session, other_id)
+    assert ctx["_selected_bg"] not in other_colours
 
 
 @then("the selection has moved forward by the same amount Page Down would move it")
@@ -960,14 +1031,6 @@ def _t_selection_falls_near(ctx):
     assert row_id in (ctx["first_id"], ctx["last_id"])
 
 
-@then("the selection is not on a blank separator row")
-def _t_selection_not_on_gap(ctx):
-    session = ctx["session"]
-    table = session.app.query_one(DataTable)
-    cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-    assert not is_gap_key(cell_key.row_key.value)
-
-
 @then("that step's row shows the dependency chain-link icon alongside its queued icon")
 def _t_shows_dependency_icon(ctx):
     icon = _icon(ctx["session"], ctx["target_id"]).plain
@@ -993,15 +1056,6 @@ def _t_runnable_before_held(ctx):
     assert order.index(ctx["runnable_id"]) < order.index(ctx["held_id"])
 
 
-@then("both rows are in the single queued group with no extra separator between them")
-def _t_both_in_single_queued_group(ctx):
-    order = _row_order(ctx["session"])
-    start = order.index(ctx["runnable_id"])
-    end = order.index(ctx["held_id"])
-    between = order[start + 1 : end]
-    assert not any(is_gap_key(rid) for rid in between)
-
-
 @then("a calm message is shown in place of the priority list")
 def _t_calm_message_shown(ctx):
     app = ctx["session"].app
@@ -1021,7 +1075,7 @@ def _t_new_row_built_at_real_width(ctx):
     session = ctx["session"]
     table = session.app.query_one(DataTable)
     row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
-    assert row.height == 1
+    assert row.height == 2
 
 
 def test_a_selected_rows_own_state_colour_survives_rendering():

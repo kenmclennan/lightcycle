@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.adapters.tui.priority_list import _project, _queued_row
+from lightcycle.adapters.tui.priority_list import _project, _queued_row, assemble_rows
 from tests.support.fake_store import FakeStore
 
 
@@ -52,3 +52,14 @@ class TestQueuedRowDependencyTieBreak(unittest.TestCase):
 
         self.assertIn(expected, row.step)
         self.assertNotIn(other, row.step)
+
+
+class TestAssembleRows(unittest.TestCase):
+    def test_concatenates_all_three_groups_with_no_separator(self):
+        self.assertEqual(assemble_rows(["a"], ["b"], ["c"]), ["a", "b", "c"])
+
+    def test_an_empty_middle_group_contributes_nothing(self):
+        self.assertEqual(assemble_rows(["a"], [], ["c"]), ["a", "c"])
+
+    def test_a_single_non_empty_group_renders_alone(self):
+        self.assertEqual(assemble_rows([], [], ["c"]), ["c"])
