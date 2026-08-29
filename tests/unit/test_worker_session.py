@@ -1,12 +1,23 @@
+import json
+import threading
 import types
 import unittest
 
-from lightcycle.adapters.worker_session import SessionError, plan_session
+from lightcycle.adapters.worker_session import SessionError, dispatch_event, plan_session
+from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
 from lightcycle.domain.pool.worker_session import (
     CLOSE,
+    MAX_NUDGES,
     NUDGE,
     SessionPolicy,
     is_terminal_command,
+)
+
+REJECTED_LINE = (
+    '{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1788009600,'
+    '"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":'
+    '"org_level_disabled","isUsingOverage":false},"uuid":"36f969c3-ce27-4c90-b9e4-4d04f05fa4df",'
+    '"session_id":"49d8ac0f-6398-40c9-b723-1a3a21918333"}'
 )
 
 
@@ -79,12 +90,12 @@ class TestSessionPolicy(unittest.TestCase):
         p = SessionPolicy()
         self.assertEqual(p.on_result(has_open_step=False), CLOSE)
 
-    def test_unresolved_task_nudges_indefinitely_never_closes_a_working_worker(self):
+    def test_unresolved_task_nudges_up_to_the_cap_then_closes(self):
         p = SessionPolicy()
         p.observe_claimed(True)
-        for _ in range(20):
+        for _ in range(MAX_NUDGES):
             self.assertEqual(p.on_result(has_open_step=True), NUDGE)
-        self.assertEqual(p.nudges, 20)
+        self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
     def test_terminal_overrides_nudge(self):
         p = SessionPolicy()
@@ -92,6 +103,46 @@ class TestSessionPolicy(unittest.TestCase):
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
         p.observe_command("lc block abc.1 --needs x")
         self.assertEqual(p.on_result(has_open_step=True), CLOSE)
+
+    def test_rejected_rate_limit_closes_even_with_open_step_and_claimed(self):
+        p = SessionPolicy()
+        p.observe_claimed(True)
+        p.observe_rate_limit(parse_rate_limit_event(REJECTED_LINE))
+        self.assertEqual(p.on_result(has_open_step=True), CLOSE)
+
+    def test_non_rejected_event_does_not_close(self):
+        allowed_line = (
+            '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}'
+        )
+        p = SessionPolicy()
+        p.observe_claimed(True)
+        p.observe_rate_limit(parse_rate_limit_event(allowed_line))
+        self.assertEqual(p.on_result(has_open_step=True), NUDGE)
+
+    def test_none_event_does_not_close(self):
+        p = SessionPolicy()
+        p.observe_claimed(True)
+        p.observe_rate_limit(None)
+        self.assertEqual(p.on_result(has_open_step=True), NUDGE)
+
+
+class TestDispatchEvent(unittest.TestCase):
+    def test_rejected_rate_limit_line_forwards_to_policy_and_closes(self):
+        policy = SessionPolicy()
+        policy.observe_claimed(True)
+        counters = {"results": 0}
+        lock = threading.Lock()
+        d = json.loads(REJECTED_LINE)
+        dispatch_event(d, REJECTED_LINE, policy, counters, lock)
+        self.assertEqual(policy.on_result(has_open_step=True), CLOSE)
+
+    def test_result_line_increments_counter(self):
+        policy = SessionPolicy()
+        counters = {"results": 0}
+        lock = threading.Lock()
+        line = '{"type":"result"}'
+        dispatch_event(json.loads(line), line, policy, counters, lock)
+        self.assertEqual(counters["results"], 1)
 
 
 if __name__ == "__main__":

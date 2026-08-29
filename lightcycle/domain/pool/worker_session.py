@@ -6,6 +6,7 @@ _TERMINAL = re.compile(r"\blc\s+(?:done|block)\b")
 KEEP = "keep"
 NUDGE = "nudge"
 CLOSE = "close"
+MAX_NUDGES = 5
 
 
 def is_terminal_command(command):
@@ -38,6 +39,7 @@ class SessionPolicy:
         self._terminal = False
         self._claimed = False
         self._nudges = 0
+        self._rejected = False
 
     def observe_command(self, command):
         if is_terminal_command(command):
@@ -47,10 +49,16 @@ class SessionPolicy:
         if claimed:
             self._claimed = True
 
+    def observe_rate_limit(self, event):
+        if event is not None and event.is_rejected:
+            self._rejected = True
+
     def on_result(self, has_open_step):
-        if self._terminal:
+        if self._terminal or self._rejected:
             return CLOSE
         if not has_open_step and not self._claimed:
+            return CLOSE
+        if self._nudges >= MAX_NUDGES:
             return CLOSE
         self._nudges += 1
         return NUDGE
