@@ -2,9 +2,11 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
+from typing import Optional
 
 from lightcycle.adapters.workers import workers_state
 from lightcycle.adapters.workflow_source import resolve_agent_for_pin
@@ -22,6 +24,7 @@ class SessionError(Exception):
 class SessionPlan:
     model: str
     sysprompt: str
+    workspace: Optional[str] = None
 
 
 def plan_session(claim, resolve, reclaim, role):
@@ -36,7 +39,11 @@ def plan_session(claim, resolve, reclaim, role):
     if not model:
         reclaim(resp.view.step.id)
         raise SessionError("agent %s has no 'model' in frontmatter" % role)
-    return SessionPlan(model=model, sysprompt=agent["body"])
+    return SessionPlan(model=model, sysprompt=agent["body"], workspace=resp.workspace)
+
+
+def session_cwd(workspace):
+    return workspace if workspace else tempfile.mkdtemp(prefix="lc-worker-")
 
 KICKOFF = ("You are the %s. Claim your next step and complete it per your role instructions, "
            "then exit.")
@@ -82,8 +89,19 @@ def build_command(model, sysprompt, root):
             "--dangerously-skip-permissions"]
 
 
-def run(root, role, spawnid, model, sysprompt, max_session_seconds):
-    proc = subprocess.Popen(build_command(model, sysprompt, root), cwd=root,
+def poll_decision(add_dir, spawnid, policy, counters, lock, processed):
+    with lock:
+        pending = counters["results"] > processed
+        processed = counters["results"]
+    if not pending:
+        return None, processed
+    open_step = has_open_step(add_dir, spawnid)
+    policy.observe_claimed(open_step)
+    return policy.on_result(open_step), processed
+
+
+def run(add_dir, cwd, role, spawnid, model, sysprompt, max_session_seconds):
+    proc = subprocess.Popen(build_command(model, sysprompt, add_dir), cwd=cwd,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1)
     policy = SessionPolicy()
@@ -120,21 +138,15 @@ def run(root, role, spawnid, model, sysprompt, max_session_seconds):
         if time.time() - start > max_session_seconds:
             proc.terminate()
             break
-        with lock:
-            pending = counters["results"] > processed
-            processed = counters["results"]
-        if pending:
-            open_step = has_open_step(root, spawnid)
-            policy.observe_claimed(open_step)
-            decision = policy.on_result(open_step)
-            if decision == CLOSE:
-                try:
-                    proc.stdin.close()
-                except (BrokenPipeError, ValueError):
-                    pass
-                break
-            if decision == NUDGE:
-                send(NUDGE_TEXT)
+        decision, processed = poll_decision(add_dir, spawnid, policy, counters, lock, processed)
+        if decision == CLOSE:
+            try:
+                proc.stdin.close()
+            except (BrokenPipeError, ValueError):
+                pass
+            break
+        if decision == NUDGE:
+            send(NUDGE_TEXT)
         time.sleep(1)
 
     deadline = time.time() + EXIT_GRACE_SECONDS
@@ -174,8 +186,8 @@ def main():
         return 1
     if plan is None:
         return 0
-    return run(config.data_root(), role, spawnid, plan.model, plan.sysprompt,
-               config.max_session_seconds())
+    return run(config.data_root(), session_cwd(plan.workspace), role, spawnid,
+               plan.model, plan.sysprompt, config.max_session_seconds())
 
 
 if __name__ == "__main__":

@@ -1,9 +1,20 @@
 import json
+import os
+import shutil
+import tempfile
 import threading
 import types
 import unittest
+from unittest.mock import MagicMock, patch
 
-from lightcycle.adapters.worker_session import SessionError, dispatch_event, plan_session
+from lightcycle.adapters.worker_session import (
+    SessionError,
+    dispatch_event,
+    plan_session,
+    poll_decision,
+    run,
+    session_cwd,
+)
 from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
 from lightcycle.domain.pool.worker_session import (
     CLOSE,
@@ -22,9 +33,10 @@ REJECTED_LINE = (
 
 
 class TestPlanSession(unittest.TestCase):
-    def _resp(self, pin, step_id="s-1"):
+    def _resp(self, pin, step_id="s-1", workspace=None):
         return types.SimpleNamespace(
-            pin=pin, view=types.SimpleNamespace(step=types.SimpleNamespace(id=step_id)))
+            pin=pin, view=types.SimpleNamespace(step=types.SimpleNamespace(id=step_id)),
+            workspace=workspace)
 
     def _never_reclaim(self, step_id):
         raise AssertionError("reclaim should not be called: %s" % step_id)
@@ -61,6 +73,20 @@ class TestPlanSession(unittest.TestCase):
                 lambda role, pin: {"meta": {}, "body": "x"},
                 reclaimed.append, "coder")
         self.assertEqual(reclaimed, ["s-9"])
+
+    def test_carries_workspace_through_when_present(self):
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha", workspace="/work/item-1"),
+            lambda role, pin: {"meta": {"model": "opus"}, "body": "B-body"},
+            self._never_reclaim, "coder")
+        self.assertEqual(plan.workspace, "/work/item-1")
+
+    def test_workspace_is_none_when_claim_has_none(self):
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha"),
+            lambda role, pin: {"meta": {"model": "opus"}, "body": "B-body"},
+            self._never_reclaim, "coder")
+        self.assertIsNone(plan.workspace)
 
 
 class TestTerminalCommand(unittest.TestCase):
@@ -124,6 +150,85 @@ class TestSessionPolicy(unittest.TestCase):
         p.observe_claimed(True)
         p.observe_rate_limit(None)
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
+
+
+class TestSessionCwd(unittest.TestCase):
+    def test_present_workspace_returned_unchanged(self):
+        self.assertEqual(session_cwd("/some/workspace"), "/some/workspace")
+
+    def test_missing_workspace_creates_fresh_scratch_dir(self):
+        created = session_cwd(None)
+        self.addCleanup(shutil.rmtree, created, ignore_errors=True)
+        self.assertTrue(os.path.isdir(created))
+        tmp_root = os.path.realpath(tempfile.gettempdir())
+        self.assertEqual(os.path.commonpath([os.path.realpath(created), tmp_root]), tmp_root)
+
+    def test_missing_workspace_is_fresh_per_call(self):
+        first = session_cwd(None)
+        second = session_cwd(None)
+        self.addCleanup(shutil.rmtree, first, ignore_errors=True)
+        self.addCleanup(shutil.rmtree, second, ignore_errors=True)
+        self.assertNotEqual(first, second)
+
+
+class TestPollDecision(unittest.TestCase):
+    def test_pending_result_looks_up_open_step_against_add_dir(self):
+        policy = SessionPolicy()
+        counters = {"results": 1}
+        lock = threading.Lock()
+        seen = {}
+
+        def fake_has_open_step(root, spawnid):
+            seen["root"] = root
+            return True
+
+        with patch("lightcycle.adapters.worker_session.has_open_step", fake_has_open_step):
+            poll_decision("/data/root", "spid", policy, counters, lock, processed=0)
+        self.assertEqual(seen["root"], "/data/root")
+
+    def test_no_pending_result_skips_lookup_and_returns_none(self):
+        policy = SessionPolicy()
+        counters = {"results": 0}
+        lock = threading.Lock()
+
+        def fail_has_open_step(root, spawnid):
+            raise AssertionError("has_open_step should not be called")
+
+        with patch("lightcycle.adapters.worker_session.has_open_step", fail_has_open_step):
+            decision, processed = poll_decision(
+                "/data/root", "spid", policy, counters, lock, processed=0)
+        self.assertIsNone(decision)
+        self.assertEqual(processed, 0)
+
+
+class TestRun(unittest.TestCase):
+    def _fake_popen(self, captured):
+        def popen(cmd, cwd, **kwargs):
+            captured["cmd"] = cmd
+            captured["cwd"] = cwd
+            proc = MagicMock()
+            proc.poll.return_value = 0
+            proc.stdout = iter(())
+            proc.wait.return_value = 0
+            return proc
+        return popen
+
+    def test_launches_with_given_cwd_and_add_dir(self):
+        captured = {}
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen",
+                    self._fake_popen(captured)):
+            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
+        self.assertEqual(captured["cwd"], "/work/item-1")
+        cmd = captured["cmd"]
+        self.assertIn("--add-dir", cmd)
+        self.assertEqual(cmd[cmd.index("--add-dir") + 1], "/data/root")
+
+    def test_launches_with_fallback_cwd_distinct_from_add_dir(self):
+        captured = {}
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen",
+                    self._fake_popen(captured)):
+            run("/data/root", "/tmp/lc-worker-xyz", "coder", "spid", "opus", "sys", 5)
+        self.assertEqual(captured["cwd"], "/tmp/lc-worker-xyz")
 
 
 class TestDispatchEvent(unittest.TestCase):
