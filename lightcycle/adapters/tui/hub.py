@@ -335,20 +335,9 @@ def escalation_panel_text(header):
 
 
 class EscalationPanel(Static):
-    can_focus = True
-
-    BINDINGS = [
-        Binding("enter", "open", "Open", show=False),
-        Binding("right", "open", "Open", show=False),
-    ]
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_id = None
-
-    def action_open(self) -> None:
-        if self.target_id and isinstance(self.screen, NodeHubScreen):
-            self.screen.open_at(self.target_id)
 
 
 class HubHeader(Vertical):
@@ -736,6 +725,7 @@ class NodeHubScreen(Screen):
         Binding("[", "prev_tab", "Prev tab", show=False),
         Binding("]", "next_tab", "Next tab", show=False),
         Binding("t", "toggle_thinking", "Thinking", show=False),
+        Binding("b", "open_blocker", "Open blocker", show=False),
     ]
 
     CSS = f"""
@@ -1234,10 +1224,7 @@ class NodeHubScreen(Screen):
         self.update_pinned_ancestor()
 
     def _focus_active_tab(self) -> None:
-        panel = self.query_one(EscalationPanel)
-        if self._active_tab == "hierarchy" and panel.display:
-            self.set_focus(panel)
-        elif self._active_tab == "hierarchy" and not self._hierarchy_floor:
+        if self._active_tab == "hierarchy" and not self._hierarchy_floor:
             self.set_focus(self.query_one(HierarchyPagingTable))
         elif self._active_tab == "log" and self._log_mode != "no-log":
             self.set_focus(self.query_one(LogPane))
@@ -1275,6 +1262,11 @@ class NodeHubScreen(Screen):
     def close_hub(self) -> None:
         self.app.pop_screen()
 
+    def action_open_blocker(self) -> None:
+        target_id = self.query_one(EscalationPanel).target_id
+        if target_id:
+            self.open_at(target_id)
+
     def open_at(self, node_id, initial_tab=None) -> None:
         self.app.push_screen(NodeHubScreen(self._container, node_id, self._now, initial_tab=initial_tab))
 
@@ -1284,7 +1276,7 @@ class NodeHubScreen(Screen):
             self._open_selected_artifact(event.row_key.value)
             return
         row_id = event.row_key.value
-        if row_id is None:
+        if row_id is None or row_id == self._node_id:
             return
         self.open_at(row_id)
 

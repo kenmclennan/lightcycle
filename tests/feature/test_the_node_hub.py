@@ -3,7 +3,8 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
-from lightcycle.adapters.tui.design_system import COLOURS, STATE_GLYPHS
+from lightcycle.adapters.tui.design_system import COLOURS, HUB_SHORTCUTS, STATE_GLYPHS
+from lightcycle.adapters.tui.footer import ShortcutBar
 from lightcycle.adapters.tui.hub import EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -342,6 +343,20 @@ def _item_blocked_on_dependency(ctx):
     _launch(ctx, store)
 
 
+@given("an item blocked on another item's completion, with a step of its own")
+def _item_blocked_with_step(ctx):
+    store = FakeStore()
+    blocker = store.create_item("Blocker item")
+    item = store.create_item("Blocked item")
+    store.dep_add(item, blocker)
+    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    ctx["item_id"] = item
+    ctx["node_id"] = item
+    ctx["blocker_id"] = blocker
+    ctx["step_id"] = step
+    _launch(ctx, store)
+
+
 @given("an item whose current step is escalated, needing rework")
 def _item_escalated_rework(ctx):
     store = FakeStore()
@@ -477,7 +492,7 @@ def _step_reclaimed(ctx):
 def _key_pressed(ctx, key):
     keymap = {
         "Enter": "enter", "→": "right", "Esc": "escape", "←": "left",
-        "Tab": "tab", "]": "]", "[": "[",
+        "Tab": "tab", "]": "]", "[": "[", "Down": "down",
     }
     ctx["session"].press(keymap.get(key, key))
 
@@ -510,11 +525,6 @@ def _tab_is_active(ctx, tab):
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
     screen._apply_tab_visibility()
     ctx["session"].pause()
-
-
-@when("I select the blocking item and press Enter or →")
-def _select_blocking_and_open(ctx):
-    ctx["session"].press("enter")
 
 
 @when("I close it with Esc or ←")
@@ -740,6 +750,38 @@ def _blocking_item_hub_opens(ctx):
     assert screen._node_id == ctx["blocker_id"]
 
 
+@then("nothing happens, since there is no blocker to jump to")
+def _b_no_op(ctx):
+    session = ctx["session"]
+    assert len(session.app.screen_stack) == 2
+    assert session.app.screen._node_id == ctx["item_id"]
+
+
+@then("the hierarchy table has focus, not the escalation panel")
+def _hierarchy_table_focused(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen.focused, HierarchyPagingTable)
+    assert not isinstance(screen.focused, EscalationPanel)
+
+
+@then("the selection has moved to the next node")
+def _selection_moved_to_next(ctx):
+    table = ctx["session"].app.screen.query_one(HierarchyPagingTable)
+    assert table.cursor_row == 1
+
+
+@then("that step's own hub opens, not the blocking item's")
+def _steps_own_hub_opens(ctx):
+    screen = ctx["session"].app.screen
+    assert screen._node_id == ctx["step_id"]
+    assert screen._node_id != ctx["blocker_id"]
+
+
+@then("the screen stack still has depth 2, unchanged by the confirm")
+def _stack_depth_still_2(ctx):
+    assert len(ctx["session"].app.screen_stack) == 2
+
+
 @then("the original blocked item's hub reappears, at the tab I was on")
 def _original_hub_reappears(ctx):
     ctx["session"].press("escape")
@@ -819,3 +861,22 @@ def _empty_state_placeholder(ctx):
 @when("I look at it")
 def _look_at_it(ctx):
     pass
+
+
+def test_hub_footer_shortcuts_include_open_blocker():
+    store = FakeStore()
+    item = store.create_item("an item")
+    store.create_step("write code", step="write-code", role="write-code", parent=item)
+    store.claim_ready("write-code")
+    session = launch(make_test_container(store=store))
+    try:
+        session.run(
+            lambda: session.app.push_screen(
+                NodeHubScreen(session.app.container, item, session.app._now)
+            )
+        )
+        session.pause()
+        assert session.app.screen.query_one(ShortcutBar).shortcuts == HUB_SHORTCUTS
+        assert ("b", "open blocker") in HUB_SHORTCUTS
+    finally:
+        session.close()
