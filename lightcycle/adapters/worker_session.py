@@ -10,6 +10,7 @@ from lightcycle.adapters.workers import workers_state
 from lightcycle.adapters.workflow_source import resolve_agent_for_pin
 from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
 from lightcycle.container import Container
+from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 
 
@@ -47,6 +48,20 @@ EXIT_GRACE_SECONDS = 20
 def user_message(text):
     return json.dumps({"type": "user",
                        "message": {"role": "user", "content": [{"type": "text", "text": text}]}})
+
+
+def dispatch_event(d, line, policy, counters, lock):
+    t = d.get("type")
+    if t == "assistant":
+        for c in d.get("message", {}).get("content", []):
+            if c.get("type") == "tool_use":
+                inp = c.get("input", {}) or {}
+                policy.observe_command(str(inp.get("command", "")))
+    elif t == "result":
+        with lock:
+            counters["results"] += 1
+    elif t == "rate_limit_event":
+        policy.observe_rate_limit(parse_rate_limit_event(line))
 
 
 def has_open_step(root, spawnid):
@@ -93,15 +108,7 @@ def run(root, role, spawnid, model, sysprompt, max_session_seconds):
                 d = json.loads(line)
             except ValueError:
                 continue
-            t = d.get("type")
-            if t == "assistant":
-                for c in d.get("message", {}).get("content", []):
-                    if c.get("type") == "tool_use":
-                        inp = c.get("input", {}) or {}
-                        policy.observe_command(str(inp.get("command", "")))
-            elif t == "result":
-                with lock:
-                    counters["results"] += 1
+            dispatch_event(d, line, policy, counters, lock)
 
     reader_thread = threading.Thread(target=reader, daemon=True)
     reader_thread.start()
