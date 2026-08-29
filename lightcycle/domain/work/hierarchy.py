@@ -40,7 +40,7 @@ def row_bucket(node):
         return "done"
     if node.state == State.IN_PROGRESS:
         return "active"
-    if node.blocked_by or (node.state == State.READY and node.role == "human"):
+    if node.state == State.READY and node.role == "human":
         return "needs-attention"
     return "queued"
 

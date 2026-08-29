@@ -1437,10 +1437,11 @@ def cmd_status(argv):
     if a.json:
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
     else:
-        for key in ("inbox", "active", "queue", "blocked"):
+        for key in ("inbox", "active", "queue"):
             print("== %s (%d) ==" % (key, len(lanes[key])))
             for t in lanes[key]:
-                print("  %s  %s" % (t.id, t.title))
+                suffix = "  [blocked by %s]" % ", ".join(sorted(t.blocked_by)) if t.blocked_by else ""
+                print("  %s  %s%s" % (t.id, t.title, suffix))
     return 0
 
 

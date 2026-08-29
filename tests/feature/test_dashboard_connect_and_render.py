@@ -158,7 +158,7 @@ def _list_rendered(ctx):
     from lightcycle.domain.work import NodeQueue
 
     lanes = NodeQueue(ctx["store"].all_steps()).by_lane()
-    expected = {n.id for n in lanes["queue"]} | {n.id for n in lanes["blocked"]}
+    expected = {n.id for n in lanes["queue"]}
     table = ctx["session"].app.query_one(DataTable)
     actual = {key.value for key in table.rows if not key.value.startswith("__gap-")}
     assert actual == expected

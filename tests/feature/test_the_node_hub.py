@@ -707,6 +707,15 @@ def _escalation_tag_bold_amber(ctx, tag):
     assert style.color.get_truecolor().hex.lower() == COLOURS["amber"].lower()
 
 
+@then(parsers.parse('the escalation panel shows no "{tag}" tag and no second line'))
+def _escalation_no_tag_one_line(ctx, tag):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert panel.display
+    assert tag not in _rendered_panel_text(panel)
+    assert _rendered_line_text(panel, 1).strip() == ""
+
+
 @then("the reason is shown on a second line below the tag, in the text colour")
 def _escalation_reason_second_line(ctx):
     screen = ctx["session"].app.screen
@@ -728,7 +737,7 @@ def _escalation_reason_second_line(ctx):
 def _escalation_link_cyan(ctx):
     screen = ctx["session"].app.screen
     panel = screen.query_one(EscalationPanel)
-    style = _segment_style_for_substring(panel, 1, ctx["blocker_id"])
+    style = _segment_style_for_substring(panel, 0, ctx["blocker_id"])
     assert style is not None
     assert style.color.get_truecolor().hex.lower() == COLOURS["cyan"].lower()
 

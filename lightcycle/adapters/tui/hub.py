@@ -321,16 +321,19 @@ def toast_text(success, message, kind, value):
 ESCALATION_TAG = "⚠ needs you"
 
 
-def escalation_panel_text(header):
-    text = Text(ESCALATION_TAG, style="bold %s" % COLOURS["amber"])
-    text.append("\n")
-    reason_start = len(text)
-    text.append(header.escalation_text, style=COLOURS["text"])
+def escalation_reason_text(header):
+    text = Text(header.escalation_text, style=COLOURS["text"])
     if header.escalation_target:
         idx = header.escalation_text.find(header.escalation_target)
         if idx != -1:
-            start = reason_start + idx
-            text.stylize(COLOURS["cyan"], start, start + len(header.escalation_target))
+            text.stylize(COLOURS["cyan"], idx, idx + len(header.escalation_target))
+    return text
+
+
+def escalation_panel_text(header):
+    text = Text(ESCALATION_TAG, style="bold %s" % COLOURS["amber"])
+    text.append("\n")
+    text.append_text(escalation_reason_text(header))
     return text
 
 
@@ -381,7 +384,8 @@ class HubHeader(Vertical):
 
         panel = self.query_one(EscalationPanel)
         if header.escalation_text:
-            panel.update(escalation_panel_text(header))
+            is_demand = header.escalation_target is None
+            panel.update(escalation_panel_text(header) if is_demand else escalation_reason_text(header))
             panel.target_id = header.escalation_target
             panel.display = True
         else:

@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.adapters.tui.priority_list import _attention_row, _project
+from lightcycle.adapters.tui.priority_list import _project, _queued_row
 from tests.support.fake_store import FakeStore
 
 
@@ -36,7 +36,7 @@ class TestProject(unittest.TestCase):
         self.assertEqual(_project(store, node), "lightcycle")
 
 
-class TestAttentionRowDependencyTieBreak(unittest.TestCase):
+class TestQueuedRowDependencyTieBreak(unittest.TestCase):
     def test_shows_lexicographically_lowest_blocker(self):
         store = FakeStore()
         blocker_a = store.create_step("blocker a", step="build", role="coder")
@@ -48,7 +48,7 @@ class TestAttentionRowDependencyTieBreak(unittest.TestCase):
         expected = sorted([blocker_a, blocker_b])[0]
         other = blocker_b if expected == blocker_a else blocker_a
 
-        row = _attention_row(store, node, "blocked")
+        row = _queued_row(store, node)
 
         self.assertIn(expected, row.step)
         self.assertNotIn(other, row.step)

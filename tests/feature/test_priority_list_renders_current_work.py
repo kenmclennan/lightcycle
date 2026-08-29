@@ -150,7 +150,7 @@ def _g_inbox_active_queued(ctx):
 
 
 @given(
-    "the store has a step in the inbox lane, a step in the blocked lane, an active step, "
+    "the store has a step in the inbox lane, a dependency-held step, an active step, "
     "and a queued step"
 )
 def _g_inbox_blocked_active_queued(ctx):
@@ -363,11 +363,10 @@ def _g_launched_with_attention_already_rung(ctx):
     ctx["bell_calls"] = _attach_bell_spy(ctx["session"])
 
 
-@given("the store has a step already in the blocked lane")
-def _g_store_has_blocked_step(ctx):
+@given("the store has a step already in the inbox lane")
+def _g_store_has_inbox_step(ctx):
     store = FakeStore()
-    blocker = store.create_step("blocker", step="build", role="coder")
-    store.create_step("blocked", step="build", role="coder", deps=[blocker])
+    store.create_step("inbox item", step="triage", role="human")
     ctx["store"] = store
     ctx["launch_with_bell_spy"] = True
 
@@ -485,6 +484,17 @@ def _g_launched_with_selected_step(ctx):
     ctx["session"].pause()
 
 
+@given("the store has a runnable queued step and a dependency-held queued step")
+def _g_runnable_and_held_queued(ctx):
+    store = FakeStore()
+    ctx["runnable_id"] = store.create_step("runnable item", step="build", role="coder")
+    blocker = store.create_step("blocker", step="build", role="coder")
+    ctx["held_id"] = store.create_step(
+        "held item", step="build", role="coder", deps=[blocker]
+    )
+    ctx["store"] = store
+
+
 @given("the store has a step blocked on another item's completion")
 def _g_blocked_on_other_item(ctx):
     store = FakeStore()
@@ -551,6 +561,11 @@ def _w_step_becomes_blocked(ctx):
     store.create_step("blocked", step="build", role="coder", deps=[blocker])
 
 
+@when("a step is created directly into the inbox lane")
+def _w_new_inbox_step_directly(ctx):
+    ctx["store"].create_step("new inbox item", step="triage", role="human")
+
+
 @when("a new step is created directly into the queue")
 def _w_new_queue_step_directly(ctx):
     ctx["store"].create_step("new queued", step="build", role="coder")
@@ -614,30 +629,19 @@ def _t_inbox_distinct(ctx):
     assert inbox_icon.plain == STATE_GLYPHS["needs-attention"].glyph
 
 
-@then(
-    "the inbox step and the blocked step both appear together in the needs-attention group, "
-    "above the active and queued groups"
-)
-def _t_inbox_and_blocked_together(ctx):
+@then("the dependency-held step appears in the queued group, not the needs-attention group")
+def _t_blocked_step_in_queued_group(ctx):
     order = _row_order(ctx["session"])
-    attention_index = min(order.index(ctx["inbox_id"]), order.index(ctx["blocked_id"]))
-    between = order[
-        attention_index : max(order.index(ctx["inbox_id"]), order.index(ctx["blocked_id"])) + 1
-    ]
-    assert set(between) == {ctx["inbox_id"], ctx["blocked_id"]}
-    assert order.index(ctx["inbox_id"]) < order.index(ctx["active_id"])
-    assert order.index(ctx["blocked_id"]) < order.index(ctx["active_id"])
-    assert order.index(ctx["inbox_id"]) < order.index(ctx["queued_id"])
-    assert order.index(ctx["blocked_id"]) < order.index(ctx["queued_id"])
+    assert order.index(ctx["inbox_id"]) < order.index(ctx["blocked_id"])
+    assert order.index(ctx["active_id"]) < order.index(ctx["blocked_id"])
+    assert order.index(ctx["queued_id"]) < order.index(ctx["blocked_id"])
 
 
-@then("neither of them appears in the active group or the queued group")
-def _t_neither_in_active_or_queued(ctx):
-    session = ctx["session"]
-    for row_id in (ctx["inbox_id"], ctx["blocked_id"]):
-        icon = _icon(session, row_id).plain
-        assert STATE_GLYPHS["active"].glyph not in icon
-        assert STATE_GLYPHS["queued"].glyph not in icon
+@then("the dependency-held step's icon is the queued glyph, not the needs-attention glyph")
+def _t_blocked_step_queued_glyph(ctx):
+    icon = _icon(ctx["session"], ctx["blocked_id"]).plain
+    assert STATE_GLYPHS["queued"].glyph in icon
+    assert STATE_GLYPHS["needs-attention"].glyph not in icon
 
 
 @then(parsers.parse('the needs-attention row for that step shows "{step_name}" as its step'))
@@ -964,10 +968,10 @@ def _t_selection_not_on_gap(ctx):
     assert not is_gap_key(cell_key.row_key.value)
 
 
-@then("that step's row shows the dependency chain-link icon alongside its needs-attention icon")
+@then("that step's row shows the dependency chain-link icon alongside its queued icon")
 def _t_shows_dependency_icon(ctx):
     icon = _icon(ctx["session"], ctx["target_id"]).plain
-    assert STATE_GLYPHS["needs-attention"].glyph in icon
+    assert STATE_GLYPHS["queued"].glyph in icon
     assert DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph in icon
 
 
@@ -981,6 +985,21 @@ def _t_shows_blocking_id(ctx):
 def _t_no_dependency_icon(ctx):
     icon = _icon(ctx["session"], ctx["target_id"]).plain
     assert DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph not in icon
+
+
+@then("the runnable step's row is positioned before the dependency-held step's row")
+def _t_runnable_before_held(ctx):
+    order = _row_order(ctx["session"])
+    assert order.index(ctx["runnable_id"]) < order.index(ctx["held_id"])
+
+
+@then("both rows are in the single queued group with no extra separator between them")
+def _t_both_in_single_queued_group(ctx):
+    order = _row_order(ctx["session"])
+    start = order.index(ctx["runnable_id"])
+    end = order.index(ctx["held_id"])
+    between = order[start + 1 : end]
+    assert not any(is_gap_key(rid) for rid in between)
 
 
 @then("a calm message is shown in place of the priority list")

@@ -12,11 +12,11 @@ Feature: Priority list renders current work
     Then the inbox step's row is grouped above the active and queued groups
     And the inbox step's row is shown with its own icon and colour, distinct from the active and queued rows
 
-  Scenario: Needs-attention groups inbox and blocked steps together, not interleaved with active or queued
-    Given the store has a step in the inbox lane, a step in the blocked lane, an active step, and a queued step
+  Scenario: A dependency-held step is grouped with queued work, not needs-attention
+    Given the store has a step in the inbox lane, a dependency-held step, an active step, and a queued step
     When I launch the dashboard
-    Then the inbox step and the blocked step both appear together in the needs-attention group, above the active and queued groups
-    And neither of them appears in the active group or the queued group
+    Then the dependency-held step appears in the queued group, not the needs-attention group
+    And the dependency-held step's icon is the queued glyph, not the needs-attention glyph
 
   Scenario: A needs-attention row shows its current step name
     Given the store has a step in the inbox lane at step "code-await-merge"
@@ -144,9 +144,15 @@ Feature: Priority list renders current work
 
   Scenario: The terminal bell rings the moment a step enters needs-attention
     Given the dashboard has launched with no needs-attention steps
-    When a step becomes blocked by an unresolved dependency
+    When a step is created directly into the inbox lane
     And one poll interval elapses
     Then the terminal bell has rung once
+
+  Scenario: The terminal bell does not ring when a step becomes dependency-blocked
+    Given the dashboard has launched with no needs-attention steps
+    When a step becomes blocked by an unresolved dependency
+    And one poll interval elapses
+    Then the terminal bell has not rung
 
   Scenario: The terminal bell does not ring again while a step remains in needs-attention
     Given the dashboard has launched and a step has already entered needs-attention, ringing the bell once
@@ -160,7 +166,7 @@ Feature: Priority list renders current work
     Then the terminal bell has not rung
 
   Scenario: The terminal bell does not ring for a needs-attention item already present at launch
-    Given the store has a step already in the blocked lane
+    Given the store has a step already in the inbox lane
     When I launch the dashboard
     Then the terminal bell has not rung
 
@@ -209,16 +215,22 @@ Feature: Priority list renders current work
     Then the selection is on a remaining row near the previous position
     And the selection is not on a blank separator row
 
-  Scenario: A needs-attention row sourced from the blocked lane shows the dependency chain-link icon and the blocking item's id
+  Scenario: A queued row that is dependency-held shows the dependency chain-link icon and the blocking item's id
     Given the store has a step blocked on another item's completion
     When I launch the dashboard
-    Then that step's row shows the dependency chain-link icon alongside its needs-attention icon
+    Then that step's row shows the dependency chain-link icon alongside its queued icon
     And that step's row shows the blocking item's id in its step cell
 
   Scenario: A needs-attention row sourced from the inbox lane shows no dependency indicator
     Given the store has a step in the inbox lane
     When I launch the dashboard
     Then that step's row shows no dependency chain-link icon
+
+  Scenario: Within the queued group, runnable work is positioned before dependency-held work
+    Given the store has a runnable queued step and a dependency-held queued step
+    When I launch the dashboard
+    Then the runnable step's row is positioned before the dependency-held step's row
+    And both rows are in the single queued group with no extra separator between them
 
   Scenario: A calm message replaces the priority list when nothing needs attention, is active, or is queued
     Given the store has no steps in any lane

@@ -54,8 +54,8 @@ class TestByLaneAndByState(unittest.TestCase):
         self.assertEqual([t.id for t in lanes["done"]], ["d"])
         self.assertEqual([t.id for t in lanes["active"]], ["a"])
         self.assertEqual([t.id for t in lanes["inbox"]], ["h"])
-        self.assertEqual([t.id for t in lanes["queue"]], ["r"])
-        self.assertEqual([t.id for t in lanes["blocked"]], ["b"])
+        self.assertEqual(sorted(t.id for t in lanes["queue"]), ["b", "r"])
+        self.assertNotIn("blocked", lanes)
 
     def test_by_state(self):
         q = NodeQueue([tk(state=State.READY), tk(state=State.DONE)])

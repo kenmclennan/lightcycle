@@ -45,14 +45,17 @@ A parent's state is derived from its children (`roll_up`):
 The `lc status` / `lc inbox` / `lc queue` / `lc active` boards are not stored - they are derived from
 each step's `(state, role)` by `lane_for`:
 
-| state       | role  | lane    |
-| ----------- | ----- | ------- |
-| ready       | human | inbox   |
-| ready       | agent | queue   |
-| in_progress | any   | active  |
-| backlogged  | any   | blocked |
-| done        | any   | done    |
+| state       | role  | lane   |
+| ----------- | ----- | ------ |
+| ready       | human | inbox  |
+| ready       | agent | queue  |
+| in_progress | any   | active |
+| backlogged  | any   | queue  |
+| done        | any   | done   |
 
 Lanes run over **steps only** - items and themes never appear in a lane (they live in `lc backlog`
-and the theme roll-up). A step that is `backlogged` because of an unmet dependency is what shows in
-the `blocked` lane.
+and the theme roll-up). A step that is `backlogged` because of an unmet dependency shows in the
+`queue` lane alongside runnable steps, not in a lane of its own - nothing is asked of anyone while
+it waits on its dependency, so it is not treated as an attention signal. It stays distinguishable
+by its `blocked_by` field, which every reader of the queue (`lc status`, `lc queue`, the priority
+list) can use to show what it is waiting on.
