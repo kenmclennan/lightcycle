@@ -16,5 +16,5 @@ def lane_for(state, role):
     if state == State.IN_PROGRESS:
         return Lane.ACTIVE
     if state == State.BACKLOGGED:
-        return Lane.BLOCKED
+        return Lane.QUEUE
     return Lane.INBOX if role == "human" else Lane.QUEUE

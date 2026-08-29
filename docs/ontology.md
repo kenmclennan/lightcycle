@@ -13,7 +13,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **role** - who performs a step. For an agent step it is the step name itself (`write-code`, `review-code`, `audit`, ...); human steps carry the role `human`.
 - **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **state** - a node's single lifecycle position: `backlogged` -> `ready` -> `in_progress` -> `done`. One state machine (there is no separate `status`).
-- **lane** - a derived view over `(state, role)`: `inbox` (human action + gates), `active` (running), `queue` (ready agent steps), `blocked`. Lanes are computed, never stored.
+- **lane** - a derived view over `(state, role)`: `inbox` (human action + gates), `active` (running), `queue` (ready agent steps, including those held behind an unmet dependency), `done`. Lanes are computed, never stored.
 
 ## The lifecycle (verbs)
 

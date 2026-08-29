@@ -143,11 +143,9 @@ class TestNeedsAttentionGroup(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def test_inbox_and_blocked_rows_render_above_active_and_queued(self):
+    def test_inbox_row_renders_above_active_and_queued(self):
         store = FakeStore()
         inbox = store.create_step("inbox item", step="triage", role="human")
-        blocker = store.create_step("blocker", step="build", role="coder")
-        blocked = store.create_step("blocked item", step="build", role="coder", deps=[blocker])
         active = store.create_step("active item", step="build", role="coder")
         store.assign(active, "worker-1")
 
@@ -155,7 +153,6 @@ class TestNeedsAttentionGroup(unittest.TestCase):
 
         order = _row_order(session)
         self.assertLess(order.index(inbox), order.index(active))
-        self.assertLess(order.index(blocked), order.index(active))
 
     def test_inbox_row_shows_single_icon_and_current_step_styled_amber(self):
         store = FakeStore()
@@ -170,19 +167,6 @@ class TestNeedsAttentionGroup(unittest.TestCase):
         self.assertEqual(icon.style, COLOURS["red"])
         step_cell = table.get_cell(inbox, "step")
         self.assertEqual(step_cell.style, COLOURS["amber"])
-
-    def test_blocked_row_shows_dual_icon_and_blocked_by_id_styled_amber(self):
-        store = FakeStore()
-        blocker = store.create_step("blocker", step="build", role="coder")
-        blocked = store.create_step("blocked item", step="build", role="coder", deps=[blocker])
-
-        session = self._launch(store)
-
-        self.assertEqual(_cell(session, blocked, "step"), "blocked · %s" % blocker)
-        table = session.app.query_one(DataTable)
-        icon = table.get_cell(blocked, "icon")
-        self.assertIn(STATE_GLYPHS["needs-attention"].glyph, icon.plain)
-        self.assertIn("⛓", icon.plain)
 
     def test_needs_attention_row_with_long_title_wraps(self):
         store = FakeStore()
@@ -277,15 +261,21 @@ class TestQueuedGroup(unittest.TestCase):
         icon_after = table.get_cell(queued, "icon").plain
         self.assertEqual(icon_after, STATE_GLYPHS["active"].glyph)
 
-    def test_blocked_step_does_not_appear_in_queued_group(self):
+    def test_dependency_held_step_appears_in_queued_group_with_dim_chain_glyph(self):
         store = FakeStore()
         blocker = store.create_step("blocker", step="build", role="coder")
         blocked = store.create_step("blocked item", step="build", role="coder", deps=[blocker])
 
         session = self._launch(store)
 
-        icon = session.app.query_one(DataTable).get_cell(blocked, "icon")
-        self.assertIn(STATE_GLYPHS["needs-attention"].glyph, icon.plain)
+        self.assertEqual(_cell(session, blocked, "step"), "blocked · %s" % blocker)
+        table = session.app.query_one(DataTable)
+        icon = table.get_cell(blocked, "icon")
+        self.assertIn(STATE_GLYPHS["queued"].glyph, icon.plain)
+        self.assertIn("⛓", icon.plain)
+        self.assertNotIn(STATE_GLYPHS["needs-attention"].glyph, icon.plain)
+        step_cell = table.get_cell(blocked, "step")
+        self.assertEqual(step_cell.style, COLOURS["dim"])
 
 
 class TestProjectColumn(unittest.TestCase):
@@ -511,8 +501,7 @@ class TestBell(unittest.TestCase):
         session = self._launch(store)
         calls = self._spy(session)
 
-        blocker = store.create_step("blocker", step="build", role="coder")
-        store.create_step("blocked", step="build", role="coder", deps=[blocker])
+        store.create_step("escalated", step="triage", role="human")
         session.poll_tick()
 
         self.assertEqual(calls["count"], 1)
@@ -520,8 +509,7 @@ class TestBell(unittest.TestCase):
     def test_does_not_refire_while_item_stays_in_needs_attention(self):
         store = FakeStore()
         session = self._launch(store)
-        blocker = store.create_step("blocker", step="build", role="coder")
-        store.create_step("blocked", step="build", role="coder", deps=[blocker])
+        store.create_step("escalated", step="triage", role="human")
         session.poll_tick()
         calls = self._spy(session)
 
@@ -539,10 +527,20 @@ class TestBell(unittest.TestCase):
 
         self.assertEqual(calls["count"], 0)
 
-    def test_does_not_fire_on_initial_render_for_item_already_present(self):
+    def test_does_not_fire_for_transition_into_dependency_held_queue(self):
         store = FakeStore()
+        session = self._launch(store)
+        calls = self._spy(session)
+
         blocker = store.create_step("blocker", step="build", role="coder")
         store.create_step("blocked", step="build", role="coder", deps=[blocker])
+        session.poll_tick()
+
+        self.assertEqual(calls["count"], 0)
+
+    def test_does_not_fire_on_initial_render_for_item_already_present(self):
+        store = FakeStore()
+        store.create_step("escalated", step="triage", role="human")
 
         calls = {"count": 0}
         original_bell = LightcycleApp.bell

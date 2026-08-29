@@ -63,19 +63,22 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         s.close(blocker, "done")
         self.assertIn(blocked, [t.id for t in s.ready_steps()])
 
-    def test_status_blocked_lane_reflects_open_blocker(self):
+    def test_status_queue_lane_reflects_open_blocker(self):
         s = self._store()
         blocker = s.create_step("blocker", role="coder")
         blocked = s.create_step("blocked", role="coder")
         s.dep_add(blocked, blocker)
         lanes = StatusUseCase(s).execute().lanes
-        self.assertIn(blocked, [t.id for t in lanes["blocked"]])
-        self.assertNotIn(blocked, [t.id for t in lanes["queue"]])
-        self.assertIn(blocker, [t.id for t in lanes["queue"]])
+        self.assertNotIn("blocked", lanes)
+        queued = {t.id: t for t in lanes["queue"]}
+        self.assertIn(blocked, queued)
+        self.assertTrue(queued[blocked].blocked_by)
+        self.assertIn(blocker, queued)
         s.close(blocker, "done")
         lanes = StatusUseCase(s).execute().lanes
-        self.assertIn(blocked, [t.id for t in lanes["queue"]])
-        self.assertNotIn(blocked, [t.id for t in lanes["blocked"]])
+        queued = {t.id: t for t in lanes["queue"]}
+        self.assertIn(blocked, queued)
+        self.assertFalse(queued[blocked].blocked_by)
 
     def test_route_to_human_relabels_and_notes(self):
         s = self._store()

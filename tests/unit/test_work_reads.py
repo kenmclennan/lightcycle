@@ -162,13 +162,13 @@ class TestStatus(unittest.TestCase):
 
         self.assertIn(watched, [t.id for t in lanes["inbox"]])
 
-    def test_dep_blocked_task_lands_in_blocked_not_queue(self):
+    def test_dep_blocked_task_lands_in_queue(self):
         s = FakeStore()
         blocker = s.create_step("blocker", step="build", role="coder")
         blocked = s.create_step("blocked", step="build", role="coder", deps=[blocker])
         lanes = StatusUseCase(s).execute().lanes
-        self.assertEqual([t.id for t in lanes["blocked"]], [blocked])
-        self.assertNotIn(blocked, [t.id for t in lanes["queue"]])
+        self.assertIn(blocked, [t.id for t in lanes["queue"]])
+        self.assertNotIn("blocked", lanes)
 
     def test_lanes_contain_only_steps_never_items_or_themes(self):
         s, non_steps, steps = _seed_mixed_store()

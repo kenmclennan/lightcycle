@@ -120,11 +120,11 @@ Feature: The hierarchy tab
       | 2     | just narrow enough to force stacking  |
       | 2     | just wide enough to clear the floor   |
 
-  Scenario: A node blocked on a dependency shows a dependency indicator distinct from other blocked reasons
+  Scenario: A node blocked on a dependency shows a dependency indicator alongside the queued state, not needs-attention
     Given a step blocked on another item's completion
     When it renders in the hierarchy
     Then a dependency indicator is shown alongside its state
-    And that indicator is distinct from a step that is blocked for any other reason
+    And that state is the queued glyph, not the needs-attention glyph
 
   Scenario: Down moves the selection to the next node
     Given the hierarchy has more rows than fit on one screen

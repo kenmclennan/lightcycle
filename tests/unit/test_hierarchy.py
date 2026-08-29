@@ -84,11 +84,11 @@ class TestLandingTab(unittest.TestCase):
 
 
 class TestRowBucket(unittest.TestCase):
-    def test_dependency_blocked_step_is_needs_attention(self):
+    def test_dependency_blocked_step_is_queued(self):
         s = FakeStore()
         blocker = s.create_step("b", step="build", role="coder")
         step = s.create_step("s", step="build", role="coder", deps=[blocker])
-        self.assertEqual(row_bucket(s.get_node(step)), "needs-attention")
+        self.assertEqual(row_bucket(s.get_node(step)), "queued")
 
     def test_human_ready_step_is_needs_attention(self):
         s = FakeStore()
@@ -111,6 +111,13 @@ class TestRowBucket(unittest.TestCase):
         step = s.create_step("s", step="build", role="coder")
         s.close(step, "done")
         self.assertEqual(row_bucket(s.get_node(step)), "done")
+
+    def test_dependency_blocked_item_is_queued(self):
+        s = FakeStore()
+        blocker = s.create_item("blocker")
+        item = s.create_item("blocked")
+        s.dep_add(item, blocker)
+        self.assertEqual(row_bucket(s.get_node(item)), "queued")
 
 
 class TestDisplayRole(unittest.TestCase):

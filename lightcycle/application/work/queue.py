@@ -20,4 +20,4 @@ class QueueUseCase:
 
     def execute(self, input: QueueInput) -> QueueResponse:
         lanes = NodeQueue(self._store.all_steps()).by_lane()
-        return QueueResponse(steps=(lanes["queue"] + lanes["blocked"])[: input.n])
+        return QueueResponse(steps=lanes["queue"][: input.n])

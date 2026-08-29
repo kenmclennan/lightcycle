@@ -826,11 +826,11 @@ def _dependency_indicator_shown(ctx):
     assert DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph in icon_text
 
 
-@then("that indicator is distinct from a step that is blocked for any other reason")
+@then("that state is the queued glyph, not the needs-attention glyph")
 def _indicator_distinct(ctx):
     icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
-    assert STATE_GLYPHS["needs-attention"].glyph in icon_text
-    assert DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph in icon_text
+    assert STATE_GLYPHS["queued"].glyph in icon_text
+    assert STATE_GLYPHS["needs-attention"].glyph not in icon_text
 
 
 @then("the selection has moved to the next node, scrolling as needed")

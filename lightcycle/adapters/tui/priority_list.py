@@ -36,22 +36,8 @@ def _elapsed_text(store, node, now):
     return format_elapsed(delta.total_seconds()) if delta is not None else ""
 
 
-def _attention_row(store, node, source_lane):
+def _attention_row(store, node):
     glyph = STATE_GLYPHS["needs-attention"]
-    if source_lane == "blocked":
-        blocker_id = sorted(node.blocked_by)[0]
-        return PriorityRow(
-            id=node.id,
-            group="attention",
-            icon=glyph.glyph,
-            icon_colour=glyph.colour,
-            dependency_icon=DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph,
-            project=_project(store, node),
-            title=node.title,
-            step="blocked · %s" % blocker_id,
-            step_colour="amber",
-            time="",
-        )
     return PriorityRow(
         id=node.id,
         group="attention",
@@ -84,6 +70,20 @@ def _active_row(store, node, now):
 
 def _queued_row(store, node):
     glyph = STATE_GLYPHS["queued"]
+    if node.blocked_by:
+        blocker_id = sorted(node.blocked_by)[0]
+        return PriorityRow(
+            id=node.id,
+            group="queued",
+            icon=glyph.glyph,
+            icon_colour=glyph.colour,
+            dependency_icon=DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph,
+            project=_project(store, node),
+            title=node.title,
+            step="blocked · %s" % blocker_id,
+            step_colour="dim",
+            time="",
+        )
     return PriorityRow(
         id=node.id,
         group="queued",
@@ -101,11 +101,13 @@ def _queued_row(store, node):
 def build_priority_rows(store, lanes, now):
     claimed = set()
     attention, active, queued = [], [], []
+    runnable = [n for n in lanes["queue"] if not n.blocked_by]
+    held = [n for n in lanes["queue"] if n.blocked_by]
     for group_rows, nodes_and_row in (
-        (attention, [(n, _attention_row(store, n, "inbox")) for n in lanes["inbox"]]
-         + [(n, _attention_row(store, n, "blocked")) for n in lanes["blocked"]]),
+        (attention, [(n, _attention_row(store, n)) for n in lanes["inbox"]]),
         (active, [(n, _active_row(store, n, now)) for n in lanes["active"]]),
-        (queued, [(n, _queued_row(store, n)) for n in lanes["queue"]]),
+        (queued, [(n, _queued_row(store, n)) for n in runnable]
+         + [(n, _queued_row(store, n)) for n in held]),
     ):
         for node, row in nodes_and_row:
             owning_id = node.parent or node.id

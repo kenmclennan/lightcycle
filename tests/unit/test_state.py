@@ -10,8 +10,11 @@ class TestLaneFor(unittest.TestCase):
     def test_in_progress_maps_to_active_lane(self):
         self.assertEqual(lane_for(State.IN_PROGRESS, role="coder"), Lane.ACTIVE)
 
-    def test_backlogged_maps_to_blocked_lane(self):
-        self.assertEqual(lane_for(State.BACKLOGGED, role="coder"), Lane.BLOCKED)
+    def test_backlogged_maps_to_queue_lane(self):
+        self.assertEqual(lane_for(State.BACKLOGGED, role="coder"), Lane.QUEUE)
+
+    def test_backlogged_with_human_role_maps_to_queue_lane(self):
+        self.assertEqual(lane_for(State.BACKLOGGED, role="human"), Lane.QUEUE)
 
     def test_ready_with_human_role_maps_to_inbox(self):
         self.assertEqual(lane_for(State.READY, role="human"), Lane.INBOX)
@@ -21,6 +24,9 @@ class TestLaneFor(unittest.TestCase):
 
     def test_ready_with_no_role_maps_to_queue(self):
         self.assertEqual(lane_for(State.READY, role=None), Lane.QUEUE)
+
+    def test_lane_has_no_blocked_member(self):
+        self.assertFalse(hasattr(Lane, "BLOCKED"))
 
 
 class TestRollUp(unittest.TestCase):
