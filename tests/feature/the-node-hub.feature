@@ -1,14 +1,14 @@
 Feature: The node hub
   Opening any node - theme, item, or step - lands on the hub: a fixed header
-  above four tabs (Hierarchy, Log, Artifacts, Description), landing on
+  above four tabs (Description, Hierarchy, Log, Artifacts), landing on
   whichever tab matches the node's current status. The header stays fixed
   while ] and [ cycle the tabs; Tab keeps its own global meaning, jumping
   straight to the backlog (or back to current work) from any tab, at any
   depth, without first backing out through Esc. Closing the hub always
   returns to wherever it was opened from - the priority list or the backlog
   - at the same position. Each tab's own content beyond this shared shell is
-  specified in its own feature file - Hierarchy, Log, Artifacts, and
-  Description alike.
+  specified in its own feature file - Description, Hierarchy, Log, and
+  Artifacts alike.
 
   Scenario Outline: Confirming a selected row opens its hub, replacing the list
     Given the priority list is showing with an item
@@ -101,17 +101,17 @@ Feature: The node hub
       | done                                  | Artifacts |
       | a theme                               | Hierarchy |
 
-  Scenario Outline: ] cycles forward through the four tabs, wrapping back to Hierarchy
+  Scenario Outline: ] cycles forward through the four tabs, wrapping back to Description
     Given a node's hub is open, on the "<from>" tab
     When ] is pressed
     Then the "<to>" tab becomes active
 
     Examples:
       | from        | to          |
+      | Description | Hierarchy   |
       | Hierarchy   | Log         |
       | Log         | Artifacts   |
       | Artifacts   | Description |
-      | Description | Hierarchy   |
 
   Scenario Outline: [ cycles backward through the same four tabs, in reverse
     Given a node's hub is open, on the "<from>" tab
@@ -120,10 +120,10 @@ Feature: The node hub
 
     Examples:
       | from        | to          |
-      | Hierarchy   | Description |
       | Description | Artifacts   |
       | Artifacts   | Log         |
       | Log         | Hierarchy   |
+      | Hierarchy   | Description |
 
   Scenario Outline: Tab jumps straight to the backlog from any tab in an open node's hub, without cycling tabs
     Given the priority list is showing with an item

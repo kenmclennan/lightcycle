@@ -5,7 +5,7 @@ Feature: The Description tab
   strip and the whole tab body off the bottom of the screen; it now lives
   here instead, scrollable, with the header fixed regardless of its length.
   The tab is always present, even on a node with no description, so the
-  Hierarchy / Log / Artifacts / Description cycle stays the same four tabs
+  Description / Hierarchy / Log / Artifacts cycle stays the same four tabs
   on every node; a node with nothing to show gets a calm message in place
   of the text rather than a blank area. Scrolling uses the same keys the
   Log tab uses - up/down and Ctrl-U/Ctrl-D - and a description longer than

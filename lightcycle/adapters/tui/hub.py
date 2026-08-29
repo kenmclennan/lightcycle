@@ -68,9 +68,9 @@ TOAST_SUB_CAPTION = "back to the artifact list automatically"
 TOAST_URL_SUB_SUFFIX = "nothing more to show here"
 TOAST_FILEPATH_DESTINATION = "in its default application"
 
-_TAB_ORDER = ("hierarchy", "log", "artifacts", "description")
+_TAB_ORDER = ("description", "hierarchy", "log", "artifacts")
 _TAB_LABELS = {
-    "hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts", "description": "Description",
+    "description": "Description", "hierarchy": "Hierarchy", "log": "Log", "artifacts": "Artifacts",
 }
 
 STACKED_COLUMN_KEY = "row"

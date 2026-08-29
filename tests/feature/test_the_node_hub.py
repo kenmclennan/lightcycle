@@ -88,8 +88,8 @@ def _painted_spans(strip):
 
 
 _HUB_TABS = (
-    ("hierarchy", "Hierarchy"), ("log", "Log"), ("artifacts", "Artifacts"),
-    ("description", "Description"),
+    ("description", "Description"), ("hierarchy", "Hierarchy"), ("log", "Log"),
+    ("artifacts", "Artifacts"),
 )
 
 
@@ -108,6 +108,14 @@ def _assert_tab_strip_rendered(session, active_tab):
             "tab %r not painted in the expected colour %r; painted colours were %r"
             % (label, expected, colours)
         )
+
+    xs = [
+        session.app.screen.query_one("#hub-tab-%s" % tab_id, Static).region.x
+        for tab_id, _ in _HUB_TABS
+    ]
+    assert xs == sorted(xs), "tabs not rendered left to right as %r; x positions were %r" % (
+        [label for _, label in _HUB_TABS], xs
+    )
 
 
 def _launch(ctx, store):
