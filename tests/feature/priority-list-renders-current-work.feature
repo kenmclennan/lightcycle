@@ -217,3 +217,4 @@ Feature: Priority list renders current work
     When a new step is created into the queue
     And one poll interval elapses
     Then the priority list is shown in place of the calm message
+    And the new step's row is built at the table's real width, not a stranded single-character wrap

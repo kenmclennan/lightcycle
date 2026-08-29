@@ -531,7 +531,7 @@ def _w_new_queue_step_directly(ctx):
 
 @when("a new step is created into the queue")
 def _w_new_queue_step(ctx):
-    ctx["store"].create_step("new item", step="build", role="coder")
+    ctx["target_id"] = ctx["store"].create_step("new item", step="build", role="coder")
 
 
 @when("Down is pressed")
@@ -934,6 +934,14 @@ def _t_list_shown_again(ctx):
     app = ctx["session"].app
     assert app.query_one("#empty-state").display is False
     assert app.query_one(DataTable).display is True
+
+
+@then("the new step's row is built at the table's real width, not a stranded single-character wrap")
+def _t_new_row_built_at_real_width(ctx):
+    session = ctx["session"]
+    table = session.app.query_one(DataTable)
+    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    assert row.height == 1
 
 
 def test_a_selected_rows_own_state_colour_survives_rendering():

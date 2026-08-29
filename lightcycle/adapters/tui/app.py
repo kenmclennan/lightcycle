@@ -89,6 +89,11 @@ class PriorityTable(PagingTable):
         if isinstance(app, LightcycleApp):
             app.refresh_priority_layout()
 
+    def on_show(self, event: events.Show) -> None:
+        app = self.app
+        if isinstance(app, LightcycleApp):
+            app.refresh_priority_layout()
+
     def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
         super().watch_cursor_coordinate(old_coordinate, new_coordinate)
         if old_coordinate.row != new_coordinate.row:
@@ -569,6 +574,7 @@ class LightcycleApp(App):
         self._priority_empty = True
         self._priority_floor = False
         self._priority_stacked = False
+        self._priority_needs_rebuild = False
         self._last_priority_rows = []
         self._backlog_project_filter = None
         self._backlog_total = 0
@@ -624,7 +630,7 @@ class LightcycleApp(App):
         table = self.query_one(PriorityTable)
         self._priority_empty = not rows
 
-        if shape == self._last_shape:
+        if shape == self._last_shape and not self._priority_needs_rebuild:
             self._update_cells(table, rows)
         else:
             self._rebuild_table(table, rows)
@@ -846,6 +852,10 @@ class LightcycleApp(App):
 
     def _rebuild_table(self, table, rows) -> None:
         self._last_priority_rows = rows
+        if table.size.width == 0:
+            self._priority_needs_rebuild = True
+            return
+        self._priority_needs_rebuild = False
         layout = self._priority_layout(table, rows)
         self._priority_floor = bool(rows) and layout.floor
         self._priority_stacked = layout.stacked
@@ -891,6 +901,10 @@ class LightcycleApp(App):
     def refresh_priority_layout(self) -> None:
         table = self.query_one(PriorityTable)
         if self._priority_empty or not self._last_priority_rows:
+            return
+        if self._priority_needs_rebuild:
+            self._rebuild_table(table, self._last_priority_rows)
+            self._apply_view_visibility()
             return
         layout = self._priority_layout(table, self._last_priority_rows)
         if bool(self._last_priority_rows) and layout.floor != self._priority_floor:
