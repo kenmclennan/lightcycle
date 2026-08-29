@@ -16,7 +16,8 @@ from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
-    render_backlog, render_backlog_themed, render_inbox, render_queue, render_workflow_mermaid,
+    render_backlog, render_backlog_themed, render_inbox, render_queue, render_search,
+    render_workflow_mermaid,
 )
 
 from lightcycle.application.feedback import (
@@ -52,6 +53,8 @@ from lightcycle.application.work import (
     ReopenItemUseCase,
     RemoveNodeInput,
     RemoveNodeUseCase,
+    SearchInput,
+    SearchUseCase,
     ShowNodeInput,
     ShowNodeUseCase,
     StatusUseCase,
@@ -165,6 +168,8 @@ COMMAND_GROUPS = [
         ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),
         ("inbox", "[N]", "what needs you now: gates to clear and agents waiting on you"),
         ("backlog", "[N]", "backlog items to develop later (todo)"),
+        ("search", "<text>", "find items by title/description/notes text, across every state "
+         "including done - the duplicate-check surface before filing new work"),
         ("active", "", "steps a worker is running right now"),
         ("queue", "[N]", "the next N ready/blocked agent steps"),
         ("ps", "[--all] [--json]", "running workers (alive only; --all includes dead)"),
@@ -252,7 +257,7 @@ def cmd_upgrade(argv):
     return 0
 
 
-_WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog")
+_WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search")
 _SET_FORBIDDEN_FLAGS = (
     "--parent", "--title", "--desc", "--description", "--goal", "--project",
     "--workflow", "--backlog", "--label", "--step",
@@ -307,7 +312,7 @@ def main(argv=None):
     ):
         sys.stderr.write(
             "lc: workers may not run '%s' - permitted: claim, done, show, attach, "
-            "backlog, set --state blocked\n" % cmd
+            "backlog, search, set --state blocked\n" % cmd
         )
         return 1
     fn = globals().get("cmd_" + cmd.replace("-", "_"))
@@ -877,6 +882,16 @@ def cmd_backlog(argv):
         if a.themes else render_backlog(resp.rows, title_cap)
     )
     for line in lines:
+        print(line)
+    return 0
+
+
+def cmd_search(argv):
+    ap = argparse.ArgumentParser(prog="lc search")
+    ap.add_argument("text")
+    a = ap.parse_args(argv)
+    resp = SearchUseCase(_container.store).execute(SearchInput(text=a.text))
+    for line in render_search(resp.matches, _container.config.max_title_length()):
         print(line)
     return 0
 

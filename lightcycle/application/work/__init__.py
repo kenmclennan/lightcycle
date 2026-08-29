@@ -21,6 +21,7 @@ from lightcycle.application.work.open_theme import OpenThemeInput, OpenThemeResp
 from lightcycle.application.work.planned_steps import PlannedStepsInput, PlannedStepsUseCase
 from lightcycle.application.work.queue import QueueInput, QueueUseCase
 from lightcycle.application.work.remove_node import RemoveNodeInput, RemoveNodeResponse, RemoveNodeUseCase
+from lightcycle.application.work.search import SearchInput, SearchMatch, SearchResponse, SearchUseCase
 from lightcycle.application.work.show_node import ShowNodeInput, ShowNodeUseCase
 from lightcycle.application.work.status import StatusUseCase
 from lightcycle.application.work.trace import TraceInput, TraceUseCase
@@ -60,6 +61,10 @@ __all__ = [
     "RemoveNodeInput",
     "RemoveNodeResponse",
     "RemoveNodeUseCase",
+    "SearchInput",
+    "SearchMatch",
+    "SearchResponse",
+    "SearchUseCase",
     "ShowNodeInput",
     "ShowNodeUseCase",
     "StatusUseCase",

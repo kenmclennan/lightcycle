@@ -19,6 +19,9 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_backlog_allowed_for_the_audit_worker(self):
         self.assertTrue(_worker_permitted("backlog", []))
 
+    def test_search_allowed_for_the_audit_worker(self):
+        self.assertTrue(_worker_permitted("search", ["text"]))
+
     def test_destructive_verbs_forbidden(self):
         for v in ("rm", "init", "new", "start", "sweep", "dep", "config",
                   "workflow"):
