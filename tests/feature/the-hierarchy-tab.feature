@@ -51,6 +51,12 @@ Feature: The hierarchy tab
     Then its own real id is shown alongside its title
     And its current state is shown using the same icon and colour as the priority list
 
+  Scenario: The active state's icon rests on a diamond and pulses through four frames
+    Given the hierarchy is open, showing an active step
+    Then the step's icon rests on the black diamond
+    When the active-glyph animation ticks four times
+    Then the step's icon cycles through the diamond pulse frames and returns to the black diamond
+
   Scenario: The hierarchy tree's row area shares the frame's own background, not an unnamed default
     Given the hierarchy tab is open
     When it renders

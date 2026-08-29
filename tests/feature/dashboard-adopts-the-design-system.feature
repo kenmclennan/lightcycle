@@ -125,7 +125,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
     Examples:
       | state           | glyph | colour |
       | needs-attention | ●     | red    |
-      | active          | ▸     | cyan   |
+      | active          | ◆     | cyan   |
       | queued          | ○     | dim    |
 
   Scenario: The dependency-blocked needs-attention state adds the amber chain-link without losing the red dot

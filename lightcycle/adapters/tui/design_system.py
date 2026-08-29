@@ -18,9 +18,18 @@ MODAL_OVERLAY_ALPHA = 0.72
 
 STATE_GLYPHS = {
     "needs-attention": Glyph("●", "red"),
-    "active": Glyph("▸", "cyan"),
+    "active": Glyph("◆", "cyan"),
     "queued": Glyph("○", "dim"),
 }
+
+ACTIVE_GLYPH_FRAMES = ("◇", "◈", "◆", "◈")
+ACTIVE_GLYPH_REST_INDEX = 2
+ACTIVE_GLYPH_TICKS_PER_SECOND = 8
+
+
+def next_active_glyph_frame(index):
+    return (index + 1) % len(ACTIVE_GLYPH_FRAMES)
+
 
 DEPENDENCY_BLOCKED_EXTRA_GLYPH = Glyph("⛓", "amber")
 

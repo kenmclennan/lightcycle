@@ -303,7 +303,7 @@ def _open_hub_on_tab(ctx, tab):
     screen = session.app.screen
     screen._active_tab = tab
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
-    screen._apply_tab_visibility()
+    session.run(screen._apply_tab_visibility)
     session.pause()
 
 
@@ -317,7 +317,7 @@ def _hub_open_on_tab(ctx, tab):
     screen = session.app.screen
     screen._active_tab = tab.lower()
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
-    screen._apply_tab_visibility()
+    session.run(screen._apply_tab_visibility)
     session.pause()
 
 
@@ -411,7 +411,7 @@ def _jumped_to_blocking_item(ctx):
     screen = session.app.screen
     screen._active_tab = "artifacts"
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
-    screen._apply_tab_visibility()
+    session.run(screen._apply_tab_visibility)
     ctx["original_screen"] = screen
     session.run(lambda: screen.open_at(blocker))
     session.pause()
@@ -444,7 +444,7 @@ def _opened_and_navigated(ctx):
     session.press("enter")
     screen = session.app.screen
     screen._active_tab = "hierarchy"
-    screen._apply_tab_visibility()
+    session.run(screen._apply_tab_visibility)
     session.press("down")
 
 
@@ -523,7 +523,7 @@ def _tab_is_active(ctx, tab):
     screen = ctx["session"].app.screen
     screen._active_tab = tab.lower()
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
-    screen._apply_tab_visibility()
+    ctx["session"].run(screen._apply_tab_visibility)
     ctx["session"].pause()
 
 

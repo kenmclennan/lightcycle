@@ -12,6 +12,9 @@ from textual.widgets.data_table import CellDoesNotExist
 from lightcycle import __version__
 from lightcycle.adapters.tui.backlog_list import build_backlog_rows
 from lightcycle.adapters.tui.design_system import (
+    ACTIVE_GLYPH_FRAMES,
+    ACTIVE_GLYPH_REST_INDEX,
+    ACTIVE_GLYPH_TICKS_PER_SECOND,
     BACKLOG_EMPTY_SHORTCUTS,
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
     BACKLOG_SHORTCUTS,
@@ -20,6 +23,7 @@ from lightcycle.adapters.tui.design_system import (
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     GLOBAL_SHORTCUTS,
     MODAL_OVERLAY_ALPHA,
+    next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.hub import NodeHubScreen
@@ -576,6 +580,11 @@ class LightcycleApp(App):
         self._priority_stacked = False
         self._priority_needs_rebuild = False
         self._last_priority_rows = []
+        self._active_row_ids = ()
+        self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
+        self._active_glyph_timer = None
+        self._priority_layout_cache = None
+        self._priority_row_budget_cache = None
         self._backlog_project_filter = None
         self._backlog_total = 0
         self._backlog_filtered_count = 0
@@ -602,6 +611,7 @@ class LightcycleApp(App):
         table.cursor_type = "row"
         table.show_header = False
         self._upgrade_version = self._check_upgrade()
+        self.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self._refresh)
 
@@ -641,6 +651,9 @@ class LightcycleApp(App):
         if had_prior_attention and newly_attention:
             self.bell()
 
+        self._active_row_ids = tuple(r.id for r in active_rows)
+        self._sync_active_glyph_animation()
+
         backlog_uc = BacklogUseCase(self._container.store, None)
         backlog_resp = backlog_uc.execute(BacklogInput(project=self._backlog_project_filter))
         backlog_counts = backlog_uc.counts()
@@ -676,6 +689,7 @@ class LightcycleApp(App):
         self.query_one("#empty-state", Static).display = on_priority and self._priority_empty
         self.query_one("#priority-list-floor", Static).display = showing_floor
         self.query_one(BacklogView).display = not on_priority
+        self._sync_active_glyph_animation()
 
     def _desired_shortcuts(self):
         if self._view == "priority":
@@ -699,6 +713,7 @@ class LightcycleApp(App):
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()
+        self._sync_active_glyph_animation()
         if self._view == "priority":
             self.set_focus(self.query_one(PriorityTable))
         else:
@@ -763,12 +778,12 @@ class LightcycleApp(App):
         for key in DATA_COLUMNS:
             table.add_column(key, width=widths[key], key=key)
 
-    def _stacked_first_line(self, row, cursor, layout, row_budget):
+    def _stacked_first_line(self, row, cursor, layout, row_budget, icon_override=None):
         cursor_field = pad_field(
             Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else Text(""),
             GLYPH_WIDTHS["cursor"],
         )
-        icon_cell = Text(row.icon, style=COLOURS[row.icon_colour])
+        icon_cell = Text(icon_override if icon_override is not None else row.icon, style=COLOURS[row.icon_colour])
         if row.dependency_icon:
             icon_cell = icon_cell + Text(
                 row.dependency_icon, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
@@ -785,14 +800,14 @@ class LightcycleApp(App):
         time_area = max(0, row_budget - len(content_so_far.plain))
         return content_so_far + pad_field_right(time_cell, time_area)
 
-    def _row_cells(self, row, layout, row_budget, cursor=False):
+    def _row_cells(self, row, layout, row_budget, cursor=False, icon_override=None):
         if layout.stacked:
-            first_line = self._stacked_first_line(row, cursor, layout, row_budget)
+            first_line = self._stacked_first_line(row, cursor, layout, row_budget, icon_override)
             cell = stacked_cell(first_line, PRIORITY_CONTINUATION_INDENT, row.title, row_budget)
             spacer = Text("\n" + " " * PRIORITY_CONTINUATION_INDENT + " ")
             return (cell + spacer,)
         cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
-        icon_cell = Text(row.icon, style=COLOURS[row.icon_colour])
+        icon_cell = Text(icon_override if icon_override is not None else row.icon, style=COLOURS[row.icon_colour])
         if row.dependency_icon:
             icon_cell = icon_cell + Text(
                 row.dependency_icon, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
@@ -817,8 +832,12 @@ class LightcycleApp(App):
                     "title": layout.flexible_width,
                 },
             )
+        self._priority_layout_cache = layout
+        self._priority_row_budget_cache = row_budget
+        active_glyph = self._active_glyph_char()
         for row in rows:
-            cells = self._row_cells(row, layout, row_budget, cursor=False)
+            icon_override = active_glyph if row.group == "active" else None
+            cells = self._row_cells(row, layout, row_budget, cursor=False, icon_override=icon_override)
             if layout.stacked:
                 table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
                 continue
@@ -826,6 +845,50 @@ class LightcycleApp(App):
                 if key == "cursor":
                     continue
                 table.update_cell(row.id, key, value)
+
+    def _active_glyph_char(self) -> str:
+        return ACTIVE_GLYPH_FRAMES[self._active_glyph_frame]
+
+    def _priority_view_visible(self) -> bool:
+        return self._view == "priority" and self.screen is self.screen_stack[0]
+
+    def _sync_active_glyph_animation(self) -> None:
+        should_run = (
+            self._priority_view_visible()
+            and bool(self._active_row_ids)
+            and not self._priority_floor
+            and not self._priority_needs_rebuild
+        )
+        if should_run and self._active_glyph_timer is None:
+            self._active_glyph_timer = self.set_interval(
+                1 / ACTIVE_GLYPH_TICKS_PER_SECOND, self._tick_active_glyph
+            )
+        elif not should_run and self._active_glyph_timer is not None:
+            self._active_glyph_timer.stop()
+            self._active_glyph_timer = None
+            self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
+
+    def _tick_active_glyph(self) -> None:
+        self._active_glyph_frame = next_active_glyph_frame(self._active_glyph_frame)
+        if not self._active_row_ids or self._priority_layout_cache is None:
+            return
+        table = self.query_one(PriorityTable)
+        glyph = self._active_glyph_char()
+        layout = self._priority_layout_cache
+        row_budget = self._priority_row_budget_cache
+        rows_by_id = {row.id: row for row in self._last_priority_rows}
+        for row_id in self._active_row_ids:
+            row = rows_by_id.get(row_id)
+            if row is None:
+                continue
+            cells = self._row_cells(row, layout, row_budget, cursor=False, icon_override=glyph)
+            try:
+                if layout.stacked:
+                    table.update_cell(row_id, STACKED_COLUMN_KEY, cells[0])
+                else:
+                    table.update_cell(row_id, "icon", cells[1])
+            except CellDoesNotExist:
+                pass
 
     def _selected_row_id(self, table):
         if table.row_count == 0:
@@ -860,6 +923,8 @@ class LightcycleApp(App):
         table.clear(columns=True)
         row_budget = render_row_budget(table, layout, len(DATA_COLUMNS))
         self._add_columns(table, layout, row_budget)
+        self._priority_layout_cache = layout
+        self._priority_row_budget_cache = row_budget
 
         new_index = 0
         if has_prior and rows:
@@ -870,14 +935,20 @@ class LightcycleApp(App):
                 new_index = min(max(self._selected_flat_index, 0), len(rows) - 1)
 
         table._stacked_mode = layout.stacked
+        active_glyph = self._active_glyph_char()
         variants = {}
         for index, row in enumerate(rows):
             is_cursor = index == new_index
-            cells = self._row_cells(row, layout, row_budget, cursor=is_cursor)
+            icon_override = active_glyph if row.group == "active" else None
+            cells = self._row_cells(row, layout, row_budget, cursor=is_cursor, icon_override=icon_override)
             if layout.stacked:
                 variants[row.id] = (
-                    self._row_cells(row, layout, row_budget, cursor=False)[0],
-                    self._row_cells(row, layout, row_budget, cursor=True)[0],
+                    self._row_cells(
+                        row, layout, row_budget, cursor=False, icon_override=icon_override
+                    )[0],
+                    self._row_cells(
+                        row, layout, row_budget, cursor=True, icon_override=icon_override
+                    )[0],
                 )
             table.add_row(*cells, height=None, key=row.id)
         table._stacked_variants = variants
