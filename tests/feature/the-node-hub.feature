@@ -178,10 +178,53 @@ Feature: The node hub
       | active |
       | queued |
 
-  Scenario: Selecting the named blocking item jumps straight to its own hub
+  Scenario: b jumps straight to the escalation's named blocking item's own hub
     Given an item's hub is open, showing an escalation reason that names a blocking item
-    When I select the blocking item and press Enter or →
+    When b is pressed
     Then the blocking item's own hub opens
+
+  Scenario: b does nothing when the escalation has no blocker to name
+    Given an item whose current step is escalated, needing rework
+    When I open it with Enter or →
+    And b is pressed
+    Then nothing happens, since there is no blocker to jump to
+
+  Scenario: The hierarchy table is focused on landing, even when the escalation panel is shown
+    Given an item blocked on another item's completion
+    When I open it with Enter or →
+    Then the hierarchy table has focus, not the escalation panel
+
+  Scenario: Cycling into the Hierarchy tab still focuses the table, not the escalation panel
+    Given an item whose current step is escalated, needing rework
+    When I open it with Enter or →
+    And ] is pressed
+    And ] is pressed
+    Then the hierarchy table has focus, not the escalation panel
+
+  Scenario: Down moves the hierarchy selection when the escalation panel is shown
+    Given an item blocked on another item's completion, with a step of its own
+    When I open it with Enter or →
+    And Down is pressed
+    Then the selection has moved to the next node
+
+  Scenario: Enter opens the highlighted row, not the escalation's blocker, when the escalation panel is shown
+    Given an item blocked on another item's completion, with a step of its own
+    When I open it with Enter or →
+    And Down is pressed
+    And Enter is pressed
+    Then that step's own hub opens, not the blocking item's
+
+  Scenario: Confirming the hub's own row in the Hierarchy tab does nothing, even when the hierarchy has other rows
+    Given an item blocked on another item's completion, with a step of its own
+    When I open it with Enter or →
+    And Enter is pressed
+    Then the screen stack still has depth 2, unchanged by the confirm
+
+  Scenario: Confirming the hub's own row in the Hierarchy tab does nothing
+    Given the backlog is showing with a todo item
+    When I open it with Enter or →
+    And Enter is pressed
+    Then the screen stack still has depth 2, unchanged by the confirm
 
   Scenario: Returning from a blocking item's hub goes back to the original blocked item's hub, not the list
     Given I jumped from a blocked item's hub to its blocking item's hub, from a particular tab

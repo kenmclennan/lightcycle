@@ -77,6 +77,7 @@ HUB_SHORTCUTS = (
     ("[/]", "switch tab"),
     ("↑↓", "scroll"),
     ("enter/→", "open node"),
+    ("b", "open blocker"),
     ("esc/←", "back"),
     ("tab", "backlog"),
     ("q", "quit"),
