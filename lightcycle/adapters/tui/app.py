@@ -808,8 +808,20 @@ class LightcycleApp(App):
         return (cursor_cell, icon_cell, row.id, project_cell, row.title, step_cell, time_cell)
 
     def _update_cells(self, table, rows) -> None:
+        self._last_priority_rows = rows
         layout = self._priority_layout(table, rows)
         row_budget = render_row_budget(table, layout, len(DATA_COLUMNS))
+        if not layout.stacked:
+            apply_widths(
+                table,
+                {
+                    "id": layout.atomic_widths["id"],
+                    "project": layout.atomic_widths["project"],
+                    "step": layout.atomic_widths["step"],
+                    "time": layout.atomic_widths["time"],
+                    "title": layout.flexible_width,
+                },
+            )
         for row in rows:
             if row.group == "gap":
                 continue

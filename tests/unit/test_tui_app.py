@@ -223,6 +223,46 @@ class TestActiveGroup(unittest.TestCase):
         self.assertEqual(_row_order(session), order_before)
         self.assertNotEqual(_cell(session, tid, "time"), time_before)
 
+    def test_poll_widens_time_column_when_elapsed_outgrows_built_width(self):
+        claimed_at = datetime.datetime(2026, 1, 1, 12, 0, 0)
+        clock = {"now": claimed_at + datetime.timedelta(minutes=9)}
+        store = FakeStore(now=lambda: claimed_at.isoformat())
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store, now=lambda: clock["now"])
+        table = session.app.query_one(DataTable)
+        self.assertEqual(_cell(session, tid, "time"), "9m")
+        self.assertEqual(table.columns.get("time").width, 2)
+
+        clock["now"] = claimed_at + datetime.timedelta(minutes=11)
+        session.poll_tick()
+
+        self.assertEqual(_cell(session, tid, "time"), "11m")
+        self.assertEqual(table.columns.get("time").width, 3)
+        rendered = "".join(segment.text for segment in table.render_line(0))
+        self.assertIn("11m", rendered)
+
+    def test_resize_after_poll_measures_the_widened_time_column(self):
+        claimed_at = datetime.datetime(2026, 1, 1, 12, 0, 0)
+        clock = {"now": claimed_at + datetime.timedelta(minutes=9)}
+        store = FakeStore(now=lambda: claimed_at.isoformat())
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store, now=lambda: clock["now"])
+        table = session.app.query_one(DataTable)
+
+        clock["now"] = claimed_at + datetime.timedelta(minutes=11)
+        session.poll_tick()
+        session.resize(100, 24)
+
+        self.assertEqual(table.columns.get("time").width, 3)
+        rendered = "".join(segment.text for segment in table.render_line(0))
+        self.assertIn("11m", rendered)
+
 
 class TestQueuedGroup(unittest.TestCase):
     def _launch(self, store):
