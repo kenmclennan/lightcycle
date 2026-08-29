@@ -14,6 +14,19 @@ def _flow(store, requires=None):
     return FlowService(FakeFs(metas, workflow=workflow), store)
 
 
+class _UnresolvableFlow:
+    def resolve_selection(self, selection):
+        raise ValueError("origin 'ghost' has no pulled version")
+
+
+class _PinnableButUnloadableFlow:
+    def resolve_selection(self, selection):
+        return "lightcycle/does-not-exist@testsha"
+
+    def load_graph(self, pin):
+        raise ValueError("workflow %r not found" % pin)
+
+
 class TestActivateItem(unittest.TestCase):
     def test_activation_files_the_entry_step_and_flips_state(self):
         s = FakeStore()
@@ -73,6 +86,23 @@ class TestActivateItem(unittest.TestCase):
         )
         self.assertEqual(s.get_node(item).state, "ready")
         self.assertEqual(s.get_node(resp.step).step, "build")
+
+    def test_an_unresolvable_workflow_raises_a_use_case_error_not_the_bare_value_error(self):
+        s = FakeStore()
+        item = s.create_item("add refunds")
+        with self.assertRaises(UseCaseError):
+            ActivateItemUseCase(s, _UnresolvableFlow(), None, None).execute(
+                ActivateItemInput(item=item, workflow="ghost/whatever")
+            )
+
+    def test_a_pin_that_resolves_but_does_not_load_raises_before_storing_it(self):
+        s = FakeStore()
+        item = s.create_item("add refunds")
+        with self.assertRaises(UseCaseError):
+            ActivateItemUseCase(s, _PinnableButUnloadableFlow(), None, None).execute(
+                ActivateItemInput(item=item, workflow="lightcycle/does-not-exist")
+            )
+        self.assertIsNone(s.get_node(item).workflow)
 
     def test_workflow_with_no_required_inputs_activates_repo_less_item(self):
         s = FakeStore()

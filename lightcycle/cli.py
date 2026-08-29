@@ -31,6 +31,10 @@ from lightcycle.domain.feedback import format_elapsed
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.project_of import project_of
 from lightcycle.application.work.resolve_backlog import link_resolves
+from lightcycle.application.work.resolve_workflow_selection import (
+    ResolveWorkflowSelectionInput,
+    ResolveWorkflowSelectionUseCase,
+)
 from lightcycle.application.work.title_guard import validate_title
 from lightcycle.application.work import (
     ActiveStepsUseCase,
@@ -1054,13 +1058,32 @@ def cmd_set(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
+    workflow_pin = a.workflow
+    resolved_pin = None
+    if a.workflow:
+        try:
+            node = _container.store.get_node(a.id)
+        except KeyError:
+            sys.stderr.write("unknown node '%s'\n" % a.id)
+            return 1
+        try:
+            resp = ResolveWorkflowSelectionUseCase(_flow()).execute(
+                ResolveWorkflowSelectionInput(node_type=node.type, selector=a.workflow))
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        workflow_pin = resp.value
+        if resp.resolved:
+            resolved_pin = resp.value
     if a.label:
         _container.store.label_add(a.id, a.label)
     tid = _container.store.edit_node(
         a.id, title=a.title, description=a.description, goal=a.goal,
-        project=a.project, parent=a.parent, workflow=a.workflow)
+        project=a.project, parent=a.parent, workflow=workflow_pin)
     if a.parent:
         print(tid)
+    if resolved_pin:
+        print(resolved_pin)
     if a.backlog:
         try:
             link_resolves(_container.store, tid, a.backlog)

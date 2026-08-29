@@ -2853,6 +2853,91 @@ class TestWorkflowSelection(unittest.TestCase):
         call(_cli_mod.cmd_done, self._build_task(item).id, "done")
         self.assertEqual(self._open_successor_steps(item), set())
 
+class TestSetWorkflow(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self, steps=True)
+
+    def test_new_item_with_workflow_stores_the_bare_selector_unresolved(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--workflow", _DEFAULT_WORKFLOW)
+        item = item.strip()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store.get_node(item).workflow, _DEFAULT_WORKFLOW)
+
+    def test_set_workflow_resolves_to_a_pin_and_prints_it(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item")
+        item = item.strip()
+        rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", _DEFAULT_WORKFLOW)
+        pin = "%s@%s" % (_DEFAULT_WORKFLOW, _SHA)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(out.strip(), pin)
+        self.assertEqual(self.store.get_node(item).workflow, pin)
+
+    def test_set_workflow_unknown_name_fails_and_does_not_store(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item")
+        item = item.strip()
+        rc, out, err = call(
+            _cli_mod.cmd_set, item, "--workflow", "lightcycle/does-not-exist")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("does-not-exist", err)
+        self.assertIsNone(self.store.get_node(item).workflow)
+
+    def test_set_workflow_unpulled_origin_fails_and_does_not_store(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item")
+        item = item.strip()
+        rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", "ghost/whatever")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("ghost", err)
+        self.assertIsNone(self.store.get_node(item).workflow)
+
+    def test_activating_with_an_unknown_workflow_fails_cleanly_instead_of_crashing(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item")
+        item = item.strip()
+        rc, out, err = call(
+            _cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/does-not-exist")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("does-not-exist", err)
+        self.assertEqual(self.store.get_node(item).state, "backlogged")
+
+    def test_set_workflow_overwriting_an_active_items_pin_still_resolves(self):
+        theme = self.store.create_theme("theme", workflow=_DEFAULT_WORKFLOW)
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--parent", theme)
+        item = item.strip()
+        rc, _, err = call(_cli_mod.cmd_set, item, "--state", "active")
+        self.assertEqual(rc, 0, err)
+        rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", _DEFAULT_WORKFLOW)
+        pin = "%s@%s" % (_DEFAULT_WORKFLOW, _SHA)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(out.strip(), pin)
+        self.assertEqual(self.store.get_node(item).workflow, pin)
+
+    def test_set_workflow_resolved_pin_survives_the_next_complete(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item")
+        item = item.strip()
+        rc, step_id, err = call(
+            _cli_mod.cmd_set, item, "--state", "active", "--workflow", _DEFAULT_WORKFLOW)
+        self.assertEqual(rc, 0, err)
+        step_id = step_id.strip()
+        rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", _DEFAULT_WORKFLOW)
+        self.assertEqual(rc, 0, err)
+        rc, out, err = call(_cli_mod.cmd_done, step_id, "done")
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(
+            any(t.step == "review" for t in self.store.all_nodes() if t.parent == item)
+        )
+
+    def test_set_workflow_rejects_an_unqualified_name(self):
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item")
+        item = item.strip()
+        rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", "solo")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("fully qualified", err)
+        self.assertIsNone(self.store.get_node(item).workflow)
+
+    def test_set_workflow_on_an_unknown_id_fails_cleanly(self):
+        rc, out, err = call(_cli_mod.cmd_set, "no-such-id", "--workflow", _DEFAULT_WORKFLOW)
+        self.assertEqual(rc, 1, err)
+        self.assertIn("unknown node", err)
+
 
 if __name__ == "__main__":
     unittest.main()

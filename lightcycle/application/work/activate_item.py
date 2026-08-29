@@ -44,7 +44,11 @@ class ActivateItemUseCase:
             raise UseCaseError(
                 "no workflow selected for '%s'; pass --workflow <origin>/<name> or set one on an "
                 "ancestor theme" % input.item)
-        pin = self._flow.resolve_selection(selection)
+        try:
+            pin = self._flow.resolve_selection(selection)
+            self._flow.load_graph(pin)
+        except ValueError as e:
+            raise UseCaseError(str(e))
         self._store.edit_node(item_id, workflow=pin)
         repo = Item(item_id, tuple(self._store.item_artifacts(item_id))).repo()
         ensure_project_cloned(self._store, self._git, self._config, repo)
