@@ -31,7 +31,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **probe cooldown** - after the breaker's own rate-limit probe is killed for stalling, `reset_at` is re-armed `probe-cooldown-seconds` forward rather than left at its stale value; a stall is inconclusive, never treated as a successful probe.
 - **retro** - gather a theme's child feedback and signals into a digest.
 - **content regression** - a PR's head advancing since the last poll but dropping a file the previously-pinned head touched; caught by comparing each poll's head against a stored `content-pin` and routed to a human rather than merged silently.
-- **read** - `show` (one node as JSON), `trace` (an item end-to-end: artifacts + child steps + logs), `status` / `inbox` / `backlog` / `active` / `queue` (lane views), `flow` (the assembled workflow), `worklog`.
+- **read** - `show` (one node as JSON), `trace` (an item end-to-end: artifacts + child steps + logs), `status` / `inbox` / `backlog` / `active` / `queue` (lane views), `flow` (the assembled workflow), `worklog`, `search` (text match over title/description/notes across every state, including done).
 
 ## The workflow (how steps chain)
 

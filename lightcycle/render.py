@@ -58,6 +58,18 @@ def _inbox_line(r, title_cap):
     return line + _strategy_suffix(r) + node_extra(r.step, show_description=True)
 
 
+def render_search(matches, title_cap):
+    return [_search_line(m, title_cap) for m in matches]
+
+
+def _search_line(m, title_cap):
+    title = _truncate(m.node.title or m.node.id, title_cap)
+    project = m.project or "-"
+    return "%-10s  %-8s  %-12s  %s  [%s] %s" % (
+        m.node.id, m.node.state, project, title, m.field, m.snippet,
+    )
+
+
 def render_queue(steps, title_cap):
     return [
         "  %-8s %s  %s" % (t.state, t.id, _truncate(t.title, title_cap)) for t in steps
