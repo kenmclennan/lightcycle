@@ -2,8 +2,8 @@ Feature: The Artifacts tab
   A node's Artifacts tab lists its non-internal artifacts, each labeled by its
   own type - internal bookkeeping artifacts are filtered out entirely, the
   same content-indicator rule the Hierarchy tab already uses. The tab is
-  always present, even on a node with nothing viewable, so the Hierarchy /
-  Log / Artifacts cycle stays the same three tabs on every node; a node with
+  always present, even on a node with nothing viewable, so the Description /
+  Hierarchy / Log / Artifacts cycle stays the same four tabs on every node; a node with
   nothing to show gets a calm message in place of the list rather than a
   blank area. Arrow keys move the selection; confirming a selected artifact
   with Enter or → opens it in the viewer appropriate for its kind - which
