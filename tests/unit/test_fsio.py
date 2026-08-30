@@ -95,6 +95,66 @@ class TestReadFrom(unittest.TestCase):
         self.assertEqual(offset, 0)
 
 
+class TestReadTail(unittest.TestCase):
+    def test_smaller_than_max_bytes_returns_the_entire_content(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "w") as f:
+            f.write("line one\nline two\n")
+        adapter = FsAdapter(None)
+        data, offset = adapter.read_tail(path, 1024)
+        self.assertEqual(data, b"line one\nline two\n")
+        self.assertEqual(offset, len(b"line one\nline two\n"))
+
+    def test_larger_than_max_bytes_returns_only_the_trailing_bytes(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "w") as f:
+            f.write("line one\nline two\n")
+        adapter = FsAdapter(None)
+        data, offset = adapter.read_tail(path, len(b"line two\n"))
+        self.assertEqual(data, b"line two\n")
+        self.assertNotIn(b"line one", data)
+        self.assertEqual(offset, len(b"line one\nline two\n"))
+
+    def test_offset_lines_up_exactly_with_a_following_read_from(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "w") as f:
+            f.write("line one\nline two\n")
+        adapter = FsAdapter(None)
+        _data, offset = adapter.read_tail(path, len(b"line two\n"))
+        with open(path, "a") as f:
+            f.write("line three\n")
+        data, new_offset = adapter.read_from(path, offset)
+        self.assertEqual(data, b"line three\n")
+        self.assertEqual(new_offset, offset + len(b"line three\n"))
+
+    def test_missing_file_reads_nothing_with_zero_offset(self):
+        adapter = FsAdapter(None)
+        data, offset = adapter.read_tail(os.path.join(tempfile.mkdtemp(), "gone.log"), 5)
+        self.assertEqual(data, b"")
+        self.assertEqual(offset, 0)
+
+    def test_fake_fs_smaller_than_max_bytes_returns_the_entire_content(self):
+        fs = FakeFs(files={"/l/worker.log": b"line one\nline two\n"})
+        data, offset = fs.read_tail("/l/worker.log", 1024)
+        self.assertEqual(data, b"line one\nline two\n")
+        self.assertEqual(offset, len(b"line one\nline two\n"))
+
+    def test_fake_fs_larger_than_max_bytes_returns_only_the_trailing_bytes(self):
+        fs = FakeFs(files={"/l/worker.log": b"line one\nline two\n"})
+        data, offset = fs.read_tail("/l/worker.log", len(b"line two\n"))
+        self.assertEqual(data, b"line two\n")
+        self.assertEqual(offset, len(b"line one\nline two\n"))
+
+    def test_fake_fs_unknown_path_reads_nothing_with_zero_offset(self):
+        fs = FakeFs()
+        data, offset = fs.read_tail("/l/missing.log", 5)
+        self.assertEqual(data, b"")
+        self.assertEqual(offset, 0)
+
+
 class TestExists(unittest.TestCase):
     def test_existing_file_exists(self):
         root = tempfile.mkdtemp()

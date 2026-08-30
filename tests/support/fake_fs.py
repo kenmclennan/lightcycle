@@ -118,6 +118,13 @@ class FakeFs:
         data = content[offset:]
         return data, offset + len(data)
 
+    def read_tail(self, path, max_bytes):
+        content = self._files.get(path)
+        if content is None:
+            return b"", 0
+        start = max(0, len(content) - max_bytes)
+        return self.read_from(path, start)
+
     def list_dir(self, path):
         return sorted(self._dirs.get(path, []))
 
