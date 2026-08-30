@@ -9,6 +9,7 @@ from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
 from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
 from lightcycle.domain.work import State
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -42,7 +43,12 @@ def _icon(session, row_id):
 
 def _rendered_icon_style(session, row_id, glyph):
     table = session.app.query_one(DataTable)
-    strip = table.render_line(table.get_row_index(row_id))
+    y = 0
+    for r in table.ordered_rows:
+        if r.key.value == row_id:
+            break
+        y += r.height
+    strip = table.render_line(y)
     for segment in strip:
         if segment.text.strip() == glyph:
             return segment.style
@@ -103,7 +109,9 @@ def _launch(ctx):
     store = ctx.get("store") or FakeStore()
     now = ctx["clock"].now if "clock" in ctx else None
     ctx["session"] = launch(
-        make_test_container(store=store), now=now, size=ctx.get("size") or DEFAULT_SIZE
+        make_test_container(store=store, fs=ctx.get("fs")),
+        now=now,
+        size=ctx.get("size") or DEFAULT_SIZE,
     )
 
 
@@ -166,6 +174,18 @@ def _g_inbox_at_step(ctx, step_name):
     store = FakeStore()
     ctx["target_id"] = store.create_step("inbox item", step=step_name, role="human")
     ctx["store"] = store
+
+
+@given("the store has a gate step and an escalation step, both in the inbox lane")
+def _g_inbox_gate_and_escalation(ctx):
+    store = FakeStore()
+    ctx["gate_id"] = store.create_step("await merge", step="ready-merge", role="human")
+    ctx["escalation_id"] = store.create_step("stuck build", step="build", role="human")
+    ctx["store"] = store
+    ctx["fs"] = FakeFs(metas={
+        "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
+        "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
+    })
 
 
 @given("the store has a step in the inbox lane and a queued step, with no active step")
@@ -643,7 +663,9 @@ def _t_inbox_distinct(ctx):
     queued_icon = _icon(session, ctx["queued_id"])
     assert (inbox_icon.plain, inbox_icon.style) != (active_icon.plain, active_icon.style)
     assert (inbox_icon.plain, inbox_icon.style) != (queued_icon.plain, queued_icon.style)
-    assert inbox_icon.plain == STATE_GLYPHS["needs-attention"].glyph
+    assert inbox_icon.plain == "●"
+    inbox_style = _rendered_icon_style(session, ctx["inbox_id"], "●")
+    assert inbox_style.color.get_truecolor().hex.lower() == COLOURS["amber"].lower()
 
 
 @then("the dependency-held step appears in the queued group, not the needs-attention group")
@@ -664,6 +686,33 @@ def _t_blocked_step_queued_glyph(ctx):
 @then(parsers.parse('the needs-attention row for that step shows "{step_name}" as its step'))
 def _t_attention_row_shows_step(ctx, step_name):
     assert _cell(ctx["session"], ctx["target_id"], "step") == step_name
+
+
+@then(parsers.parse('the gate\'s row shows icon "{glyph}" at colour {colour}'))
+def _t_gate_row_icon_colour(ctx, glyph, colour):
+    session = ctx["session"]
+    assert _icon(session, ctx["gate_id"]).plain == glyph
+    style = _rendered_icon_style(session, ctx["gate_id"], glyph)
+    assert style.color.get_truecolor().hex.lower() == COLOURS[colour].lower()
+
+
+@then(parsers.parse('the escalation\'s row shows icon "{glyph}" at colour {colour}'))
+def _t_escalation_row_icon_colour(ctx, glyph, colour):
+    session = ctx["session"]
+    assert _icon(session, ctx["escalation_id"]).plain == glyph
+    style = _rendered_icon_style(session, ctx["escalation_id"], glyph)
+    assert style.color.get_truecolor().hex.lower() == COLOURS[colour].lower()
+
+
+@then(parsers.parse('the escalation\'s step-column text reads "{text}"'))
+def _t_escalation_step_text(ctx, text):
+    assert _cell(ctx["session"], ctx["escalation_id"], "step") == text
+
+
+@then("the escalation's row is positioned before the gate's row within the needs-attention group")
+def _t_escalation_before_gate(ctx):
+    order = _row_order(ctx["session"])
+    assert order.index(ctx["escalation_id"]) < order.index(ctx["gate_id"])
 
 
 @then("the table contains exactly 3 rows, one for each step, with no extra row of any kind")
@@ -1085,17 +1134,13 @@ def test_a_selected_rows_own_state_colour_survives_rendering():
     store.assign(active_id, "worker-1")
     session = launch(make_test_container(store=store))
 
-    selected_style = _rendered_icon_style(
-        session, attention_id, STATE_GLYPHS["needs-attention"].glyph
-    )
-    assert selected_style.color.get_truecolor().hex.lower() == COLOURS["red"].lower()
+    selected_style = _rendered_icon_style(session, attention_id, STATE_GLYPHS["gate"].glyph)
+    assert selected_style.color.get_truecolor().hex.lower() == COLOURS["amber"].lower()
     assert selected_style.bgcolor.get_truecolor().hex.lower() == COLOURS["selected-bg"].lower()
 
     session.press("down")
-    deselected_style = _rendered_icon_style(
-        session, attention_id, STATE_GLYPHS["needs-attention"].glyph
-    )
-    assert deselected_style.color.get_truecolor().hex.lower() == COLOURS["red"].lower()
+    deselected_style = _rendered_icon_style(session, attention_id, STATE_GLYPHS["gate"].glyph)
+    assert deselected_style.color.get_truecolor().hex.lower() == COLOURS["amber"].lower()
     assert deselected_style.bgcolor.get_truecolor().hex.lower() == COLOURS["bg"].lower()
 
     session.close()

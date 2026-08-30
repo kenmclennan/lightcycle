@@ -53,15 +53,32 @@ class FakeLauncher:
         return self.path_succeeds
 
 
+class FakeWorkflowSource:
+    def current_sha(self, origin):
+        return None
+
+    def workflow_names(self, origin, sha):
+        return []
+
+    def bundle_path(self, origin, sha):
+        return None
+
+
+class FakeFlowConfig(Config):
+    def default_origin(self):
+        return "lightcycle"
+
+
 def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None, launcher=None):
     return Container(
         store=store or FakeStore(),
         lock=lock or FakeLock(running=False),
+        config=FakeFlowConfig(environ={}),
+        workflow_source=FakeWorkflowSource(),
         breaker=breaker or FakeBreakerPort(),
         fs=fs or FakeFs(),
         workers=workers or FakeWorkers(),
         launcher=launcher or FakeLauncher(),
-        config=Config(environ={}),
     )
 
 

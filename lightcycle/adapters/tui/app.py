@@ -628,7 +628,7 @@ class LightcycleApp(App):
         lanes = StatusUseCase(self._container.store).execute().lanes
         now = self._now().isoformat()
         attention_rows, active_rows, queued_rows = build_priority_rows(
-            self._container.store, lanes, now
+            self._container.store, lanes, now, self._container.flow_service()
         )
         shape = (
             tuple(r.id for r in attention_rows),

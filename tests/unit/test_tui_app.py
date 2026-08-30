@@ -163,8 +163,8 @@ class TestNeedsAttentionGroup(unittest.TestCase):
         self.assertEqual(_cell(session, inbox, "step"), "code-await-merge")
         table = session.app.query_one(DataTable)
         icon = table.get_cell(inbox, "icon")
-        self.assertEqual(icon.plain, STATE_GLYPHS["needs-attention"].glyph)
-        self.assertEqual(icon.style, COLOURS["red"])
+        self.assertEqual(icon.plain, STATE_GLYPHS["gate"].glyph)
+        self.assertEqual(icon.style, COLOURS["amber"])
         step_cell = table.get_cell(inbox, "step")
         self.assertEqual(step_cell.style, COLOURS["amber"])
 

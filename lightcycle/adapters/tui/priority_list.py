@@ -30,8 +30,10 @@ def _elapsed_text(store, node, now):
     return format_elapsed(delta.total_seconds()) if delta is not None else ""
 
 
-def _attention_row(store, node):
-    glyph = STATE_GLYPHS["needs-attention"]
+def _attention_row(store, node, flow):
+    kind, _ = node.classify_for_human(flow)
+    escalation = kind == "blocked"
+    glyph = STATE_GLYPHS["escalation"] if escalation else STATE_GLYPHS["gate"]
     return PriorityRow(
         id=node.id,
         group="attention",
@@ -40,7 +42,7 @@ def _attention_row(store, node):
         dependency_icon="",
         project=_project(store, node),
         title=node.title,
-        step=node.step or "",
+        step="stuck · %s" % node.step if escalation else (node.step or ""),
         step_colour="amber",
         time="",
     )
@@ -92,13 +94,17 @@ def _queued_row(store, node):
     )
 
 
-def build_priority_rows(store, lanes, now):
+def build_priority_rows(store, lanes, now, flow_service):
     claimed = set()
     attention, active, queued = [], [], []
     runnable = [n for n in lanes["queue"] if not n.blocked_by]
     held = [n for n in lanes["queue"] if n.blocked_by]
+    inbox = sorted(
+        ((n, flow_service.flow_for(n)) for n in lanes["inbox"]),
+        key=lambda pair: pair[0].classify_for_human(pair[1])[0] != "blocked",
+    )
     for group_rows, nodes_and_row in (
-        (attention, [(n, _attention_row(store, n)) for n in lanes["inbox"]]),
+        (attention, [(n, _attention_row(store, n, flow)) for n, flow in inbox]),
         (active, [(n, _active_row(store, n, now)) for n in lanes["active"]]),
         (queued, [(n, _queued_row(store, n)) for n in runnable]
          + [(n, _queued_row(store, n)) for n in held]),
