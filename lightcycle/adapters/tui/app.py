@@ -5,6 +5,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Static
 from textual.widgets.data_table import CellDoesNotExist
@@ -872,7 +873,10 @@ class LightcycleApp(App):
         self._active_glyph_frame = next_active_glyph_frame(self._active_glyph_frame)
         if not self._active_row_ids or self._priority_layout_cache is None:
             return
-        table = self.query_one(PriorityTable)
+        try:
+            table = self.query_one(PriorityTable)
+        except NoMatches:
+            return
         glyph = self._active_glyph_char()
         layout = self._priority_layout_cache
         row_budget = self._priority_row_budget_cache
