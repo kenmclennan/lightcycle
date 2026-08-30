@@ -54,6 +54,9 @@ class FakeConfig:
     def missing_config_keys(self):
         return ()
 
+    def obsolete_config_keys(self):
+        return ()
+
     def default_origin(self):
         return "acme"
 
@@ -108,6 +111,23 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 1)
         data = json.loads(out)
         self.assertTrue(any("acme2" in p["message"] for p in data["origin"]))
+
+    def test_obsolete_config_key_reports_in_config_category(self):
+        class ObsoleteFakeConfig(FakeConfig):
+            def obsolete_config_keys(self):
+                return ("old-key",)
+
+        cli.set_container(FakeContainer(FakeStore(), config=ObsoleteFakeConfig()))
+        rc, out, err = call(cli.cmd_doctor)
+        self.assertEqual(rc, 1)
+        self.assertIn("config:", out)
+        self.assertIn("old-key", out)
+
+        cli.set_container(FakeContainer(FakeStore(), config=ObsoleteFakeConfig()))
+        rc, out, err = call(cli.cmd_doctor, "--json")
+        self.assertEqual(rc, 1)
+        data = json.loads(out)
+        self.assertTrue(any("old-key" in p["message"] for p in data["config"]))
 
     def test_json_unhealthy_shape_and_exit_code(self):
         store = FakeStore()

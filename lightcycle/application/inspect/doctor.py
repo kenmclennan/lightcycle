@@ -78,7 +78,12 @@ class DoctorUseCase:
         return problems
 
     def _config_problems(self):
-        return [
+        problems = [
             Problem("config", "required config key %r is not set" % k)
             for k in self._config.missing_config_keys()
         ]
+        problems += [
+            Problem("config", "config key %r is set but not read by this version" % k)
+            for k in self._config.obsolete_config_keys()
+        ]
+        return problems

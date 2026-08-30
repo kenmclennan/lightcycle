@@ -22,7 +22,6 @@ _ALL_KEYS = dict(
     poll_seconds="5", worker_history="20", editor="vi", retro_interval_reflections="20",
     backups_dir="/b", backup_interval_minutes="15", backup_retention="96",
     workflow_retention="5", max_title_length="72", personal_origin="",
-    project_shortcodes="",
 )
 
 
@@ -191,6 +190,26 @@ class TestDoctorUseCase(unittest.TestCase):
         report = DoctorUseCase(store, source, config).execute(DoctorInput())
         self.assertFalse(report.healthy())
         self.assertTrue(any("max-agents" in p.message for p in report.problems["config"]))
+
+    def test_obsolete_config_key_reports_config_problem(self):
+        keys = dict(_ALL_KEYS)
+        keys["retro_interval_items"] = "5"
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        config = _cfg(**keys)
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
+        self.assertFalse(report.healthy())
+        self.assertTrue(any("retro-interval-items" in p.message for p in report.problems["config"]))
+
+    def test_all_seed_keys_reports_no_obsolete_key_problems(self):
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        config = _cfg(**_ALL_KEYS)
+        self.assertEqual(config.obsolete_config_keys(), ())
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
+        self.assertEqual(report.problems["config"], [])
 
     def test_store_integrity_violation_surfaces_under_store(self):
         store = FakeStore()
