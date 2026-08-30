@@ -215,7 +215,7 @@ class TestResolveLog(unittest.TestCase):
 
 class TestTailLog(unittest.TestCase):
     def test_max_bytes_set_calls_read_tail_and_ignores_offset(self):
-        fs = FakeFs(files={"/l/x.log": b"0123456789"})
+        fs = FakeFs(files={"/l/x.log": b"01234\n6789"})
         workers = FakeWorkers(workers=[{"role": "coder", "step": "s1", "log": "/l/x.log", "pid": 1}])
         result = TailLogUseCase(FakeStore(), workers, fs, FakeConfig()).execute(
             TailLogInput(target="s1", offset=999, max_bytes=4)

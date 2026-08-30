@@ -136,6 +136,42 @@ class TestReadTail(unittest.TestCase):
         self.assertEqual(data, b"")
         self.assertEqual(offset, 0)
 
+    def test_mid_line_seek_discards_the_leading_fragment(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        content = b"line one\nline two\nline three\n"
+        with open(path, "wb") as f:
+            f.write(content)
+        adapter = FsAdapter(None)
+        data, offset = adapter.read_tail(path, 15)
+        self.assertEqual(data, b"line three\n")
+        self.assertEqual(offset, len(content))
+
+    def test_offset_after_a_mid_line_trim_lines_up_with_a_following_read_from(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        content = b"line one\nline two\nline three\n"
+        with open(path, "wb") as f:
+            f.write(content)
+        adapter = FsAdapter(None)
+        _data, offset = adapter.read_tail(path, 15)
+        with open(path, "ab") as f:
+            f.write(b"line four\n")
+        data, new_offset = adapter.read_from(path, offset)
+        self.assertEqual(data, b"line four\n")
+        self.assertEqual(new_offset, offset + len(b"line four\n"))
+
+    def test_a_single_line_wider_than_the_window_yields_no_leading_fragment(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        content = b"x" * 100 + b"\n"
+        with open(path, "wb") as f:
+            f.write(content)
+        adapter = FsAdapter(None)
+        data, offset = adapter.read_tail(path, 10)
+        self.assertEqual(data, b"")
+        self.assertEqual(offset, len(content))
+
     def test_fake_fs_smaller_than_max_bytes_returns_the_entire_content(self):
         fs = FakeFs(files={"/l/worker.log": b"line one\nline two\n"})
         data, offset = fs.read_tail("/l/worker.log", 1024)
@@ -153,6 +189,13 @@ class TestReadTail(unittest.TestCase):
         data, offset = fs.read_tail("/l/missing.log", 5)
         self.assertEqual(data, b"")
         self.assertEqual(offset, 0)
+
+    def test_fake_fs_mid_line_seek_discards_the_leading_fragment(self):
+        content = b"line one\nline two\nline three\n"
+        fs = FakeFs(files={"/l/worker.log": content})
+        data, offset = fs.read_tail("/l/worker.log", 15)
+        self.assertEqual(data, b"line three\n")
+        self.assertEqual(offset, len(content))
 
 
 class TestExists(unittest.TestCase):

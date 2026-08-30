@@ -108,7 +108,14 @@ def read_tail(path, max_bytes):
     if not path or not os.path.exists(path):
         return b"", 0
     start = max(0, os.path.getsize(path) - max_bytes)
-    return read_from(path, start)
+    if start == 0:
+        return read_from(path, start)
+    data, offset = read_from(path, start - 1)
+    preceding, rest = data[:1], data[1:]
+    if preceding != b"\n":
+        newline = rest.find(b"\n")
+        rest = rest[newline + 1:] if newline != -1 else b""
+    return rest, offset
 
 
 def list_dir(path):
