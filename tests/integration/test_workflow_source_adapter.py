@@ -154,6 +154,40 @@ class TestRegistry(unittest.TestCase):
         )
 
 
+class TestUnresolvableReason(unittest.TestCase):
+    def test_resolvable_ref_returns_none(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        self.assertIsNone(adapter.unresolvable_reason(repo, "main"))
+
+    def test_deleted_ref_returns_ref_not_found_reason(self):
+        repo, head = _make_source_repo()
+        _git(repo, "checkout", "-q", "-b", "throwaway")
+        _git(repo, "checkout", "-q", "main")
+        _git(repo, "branch", "-q", "-D", "throwaway")
+        adapter = _adapter()
+        reason = adapter.unresolvable_reason(repo, "throwaway")
+        self.assertIsNotNone(reason)
+        self.assertIn("throwaway", reason)
+
+    def test_unreachable_path_returns_not_reachable_reason(self):
+        adapter = _adapter()
+        reason = adapter.unresolvable_reason("/no/such/repo/anywhere", "main")
+        self.assertIsNotNone(reason)
+        self.assertIn("not reachable", reason)
+
+    def test_ref_not_currently_checked_out_still_resolves(self):
+        repo, head = _make_source_repo()
+        _git(repo, "checkout", "-q", "-b", "other")
+        with open(os.path.join(repo, "source.toml"), "w") as f:
+            f.write('name = "acme"\ncontract = 1\ndescription = "acme flows (other)"\n')
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "other branch commit")
+        _git(repo, "checkout", "-q", "main")
+        adapter = _adapter()
+        self.assertIsNone(adapter.unresolvable_reason(repo, "other"))
+
+
 class TestListingAndRemoval(unittest.TestCase):
     def test_list_origins_and_versions_then_remove(self):
         repo, head = _make_source_repo()

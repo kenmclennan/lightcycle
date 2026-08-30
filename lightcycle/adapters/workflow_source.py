@@ -90,6 +90,20 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         registry = self.read_registry(origin)
         return registry["current"] if registry else None
 
+    def unresolvable_reason(self, url, ref):
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", "--exit-code", url, ref or "HEAD"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return "%s is not reachable right now" % url
+        if result.returncode == 0:
+            return None
+        if result.returncode == 2:
+            return "ref %r no longer resolves against %s" % (ref, url)
+        return "%s is not reachable right now" % url
+
     def workflow_names(self, origin, sha):
         d = os.path.join(self._bundle_dir(origin, sha), "workflows")
         if not os.path.isdir(d):

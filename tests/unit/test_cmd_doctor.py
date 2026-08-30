@@ -18,6 +18,10 @@ def call(fn, *args):
 
 
 class FakeWorkflowSource:
+    def __init__(self):
+        self.registries = {}
+        self.failures = {}
+
     def has_version(self, origin, sha):
         return True
 
@@ -29,6 +33,21 @@ class FakeWorkflowSource:
 
     def current_sha(self, origin):
         return "sha1"
+
+    def list_origins(self):
+        return sorted(self.registries)
+
+    def read_registry(self, name):
+        return self.registries.get(name)
+
+    def register_origin(self, name, url=None, ref=""):
+        self.registries[name] = {"url": url or name, "ref": ref}
+
+    def fail_resolve(self, name, reason):
+        self.failures[self.registries[name]["url"]] = reason
+
+    def unresolvable_reason(self, url, ref):
+        return self.failures.get(url)
 
 
 class FakeConfig:
@@ -73,6 +92,22 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(set(data.keys()), {"store", "pins", "contract", "origin", "config"})
         for probs in data.values():
             self.assertEqual(probs, [])
+
+    def test_failing_origin_reports_in_origin_category(self):
+        source = FakeWorkflowSource()
+        source.register_origin("acme2", ref="gone-branch")
+        source.fail_resolve("acme2", "ref 'gone-branch' no longer resolves against acme2")
+        cli.set_container(FakeContainer(FakeStore(), workflow_source=source))
+        rc, out, err = call(cli.cmd_doctor)
+        self.assertEqual(rc, 1)
+        self.assertIn("origin:", out)
+        self.assertIn("acme2", out)
+
+        cli.set_container(FakeContainer(FakeStore(), workflow_source=source))
+        rc, out, err = call(cli.cmd_doctor, "--json")
+        self.assertEqual(rc, 1)
+        data = json.loads(out)
+        self.assertTrue(any("acme2" in p["message"] for p in data["origin"]))
 
     def test_json_unhealthy_shape_and_exit_code(self):
         store = FakeStore()
