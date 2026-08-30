@@ -6,6 +6,7 @@ from lightcycle.application.flow import (
     UnblockStepUseCase,
 )
 from lightcycle.application.pool import LC_MARKER, MonitorPrsUseCase, TickInput, TickUseCase
+from lightcycle.application.pool.monitor_prs import _outstanding_threads
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, flow_from_metas
 from lightcycle.domain.work import State
@@ -724,6 +725,32 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertIn(item, worktrees.removed)
 
 
+class TestOutstandingThreads(unittest.TestCase):
+    def test_later_unmarked_reply_supersedes_earlier_one_in_same_thread(self):
+        root = Comment(
+            author="alice", body="please fix X and Y", is_top_level=False,
+            id="c1", in_reply_to_id=None, created_at=1000.0,
+        )
+        reply = Comment(
+            author="alice", body="actually scratch that, ignore X and Y", is_top_level=False,
+            id="c2", in_reply_to_id="c1", created_at=2000.0,
+        )
+
+        self.assertEqual(_outstanding_threads([root, reply]), [reply])
+
+    def test_later_unmarked_reply_wins_regardless_of_input_order(self):
+        root = Comment(
+            author="alice", body="please fix X and Y", is_top_level=False,
+            id="c1", in_reply_to_id=None, created_at=1000.0,
+        )
+        reply = Comment(
+            author="alice", body="actually scratch that, ignore X and Y", is_top_level=False,
+            id="c2", in_reply_to_id="c1", created_at=2000.0,
+        )
+
+        self.assertEqual(_outstanding_threads([reply, root]), [reply])
+
+
 class TestMonitorPrsFeedback(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         f = flow or _FEEDBACK_FLOW
@@ -815,6 +842,23 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [])
+
+    def test_threaded_comment_with_later_unmarked_reply_records_reply_timestamp(self):
+        url = "https://github.com/x/y/pull/30-threaded-live-reply"
+        root = self._inline_comment(1200.0, body="please fix X", cid="c1")
+        reply = self._inline_comment(
+            1300.0, body="actually scratch that", cid="c2", in_reply_to="c1"
+        )
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[root, reply])
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
+        spawn_mark = [
+            a for a in store.item_artifacts(step) if a.type == "feedback-spawned-through"
+        ]
+        self.assertEqual(spawn_mark[0].value, str(1300.0))
 
     def test_allowlisted_bot_review_spawns(self):
         url = "https://github.com/x/y/pull/30-bot"
