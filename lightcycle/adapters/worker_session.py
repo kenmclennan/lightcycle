@@ -68,7 +68,7 @@ def dispatch_event(d, line, policy, counters, lock):
         with lock:
             counters["results"] += 1
     elif t == "rate_limit_event":
-        policy.observe_rate_limit(parse_rate_limit_event(line))
+        policy.observe_rate_limit(parse_rate_limit_event([line]))
 
 
 def has_open_step(root, spawnid):

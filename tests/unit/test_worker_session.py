@@ -133,7 +133,7 @@ class TestSessionPolicy(unittest.TestCase):
     def test_rejected_rate_limit_closes_even_with_open_step_and_claimed(self):
         p = SessionPolicy()
         p.observe_claimed(True)
-        p.observe_rate_limit(parse_rate_limit_event(REJECTED_LINE))
+        p.observe_rate_limit(parse_rate_limit_event([REJECTED_LINE]))
         self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
     def test_non_rejected_event_does_not_close(self):
@@ -142,7 +142,7 @@ class TestSessionPolicy(unittest.TestCase):
         )
         p = SessionPolicy()
         p.observe_claimed(True)
-        p.observe_rate_limit(parse_rate_limit_event(allowed_line))
+        p.observe_rate_limit(parse_rate_limit_event([allowed_line]))
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
 
     def test_none_event_does_not_close(self):

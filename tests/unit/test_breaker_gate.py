@@ -10,6 +10,16 @@ _REJECTED = (
 )
 
 
+class RecordingFakeFs(FakeFs):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.iter_lines_calls = []
+
+    def iter_lines(self, path):
+        self.iter_lines_calls.append(path)
+        return super().iter_lines(path)
+
+
 class FakeWorkers:
     def __init__(self, workers=None, alive_pids=(), log_mtimes=None):
         self._workers = workers or []
@@ -270,6 +280,78 @@ class TestBreakerGateUseCase(unittest.TestCase):
         self.assertTrue(result.opened)
         self.assertEqual(result.breaker.reset_at, 5000)
         self.assertFalse(result.rearmed)
+
+    def test_when_not_probing_the_stalled_workers_log_is_never_read(self):
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                }
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
+        )
+        fs = RecordingFakeFs(files={})
+        breaker_port = FakeBreakerPort({"open": False, "reset_at": None})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=1000)
+        self.assertFalse(result.rearmed)
+        self.assertNotIn("/l/probe.log", fs.iter_lines_calls)
+
+    def test_a_concurrent_rejection_skips_reading_the_stalled_probe_log(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "dead-sp", "pid": 1, "log": "/l/dead.log", "started": 0},
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                },
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
+        )
+        fs = RecordingFakeFs(files={"/l/dead.log": (_REJECTED % 5000).encode()})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=1000)
+        self.assertTrue(result.opened)
+        self.assertFalse(result.rearmed)
+        self.assertIn("/l/dead.log", fs.iter_lines_calls)
+        self.assertNotIn("/l/probe.log", fs.iter_lines_calls)
+
+    def test_a_successful_probe_skips_reading_a_different_stalled_workers_log(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "probe-sp", "pid": 3, "log": "/l/probe.log", "started": 0},
+                {
+                    "spawnid": "other-sp",
+                    "pid": 4,
+                    "step": "probe",
+                    "log": "/l/other.log",
+                    "started": 0,
+                },
+            ],
+            alive_pids={4},
+            log_mtimes={"/l/other.log": 500 - 1800 - 1},
+        )
+        fs = RecordingFakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=500)
+        self.assertTrue(result.closed)
+        self.assertFalse(result.breaker.is_open)
+        self.assertIn("/l/probe.log", fs.iter_lines_calls)
+        self.assertNotIn("/l/other.log", fs.iter_lines_calls)
 
 
 if __name__ == "__main__":

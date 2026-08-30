@@ -30,24 +30,12 @@ class BreakerGateUseCase:
         rejected_reset_ats = []
         any_success = False
         for w in pool.dead_unchecked(probe):
-            event = parse_rate_limit_event(self._read_log(w.log))
+            event = parse_rate_limit_event(self._fs.iter_lines(w.log))
             self._workers.mark_checked(w.spawnid)
             if event and event.is_rejected:
                 rejected_reset_ats.append(event.reset_at)
             else:
                 any_success = True
-
-        stalled_probes = [
-            w
-            for w in pool.stalled(
-                probe,
-                now,
-                self._config.max_boot_seconds(),
-                self._config.stall_seconds(),
-                self._workers.log_mtime,
-            )
-            if not saw_terminal_command(self._read_log(w.log))
-        ]
 
         opened = False
         closed = False
@@ -62,17 +50,23 @@ class BreakerGateUseCase:
         elif was_probing and any_success:
             state = state.close()
             closed = True
-        elif was_probing and stalled_probes:
-            state = state.rearm(now + self._config.probe_cooldown_seconds())
-            rearmed = True
+        elif was_probing:
+            stalled_probes = [
+                w
+                for w in pool.stalled(
+                    probe,
+                    now,
+                    self._config.max_boot_seconds(),
+                    self._config.stall_seconds(),
+                    self._workers.log_mtime,
+                )
+                if not saw_terminal_command(self._fs.iter_lines(w.log))
+            ]
+            if stalled_probes:
+                state = state.rearm(now + self._config.probe_cooldown_seconds())
+                rearmed = True
 
         self._breaker_port.save(state.as_dict())
         return BreakerGateResponse(
             breaker=state, opened=opened, closed=closed, rearmed=rearmed, killed=killed
         )
-
-    def _read_log(self, path):
-        data = self._fs.read_bytes(path)
-        if data is None:
-            return ""
-        return data.decode("utf-8", errors="replace")

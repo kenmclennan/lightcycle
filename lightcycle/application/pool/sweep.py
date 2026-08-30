@@ -39,10 +39,7 @@ class SweepUseCase:
     def _saw_terminal_command(self, log):
         if self._fs is None:
             return False
-        data = self._fs.read_bytes(log)
-        if data is None:
-            return False
-        return saw_terminal_command(data.decode("utf-8", errors="replace"))
+        return saw_terminal_command(self._fs.iter_lines(log))
 
     def execute(self, now, max_boot, stall_seconds) -> SweepResponse:
         probe = self._workers.pid_alive

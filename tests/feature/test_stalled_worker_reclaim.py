@@ -67,6 +67,13 @@ class FakeFs:
     def read_bytes(self, path):
         return self.files.get(path)
 
+    def iter_lines(self, path):
+        content = self.files.get(path)
+        if content is None:
+            return
+        for line in content.decode("utf-8", errors="replace").splitlines():
+            yield line
+
 
 class FakeWorktrees:
     def __init__(self):

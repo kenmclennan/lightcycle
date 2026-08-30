@@ -13,10 +13,8 @@ def is_terminal_command(command):
     return bool(command) and _TERMINAL.search(command) is not None
 
 
-def saw_terminal_command(text):
-    if not text:
-        return False
-    for line in text.splitlines():
+def saw_terminal_command(lines):
+    for line in lines:
         line = line.strip()
         if not line:
             continue

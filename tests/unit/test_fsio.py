@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from lightcycle.adapters.fsio import FsAdapter, workflow_names
+from lightcycle.adapters.fsio import FsAdapter, iter_lines, workflow_names
 from tests.support.fake_fs import FakeFs
 
 
@@ -115,6 +115,53 @@ class TestExists(unittest.TestCase):
         self.assertTrue(fs.exists("/s/spec.md"))
         self.assertTrue(fs.exists("/root"))
         self.assertFalse(fs.exists("/s/gone.md"))
+
+
+class TestIterLines(unittest.TestCase):
+    def test_module_level_yields_decoded_lines_in_order(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "wb") as f:
+            f.write(b"line one\nline two\nline three\n")
+        self.assertEqual(list(iter_lines(path)), ["line one\n", "line two\n", "line three\n"])
+
+    def test_module_level_missing_path_yields_nothing(self):
+        root = tempfile.mkdtemp()
+        self.assertEqual(list(iter_lines(os.path.join(root, "gone.log"))), [])
+
+    def test_module_level_falsy_path_yields_nothing(self):
+        self.assertEqual(list(iter_lines(None)), [])
+        self.assertEqual(list(iter_lines("")), [])
+
+    def test_module_level_replaces_invalid_utf8_bytes(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "wb") as f:
+            f.write(b"good line\n\xff\xfe bad bytes\nlast line\n")
+        lines = list(iter_lines(path))
+        self.assertEqual(lines[0], "good line\n")
+        self.assertIn("�", lines[1])
+        self.assertEqual(lines[2], "last line\n")
+
+    def test_adapter_yields_decoded_lines(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "wb") as f:
+            f.write(b"line one\nline two\n")
+        self.assertEqual(list(FsAdapter(None).iter_lines(path)), ["line one\n", "line two\n"])
+
+    def test_adapter_missing_path_yields_nothing(self):
+        root = tempfile.mkdtemp()
+        adapter = FsAdapter(None)
+        self.assertEqual(list(adapter.iter_lines(os.path.join(root, "gone.log"))), [])
+
+    def test_fake_fs_yields_seeded_lines(self):
+        fs = FakeFs(files={"/l/worker.log": b"line one\nline two\n"})
+        self.assertEqual(list(fs.iter_lines("/l/worker.log")), ["line one", "line two"])
+
+    def test_fake_fs_unknown_path_yields_nothing(self):
+        fs = FakeFs()
+        self.assertEqual(list(fs.iter_lines("/l/missing.log")), [])
 
 
 if __name__ == "__main__":

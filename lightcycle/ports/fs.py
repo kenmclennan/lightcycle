@@ -39,6 +39,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def iter_lines(self, path):
+        pass
+
+    @abstractmethod
     def exists(self, path):
         pass
 
