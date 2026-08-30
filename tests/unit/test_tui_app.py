@@ -3,6 +3,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+from textual.css.query import NoMatches
 from textual.widgets import DataTable, Static
 
 from lightcycle import __version__
@@ -329,6 +330,18 @@ class TestActiveGroup(unittest.TestCase):
         session.poll_tick()
 
         self.assertEqual(table.get_cell(tid, "icon").plain, ticked)
+
+    def test_tick_active_glyph_is_a_no_op_when_the_table_is_not_mounted(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        self.assertIsNotNone(session.app._active_glyph_timer)
+
+        with patch.object(LightcycleApp, "query_one", side_effect=NoMatches("PriorityTable")):
+            session.run(session.app._tick_active_glyph)
 
     def test_active_glyph_animation_does_not_run_at_the_floor(self):
         store = FakeStore()
