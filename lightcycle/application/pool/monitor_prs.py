@@ -26,16 +26,15 @@ def _thread_key(comment):
 
 def _outstanding_threads(comments):
     marked_threads = {_thread_key(c) for c in comments if LC_MARKER in c.body}
-    seen, outstanding = set(), []
-    for c in comments:
+    latest = {}
+    for c in sorted(comments, key=lambda c: c.created_at):
         if LC_MARKER in c.body:
             continue
         key = _thread_key(c)
-        if key is None or key in marked_threads or key in seen:
+        if key is None or key in marked_threads:
             continue
-        seen.add(key)
-        outstanding.append(c)
-    return outstanding
+        latest[key] = c
+    return list(latest.values())
 
 
 def _review_has_signal(review):
