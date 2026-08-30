@@ -4,7 +4,7 @@ import sqlite3
 
 from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
 from lightcycle.domain.workspace.isolation import refuses_live_store
-from lightcycle.ports.store import ProjectEntry, ProjectResolutionError, StorePort
+from lightcycle.ports.store import ItemTextRow, ProjectEntry, ProjectResolutionError, StorePort
 
 _DB_FILENAME = "store.db"
 
@@ -240,6 +240,59 @@ class SqliteStore(StorePort):
             workflow=d["workflow"],
         )
 
+    def _rollup_child_states(self, pending_ids):
+        if not pending_ids:
+            return {}
+        placeholders = ", ".join("?" * len(pending_ids))
+        rows = self._conn.execute(
+            "WITH RECURSIVE descendants(id, parent, type, state, assignee) AS ("
+            "  SELECT id, parent, type, state, assignee FROM nodes WHERE parent IN (%s)"
+            "  UNION ALL"
+            "  SELECT n.id, n.parent, n.type, n.state, n.assignee"
+            "  FROM nodes n JOIN descendants d ON n.parent = d.id"
+            "  WHERE d.state != 'done'"
+            ") SELECT id, parent, type, state, assignee FROM descendants" % placeholders,
+            pending_ids,
+        ).fetchall()
+
+        by_id = {}
+        children_of = {}
+        step_ids = []
+        for did, parent, dtype, dstate, assignee in rows:
+            by_id[did] = (dtype, dstate, assignee)
+            children_of.setdefault(parent, []).append(did)
+            if dtype == "step":
+                step_ids.append(did)
+
+        unresolved = set()
+        if step_ids:
+            step_placeholders = ", ".join("?" * len(step_ids))
+            unresolved = {
+                node_id
+                for (node_id,) in self._conn.execute(
+                    "SELECT DISTINCT d.node_id FROM deps d JOIN nodes t ON t.id = d.blocked_by "
+                    "WHERE t.state != 'done' AND d.node_id IN (%s)" % step_placeholders,
+                    step_ids,
+                ).fetchall()
+            }
+
+        computed = {}
+
+        def state_of(node_id):
+            if node_id not in computed:
+                dtype, dstate, assignee = by_id[node_id]
+                closed = dstate == "done"
+                if dtype == "step" or closed:
+                    computed[node_id] = derive_state(
+                        dtype, closed, assignee, node_id in unresolved, []
+                    )
+                else:
+                    child_states = [state_of(cid) for cid in children_of.get(node_id, [])]
+                    computed[node_id] = derive_state(dtype, False, assignee, False, child_states)
+            return computed[node_id]
+
+        return {pid: [state_of(cid) for cid in children_of.get(pid, [])] for pid in pending_ids}
+
     def _rows_to_nodes(self, rows):
         if not rows:
             return []
@@ -268,9 +321,11 @@ class SqliteStore(StorePort):
             self._row_to_node(row, artifacts_by_id.get(row[0], []), deps_by_id.get(row[0], []))
             for row in rows
         ]
-        for node in nodes:
-            if node.state is None:
-                child_states = [c.state for c in self.children(node.id)]
+        pending = [node for node in nodes if node.state is None]
+        if pending:
+            child_states_by_id = self._rollup_child_states([node.id for node in pending])
+            for node in pending:
+                child_states = child_states_by_id.get(node.id, [])
                 node.state = derive_state(
                     node.type, False, node.claimed_by, bool(node.deps), child_states
                 )
@@ -379,6 +434,12 @@ class SqliteStore(StorePort):
 
     def all_nodes_including_done(self):
         return self._select("")
+
+    def item_text_rows(self):
+        rows = self._conn.execute(
+            "SELECT id, title, description, notes FROM nodes WHERE type = 'item'"
+        ).fetchall()
+        return [ItemTextRow(*row) for row in rows]
 
     def all_steps(self):
         return self._select("type = 'step' AND state != 'done'")

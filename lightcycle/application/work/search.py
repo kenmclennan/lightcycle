@@ -51,15 +51,13 @@ class SearchUseCase:
     def execute(self, input: SearchInput) -> SearchResponse:
         needle = input.text.lower()
         matches = []
-        items = sorted(
-            (n for n in self._store.all_nodes_including_done() if n.type == "item"),
-            key=lambda n: n.id,
-        )
-        for node in items:
-            hit = _first_match(node, needle)
+        rows = sorted(self._store.item_text_rows(), key=lambda r: r.id)
+        for row in rows:
+            hit = _first_match(row, needle)
             if hit is None:
                 continue
             field, snippet = hit
+            node = self._store.get_node(row.id)
             matches.append(SearchMatch(
                 node=node, project=project_of(self._store, node), field=field, snippet=snippet,
             ))
