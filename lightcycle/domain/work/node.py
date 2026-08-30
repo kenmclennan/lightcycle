@@ -5,7 +5,7 @@ from lightcycle.domain.work.artifact import Artifact
 from lightcycle.domain.work.state import State
 
 
-@dataclass
+@dataclass(slots=True)
 class Node:
     id: str
     title: str = ""

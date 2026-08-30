@@ -2,7 +2,7 @@ import datetime
 import os
 import uuid
 
-from lightcycle.ports.store import ProjectEntry, ProjectResolutionError, StorePort
+from lightcycle.ports.store import ItemTextRow, ProjectEntry, ProjectResolutionError, StorePort
 from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
 
 
@@ -171,6 +171,16 @@ class FakeStore(StorePort):
 
     def all_nodes_including_done(self):
         return [self._to_node(b) for b in self._records.values()]
+
+    def item_text_rows(self):
+        return [
+            ItemTextRow(
+                id=b["id"], title=b.get("title", ""),
+                description=b.get("description"), notes=b.get("notes"),
+            )
+            for b in self._records.values()
+            if b.get("type") == "item"
+        ]
 
     def all_steps(self):
         return [self._to_node(b) for b in self._records.values()

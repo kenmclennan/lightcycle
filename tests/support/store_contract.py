@@ -515,6 +515,25 @@ class StoreContractBase:
         s.close(b, "done")
         self.assertEqual(s.get_node(item).state, "done")
 
+    def test_theme_state_rolls_up_through_item_with_mixed_children(self):
+        s = self.make_store()
+        theme = s.create_theme("theme")
+        item = s.create_item("item", theme=theme)
+        done_step = s.create_step("done step", parent=item)
+        s.create_step("open step", parent=item)
+        s.close(done_step, "done")
+        self.assertEqual(s.get_node(theme).state, "in_progress")
+
+    def test_theme_state_done_when_its_item_has_all_children_done(self):
+        s = self.make_store()
+        theme = s.create_theme("theme")
+        item = s.create_item("item", theme=theme)
+        a = s.create_step("a", parent=item)
+        b = s.create_step("b", parent=item)
+        s.close(a, "done")
+        s.close(b, "done")
+        self.assertEqual(s.get_node(theme).state, "done")
+
     def test_item_state_ready_when_all_children_ready(self):
         s = self.make_store()
         item = s.create_item("item")

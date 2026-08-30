@@ -3,6 +3,7 @@ from collections import namedtuple
 
 
 ProjectEntry = namedtuple("ProjectEntry", "identity shortcode local_path remote")
+ItemTextRow = namedtuple("ItemTextRow", "id title description notes")
 
 
 class ProjectResolutionError(Exception):
@@ -28,6 +29,10 @@ class StorePort(ABC):
 
     @abstractmethod
     def all_nodes_including_done(self):
+        pass
+
+    @abstractmethod
+    def item_text_rows(self):
         pass
 
     @abstractmethod

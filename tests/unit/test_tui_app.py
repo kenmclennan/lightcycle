@@ -283,10 +283,13 @@ class TestActiveGroup(unittest.TestCase):
         session = self._launch(store)
         table = session.app.query_one(DataTable)
 
+        timer = session.app._active_glyph_timer
+        timer.pause()
         frames = []
         for _ in range(4):
             session.run(session.app._tick_active_glyph)
             frames.append(table.get_cell(tid, "icon").plain)
+        timer.resume()
 
         self.assertEqual(frames, ["◈", "◇", "◈", "◆"])
 

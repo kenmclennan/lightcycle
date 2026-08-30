@@ -3,7 +3,7 @@ def watched_step_ids(store):
     for n in store.all_nodes():
         if n.type != "step":
             continue
-        for a in store.item_artifacts(n.id):
+        for a in n.artifacts:
             if a.type == "watched-step":
                 watched.add(a.value)
     return watched
