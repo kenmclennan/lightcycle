@@ -9,6 +9,7 @@ from lightcycle.adapters.tui.design_system import COLOURS
 from lightcycle.adapters.tui.hub import (
     LOG_CURSOR_GLYPH, LOG_FINISHED_MESSAGE, LOG_LINES_MAX_RETAINED, LogPane, NodeHubScreen,
 )
+from lightcycle.domain.work.log_line import LogKind
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -634,6 +635,7 @@ def test_opening_a_live_steps_log_tab_against_an_oversized_log_reads_only_the_re
     buffered = _buffered_text(ctx)
     assert LARGE_LOG_OPENING_MARKER not in buffered
     assert LARGE_LOG_CLOSING_MARKER in buffered
+    assert ctx["hub_screen"]._log_lines[0].kind != LogKind.UNPARSED
 
     _write_line(ctx, "brand new live line")
     _tick(ctx)
@@ -648,6 +650,7 @@ def test_opening_a_done_steps_log_tab_against_an_oversized_log_reads_only_the_re
     buffered = _buffered_text(ctx)
     assert LARGE_LOG_OPENING_MARKER not in buffered
     assert LARGE_LOG_CLOSING_MARKER in buffered
+    assert ctx["hub_screen"]._log_lines[0].kind != LogKind.UNPARSED
 
 
 def test_lines_beyond_the_retained_window_are_dropped_from_pane_and_repaint_alike(ctx):
