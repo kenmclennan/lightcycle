@@ -38,10 +38,20 @@ def _outstanding_threads(comments):
     return outstanding
 
 
+def _review_has_signal(review):
+    if review.state == "CHANGES_REQUESTED":
+        return True
+    if review.state == "COMMENTED":
+        return bool(review.body.strip())
+    return False
+
+
 def _outstanding_reviews(reviews, comments):
     marked_at = sorted(c.created_at for c in comments if LC_MARKER in c.body)
     outstanding = []
     for r in reviews:
+        if not _review_has_signal(r):
+            continue
         if LC_MARKER in r.body:
             continue
         if any(ts > r.created_at for ts in marked_at):

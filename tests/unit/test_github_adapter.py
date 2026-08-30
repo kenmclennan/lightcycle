@@ -22,6 +22,7 @@ class TestReviews(unittest.TestCase):
                     "user": {"login": "copilot-pull-request-reviewer[bot]"},
                     "body": "found a bug on line 12",
                     "submitted_at": "2024-01-02T00:00:00Z",
+                    "state": "COMMENTED",
                 }
             ]
         )
@@ -34,6 +35,42 @@ class TestReviews(unittest.TestCase):
         self.assertEqual(reviews[0].author, "copilot-pull-request-reviewer[bot]")
         self.assertEqual(reviews[0].body, "found a bug on line 12")
         self.assertGreater(reviews[0].created_at, 0.0)
+        self.assertEqual(reviews[0].state, "COMMENTED")
+
+    def test_parses_changes_requested_state(self):
+        payload = json.dumps(
+            [
+                {
+                    "user": {"login": "reviewer"},
+                    "body": "please fix this",
+                    "submitted_at": "2024-01-02T00:00:00Z",
+                    "state": "CHANGES_REQUESTED",
+                }
+            ]
+        )
+        with patch(
+            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+        ):
+            reviews = self.adapter.reviews(_PR, since=0.0)
+
+        self.assertEqual(reviews[0].state, "CHANGES_REQUESTED")
+
+    def test_defaults_state_to_empty_string_when_absent(self):
+        payload = json.dumps(
+            [
+                {
+                    "user": {"login": "reviewer"},
+                    "body": "no state field here",
+                    "submitted_at": "2024-01-02T00:00:00Z",
+                }
+            ]
+        )
+        with patch(
+            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+        ):
+            reviews = self.adapter.reviews(_PR, since=0.0)
+
+        self.assertEqual(reviews[0].state, "")
 
     def test_excludes_reviews_submitted_before_since(self):
         payload = json.dumps(

@@ -210,6 +210,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
                                 author=rv.get("user", {}).get("login", ""),
                                 body=rv.get("body", ""),
                                 created_at=submitted,
+                                state=rv.get("state", ""),
                             )
                         )
             except (json.JSONDecodeError, ValueError):

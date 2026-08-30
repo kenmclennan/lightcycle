@@ -766,8 +766,8 @@ class TestMonitorPrsFeedback(unittest.TestCase):
             ),
         )
 
-    def _bot_review(self, ts, author=_BOT_LOGIN, body="looks like a bug on line 12"):
-        return (ts, Review(author=author, body=body, created_at=ts))
+    def _bot_review(self, ts, author=_BOT_LOGIN, body="looks like a bug on line 12", state="COMMENTED"):
+        return (ts, Review(author=author, body=body, created_at=ts, state=state))
 
     def test_mention_comment_after_push_spawns_handle_feedback(self):
         url = "https://github.com/x/y/pull/30"
@@ -887,7 +887,12 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         url = "https://github.com/x/y/pull/37-review"
         marked = (
             1200.0,
-            Review(author=_BOT_LOGIN, body="already replied %s" % LC_MARKER, created_at=1200.0),
+            Review(
+                author=_BOT_LOGIN,
+                body="already replied %s" % LC_MARKER,
+                created_at=1200.0,
+                state="COMMENTED",
+            ),
         )
         gh = FakeGitHub(push_time=1000.0, timed_reviews=[marked])
         store, item, step, worktrees, uc = self._setup(url, gh)
@@ -908,6 +913,51 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [])
+
+    def test_approved_review_with_body_does_not_trigger(self):
+        url = "https://github.com/x/y/pull/37-approved"
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_reviews=[self._bot_review(1500.0, body="thanks, nice work", state="APPROVED")],
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+
+    def test_commented_review_with_empty_body_does_not_trigger(self):
+        url = "https://github.com/x/y/pull/37-commented-empty"
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_reviews=[self._bot_review(1500.0, body="", state="COMMENTED")],
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+
+    def test_changes_requested_review_with_empty_body_still_triggers(self):
+        url = "https://github.com/x/y/pull/37-changes-requested-empty"
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_reviews=[self._bot_review(1500.0, body="", state="CHANGES_REQUESTED")],
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
+
+    def test_commented_review_with_body_triggers(self):
+        url = "https://github.com/x/y/pull/37-commented-with-body"
+        gh = FakeGitHub(push_time=1000.0, timed_reviews=[self._bot_review(1500.0)])
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
 
     def test_no_mention_token_configured_never_fires_on_top_level(self):
         url = "https://github.com/x/y/pull/37-no-config"

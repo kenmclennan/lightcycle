@@ -20,6 +20,7 @@ class Review:
     author: str
     body: str
     created_at: float = 0.0
+    state: str = ""
 
 
 class GitHubEventsPort(ABC):
