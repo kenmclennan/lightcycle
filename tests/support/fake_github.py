@@ -1,9 +1,10 @@
-from lightcycle.ports.github import GitHubEventsPort
+from lightcycle.ports.github import GitHubEventsPort, ReadFailure
 
 
 class FakeGitHub(GitHubEventsPort):
     def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
-                 timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None):
+                 timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
+                 failing_calls=()):
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
         self._conflicted = set(conflicted_prs)
@@ -12,6 +13,7 @@ class FakeGitHub(GitHubEventsPort):
         self._timed_reviews = timed_reviews or []
         self._head_shas = head_shas or {}
         self._files_by_sha = files_by_sha or {}
+        self._failing_calls = set(failing_calls)
 
     def is_merged(self, pr):
         return pr in self._merged
@@ -23,19 +25,29 @@ class FakeGitHub(GitHubEventsPort):
         return pr in self._conflicted
 
     def last_push_time(self, pr):
+        if "last_push_time" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return self._push_time
 
     def comments_since(self, pr, since):
+        if "comments_since" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return [c for ts, c in self._timed_comments if ts > since and c.is_top_level]
 
     def pull_comments(self, pr, since):
+        if "pull_comments" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return [c for ts, c in self._timed_comments if ts > since and not c.is_top_level]
 
     def reviews(self, pr, since):
+        if "reviews" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return [r for ts, r in self._timed_reviews if ts > since]
 
     def head_sha(self, pr):
         return self._head_shas.get(pr, "")
 
     def changed_files(self, pr, sha):
+        if "changed_files" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return self._files_by_sha.get((pr, sha), frozenset())

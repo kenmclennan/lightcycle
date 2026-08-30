@@ -1078,6 +1078,70 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         spawned3 = self._spawned_feedback_steps(store, step)
         self.assertEqual(len(spawned3), 1)
 
+    def test_last_push_time_failure_declines_to_conclude_feedback(self):
+        url = "https://github.com/x/y/pull/50"
+        gh = FakeGitHub(
+            push_time=1000.0, timed_comments=[self._mention_comment(1500.0)],
+            failing_calls={"last_push_time"},
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(self._spawned_feedback_steps(store, step), [])
+        notes = store.get_node(item).notes
+        self.assertIn("gh read failed", notes)
+        self.assertIn("boom", notes)
+
+    def test_comments_since_failure_declines_to_conclude_feedback(self):
+        url = "https://github.com/x/y/pull/51"
+        gh = FakeGitHub(
+            push_time=1000.0, timed_comments=[self._mention_comment(1500.0)],
+            failing_calls={"comments_since"},
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(self._spawned_feedback_steps(store, step), [])
+        notes = store.get_node(item).notes
+        self.assertIn("gh read failed", notes)
+        self.assertIn("boom", notes)
+
+    def test_pull_comments_failure_declines_to_conclude_feedback(self):
+        url = "https://github.com/x/y/pull/52"
+        gh = FakeGitHub(
+            push_time=1000.0, timed_comments=[self._inline_comment(1500.0)],
+            failing_calls={"pull_comments"},
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(self._spawned_feedback_steps(store, step), [])
+        notes = store.get_node(item).notes
+        self.assertIn("gh read failed", notes)
+        self.assertIn("boom", notes)
+
+    def test_reviews_failure_declines_to_conclude_feedback(self):
+        url = "https://github.com/x/y/pull/53"
+        gh = FakeGitHub(
+            push_time=1000.0, timed_reviews=[self._bot_review(1500.0)],
+            failing_calls={"reviews"},
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(self._spawned_feedback_steps(store, step), [])
+        notes = store.get_node(item).notes
+        self.assertIn("gh read failed", notes)
+        self.assertIn("boom", notes)
+
     def test_merged_pr_takes_merge_path_not_feedback(self):
         url = "https://github.com/x/y/pull/39"
         gh = FakeGitHub(
@@ -1520,6 +1584,24 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(self._pin(store, item), "sha1")
         self.assertIsNone(store.get_node(step).notes)
+
+    def test_changed_files_failure_declines_to_conclude_and_does_not_advance_the_pin(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+        gh._failing_calls = {"changed_files"}
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha1")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(store.get_node(step).role, "coder")
 
 
 class FakeWorkers:
