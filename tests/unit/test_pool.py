@@ -11,6 +11,8 @@ from lightcycle.application.pool import (
     ResolveLogInput,
     ResolveLogUseCase,
     SweepUseCase,
+    TailLogInput,
+    TailLogUseCase,
     TickInput,
     TickUseCase,
 )
@@ -209,6 +211,26 @@ class TestResolveLog(unittest.TestCase):
             ResolveLogInput(target=step_id)
         )
         self.assertIsNone(resp.path)
+
+
+class TestTailLog(unittest.TestCase):
+    def test_max_bytes_set_calls_read_tail_and_ignores_offset(self):
+        fs = FakeFs(files={"/l/x.log": b"0123456789"})
+        workers = FakeWorkers(workers=[{"role": "coder", "step": "s1", "log": "/l/x.log", "pid": 1}])
+        result = TailLogUseCase(FakeStore(), workers, fs, FakeConfig()).execute(
+            TailLogInput(target="s1", offset=999, max_bytes=4)
+        )
+        self.assertEqual(result.data, b"6789")
+        self.assertEqual(result.offset, 10)
+
+    def test_max_bytes_unset_is_unchanged_from_today(self):
+        fs = FakeFs(files={"/l/x.log": b"0123456789"})
+        workers = FakeWorkers(workers=[{"role": "coder", "step": "s1", "log": "/l/x.log", "pid": 1}])
+        result = TailLogUseCase(FakeStore(), workers, fs, FakeConfig()).execute(
+            TailLogInput(target="s1", offset=4)
+        )
+        self.assertEqual(result.data, b"456789")
+        self.assertEqual(result.offset, 10)
 
 
 class TestSweep(unittest.TestCase):

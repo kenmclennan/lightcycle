@@ -3,8 +3,9 @@ Feature: The Log tab
   lines appear as fast as the worker writes them. What it renders depends on the step
   behind it: a running step gets a live-following tail seeded with whatever it's
   already written, a step with no worker - human, or not yet started - shows a message
-  instead of a blank or broken pane, and a step that's already done shows its full
-  accumulated output as a static, scrollable read with no live-tail indicators. A step
+  instead of a blank or broken pane, and a step that's already done shows its most
+  recently captured output, up to the retained window, as a static, scrollable read
+  with no live-tail indicators. A step
   that finishes while its live log is open makes that transition visible rather than
   just going silent, without clearing what was already shown. Scrolling up never stops
   a running tail, and Ctrl-U/Ctrl-D fast-scroll a full screen at a time in either state,
@@ -99,10 +100,10 @@ Feature: The Log tab
     When I look at the log
     Then it still shows the output accumulated up to completion
 
-  Scenario: Opening a done step's Log tab shows its complete captured output
+  Scenario: Opening a done step's Log tab shows its most recently captured output
     Given the current step is done
     When I open its Log tab
-    Then it shows the complete log output captured from that step's run
+    Then it shows the most recently captured log output, up to the retained window
 
   Scenario: A done step's log shows no live-tail indicators
     Given a done step's log is open

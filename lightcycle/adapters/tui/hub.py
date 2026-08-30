@@ -60,6 +60,9 @@ from lightcycle.domain.work import (
 
 POLL_INTERVAL_SECONDS = 10
 LOG_TAIL_INTERVAL_SECONDS = 1
+LOG_INITIAL_TAIL_BYTES = 256 * 1024
+LOG_LINES_MAX_RETAINED = 4000
+LOG_PANE_MAX_LINES = 20000
 LOG_NO_STREAM_MESSAGE = "Nothing live to stream."
 LOG_FINISHED_MESSAGE = "✓ step finished"
 LOG_CURSOR_GLYPH = "▌"
@@ -437,6 +440,7 @@ class LogPane(RichLog):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("wrap", True)
         kwargs.setdefault("min_width", 0)
+        kwargs.setdefault("max_lines", LOG_PANE_MAX_LINES)
         super().__init__(*args, **kwargs)
         self.live = False
 
@@ -446,11 +450,11 @@ class LogPane(RichLog):
 
     def write_entry(self, content) -> int:
         before_deferred = len(self._deferred_renders)
-        before_lines = len(self.lines)
+        before = len(self.lines) + self._start_line
         self.write(content)
         if len(self._deferred_renders) > before_deferred:
             return 1
-        return len(self.lines) - before_lines
+        return len(self.lines) + self._start_line - before
 
     def replace_last_entry(self, row_count, content) -> None:
         for _ in range(row_count):
@@ -884,7 +888,7 @@ class NodeHubScreen(Screen):
         log_pane = self.query_one(LogPane)
         log_pane.live = mode == "live"
         log_pane.auto_scroll = mode == "live"
-        result = self._run_tail(0)
+        result = self._run_initial_tail()
         if result.path is None:
             self._log_mode = "no-log"
             empty.update(LOG_NO_STREAM_MESSAGE)
@@ -892,6 +896,12 @@ class NodeHubScreen(Screen):
         self._apply_tail_result(result)
         if self._log_mode == "live" and not self._log_finished:
             self._log_timer = self.set_interval(LOG_TAIL_INTERVAL_SECONDS, self._tail_tick)
+
+    def _run_initial_tail(self):
+        use_case = TailLogUseCase(
+            self._container.store, self._container.workers, self._container.fs, self._container.config
+        )
+        return use_case.execute(TailLogInput(target=self._log_target, max_bytes=LOG_INITIAL_TAIL_BYTES))
 
     def _run_tail(self, offset):
         use_case = TailLogUseCase(
@@ -907,8 +917,9 @@ class NodeHubScreen(Screen):
         log_pane = self.query_one(LogPane)
         new_lines = self._log_parser.feed(result.data) if result.data else []
         if new_lines:
-            self._log_lines.extend(new_lines)
-            self._write_tail_data(log_pane, new_lines)
+            self._log_lines = (self._log_lines + new_lines)[-LOG_LINES_MAX_RETAINED:]
+            retained_new = new_lines[max(0, len(new_lines) - LOG_LINES_MAX_RETAINED):]
+            self._write_tail_data(log_pane, retained_new)
         if self._log_mode == "live" and not result.live and not self._log_finished:
             self._clear_log_cursor(log_pane)
             self._log_finished = True

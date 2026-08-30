@@ -8,6 +8,7 @@ from lightcycle.application.pool.resolve_log import ResolveLogInput, ResolveLogU
 class TailLogInput:
     target: str
     offset: int = 0
+    max_bytes: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -28,7 +29,10 @@ class TailLogUseCase:
         path = self._resolve.execute(ResolveLogInput(target=input.target)).path
         if path is None:
             return TailLogResult(path=None, data=b"", offset=input.offset, live=False)
-        data, offset = self._fs.read_from(path, input.offset)
+        if input.max_bytes is not None:
+            data, offset = self._fs.read_tail(path, input.max_bytes)
+        else:
+            data, offset = self._fs.read_from(path, input.offset)
         return TailLogResult(path=path, data=data, offset=offset, live=self._worker_alive(input.target))
 
     def _worker_alive(self, target):

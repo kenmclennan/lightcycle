@@ -96,6 +96,13 @@ def read_from(path, offset):
     return data, offset + len(data)
 
 
+def read_tail(path, max_bytes):
+    if not path or not os.path.exists(path):
+        return b"", 0
+    start = max(0, os.path.getsize(path) - max_bytes)
+    return read_from(path, start)
+
+
 def list_dir(path):
     if not os.path.isdir(path):
         return []
@@ -171,6 +178,9 @@ class FsAdapter(FsPort):
 
     def read_from(self, path, offset):
         return read_from(path, offset)
+
+    def read_tail(self, path, max_bytes):
+        return read_tail(path, max_bytes)
 
     def list_dir(self, path):
         return list_dir(path)

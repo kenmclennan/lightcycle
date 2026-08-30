@@ -47,6 +47,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def read_tail(self, path, max_bytes):
+        pass
+
+    @abstractmethod
     def list_dir(self, path):
         pass
 

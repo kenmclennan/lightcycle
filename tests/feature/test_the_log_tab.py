@@ -6,7 +6,9 @@ from rich.color import Color
 from textual.widgets import Static
 
 from lightcycle.adapters.tui.design_system import COLOURS
-from lightcycle.adapters.tui.hub import LOG_CURSOR_GLYPH, LOG_FINISHED_MESSAGE, LogPane, NodeHubScreen
+from lightcycle.adapters.tui.hub import (
+    LOG_CURSOR_GLYPH, LOG_FINISHED_MESSAGE, LOG_LINES_MAX_RETAINED, LogPane, NodeHubScreen,
+)
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -95,6 +97,27 @@ def _done_step(lines):
 
 def _many_lines(n):
     return b"".join(_assistant_text_event("line %02d" % i) for i in range(n))
+
+
+LARGE_LOG_MIN_BYTES = 18_700_000
+LARGE_LOG_MIN_LINES = 1874
+LARGE_LOG_LARGEST_LINE_BYTES = 1218 * 1024
+LARGE_LOG_LINE_PAYLOAD_BYTES = 10441
+LARGE_LOG_OPENING_MARKER = "opening-marker-never-retained"
+LARGE_LOG_CLOSING_MARKER = "closing-marker-most-recent"
+
+
+def _large_fixture():
+    parts = [_assistant_text_event(LARGE_LOG_OPENING_MARKER, "2020-01-01T00:00:00.000Z")]
+    payload = "p" * LARGE_LOG_LINE_PAYLOAD_BYTES
+    size = len(parts[0])
+    while size < LARGE_LOG_MIN_BYTES or len(parts) < LARGE_LOG_MIN_LINES:
+        line = _assistant_text_event(payload)
+        parts.append(line)
+        size += len(line)
+    parts.append(_assistant_text_event("q" * LARGE_LOG_LARGEST_LINE_BYTES))
+    parts.append(_assistant_text_event(LARGE_LOG_CLOSING_MARKER, "2020-01-01T01:00:00.000Z"))
+    return b"".join(parts)
 
 
 def _prepare(ctx, store, item, step, fs, workers):
@@ -471,7 +494,7 @@ def _then_still_shows_accumulated(ctx):
     assert "running suite" in text
 
 
-@then("it shows the complete log output captured from that step's run")
+@then("it shows the most recently captured log output, up to the retained window")
 def _then_shows_complete_output(ctx):
     text = _log_text(ctx)
     assert "reading files" in text
@@ -601,6 +624,53 @@ def test_escape_closes_the_hub_from_the_no_log_state(ctx):
     session.press("escape")
 
     assert not isinstance(session.app.screen, NodeHubScreen)
+
+
+def test_opening_a_live_steps_log_tab_against_an_oversized_log_reads_only_the_recent_window(ctx):
+    _prepare(ctx, *_running_step(lines=_large_fixture()))
+
+    _open(ctx)
+
+    buffered = _buffered_text(ctx)
+    assert LARGE_LOG_OPENING_MARKER not in buffered
+    assert LARGE_LOG_CLOSING_MARKER in buffered
+
+    _write_line(ctx, "brand new live line")
+    _tick(ctx)
+    assert "brand new live line" in _buffered_text(ctx)
+
+
+def test_opening_a_done_steps_log_tab_against_an_oversized_log_reads_only_the_recent_window(ctx):
+    _prepare(ctx, *_done_step(_large_fixture()))
+
+    _open(ctx)
+
+    buffered = _buffered_text(ctx)
+    assert LARGE_LOG_OPENING_MARKER not in buffered
+    assert LARGE_LOG_CLOSING_MARKER in buffered
+
+
+def test_lines_beyond_the_retained_window_are_dropped_from_pane_and_repaint_alike(ctx):
+    _prepare(ctx, *_running_step(lines=SEEDED_LINES))
+    _open(ctx)
+
+    overflow_count = LOG_LINES_MAX_RETAINED + 50
+    bulk = b"".join(_assistant_text_event("bulk line %05d" % i) for i in range(overflow_count))
+    _write_raw(ctx, bulk)
+    _tick(ctx)
+
+    oldest_marker = "bulk line %05d" % 0
+    surviving_marker = "bulk line %05d" % (overflow_count - 1)
+
+    buffered = _buffered_text(ctx)
+    assert oldest_marker not in buffered
+    assert surviving_marker in buffered
+    assert len(ctx["hub_screen"]._log_lines) == LOG_LINES_MAX_RETAINED
+
+    ctx["session"].press("t")
+    repainted = _buffered_text(ctx)
+    assert oldest_marker not in repainted
+    assert surviving_marker in repainted
 
 
 def test_first_mount_on_a_still_in_progress_step_whose_worker_already_died(ctx):
