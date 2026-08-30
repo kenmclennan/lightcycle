@@ -23,6 +23,14 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the needs-attention row for that step shows "code-await-merge" as its step
 
+  Scenario: A gate renders an amber circle and an escalation a red triangle, with escalations sorted first
+    Given the store has a gate step and an escalation step, both in the inbox lane
+    When I launch the dashboard
+    Then the gate's row shows icon "●" at colour amber
+    And the escalation's row shows icon "▲" at colour red
+    And the escalation's step-column text reads "stuck · build"
+    And the escalation's row is positioned before the gate's row within the needs-attention group
+
   Scenario: A three-group list renders exactly one row per real item, at the spaced height, with no separator row
     Given the store has a step in the inbox lane, an active step, and a queued step
     When I launch the dashboard

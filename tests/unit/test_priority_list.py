@@ -1,6 +1,13 @@
 import unittest
 
-from lightcycle.adapters.tui.priority_list import _project, _queued_row, assemble_rows
+from lightcycle.adapters.tui.priority_list import (
+    _attention_row,
+    _project,
+    _queued_row,
+    build_priority_rows,
+    assemble_rows,
+)
+from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
 
 
@@ -52,6 +59,87 @@ class TestQueuedRowDependencyTieBreak(unittest.TestCase):
 
         self.assertIn(expected, row.step)
         self.assertNotIn(other, row.step)
+
+
+_FLOW = flow_from_metas(
+    {
+        "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
+        "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
+    }
+)
+
+
+class TestAttentionRow(unittest.TestCase):
+    def test_a_human_owned_step_is_a_gate(self):
+        store = FakeStore()
+        step = store.create_step("await merge", step="ready-merge", role="human")
+        node = store.get_node(step)
+
+        row = _attention_row(store, node, _FLOW)
+
+        self.assertEqual(row.icon, "●")
+        self.assertEqual(row.icon_colour, "amber")
+        self.assertEqual(row.step, node.step)
+
+    def test_a_step_unknown_to_the_flow_is_a_gate(self):
+        store = FakeStore()
+        step = store.create_step("triage", step="triage", role="human")
+        node = store.get_node(step)
+
+        row = _attention_row(store, node, _FLOW)
+
+        self.assertEqual(row.icon, "●")
+        self.assertEqual(row.icon_colour, "amber")
+        self.assertEqual(row.step, node.step)
+
+    def test_an_agent_owned_step_is_an_escalation(self):
+        store = FakeStore()
+        step = store.create_step("stuck build", step="build", role="human")
+        node = store.get_node(step)
+
+        row = _attention_row(store, node, _FLOW)
+
+        self.assertEqual(row.icon, "▲")
+        self.assertEqual(row.icon_colour, "red")
+        self.assertEqual(row.step, "stuck · %s" % node.step)
+
+
+class FixedFlowService:
+    def __init__(self, flow):
+        self._flow = flow
+
+    def flow_for(self, node):
+        return self._flow
+
+
+class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
+    def test_escalation_sorts_before_gate_when_gate_listed_first(self):
+        store = FakeStore()
+        gate = store.create_step("await merge", step="ready-merge", role="human")
+        escalation = store.create_step("stuck build", step="build", role="human")
+        lanes = {
+            "inbox": [store.get_node(gate), store.get_node(escalation)],
+            "queue": [],
+            "active": [],
+        }
+
+        attention, _, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual([row.id for row in attention], [escalation, gate])
+
+    def test_escalation_sorts_before_gate_when_escalation_listed_first(self):
+        store = FakeStore()
+        escalation = store.create_step("stuck build", step="build", role="human")
+        gate = store.create_step("await merge", step="ready-merge", role="human")
+        lanes = {
+            "inbox": [store.get_node(escalation), store.get_node(gate)],
+            "queue": [],
+            "active": [],
+        }
+
+        attention, _, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual([row.id for row in attention], [escalation, gate])
 
 
 class TestAssembleRows(unittest.TestCase):
