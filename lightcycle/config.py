@@ -159,6 +159,10 @@ class Config:
     def missing_config_keys(self):
         return tuple(k for k, v in self._missing_seed_keys(self.load_config()))
 
+    def obsolete_config_keys(self):
+        seed_names = {k for k, v in _SEED_KEYS}
+        return tuple(k for k in self.load_config() if k not in seed_names)
+
     def resolved_settings(self):
         raw = self.load_config()
         entries = []

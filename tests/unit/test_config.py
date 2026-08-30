@@ -291,6 +291,27 @@ class TestMissingConfigKeys(unittest.TestCase):
         self.assertEqual(set(missing), {k for k, _ in _SEED_KEYS})
 
 
+class TestObsoleteConfigKeys(unittest.TestCase):
+    def test_freshly_seeded_config_returns_empty(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"LC_CONFIG": p})
+        c.ensure_config()
+        self.assertEqual(c.obsolete_config_keys(), ())
+
+    def test_mixed_known_and_unknown_keys_reports_only_unknown(self):
+        c = _cfg(projects="/p", specs="/s", retro_interval_items="5")
+        obsolete = c.obsolete_config_keys()
+        self.assertEqual(obsolete, ("retro-interval-items",))
+        self.assertNotIn("projects", obsolete)
+        self.assertNotIn("specs", obsolete)
+
+    def test_only_unknown_keys_reports_all_of_them_and_missing_still_reports_seed_keys(self):
+        c = _cfg(retro_interval_items="5", old_flag="x")
+        self.assertEqual(c.obsolete_config_keys(), ("retro-interval-items", "old-flag"))
+        self.assertEqual(set(c.missing_config_keys()), {k for k, _ in _SEED_KEYS})
+
+
 class TestMaxTitleLength(unittest.TestCase):
     def test_missing_key_raises(self):
         with self.assertRaises(ConfigError):
