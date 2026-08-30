@@ -1,12 +1,29 @@
 import asyncio
 import contextvars
+import os
+import tempfile
 
 from lightcycle import __version__
 from lightcycle.application.setup import UpgradeResponse
-from lightcycle.config import Config
+from lightcycle.adapters.backup import SqliteBackupAdapter
+from lightcycle.adapters.breaker import BreakerAdapter
+from lightcycle.adapters.fsio import FsAdapter
+from lightcycle.adapters.github import GitHubEventsAdapter
+from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.adapters.launcher import LauncherAdapter
+from lightcycle.adapters.lock import RunLockAdapter
+from lightcycle.adapters.spawner import SpawnerAdapter
+from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.adapters.workers import WorkersAdapter
+from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
+from lightcycle.config import Config, _SEED_KEYS
 from lightcycle.container import Container
+from lightcycle.ports.backup import BackupPort
+from lightcycle.ports.git import GitPort
+from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.adapters.tui.app import LightcycleApp
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 
@@ -64,22 +81,79 @@ class FakeWorkflowSource:
         return None
 
 
-class FakeFlowConfig(Config):
-    def default_origin(self):
-        return "lightcycle"
+class HermeticTuiConfig(Config):
+    def __init__(self):
+        home = tempfile.mkdtemp()
+        cfg_path = os.path.join(home, "config")
+        seeded = dict(_SEED_KEYS)
+        seeded["projects"] = tempfile.mkdtemp()
+        seeded["specs"] = tempfile.mkdtemp()
+        seeded["backups-dir"] = tempfile.mkdtemp()
+        with open(cfg_path, "w") as f:
+            f.writelines("%s: %s\n" % (k, v) for k, v in seeded.items())
+        super().__init__(environ={"LC_HOME": home, "LC_CONFIG": cfg_path})
 
 
-def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None, launcher=None):
-    return Container(
+class NonHermeticContainerError(Exception):
+    pass
+
+
+def _poisoned(port_cls, port_name):
+    def _raise(method_name):
+        def _fn(self, *a, **kw):
+            raise NonHermeticContainerError(
+                "container.%s.%s() was called without a fake in this test container"
+                % (port_name, method_name)
+            )
+        return _fn
+
+    attrs = {name: _raise(name) for name in port_cls.__abstractmethods__}
+    return type("Poisoned" + port_cls.__name__, (port_cls,), attrs)()
+
+
+_LIVE_ADAPTER_TYPES = {
+    "config": Config,
+    "store": SqliteStore,
+    "lock": RunLockAdapter,
+    "git": GitAdapter,
+    "spawner": SpawnerAdapter,
+    "workers": WorkersAdapter,
+    "fs": FsAdapter,
+    "github": GitHubEventsAdapter,
+    "breaker": BreakerAdapter,
+    "backup": SqliteBackupAdapter,
+    "workflow_source": WorkflowSourceAdapter,
+    "launcher": LauncherAdapter,
+}
+
+
+def assert_hermetic(container):
+    for field, real_type in _LIVE_ADAPTER_TYPES.items():
+        if type(getattr(container, field)) is real_type:
+            raise NonHermeticContainerError(
+                "make_test_container built a real %s (%s) - tests would touch "
+                "real config, disk, or the network" % (field, real_type.__name__)
+            )
+
+
+def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None,
+                         launcher=None, git=None, spawner=None, github=None, backup=None):
+    container = Container(
         store=store or FakeStore(),
         lock=lock or FakeLock(running=False),
-        config=FakeFlowConfig(environ={}),
+        config=HermeticTuiConfig(),
         workflow_source=FakeWorkflowSource(),
         breaker=breaker or FakeBreakerPort(),
         fs=fs or FakeFs(),
         workers=workers or FakeWorkers(),
         launcher=launcher or FakeLauncher(),
+        git=git or _poisoned(GitPort, "git"),
+        spawner=spawner or _poisoned(SpawnerPort, "spawner"),
+        github=github or FakeGitHub(),
+        backup=backup or _poisoned(BackupPort, "backup"),
     )
+    assert_hermetic(container)
+    return container
 
 
 class TuiSession:
