@@ -81,7 +81,13 @@ The craft is carried by skills, not by fattening the step files. Invoke them:
 - **Building**: `test-driven-development` - new behaviour ships with a failing test first.
 - **Reviewing**: `requesting-code-review` / `receiving-code-review`, and verify the work meets its spec's acceptance criteria (run it, do not infer).
 
-Two craft checks that belong here, not in the step prompts: **no broken windows** (no failing or skipped tests, dead code, or leftover TODOs) and **names that age well** (never bake a deprecated concept into a durable identifier).
+Three craft checks that belong here, not in the step prompts: **no broken windows** (no failing or skipped tests, dead code, or leftover TODOs), **names that age well** (never bake a deprecated concept into a durable identifier), and **absence is not an answer** (below).
+
+**Absence is not an answer.** A call that could not read the world must never return the value that means "no". This has shipped here four times, each time as a different-looking bug: `has_uncommitted` returns `git status`'s empty stdout as a clean tree, so a failed status reads as "nothing to lose" to the guard protecting `lc rm` from deleting uncommitted work; `worktree_registered` returns `False` when `git worktree list` fails, which reads as "no worktree here"; `comments_since` returns `[]` when `gh` exits non-zero, which reads as "no feedback" on the channel human change requests arrive through; and a `gh` error message containing the word "state" read as a passing CI check to a poll loop grepping for it.
+
+Check the return code. Give the caller a way to tell "no" from "could not tell", and then choose which way to fail deliberately rather than inheriting it from an empty string. **A guard against data loss fails closed**: refusing a delete that would have been safe costs one command, proceeding with one that was not costs the work. A read that merely informs may fail open, but the failure is surfaced rather than swallowed - capture the return code and stderr so a real failure is diagnosable instead of invisible.
+
+The step prompts already carry this rule for CI reads (`watch-ci.md`: require a zero exit code and empty stderr before trusting output). It is stated here because it is the engine's rule too, and the engine kept breaking it while telling its agents not to.
 
 ## Spec-authoring guidance
 
