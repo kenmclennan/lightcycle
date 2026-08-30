@@ -420,6 +420,7 @@ class LightcycleApp(App):
     Screen {{
         border: solid {COLOURS["border"]};
         background: {COLOURS["bg"]};
+        overflow-y: hidden;
     }}
 
     TabStrip {{
@@ -439,6 +440,10 @@ class LightcycleApp(App):
     }}
     .tab-separator {{
         color: {COLOURS["dim"]};
+    }}
+
+    PriorityTable {{
+        height: 1fr;
     }}
 
     DataTable {{
@@ -504,6 +509,9 @@ class LightcycleApp(App):
     #backlog-filter-right {{
         width: 1fr;
         content-align: right middle;
+    }}
+    BacklogTable {{
+        height: 1fr;
     }}
     #backlog-empty-overall {{
         content-align: center top;
