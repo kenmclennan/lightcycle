@@ -83,6 +83,14 @@ def read_bytes(path):
         return f.read()
 
 
+def iter_lines(path):
+    if not path or not os.path.exists(path):
+        return
+    with open(path, "rb") as f:
+        for raw in f:
+            yield raw.decode("utf-8", errors="replace")
+
+
 def exists(path):
     return bool(path) and os.path.exists(path)
 
@@ -172,6 +180,9 @@ class FsAdapter(FsPort):
 
     def read_bytes(self, path):
         return read_bytes(path)
+
+    def iter_lines(self, path):
+        return iter_lines(path)
 
     def exists(self, path):
         return exists(path)

@@ -13,11 +13,9 @@ class RateLimitEvent:
         return self.status == "rejected"
 
 
-def parse_rate_limit_event(text) -> Optional[RateLimitEvent]:
-    if not text:
-        return None
+def parse_rate_limit_event(lines) -> Optional[RateLimitEvent]:
     found = None
-    for line in text.splitlines():
+    for line in lines:
         line = line.strip()
         if not line:
             continue

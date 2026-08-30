@@ -108,6 +108,13 @@ class FakeFs:
     def read_bytes(self, path):
         return self._files.get(path)
 
+    def iter_lines(self, path):
+        content = self._files.get(path)
+        if content is None:
+            return
+        for line in content.decode("utf-8", errors="replace").splitlines():
+            yield line
+
     def exists(self, path):
         return path in self._files or path in self._dirs
 
