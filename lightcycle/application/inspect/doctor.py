@@ -64,12 +64,18 @@ class DoctorUseCase:
         return pins, contracts
 
     def _origin_problems(self):
-        if "default-origin" in self._config.missing_config_keys():
-            return []
-        origin = self._config.default_origin()
-        if self._workflow_source.current_sha(origin) is None:
-            return [Problem("origin", "default-origin %r is set but has no pulled bundle" % origin)]
-        return []
+        problems = []
+        if "default-origin" not in self._config.missing_config_keys():
+            origin = self._config.default_origin()
+            if self._workflow_source.current_sha(origin) is None:
+                problems.append(
+                    Problem("origin", "default-origin %r is set but has no pulled bundle" % origin))
+        for name in self._workflow_source.list_origins():
+            registry = self._workflow_source.read_registry(name) or {}
+            reason = self._workflow_source.unresolvable_reason(registry.get("url"), registry.get("ref"))
+            if reason:
+                problems.append(Problem("origin", "%s: %s" % (name, reason)))
+        return problems
 
     def _config_problems(self):
         return [

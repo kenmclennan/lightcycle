@@ -27,6 +27,10 @@ class WorkflowSourcePort(ABC):
         pass
 
     @abstractmethod
+    def unresolvable_reason(self, url, ref):
+        pass
+
+    @abstractmethod
     def workflow_names(self, origin, sha):
         pass
 

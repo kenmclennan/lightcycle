@@ -31,12 +31,20 @@ class FakeWorkflowSource:
         self.materialized = {}
         self.manifests = {}
         self.currents = {}
+        self.registries = {}
+        self.failures = {}
 
     def add_bundle(self, origin, sha, contract, current=False):
         self.materialized.setdefault(origin, []).append(sha)
         self.manifests[(origin, sha)] = 'name = "%s"\ncontract = %d\n' % (origin, contract)
         if current:
             self.currents[origin] = sha
+
+    def register_origin(self, name, url=None, ref=""):
+        self.registries[name] = {"url": url or name, "ref": ref}
+
+    def fail_resolve(self, name, reason):
+        self.failures[self.registries[name]["url"]] = reason
 
     def has_version(self, origin, sha):
         return sha in self.materialized.get(origin, [])
@@ -49,6 +57,15 @@ class FakeWorkflowSource:
 
     def current_sha(self, origin):
         return self.currents.get(origin)
+
+    def list_origins(self):
+        return sorted(self.registries)
+
+    def read_registry(self, name):
+        return self.registries.get(name)
+
+    def unresolvable_reason(self, url, ref):
+        return self.failures.get(url)
 
 
 class TestDoctorUseCase(unittest.TestCase):
@@ -95,6 +112,62 @@ class TestDoctorUseCase(unittest.TestCase):
         config = _cfg(**_ALL_KEYS)
         report = DoctorUseCase(store, source, config).execute(DoctorInput())
         self.assertFalse(report.healthy())
+        self.assertEqual(len(report.problems["origin"]), 1)
+        self.assertIn("acme", report.problems["origin"][0].message)
+
+    def test_registered_origin_with_resolvable_ref_reports_no_origin_problem(self):
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        source.register_origin("acme", ref="main")
+        config = _cfg(**_ALL_KEYS)
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
+        self.assertEqual(report.problems["origin"], [])
+
+    def test_registered_origin_with_deleted_ref_reports_origin_problem(self):
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        source.register_origin("acme", ref="gone-branch")
+        source.fail_resolve("acme", "ref 'gone-branch' no longer resolves against acme")
+        config = _cfg(**_ALL_KEYS)
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
+        self.assertEqual(len(report.problems["origin"]), 1)
+        problem = report.problems["origin"][0]
+        self.assertIn("acme", problem.message)
+        self.assertIn("gone-branch", problem.message)
+
+    def test_registered_origin_unreachable_reports_distinguishable_message(self):
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        source.register_origin("acme", ref="main")
+        source.fail_resolve("acme", "acme is not reachable right now")
+        config = _cfg(**_ALL_KEYS)
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
+        self.assertEqual(len(report.problems["origin"]), 1)
+        message = report.problems["origin"][0].message
+        self.assertIn("not reachable", message)
+        self.assertNotIn("no longer resolves", message)
+
+    def test_only_the_failing_origin_among_two_is_reported(self):
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        source.register_origin("acme", ref="main")
+        source.register_origin("other", ref="gone-branch")
+        source.fail_resolve("other", "ref 'gone-branch' no longer resolves against other")
+        config = _cfg(**_ALL_KEYS)
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
+        self.assertEqual(len(report.problems["origin"]), 1)
+        self.assertIn("other", report.problems["origin"][0].message)
+
+    def test_unpulled_default_origin_and_separate_resolvable_registered_origin_coexist(self):
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.register_origin("other", ref="main")
+        config = _cfg(**_ALL_KEYS)
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
         self.assertEqual(len(report.problems["origin"]), 1)
         self.assertIn("acme", report.problems["origin"][0].message)
 

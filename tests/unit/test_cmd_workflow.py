@@ -308,6 +308,20 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertIn("acme", out)
         self.assertIn("sha1", out)
 
+    def test_list_shows_ref_when_pinned_and_omits_it_when_not(self):
+        self.source.add_remote("u1", 'name = "pinned"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u1", "--ref", "branch-x", "--name", "pinned")
+        self.source.add_remote("u2", 'name = "unpinned"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u2", "--name", "unpinned")
+        rc, out, err = call(cli.cmd_workflow, "list")
+        self.assertEqual(rc, 0)
+        lines = out.splitlines()
+        pinned_line = next(l for l in lines if l.startswith("pinned "))
+        unpinned_line = next(l for l in lines if l.startswith("unpinned "))
+        self.assertIn("branch-x", pinned_line)
+        self.assertNotEqual(pinned_line, unpinned_line)
+        self.assertNotIn("branch-x", unpinned_line)
+
     def test_rm_deregisters(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         call(cli.cmd_workflow, "add", "u")

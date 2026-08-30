@@ -393,6 +393,8 @@ def cmd_workflow(argv):
                 return 0
             for v in resp.origins:
                 line = "%s  %s  %s  (%d versions" % (v.name, v.current, v.url, len(v.versions))
+                if v.ref:
+                    line += ", ref=%s" % v.ref
                 if v.pinned:
                     line += ", %d pinned" % len(v.pinned)
                 print(line + ")")
