@@ -51,6 +51,8 @@ from lightcycle.application.work import (
     LinkArtifactUseCase,
     OpenThemeInput,
     OpenThemeUseCase,
+    PeekStepInput,
+    PeekStepUseCase,
     QueueInput,
     QueueUseCase,
     ReopenItemInput,
@@ -179,6 +181,9 @@ COMMAND_GROUPS = [
         ("ps", "[--all] [--json]", "running workers (alive only; --all includes dead)"),
         ("logs", "<step|role|run> [-f]", "tail a worker's or the loop's log"),
         ("show", "<id>", "one step or item as JSON (artifacts, resume-state)"),
+        ("peek", "<id> <role>", "print a role's step guidance as currently pinned for the given "
+         "item/step's workflow origin - lets a worker read another role's instructions without "
+         "claiming them"),
         ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
         ("tui", "", "launch the interactive dashboard (priority list + pool/breaker status)"),
@@ -261,7 +266,7 @@ def cmd_upgrade(argv):
     return 0
 
 
-_WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search")
+_WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search", "peek")
 _SET_FORBIDDEN_FLAGS = (
     "--parent", "--title", "--desc", "--description", "--goal", "--project",
     "--workflow", "--backlog", "--label", "--step",
@@ -316,7 +321,7 @@ def main(argv=None):
     ):
         sys.stderr.write(
             "lc: workers may not run '%s' - permitted: claim, done, show, attach, "
-            "backlog, search, set --state blocked\n" % cmd
+            "backlog, search, peek, set --state blocked\n" % cmd
         )
         return 1
     fn = globals().get("cmd_" + cmd.replace("-", "_"))
@@ -420,6 +425,25 @@ def cmd_show(argv):
     if skill:
         out["skill"] = skill
     print(json.dumps(out, indent=2))
+    return 0
+
+
+def cmd_peek(argv):
+    ap = argparse.ArgumentParser(prog="lc peek")
+    ap.add_argument("id")
+    ap.add_argument("role")
+    a = ap.parse_args(argv)
+    try:
+        resp = PeekStepUseCase(
+            _container.store, _flow(), _container.config, _container.workflow_source
+        ).execute(PeekStepInput(node_id=a.id, role=a.role))
+    except KeyError:
+        sys.stderr.write("unknown node '%s'\n" % a.id)
+        return 1
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print("# %s @ %s\n\n%s" % (a.role, resp.pin, resp.body))
     return 0
 
 

@@ -18,6 +18,7 @@ from lightcycle.application.work.open_artifact import (
     OpenArtifactUseCase,
 )
 from lightcycle.application.work.open_theme import OpenThemeInput, OpenThemeResponse, OpenThemeUseCase
+from lightcycle.application.work.peek_step import PeekStepInput, PeekStepResponse, PeekStepUseCase
 from lightcycle.application.work.planned_steps import PlannedStepsInput, PlannedStepsUseCase
 from lightcycle.application.work.queue import QueueInput, QueueUseCase
 from lightcycle.application.work.remove_node import RemoveNodeInput, RemoveNodeResponse, RemoveNodeUseCase
@@ -54,6 +55,9 @@ __all__ = [
     "OpenThemeInput",
     "OpenThemeResponse",
     "OpenThemeUseCase",
+    "PeekStepInput",
+    "PeekStepResponse",
+    "PeekStepUseCase",
     "PlannedStepsInput",
     "PlannedStepsUseCase",
     "QueueInput",
