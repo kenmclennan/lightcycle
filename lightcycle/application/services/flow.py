@@ -119,6 +119,12 @@ class FlowService:
                 return node.workflow
         return None
 
+    def workflow_owner(self, node):
+        for n in self._walk(node):
+            if n.workflow:
+                return n.workflow, n.id
+        return None, None
+
     def project_for(self, step):
         for node in self._walk(step):
             if getattr(node, "project", None):

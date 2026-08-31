@@ -2706,6 +2706,82 @@ class TestNodeDTOReadSurface(unittest.TestCase):
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
 
 
+class TestWorkflowFieldNeverGoesMissing(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_show_includes_workflow_key_when_unset(self):
+        tid = self.store.create_step("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("workflow", json.loads(out))
+
+    def test_claim_includes_workflow_key_when_unset(self):
+        self.store.create_step("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("workflow", json.loads(out))
+
+    def test_status_json_includes_workflow_key_when_unset(self):
+        self.store.create_step("build: t", step="build", role="coder")
+        rc, out, err = call(_cli_mod.cmd_status, "--json")
+        self.assertEqual(rc, 0, err)
+        lanes = json.loads(out)
+        nodes = [n for lane in lanes.values() for n in lane]
+        self.assertTrue(nodes)
+        for n in nodes:
+            self.assertIn("workflow", n)
+
+
+class TestShowSurfacesWorkflowResolution(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self, steps=True)
+
+    def test_own_explicit_workflow_resolves_and_sources_to_itself(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item(
+            "item", theme=theme, workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        pin = "%s@%s" % (_DEFAULT_WORKFLOW, _SHA)
+        self.assertEqual(d["workflow"], pin)
+        self.assertEqual(d["workflow_resolved"], pin)
+        self.assertEqual(d["workflow_source"], item)
+        self.assertIsNone(d["workflow_error"])
+
+    def test_inherited_workflow_sources_to_the_ancestor_not_the_node(self):
+        theme = self.store.create_theme(
+            "theme", workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
+        item = self.store.create_item("item", theme=theme)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertIsNone(d["workflow"])
+        self.assertEqual(d["workflow_resolved"], "%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
+        self.assertEqual(d["workflow_source"], theme)
+
+    def test_nothing_set_anywhere_is_all_null(self):
+        theme = self.store.create_theme("theme")
+        item = self.store.create_item("item", theme=theme)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertIsNone(d["workflow"])
+        self.assertIsNone(d["workflow_resolved"])
+        self.assertIsNone(d["workflow_source"])
+
+    def test_broken_inherited_selector_reports_the_owner_and_the_error(self):
+        theme = self.store.create_theme("theme", workflow="ghost/whatever")
+        item = self.store.create_item("item", theme=theme)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertIsNone(d["workflow_resolved"])
+        self.assertEqual(d["workflow_source"], theme)
+        self.assertIsNotNone(d["workflow_error"])
+
+
 class TestClaimConfigReadSurface(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
@@ -2966,6 +3042,23 @@ class TestSetWorkflow(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_set, "no-such-id", "--workflow", _DEFAULT_WORKFLOW)
         self.assertEqual(rc, 1, err)
         self.assertIn("unknown node", err)
+
+    def test_repointing_a_theme_shadowed_by_a_pinned_item_warns_on_stderr(self):
+        theme = self.store.create_theme("theme", workflow=_DEFAULT_WORKFLOW)
+        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--parent", theme)
+        item = item.strip()
+        self.store.edit_node(item, workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
+        rc, out, err = call(_cli_mod.cmd_set, theme, "--workflow", _DEFAULT_WORKFLOW)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store.get_node(theme).workflow, _DEFAULT_WORKFLOW)
+        self.assertIn(item, err)
+        self.assertIn("will not follow this", err)
+
+    def test_repointing_a_theme_with_no_shadowing_descendants_warns_nothing(self):
+        theme = self.store.create_theme("theme", workflow=_DEFAULT_WORKFLOW)
+        rc, out, err = call(_cli_mod.cmd_set, theme, "--workflow", _DEFAULT_WORKFLOW)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(err, "")
 
 
 if __name__ == "__main__":
