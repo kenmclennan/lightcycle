@@ -10,14 +10,17 @@ from lightcycle.domain.workspace import (
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
 
+_PHASE_RUN_ARTIFACT = "phase-run"
+
 
 class WorktreeService:
-    def __init__(self, store, git, fs, config, flow=None):
+    def __init__(self, store, git, fs, config, flow=None, *, github=None):
         self._store = store
         self._git = git
         self._fs = fs
         self._config = config
         self._flow = flow
+        self._github = github
 
     def _item(self, item):
         return Item(item, tuple(self._store.item_artifacts(item)))
@@ -94,8 +97,29 @@ class WorktreeService:
             if getattr(child, "type", None) == "step"
         ]
 
+    def _persisted_run_index(self, item):
+        phase = self._phase(item)
+        value = self._item(item).artifact_of(_PHASE_RUN_ARTIFACT, label=phase)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _phase_pr_open(self, item, phase):
+        if self._github is None:
+            return False
+        pr = self._item(item).artifact_of("pr", label=phase)
+        if pr is None:
+            return False
+        return not self._github.is_merged(pr) and not self._github.is_closed_unmerged(pr)
+
     def _phase_key(self, item):
-        return phase_key(self._phase(item), current_run_index(self._step_phases(item)))
+        phase = self._phase(item)
+        candidate = current_run_index(self._step_phases(item))
+        persisted = self._persisted_run_index(item)
+        if persisted is not None and candidate > persisted and self._phase_pr_open(item, phase):
+            candidate = persisted
+        return phase_key(phase, candidate)
 
     def worktree_path(self, item):
         return Worktree(item, self._phase_key(item)).path_in(self.target_repo(item))
@@ -138,14 +162,21 @@ class WorktreeService:
         if recorded == branch:
             return
         phase = self._phase(item)
+        run_index = current_run_index(self._step_phases(item))
         if recorded is None:
             self._store.add_artifact(item, "branch", branch, label=phase)
+            self._store.replace_artifact(
+                item, _PHASE_RUN_ARTIFACT, str(run_index), label=phase, internal=True
+            )
             return
         self._release_run(
-            item, phase, current_run_index(self._step_phases(item)) - 1, recorded,
+            item, phase, run_index - 1, recorded,
             delete_remote=False,
         )
         self._store.replace_artifact(item, "branch", branch, label=phase)
+        self._store.replace_artifact(
+            item, _PHASE_RUN_ARTIFACT, str(run_index), label=phase, internal=True
+        )
 
     def ensure(self, item):
         if self._uses_item_repo(item) and not self.has_repo(item):
