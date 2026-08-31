@@ -12,7 +12,6 @@ Feature: Parking a step for a human
   Background:
     Given a flow where the coder builds and the reviewer reviews
 
-  @wip
   Scenario: Blocking a step with no stated question is refused, and the step is left exactly as it was
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item
@@ -23,7 +22,6 @@ Feature: Parking a step for a human
     And the build step's state is unchanged
     And the build step's notes are unchanged
 
-  @wip
   Scenario: Blocking a step for a human hands it to the human role, and the step carries the stated question as both its recorded need and a note explaining why it stopped
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item
@@ -33,7 +31,6 @@ Feature: Parking a step for a human
     And the build step's need reads "pick a colour"
     And the build step's notes explain that it is blocked on "pick a colour"
 
-  @wip
   Scenario: A parked step appears in the operator's inbox, distinctly flagged, with handing it back offered as one of its actions
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item
