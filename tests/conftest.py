@@ -29,3 +29,11 @@ def pytest_configure(config):
 def _isolate_store_home():
     _fresh_test_home()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_tui_harness_temp_dirs():
+    yield
+    from tests.support.tui_harness import _sweep_temp_roots
+
+    _sweep_temp_roots()

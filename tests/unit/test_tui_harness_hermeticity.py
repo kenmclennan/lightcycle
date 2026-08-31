@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 import pytest
 
@@ -8,6 +9,7 @@ from lightcycle.container import Container
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.spawner import SpawnerPort
+from tests.support import tui_harness
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -20,9 +22,12 @@ from tests.support.tui_harness import (
     HermeticTuiConfig,
     NonHermeticContainerError,
     _poisoned,
+    _sweep_temp_roots,
     assert_hermetic,
     make_test_container,
 )
+
+_swept_root_from_previous_test = []
 
 
 def _fully_faked_container(**overrides):
@@ -83,3 +88,35 @@ def test_hermetic_tui_config_answers_seed_keys_beyond_default_origin():
     assert os.path.realpath(config.data_root()) != os.path.realpath(
         os.path.join(os.path.expanduser("~"), ".lightcycle")
     )
+
+
+def test_hermetic_tui_config_creates_a_single_temp_root_swept_by_sweep_temp_roots(monkeypatch, tmp_path):
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    HermeticTuiConfig()
+
+    assert list(tmp_path.iterdir())
+
+    _sweep_temp_roots()
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_sweep_temp_roots_does_not_raise_with_nothing_tracked():
+    assert tui_harness._TEMP_ROOTS == []
+
+    _sweep_temp_roots()
+
+
+def test_autouse_fixture_sweeps_the_temp_root_after_the_test_that_built_it(monkeypatch, tmp_path):
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    make_test_container()
+
+    assert tui_harness._TEMP_ROOTS
+    _swept_root_from_previous_test.append(tui_harness._TEMP_ROOTS[-1])
+
+
+def test_autouse_fixture_already_swept_the_previous_tests_temp_root():
+    assert _swept_root_from_previous_test
+    assert not os.path.exists(_swept_root_from_previous_test[0])
