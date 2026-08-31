@@ -23,6 +23,8 @@ class ReopenItemUseCase:
             raise UseCaseError(
                 "'%s' is a step; use --state ready to hand it back to its lane" % input.item
             )
+        if node.type != "item":
+            raise UseCaseError("'%s' is not an item (type=%s)" % (input.item, node.type))
         if str(node.state) != "done":
             raise UseCaseError("'%s' is not closed (state=%s)" % (input.item, node.state))
         self._store.reopen(input.item)
