@@ -191,5 +191,54 @@ class TestPhaseFor(unittest.TestCase):
         self.assertIsNone(service.phase_for(step))
 
 
+class TestDisplayFor(unittest.TestCase):
+    def _step(self, metas):
+        store = FakeStore()
+        item = store.create_item("st", theme=store.create_theme("theme"), workflow="w")
+        step = store.get_node(store.create_step("b", step="build", role="coder", parent=item))
+        return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
+
+    def test_returns_the_steps_declared_display_phrase(self):
+        service, step = self._step(
+            {"coder": {"model": "sonnet", "step": "build", "display": "Coding"}})
+        self.assertEqual(service.display_for(step), "Coding")
+
+    def test_is_none_when_the_step_declares_no_display_phrase(self):
+        service, step = self._step({"coder": {"model": "sonnet", "step": "build"}})
+        self.assertIsNone(service.display_for(step))
+
+    def test_is_none_for_a_workflow_less_node_without_a_crash(self):
+        store = FakeStore()
+        service = FlowService(
+            FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
+        step = store.get_node(store.create_step("audit: x", step="audit", role="audit"))
+        self.assertIsNone(service.display_for(step))
+
+
+class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
+    def test_resolves_the_bundle_text_once_across_nodes_sharing_a_pin(self):
+        store = FakeStore()
+        fs = FakeFs(METAS)
+        service = FlowService(fs, store)
+        build_node = store.get_node(store.create_step("a", step="build", role="coder"))
+        review_node = store.get_node(store.create_step("b", step="review", role="reviewer"))
+
+        service.flow_for(build_node)
+        service.flow_for(review_node)
+        service.display_for(build_node)
+
+        self.assertEqual(len(fs.workflow_text_calls), 1)
+
+    def test_a_fresh_flow_service_instance_re_resolves(self):
+        store = FakeStore()
+        fs = FakeFs(METAS)
+        node = store.get_node(store.create_step("a", step="build", role="coder"))
+
+        FlowService(fs, store).flow_for(node)
+        FlowService(fs, store).flow_for(node)
+
+        self.assertEqual(len(fs.workflow_text_calls), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

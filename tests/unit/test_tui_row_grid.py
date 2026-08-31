@@ -7,6 +7,7 @@ from lightcycle.adapters.tui.row_grid import (
     classify_grid,
     column_kind,
     compute_layout,
+    truncate_field,
 )
 
 
@@ -147,3 +148,21 @@ class TestComputeLayout(unittest.TestCase):
         self.assertFalse(layout.stacked)
         self.assertFalse(layout.floor)
         self.assertEqual(layout.flexible_width, 1)
+
+
+class TestTruncateField(unittest.TestCase):
+    def test_returns_the_value_unchanged_when_within_width(self):
+        self.assertEqual(truncate_field("Coding", 19), "Coding")
+
+    def test_returns_the_value_unchanged_when_exactly_at_width(self):
+        value = "x" * 19
+        self.assertEqual(truncate_field(value, 19), value)
+
+    def test_truncates_with_a_trailing_ellipsis_when_longer_than_width(self):
+        value = "x" * 25
+        result = truncate_field(value, 19)
+        self.assertEqual(result, "x" * 18 + "…")
+        self.assertEqual(len(result), 19)
+
+    def test_empty_value_is_unchanged(self):
+        self.assertEqual(truncate_field("", 19), "")

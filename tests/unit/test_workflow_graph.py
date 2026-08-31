@@ -159,6 +159,36 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         self.assertEqual(graph.workspace_for_phase(None), "project")
         self.assertEqual(graph.workspace_for_phase("code"), "project")
 
+    def test_display_block_resolves_a_stage_to_its_declared_phrase(self):
+        graph = parse_graph(
+            "entry: code-await-merge\n\n"
+            "display:\n"
+            "  code-await-merge  Review the PR\n"
+            "  write-code        Coding\n"
+        )
+        self.assertEqual(graph.display_for("code-await-merge"), "Review the PR")
+        self.assertEqual(graph.display_for("write-code"), "Coding")
+
+    def test_display_for_a_stage_absent_from_the_block_returns_none(self):
+        graph = parse_graph(
+            "entry: build\n\n"
+            "display:\n"
+            "  build  Coding\n"
+        )
+        self.assertIsNone(graph.display_for("review"))
+
+    def test_display_for_returns_none_when_the_bundle_declares_no_display_block(self):
+        graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
+        self.assertIsNone(graph.display_for("build"))
+
+    def test_display_block_splits_only_on_the_first_run_of_whitespace(self):
+        graph = parse_graph(
+            "entry: code-await-merge\n\n"
+            "display:\n"
+            "  code-await-merge  Review the PR\n"
+        )
+        self.assertEqual(graph.display_for("code-await-merge"), "Review the PR")
+
     def test_ignores_prose_and_blank_lines(self):
         graph = parse_graph(
             "# Standard - spec to merge\n"

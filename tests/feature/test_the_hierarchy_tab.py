@@ -10,6 +10,7 @@ from lightcycle.adapters.tui.design_system import (
 )
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
 from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -27,7 +28,7 @@ def ctx():
 
 def _launch(ctx, store, node_id, size=None):
     ctx["store"] = store
-    session = launch(make_test_container(store=store), size=size)
+    session = launch(make_test_container(store=store, fs=ctx.get("fs")), size=size)
     ctx["session"] = session
     session.run(
         lambda: session.app.push_screen(NodeHubScreen(session.app.container, node_id, session.app._now))
@@ -299,6 +300,20 @@ def _step_title_is_step_name_and_body(ctx):
         step="implement-features", role="coder", parent=item,
     )
     ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given(parsers.parse(
+    'a step at stage "{stage}" whose workflow declares the display phrase "{phrase}" for that stage'
+))
+def _step_at_stage_with_display(ctx, stage, phrase):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("s", step=stage, role="coder", parent=item)
+    ctx["step_id"] = step
+    ctx["fs"] = FakeFs(metas={
+        "coder": {"model": "sonnet", "step": stage, "display": phrase},
+    })
     _launch(ctx, store, item)
 
 
@@ -782,6 +797,13 @@ def _step_row_label_is_step_name(ctx):
     assert title_text == "implement-features"
     assert role_text == "coder"
     assert "Deliver the operator-monitoring feature" not in title_text
+
+
+@then(parsers.parse('the step\'s row label reads "{phrase}", not "{stage}"'))
+def _step_row_label_reads_phrase(ctx, phrase, stage):
+    title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
+    assert title_text == phrase
+    assert stage not in title_text
 
 
 @then("its id is shown in full, on one line")

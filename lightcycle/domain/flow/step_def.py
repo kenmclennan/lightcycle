@@ -26,3 +26,4 @@ class StepDef:
     phase: Optional[str] = None
     hooks: frozenset = frozenset()
     primary: Optional[str] = None
+    display: Optional[str] = None

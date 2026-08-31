@@ -16,7 +16,7 @@ def signals_from_metas(metas):
 
 
 def graph_text_from_metas(metas, entry=None, requires=None):
-    nodes, edges, hooks, signals, phases = [], [], [], [], []
+    nodes, edges, hooks, signals, phases, display = [], [], [], [], [], []
     for role in sorted(metas):
         meta = metas[role] or {}
         step = meta.get("step")
@@ -26,6 +26,8 @@ def graph_text_from_metas(metas, entry=None, requires=None):
             nodes.append("  %s  %s" % (step, role))
         if meta.get("phase"):
             phases.append("  %s  %s" % (step, meta["phase"]))
+        if meta.get("display"):
+            display.append("  %s  %s" % (step, meta["display"]))
         for outcome, target in (meta.get("routes") or {}).items():
             edges.append("  %s  %s  %s" % (step, outcome, target))
         for name, decl in (meta.get("signals") or {}).items():
@@ -55,6 +57,8 @@ def graph_text_from_metas(metas, entry=None, requires=None):
         out.append("signals:\n" + "\n".join(signals))
     if phases:
         out.append("phase:\n" + "\n".join(phases))
+    if display:
+        out.append("display:\n" + "\n".join(display))
     return "\n\n".join(out) + "\n"
 
 
@@ -67,8 +71,10 @@ class FakeFs:
         self._workflow = workflow
         self._workflows = workflows or {}
         self._bodies = bodies or {}
+        self.workflow_text_calls = []
 
     def workflow_text(self, name, root=None):
+        self.workflow_text_calls.append((name, root))
         if name in self._workflows:
             return self._workflows[name]
         if isinstance(self._workflow, dict):

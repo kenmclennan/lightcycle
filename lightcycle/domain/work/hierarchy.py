@@ -49,6 +49,10 @@ def display_role(role):
     return role or "human"
 
 
+def display_stage(phrase, stage):
+    return "%s · %s" % (phrase, stage) if phrase else stage
+
+
 def has_content(node):
     return any(not a.internal for a in node.artifacts)
 

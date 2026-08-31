@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 
-_SECTIONS = ("nodes", "edges", "hooks", "signals")
+_SECTIONS = ("nodes", "edges", "hooks", "signals", "display")
 
 
 @dataclass(frozen=True)
@@ -16,9 +16,13 @@ class WorkflowGraph:
     workspaces: dict = field(default_factory=dict)
     phases: dict = field(default_factory=dict)
     primary: dict = field(default_factory=dict)
+    display: dict = field(default_factory=dict)
 
     def file_for(self, stage):
         return self.nodes.get(stage, stage)
+
+    def display_for(self, stage):
+        return self.display.get(stage)
 
     def primary_outcome(self, stage):
         return self.primary.get(stage)
@@ -48,6 +52,7 @@ def parse_graph(text):
     workspace = "project"
     nodes, edges, hooks, signals, workspaces, phases = {}, {}, {}, {}, {}, {}
     primary = {}
+    display = {}
     section = None
     for line in text.splitlines():
         if not line.strip():
@@ -91,8 +96,11 @@ def parse_graph(text):
         elif section == "phase":
             stage, ph = parts
             phases[stage] = ph
+        elif section == "display":
+            stage, phrase = line.split(maxsplit=1)
+            display[stage] = phrase
     return WorkflowGraph(
         entry=entry, requires=requires, workspace=workspace,
         nodes=nodes, edges=edges, hooks=hooks, signals=signals,
-        workspaces=workspaces, phases=phases, primary=primary
+        workspaces=workspaces, phases=phases, primary=primary, display=display
     )

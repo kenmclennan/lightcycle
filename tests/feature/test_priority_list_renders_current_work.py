@@ -176,6 +176,19 @@ def _g_inbox_at_step(ctx, step_name):
     ctx["store"] = store
 
 
+@given(parsers.parse(
+    'the store has a step in the inbox lane at step "{step_name}", with the display phrase '
+    '"{phrase}" declared for that stage'
+))
+def _g_inbox_at_step_with_display(ctx, step_name, phrase):
+    store = FakeStore()
+    ctx["target_id"] = store.create_step("inbox item", step=step_name, role="human")
+    ctx["store"] = store
+    ctx["fs"] = FakeFs(metas={
+        step_name: {"step": step_name, "display": phrase},
+    })
+
+
 @given("the store has a gate step and an escalation step, both in the inbox lane")
 def _g_inbox_gate_and_escalation(ctx):
     store = FakeStore()
@@ -184,6 +197,23 @@ def _g_inbox_gate_and_escalation(ctx):
     ctx["store"] = store
     ctx["fs"] = FakeFs(metas={
         "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
+        "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
+    })
+
+
+@given(parsers.parse(
+    "the store has a gate step and an escalation step, both in the inbox lane, with the "
+    'display phrase "{phrase}" declared for the escalation step\'s stage'
+))
+def _g_inbox_gate_and_escalation_with_display(ctx, phrase):
+    store = FakeStore()
+    ctx["gate_id"] = store.create_step("await merge", step="ready-merge", role="human")
+    ctx["escalation_id"] = store.create_step("stuck build", step="build", role="human")
+    ctx["store"] = store
+    ctx["fs"] = FakeFs(metas={
+        "coder": {
+            "model": "sonnet", "step": "build", "display": phrase, "routes": {"done": "review"},
+        },
         "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
     })
 
@@ -230,6 +260,17 @@ def _g_claimed_minutes_ago(ctx, step_name, minutes):
     ctx["store"] = store
     ctx["clock"] = clock
     ctx["target_id"] = tid
+
+
+@given(parsers.parse(
+    'the store has a step at step "{step_name}" that was claimed {minutes:d} minutes ago '
+    'and is still in progress, with the display phrase "{phrase}" declared for that stage'
+))
+def _g_claimed_minutes_ago_with_display(ctx, step_name, minutes, phrase):
+    _g_claimed_minutes_ago(ctx, step_name, minutes)
+    ctx["fs"] = FakeFs(metas={
+        step_name: {"model": "sonnet", "step": step_name, "display": phrase},
+    })
 
 
 @given("the dashboard has launched with a step that was claimed some time ago and is still in progress")
@@ -289,6 +330,17 @@ def _g_queued_at_step(ctx, step_name):
     store = FakeStore()
     ctx["target_id"] = store.create_step("queued item", step=step_name, role="coder")
     ctx["store"] = store
+
+
+@given(parsers.parse(
+    'the store has a queued step at step "{step_name}", with the display phrase "{phrase}" '
+    "declared for that stage"
+))
+def _g_queued_at_step_with_display(ctx, step_name, phrase):
+    _g_queued_at_step(ctx, step_name)
+    ctx["fs"] = FakeFs(metas={
+        step_name: {"model": "sonnet", "step": step_name, "display": phrase},
+    })
 
 
 @given("the dashboard has launched with a queued step")
@@ -517,6 +569,17 @@ def _g_blocked_on_other_item(ctx):
     ctx["blocker_id"] = blocker
     ctx["target_id"] = store.create_step("blocked", step="build", role="coder", deps=[blocker])
     ctx["store"] = store
+
+
+@given(parsers.parse(
+    "the store has a step blocked on another item's completion, with the display phrase "
+    '"{phrase}" declared for that step\'s own stage'
+))
+def _g_blocked_on_other_item_with_display(ctx, phrase):
+    _g_blocked_on_other_item(ctx)
+    ctx["fs"] = FakeFs(metas={
+        "build": {"model": "sonnet", "step": "build", "display": phrase},
+    })
 
 
 @given("the store has a step in the inbox lane")
@@ -1091,6 +1154,15 @@ def _t_shows_dependency_icon(ctx):
 def _t_shows_blocking_id(ctx):
     step_text = _cell(ctx["session"], ctx["target_id"], "step")
     assert ctx["blocker_id"] in step_text
+
+
+@then(parsers.parse(
+    "that step's row shows the blocking item's id in its step cell, not \"{phrase}\""
+))
+def _t_shows_blocking_id_not_phrase(ctx, phrase):
+    step_text = _cell(ctx["session"], ctx["target_id"], "step")
+    assert ctx["blocker_id"] in step_text
+    assert phrase not in step_text
 
 
 @then("that step's row shows no dependency chain-link icon")

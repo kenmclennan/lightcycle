@@ -1,3 +1,6 @@
+from lightcycle.domain.work import display_stage
+
+
 def node_extra(node, *, show_description=False):
     plan = next((a.value for a in node.artifacts if a.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
@@ -47,15 +50,24 @@ def _item_line(r, show_kind, title_cap):
     return "%s  %s%s" % (r.step.id, title, extra)
 
 
-def render_inbox(rows, title_cap):
-    return [_inbox_line(r, title_cap) for r in rows]
+def render_inbox(rows, title_cap, flow_service=None):
+    return [_inbox_line(r, title_cap, flow_service) for r in rows]
 
 
-def _inbox_line(r, title_cap):
+def _inbox_line(r, title_cap, flow_service=None):
     title = _truncate(r.step.title or r.step.step, title_cap)
     project = r.project or "-"
     line = "%-9s  %-10s  %-12s  %s" % ("[%s]" % r.kind, r.step.id, project, title)
-    return line + _strategy_suffix(r) + node_extra(r.step, show_description=True)
+    return (
+        line + _strategy_suffix(r) + node_extra(r.step, show_description=True)
+        + _step_extra(r.step, flow_service)
+    )
+
+
+def _step_extra(node, flow_service):
+    if flow_service is None or not node.step:
+        return ""
+    return "  step:%s" % display_stage(flow_service.display_for(node), node.step)
 
 
 def render_search(matches, title_cap):

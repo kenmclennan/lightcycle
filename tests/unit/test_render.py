@@ -244,6 +244,33 @@ class TestRenderInbox(unittest.TestCase):
         lines = render_inbox([r], TITLE_CAP)
         self.assertIn(title, lines[0])
 
+    def test_no_step_fragment_when_no_flow_service_is_given(self):
+        r = row(kind="action", step=tk(id="t1", title="one", step="build"))
+        lines = render_inbox([r], TITLE_CAP)
+        self.assertNotIn("step:", lines[0])
+
+
+class _FixedFlowService:
+    def __init__(self, phrases):
+        self._phrases = phrases
+
+    def display_for(self, node):
+        return self._phrases.get(node.step)
+
+
+class TestRenderInboxDisplayPhrase(unittest.TestCase):
+    def test_shows_the_phrase_and_stage_when_a_phrase_is_declared(self):
+        r = row(kind="action", step=tk(id="t1", title="one", step="code-await-merge"))
+        flow_service = _FixedFlowService({"code-await-merge": "Review the PR"})
+        lines = render_inbox([r], TITLE_CAP, flow_service)
+        self.assertTrue(lines[0].endswith("  step:Review the PR · code-await-merge"))
+
+    def test_shows_the_bare_stage_when_no_phrase_is_declared(self):
+        r = row(kind="action", step=tk(id="t1", title="one", step="build"))
+        flow_service = _FixedFlowService({})
+        lines = render_inbox([r], TITLE_CAP, flow_service)
+        self.assertTrue(lines[0].endswith("  step:build"))
+
 
 class TestRenderQueue(unittest.TestCase):
     def test_short_title_passes_through(self):

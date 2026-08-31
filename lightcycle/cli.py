@@ -29,6 +29,7 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.domain.feedback import format_elapsed
+from lightcycle.domain.work import display_stage
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.project_of import project_of
 from lightcycle.application.work.resolve_backlog import link_resolves
@@ -708,7 +709,10 @@ def _workflow_describe(selector, as_mermaid=False):
     phases = sorted({p for p in graph.phases.values()})
     if phases:
         print("  phases       %s" % ", ".join(phases))
-    print("  steps        %s" % ", ".join(assembled.steps()))
+    print(
+        "  steps        %s"
+        % ", ".join(display_stage(assembled.display_of(s), s) for s in assembled.steps())
+    )
     return 0
 
 
@@ -905,8 +909,9 @@ def cmd_inbox(argv):
     ap = argparse.ArgumentParser(prog="lc inbox")
     ap.add_argument("n", nargs="?", type=int)
     a = ap.parse_args(argv)
-    resp = InboxUseCase(_container.store, _flow()).execute(InboxInput(n=a.n))
-    for line in render_inbox(resp.rows, _container.config.max_title_length()):
+    flow_service = _flow()
+    resp = InboxUseCase(_container.store, flow_service).execute(InboxInput(n=a.n))
+    for line in render_inbox(resp.rows, _container.config.max_title_length(), flow_service):
         print(line)
     return 0
 
@@ -1528,11 +1533,15 @@ def cmd_status(argv):
     if a.json:
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
     else:
+        flow_service = _flow()
         for key in ("inbox", "active", "queue"):
             print("== %s (%d) ==" % (key, len(lanes[key])))
             for t in lanes[key]:
                 suffix = "  [blocked by %s]" % ", ".join(sorted(t.blocked_by)) if t.blocked_by else ""
-                print("  %s  %s%s" % (t.id, t.title, suffix))
+                step_suffix = (
+                    "  %s" % display_stage(flow_service.display_for(t), t.step) if t.step else ""
+                )
+                print("  %s  %s%s%s" % (t.id, t.title, suffix, step_suffix))
     return 0
 
 

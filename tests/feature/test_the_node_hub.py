@@ -6,6 +6,7 @@ from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
 from lightcycle.adapters.tui.design_system import COLOURS, HUB_SHORTCUTS, STATE_GLYPHS
 from lightcycle.adapters.tui.footer import ShortcutBar
 from lightcycle.adapters.tui.hub import EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -121,7 +122,7 @@ def _assert_tab_strip_rendered(session, active_tab):
 
 def _launch(ctx, store):
     ctx["store"] = store
-    ctx["session"] = launch(make_test_container(store=store))
+    ctx["session"] = launch(make_test_container(store=store, fs=ctx.get("fs")))
     return ctx["session"]
 
 
@@ -172,6 +173,20 @@ def _item_no_workflow(ctx):
 
 @given(parsers.parse('an item at step "{step}"'))
 def _item_at_step(ctx, step):
+    store = FakeStore()
+    item = store.create_item("Item")
+    store.create_step("s", step=step, role="write-code", parent=item)
+    ctx["item_id"] = item
+    _launch(ctx, store)
+
+
+@given(parsers.parse(
+    'an item at step "{step}" whose workflow declares the display phrase "{phrase}" for that stage'
+))
+def _item_at_step_with_display(ctx, step, phrase):
+    ctx["fs"] = FakeFs(metas={
+        "write-code": {"model": "sonnet", "step": step, "display": phrase},
+    })
     store = FakeStore()
     item = store.create_item("Item")
     store.create_step("s", step=step, role="write-code", parent=item)

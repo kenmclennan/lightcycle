@@ -35,7 +35,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 ## The workflow (how steps chain)
 
-- **workflow** - the graph, defined in markdown: `entry`, `requires` (artifacts the item must carry to start), `workspace` (which repo a stage runs in), `nodes` (stage -> step file), `edges` (outcome -> next step), `hooks` (external event -> transition), `signals`.
+- **workflow** - the graph, defined in markdown: `entry`, `requires` (artifacts the item must carry to start), `workspace` (which repo a stage runs in), `nodes` (stage -> step file), `edges` (outcome -> next step), `hooks` (external event -> transition), `signals`, `display` (stage -> human-facing phrase).
 - **step file** / **step markdown** - the prompt for a stage (`steps/<name>.md`, in a workflow source). Workflow policy and conventions live here; the engine stays agnostic.
 - **entry** - the step filed when an item is activated.
 - **edge** - `step  outcome  next-step`; a `next-step`-less edge declares the outcome terminal (closes, no new step).
@@ -46,6 +46,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **phase** - a group of stages sharing one PR and one worktree (spec, feature, code). It names _which_ gate, not when.
 - **workspace** - which repo a stage's worktree is cut from. `project` (the default) is the item's own `repo` artifact; `specs` is the configured specs root; any other value names a registered project. An unregistered name is an error, never a silent fall back to the item's repo.
 - **phase run** - one pass of an item through a phase. A workflow that loops re-enters a phase, and each run gets its own branch and worktree; the first run keys on the bare phase name, later runs carry their index (`spec-2`). Phase alone identifies a gate, never a pass.
+- **display phrase** - an optional, per-stage human-facing label declared in a workflow's `display:` block. Shown alongside or in place of the raw stage name wherever a human scans (`lc inbox`, `lc status`, the TUI); never a substitute for the stage name itself, which stays the identifier `lc claim` and every JSON payload use. A stage with no declared phrase falls back to its bare name.
 
 ## The spec-driven pipeline (steps)
 

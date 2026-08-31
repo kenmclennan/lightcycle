@@ -74,13 +74,14 @@ class Flow:
 
         workspaces = dict(graph.workspaces)
         phases = dict(graph.phases)
+        display = dict(graph.display)
 
         steps = {}
         all_stages = (
             set(owner) | set(workspaces) | set(phases) | set(pr_merge) | set(pr_close)
             | set(pr_feedback) | set(pr_conflict) | set(pr_conflict_cap)
             | set(pr_conflict_escalate) | set(mention_token) | set(review_bot_allowlist)
-            | set(ci_cap) | set(step_hooks) | set(primary)
+            | set(ci_cap) | set(step_hooks) | set(primary) | set(display)
         )
         for stage in all_stages:
             steps[stage] = StepDef(
@@ -99,6 +100,7 @@ class Flow:
                 phase=phases.get(stage),
                 hooks=frozenset(step_hooks.get(stage, set())),
                 primary=primary.get(stage),
+                display=display.get(stage),
             )
         return cls(steps, graph.workspace)
 
@@ -140,6 +142,10 @@ class Flow:
     def phase_of(self, step):
         sd = self._steps.get(step)
         return sd.phase if sd else None
+
+    def display_of(self, step):
+        sd = self._steps.get(step)
+        return sd.display if sd else None
 
     def pr_feedback_step(self, step):
         sd = self._steps.get(step)
