@@ -97,3 +97,9 @@ Feature: Closing and reopening an item
     When I reopen the item
     Then the command is rejected
     And the refusal names the item's current state
+
+  Scenario: Reopening a closed theme is refused, distinctly from reopening an item
+    Given a closed theme
+    When I reopen the theme
+    Then the command is rejected
+    And the refusal names the theme's type
