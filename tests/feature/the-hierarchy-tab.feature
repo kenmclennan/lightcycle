@@ -83,6 +83,12 @@ Feature: The hierarchy tab
     When it renders in the hierarchy
     Then the step's row label is exactly its step name, with no title body and no repetition of the role
 
+  @wip
+  Scenario: A step row shows its declared display phrase in place of its raw stage name
+    Given a step at stage "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage
+    When it renders in the hierarchy
+    Then the step's row label reads "Review the PR", not "code-await-merge"
+
   Scenario Outline: The id column widens to fit the longest id in the tree, whatever produced it, without truncating or wrapping it
     Given a node in the hierarchy with id "<id>" (<id source>)
     When it renders in the hierarchy

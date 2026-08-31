@@ -23,6 +23,12 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the needs-attention row for that step shows "code-await-merge" as its step
 
+  @wip
+  Scenario: A needs-attention row shows its declared display phrase in place of its raw stage name
+    Given the store has a step in the inbox lane at step "code-await-merge", with the display phrase "Review the PR" declared for that stage
+    When I launch the dashboard
+    Then the needs-attention row for that step shows "Review the PR" as its step
+
   Scenario: A gate renders an amber circle and an escalation a red triangle, with escalations sorted first
     Given the store has a gate step and an escalation step, both in the inbox lane
     When I launch the dashboard
@@ -30,6 +36,12 @@ Feature: Priority list renders current work
     And the escalation's row shows icon "▲" at colour red
     And the escalation's step-column text reads "stuck · build"
     And the escalation's row is positioned before the gate's row within the needs-attention group
+
+  @wip
+  Scenario: An escalation row's "stuck ·" prefix carries the declared display phrase, not the raw stage name
+    Given the store has a gate step and an escalation step, both in the inbox lane, with the display phrase "Coding" declared for the escalation step's stage
+    When I launch the dashboard
+    Then the escalation's step-column text reads "stuck · Coding"
 
   Scenario: A three-group list renders exactly one row per real item, at the spaced height, with no separator row
     Given the store has a step in the inbox lane, an active step, and a queued step
@@ -65,6 +77,12 @@ Feature: Priority list renders current work
     Then the active row for that step shows "build" as its step
     And the active row's elapsed time reads "14m"
 
+  @wip
+  Scenario: An active row shows its declared display phrase in place of its raw stage name
+    Given the store has a step at step "build" that was claimed 14 minutes ago and is still in progress, with the display phrase "Coding" declared for that stage
+    When I launch the dashboard
+    Then the active row for that step shows "Coding" as its step
+
   Scenario: An active item's elapsed time updates as time passes, without disturbing the rest of the list
     Given the dashboard has launched with a step that was claimed some time ago and is still in progress
     When one poll interval elapses
@@ -81,6 +99,12 @@ Feature: Priority list renders current work
     Given the store has a queued step at step "build"
     When I launch the dashboard
     Then the queued row for that step shows "build" as its next step
+
+  @wip
+  Scenario: A queued row shows its declared display phrase in place of its raw stage name
+    Given the store has a queued step at step "build", with the display phrase "Coding" declared for that stage
+    When I launch the dashboard
+    Then the queued row for that step shows "Coding" as its next step
 
   Scenario: An item with an active step and a queued step of its own renders exactly one row, in the active group
     Given the store has an item with an active step and a queued step of its own
@@ -244,6 +268,12 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then that step's row shows the dependency chain-link icon alongside its queued icon
     And that step's row shows the blocking item's id in its step cell
+
+  @wip
+  Scenario: A dependency-held row keeps showing the blocking item's id even when its own stage has a declared display phrase
+    Given the store has a step blocked on another item's completion, with the display phrase "Coding" declared for that step's own stage
+    When I launch the dashboard
+    Then that step's row shows the blocking item's id in its step cell, not "Coding"
 
   Scenario: A needs-attention row sourced from the inbox lane shows no dependency indicator
     Given the store has a step in the inbox lane
