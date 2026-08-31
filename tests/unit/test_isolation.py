@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.workspace.isolation import refuses_live_store
+from lightcycle.domain.workspace.isolation import has_worktrees_component, refuses_live_store
 
 
 class TestRefusesLiveStore(unittest.TestCase):
@@ -37,6 +37,23 @@ class TestRefusesLiveStore(unittest.TestCase):
             package_root="/home/u/workspace/projects/lightcycle/.worktrees-other/lightcycle",
             live_store_root="/home/u/.lightcycle",
             target_root="/home/u/.lightcycle",
+        ))
+
+
+class TestHasWorktreesComponent(unittest.TestCase):
+    def test_path_with_worktrees_segment_is_true(self):
+        self.assertTrue(has_worktrees_component(
+            "/home/u/workspace/projects/lightcycle/.worktrees/LC-13.1/lightcycle"
+        ))
+
+    def test_path_without_worktrees_segment_is_false(self):
+        self.assertFalse(has_worktrees_component(
+            "/home/u/.local/pipx/venvs/lightcycle/lib/site-packages"
+        ))
+
+    def test_lookalike_dir_name_is_not_treated_as_a_worktrees_component(self):
+        self.assertFalse(has_worktrees_component(
+            "/home/u/workspace/projects/lightcycle/.worktrees-other/lightcycle"
         ))
 
 

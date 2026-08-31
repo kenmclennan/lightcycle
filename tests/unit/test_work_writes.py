@@ -291,6 +291,108 @@ class TestLinkArtifact(unittest.TestCase):
         )
         self.assertTrue(s.item_artifacts(sid)[0].internal)
 
+    def test_spec_with_worktrees_segment_raises(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(
+                    item=sid, atype="spec",
+                    value="/home/u/specs/.worktrees/LC-1-spec/widget/LC-1.md",
+                )
+            )
+        self.assertEqual(s.item_artifacts(sid), [])
+
+    def test_spec_under_unregistered_directory_raises_naming_it(self):
+        s = FakeStore()
+        s.add_project("acme/widget", local_path="/tmp/widget")
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="widget")
+        )
+        with self.assertRaises(UseCaseError) as ctx:
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="spec", value="nowhere/LC-1.md")
+            )
+        self.assertIn("nowhere", str(ctx.exception))
+
+    def test_spec_under_a_different_registered_project_raises_naming_both(self):
+        s = FakeStore()
+        s.add_project("acme/widget", local_path="/tmp/widget")
+        s.add_project("acme/gadget", local_path="/tmp/gadget")
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="widget")
+        )
+        with self.assertRaises(UseCaseError) as ctx:
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="spec", value="gadget/LC-1.md")
+            )
+        message = str(ctx.exception)
+        self.assertIn("gadget", message)
+        self.assertIn("acme/widget", message)
+
+    def test_spec_bare_directory_against_owner_name_repo_succeeds(self):
+        s = FakeStore()
+        s.add_project("acme/lightcycle", local_path="/tmp/lc")
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="lightcycle")
+        )
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="lightcycle/LC-1.md")
+        )
+        self.assertEqual(s.item_artifacts(sid)[1].value, "lightcycle/LC-1.md")
+
+    def test_spec_owner_name_directory_against_bare_repo_succeeds(self):
+        s = FakeStore()
+        s.add_project("acme/lightcycle", local_path="/tmp/lc")
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="acme/lightcycle")
+        )
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="lightcycle/LC-1.md")
+        )
+        self.assertEqual(s.item_artifacts(sid)[1].value, "lightcycle/LC-1.md")
+
+    def test_spec_on_item_with_no_repo_artifact_succeeds_regardless_of_directory(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="anywhere/LC-1.md")
+        )
+        self.assertEqual(s.item_artifacts(sid)[0].value, "anywhere/LC-1.md")
+
+    def test_spec_on_item_with_unresolvable_repo_artifact_succeeds_regardless_of_directory(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="unregistered")
+        )
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="anywhere/LC-1.md")
+        )
+        self.assertEqual(s.item_artifacts(sid)[1].value, "anywhere/LC-1.md")
+
+    def test_replace_with_worktrees_segment_raises_and_leaves_original(self):
+        s = FakeStore()
+        sid = s.create_item("st", theme=s.create_theme("theme"))
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(
+                    item=sid, atype="spec",
+                    value="/home/u/specs/.worktrees/LC-1-spec/widget/LC-1.md",
+                    replace=True,
+                )
+            )
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "specs/old.md")
+
 
 class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):
