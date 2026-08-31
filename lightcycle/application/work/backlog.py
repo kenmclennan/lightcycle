@@ -50,6 +50,7 @@ class BacklogUseCase:
     def __init__(self, store, flow):
         self._store = store
         self._flow = flow
+        self._backlogged_items_cache = None
 
     def execute(self, input: BacklogInput) -> BacklogResponse:
         items = self._backlogged_items()
@@ -81,10 +82,12 @@ class BacklogUseCase:
         return BacklogCountsResponse(projects=projects, unscoped=unscoped, total=len(items))
 
     def _backlogged_items(self):
-        return [
-            n for n in self._store.all_nodes()
-            if n.type == "item" and n.state == State.BACKLOGGED
-        ]
+        if self._backlogged_items_cache is None:
+            self._backlogged_items_cache = [
+                n for n in self._store.all_nodes()
+                if n.type == "item" and n.state == State.BACKLOGGED
+            ]
+        return self._backlogged_items_cache
 
     def _grouped(self, rows):
         by_theme, order, no_theme = {}, [], []

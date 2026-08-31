@@ -821,6 +821,7 @@ class NodeHubScreen(Screen):
         self._hierarchy_row_budget_cache = None
         self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
         self._active_glyph_timer = None
+        self._poll_timer = None
         self._log_mode = None
         self._log_target = None
         self._log_offset = 0
@@ -875,7 +876,19 @@ class NodeHubScreen(Screen):
         self._setup_log_tab()
         self.app.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._initial_refresh)
-        self.set_interval(POLL_INTERVAL_SECONDS, self.poll_refresh)
+        self._poll_timer = self.set_interval(POLL_INTERVAL_SECONDS, self.poll_refresh)
+
+    def on_screen_suspend(self) -> None:
+        if self._poll_timer is not None:
+            self._poll_timer.pause()
+        if self._log_timer is not None:
+            self._log_timer.pause()
+
+    def on_screen_resume(self) -> None:
+        if self._poll_timer is not None:
+            self._poll_timer.resume()
+        if self._log_timer is not None:
+            self._log_timer.resume()
 
     def _setup_log_tab(self) -> None:
         store = self._container.store
@@ -1204,6 +1217,7 @@ class NodeHubScreen(Screen):
         table = self.query_one(ArtifactsTable)
         shape = tuple((a.type, a.value, a.label, a.kind) for a in artifacts)
         if shape == self._last_artifacts_shape and not initial:
+            self._last_artifacts_shape = shape
             self._update_artifact_cells(table, artifacts)
             return
         if table.size.width == 0:

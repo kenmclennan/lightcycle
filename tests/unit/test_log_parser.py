@@ -1,7 +1,8 @@
+import json
 import unittest
 from datetime import datetime
 
-from lightcycle.adapters.log_parser import LogLineParser
+from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
 from lightcycle.domain.work import LogKind
 
 HOOK_STARTED = b'{"type":"system","subtype":"hook_started","hook_id":"12bf4ec6-d046-45ba-b784-638a124d5a90","hook_name":"SessionStart:startup","hook_event":"SessionStart","uuid":"f641bc47-9f32-4e14-b3b6-fbe735cfdb6b","session_id":"7c5f0968-d6de-4df9-b07f-7cdb41e507ea"}\n'
@@ -159,6 +160,55 @@ class ForwardCompatibilityTest(unittest.TestCase):
         lines = LogLineParser().feed(raw)
         self.assertEqual(len(lines), 1)
         self.assertEqual(lines[0].kind, LogKind.SYSTEM)
+
+
+def _tool_result_event(content, is_error=False):
+    return (json.dumps({
+        "type": "user",
+        "message": {"role": "user", "content": [{
+            "type": "tool_result", "tool_use_id": "toolu_1", "content": content, "is_error": is_error,
+        }]},
+    }) + "\n").encode()
+
+
+class BoundedLogLineSizeTest(unittest.TestCase):
+    def test_tool_result_over_the_cap_is_truncated_with_a_marker(self):
+        content = "x" * (MAX_LOG_LINE_CHARS + 500)
+        lines = LogLineParser().feed(_tool_result_event(content))
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].kind, LogKind.RESULT)
+        self.assertTrue(lines[0].text.startswith("x" * MAX_LOG_LINE_CHARS))
+        self.assertTrue(lines[0].text.endswith("…[truncated]"))
+        self.assertLess(len(lines[0].text), len(content))
+
+    def test_tool_result_under_the_cap_is_unaffected(self):
+        content = "small result"
+        lines = LogLineParser().feed(_tool_result_event(content))
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].text, content)
+
+    def test_unrecognised_top_level_type_with_oversized_payload_is_truncated(self):
+        raw = json.dumps({
+            "type": "a_future_event_type_nobody_has_seen_yet",
+            "blob": "y" * (MAX_LOG_LINE_CHARS + 500),
+        }) + "\n"
+        lines = LogLineParser().feed(raw.encode())
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].kind, LogKind.SYSTEM)
+        self.assertTrue(lines[0].text.endswith("…[truncated]"))
+        self.assertLessEqual(len(lines[0].text), MAX_LOG_LINE_CHARS + len(" …[truncated]"))
+
+    def test_unrecognised_system_subtype_with_oversized_payload_is_truncated(self):
+        raw = json.dumps({
+            "type": "system",
+            "subtype": "a_future_subtype_nobody_has_seen_yet",
+            "blob": "z" * (MAX_LOG_LINE_CHARS + 500),
+        }) + "\n"
+        lines = LogLineParser().feed(raw.encode())
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].kind, LogKind.SYSTEM)
+        self.assertTrue(lines[0].text.endswith("…[truncated]"))
+        self.assertLessEqual(len(lines[0].text), MAX_LOG_LINE_CHARS + len(" …[truncated]"))
 
 
 class BlankAndMalformedLineTest(unittest.TestCase):

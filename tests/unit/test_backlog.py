@@ -217,5 +217,40 @@ class TestBacklogCounts(unittest.TestCase):
         self.assertEqual([r.step.id for r in filtered.rows], [item])
 
 
+class TestBacklogUseCaseMemoization(unittest.TestCase):
+    def _counting_store(self):
+        s = FakeStore()
+        s.create_item("a")
+        calls = {"n": 0}
+        original = s.all_nodes
+
+        def counted():
+            calls["n"] += 1
+            return original()
+
+        s.all_nodes = counted
+        return s, calls
+
+    def test_execute_then_counts_on_one_instance_scans_once(self):
+        s, calls = self._counting_store()
+        uc = BacklogUseCase(s, None)
+        uc.execute(BacklogInput())
+        uc.counts()
+        self.assertEqual(calls["n"], 1)
+
+    def test_counts_then_execute_on_one_instance_scans_once(self):
+        s, calls = self._counting_store()
+        uc = BacklogUseCase(s, None)
+        uc.counts()
+        uc.execute(BacklogInput())
+        self.assertEqual(calls["n"], 1)
+
+    def test_two_independent_instances_each_scan_once(self):
+        s, calls = self._counting_store()
+        BacklogUseCase(s, None).execute(BacklogInput())
+        BacklogUseCase(s, None).counts()
+        self.assertEqual(calls["n"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()
