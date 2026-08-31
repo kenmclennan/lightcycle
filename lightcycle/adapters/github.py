@@ -2,8 +2,9 @@ import datetime
 import json
 import re
 import subprocess
+from typing import Union
 
-from lightcycle.ports.github import Comment, GitHubEventsPort, Review
+from lightcycle.ports.github import Comment, GitHubEventsPort, ReadFailure, Review
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 
@@ -51,26 +52,22 @@ class GitHubEventsAdapter(GitHubEventsPort):
         return (data.get("mergeable") == "CONFLICTING"
                 or data.get("mergeStateStatus") == "DIRTY")
 
-    def last_push_time(self, pr: str) -> float:
+    def last_push_time(self, pr: str) -> Union[float, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
             return 0.0
         owner, repo, number = parts
         result = subprocess.run(
-            ["gh", "api", "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number)],
+            [
+                "gh", "api", "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number),
+                "--jq", ".[-1].commit.committer.date // empty", "-r",
+            ],
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
-            return 0.0
-        try:
-            commits = json.loads(result.stdout)
-        except (json.JSONDecodeError, ValueError):
-            return 0.0
-        if not commits:
-            return 0.0
-        last = commits[-1]
-        date_str = last.get("commit", {}).get("committer", {}).get("date", "")
+            return ReadFailure(result.returncode, result.stderr)
+        date_str = result.stdout.strip()
         if not date_str:
             return 0.0
         try:
@@ -85,27 +82,39 @@ class GitHubEventsAdapter(GitHubEventsPort):
         owner, repo, number = parts
         result = []
 
+        jq = (
+            ".[] | select((.created_at|fromdateiso8601) > %s) | "
+            "{author: .user.login, body, id, created_at: (.created_at|fromdateiso8601)}"
+            % since
+        )
         r = subprocess.run(
-            ["gh", "api", "--paginate", "/repos/%s/%s/issues/%s/comments" % (owner, repo, number)],
+            [
+                "gh", "api", "--paginate",
+                "/repos/%s/%s/issues/%s/comments" % (owner, repo, number),
+                "--jq", jq,
+            ],
             capture_output=True,
             text=True,
         )
-        if r.returncode == 0:
+        if r.returncode != 0:
+            return ReadFailure(r.returncode, r.stderr)
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
             try:
-                for c in json.loads(r.stdout):
-                    created = _parse_iso(c.get("created_at", "1970-01-01T00:00:00Z"))
-                    if created > since:
-                        result.append(
-                            Comment(
-                                author=c.get("user", {}).get("login", ""),
-                                body=c.get("body", ""),
-                                is_top_level=True,
-                                id=str(c["id"]) if c.get("id") is not None else None,
-                                created_at=created,
-                            )
-                        )
+                c = json.loads(line)
             except (json.JSONDecodeError, ValueError):
-                pass
+                continue
+            result.append(
+                Comment(
+                    author=c.get("author") or "",
+                    body=c.get("body") or "",
+                    is_top_level=True,
+                    id=str(c["id"]) if c.get("id") is not None else None,
+                    created_at=c.get("created_at", 0.0),
+                )
+            )
 
         return result
 
@@ -116,33 +125,46 @@ class GitHubEventsAdapter(GitHubEventsPort):
         owner, repo, number = parts
         result = []
 
+        jq = (
+            ".[] | select((.created_at|fromdateiso8601) > %s) | "
+            "{author: .user.login, body, id, in_reply_to_id, path, line, "
+            "created_at: (.created_at|fromdateiso8601)}"
+            % since
+        )
         r = subprocess.run(
-            ["gh", "api", "--paginate", "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number)],
+            [
+                "gh", "api", "--paginate",
+                "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number),
+                "--jq", jq,
+            ],
             capture_output=True,
             text=True,
         )
-        if r.returncode == 0:
+        if r.returncode != 0:
+            return ReadFailure(r.returncode, r.stderr)
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
             try:
-                for c in json.loads(r.stdout):
-                    created = _parse_iso(c.get("created_at", "1970-01-01T00:00:00Z"))
-                    if created > since:
-                        result.append(
-                            Comment(
-                                author=c.get("user", {}).get("login", ""),
-                                body=c.get("body", ""),
-                                is_top_level=False,
-                                path=c.get("path"),
-                                line=c.get("line"),
-                                id=str(c["id"]) if c.get("id") is not None else None,
-                                in_reply_to_id=(
-                                    str(c["in_reply_to_id"])
-                                    if c.get("in_reply_to_id") is not None else None
-                                ),
-                                created_at=created,
-                            )
-                        )
+                c = json.loads(line)
             except (json.JSONDecodeError, ValueError):
-                pass
+                continue
+            result.append(
+                Comment(
+                    author=c.get("author") or "",
+                    body=c.get("body") or "",
+                    is_top_level=False,
+                    path=c.get("path"),
+                    line=c.get("line"),
+                    id=str(c["id"]) if c.get("id") is not None else None,
+                    in_reply_to_id=(
+                        str(c["in_reply_to_id"])
+                        if c.get("in_reply_to_id") is not None else None
+                    ),
+                    created_at=c.get("created_at", 0.0),
+                )
+            )
 
         return result
 
@@ -158,7 +180,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ""
         return data.get("headRefOid", "")
 
-    def changed_files(self, pr: str, sha: str) -> frozenset:
+    def changed_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
             return frozenset()
@@ -167,7 +189,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             ["gh", "pr", "view", pr, "--json", "baseRefName"], capture_output=True, text=True
         )
         if result.returncode != 0:
-            return frozenset()
+            return ReadFailure(result.returncode, result.stderr)
         try:
             base = json.loads(result.stdout).get("baseRefName", "")
         except (json.JSONDecodeError, ValueError):
@@ -175,18 +197,19 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if not base:
             return frozenset()
         r = subprocess.run(
-            ["gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha)],
+            [
+                "gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha),
+                "--jq", "[.files[]?.filename]",
+            ],
             capture_output=True, text=True,
         )
         if r.returncode != 0:
-            return frozenset()
+            return ReadFailure(r.returncode, r.stderr)
         try:
-            data = json.loads(r.stdout)
+            filenames = json.loads(r.stdout)
         except (json.JSONDecodeError, ValueError):
             return frozenset()
-        return frozenset(
-            f.get("filename") for f in (data.get("files") or []) if f.get("filename")
-        )
+        return frozenset(f for f in filenames if f)
 
     def reviews(self, pr: str, since: float):
         parts = _repo_parts(pr)
@@ -195,25 +218,38 @@ class GitHubEventsAdapter(GitHubEventsPort):
         owner, repo, number = parts
         result = []
 
+        jq = (
+            '.[] | select(((.submitted_at // "1970-01-01T00:00:00Z")|fromdateiso8601) > %s) | '
+            '{author: .user.login, body, state, '
+            'created_at: ((.submitted_at // "1970-01-01T00:00:00Z")|fromdateiso8601)}'
+            % since
+        )
         r = subprocess.run(
-            ["gh", "api", "--paginate", "/repos/%s/%s/pulls/%s/reviews" % (owner, repo, number)],
+            [
+                "gh", "api", "--paginate",
+                "/repos/%s/%s/pulls/%s/reviews" % (owner, repo, number),
+                "--jq", jq,
+            ],
             capture_output=True,
             text=True,
         )
-        if r.returncode == 0:
+        if r.returncode != 0:
+            return ReadFailure(r.returncode, r.stderr)
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
             try:
-                for rv in json.loads(r.stdout):
-                    submitted = _parse_iso(rv.get("submitted_at") or "1970-01-01T00:00:00Z")
-                    if submitted > since:
-                        result.append(
-                            Review(
-                                author=rv.get("user", {}).get("login", ""),
-                                body=rv.get("body", ""),
-                                created_at=submitted,
-                                state=rv.get("state", ""),
-                            )
-                        )
+                rv = json.loads(line)
             except (json.JSONDecodeError, ValueError):
-                pass
+                continue
+            result.append(
+                Review(
+                    author=rv.get("author") or "",
+                    body=rv.get("body") or "",
+                    created_at=rv.get("created_at", 0.0),
+                    state=rv.get("state") or "",
+                )
+            )
 
         return result

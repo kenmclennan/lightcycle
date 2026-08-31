@@ -4,6 +4,7 @@ from typing import List
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.work import Item, State
+from lightcycle.ports.github import ReadFailure
 
 LC_MARKER = "<!-- lc -->"
 _WATERMARK_ARTIFACT = "feedback-watermark"
@@ -115,6 +116,13 @@ class MonitorPrsUseCase:
                 return child
         return None
 
+    def _note_gh_read_failure(self, item_id, failure):
+        self._store.note(
+            item_id,
+            "gh read failed while checking outstanding feedback (exit %d): %s"
+            % (failure.returncode, failure.stderr),
+        )
+
     def _check_content_pin(self, item, pr_value, phase):
         head = self._github.head_sha(pr_value)
         artifacts = tuple(self._store.item_artifacts(item.id))
@@ -140,6 +148,8 @@ class MonitorPrsUseCase:
             return
         old_files = self._github.changed_files(pr_value, pin)
         new_files = self._github.changed_files(pr_value, head)
+        if isinstance(old_files, ReadFailure) or isinstance(new_files, ReadFailure):
+            return
         dropped = old_files - new_files
         if dropped:
             base_note = (
@@ -247,9 +257,18 @@ class MonitorPrsUseCase:
 
     def _outstanding_feedback(self, step, pr, flow):
         since = self._github.last_push_time(pr)
+        if isinstance(since, ReadFailure):
+            self._note_gh_read_failure(step.parent, since)
+            return []
         top_level = self._github.comments_since(pr, since)
         inline = self._github.pull_comments(pr, since)
         reviews = self._github.reviews(pr, since)
+        failure = next(
+            (r for r in (top_level, inline, reviews) if isinstance(r, ReadFailure)), None
+        )
+        if failure is not None:
+            self._note_gh_read_failure(step.parent, failure)
+            return []
 
         allowlist = flow.review_bot_allowlist(step.step)
         items = [c for c in _outstanding_threads(inline) if _eligible(c.author, allowlist)]

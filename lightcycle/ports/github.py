@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,12 @@ class Review:
     state: str = ""
 
 
+@dataclass(frozen=True)
+class ReadFailure:
+    returncode: int
+    stderr: str
+
+
 class GitHubEventsPort(ABC):
     @abstractmethod
     def is_merged(self, pr: str) -> bool:
@@ -33,7 +39,7 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
-    def last_push_time(self, pr: str) -> float:
+    def last_push_time(self, pr: str) -> Union[float, ReadFailure]:
         pass
 
     @abstractmethod
@@ -41,15 +47,15 @@ class GitHubEventsPort(ABC):
         """Return True only for definitive conflict (CONFLICTING/DIRTY); False for UNKNOWN."""
 
     @abstractmethod
-    def comments_since(self, pr: str, since: float) -> List[Comment]:
+    def comments_since(self, pr: str, since: float) -> Union[List[Comment], ReadFailure]:
         pass
 
     @abstractmethod
-    def pull_comments(self, pr: str, since: float) -> List[Comment]:
+    def pull_comments(self, pr: str, since: float) -> Union[List[Comment], ReadFailure]:
         pass
 
     @abstractmethod
-    def reviews(self, pr: str, since: float) -> List[Review]:
+    def reviews(self, pr: str, since: float) -> Union[List[Review], ReadFailure]:
         pass
 
     @abstractmethod
@@ -57,5 +63,5 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
-    def changed_files(self, pr: str, sha: str) -> frozenset:
+    def changed_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
         pass
