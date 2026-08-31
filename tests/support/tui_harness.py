@@ -1,6 +1,7 @@
 import asyncio
 import contextvars
 import os
+import shutil
 import tempfile
 
 from lightcycle import __version__
@@ -81,14 +82,33 @@ class FakeWorkflowSource:
         return None
 
 
+_TEMP_ROOTS = []
+
+
+def _tracked_mkdtemp():
+    root = tempfile.mkdtemp()
+    _TEMP_ROOTS.append(root)
+    return root
+
+
+def _sweep_temp_roots():
+    while _TEMP_ROOTS:
+        shutil.rmtree(_TEMP_ROOTS.pop(), ignore_errors=True)
+
+
 class HermeticTuiConfig(Config):
     def __init__(self):
-        home = tempfile.mkdtemp()
+        root = _tracked_mkdtemp()
+        home = os.path.join(root, "home")
+        os.makedirs(home)
         cfg_path = os.path.join(home, "config")
         seeded = dict(_SEED_KEYS)
-        seeded["projects"] = tempfile.mkdtemp()
-        seeded["specs"] = tempfile.mkdtemp()
-        seeded["backups-dir"] = tempfile.mkdtemp()
+        seeded["projects"] = os.path.join(root, "projects")
+        seeded["specs"] = os.path.join(root, "specs")
+        seeded["backups-dir"] = os.path.join(root, "backups-dir")
+        os.makedirs(seeded["projects"])
+        os.makedirs(seeded["specs"])
+        os.makedirs(seeded["backups-dir"])
         with open(cfg_path, "w") as f:
             f.writelines("%s: %s\n" % (k, v) for k, v in seeded.items())
         super().__init__(environ={"LC_HOME": home, "LC_CONFIG": cfg_path})
