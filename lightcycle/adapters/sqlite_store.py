@@ -43,7 +43,11 @@ CREATE TABLE IF NOT EXISTS nodes (
     theme TEXT,
     needs TEXT,
     model TEXT,
-    workflow TEXT
+    workflow TEXT,
+    branch TEXT,
+    pr TEXT,
+    reason TEXT,
+    tried TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_nodes_state ON nodes(state);
@@ -94,9 +98,12 @@ _COLUMNS = (
     "id", "type", "title", "state", "step", "role", "parent", "project", "goal",
     "description", "notes", "outcome", "assignee", "since", "fired_at",
     "closed_at", "attention", "theme", "needs", "model", "workflow",
+    "branch", "pr", "reason", "tried",
 )
 
-_METADATA_COLUMNS = ("theme", "needs", "since", "fired_at", "workflow")
+_METADATA_COLUMNS = (
+    "theme", "needs", "since", "fired_at", "workflow", "branch", "pr", "reason", "tried",
+)
 
 _LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
 
@@ -130,6 +137,7 @@ class SqliteStore(StorePort):
         self._apply_schema_version_floor()
         self._migrate_close_reason_to_outcome()
         self._migrate_artifact_fields()
+        self._migrate_resume_fields()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -205,6 +213,12 @@ class SqliteStore(StorePort):
                     (default_kind_for(atype), atype),
                 )
 
+    def _migrate_resume_fields(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
+        for col in ("branch", "pr", "reason", "tried"):
+            if col not in cols:
+                self._conn.execute("ALTER TABLE nodes ADD COLUMN %s TEXT" % col)
+
     def _row_to_node(self, row, artifacts, blocked_by):
         d = dict(zip(_COLUMNS, row))
         deps = len(blocked_by)
@@ -238,6 +252,10 @@ class SqliteStore(StorePort):
             attention=bool(d["attention"]),
             model=d["model"],
             workflow=d["workflow"],
+            branch=d["branch"],
+            pr=d["pr"],
+            reason=d["reason"],
+            tried=d["tried"],
         )
 
     def _rollup_child_states(self, pending_ids):
@@ -522,6 +540,7 @@ class SqliteStore(StorePort):
                 "blocked_by": blocked_by, "labels": labels, "since": d["since"],
                 "fired_at": d["fired_at"], "closed_at": d["closed_at"],
                 "created_at": d["created_at"],
+                "branch": d["branch"], "pr": d["pr"], "reason": d["reason"], "tried": d["tried"],
             })
         return result
 

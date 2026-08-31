@@ -399,6 +399,15 @@ class StoreContractBase:
         self.assertEqual(t.model, "sonnet")
         self.assertEqual(t.since, "2025-01-01")
 
+    def test_update_metadata_preserves_other_metadata(self):
+        s = self.make_store()
+        tid = s.create_step("t")
+        s.set_model(tid, "sonnet")
+        s.update_metadata(tid, {"since": "2025-01-01"})
+        t = s.get_node(tid)
+        self.assertEqual(t.model, "sonnet")
+        self.assertEqual(t.since, "2025-01-01")
+
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()
         open_tid = s.create_step("open step")

@@ -46,6 +46,41 @@ class TestCmdDep(unittest.TestCase):
         rc, out, err = call(cli.cmd_dep, blocked)
         self.assertNotEqual(rc, 0)
 
+    def test_add_succeeds_when_both_ids_exist(self):
+        blocker = self.store.create_step("blocker", role="coder")
+        blocked = self.store.create_step("blocked", role="coder")
+        rc, out, err = call(cli.cmd_dep, blocked, "--needs", blocker)
+        self.assertEqual(rc, 0)
+        ready_ids = [t.id for t in self.store.ready_steps()]
+        self.assertNotIn(blocked, ready_ids)
+
+    def test_add_refuses_empty_id(self):
+        blocker = self.store.create_step("blocker", role="coder")
+        rc, out, err = call(cli.cmd_dep, "", "--needs", blocker)
+        self.assertEqual(rc, 1)
+        self.assertIn("unknown node", err)
+        self.assertEqual(self.store._deps.get(""), None)
+
+    def test_add_refuses_empty_needs(self):
+        blocked = self.store.create_step("blocked", role="coder")
+        rc, out, err = call(cli.cmd_dep, blocked, "--needs", "")
+        self.assertEqual(rc, 1)
+        self.assertIn("unknown node", err)
+        self.assertEqual(self.store._deps.get(blocked), set())
+
+    def test_add_refuses_nonexistent_blocked_id(self):
+        blocker = self.store.create_step("blocker", role="coder")
+        rc, out, err = call(cli.cmd_dep, "does-not-exist", "--needs", blocker)
+        self.assertEqual(rc, 1)
+        self.assertIn("unknown node 'does-not-exist'", err)
+
+    def test_add_refuses_nonexistent_needs_id(self):
+        blocked = self.store.create_step("blocked", role="coder")
+        rc, out, err = call(cli.cmd_dep, blocked, "--needs", "does-not-exist")
+        self.assertEqual(rc, 1)
+        self.assertIn("unknown node 'does-not-exist'", err)
+        self.assertEqual(self.store._deps.get(blocked), set())
+
 
 if __name__ == "__main__":
     unittest.main()

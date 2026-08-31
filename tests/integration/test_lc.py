@@ -2706,6 +2706,24 @@ class TestNodeDTOReadSurface(unittest.TestCase):
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
 
 
+class TestResumeFieldsSurfaceOnShow(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_show_surfaces_branch_pr_reason_tried(self):
+        tid = self.store.create_step("build: t", step="build", role="human")
+        self.store.update_metadata(
+            tid, {"branch": "feat/y", "pr": "123", "reason": "oops", "tried": "a,b"}
+        )
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["branch"], "feat/y")
+        self.assertEqual(d["pr"], "123")
+        self.assertEqual(d["reason"], "oops")
+        self.assertEqual(d["tried"], "a,b")
+
+
 class TestWorkflowFieldNeverGoesMissing(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)

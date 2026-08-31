@@ -214,11 +214,11 @@ class TestMetadata(unittest.TestCase):
         step = self.s.get_node(self.tid)
         self.assertEqual(step.needs, "a spec")
 
-    def test_update_metadata_replaces(self):
+    def test_update_metadata_merges(self):
         self.s.update_metadata(self.tid, {"needs": "old"})
         self.s.update_metadata(self.tid, {"artifacts": [{"type": "spec", "value": "s.md"}]})
         step = self.s.get_node(self.tid)
-        self.assertIsNone(step.needs)
+        self.assertEqual(step.needs, "old")
         self.assertEqual(len(step.artifacts), 1)
 
 

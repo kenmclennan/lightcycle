@@ -1075,6 +1075,38 @@ def cmd_new(argv):
     return 0
 
 
+_SET_FLAG_OWNERS = {
+    "title": (None,), "description": (None,), "goal": (None,), "project": (None,),
+    "label": (None,), "backlog": (None,),
+    "parent": (None, "active"),
+    "workflow": (None, "active"),
+    "step": ("active",),
+    "needs": ("blocked",), "branch": ("blocked",), "pr": ("blocked",),
+    "reason": ("blocked",), "tried": ("blocked",),
+}
+_SET_KNOWN_STATES = (None, "active", "blocked", "ready", "in_progress")
+
+
+def _set_state_label(state):
+    return "--state %s" % state if state is not None else "no --state"
+
+
+def _reject_flags_ineffective_for_state(a):
+    if a.state not in _SET_KNOWN_STATES:
+        return None
+    offending = [
+        f for f in _SET_FLAG_OWNERS
+        if getattr(a, f) is not None and a.state not in _SET_FLAG_OWNERS[f]
+    ]
+    if not offending:
+        return None
+    parts = [
+        "--%s (needs %s)" % (f, " or ".join(_set_state_label(s) for s in _SET_FLAG_OWNERS[f]))
+        for f in offending
+    ]
+    return "%s does not accept %s\n" % (_set_state_label(a.state), "; ".join(parts))
+
+
 def cmd_set(argv):
     ap = argparse.ArgumentParser(prog="lc set")
     for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label",
@@ -1083,6 +1115,10 @@ def cmd_set(argv):
     ap.add_argument("--backlog", action="append")
     ap.add_argument("id")
     a = ap.parse_args(argv)
+    msg = _reject_flags_ineffective_for_state(a)
+    if msg:
+        sys.stderr.write(msg)
+        return 2
     try:
         if a.title:
             validate_title(_container.config, a.title)
@@ -1211,6 +1247,12 @@ def cmd_dep(argv):
         else:
             print("no-op: %s was not blocked by %s" % (a.id, a.remove))
         return 0
+    for node_id in (a.id, a.needs):
+        try:
+            _container.store.get_node(node_id)
+        except KeyError:
+            sys.stderr.write("unknown node '%s'\n" % node_id)
+            return 1
     _container.store.dep_add(a.id, a.needs)
     return 0
 
