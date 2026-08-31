@@ -60,7 +60,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         result = subprocess.run(
             [
                 "gh", "api", "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number),
-                "--jq", ".[-1].commit.committer.date // empty", "-r",
+                "--jq", ".[-1].commit.committer.date // empty",
             ],
             capture_output=True,
             text=True,
