@@ -77,3 +77,8 @@ Feature: Blocking-dependency ids on the live read path
   Scenario: A step held by a dependency sits with ordinary queued work, not in the human's inbox
     Given a step "blocked" needs a step "dep1"
     Then "blocked" belongs to the queue lane, not the inbox lane
+
+  @wip
+  Scenario: An item whose only step is held by an unmet dependency is ready, not backlogged
+    Given an item whose only step "blocked" needs a step "dep1"
+    Then the item containing "blocked" is ready
