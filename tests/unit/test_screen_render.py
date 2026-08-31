@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
-from tests.support.screen_render import DEFAULT_SIZE, SCREENS, UNRENDERABLE, render
+from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
+from tests.support.screen_render import DEFAULT_SIZE, SCREENS, UNRENDERABLE, _LOG_EXCERPT, render
 
 
 @pytest.mark.parametrize("state", sorted(SCREENS))
@@ -110,3 +113,18 @@ def test_header_height_reflects_the_fields_a_node_shows():
             session.close()
 
     assert header_height("hub#done-item") < header_height("hub#hierarchy")
+
+
+def test_the_log_excerpt_fixture_is_real_captured_stream_json_past_the_bound():
+    lines = _LOG_EXCERPT.split(b"\n")
+    assert lines[-1] == b""
+    for line in lines[:-1]:
+        json.loads(line)
+
+    parsed = LogLineParser().feed(_LOG_EXCERPT)
+    assert any(len(entry.text) > MAX_LOG_LINE_CHARS for entry in parsed)
+
+
+def test_the_log_pane_wraps_a_long_entry_instead_of_clipping_it():
+    frame = render("hub#active-log")
+    assert "resumes 14:32:00" in frame
