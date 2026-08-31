@@ -564,6 +564,40 @@ class TestCursorColumn(unittest.TestCase):
         self.assertEqual(table.get_cell(second, "cursor").plain, CURSOR_GLYPH.glyph)
 
 
+class TestCursorColumnSurvivesCheapPaths(unittest.TestCase):
+    def _launch(self, store):
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        return session
+
+    def test_cheap_poll_leaves_the_cursor_column_unchanged(self):
+        store = FakeStore()
+        first = store.create_step("first", step="build", role="coder")
+        store.create_step("second", step="build", role="coder")
+
+        session = self._launch(store)
+        table = session.app.query_one(DataTable)
+        self.assertEqual(table.get_cell(first, "cursor").plain, CURSOR_GLYPH.glyph)
+
+        session.poll_tick()
+
+        self.assertEqual(table.get_cell(first, "cursor").plain, CURSOR_GLYPH.glyph)
+
+    def test_tick_active_glyph_leaves_the_cursor_column_unchanged(self):
+        store = FakeStore()
+        tid = store.create_step("active item", step="build", role="coder")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+
+        session = self._launch(store)
+        table = session.app.query_one(DataTable)
+        self.assertEqual(table.get_cell(tid, "cursor").plain, CURSOR_GLYPH.glyph)
+
+        session.run(session.app._tick_active_glyph)
+
+        self.assertEqual(table.get_cell(tid, "cursor").plain, CURSOR_GLYPH.glyph)
+
+
 class TestScroll(unittest.TestCase):
     def _launch(self, store):
         session = launch(make_test_container(store=store))

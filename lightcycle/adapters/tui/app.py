@@ -876,9 +876,12 @@ class LightcycleApp(App):
         self._priority_layout_cache = layout
         self._priority_row_budget_cache = row_budget
         active_glyph = self._active_glyph_char()
+        selected_id = self._selected_row_id(table)
         for row in rows:
             icon_override = active_glyph if row.group == "active" else None
-            cells = self._row_cells(row, layout, row_budget, cursor=False, icon_override=icon_override)
+            cells = self._row_cells(
+                row, layout, row_budget, cursor=(row.id == selected_id), icon_override=icon_override
+            )
             if layout.stacked:
                 table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
                 continue
@@ -921,11 +924,14 @@ class LightcycleApp(App):
         layout = self._priority_layout_cache
         row_budget = self._priority_row_budget_cache
         rows_by_id = {row.id: row for row in self._last_priority_rows}
+        selected_id = self._selected_row_id(table)
         for row_id in self._active_row_ids:
             row = rows_by_id.get(row_id)
             if row is None:
                 continue
-            cells = self._row_cells(row, layout, row_budget, cursor=False, icon_override=glyph)
+            cells = self._row_cells(
+                row, layout, row_budget, cursor=(row_id == selected_id), icon_override=glyph
+            )
             try:
                 if layout.stacked:
                     table.update_cell(row_id, STACKED_COLUMN_KEY, cells[0])

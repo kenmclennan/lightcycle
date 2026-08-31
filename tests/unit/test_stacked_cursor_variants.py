@@ -6,6 +6,7 @@ from lightcycle.adapters.tui.app import (
     BACKLOG_COLUMNS, DATA_COLUMNS, BacklogTable, BacklogView, PriorityTable,
 )
 from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
+from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -125,6 +126,64 @@ class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):
             session.pause()
 
         self.assertEqual(spy.call_count, 2)
+
+
+class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
+    def _launch(self, *, active_ids=()):
+        store = FakeStore()
+        store.create_step(
+            "first title long enough for a continuation line",
+            step=_PRIORITY_STEP, role="coder", id=_PRIORITY_ID_A,
+        )
+        store.add_artifact(_PRIORITY_ID_A, "repo", _PRIORITY_PROJECT)
+        store.create_step(
+            "second title long enough for a continuation line",
+            step=_PRIORITY_STEP, role="coder", id=_PRIORITY_ID_B,
+        )
+        store.add_artifact(_PRIORITY_ID_B, "repo", _PRIORITY_PROJECT)
+        for tid in active_ids:
+            store.assign(tid, "worker-1")
+            store.update_state(tid, State.IN_PROGRESS)
+        width = _priority_stack_terminal_width()
+        session = launch(make_test_container(store=store), size=(width, 24))
+        self.addCleanup(session.close)
+        return session
+
+    def test_cheap_poll_leaves_the_cursor_glyph_on_the_selected_row(self):
+        session = self._launch()
+        table = session.app.query_one(PriorityTable)
+        self.assertTrue(table._stacked_mode)
+        selected_id = session.app._selected_row_id(table)
+        self.assertIn("❯", table.get_cell(selected_id, "row").plain)
+
+        session.poll_tick()
+
+        self.assertIn("❯", table.get_cell(selected_id, "row").plain)
+
+    def test_active_glyph_tick_leaves_the_cursor_glyph_on_the_selected_row(self):
+        session = self._launch(active_ids=(_PRIORITY_ID_A,))
+        table = session.app.query_one(PriorityTable)
+        self.assertTrue(table._stacked_mode)
+        selected_id = session.app._selected_row_id(table)
+        self.assertEqual(selected_id, _PRIORITY_ID_A)
+        self.assertIn("❯", table.get_cell(_PRIORITY_ID_A, "row").plain)
+
+        session.run(session.app._tick_active_glyph)
+
+        self.assertIn("❯", table.get_cell(_PRIORITY_ID_A, "row").plain)
+
+    def test_active_glyph_tick_paints_the_glyph_only_on_the_selected_row(self):
+        session = self._launch(active_ids=(_PRIORITY_ID_A, _PRIORITY_ID_B))
+        table = session.app.query_one(PriorityTable)
+        self.assertTrue(table._stacked_mode)
+        session.press("down")
+        selected_id = session.app._selected_row_id(table)
+        self.assertEqual(selected_id, _PRIORITY_ID_B)
+
+        session.run(session.app._tick_active_glyph)
+
+        self.assertNotIn("❯", table.get_cell(_PRIORITY_ID_A, "row").plain)
+        self.assertIn("❯", table.get_cell(_PRIORITY_ID_B, "row").plain)
 
 
 if __name__ == "__main__":
