@@ -1437,7 +1437,9 @@ def cmd_project(argv):
                 print(json.dumps([dict(cand._asdict()) for cand in candidates], indent=2))
                 return 0
             for cand in candidates:
-                if cand.status == "no-remote":
+                if cand.status == "unreadable":
+                    print("unreadable\t%s\t(git could not read this repo)" % cand.path)
+                elif cand.status == "no-remote":
                     print("no-remote\t%s\t(%s)" % (cand.path, cand.remote or "no origin"))
                 elif cand.status == "already-registered":
                     print("already-registered\t%s\t%s\tproposed %s\tregistered at %s (shortcode %s)" % (

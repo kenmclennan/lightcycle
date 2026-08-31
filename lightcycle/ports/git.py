@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
 
+class GitReadError(Exception):
+    pass
+
+
 class GitPort(ABC):
     @abstractmethod
     def git(self, root, *args):

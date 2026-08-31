@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.ports.git import GitReadError
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,12 @@ class AddProjectUseCase:
             input.shortcode or (existing.shortcode if existing else None)
             or input.identity.split("/")[-1].upper()
         )
-        remote = self._git.remote_url(input.path) if input.path else None
+        remote = None
+        if input.path:
+            try:
+                remote = self._git.remote_url(input.path)
+            except GitReadError:
+                remote = None
         local_path = input.path or (existing.local_path if existing else None)
         remote = remote or (existing.remote if existing else None)
         changed = (

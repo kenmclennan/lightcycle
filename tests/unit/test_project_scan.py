@@ -4,19 +4,23 @@ import unittest
 
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.application.setup.project_scan import ScanProjectsUseCase
+from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 
 class _FakeGit:
-    def __init__(self, git_repos=(), remotes=None):
+    def __init__(self, git_repos=(), remotes=None, unreadable=()):
         self._git_repos = set(git_repos)
         self._remotes = remotes or {}
+        self._unreadable = set(unreadable)
 
     def is_repo_root(self, path):
         return path in self._git_repos
 
     def remote_url(self, path):
+        if path in self._unreadable:
+            raise GitReadError("git remote get-url failed in %s: fatal: not a git repository" % path)
         return self._remotes.get(path)
 
 
@@ -69,6 +73,23 @@ class TestScanProjects(unittest.TestCase):
         self.assertEqual(cand.status, "no-remote")
         self.assertIsNone(cand.identity)
         self.assertEqual(cand.remote, "git@gitlab.com:acme/x.git")
+
+    def test_unreadable_repo_is_reported_distinctly_and_does_not_abort_the_walk(self):
+        root = "/tree"
+        broken = os.path.join(root, "broken")
+        ok = os.path.join(root, "ok")
+        fs = FakeFs(dirs={root: ["broken", "ok"]})
+        git = _FakeGit(
+            git_repos={broken, ok}, remotes={ok: "git@github.com:acme/ok.git"},
+            unreadable={broken},
+        )
+        uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
+        candidates = uc.execute(root)
+        by_path = {c.path: c for c in candidates}
+        self.assertEqual(len(candidates), 2)
+        self.assertEqual(by_path[broken].status, "unreadable")
+        self.assertIsNone(by_path[broken].identity)
+        self.assertEqual(by_path[ok].status, "new")
 
     def test_already_registered_shows_found_and_registered_separately(self):
         root = "/tree/x"

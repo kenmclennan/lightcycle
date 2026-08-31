@@ -7,6 +7,7 @@ from lightcycle.domain.work import Item, State
 from lightcycle.domain.workspace import (
     Branch, Worktree, current_run_index, phase_key, runs_of,
 )
+from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
 
 
@@ -158,10 +159,17 @@ class WorktreeService:
             )
         branch = self._branch_for(item)
         path = self.worktree_path(item)
-        if self._git.worktree_registered(target, path) and os.path.isdir(path):
+        try:
+            registered = self._git.worktree_registered(target, path)
+        except GitReadError:
+            registered = False
+        if registered and os.path.isdir(path):
             self._ensure_branch_artifact(item, branch)
             return path
-        is_new_branch = not self._git.branch_exists(target, branch)
+        try:
+            is_new_branch = not self._git.branch_exists(target, branch)
+        except GitReadError:
+            is_new_branch = True
         if is_new_branch:
             if not self._git.sync_to_origin(target):
                 raise UseCaseError(
@@ -177,7 +185,11 @@ class WorktreeService:
         else:
             add_args = ["worktree", "add", path, branch]
         os.makedirs(self._fs.worktrees_dir(target), exist_ok=True)
-        self._fs.ensure_worktrees_ignored(self._git.common_dir(target))
+        try:
+            common = self._git.common_dir(target)
+        except GitReadError as e:
+            raise UseCaseError("cannot set up workspace for %s: %s" % (item, e))
+        self._fs.ensure_worktrees_ignored(common)
         retries = self._config.worktree_retries()
         backoff = self._config.worktree_retry_sleep()
         self._git.git(target, "worktree", "prune")

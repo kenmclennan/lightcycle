@@ -17,6 +17,7 @@ from lightcycle.application.work import (
     RemoveNodeUseCase,
 )
 from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -137,6 +138,21 @@ class RaisingGitForRemove:
         raise AssertionError("worktree_registered should not be called")
 
     def has_uncommitted(self, path):
+        raise AssertionError("has_uncommitted should not be called")
+
+
+class UnreadableGitForRemove:
+    def __init__(self, fails="worktree_registered"):
+        self._fails = fails
+
+    def worktree_registered(self, root, path):
+        if self._fails == "worktree_registered":
+            raise GitReadError("git worktree list failed in %s: fatal: not a git repository" % root)
+        return True
+
+    def has_uncommitted(self, path):
+        if self._fails == "has_uncommitted":
+            raise GitReadError("git status failed in %s: fatal: not a git repository" % path)
         raise AssertionError("has_uncommitted should not be called")
 
 
@@ -497,6 +513,44 @@ class TestRemoveNode(unittest.TestCase):
         self.assertIn(item, str(ctx.exception))
         self.assertEqual(wt.removed, [])
         self.assertEqual(s.get_node(item).id, item)
+
+    def test_refuses_when_worktree_registered_check_is_unreadable(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = UnreadableGitForRemove(fails="worktree_registered")
+        with self.assertRaises(UseCaseError) as ctx:
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertIn(item, str(ctx.exception))
+        self.assertEqual(wt.removed, [])
+        self.assertEqual(s.get_node(item).id, item)
+
+    def test_refuses_when_has_uncommitted_check_is_unreadable(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = UnreadableGitForRemove(fails="has_uncommitted")
+        with self.assertRaises(UseCaseError) as ctx:
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertIn(item, str(ctx.exception))
+        self.assertEqual(wt.removed, [])
+        self.assertEqual(s.get_node(item).id, item)
+
+    def test_force_overrides_an_unreadable_worktree(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = UnreadableGitForRemove(fails="worktree_registered")
+        resp = RemoveNodeUseCase(s, workers, wt, git).execute(
+            RemoveNodeInput(id=item, force=True)
+        )
+        self.assertTrue(resp.worktree_removed)
+        self.assertEqual(wt.removed, [item])
+        with self.assertRaises(KeyError):
+            s.get_node(item)
 
     def test_stale_claim_does_not_block(self):
         s = FakeStore()
