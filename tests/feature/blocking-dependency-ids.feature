@@ -6,6 +6,14 @@ Feature: Blocking-dependency ids on the live read path
   meaning and value throughout - the blocking ids are additive, never a
   replacement for it.
 
+  A step with an unmet dependency is never claimed, by any role, and needs
+  no action taken on it to become claimable again: the instant its last
+  blocker closes, it is claimable. This holds whether it is held by one
+  dependency or several, and holds independently of the blocking ids and
+  count above - the two are meant to move together. A dependency-held step
+  also sits with ordinary queued work, not in the human's inbox, the same
+  as any other step waiting its turn.
+
   Scenario: A step blocked by one dependency names that dependency's id
     Given a step "blocked" needs a step "dep1"
     When "blocked" is read
@@ -37,3 +45,40 @@ Feature: Blocking-dependency ids on the live read path
     When "blocked" is read
     Then its blocking ids are empty
     And its dependency count is 0
+
+  @wip
+  Scenario: Nothing claims a step held by an unmet dependency, even for the role that would otherwise own it
+    Given a step "blocked", owned by the coder, needs a step "dep1"
+    Then "blocked" is not ready for the coder to claim
+    When the coder tries to claim the next step
+    Then nothing is claimed
+
+  @wip
+  Scenario: The moment a step's only dependency closes, the step becomes claimable with no action taken on the held step itself
+    Given a step "blocked", owned by the coder, needs a step "dep1"
+    And "dep1" is closed
+    Then "blocked" is ready for the coder to claim
+    When the coder claims the next step
+    Then "blocked" is the step claimed
+
+  @wip
+  Scenario: A step held by two dependencies is still un-claimable once only one has closed
+    Given a step "blocked", owned by the coder, needs steps "dep1" and "dep2"
+    And "dep1" is closed
+    Then "blocked" is not ready for the coder to claim
+    When the coder tries to claim the next step
+    Then nothing is claimed
+
+  @wip
+  Scenario: Closing the last of several dependencies releases the step for claiming
+    Given a step "blocked", owned by the coder, needs steps "dep1" and "dep2"
+    And "dep1" is closed
+    And "dep2" is closed
+    Then "blocked" is ready for the coder to claim
+    When the coder claims the next step
+    Then "blocked" is the step claimed
+
+  @wip
+  Scenario: A step held by a dependency sits with ordinary queued work, not in the human's inbox
+    Given a step "blocked" needs a step "dep1"
+    Then "blocked" belongs to the queue lane, not the inbox lane
