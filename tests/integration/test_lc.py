@@ -1059,6 +1059,25 @@ class TestLink(unittest.TestCase):
         self.assertEqual(arts[0].type, "brief")
         self.assertEqual(arts[0].value, "the brief's literal text")
 
+    def test_attach_spec_with_worktrees_segment_fails(self):
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
+        value = "/home/u/specs/.worktrees/LC-1-spec/widget/LC-1.md"
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "spec", value)
+        self.assertEqual(rc, 1)
+        self.assertIn(value, err)
+        self.assertEqual(self.store.item_artifacts(sid), [])
+
+    def test_attach_spec_with_mismatched_repo_directory_fails(self):
+        self.store.add_project("acme/widget", local_path=tempfile.mkdtemp())
+        self.store.add_project("acme/other", local_path=tempfile.mkdtemp())
+        sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
+        call(_cli_mod.cmd_attach, sid, "repo", "widget")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "spec", "other/LC-1.md")
+        self.assertEqual(rc, 1)
+        self.assertIn("other", err)
+        self.assertIn("acme/widget", err)
+        self.assertEqual([a.type for a in self.store.item_artifacts(sid)], ["repo"])
+
     def test_attach_without_value_or_file_fails(self):
         sid = self.store.create_item("item s", theme=self.store.create_theme("theme", workflow="lightcycle/spec-driven"))
         rc, out, err = call(_cli_mod.cmd_attach, sid, "brief")
@@ -1574,7 +1593,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
     def test_spec_writer_advances_to_the_spec_pr(self):
         item = self._item_with_brief()
         _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
-        call(_cli_mod.cmd_attach, item, "spec", "specs/X.md")
+        call(_cli_mod.cmd_attach, item, "spec", "widget/X.md")
         rc, out, err = call(_cli_mod.cmd_done, step_id.strip(), "done")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(out.strip()).step, "spec-open-pr")

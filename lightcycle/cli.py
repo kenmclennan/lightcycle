@@ -1158,12 +1158,16 @@ def cmd_attach(argv):
             ReflectInput(step=a.id, feedback=value)
         )
         return 0
-    LinkArtifactUseCase(_container.store).execute(
-        LinkArtifactInput(
-            item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace,
-            internal=a.internal, kind=a.kind,
+    try:
+        LinkArtifactUseCase(_container.store).execute(
+            LinkArtifactInput(
+                item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace,
+                internal=a.internal, kind=a.kind,
+            )
         )
-    )
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     return 0
 
 
