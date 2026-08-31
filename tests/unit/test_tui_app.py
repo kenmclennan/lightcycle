@@ -1320,3 +1320,22 @@ class TestBacklogFooter(unittest.TestCase):
         session.press("tab")
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
+
+
+class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
+    def _launch(self, store):
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        return session
+
+    def test_unchanged_priority_shape_still_takes_the_cheap_path_after_a_poll(self):
+        store = FakeStore()
+        store.create_step("queued", step="build", role="coder")
+        session = self._launch(store)
+
+        with patch.object(LightcycleApp, "_rebuild_table") as rebuild, \
+                patch.object(LightcycleApp, "_update_cells") as update:
+            session.run(session.app._refresh)
+            session.pause()
+            rebuild.assert_not_called()
+            update.assert_called_once()

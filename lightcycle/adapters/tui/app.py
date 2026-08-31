@@ -153,12 +153,15 @@ class BacklogTable(PagingTable):
 
 
 def _repaint_stacked_cursor(table, row_key, show) -> None:
-    variant_pair = getattr(table, "_stacked_variants", {}).get(row_key.value)
-    if variant_pair is None:
+    entry = getattr(table, "_stacked_rows", {}).get(row_key.value)
+    if entry is None:
         return
-    value = variant_pair[1] if show else variant_pair[0]
+    row, icon_override = entry
+    cells = table._stacked_cell_builder(
+        row, table._stacked_layout, table._stacked_row_budget, show, icon_override
+    )
     try:
-        table.update_cell(row_key, STACKED_COLUMN_KEY, value)
+        table.update_cell(row_key, STACKED_COLUMN_KEY, cells[0])
     except CellDoesNotExist:
         pass
 
@@ -183,6 +186,10 @@ def _backlog_row_cells(row, layout, row_budget, cursor=False):
     return (cursor_cell, row.id, project_cell, row.title)
 
 
+def _backlog_stacked_cell_builder(row, layout, row_budget, cursor, icon_override):
+    return _backlog_row_cells(row, layout, row_budget, cursor=cursor)
+
+
 class BacklogView(Vertical):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -190,6 +197,8 @@ class BacklogView(Vertical):
         self._floor = False
         self._total = 0
         self._project_filter = None
+        self._last_shape = None
+        self._backlog_needs_rebuild = False
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
@@ -209,11 +218,16 @@ class BacklogView(Vertical):
         table.show_header = False
 
     def apply_rows(self, rows, total, project_filter) -> None:
+        shape = (tuple(r.id for r in rows), total, project_filter)
+        self._render_filter_bar(project_filter, len(rows))
+        if shape == self._last_shape and not self._backlog_needs_rebuild:
+            self._update_cells(rows)
+        else:
+            self._rebuild_table(rows)
+            self._last_shape = shape
         self._rows = rows
         self._total = total
         self._project_filter = project_filter
-        self._render_filter_bar(project_filter, len(rows))
-        self._rebuild_table(rows)
         self._toggle_state(total, len(rows), project_filter)
 
     def refresh_column_width(self) -> None:
@@ -247,15 +261,18 @@ class BacklogView(Vertical):
     def _rebuild_table(self, rows) -> None:
         table = self.query_one(BacklogTable)
         if table.size.width == 0:
+            self._backlog_needs_rebuild = True
             return
         layout = self._layout(table)
         self._floor = bool(rows) and layout.floor
         floor_widget = self.query_one("#backlog-floor", Static)
         if self._floor:
+            self._backlog_needs_rebuild = True
             floor_widget.update(
                 Text(floor_message(layout, table, len(BACKLOG_COLUMNS)), style=COLOURS["dim"])
             )
             return
+        self._backlog_needs_rebuild = False
         selected_id = self._selected_row_id(table)
 
         table.clear(columns=True)
@@ -275,19 +292,34 @@ class BacklogView(Vertical):
         ids = [row.id for row in rows]
         new_index = ids.index(selected_id) if selected_id in ids else 0
         table._stacked_mode = layout.stacked
-        variants = {}
+        table._stacked_layout = layout
+        table._stacked_row_budget = row_budget
+        table._stacked_cell_builder = _backlog_stacked_cell_builder
+        stacked_rows = {}
         for index, row in enumerate(rows):
             is_cursor = index == new_index
             cells = _backlog_row_cells(row, layout, row_budget, cursor=is_cursor)
             if layout.stacked:
-                variants[row.id] = (
-                    _backlog_row_cells(row, layout, row_budget, cursor=False)[0],
-                    _backlog_row_cells(row, layout, row_budget, cursor=True)[0],
-                )
+                stacked_rows[row.id] = (row, None)
             table.add_row(*cells, height=None, key=row.id)
-        table._stacked_variants = variants
+        table._stacked_rows = stacked_rows
         if rows:
             table.move_cursor(row=new_index)
+
+    def _update_cells(self, rows) -> None:
+        table = self.query_one(BacklogTable)
+        layout = self._layout(table)
+        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        selected_id = self._selected_row_id(table)
+        for row in rows:
+            cells = _backlog_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
+            if layout.stacked:
+                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                continue
+            for key, value in zip(BACKLOG_COLUMNS, cells):
+                if key == "cursor":
+                    continue
+                table.update_cell(row.id, key, value)
 
     def _toggle_state(self, total, filtered_count, project_filter) -> None:
         overall_empty = total == 0
@@ -676,9 +708,6 @@ class LightcycleApp(App):
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
 
-        if isinstance(self.screen, NodeHubScreen):
-            self.screen.poll_refresh()
-
         running = PoolRunningUseCase(self._container.lock).execute().running
         breaker = BreakerStatusUseCase(self._container.breaker).execute()
         self.screen_stack[0].query_one(StatusBar).report(
@@ -826,6 +855,9 @@ class LightcycleApp(App):
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
         return (cursor_cell, icon_cell, row.id, project_cell, row.title + "\n ", step_cell, time_cell)
 
+    def _stacked_row_cell_builder(self, row, layout, row_budget, cursor, icon_override):
+        return self._row_cells(row, layout, row_budget, cursor=cursor, icon_override=icon_override)
+
     def _update_cells(self, table, rows) -> None:
         self._last_priority_rows = rows
         layout = self._priority_layout(table, rows)
@@ -947,23 +979,19 @@ class LightcycleApp(App):
                 new_index = min(max(self._selected_flat_index, 0), len(rows) - 1)
 
         table._stacked_mode = layout.stacked
+        table._stacked_layout = layout
+        table._stacked_row_budget = row_budget
+        table._stacked_cell_builder = self._stacked_row_cell_builder
         active_glyph = self._active_glyph_char()
-        variants = {}
+        stacked_rows = {}
         for index, row in enumerate(rows):
             is_cursor = index == new_index
             icon_override = active_glyph if row.group == "active" else None
             cells = self._row_cells(row, layout, row_budget, cursor=is_cursor, icon_override=icon_override)
             if layout.stacked:
-                variants[row.id] = (
-                    self._row_cells(
-                        row, layout, row_budget, cursor=False, icon_override=icon_override
-                    )[0],
-                    self._row_cells(
-                        row, layout, row_budget, cursor=True, icon_override=icon_override
-                    )[0],
-                )
+                stacked_rows[row.id] = (row, icon_override)
             table.add_row(*cells, height=None, key=row.id)
-        table._stacked_variants = variants
+        table._stacked_rows = stacked_rows
 
         self._selected_flat_index = new_index
         if rows:

@@ -3,6 +3,14 @@ from datetime import datetime
 
 from lightcycle.domain.work.log_line import LogKind, LogLine
 
+MAX_LOG_LINE_CHARS = 8000
+
+
+def _bounded(text):
+    if len(text) <= MAX_LOG_LINE_CHARS:
+        return text
+    return text[:MAX_LOG_LINE_CHARS] + " …[truncated]"
+
 
 def _content_text(content):
     if isinstance(content, list):
@@ -21,7 +29,7 @@ def _tool_use_text(block):
 
 def _tool_result_text(block):
     text = _content_text(block.get("content"))
-    return ("[error] " if block.get("is_error") else "") + text
+    return _bounded(("[error] " if block.get("is_error") else "") + text)
 
 
 def _result_event_text(event):
@@ -116,7 +124,7 @@ class LogLineParser:
             return [LogLine(ts, LogKind.RETRY, _rate_limit_text(event))]
         if t == "tool_progress":
             return [LogLine(ts, LogKind.PROGRESS, _tool_progress_text(event))]
-        return [LogLine(ts, LogKind.SYSTEM, raw_text)]
+        return [LogLine(ts, LogKind.SYSTEM, _bounded(raw_text))]
 
     def _assistant_lines(self, event, ts) -> list[LogLine]:
         lines = []
@@ -151,4 +159,4 @@ class LogLineParser:
             return [LogLine(ts, LogKind.SYSTEM, _SYSTEM_TEXT[subtype](event))]
         if subtype in _PROGRESS_TEXT:
             return [LogLine(ts, LogKind.PROGRESS, _PROGRESS_TEXT[subtype](event))]
-        return [LogLine(ts, LogKind.SYSTEM, raw_text)]
+        return [LogLine(ts, LogKind.SYSTEM, _bounded(raw_text))]

@@ -589,7 +589,9 @@ def _step_claimed_becomes_active(ctx):
 
 @when("one poll interval elapses")
 def _one_poll_interval(ctx):
-    ctx["session"].poll_tick()
+    session = ctx["session"]
+    session.run(session.app.screen.poll_refresh)
+    session.pause()
 
 
 @when("it renders in the hierarchy")
