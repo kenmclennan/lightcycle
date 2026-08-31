@@ -8,6 +8,7 @@ GLYPH_WIDTHS = {"cursor": 2, "icon": 4, "content": 2}
 ATOMIC_COLUMNS = frozenset({"id", "project", "step", "role", "type", "time"})
 FLEXIBLE_COLUMNS = frozenset({"title", "value"})
 FLEXIBLE_MINIMUM = 24
+STEP_PHRASE_BUDGET = 19
 
 
 def column_kind(name):
@@ -81,6 +82,12 @@ def floor_message(layout, table, num_columns):
     chrome = table.screen.outer_size.width - table.screen.size.width
     needed = layout.floor_width + padding + chrome
     return "Widen the terminal to at least %d columns to show this list." % needed
+
+
+def truncate_field(value, width):
+    if len(value) <= width:
+        return value
+    return value[: max(0, width - 1)] + "…"
 
 
 def pad_field(value, width):

@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.adapters.tui.priority_list import (
+    _active_row,
     _attention_row,
     _project,
     _queued_row,
@@ -55,7 +56,7 @@ class TestQueuedRowDependencyTieBreak(unittest.TestCase):
         expected = sorted([blocker_a, blocker_b])[0]
         other = blocker_b if expected == blocker_a else blocker_a
 
-        row = _queued_row(store, node)
+        row = _queued_row(store, node, _FLOW)
 
         self.assertIn(expected, row.step)
         self.assertNotIn(other, row.step)
@@ -102,6 +103,73 @@ class TestAttentionRow(unittest.TestCase):
         self.assertEqual(row.icon, "▲")
         self.assertEqual(row.icon_colour, "red")
         self.assertEqual(row.step, "stuck · %s" % node.step)
+
+
+_FLOW_WITH_DISPLAY = flow_from_metas(
+    {
+        "coder": {
+            "model": "sonnet", "step": "build", "display": "Coding",
+            "routes": {"done": "review"},
+        },
+        "ready-merge": {
+            "step": "ready-merge", "display": "Review the PR",
+            "routes": {"merged": "cleanup", "changes": "build"},
+        },
+    }
+)
+
+
+class TestAttentionRowDisplayPhrase(unittest.TestCase):
+    def test_a_gate_shows_its_declared_display_phrase(self):
+        store = FakeStore()
+        step = store.create_step("await merge", step="ready-merge", role="human")
+        node = store.get_node(step)
+
+        row = _attention_row(store, node, _FLOW_WITH_DISPLAY)
+
+        self.assertEqual(row.step, "Review the PR")
+
+    def test_an_escalation_carries_its_declared_display_phrase_in_the_stuck_prefix(self):
+        store = FakeStore()
+        step = store.create_step("stuck build", step="build", role="human")
+        node = store.get_node(step)
+
+        row = _attention_row(store, node, _FLOW_WITH_DISPLAY)
+
+        self.assertEqual(row.step, "stuck · Coding")
+
+
+class TestActiveRowDisplayPhrase(unittest.TestCase):
+    def test_shows_its_declared_display_phrase(self):
+        store = FakeStore()
+        step = store.create_step("building", step="build", role="coder")
+        node = store.get_node(step)
+
+        row = _active_row(store, node, "now", _FLOW_WITH_DISPLAY)
+
+        self.assertEqual(row.step, "Coding")
+
+
+class TestQueuedRowDisplayPhrase(unittest.TestCase):
+    def test_shows_its_declared_display_phrase(self):
+        store = FakeStore()
+        step = store.create_step("queued build", step="build", role="coder")
+        node = store.get_node(step)
+
+        row = _queued_row(store, node, _FLOW_WITH_DISPLAY)
+
+        self.assertEqual(row.step, "Coding")
+
+    def test_a_blocked_row_shows_the_blockers_id_not_the_declared_phrase(self):
+        store = FakeStore()
+        blocker = store.create_step("blocker", step="ready-merge", role="human")
+        blocked = store.create_step("blocked", step="build", role="coder", deps=[blocker])
+        node = store.get_node(blocked)
+
+        row = _queued_row(store, node, _FLOW_WITH_DISPLAY)
+
+        self.assertEqual(row.step, "blocked · %s" % blocker)
+        self.assertNotIn("Coding", row.step)
 
 
 class FixedFlowService:

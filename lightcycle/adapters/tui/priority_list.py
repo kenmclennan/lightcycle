@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace
 
 from lightcycle.adapters.tui.design_system import DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
+from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.work import Item
@@ -30,10 +31,18 @@ def _elapsed_text(store, node, now):
     return format_elapsed(delta.total_seconds()) if delta is not None else ""
 
 
+def _resolved_step(node, flow):
+    if not node.step:
+        return ""
+    phrase = flow.display_of(node.step)
+    return truncate_field(phrase, STEP_PHRASE_BUDGET) if phrase else node.step
+
+
 def _attention_row(store, node, flow):
     kind, _ = node.classify_for_human(flow)
     escalation = kind == "blocked"
     glyph = STATE_GLYPHS["escalation"] if escalation else STATE_GLYPHS["gate"]
+    step = _resolved_step(node, flow)
     return PriorityRow(
         id=node.id,
         group="attention",
@@ -42,13 +51,13 @@ def _attention_row(store, node, flow):
         dependency_icon="",
         project=_project(store, node),
         title=node.title,
-        step="stuck · %s" % node.step if escalation else (node.step or ""),
+        step="stuck · %s" % step if escalation else step,
         step_colour="amber",
         time="",
     )
 
 
-def _active_row(store, node, now):
+def _active_row(store, node, now, flow):
     glyph = STATE_GLYPHS["active"]
     return PriorityRow(
         id=node.id,
@@ -58,13 +67,13 @@ def _active_row(store, node, now):
         dependency_icon="",
         project=_project(store, node),
         title=node.title,
-        step=node.step or "",
+        step=_resolved_step(node, flow),
         step_colour="dim",
         time=_elapsed_text(store, node, now),
     )
 
 
-def _queued_row(store, node):
+def _queued_row(store, node, flow):
     glyph = STATE_GLYPHS["queued"]
     if node.blocked_by:
         blocker_id = sorted(node.blocked_by)[0]
@@ -88,7 +97,7 @@ def _queued_row(store, node):
         dependency_icon="",
         project=_project(store, node),
         title=node.title,
-        step=node.step or "",
+        step=_resolved_step(node, flow),
         step_colour="dim",
         time="",
     )
@@ -105,9 +114,9 @@ def build_priority_rows(store, lanes, now, flow_service):
     )
     for group_rows, nodes_and_row in (
         (attention, [(n, _attention_row(store, n, flow)) for n, flow in inbox]),
-        (active, [(n, _active_row(store, n, now)) for n in lanes["active"]]),
-        (queued, [(n, _queued_row(store, n)) for n in runnable]
-         + [(n, _queued_row(store, n)) for n in held]),
+        (active, [(n, _active_row(store, n, now, flow_service.flow_for(n))) for n in lanes["active"]]),
+        (queued, [(n, _queued_row(store, n, flow_service.flow_for(n))) for n in runnable]
+         + [(n, _queued_row(store, n, flow_service.flow_for(n))) for n in held]),
     ):
         for node, row in nodes_and_row:
             owning_id = node.parent or node.id

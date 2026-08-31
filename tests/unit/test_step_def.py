@@ -12,6 +12,7 @@ class TestStepDef(unittest.TestCase):
         self.assertIsNone(sd.ci_cap)
         self.assertEqual(sd.hooks, frozenset())
         self.assertIsNone(sd.primary)
+        self.assertIsNone(sd.display)
 
     def test_ci_cap_holds_outcome_n_target(self):
         cap = CiCap("ci-failed", 3, "review-ci")
@@ -27,6 +28,17 @@ class TestPhase(unittest.TestCase):
     def test_flow_phase_of_is_none_when_undeclared(self):
         self.assertIsNone(Flow({"s": StepDef()}).phase_of("s"))
         self.assertIsNone(Flow({}).phase_of("missing"))
+
+
+class TestDisplay(unittest.TestCase):
+    def test_flow_display_of_returns_the_declared_phrase(self):
+        flow = Flow({"s": StepDef(display="Writing the spec"), "c": StepDef(display="Coding")})
+        self.assertEqual(flow.display_of("s"), "Writing the spec")
+        self.assertEqual(flow.display_of("c"), "Coding")
+
+    def test_flow_display_of_is_none_when_undeclared(self):
+        self.assertIsNone(Flow({"s": StepDef()}).display_of("s"))
+        self.assertIsNone(Flow({}).display_of("missing"))
 
 
 class TestConflictTransition(unittest.TestCase):

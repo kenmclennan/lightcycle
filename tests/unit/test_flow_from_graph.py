@@ -132,3 +132,34 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_primary_outcome_absent_by_default(self):
         self.assertIsNone(self.flow.primary_outcome("review"))
+
+    def test_display_of_absent_by_default(self):
+        self.assertIsNone(self.flow.display_of("build"))
+
+
+DISPLAY_GRAPH_TEXT = """
+entry: build
+
+nodes:
+  build   coder
+  review  reviewer
+
+edges:
+  build   done  review
+
+display:
+  build   Coding
+  review  Review the PR
+"""
+
+
+class TestFlowDisplayOf(unittest.TestCase):
+    def setUp(self):
+        self.flow = Flow.from_graph(parse_graph(DISPLAY_GRAPH_TEXT), STEP_METAS)
+
+    def test_returns_the_declared_phrase(self):
+        self.assertEqual(self.flow.display_of("build"), "Coding")
+        self.assertEqual(self.flow.display_of("review"), "Review the PR")
+
+    def test_returns_none_for_a_stage_with_no_declared_phrase(self):
+        self.assertIsNone(self.flow.display_of("audit"))

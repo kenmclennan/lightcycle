@@ -54,8 +54,8 @@ from lightcycle.application.work import (
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.work import (
-    Item, LogKind, State, display_role, has_content, landing_tab, row_bucket, type_label,
-    viewable_artifacts,
+    Item, LogKind, State, display_role, display_stage, has_content, landing_tab, row_bucket,
+    type_label, viewable_artifacts,
 )
 
 POLL_INTERVAL_SECONDS = 10
@@ -168,7 +168,7 @@ class HeaderData:
     item_count_line: Optional[str] = None
 
 
-def build_header(store, node, now):
+def build_header(store, node, now, flow_service):
     if node.type == "theme":
         count = sum(1 for child in store.children(node.id) if child.type == "item")
         item_count_line = "theme · %d item%s underneath" % (count, "" if count == 1 else "s")
@@ -181,11 +181,11 @@ def build_header(store, node, now):
         )
     project = project_label(store, node) or None
     if node.type == "item":
-        return _item_header(store, node, now, project)
+        return _item_header(store, node, now, project, flow_service)
     return _step_header(store, node, now, project)
 
 
-def _item_header(store, node, now, project):
+def _item_header(store, node, now, project, flow_service):
     theme_line = None
     if node.parent:
         theme = store.get_node(node.parent)
@@ -206,7 +206,7 @@ def _item_header(store, node, now, project):
                 escalation_target = sorted(cur.blocked_by)[0]
                 escalation_text = "Blocked · depends on %s" % escalation_target
             else:
-                step_field = cur.step
+                step_field = display_stage(flow_service.display_for(cur), cur.step)
                 if cur.role == "human":
                     if cur.needs:
                         escalation_text = cur.needs
@@ -281,12 +281,20 @@ def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None):
     return content_so_far + pad_field_right(role_cell, role_area)
 
 
-def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None):
+def _hierarchy_label(node, flow_service):
+    if node.type != "step":
+        return node.title
+    if flow_service is None:
+        return node.step
+    return flow_service.display_for(node) or node.step
+
+
+def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None, flow_service=None):
     node = row.node
     if layout is not None and layout.stacked:
         first_line = _hierarchy_stacked_first_line(row, layout, row_budget, active_frame)
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
-        label = node.step if node.type == "step" else node.title
+        label = _hierarchy_label(node, flow_service)
         return (stacked_cell(first_line, indent, label, row_budget),)
     glyph = _display_glyph(node, active_frame)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
@@ -297,7 +305,7 @@ def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None):
     content_cell = (
         Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else ""
     )
-    title_cell = ("  " * row.depth) + (node.step if node.type == "step" else node.title)
+    title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service)
     role_cell = Text(display_role(node.role), style=COLOURS["dim"]) if node.type == "step" else ""
     return (icon_cell, content_cell, node.id, title_cell, role_cell)
 
@@ -819,6 +827,7 @@ class NodeHubScreen(Screen):
         self._hierarchy_stacked = False
         self._hierarchy_layout_cache = None
         self._hierarchy_row_budget_cache = None
+        self._flow_service = None
         self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
         self._active_glyph_timer = None
         self._poll_timer = None
@@ -1003,7 +1012,8 @@ class NodeHubScreen(Screen):
     def _refresh(self, initial) -> None:
         store = self._container.store
         node = store.get_node(self._node_id)
-        header = build_header(store, node, self._now().isoformat())
+        self._flow_service = self._container.flow_service()
+        header = build_header(store, node, self._now().isoformat(), self._flow_service)
         self.query_one(HubHeader).update(header)
         rows = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id)).rows
         self._render_hierarchy(rows, initial)
@@ -1126,7 +1136,10 @@ class NodeHubScreen(Screen):
         active_frame = self._active_glyph_char()
         for row in rows:
             table.add_row(
-                *hierarchy_row_cells(row, layout, row_budget, active_frame=active_frame),
+                *hierarchy_row_cells(
+                    row, layout, row_budget, active_frame=active_frame,
+                    flow_service=self._flow_service,
+                ),
                 height=None, key=row.node.id
             )
 
@@ -1143,7 +1156,10 @@ class NodeHubScreen(Screen):
         self._hierarchy_row_budget_cache = row_budget
         active_frame = self._active_glyph_char()
         for row in rows:
-            cells = hierarchy_row_cells(row, layout, row_budget, active_frame=active_frame)
+            cells = hierarchy_row_cells(
+                row, layout, row_budget, active_frame=active_frame,
+                flow_service=self._flow_service,
+            )
             if layout.stacked:
                 table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
                 continue
@@ -1186,7 +1202,9 @@ class NodeHubScreen(Screen):
             row = rows_by_id.get(node_id)
             if row is None:
                 continue
-            cells = hierarchy_row_cells(row, layout, row_budget, active_frame=frame)
+            cells = hierarchy_row_cells(
+                row, layout, row_budget, active_frame=frame, flow_service=self._flow_service,
+            )
             try:
                 if layout.stacked:
                     table.update_cell(node_id, STACKED_COLUMN_KEY, cells[0])

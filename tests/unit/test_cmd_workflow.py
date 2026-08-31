@@ -359,6 +359,21 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertEqual(out, expected)
         self.assertNotIn("flowchart", out)
 
+    def test_describe_resolves_each_steps_display_phrase(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        container = FakeContainer(self.source, self.store)
+        display_graph_text = GRAPH_TEXT + "\ndisplay:\n  build  Coding\n  review  Review the PR\n"
+        container.fs = FakeFs(metas=STEP_METAS, workflows={"build": display_graph_text})
+        cli.set_container(container)
+        rc, out, err = call(cli.cmd_workflow, "describe", "acme/build@sha1")
+        self.assertEqual(rc, 0)
+        flow = Flow.from_graph(parse_graph(display_graph_text), STEP_METAS)
+        self.assertIn("Coding · build", out)
+        self.assertIn("Review the PR · review", out)
+        for step in flow.steps():
+            if flow.display_of(step) is None:
+                self.assertIn(step, out)
+
     def test_describe_mermaid_flag_prints_diagram(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         container = FakeContainer(self.source, self.store)

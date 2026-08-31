@@ -15,6 +15,7 @@ class FlowService:
         self._store = store
         self._config = config
         self._workflow_source = workflow_source
+        self._graph_cache = {}
 
     def _default_pin(self):
         origin = self._config.default_origin()
@@ -70,12 +71,19 @@ class FlowService:
 
     def _graph_and_root(self, name):
         wfname, root = self._resolve(name)
+        cache_key = (wfname, root)
+        if cache_key in self._graph_cache:
+            return self._graph_cache[cache_key]
         text = self._fs.workflow_text(wfname, root)
         if text is None:
             if wfname is None:
-                return parse_graph(""), root
-            raise ValueError("workflow %r not found" % name)
-        return parse_graph(text), root
+                result = parse_graph(""), root
+            else:
+                raise ValueError("workflow %r not found" % name)
+        else:
+            result = parse_graph(text), root
+        self._graph_cache[cache_key] = result
+        return result
 
     def _role_metas_in(self, root):
         return {
@@ -167,6 +175,13 @@ class FlowService:
             return None
         stage = node.step if getattr(node, "type", None) == "step" else None
         return graph.phase_for(stage) if stage else None
+
+    def display_for(self, node):
+        graph = self._graph_for_node(node)
+        if graph is None:
+            return None
+        stage = node.step if getattr(node, "type", None) == "step" else None
+        return graph.display_for(stage) if stage else None
 
     def workspace_for_phase(self, node, phase):
         graph = self._graph_for_node(node)

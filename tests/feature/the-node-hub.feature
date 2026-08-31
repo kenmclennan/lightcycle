@@ -41,7 +41,6 @@ Feature: The node hub
     When I open it with Enter or →
     Then the header names "write-code" as the current step
 
-  @wip
   Scenario: The header shows the current step's declared display phrase alongside its stage name
     Given an item at step "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage
     When I open it with Enter or →
