@@ -371,7 +371,7 @@ class TestLastPushTime(unittest.TestCase):
         args = mock_run.call_args.args[0]
         jq = _jq_arg(mock_run)
         self.assertEqual(jq, ".[-1].commit.committer.date // empty")
-        self.assertIn("-r", args)
+        self.assertNotIn("-r", args)
 
     def test_populated_commit_returns_parsed_timestamp(self):
         with patch(
