@@ -421,9 +421,22 @@ def cmd_show(argv):
     a = ap.parse_args(argv)
     view = ShowNodeUseCase(_container.store).execute(ShowNodeInput(step=a.id)).view
     out = view.as_dict()
-    skill = _flow().step_skill(view.step)
+    flow = _flow()
+    skill = flow.step_skill(view.step)
     if skill:
         out["skill"] = skill
+    selector, source = flow.workflow_owner(view.step)
+    out["workflow_resolved"] = None
+    out["workflow_source"] = source
+    out["workflow_error"] = None
+    if selector is not None:
+        try:
+            pin = flow.resolve_selection(selector)
+            flow.load_graph(pin)
+        except ValueError as e:
+            out["workflow_error"] = str(e)
+        else:
+            out["workflow_resolved"] = pin
     print(json.dumps(out, indent=2))
     return 0
 
@@ -1101,6 +1114,7 @@ def cmd_set(argv):
         return 1
     workflow_pin = a.workflow
     resolved_pin = None
+    shadowed_by = []
     if a.workflow:
         try:
             node = _container.store.get_node(a.id)
@@ -1108,12 +1122,14 @@ def cmd_set(argv):
             sys.stderr.write("unknown node '%s'\n" % a.id)
             return 1
         try:
-            resp = ResolveWorkflowSelectionUseCase(_flow()).execute(
-                ResolveWorkflowSelectionInput(node_type=node.type, selector=a.workflow))
+            resp = ResolveWorkflowSelectionUseCase(_flow(), _container.store).execute(
+                ResolveWorkflowSelectionInput(
+                    node_id=node.id, node_type=node.type, selector=a.workflow))
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
         workflow_pin = resp.value
+        shadowed_by = resp.shadowed_by
         if resp.resolved:
             resolved_pin = resp.value
     if a.label:
@@ -1125,6 +1141,11 @@ def cmd_set(argv):
         print(tid)
     if resolved_pin:
         print(resolved_pin)
+    if shadowed_by:
+        sys.stderr.write(
+            "%d descendant(s) already have their own pin and will not follow this: %s\n"
+            % (len(shadowed_by), ", ".join(sorted(shadowed_by)))
+        )
     if a.backlog:
         try:
             link_resolves(_container.store, tid, a.backlog)

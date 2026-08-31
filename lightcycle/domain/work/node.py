@@ -58,5 +58,5 @@ class Node:
             "blocked_by": self.blocked_by,
             "notes": self.notes, "theme": self.theme, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
-            "model": self.model,
+            "model": self.model, "workflow": self.workflow,
         }

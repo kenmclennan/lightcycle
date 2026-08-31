@@ -38,3 +38,27 @@ class TestWorkflowFor(unittest.TestCase):
         s = FakeStore()
         step = self._task_under(s)
         self.assertIsNone(svc(s).workflow_for(step))
+
+
+class TestWorkflowOwner(unittest.TestCase):
+    def _task_under(self, store, *, epic_workflow=None, story_workflow=None):
+        theme = store.create_theme("e", workflow=epic_workflow)
+        item = store.create_item("st", theme=theme, workflow=story_workflow)
+        tid = store.create_step("build: x", step="build", parent=item)
+        return store.get_node(tid), theme, item
+
+    def test_inherited_from_theme_reports_the_theme_as_owner(self):
+        s = FakeStore()
+        step, theme, _item = self._task_under(s, epic_workflow="poc")
+        self.assertEqual(svc(s).workflow_owner(step), ("poc", theme))
+
+    def test_own_item_workflow_reports_the_item_as_owner(self):
+        s = FakeStore()
+        step, _theme, item = self._task_under(
+            s, epic_workflow="standard", story_workflow="gherkin")
+        self.assertEqual(svc(s).workflow_owner(step), ("gherkin", item))
+
+    def test_unset_returns_no_selector_and_no_owner(self):
+        s = FakeStore()
+        step, _theme, _item = self._task_under(s)
+        self.assertEqual(svc(s).workflow_owner(step), (None, None))

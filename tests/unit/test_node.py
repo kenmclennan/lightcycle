@@ -15,5 +15,16 @@ class TestNodeSlots(unittest.TestCase):
         self.assertEqual(node.state, State.DONE)
 
 
+class TestNodeAsDictWorkflow(unittest.TestCase):
+    def test_unset_workflow_is_an_explicit_null_not_a_missing_key(self):
+        out = Node(id="x").as_dict()
+        self.assertIn("workflow", out)
+        self.assertIsNone(out["workflow"])
+
+    def test_set_workflow_round_trips_as_the_pin(self):
+        out = Node(id="x", workflow="lightcycle/solo@abc123").as_dict()
+        self.assertEqual(out["workflow"], "lightcycle/solo@abc123")
+
+
 if __name__ == "__main__":
     unittest.main()
