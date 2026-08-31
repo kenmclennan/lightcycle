@@ -46,14 +46,12 @@ Feature: Blocking-dependency ids on the live read path
     Then its blocking ids are empty
     And its dependency count is 0
 
-  @wip
   Scenario: Nothing claims a step held by an unmet dependency, even for the role that would otherwise own it
     Given a step "blocked", owned by the coder, needs a step "dep1"
     Then "blocked" is not ready for the coder to claim
     When the coder tries to claim the next step
     Then nothing is claimed
 
-  @wip
   Scenario: The moment a step's only dependency closes, the step becomes claimable with no action taken on the held step itself
     Given a step "blocked", owned by the coder, needs a step "dep1"
     And "dep1" is closed
@@ -61,7 +59,6 @@ Feature: Blocking-dependency ids on the live read path
     When the coder claims the next step
     Then "blocked" is the step claimed
 
-  @wip
   Scenario: A step held by two dependencies is still un-claimable once only one has closed
     Given a step "blocked", owned by the coder, needs steps "dep1" and "dep2"
     And "dep1" is closed
@@ -69,7 +66,6 @@ Feature: Blocking-dependency ids on the live read path
     When the coder tries to claim the next step
     Then nothing is claimed
 
-  @wip
   Scenario: Closing the last of several dependencies releases the step for claiming
     Given a step "blocked", owned by the coder, needs steps "dep1" and "dep2"
     And "dep1" is closed
@@ -78,7 +74,6 @@ Feature: Blocking-dependency ids on the live read path
     When the coder claims the next step
     Then "blocked" is the step claimed
 
-  @wip
   Scenario: A step held by a dependency sits with ordinary queued work, not in the human's inbox
     Given a step "blocked" needs a step "dep1"
     Then "blocked" belongs to the queue lane, not the inbox lane
