@@ -3,6 +3,7 @@ from typing import List
 
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.domain.pool.worker_session import saw_terminal_command
+from lightcycle.ports.git import GitReadError
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,11 @@ class SweepUseCase:
         path = self._worktrees.worktree_path(item)
         if not self._git.is_git_repo(path):
             return None
-        if not self._git.has_uncommitted(path):
+        try:
+            dirty = self._git.has_uncommitted(path)
+        except GitReadError:
+            return False
+        if not dirty:
             return None
         message = "wip: preserved %s on reclaim" % t.id
         return self._git.commit_all(path, message)

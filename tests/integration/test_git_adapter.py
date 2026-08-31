@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.ports.git import GitReadError
 
 
 def _git(root, *args):
@@ -35,6 +36,39 @@ class TestGitAdapterRemoteUrl(unittest.TestCase):
         adapter = GitAdapter()
 
         self.assertIsNone(adapter.remote_url(repo))
+
+    def test_raises_when_the_repo_cannot_be_read(self):
+        not_a_repo = tempfile.mkdtemp()
+        adapter = GitAdapter()
+
+        with self.assertRaises(GitReadError):
+            adapter.remote_url(not_a_repo)
+
+
+class TestGitAdapterUnreadableWorktree(unittest.TestCase):
+    def test_has_uncommitted_raises_when_the_repo_cannot_be_read(self):
+        not_a_repo = tempfile.mkdtemp()
+
+        with self.assertRaises(GitReadError):
+            GitAdapter().has_uncommitted(not_a_repo)
+
+    def test_worktree_registered_raises_when_the_repo_cannot_be_read(self):
+        not_a_repo = tempfile.mkdtemp()
+
+        with self.assertRaises(GitReadError):
+            GitAdapter().worktree_registered(not_a_repo, os.path.join(not_a_repo, "wt"))
+
+    def test_branch_exists_raises_when_the_repo_cannot_be_read(self):
+        not_a_repo = tempfile.mkdtemp()
+
+        with self.assertRaises(GitReadError):
+            GitAdapter().branch_exists(not_a_repo, "main")
+
+    def test_common_dir_raises_when_the_repo_cannot_be_read(self):
+        not_a_repo = tempfile.mkdtemp()
+
+        with self.assertRaises(GitReadError):
+            GitAdapter().common_dir(not_a_repo)
 
 
 def _bare_origin():

@@ -2,6 +2,8 @@ import os
 import re
 from collections import namedtuple
 
+from lightcycle.ports.git import GitReadError
+
 
 ScanCandidate = namedtuple(
     "ScanCandidate",
@@ -51,7 +53,13 @@ class ScanProjectsUseCase:
         return candidates
 
     def _candidate(self, path):
-        remote = self._git.remote_url(path)
+        try:
+            remote = self._git.remote_url(path)
+        except GitReadError:
+            return ScanCandidate(
+                identity=None, path=path, shortcode=None, status="unreadable", remote=None,
+                registered_path=None, registered_shortcode=None,
+            )
         identity = _identity_from_remote(remote)
         if identity is None:
             return ScanCandidate(

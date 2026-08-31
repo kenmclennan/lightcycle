@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.pool import WorkerPool
+from lightcycle.ports.git import GitReadError
 
 _STRUCTURAL_TYPES = ("item", "theme")
 
@@ -70,11 +71,18 @@ class RemoveNodeUseCase:
                 "- stop the pool or sweep first" % (node.id, live)
             )
 
-        if node.type == "item" and not input.force and self._worktree_dirty(node.id):
-            raise UseCaseError(
-                "refusing to delete %s: worktree has uncommitted changes "
-                "- commit or discard, or use --force" % node.id
-            )
+        if node.type == "item" and not input.force:
+            try:
+                dirty = self._worktree_dirty(node.id)
+            except GitReadError as e:
+                raise UseCaseError(
+                    "refusing to delete %s: could not verify worktree state - %s" % (node.id, e)
+                )
+            if dirty:
+                raise UseCaseError(
+                    "refusing to delete %s: worktree has uncommitted changes "
+                    "- commit or discard, or use --force" % node.id
+                )
 
         worktree_removed = False
         if node.type == "item":

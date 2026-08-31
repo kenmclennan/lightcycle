@@ -91,6 +91,15 @@ class TestAddProject(unittest.TestCase):
         self.assertEqual(r.local_path, "/does/not/exist")
         self.assertIsNone(r.remote)
 
+    def test_registers_a_project_with_a_path_that_exists_but_is_not_a_git_repo(self):
+        config, fs, _ = _env()
+        not_a_repo = tempfile.mkdtemp()
+        r = AddProjectUseCase(_store(config), GitAdapter(), config, fs).execute(
+            AddProjectInput(identity="acme/ghost", path=not_a_repo)
+        )
+        self.assertEqual(r.local_path, not_a_repo)
+        self.assertIsNone(r.remote)
+
     def test_refuses_an_identity_without_owner_slash_name_shape(self):
         config, fs, _ = _env()
         with self.assertRaises(UseCaseError) as ctx:

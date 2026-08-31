@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from lightcycle.ports.git import GitPort
+from lightcycle.ports.git import GitPort, GitReadError
 
 
 def git(root, *args):
@@ -22,6 +22,8 @@ def is_repo_root(root):
 
 
 def remote_url(root):
+    if not is_git_repo(root):
+        raise GitReadError("cannot read remote: %s is not a readable git repo" % root)
     proc = git(root, "remote", "get-url", "origin")
     if proc.returncode != 0:
         return None
@@ -29,6 +31,8 @@ def remote_url(root):
 
 
 def branch_exists(root, branch):
+    if not is_git_repo(root):
+        raise GitReadError("cannot check branch %r: %s is not a readable git repo" % (branch, root))
     return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch)
 
 
@@ -96,7 +100,7 @@ def delete_remote_branch(root, branch):
 def worktree_registered(root, path):
     proc = git(root, "worktree", "list", "--porcelain")
     if proc.returncode != 0:
-        return False
+        raise GitReadError("git worktree list failed in %s: %s" % (root, proc.stderr.strip()))
     want = os.path.realpath(path)
     for line in proc.stdout.splitlines():
         if line.startswith("worktree ") and os.path.realpath(line[len("worktree ") :]) == want:
@@ -105,7 +109,10 @@ def worktree_registered(root, path):
 
 
 def has_uncommitted(root):
-    return git(root, "status", "--porcelain").stdout.strip() != ""
+    proc = git(root, "status", "--porcelain")
+    if proc.returncode != 0:
+        raise GitReadError("git status failed in %s: %s" % (root, proc.stderr.strip()))
+    return proc.stdout.strip() != ""
 
 
 def commit_all(root, message):
@@ -116,7 +123,9 @@ def commit_all(root, message):
 def common_dir(root):
     proc = git(root, "rev-parse", "--git-common-dir")
     if proc.returncode != 0:
-        return None
+        raise GitReadError(
+            "git rev-parse --git-common-dir failed in %s: %s" % (root, proc.stderr.strip())
+        )
     path = proc.stdout.strip()
     if not os.path.isabs(path):
         path = os.path.join(root, path)

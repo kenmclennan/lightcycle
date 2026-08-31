@@ -976,6 +976,16 @@ class TestProjectScanCli(unittest.TestCase):
         self.assertEqual(data[0]["identity"], "acme/found")
         self.assertEqual(data[0]["status"], "new")
 
+    def test_scan_reports_an_unreadable_repo_on_its_own_line(self):
+        tree = tempfile.mkdtemp()
+        broken = os.path.join(tree, "broken")
+        os.makedirs(os.path.join(broken, ".git"))
+
+        rc, out, err = call(_cli_mod.cmd_project, "scan", tree)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("unreadable\t%s" % broken, out)
+        self.assertNotIn("new\t", out)
+
 
 class TestArtifacts(unittest.TestCase):
     def setUp(self):

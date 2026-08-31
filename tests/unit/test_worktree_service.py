@@ -5,6 +5,7 @@ import unittest
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -95,7 +96,7 @@ class _GitResult:
 
 class _FakeGit:
     def __init__(self, git_repos=(), sync_result=True, base=None, registered=(), branches=(),
-                 clone_result=True, sync_default_result=True):
+                 clone_result=True, sync_default_result=True, raises=()):
         self._git_repos = set(git_repos)
         self.calls = []
         self._sync_result = sync_result
@@ -104,6 +105,7 @@ class _FakeGit:
         self._branches = set(branches)
         self._clone_result = clone_result
         self._sync_default_result = sync_default_result
+        self._raises = set(raises)
 
     def is_git_repo(self, path):
         self.calls.append(("is_git_repo", path))
@@ -127,10 +129,16 @@ class _FakeGit:
 
     def branch_exists(self, root, branch):
         self.calls.append(("branch_exists", root, branch))
+        if "branch_exists" in self._raises:
+            raise GitReadError("git rev-parse failed in %s: fatal: not a git repository" % root)
         return (root, branch) in self._branches
 
     def worktree_registered(self, root, path):
         self.calls.append(("worktree_registered", root, path))
+        if "worktree_registered" in self._raises:
+            raise GitReadError(
+                "git worktree list failed in %s: fatal: not a git repository" % root
+            )
         return path in self._registered
 
     def git(self, root, *args):
@@ -139,6 +147,10 @@ class _FakeGit:
 
     def common_dir(self, root):
         self.calls.append(("common_dir", root))
+        if "common_dir" in self._raises:
+            raise GitReadError(
+                "git rev-parse --git-common-dir failed in %s: fatal: not a git repository" % root
+            )
         return os.path.join(root, ".git")
 
     def remove_worktree(self, root, path):
@@ -586,6 +598,46 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         svc.ensure(item)
 
         self.assertIn(("sync_to_origin", target), git.calls)
+
+    def test_ensure_proceeds_to_add_a_worktree_when_worktree_registered_is_unreadable(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = _FakeGit(
+            git_repos={target}, sync_result=True, base="origin/main",
+            branches={(target, self.store.get_node(item).id)}, raises={"worktree_registered"},
+        )
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+
+        svc.ensure(item)
+
+        kinds = [c[0] for c in git.calls]
+        self.assertIn("worktree_registered", kinds)
+        self.assertIn("git", kinds)
+
+    def test_ensure_treats_an_unreadable_branch_exists_as_a_new_branch(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = _FakeGit(
+            git_repos={target}, sync_result=True, base="origin/main", raises={"branch_exists"},
+        )
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+
+        svc.ensure(item)
+
+        kinds = [c[0] for c in git.calls]
+        self.assertIn("sync_to_origin", kinds)
+        self.assertIn("worktree_base", kinds)
+
+    def test_ensure_raises_when_common_dir_is_unreadable(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = _FakeGit(
+            git_repos={target}, sync_result=True, base="origin/main", raises={"common_dir"},
+        )
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+
+        with self.assertRaises(UseCaseError):
+            svc.ensure(item)
 
 
 class TestSyncSpecs(unittest.TestCase):

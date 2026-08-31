@@ -19,6 +19,7 @@ from lightcycle.application.pool import (
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.pool import Breaker
+from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -91,16 +92,19 @@ class FakeWorktrees:
 
 
 class FakeCaptureGit:
-    def __init__(self, dirty=(), non_git=(), fail=()):
+    def __init__(self, dirty=(), non_git=(), fail=(), unreadable=()):
         self._dirty = set(dirty)
         self._non_git = set(non_git)
         self._fail = set(fail)
+        self._unreadable = set(unreadable)
         self.commits = []
 
     def is_git_repo(self, root):
         return root not in self._non_git
 
     def has_uncommitted(self, root):
+        if root in self._unreadable:
+            raise GitReadError("git status failed in %s: fatal: not a git repository" % root)
         return root in self._dirty
 
     def commit_all(self, root, message):
@@ -421,6 +425,24 @@ class TestSweep(unittest.TestCase):
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
         git = FakeCaptureGit(dirty={"/worktrees/%s" % item}, fail={"/worktrees/%s" % item})
+
+        result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
+            now=1000, max_boot=120, stall_seconds=1800
+        )
+
+        self.assertEqual(result.swept, [step])
+        self.assertEqual(result.preserved, [])
+        self.assertEqual(result.capture_failed, [step])
+        self.assertEqual(s.get_node(step).state, "ready")
+
+    def test_an_unreadable_worktree_is_reported_as_a_capture_failure_not_a_silent_skip(self):
+        s = FakeStore()
+        item = s.create_item("feature", theme=s.create_theme("theme"))
+        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
+        git = FakeCaptureGit(unreadable={"/worktrees/%s" % item})
 
         result = SweepUseCase(s, workers, worktrees=worktrees, git=git).execute(
             now=1000, max_boot=120, stall_seconds=1800
