@@ -353,7 +353,7 @@ FINDINGS_TEXT = (
     "FINDING 1: Recurring missed version bump causes avoidable review-reject/rework cycles.\n"
     "The version-bump CI gate was missed by build/implementation steps at least twice independently."
 )
-BRIEF_PATH = "/Users/kenmclennan/workspace/specs/GRID-012-agents-report-tool-friction.md"
+BRIEF_PATH = "/home/dev/workspace/specs/GRID-012-agents-report-tool-friction.md"
 
 
 def _artifact_viewer_store():
