@@ -714,6 +714,12 @@ class TextArtifactViewerScreen(ArtifactViewerScreen):
 
 
 class ListArtifactViewerScreen(ArtifactViewerScreen):
+    CSS = ArtifactViewerScreen.CSS + """
+    ArtifactListTable {
+        height: 1fr;
+    }
+    """
+
     def compose(self) -> ComposeResult:
         yield ArtifactViewerHeader(id="artifact-viewer-header")
         yield ArtifactListTable(id="artifact-viewer-list")
