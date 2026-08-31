@@ -72,6 +72,10 @@ def record_to_node(record, blocked_by=None):
         closed_at=record.get("closed_at"),
         attention="attention" in labels,
         model=meta.get("model"),
+        branch=meta.get("branch"),
+        pr=meta.get("pr"),
+        reason=meta.get("reason"),
+        tried=meta.get("tried"),
     )
 
 
@@ -284,7 +288,10 @@ class FakeStore(StorePort):
         pass
 
     def update_metadata(self, tid, meta):
-        self._get(tid)["metadata"] = dict(meta)
+        b = self._get(tid)
+        merged = dict(b.get("metadata") or {})
+        merged.update(meta)
+        b["metadata"] = merged
 
     def set_model(self, tid, model):
         b = self._get(tid)
