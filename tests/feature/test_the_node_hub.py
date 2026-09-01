@@ -126,10 +126,6 @@ def _launch(ctx, store):
     return ctx["session"]
 
 
-def _open_with(ctx, key):
-    ctx["session"].press(key)
-
-
 @given("the priority list is showing with an item")
 def _priority_with_item(ctx):
     store = FakeStore()
@@ -243,17 +239,27 @@ def _step_selected(ctx):
     session.pause()
 
 
-@given("a theme with 4 items underneath")
+def _push_hub(ctx, session, node_id):
+    session.run(
+        lambda: session.app.push_screen(
+            NodeHubScreen(session.app.container, node_id, session.app._now)
+        )
+    )
+    session.pause()
+
+
+@given("a theme with 4 items underneath, its hub open")
 def _theme_with_4_items(ctx):
     store = FakeStore()
     theme = store.create_theme("Theme")
     for i in range(4):
         store.create_item("Item %d" % i, theme=theme)
     ctx["node_id"] = theme
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, theme)
 
 
-@given("a theme whose items belong to different projects")
+@given("a theme whose items belong to different projects, its hub open")
 def _theme_items_different_projects(ctx):
     store = FakeStore()
     theme = store.create_theme("Theme")
@@ -262,10 +268,11 @@ def _theme_items_different_projects(ctx):
     second = store.create_item("Second", theme=theme)
     store.add_artifact(second, "repo", "org/repo-b")
     ctx["node_id"] = theme
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, theme)
 
 
-@given(parsers.parse('a node with the status "{status}"'))
+@given(parsers.parse('a node with the status "{status}", its hub open'))
 def _node_with_status(ctx, status):
     store = FakeStore()
     if status == "active":
@@ -296,7 +303,8 @@ def _node_with_status(ctx, status):
     else:
         raise AssertionError("unhandled status %r" % status)
     ctx["node_id"] = node_id
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, node_id)
 
 
 @given("a node's hub is open, on the Log tab")
@@ -346,7 +354,7 @@ def _backlog_todo_item(ctx):
     ctx["session"].press("tab")
 
 
-@given("an item blocked on another item's completion")
+@given("an item blocked on another item's completion, its hub open")
 def _item_blocked_on_dependency(ctx):
     store = FakeStore()
     blocker = store.create_item("Blocker item")
@@ -355,10 +363,11 @@ def _item_blocked_on_dependency(ctx):
     ctx["item_id"] = item
     ctx["node_id"] = item
     ctx["blocker_id"] = blocker
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given("an item blocked on another item's completion, with a step of its own")
+@given("an item blocked on another item's completion, with a step of its own, its hub open")
 def _item_blocked_with_step(ctx):
     store = FakeStore()
     blocker = store.create_item("Blocker item")
@@ -369,7 +378,8 @@ def _item_blocked_with_step(ctx):
     ctx["node_id"] = item
     ctx["blocker_id"] = blocker
     ctx["step_id"] = step
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
 @given("an item whose current step is escalated, needing rework")
@@ -428,34 +438,58 @@ def _hub_open_with_escalation(ctx):
     session.pause()
 
 
-@given(
-    "I jumped from a blocked item's hub to its blocking item's hub, from a particular tab"
-)
-def _jumped_to_blocking_item(ctx):
+_TAB_CYCLE_ORDER = ("description", "hierarchy", "log", "artifacts")
+
+
+@given(parsers.parse('I cycle to the "{tab}" tab with ]'))
+def _cycle_to_tab(ctx, tab):
+    screen = ctx["session"].app.screen
+    tab_id = tab.lower()
+    current = _TAB_CYCLE_ORDER.index(screen._active_tab)
+    target = _TAB_CYCLE_ORDER.index(tab_id)
+    for _ in range((target - current) % len(_TAB_CYCLE_ORDER)):
+        ctx["session"].press("]")
+    ctx["target_tab"] = tab_id
+
+
+@given("a blocked item's hub is open, with content on every tab")
+def _blocked_items_hub_open_with_content(ctx):
     store = FakeStore()
     blocker = store.create_item("Blocker item")
     store.create_step("s", step="build", role="coder", parent=blocker)
     item = store.create_item("Blocked item")
     store.dep_add(item, blocker)
+    store.create_step("own step", step="write-code", role="write-code", parent=item)
+    store.claim_ready("write-code")
+    store.add_artifact(item, "repo", "org/repo")
+    store.edit_node(item, description="A description")
+    ctx["item_id"] = item
+    ctx["blocker_id"] = blocker
     session = _launch(ctx, store)
+    table = session.app.query_one(PriorityTable)
+    ids = [row.key.value for row in table.ordered_rows]
+    table.move_cursor(row=ids.index(item))
     session.press("enter")
-    screen = session.app.screen
-    screen._active_tab = "artifacts"
-    screen.query_one(HubTabStrip).set_active(screen._active_tab)
-    session.run(screen._apply_tab_visibility)
-    ctx["original_screen"] = screen
-    session.run(lambda: screen.open_at(blocker))
-    session.pause()
+    ctx["original_screen"] = session.app.screen
 
 
-@given("I opened an item's hub from a specific row in the priority list")
+@given("I jump to its blocking item's hub")
+def _jump_to_blocking_item(ctx):
+    ctx["session"].press("b")
+
+
+@given("I opened an item's hub from a specific row in the priority list, with content on every tab")
 def _opened_from_priority_row(ctx):
     store = FakeStore()
     other = store.create_item("Other")
     store.create_step("other", step="build", role="coder", parent=other)
     item = store.create_item("Target")
-    store.create_step("s", step="build", role="coder", parent=item)
+    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    store.claim_ready("write-code")
+    store.add_artifact(item, "repo", "org/repo")
+    store.edit_node(item, description="A description")
     ctx["item_id"] = item
+    ctx["step_id"] = step
     session = _launch(ctx, store)
     table = session.app.query_one(PriorityTable)
     table.move_cursor(row=list(table.rows).index(item) if item in table.rows else 0)
@@ -489,11 +523,13 @@ def _backlog_shown_with_todo(ctx):
     ctx["session"].press("tab")
 
 
-@given("I opened a backlog item's hub from a specific row in the backlog")
+@given("I opened a backlog item's hub from a specific row in the backlog, with content on every tab")
 def _opened_backlog_hub(ctx):
     store = FakeStore()
     store.create_item("Other todo")
     item = store.create_item("Target todo")
+    store.add_artifact(item, "repo", "org/repo")
+    store.edit_node(item, description="A description")
     ctx["item_id"] = item
     session = _launch(ctx, store)
     session.press("tab")
@@ -535,20 +571,6 @@ def _select_item_row(ctx):
     table.move_cursor(row=ids.index(ctx["item_id"]))
 
 
-@when(parsers.parse("I open it with Enter or {arrow}"))
-def _open_it(ctx, arrow):
-    if "node_id" in ctx:
-        session = ctx["session"]
-        session.run(
-            lambda: session.app.push_screen(
-                NodeHubScreen(session.app.container, ctx["node_id"], session.app._now)
-            )
-        )
-        session.pause()
-    else:
-        _open_with(ctx, "enter")
-
-
 @when(parsers.parse('the "{tab}" tab is active'))
 def _tab_is_active(ctx, tab):
     screen = ctx["session"].app.screen
@@ -556,11 +578,6 @@ def _tab_is_active(ctx, tab):
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
     ctx["session"].run(screen._apply_tab_visibility)
     ctx["session"].pause()
-
-
-@when("I close it with Esc or ←")
-def _close_with_esc(ctx):
-    ctx["session"].press("escape")
 
 
 @then("the item's hub opens, replacing the list on screen")
@@ -842,11 +859,10 @@ def _stack_depth_still_2(ctx):
 
 @then("the original blocked item's hub reappears, at the tab I was on")
 def _original_hub_reappears(ctx):
-    ctx["session"].press("escape")
     screen = ctx["session"].app.screen
     assert screen is ctx["original_screen"]
-    assert screen._active_tab == "artifacts"
-    _assert_tab_strip_rendered(ctx["session"], "artifacts")
+    assert screen._active_tab == ctx["target_tab"]
+    _assert_tab_strip_rendered(ctx["session"], ctx["target_tab"])
 
 
 @then("the priority list reappears with that row still selected, at the same scroll position")
