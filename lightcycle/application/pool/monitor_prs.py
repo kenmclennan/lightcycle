@@ -124,6 +124,20 @@ class MonitorPrsUseCase:
             % (failure.returncode, failure.stderr),
         )
 
+    def _unauthorized_drops(self, pr_value, dropped):
+        top_level = self._github.comments_since(pr_value, 0.0)
+        inline = self._github.pull_comments(pr_value, 0.0)
+        reviews = self._github.reviews(pr_value, 0.0)
+        failure = next(
+            (r for r in (top_level, inline, reviews) if isinstance(r, ReadFailure)), None
+        )
+        if failure is not None:
+            return dropped, True
+        marked_bodies = [c.body for c in list(top_level) + list(inline) if LC_MARKER in c.body]
+        marked_bodies += [r.body for r in reviews if LC_MARKER in r.body]
+        unauthorized = {f for f in dropped if not any(f in body for body in marked_bodies)}
+        return unauthorized, False
+
     def _check_content_pin(self, item, pr_value, phase):
         head = self._github.head_sha(pr_value)
         artifacts = tuple(self._store.item_artifacts(item.id))
@@ -153,29 +167,40 @@ class MonitorPrsUseCase:
             return
         dropped = old_files - new_files
         if dropped:
-            base_note = (
-                "PR head moved from %s to %s and dropped: %s - a previously-reviewed change "
-                "may have been lost; verify before merging."
-                % (pin, head, ", ".join(sorted(dropped)))
-            )
-            step = self._active_step_any(item.id)
-            if step is not None and step.state != State.IN_PROGRESS:
-                decision = (
-                    "confirm whether the drop of %s was ordered by review, or should be "
-                    "restored" % ", ".join(sorted(dropped))
-                )
-                observation = (
-                    "PR head moved from %s to %s and dropped: %s. A file dropped between "
-                    "review rounds is commonly review-code ordering its removal in feedback "
-                    "and write-code carrying it out - check the PR's review thread for that "
-                    "instruction before treating this as lost work."
-                    % (pin, head, ", ".join(sorted(dropped)))
-                )
-                ParkStepUseCase(self._store).execute(
-                    ParkInput(step=step.id, observation=observation, decision=decision)
+            unauthorized, lookup_failed = self._unauthorized_drops(pr_value, dropped)
+            if lookup_failed:
+                reported = dropped
+                thread_note = (
+                    " Could not read the PR's review thread to check whether this was ordered."
                 )
             else:
-                self._store.note_condition(item.id, base_note)
+                reported = unauthorized
+                thread_note = ""
+            if reported:
+                base_note = (
+                    "PR head moved from %s to %s and dropped: %s - a previously-reviewed change "
+                    "may have been lost; verify before merging.%s"
+                    % (pin, head, ", ".join(sorted(reported)), thread_note)
+                )
+                step = self._active_step_any(item.id)
+                if step is not None and step.state != State.IN_PROGRESS:
+                    decision = (
+                        "confirm whether the drop of %s was ordered by review, or should be "
+                        "restored" % ", ".join(sorted(reported))
+                    )
+                    observation = (
+                        "PR head moved from %s to %s and dropped: %s.%s A file dropped between "
+                        "review rounds is commonly review-code ordering its removal in feedback "
+                        "and write-code carrying it out - checked the PR's review thread for "
+                        "that instruction and did not find one accounting for %s."
+                        % (pin, head, ", ".join(sorted(reported)), thread_note,
+                           ", ".join(sorted(reported)))
+                    )
+                    ParkStepUseCase(self._store).execute(
+                        ParkInput(step=step.id, observation=observation, decision=decision)
+                    )
+                else:
+                    self._store.note_condition(item.id, base_note)
         self._store.replace_artifact(
             item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
         )

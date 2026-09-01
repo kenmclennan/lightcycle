@@ -1666,6 +1666,126 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(store.get_node(step).role, "coder")
 
+    def test_removal_authorized_by_a_marked_comment_is_not_parked(self):
+        comment = Comment(
+            author="review-code",
+            body=LC_MARKER + " Remove b.py - keep everything else.",
+            is_top_level=True,
+            created_at=100.0,
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "coder")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(self._pin(store, item), "sha2")
+
+    def test_removal_without_a_marked_comment_still_parks(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"steps/a.md", "steps/b.md"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha2")
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("sha1", node.reason)
+        self.assertIn("sha2", node.reason)
+        self.assertIn("steps/a.md", node.notes)
+        self.assertIn("steps/b.md", node.notes)
+        self.assertIn("steps/a.md", node.needs)
+        self.assertIn("steps/b.md", node.needs)
+
+    def test_mixed_drop_parks_naming_only_the_unauthorized_file(self):
+        comment = Comment(
+            author="review-code",
+            body=LC_MARKER + " Remove ordered.py - keep everything else.",
+            is_top_level=True,
+            created_at=100.0,
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={
+                (self._URL, "sha1"): frozenset({"ordered.py", "stray.py"})
+            },
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("stray.py", node.notes)
+        self.assertNotIn("ordered.py", node.notes)
+        self.assertIn("stray.py", node.needs)
+        self.assertNotIn("ordered.py", node.needs)
+
+    def test_unmarked_mention_of_the_dropped_file_does_not_authorize_it(self):
+        comment = Comment(
+            author="human",
+            body="heads up, b.py looked off to me",
+            is_top_level=True,
+            created_at=100.0,
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
+    def test_thread_read_failure_fails_closed(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            failing_calls={"comments_since"},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+        self.assertIn("b.py", node.needs)
+        self.assertIn("could not read", node.reason.lower())
+
 
 class FakeWorkers:
     def __init__(self):
