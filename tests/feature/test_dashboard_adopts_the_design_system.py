@@ -47,6 +47,18 @@ _TOKEN_BACKGROUNDS |= {
     _blend_over(token, COLOURS["bg"], _WIREFRAME_MODAL_OVERLAY_ALPHA) for token in _TOKEN_BACKGROUNDS
 }
 
+_TOKEN_FOREGROUNDS = {
+    COLOURS["text"].lower(),
+    COLOURS["dim"].lower(),
+    COLOURS["cyan"].lower(),
+    COLOURS["amber"].lower(),
+    COLOURS["red"].lower(),
+    COLOURS["border"].lower(),
+}
+_TOKEN_FOREGROUNDS |= {
+    _blend_over(token, COLOURS["bg"], _WIREFRAME_MODAL_OVERLAY_ALPHA) for token in _TOKEN_FOREGROUNDS
+}
+
 
 @pytest.fixture
 def ctx():
@@ -341,6 +353,23 @@ def test_every_registered_screen_state_paints_only_token_backgrounds():
                     if segment.style and segment.style.bgcolor:
                         hexv = segment.style.bgcolor.get_truecolor().hex.lower()
                         assert hexv in _TOKEN_BACKGROUNDS, (state, x, y, hexv)
+                    x += width
+        finally:
+            session.close()
+
+
+def test_every_registered_screen_state_paints_only_token_foregrounds():
+    for state, render in RENDER_SCREENS.items():
+        session = render(RENDER_SIZE)
+        try:
+            strips = session.app.screen._compositor.render_strips()
+            for y, strip in enumerate(strips):
+                x = 0
+                for segment in strip:
+                    width = len(segment.text)
+                    if segment.style and segment.style.color:
+                        hexv = segment.style.color.get_truecolor().hex.lower()
+                        assert hexv in _TOKEN_FOREGROUNDS, (state, x, y, hexv)
                     x += width
         finally:
             session.close()

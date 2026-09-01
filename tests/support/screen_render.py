@@ -488,12 +488,19 @@ def _plain_row(strip):
 def _coloured_row(strip):
     out = []
     for segment in strip:
-        colour = segment.style.color if segment.style else None
-        rgb = colour.get_truecolor() if colour else None
-        if rgb is None:
-            out.append(segment.text)
+        fg = segment.style.color if segment.style else None
+        bg = segment.style.bgcolor if segment.style else None
+        codes = []
+        if fg is not None:
+            rgb = fg.get_truecolor()
+            codes.append("38;2;%d;%d;%d" % (rgb.red, rgb.green, rgb.blue))
+        if bg is not None:
+            rgb = bg.get_truecolor()
+            codes.append("48;2;%d;%d;%d" % (rgb.red, rgb.green, rgb.blue))
+        if codes:
+            out.append("\x1b[%sm%s\x1b[0m" % (";".join(codes), segment.text))
         else:
-            out.append("\x1b[38;2;%d;%d;%dm%s\x1b[0m" % (rgb.red, rgb.green, rgb.blue, segment.text))
+            out.append(segment.text)
     return "".join(out).rstrip()
 
 

@@ -55,6 +55,7 @@ def test_colour_carries_the_state_tokens_the_plain_frame_drops():
     coloured = render("priority-list#normal", colour=True)
 
     assert "\x1b[38;2;" in coloured
+    assert "\x1b[48;2;" in coloured
     assert "\x1b[" not in plain
 
 
