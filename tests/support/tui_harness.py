@@ -183,6 +183,7 @@ class TuiSession:
         self._ctx = contextvars.copy_context()
         self._run_test_cm = self.app.run_test(size=size) if size else self.app.run_test()
         self.pilot = self._run(self._run_test_cm.__aenter__())
+        self._paused_glyph_timers = []
 
     def _run(self, coro):
         task = self._loop.create_task(coro, context=self._ctx)
@@ -194,7 +195,13 @@ class TuiSession:
 
         return self._run(_call())
 
+    def _resume_glyph_timers(self):
+        for timer in self._paused_glyph_timers:
+            timer.resume()
+        self._paused_glyph_timers = []
+
     def press(self, key):
+        self._resume_glyph_timers()
         self._run(self.pilot.press(key))
         self.pause()
 
@@ -203,18 +210,19 @@ class TuiSession:
         return [t._active_glyph_timer for t in targets if getattr(t, "_active_glyph_timer", None) is not None]
 
     def pause(self):
+        self._run(self.pilot.pause())
         timers = self._glyph_timers()
         for timer in timers:
             timer.pause()
-        self._run(self.pilot.pause())
-        for timer in timers:
-            timer.resume()
+        self._paused_glyph_timers = timers
 
     def poll_tick(self):
+        self._resume_glyph_timers()
         self.run(self.app._refresh)
         self.pause()
 
     def resize(self, width, height):
+        self._resume_glyph_timers()
         self._run(self.pilot.resize_terminal(width, height))
         self.pause()
 
