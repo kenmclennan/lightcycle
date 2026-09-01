@@ -120,6 +120,7 @@ from lightcycle.application.setup import (
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SqliteStore
 from lightcycle.config import Config, ConfigError
 from lightcycle.container import Container, make_flow_service, make_worktrees
+from lightcycle.ports.store import NodeNotFoundError
 
 
 _container = None
@@ -331,7 +332,11 @@ def main(argv=None):
     if fn is None:
         sys.stderr.write("not implemented: %s\n" % cmd)
         return 2
-    return fn(argv[1:]) or 0
+    try:
+        return fn(argv[1:]) or 0
+    except NodeNotFoundError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
 
 
 def cmd_workflow(argv):

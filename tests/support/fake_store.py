@@ -2,7 +2,13 @@ import datetime
 import os
 import uuid
 
-from lightcycle.ports.store import ItemTextRow, ProjectEntry, ProjectResolutionError, StorePort
+from lightcycle.ports.store import (
+    ItemTextRow,
+    NodeNotFoundError,
+    ProjectEntry,
+    ProjectResolutionError,
+    StorePort,
+)
 from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
 
 
@@ -114,7 +120,7 @@ class FakeStore(StorePort):
         try:
             return self._records[tid]
         except KeyError:
-            raise KeyError("step not found: %s" % tid)
+            raise NodeNotFoundError("unknown node '%s'" % tid)
 
     def _to_node(self, record):
         blocked_by = [
