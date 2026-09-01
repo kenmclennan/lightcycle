@@ -12,6 +12,19 @@ from tests.support.tui_harness import launch, make_test_container
 
 scenarios("the-node-hub.feature")
 
+LC_277_6_REASON = (
+    "CI still pending on PR #424 head 7d4d840 (integration and unit-feature jobs in-progress) - "
+    "scenario review itself is clean (see feedback), just waiting on CI to conclude before "
+    "posting a pass verdict"
+)
+LC_277_6_REASON_EXTENDED = (
+    LC_277_6_REASON
+    + " Also, the integration job flaked once and was retried successfully before landing, "
+    "and the operator confirmed the fix was genuinely safe to merge once CI turns fully "
+    "green again."
+)
+WRAPPING_HUB_SIZE = (100, 30)
+
 
 @pytest.fixture
 def ctx():
@@ -120,9 +133,9 @@ def _assert_tab_strip_rendered(session, active_tab):
     )
 
 
-def _launch(ctx, store):
+def _launch(ctx, store, size=None):
     ctx["store"] = store
-    ctx["session"] = launch(make_test_container(store=store, fs=ctx.get("fs")))
+    ctx["session"] = launch(make_test_container(store=store, fs=ctx.get("fs")), size=size)
     return ctx["session"]
 
 
@@ -409,6 +422,53 @@ def _item_escalated_rework_with_reason(ctx):
     _launch(ctx, store)
 
 
+@given("an item whose current step is escalated, with a reason long enough to wrap")
+def _item_escalated_long_reason(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    store.update_metadata(
+        step, {"needs": "Resolve the merge conflict manually", "reason": LC_277_6_REASON}
+    )
+    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+
+
+@given("an item whose current step is escalated, with a reason far longer than the panel's line cap")
+def _item_escalated_over_cap_reason(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    store.update_metadata(
+        step, {"needs": "Resolve the merge conflict manually", "reason": LC_277_6_REASON_EXTENDED}
+    )
+    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+
+
+@given("an item whose current step is escalated, with a reason that wraps differently at two widths")
+def _item_escalated_resizable_reason(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    store.update_metadata(
+        step,
+        {
+            "needs": "Resolve the merge conflict manually",
+            "reason": "Investigate the flaky retry logic in the deploy pipeline before "
+            "merging further changes",
+        },
+    )
+    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+
+
 @given(parsers.parse('an item that is "{status}"'))
 def _item_that_is(ctx, status):
     store = FakeStore()
@@ -578,6 +638,16 @@ def _tab_is_active(ctx, tab):
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
     ctx["session"].run(screen._apply_tab_visibility)
     ctx["session"].pause()
+
+
+@when("the terminal is resized narrower")
+def _terminal_resized_narrower(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    ctx["pre_resize_height"] = panel.size.height
+    ctx["pre_resize_line_2"] = _rendered_line_text(panel, 2)
+    ctx["session"].resize(50, WRAPPING_HUB_SIZE[1])
+
 
 
 @then("the item's hub opens, replacing the list on screen")
@@ -763,6 +833,7 @@ def _escalation_tag_bold_amber(ctx, tag):
     assert style is not None
     assert style.bold
     assert style.color.get_truecolor().hex.lower() == COLOURS["amber"].lower()
+    assert panel.size.height == 3
 
 
 @then(parsers.parse('the escalation panel shows no "{tag}" tag and no second line'))
@@ -771,7 +842,7 @@ def _escalation_no_tag_one_line(ctx, tag):
     panel = screen.query_one(EscalationPanel)
     assert panel.display
     assert tag not in _rendered_panel_text(panel)
-    assert _rendered_line_text(panel, 1).strip() == ""
+    assert panel.size.height == 1
 
 
 @then("the escalation panel's third line names the resume command")
@@ -816,6 +887,56 @@ def _escalation_link_cyan(ctx):
     style = _segment_style_for_substring(panel, 0, ctx["blocker_id"])
     assert style is not None
     assert style.color.get_truecolor().hex.lower() == COLOURS["cyan"].lower()
+
+
+@then("the escalation panel shows the reason's final words")
+def _escalation_shows_final_words(ctx):
+    from lightcycle.domain.work import park_resume_command
+
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    text = _rendered_panel_text(panel)
+    assert "pass verdict" in text
+    assert park_resume_command(ctx["step_id"]) in text
+
+
+@then("the escalation panel shows no truncation ellipsis")
+def _escalation_shows_no_ellipsis(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert "…" not in _rendered_panel_text(panel)
+
+
+@then("the escalation panel is capped at the configured line count")
+def _escalation_capped_line_count(ctx):
+    from lightcycle.adapters.tui.hub import ESCALATION_REASON_LINE_CAP
+
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert panel.size.height == ESCALATION_REASON_LINE_CAP + 1
+
+
+@then("the escalation panel's last line ends with an ellipsis")
+def _escalation_last_line_ellipsis(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    last_line = _rendered_line_text(panel, panel.size.height - 1)
+    assert last_line.rstrip().endswith("…")
+
+
+@then("text past the cut point does not appear anywhere in the escalation panel")
+def _escalation_cut_text_absent(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert "green" not in _rendered_panel_text(panel)
+
+
+@then("the escalation panel's rendered lines match the new width, not the original")
+def _escalation_reflowed_on_resize(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert panel.size.height != ctx["pre_resize_height"]
+    assert _rendered_line_text(panel, 2) != ctx["pre_resize_line_2"]
 
 
 @then("the blocking item's own hub opens")

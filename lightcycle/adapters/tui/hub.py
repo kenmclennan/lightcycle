@@ -38,6 +38,8 @@ from lightcycle.adapters.tui.row_grid import (
     render_row_budget,
     row_budget_for,
     stacked_cell,
+    truncate_field,
+    wrap_continuation,
 )
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
@@ -354,21 +356,52 @@ def toast_text(success, message, kind, value):
 
 
 ESCALATION_TAG = "⚠ needs you"
+ESCALATION_REASON_LINE_CAP = 4
 
 
-def escalation_reason_text(header):
-    text = Text(header.escalation_text, style=COLOURS["text"])
-    if header.escalation_target:
-        idx = header.escalation_text.find(header.escalation_target)
-        if idx != -1:
-            text.stylize(COLOURS["cyan"], idx, idx + len(header.escalation_target))
-    return text
+def _capped_reason_lines(text, width):
+    paragraphs = text.split("\n")
+    lines = []
+    offsets = []
+    for paragraph_index, paragraph in enumerate(paragraphs):
+        consumed = 0
+        for line in wrap_continuation(paragraph, width):
+            consumed += len(line) + 1
+            lines.append(line)
+            offsets.append((paragraph_index, consumed))
+    if len(lines) <= ESCALATION_REASON_LINE_CAP:
+        return lines
+    kept = lines[: ESCALATION_REASON_LINE_CAP - 1]
+    cut_paragraph_index, cut_offset = offsets[ESCALATION_REASON_LINE_CAP - 2]
+    remaining_parts = [paragraphs[cut_paragraph_index][cut_offset:].lstrip()]
+    remaining_parts.extend(paragraphs[cut_paragraph_index + 1 :])
+    remaining_text = " ".join(part for part in remaining_parts if part)
+    kept.append(truncate_field(remaining_text, width))
+    return kept
 
 
-def escalation_panel_text(header):
+def _reason_lines_text(header, width):
+    result = Text()
+    for index, line in enumerate(_capped_reason_lines(header.escalation_text, width)):
+        if index:
+            result.append("\n")
+        line_text = Text(line, style=COLOURS["text"])
+        if header.escalation_target:
+            idx = line.find(header.escalation_target)
+            if idx != -1:
+                line_text.stylize(COLOURS["cyan"], idx, idx + len(header.escalation_target))
+        result.append_text(line_text)
+    return result
+
+
+def escalation_reason_text(header, width):
+    return _reason_lines_text(header, width)
+
+
+def escalation_panel_text(header, width):
     text = Text(ESCALATION_TAG, style="bold %s" % COLOURS["amber"])
     text.append("\n")
-    text.append_text(escalation_reason_text(header))
+    text.append_text(_reason_lines_text(header, width))
     return text
 
 
@@ -377,8 +410,17 @@ class EscalationPanel(Static):
         super().__init__(*args, **kwargs)
         self.target_id = None
 
+    def on_resize(self, event: events.Resize) -> None:
+        header = self.parent
+        if isinstance(header, HubHeader) and header._last_header is not None:
+            header._paint_escalation(header._last_header)
+
 
 class HubHeader(Vertical):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._last_header = None
+
     def compose(self) -> ComposeResult:
         yield Static(id="hub-id")
         yield Static(id="hub-title")
@@ -406,10 +448,19 @@ class HubHeader(Vertical):
         self._field_line("#hub-elapsed", "ELAPSED", header.elapsed_field)
         self._field_line("#hub-state", "STATE", header.state_field)
 
+        self._last_header = header
+        self._paint_escalation(header)
+
+    def _paint_escalation(self, header) -> None:
         panel = self.query_one(EscalationPanel)
         if header.escalation_text:
             is_demand = header.escalation_target is None
-            panel.update(escalation_panel_text(header) if is_demand else escalation_reason_text(header))
+            width = max(1, panel.size.width)
+            painted = (
+                escalation_panel_text(header, width) if is_demand
+                else escalation_reason_text(header, width)
+            )
+            panel.update(painted)
             panel.target_id = header.escalation_target
             panel.display = True
         else:
@@ -796,7 +847,7 @@ class NodeHubScreen(Screen):
         margin-right: 3;
     }}
     #hub-escalation {{
-        height: 3;
+        height: auto;
         display: none;
     }}
     #hub-log-empty, #hub-artifacts-empty, #hub-description-empty {{
