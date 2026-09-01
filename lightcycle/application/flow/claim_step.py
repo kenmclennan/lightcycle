@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeView, State
 from lightcycle.ports.store import ProjectResolutionError
@@ -67,8 +68,13 @@ class ClaimStepUseCase:
         meta = self._flow.meta_for_step(t.step, pin) if pin else {}
         missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:
-            self._store.route_to_human(
-                t.id, "BLOCKED: missing required input(s): %s" % ", ".join(sorted(missing))
+            decision = "missing required input(s): %s" % ", ".join(sorted(missing))
+            observation = (
+                "step '%s' was claimed for role '%s' but the item is missing the input(s) "
+                "this step requires before it can start" % (t.step, role)
+            )
+            ParkStepUseCase(self._store).execute(
+                ParkInput(step=t.id, observation=observation, decision=decision)
             )
             return None
         model = meta.get("model")

@@ -3,6 +3,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.next_step import NextStepResolver
+from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.has_feedback import has_feedback
@@ -58,10 +59,16 @@ class CompleteStepUseCase:
                 "Fix the flow or use a defined outcome." % (t.step, input.outcome)
             )
         if transition is None and not self._flow.is_known_step(t.step, name):
-            self._store.route_to_human(
-                input.step,
+            decision = (
                 "no transition for step=%s outcome=%s; the workflow does not define %s"
-                % (t.step, input.outcome, t.step),
+                % (t.step, input.outcome, t.step)
+            )
+            observation = (
+                "step '%s' completed with outcome '%s', but workflow '%s' has no route "
+                "defined for it" % (t.step, input.outcome, name)
+            )
+            ParkStepUseCase(self._store).execute(
+                ParkInput(step=input.step, observation=observation, decision=decision)
             )
             return CompleteResponse(next_step=None)
         target = (

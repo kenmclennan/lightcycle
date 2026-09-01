@@ -53,6 +53,10 @@ def display_stage(phrase, stage):
     return "%s · %s" % (phrase, stage) if phrase else stage
 
 
+def park_resume_command(node_id):
+    return "lc set %s --state ready" % node_id
+
+
 def has_content(node):
     return any(not a.internal for a in node.artifacts)
 

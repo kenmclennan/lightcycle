@@ -278,6 +278,9 @@ class TestCompleteTask(unittest.TestCase):
         self.assertNotEqual(node.state, "done")
         self.assertEqual(node.role, "human")
         self.assertIn("review-code", node.notes or "")
+        self.assertIn("review-code", node.needs or "")
+        self.assertTrue((node.reason or "").strip())
+        self.assertNotEqual(node.needs, node.reason)
 
     def test_terminal_step_with_required_produce_does_not_demand_it(self):
         terminal_metas = {
@@ -857,7 +860,24 @@ class TestClaimTask(unittest.TestCase):
             s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
         ).execute(ClaimInput(role="coder"))
         self.assertIsNone(resp)
-        self.assertEqual(s.get_node(bid).role, "human")
+        node = s.get_node(bid)
+        self.assertEqual(node.role, "human")
+        self.assertIn("missing required input(s): spec", node.needs or "")
+        self.assertTrue((node.reason or "").strip())
+        self.assertNotEqual(node.needs, node.reason)
+
+    def test_missing_required_input_park_can_be_unblocked_symmetrically(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder",
+                            parent=s.create_item("i", workflow="standard"))
+        ClaimStepUseCase(
+            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
+        ).execute(ClaimInput(role="coder"))
+        UnblockStepUseCase(s, flow_for(SPEC_METAS, s)).execute(UnblockInput(step=bid))
+        node = s.get_node(bid)
+        self.assertIsNone(node.needs)
+        self.assertNotIn("BLOCKED:", node.notes or "")
+        self.assertEqual(node.role, "coder")
 
     def test_resolves_spec_path_against_specs_root(self):
         s = FakeStore()
@@ -1017,10 +1037,18 @@ class TestBlockTask(unittest.TestCase):
     def test_routes_to_human_with_resume(self):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="coder")
-        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", branch="feat/y"))
+        BlockStepUseCase(s).execute(
+            BlockInput(step=bid, needs="decide X", reason="oops", branch="feat/y")
+        )
         t = s.get_node(bid)
         self.assertEqual(t.role, "human")
         self.assertEqual(t.needs, "decide X")
+
+    def test_empty_reason_raises(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="coder")
+        with self.assertRaises(UseCaseError):
+            BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason=""))
 
     def test_resume_fields_round_trip(self):
         s = FakeStore()
@@ -1063,7 +1091,7 @@ class TestUnblockTask(unittest.TestCase):
     def test_block_then_single_unblock_restores_role_on_fake_store(self):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="coder")
-        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X"))
+        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
         resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         self.assertEqual(resp.role, "coder")
         self.assertEqual(s.get_node(bid).role, "coder")
@@ -1071,7 +1099,7 @@ class TestUnblockTask(unittest.TestCase):
     def test_block_then_single_unblock_restores_role_on_sqlite_store(self):
         s = make_sqlite_store()
         bid = s.create_step("build: x", step="build", role="coder")
-        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X"))
+        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
         resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         self.assertEqual(resp.role, "coder")
         self.assertEqual(s.get_node(bid).role, "coder")
@@ -1085,7 +1113,9 @@ class TestUnblockTask(unittest.TestCase):
     def test_clears_needs_and_blocked_note(self):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="coder")
-        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="confirm approach"))
+        BlockStepUseCase(s).execute(
+            BlockInput(step=bid, needs="confirm approach", reason="oops")
+        )
         UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         t = s.get_node(bid)
         self.assertIsNone(t.needs)
@@ -1095,7 +1125,9 @@ class TestUnblockTask(unittest.TestCase):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="coder")
         s.note(bid, "from review: lgtm")
-        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="confirm approach"))
+        BlockStepUseCase(s).execute(
+            BlockInput(step=bid, needs="confirm approach", reason="oops")
+        )
         UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         t = s.get_node(bid)
         self.assertIn("from review: lgtm", t.notes or "")

@@ -172,6 +172,17 @@ Feature: The node hub
     Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
     And the reason is shown on a second line below the tag, in the text colour
 
+  Scenario: An escalated step's escalation panel names the resume command on its third line
+    Given an item whose current step is escalated, needing rework
+    When I open it with Enter or →
+    Then the escalation panel's third line names the resume command
+
+  Scenario: An escalated step with a recorded reason shows it alongside the resume command
+    Given an item whose current step is escalated, needing rework, with a recorded reason
+    When I open it with Enter or →
+    Then the escalation panel's third line names the resume command
+    And the escalation panel's third line also names the recorded reason
+
   Scenario Outline: An item that is not needs-attention shows no escalation reason
     Given an item that is "<status>"
     When I open it with Enter or →

@@ -471,7 +471,10 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_block_writes_metadata_and_routes_human(self):
         b = self.store.create_step("build: t", step="build", role="coder")
-        rc, out, err = call(_cli_mod.cmd_set, b, "--state", "blocked", "--branch", "grid/x", "--needs", "confirm aud")
+        rc, out, err = call(
+            _cli_mod.cmd_set, b, "--state", "blocked", "--branch", "grid/x",
+            "--needs", "confirm aud", "--reason", "audit was inconclusive",
+        )
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(b)
         self.assertEqual(step.needs, "confirm aud")
@@ -481,7 +484,10 @@ class TestDoneBlock(unittest.TestCase):
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
         b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
-        rc, out, err = call(_cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first")
+        rc, out, err = call(
+            _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
+            "--reason", "conflicts on rebase",
+        )
         self.assertEqual(rc, 0, err)
         self.assertIsNone(self.store.get_node(b).claimed_by)
         rc2, inbox_out, _ = call(_cli_mod.cmd_inbox)
@@ -2174,7 +2180,10 @@ class TestUnblock(unittest.TestCase):
     def test_unblock_returns_blocked_task_to_agent_role(self):
         b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
-        call(_cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first")
+        call(
+            _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
+            "--reason", "conflicts on rebase",
+        )
         rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(b)
@@ -2185,7 +2194,10 @@ class TestUnblock(unittest.TestCase):
     def test_unblock_clears_needs_and_blocked_note(self):
         b = self.store.create_step("build: t", step="build", role="coder")
         self.store.claim_ready("coder")
-        call(_cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first")
+        call(
+            _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
+            "--reason", "conflicts on rebase",
+        )
         rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(b)
