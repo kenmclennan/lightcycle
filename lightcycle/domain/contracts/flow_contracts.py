@@ -92,6 +92,10 @@ class FlowContracts:
     def unknown_phases(self):
         return sorted(s for s in self._graph.phases if not self._flow.owner_of(s))
 
+    def unknown_display(self):
+        known = set(self._steps) | set(self.terminals())
+        return sorted(s for s in self._graph.display if s not in known)
+
     def phase_conflicts(self):
         groups = {}
         for stage, phase in self._graph.phases.items():
@@ -104,6 +108,7 @@ class FlowContracts:
         return (
             not self.missing() and not self._dups
             and not self.phase_gaps() and not self.unknown_phases() and not self.phase_conflicts()
+            and not self.unknown_display()
         )
 
     def as_dict(self):
@@ -120,5 +125,6 @@ class FlowContracts:
             "phase_gaps": self.phase_gaps(),
             "unknown_phases": self.unknown_phases(),
             "phase_conflicts": self.phase_conflicts(),
+            "unknown_display": self.unknown_display(),
             "ok": self.ok(),
         }

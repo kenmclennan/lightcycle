@@ -27,6 +27,11 @@ def check_bundle_references(fs, root):
             )
         for phase, workspaces in sorted(contracts.phase_conflicts().items()):
             messages.append("phase %r spans workspaces: %s" % (phase, ", ".join(workspaces)))
+        if contracts.unknown_display():
+            messages.append(
+                "display phrase declared for a stage this bundle does not reference: %s"
+                % ", ".join(contracts.unknown_display())
+            )
         if messages:
             problems[name] = messages
     return problems
