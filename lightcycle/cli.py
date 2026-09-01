@@ -1158,9 +1158,14 @@ def cmd_set(argv):
             if not a.needs:
                 sys.stderr.write("--state blocked requires --needs (what the human must decide)\n")
                 return 2
+            if not a.reason:
+                sys.stderr.write(
+                    "--state blocked requires --reason (what happened that led to this)\n"
+                )
+                return 2
             BlockStepUseCase(_container.store).execute(
-                BlockInput(step=a.id, needs=a.needs, branch=a.branch, pr=a.pr,
-                           reason=a.reason, tried=a.tried)
+                BlockInput(step=a.id, needs=a.needs, reason=a.reason, branch=a.branch, pr=a.pr,
+                           tried=a.tried)
             )
             return 0
         if a.state == "ready":

@@ -171,7 +171,15 @@ class TestRenderInbox(unittest.TestCase):
         node = tk(id="t1", title="one", needs="waiting on X")
         r = row(kind="blocked", step=node)
         lines = render_inbox([r], TITLE_CAP)
-        self.assertTrue(lines[0].endswith("  needs:waiting on X"))
+        self.assertTrue(lines[0].endswith("  needs:waiting on X  resume:lc set t1 --state ready"))
+
+    def test_blocked_row_with_needs_and_reason(self):
+        node = tk(id="t1", title="one", needs="waiting on X", reason="X was missing")
+        r = row(kind="blocked", step=node)
+        lines = render_inbox([r], TITLE_CAP)
+        self.assertTrue(lines[0].endswith(
+            "  needs:waiting on X  reason:X was missing  resume:lc set t1 --state ready"
+        ))
 
     def test_blocked_row_without_needs_has_no_suffix(self):
         r = row(kind="blocked", project="proj-a", step=tk(id="t1", title="one"))
@@ -200,7 +208,7 @@ class TestRenderInbox(unittest.TestCase):
         node = tk(id="t1", title="one", needs="waiting on X")
         r = row(kind="blocked", step=node, pr="https://example.com/pr/1")
         lines = render_inbox([r], TITLE_CAP)
-        self.assertTrue(lines[0].endswith("  needs:waiting on X"))
+        self.assertTrue(lines[0].endswith("  needs:waiting on X  resume:lc set t1 --state ready"))
         self.assertNotIn("pr:", lines[0])
 
     def test_kind_always_shown_even_for_single_row(self):
@@ -211,7 +219,9 @@ class TestRenderInbox(unittest.TestCase):
         node = tk(id="t1", title="one", needs="waiting on X", description="deets")
         r = row(kind="blocked", step=node)
         lines = render_inbox([r], TITLE_CAP)
-        self.assertTrue(lines[0].endswith("  needs:waiting on X  desc:deets"))
+        self.assertTrue(
+            lines[0].endswith("  needs:waiting on X  resume:lc set t1 --state ready  desc:deets")
+        )
 
     def test_plan_suffix_renders_after_strategy_suffix(self):
         node = tk(
@@ -220,7 +230,9 @@ class TestRenderInbox(unittest.TestCase):
         )
         r = row(kind="blocked", step=node)
         lines = render_inbox([r], TITLE_CAP)
-        self.assertTrue(lines[0].endswith("  needs:waiting on X  plan:plans/x.md"))
+        self.assertTrue(lines[0].endswith(
+            "  needs:waiting on X  resume:lc set t1 --state ready  plan:plans/x.md"
+        ))
 
     def test_mixed_kinds_align_id_column(self):
         rows = [

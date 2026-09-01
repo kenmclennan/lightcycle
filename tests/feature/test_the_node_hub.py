@@ -380,6 +380,22 @@ def _item_escalated_rework(ctx):
     store.update_metadata(step, {"needs": "Resolve the merge conflict manually"})
     store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store)
+
+
+@given("an item whose current step is escalated, needing rework, with a recorded reason")
+def _item_escalated_rework_with_reason(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    store.update_metadata(
+        step,
+        {"needs": "Resolve the merge conflict manually", "reason": "CI reported a real conflict"},
+    )
+    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    ctx["item_id"] = item
+    ctx["step_id"] = step
     _launch(ctx, store)
 
 
@@ -739,6 +755,24 @@ def _escalation_no_tag_one_line(ctx, tag):
     assert panel.display
     assert tag not in _rendered_panel_text(panel)
     assert _rendered_line_text(panel, 1).strip() == ""
+
+
+@then("the escalation panel's third line names the resume command")
+def _escalation_resume_third_line(ctx):
+    from lightcycle.domain.work import park_resume_command
+
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert panel.display
+    assert park_resume_command(ctx["step_id"]) in _rendered_line_text(panel, 2)
+
+
+@then("the escalation panel's third line also names the recorded reason")
+def _escalation_reason_third_line(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert panel.display
+    assert "CI reported a real conflict" in _rendered_line_text(panel, 2)
 
 
 @then("the reason is shown on a second line below the tag, in the text colour")

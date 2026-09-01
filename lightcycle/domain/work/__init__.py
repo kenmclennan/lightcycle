@@ -5,7 +5,7 @@ from lightcycle.domain.work.rollup import roll_up
 from lightcycle.domain.work.derive import derive_state
 from lightcycle.domain.work.hierarchy import (
     HierarchyRow, compose_hierarchy, display_role, display_stage, has_content, landing_tab,
-    row_bucket, viewable_artifacts,
+    park_resume_command, row_bucket, viewable_artifacts,
 )
 from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.log_line import LogKind, LogLine
@@ -20,7 +20,7 @@ __all__ = [
     "Artifact", "default_kind_for", "type_label", "Lane", "State", "lane_for", "roll_up",
     "derive_state",
     "HierarchyRow", "compose_hierarchy", "display_role", "display_stage", "has_content",
-    "landing_tab", "row_bucket", "viewable_artifacts",
+    "landing_tab", "park_resume_command", "row_bucket", "viewable_artifacts",
     "Item", "LogKind", "LogLine", "Node", "NodeQueue", "NodeSpec", "NodeView", "ProjectedStep",
     "worker_log_filename",
 ]

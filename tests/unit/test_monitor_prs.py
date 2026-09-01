@@ -1458,11 +1458,12 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(self._pin(store, item), "sha2")
         node = store.get_node(step)
         self.assertEqual(node.role, "human")
-        self.assertIn("sha1", node.notes)
-        self.assertIn("sha2", node.notes)
+        self.assertIn("sha1", node.reason)
+        self.assertIn("sha2", node.reason)
         self.assertIn("steps/a.md", node.notes)
         self.assertIn("steps/b.md", node.notes)
-        self.assertIn("lc set %s --state ready" % step, node.notes)
+        self.assertIn("steps/a.md", node.needs)
+        self.assertIn("steps/b.md", node.needs)
 
     def test_pr_replaced_between_polls_does_not_report_the_old_prs_files_as_dropped(self):
         old_url = self._URL
@@ -1512,10 +1513,10 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(self._pin(store, item), "sha10")
         node = store.get_node(step)
         self.assertEqual(node.role, "human")
-        self.assertIn("sha9", node.notes)
-        self.assertIn("sha10", node.notes)
+        self.assertIn("sha9", node.reason)
+        self.assertIn("sha10", node.reason)
         self.assertIn("d.py", node.notes)
-        self.assertIn("lc set %s --state ready" % step, node.notes)
+        self.assertIn("d.py", node.needs)
 
     def test_escalated_step_returns_to_its_lane_via_unblock(self):
         gh = FakeGitHub(

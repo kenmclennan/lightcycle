@@ -1,4 +1,4 @@
-from lightcycle.domain.work import display_stage
+from lightcycle.domain.work import display_stage, park_resume_command
 
 
 def node_extra(node, *, show_description=False):
@@ -90,7 +90,11 @@ def render_queue(steps, title_cap):
 
 def _strategy_suffix(r):
     if r.kind == "blocked" and r.step.needs:
-        return "  needs:%s" % r.step.needs
+        parts = ["needs:%s" % r.step.needs]
+        if r.step.reason:
+            parts.append("reason:%s" % _truncate(r.step.reason))
+        parts.append("resume:%s" % park_resume_command(r.step.id))
+        return "  " + "  ".join(parts)
     if r.kind == "triage" and r.step.notes:
         return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])
     if r.pr:

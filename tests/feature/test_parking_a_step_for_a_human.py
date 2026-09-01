@@ -49,7 +49,7 @@ def _step_node(ctx):
 def _block(ctx, needs=None):
     args = ["set", ctx["step"], "--state", "blocked"]
     if needs is not None:
-        args += ["--needs", needs]
+        args += ["--needs", needs, "--reason", "a decision was needed"]
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run(*args)
 
 

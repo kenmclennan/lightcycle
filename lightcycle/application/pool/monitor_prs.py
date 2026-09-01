@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
+from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.work import Item, State
 from lightcycle.ports.github import ReadFailure
@@ -159,11 +160,20 @@ class MonitorPrsUseCase:
             )
             step = self._active_step_any(item.id)
             if step is not None and step.state != State.IN_PROGRESS:
-                note = base_note + (
-                    " If this is a false positive, `lc set %s --state ready` returns the step "
-                    "to its agent lane." % step.id
+                decision = (
+                    "confirm whether the drop of %s was ordered by review, or should be "
+                    "restored" % ", ".join(sorted(dropped))
                 )
-                self._store.route_to_human(step.id, note)
+                observation = (
+                    "PR head moved from %s to %s and dropped: %s. A file dropped between "
+                    "review rounds is commonly review-code ordering its removal in feedback "
+                    "and write-code carrying it out - check the PR's review thread for that "
+                    "instruction before treating this as lost work."
+                    % (pin, head, ", ".join(sorted(dropped)))
+                )
+                ParkStepUseCase(self._store).execute(
+                    ParkInput(step=step.id, observation=observation, decision=decision)
+                )
             else:
                 self._store.note(item.id, base_note)
         self._store.replace_artifact(

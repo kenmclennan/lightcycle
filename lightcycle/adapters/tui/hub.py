@@ -54,8 +54,8 @@ from lightcycle.application.work import (
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.work import (
-    Item, LogKind, State, display_role, display_stage, has_content, landing_tab, row_bucket,
-    type_label, viewable_artifacts,
+    Item, LogKind, State, display_role, display_stage, has_content, landing_tab,
+    park_resume_command, row_bucket, type_label, viewable_artifacts,
 )
 
 POLL_INTERVAL_SECONDS = 10
@@ -192,6 +192,12 @@ def build_header(store, node, now, flow_service):
     return _step_header(store, node, now, project)
 
 
+def _park_escalation_text(node):
+    resume = "resume: %s" % park_resume_command(node.id)
+    tail = "%s - %s" % (node.reason, resume) if node.reason else resume
+    return "%s\n%s" % (node.needs, tail)
+
+
 def _item_header(store, node, now, project, flow_service):
     theme_line = None
     if node.parent:
@@ -216,7 +222,7 @@ def _item_header(store, node, now, project, flow_service):
                 step_field = display_stage(flow_service.display_for(cur), cur.step)
                 if cur.role == "human":
                     if cur.needs:
-                        escalation_text = cur.needs
+                        escalation_text = _park_escalation_text(cur)
                 else:
                     role_field = cur.role
                     if cur.state == State.IN_PROGRESS:
@@ -236,7 +242,7 @@ def _step_header(store, node, now, project):
         escalation_target = sorted(node.blocked_by)[0]
         escalation_text = "Blocked · depends on %s" % escalation_target
     elif node.role == "human" and node.needs:
-        escalation_text = node.needs
+        escalation_text = _park_escalation_text(node)
 
     elapsed_field = _elapsed(store, node, now) if node.state == State.IN_PROGRESS else None
     return HeaderData(
@@ -790,7 +796,7 @@ class NodeHubScreen(Screen):
         margin-right: 3;
     }}
     #hub-escalation {{
-        height: 2;
+        height: 3;
         display: none;
     }}
     #hub-log-empty, #hub-artifacts-empty, #hub-description-empty {{

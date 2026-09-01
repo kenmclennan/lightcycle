@@ -1,14 +1,16 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+
 
 @dataclass(frozen=True)
 class BlockInput:
     step: str
     needs: str
+    reason: str
     branch: Optional[str] = None
     pr: Optional[str] = None
-    reason: Optional[str] = None
     tried: Optional[str] = None
 
 
@@ -17,15 +19,7 @@ class BlockStepUseCase:
         self._store = store
 
     def execute(self, input: BlockInput) -> None:
-        resume = {}
-        for k, v in (
-            ("branch", input.branch),
-            ("pr", input.pr),
-            ("reason", input.reason),
-            ("tried", input.tried),
-            ("needs", input.needs),
-        ):
-            if v:
-                resume[k] = v
-        self._store.update_metadata(input.step, resume)
-        self._store.route_to_human(input.step, "BLOCKED: %s" % input.needs)
+        ParkStepUseCase(self._store).execute(ParkInput(
+            step=input.step, observation=input.reason, decision=input.needs,
+            branch=input.branch, pr=input.pr, tried=input.tried,
+        ))
