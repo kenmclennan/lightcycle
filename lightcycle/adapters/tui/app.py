@@ -452,6 +452,7 @@ class LightcycleApp(App):
     Screen {{
         border: solid {COLOURS["border"]};
         background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
         overflow-y: hidden;
     }}
 
@@ -480,6 +481,7 @@ class LightcycleApp(App):
 
     DataTable {{
         background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
         scrollbar-background: {COLOURS["bg"]};
         scrollbar-background-hover: {COLOURS["bg"]};
         scrollbar-background-active: {COLOURS["bg"]};
@@ -493,9 +495,11 @@ class LightcycleApp(App):
     }}
     DataTable > .datatable--cursor {{
         background: {COLOURS["selected-bg"]};
+        color: {COLOURS["cyan"]};
     }}
     RichLog {{
         background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
         scrollbar-background: {COLOURS["bg"]};
         scrollbar-background-hover: {COLOURS["bg"]};
         scrollbar-background-active: {COLOURS["bg"]};
