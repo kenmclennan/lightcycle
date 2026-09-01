@@ -5,7 +5,9 @@ import lightcycle.adapters.tui.app as app_module
 from lightcycle.adapters.tui.app import (
     BACKLOG_COLUMNS, DATA_COLUMNS, BacklogTable, BacklogView, PriorityTable,
 )
-from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
+from lightcycle.adapters.tui.row_grid import (
+    FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
+)
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -22,7 +24,7 @@ def _backlog_stack_terminal_width():
     first_line_width = glyph_total + atomic_total
     breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
     row_budget = breakpoint_width - 1
-    return row_budget + 2 + 2 * len(BACKLOG_COLUMNS)
+    return row_budget + 2 + 2 * len(BACKLOG_COLUMNS) + scrollbar_reservation_width(BacklogTable)
 
 
 class TestBacklogStackedRebuildRendersEachRowOnce(unittest.TestCase):
@@ -94,7 +96,7 @@ def _priority_stack_terminal_width():
     first_line_width = glyph_total + atomic_total
     breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
     row_budget = breakpoint_width - 1
-    return row_budget + 2 + 2 * len(DATA_COLUMNS)
+    return row_budget + 2 + 2 * len(DATA_COLUMNS) + scrollbar_reservation_width(PriorityTable)
 
 
 class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):

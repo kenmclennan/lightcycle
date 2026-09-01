@@ -68,7 +68,11 @@ def compute_layout(row_budget, glyph_columns, atomic_values, indent):
 
 def row_budget_for(table, num_columns):
     padding = 2 * table.cell_padding * num_columns
-    return table.size.width - padding
+    return table.size.width - table.scrollbar_gutter.width - padding
+
+
+def scrollbar_reservation_width(table_cls):
+    return table_cls().styles.scrollbar_size_vertical
 
 
 def render_row_budget(table, layout, num_columns):
@@ -80,7 +84,7 @@ def render_row_budget(table, layout, num_columns):
 def floor_message(layout, table, num_columns):
     padding = 2 * table.cell_padding * num_columns
     chrome = table.screen.outer_size.width - table.screen.size.width
-    needed = layout.floor_width + padding + chrome
+    needed = layout.floor_width + padding + chrome + table.scrollbar_gutter.width
     return "Widen the terminal to at least %d columns to show this list." % needed
 
 

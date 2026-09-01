@@ -9,7 +9,9 @@ from lightcycle.adapters.tui.design_system import (
     STATE_GLYPHS,
 )
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
-from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
+from lightcycle.adapters.tui.row_grid import (
+    FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
+)
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -358,7 +360,7 @@ def _hierarchy_stack_terminal_width(mode, ids, roles, max_depth):
     floor_width = max(first_line_width, indent + FLEXIBLE_MINIMUM)
     breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
     row_budget = floor_width if mode == "just wide enough to clear the floor" else breakpoint_width - 1
-    return row_budget + 2 + 2 * _HIERARCHY_NUM_COLUMNS
+    return row_budget + 2 + 2 * _HIERARCHY_NUM_COLUMNS + scrollbar_reservation_width(HierarchyPagingTable)
 
 
 @given(parsers.parse(

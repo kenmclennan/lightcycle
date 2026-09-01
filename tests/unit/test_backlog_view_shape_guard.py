@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 from lightcycle.adapters.tui.app import BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, BacklogView
 from lightcycle.adapters.tui.backlog_list import BacklogRow
-from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, atomic_column_width
+from lightcycle.adapters.tui.row_grid import (
+    FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
+)
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -135,7 +137,7 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
         first_line_width = glyph_total + atomic_total
         floor_width = max(first_line_width, BACKLOG_CONTINUATION_INDENT + FLEXIBLE_MINIMUM)
         row_budget = floor_width - 1
-        return row_budget + 2 + 2 * len(BACKLOG_COLUMNS)
+        return row_budget + 2 + 2 * len(BACKLOG_COLUMNS) + scrollbar_reservation_width(BacklogTable)
 
     def _launch(self):
         store = FakeStore()

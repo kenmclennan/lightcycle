@@ -489,6 +489,8 @@ class LightcycleApp(App):
         scrollbar-color-hover: {COLOURS["dim"]};
         scrollbar-color-active: {COLOURS["dim"]};
         scrollbar-corner-color: {COLOURS["bg"]};
+        scrollbar-gutter: stable;
+        overflow-x: hidden;
     }}
     DataTable:focus {{
         background-tint: transparent;
