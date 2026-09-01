@@ -12,9 +12,9 @@ def ctx():
     return {"store": FakeStore(), "ids": {}}
 
 
-def _create_step(ctx, name, deps=None, role=None):
+def _create_step(ctx, name, deps=None, role=None, parent=None):
     tid = ctx["store"].create_step(
-        name, role=role, deps=[ctx["ids"][d] for d in (deps or [])]
+        name, role=role, deps=[ctx["ids"][d] for d in (deps or [])], parent=parent
     )
     ctx["ids"][name] = tid
     return tid
@@ -119,3 +119,18 @@ def _is_the_step_claimed(ctx, name):
 def _queue_lane(ctx, name):
     node = ctx["store"].get_node(ctx["ids"][name])
     assert lane_for(node.state, node.role) == Lane.QUEUE
+
+
+@given(parsers.parse('an item whose only step "{blocked}" needs a step "{dep}"'))
+def _item_with_dependency_held_step(ctx, blocked, dep):
+    theme = ctx["store"].create_theme("objective")
+    item = ctx["store"].create_item("some item", theme=theme)
+    ctx["ids"]["item:" + blocked] = item
+    _create_step(ctx, dep)
+    _create_step(ctx, blocked, deps=[dep], parent=item)
+
+
+@then(parsers.parse('the item containing "{name}" is ready'))
+def _item_containing_is_ready(ctx, name):
+    item = ctx["store"].get_node(ctx["ids"]["item:" + name])
+    assert item.state == "ready"
