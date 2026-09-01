@@ -45,7 +45,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **signal** - a per-step counter or condition feeding cadence or escalation.
 - **phase** - a group of stages sharing one PR and one worktree (spec, feature, code). It names _which_ gate, not when.
 - **workspace** - which repo a stage's worktree is cut from. `project` (the default) is the item's own `repo` artifact; `specs` is the configured specs root; any other value names a registered project. An unregistered name is an error, never a silent fall back to the item's repo.
-- **phase run** - one pass of an item through a phase. A workflow that loops re-enters a phase, and each run gets its own branch and worktree; the first run keys on the bare phase name, later runs carry their index (`spec-2`). Phase alone identifies a gate, never a pass.
+- **phase run** - one pass of an item through a phase. A workflow that loops re-enters a phase, and each run gets its own branch and worktree only once the prior run's PR (if it had one) has resolved; while that PR is still open, further activity on the phase reuses the same branch and worktree rather than minting a new run. The first run keys on the bare phase name, later runs carry their index (`spec-2`). Phase alone identifies a gate, never a pass.
 - **display phrase** - an optional, per-stage human-facing label declared in a workflow's `display:` block. Shown alongside or in place of the raw stage name wherever a human scans (`lc inbox`, `lc status`, the TUI); never a substitute for the stage name itself, which stays the identifier `lc claim` and every JSON payload use. A stage with no declared phrase falls back to its bare name.
 
 ## The spec-driven pipeline (steps)

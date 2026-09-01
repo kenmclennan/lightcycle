@@ -128,6 +128,20 @@ _CONFLICT_FLOW = flow_from_metas({
     },
 })
 
+_CLOSE_ROUTES_TO_HUMAN_GATE_FLOW = flow_from_metas(
+    {
+        "confirm-abandon": {
+            "step": "confirm-abandon",
+        },
+        "reviewer": {
+            "step": "ready-merge",
+            "routes": {"merged": "cleanup", "changes": "build", "abandoned": "confirm-abandon"},
+            "on_pr_merge": "merged",
+            "on_pr_close": "abandoned",
+        },
+    }
+)
+
 _READY_MERGE_QUAD_FLOW = flow_from_metas({
     "handle-feedback": {
         "model": "sonnet",
@@ -705,6 +719,30 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
 
         self.assertEqual(result.abandoned, [])
         self.assertEqual(store.get_node(item).state, "ready")
+
+    def test_closed_unmerged_pr_advances_to_a_declared_gate_instead_of_closing(self):
+        url = "https://github.com/x/y/pull/23"
+        store = FakeStore()
+        item = store.create_item("gated feature", theme=store.create_theme("theme"))
+        store.add_artifact(item, "pr", url)
+        step = store.create_step(
+            "ready-merge: gated feature", step="ready-merge", role="human", parent=item
+        )
+        worktrees = FakeWorktrees()
+        flow_adapter = _FlowAdapter(_CLOSE_ROUTES_TO_HUMAN_GATE_FLOW)
+        complete = CompleteStepUseCase(store, flow_adapter)
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(closed_prs={url}), worktrees, flow_adapter, complete
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])
+        self.assertEqual(store.get_node(item).state, "in_progress")
+        self.assertEqual(store.get_node(step).state, "done")
+        live_steps = [s for s in store.children(item) if s.state != "done"]
+        self.assertEqual([s.step for s in live_steps], ["confirm-abandon"])
+        self.assertEqual(worktrees.removed, [])
 
     def test_closed_unmerged_pr_closes_story_whose_live_task_is_at_watch_pr(self):
         url = "https://github.com/x/y/pull/22"

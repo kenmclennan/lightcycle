@@ -203,9 +203,18 @@ class MonitorPrsUseCase:
                         resolved = True
                     merged.append(item.id)
                 elif close_outcome and self._github.is_closed_unmerged(pr_value):
-                    close.execute(CloseItemInput(item=item.id, reason=close_outcome))
+                    nxt = flow.next(stage, close_outcome)
+                    if nxt and nxt.to_step and not nxt.to_terminal:
+                        step = self._active_step_at(item.id, stage)
+                        if step is None:
+                            continue
+                        if flow.phase_of(stage) != flow.phase_of(nxt.to_step):
+                            self._worktrees.remove(item.id)
+                        self._complete.execute(CompleteInput(step=step.id, outcome=close_outcome))
+                    else:
+                        close.execute(CloseItemInput(item=item.id, reason=close_outcome))
+                        resolved = True
                     abandoned.append(item.id)
-                    resolved = True
                 if resolved:
                     break
         for step in self._store.all_nodes():

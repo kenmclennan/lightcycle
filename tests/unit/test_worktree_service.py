@@ -7,6 +7,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 
@@ -814,6 +815,131 @@ class TestPhaseReEntry(unittest.TestCase):
         self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
 
         self.assertFalse([c for c in self.git.calls if c[0] == "remove_worktree"])
+
+
+class _ExplodingGitHub:
+    def is_merged(self, pr):
+        raise AssertionError("must not query github when no pr artifact is recorded")
+
+    def is_closed_unmerged(self, pr):
+        raise AssertionError("must not query github when no pr artifact is recorded")
+
+
+class TestPhaseReEntryWithOpenPr(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.phases = {"spec-writer": "spec", "build": "code"}
+        self.flow = _LoopFlow(self.phases)
+        self.git = _FakeGit(git_repos={os.path.join("/home/u/workspace/projects", "saga")})
+        self.theme = self.store.create_theme("theme")
+        self.item = self.store.create_item("deliver the blueprint", theme=self.theme)
+        self.store.add_project(
+            "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
+        )
+        self.store.add_artifact(self.item, "repo", "saga")
+
+    def _svc(self, github):
+        return WorktreeService(
+            self.store, git=self.git, fs=None,
+            config=_Cfg("/home/u/workspace/projects"), flow=self.flow, github=github,
+        )
+
+    def _step(self, step):
+        return self.store.create_step("%s: work" % step, step=step, parent=self.item)
+
+    def _close(self, sid):
+        self.store.update_state(sid, "done")
+
+    def test_a_still_open_pr_keeps_the_same_branch_and_worktree(self):
+        svc = self._svc(FakeGitHub())
+        first = self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+        first_branch = svc.item_branch(self.item)
+        first_path = svc.worktree_path(self.item)
+        self.store.add_artifact(
+            self.item, "pr", "https://github.com/x/y/pull/369", label="spec"
+        )
+        self._close(first)
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+
+        self.assertEqual(svc.item_branch(self.item), first_branch)
+        self.assertEqual(svc.worktree_path(self.item), first_path)
+        self.assertFalse([
+            c for c in self.git.calls
+            if c[0] in ("delete_branch", "delete_remote_branch", "remove_worktree")
+        ])
+
+    def test_a_still_open_pr_keeps_the_same_branch_across_repeated_boundary_crossings(self):
+        svc = self._svc(FakeGitHub())
+        first = self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+        first_branch = svc.item_branch(self.item)
+        self.store.add_artifact(
+            self.item, "pr", "https://github.com/x/y/pull/369", label="spec"
+        )
+        self._close(first)
+        self._close(self._step("build"))
+        self._close(self._step("spec-writer"))
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+
+        self.assertEqual(svc.item_branch(self.item), first_branch)
+        self.assertFalse([
+            c for c in self.git.calls
+            if c[0] in ("delete_branch", "delete_remote_branch", "remove_worktree")
+        ])
+
+    def test_a_merged_pr_still_mints_a_new_branch(self):
+        pr_url = "https://github.com/x/y/pull/370"
+        svc = self._svc(FakeGitHub(merged_prs={pr_url}))
+        first = self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+        first_branch = svc.item_branch(self.item)
+        self.store.add_artifact(self.item, "pr", pr_url, label="spec")
+        self._close(first)
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+
+        self.assertNotEqual(svc.item_branch(self.item), first_branch)
+        self.assertIn("spec-2", svc.item_branch(self.item))
+
+    def test_a_closed_unmerged_pr_still_mints_a_new_branch(self):
+        pr_url = "https://github.com/x/y/pull/371"
+        svc = self._svc(FakeGitHub(closed_prs={pr_url}))
+        first = self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+        first_branch = svc.item_branch(self.item)
+        self.store.add_artifact(self.item, "pr", pr_url, label="spec")
+        self._close(first)
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+
+        self.assertNotEqual(svc.item_branch(self.item), first_branch)
+        self.assertIn("spec-2", svc.item_branch(self.item))
+
+    def test_no_pr_artifact_mints_a_new_branch_without_querying_github(self):
+        svc = self._svc(_ExplodingGitHub())
+        first = self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+        first_branch = svc.item_branch(self.item)
+        self._close(first)
+        self._close(self._step("build"))
+
+        self._step("spec-writer")
+        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+
+        self.assertNotEqual(svc.item_branch(self.item), first_branch)
+        self.assertIn("spec-2", svc.item_branch(self.item))
+
 
 class TestNamedWorkspace(unittest.TestCase):
     def setUp(self):

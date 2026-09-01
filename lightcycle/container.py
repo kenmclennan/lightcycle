@@ -38,7 +38,9 @@ class Container:
         return make_flow_service(self.fs, self.store, self.config, self.workflow_source)
 
     def worktrees(self):
-        return make_worktrees(self.store, self.git, self.fs, self.config, self.flow_service())
+        return make_worktrees(
+            self.store, self.git, self.fs, self.config, self.flow_service(), self.github
+        )
 
 
 def make_flow_service(fs, store, config, workflow_source):
@@ -47,7 +49,7 @@ def make_flow_service(fs, store, config, workflow_source):
     return FlowService(fs, store, config, workflow_source)
 
 
-def make_worktrees(store, git, fs, config, flow):
+def make_worktrees(store, git, fs, config, flow, github=None):
     from lightcycle.application.services.worktree import WorktreeService
 
-    return WorktreeService(store, git, fs, config, flow)
+    return WorktreeService(store, git, fs, config, flow, github=github)

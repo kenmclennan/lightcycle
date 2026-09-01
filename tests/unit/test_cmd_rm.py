@@ -32,6 +32,7 @@ class FakeContainer:
         self.fs = None
         self.config = None
         self.workflow_source = None
+        self.github = None
 
 
 class TestCmdRm(unittest.TestCase):

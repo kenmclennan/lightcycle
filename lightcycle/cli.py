@@ -144,7 +144,8 @@ def ready_roles():
 
 def _worktrees():
     return make_worktrees(
-        _container.store, _container.git, _container.fs, _container.config, _flow())
+        _container.store, _container.git, _container.fs, _container.config, _flow(),
+        _container.github)
 
 
 def require_store():
