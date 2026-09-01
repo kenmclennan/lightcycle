@@ -254,3 +254,25 @@ Feature: The hierarchy tab
     Given the current node is a step nested under an item under a theme
     When I view the Hierarchy tab
     Then it is highlighted at its actual depth, not the top row
+
+  Scenario: The Hierarchy tab lands on the current step, not the item, when the item has one already started
+    Given an item with one completed step and one queued step after it
+    When I view the Hierarchy tab
+    Then the queued step's row is highlighted, not the item's own row
+
+  Scenario: The Hierarchy tab lands on the current step, not the item, and it is scrolled into view even when it is far below the fold
+    Given an item with 40 completed steps and one queued step after them
+    When I view the Hierarchy tab
+    Then the queued step's row is highlighted, not the item's own row
+    And it is scrolled into view
+
+  Scenario: The Hierarchy tab still lands on the item's own row when every step is done
+    Given an item whose every step is done
+    When I view the Hierarchy tab
+    Then it is highlighted at the top row
+
+  Scenario: Confirming the Hierarchy tab's default selection on an in-progress item opens its current step, not the item itself
+    Given an item with one completed step and one queued step after it
+    When I view the Hierarchy tab
+    And Enter or → is pressed, without moving the selection
+    Then that step's own hub opens

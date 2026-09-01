@@ -235,6 +235,7 @@ def _type_with_active_current_step_highlighted(ctx, node_type):
     store.claim_ready("coder")
     ctx["node_id"] = node_id
     ctx["step_id"] = step
+    ctx["expected_log_target_id"] = step if node_type == "item" else node_id
     _launch(ctx, store, node_id)
 
 
@@ -572,6 +573,42 @@ def _current_node_nested_step(ctx):
     _launch(ctx, store, step)
 
 
+@given("an item with one completed step and one queued step after it")
+def _item_one_done_one_queued(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    done_step = store.create_step("s1", step="build", role="coder", parent=item)
+    queued_step = store.create_step("s2", step="write-code", role="write-code", parent=item)
+    store.close(done_step, "done")
+    ctx["item_id"] = item
+    ctx["step_id"] = queued_step
+    _launch(ctx, store, item)
+
+
+@given("an item with 40 completed steps and one queued step after them")
+def _item_forty_done_one_queued(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    for i in range(40):
+        step = store.create_step("s%d" % i, step="build", role="coder", parent=item)
+        store.close(step, "done")
+    queued_step = store.create_step("s-last", step="write-code", role="write-code", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = queued_step
+    _launch(ctx, store, item)
+
+
+@given("an item whose every step is done")
+def _item_every_step_done(ctx):
+    store = FakeStore()
+    item = store.create_item("Item")
+    for i in range(3):
+        step = store.create_step("s%d" % i, step="build", role="coder", parent=item)
+        store.close(step, "done")
+    ctx["item_id"] = item
+    _launch(ctx, store, item)
+
+
 @when("it appears in the hierarchy")
 def _it_appears(ctx):
     pass
@@ -644,6 +681,11 @@ def _enter_or_arrow_pressed(ctx, arrow):
     ctx["session"].press("enter")
 
 
+@when("Enter or → is pressed, without moving the selection")
+def _enter_pressed_without_moving_selection(ctx):
+    ctx["session"].press("enter")
+
+
 @when("I close it with Esc or ←")
 def _close_with_esc(ctx):
     ctx["session"].press("escape")
@@ -657,7 +699,11 @@ def _ancestor_leaves_view(ctx):
 
 @when("I scroll back up to where its actual row is")
 def _scroll_back_to_ancestor(ctx):
-    for _ in range(31):
+    table = _table(ctx)
+    banner = ctx["hub_screen"].query_one("#pinned-ancestor", Static)
+    for _ in range(table.row_count):
+        if not banner.display:
+            break
         ctx["session"].press("up")
 
 
@@ -1011,7 +1057,7 @@ def _nothing_happens_no_log(ctx):
 def _current_step_log_tab_opens_live(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen, NodeHubScreen)
-    assert screen._node_id == ctx["node_id"]
+    assert screen._node_id == ctx["expected_log_target_id"]
     assert screen._active_tab == "log"
 
 
@@ -1040,3 +1086,26 @@ def _highlighted_at_actual_depth(ctx):
     ids = [row.key.value for row in table.ordered_rows]
     assert ids[table.cursor_row] == ctx["step_id"]
     assert table.cursor_row > 0
+
+
+@then("the queued step's row is highlighted, not the item's own row")
+def _queued_step_highlighted_not_item(ctx):
+    table = _table(ctx)
+    ids = _row_ids(ctx)
+    assert ids[table.cursor_row] == ctx["step_id"]
+    assert ids[table.cursor_row] != ctx["item_id"]
+
+
+@then("it is scrolled into view")
+def _scrolled_into_view(ctx):
+    table = _table(ctx)
+    assert table.cursor_row >= table.scroll_y
+    assert table.cursor_row < table.scroll_y + table.size.height
+
+
+@then("that step's own hub opens")
+def _steps_own_hub_opens_plain(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["step_id"]
+    assert screen._node_id != ctx["item_id"]

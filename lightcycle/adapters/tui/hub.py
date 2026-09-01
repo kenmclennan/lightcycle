@@ -115,6 +115,13 @@ def landing_node(store, node):
     return cur if cur is not None else node
 
 
+def hierarchy_target_node(store, node):
+    if node.type != "item" or node.blocked_by or node.state == State.DONE:
+        return node
+    cur = current_step(store, node.id)
+    return cur if cur is not None else node
+
+
 def log_target_node(store, node):
     if node.type == "step":
         return node
@@ -827,6 +834,7 @@ class NodeHubScreen(Screen):
         self._hierarchy_stacked = False
         self._hierarchy_layout_cache = None
         self._hierarchy_row_budget_cache = None
+        self._hierarchy_target_id = None
         self._flow_service = None
         self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
         self._active_glyph_timer = None
@@ -882,6 +890,7 @@ class NodeHubScreen(Screen):
         store = self._container.store
         node = store.get_node(self._node_id)
         self._active_tab = self._forced_initial_tab or landing_tab(landing_node(store, node))
+        self._hierarchy_target_id = hierarchy_target_node(store, node).id
         self._setup_log_tab()
         self.app.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._initial_refresh)
@@ -1113,7 +1122,7 @@ class NodeHubScreen(Screen):
             self._last_hierarchy_shape = shape
             return
 
-        selected_id = self._node_id if initial else self._selected_id(table)
+        selected_id = self._selected_id(table) or self._hierarchy_target_id
         table.clear(columns=True)
         row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["hierarchy"]))
         self._hierarchy_layout_cache = layout
