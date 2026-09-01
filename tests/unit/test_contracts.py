@@ -173,6 +173,38 @@ class TestPhaseContracts(unittest.TestCase):
         self.assertEqual(a.phase_conflicts(), {})
 
 
+class TestDisplayContracts(unittest.TestCase):
+    def test_display_for_destination_only_fileless_target_is_not_unknown(self):
+        text = (
+            "entry: build\n\n"
+            "nodes:\n  build  coder\n\n"
+            "edges:\n  build  done  review-conflict\n\n"
+            "display:\n  review-conflict  Resolve conflict\n"
+        )
+        graph = parse_graph(text)
+        metas = {"coder": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unknown_display(), [])
+
+    def test_unknown_display_stage_is_refused(self):
+        text = "entry: build\n\nnodes:\n  build  coder\n\ndisplay:\n  build  Build it\n  ghost  Ghost it\n"
+        graph = parse_graph(text)
+        metas = {"coder": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unknown_display(), ["ghost"])
+        self.assertFalse(a.ok())
+
+    def test_as_dict_includes_unknown_display(self):
+        text = "entry: build\n\nnodes:\n  build  coder\n\ndisplay:\n  ghost  Ghost it\n"
+        graph = parse_graph(text)
+        metas = {"coder": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.as_dict()["unknown_display"], a.unknown_display())
+
+
 class TestRealStepsFlowComposition(unittest.TestCase):
     def _graph_flow(self):
         step_metas = {
