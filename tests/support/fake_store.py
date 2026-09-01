@@ -413,7 +413,8 @@ class FakeStore(StorePort):
             b["workflow"] = workflow
         return tid
 
-    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
+    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None,
+                     shortcode=None):
         fields = dict(
             title=title,
             type="item",
@@ -429,7 +430,7 @@ class FakeStore(StorePort):
         self._records[tid] = b
         return tid
 
-    def create_theme(self, title, *, project=None, goal=None, workflow=None):
+    def create_theme(self, title, *, project=None, goal=None, workflow=None, shortcode=None):
         b = self._new_record(
             title=title,
             type="theme",

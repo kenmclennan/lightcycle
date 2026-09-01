@@ -23,10 +23,10 @@ class TestProjectShortcode(unittest.TestCase):
         config, projects = _config()
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
-        eid = store.create_theme("x", project="horde")
+        eid = store.create_theme("x", project="horde", shortcode="HORDE")
         self.assertTrue(eid.startswith("HORDE-"), eid)
 
-    def test_epic_without_project_config_uses_global_shortcode(self):
+    def test_theme_without_an_explicit_shortcode_uses_the_global_shortcode(self):
         config, projects = _config()
         eid = SqliteStore(config).create_theme("y", project="plain")
         self.assertTrue(eid.startswith("xy-"), eid)
@@ -40,7 +40,7 @@ class TestProjectShortcode(unittest.TestCase):
         config, projects = _config()
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
-        theme = store.create_theme("x", project="horde")
+        theme = store.create_theme("x", project="horde", shortcode="HORDE")
         item = store.create_item("s", theme=theme)
         self.assertTrue(item.startswith(theme + "."), item)
 
@@ -48,10 +48,10 @@ class TestProjectShortcode(unittest.TestCase):
         config, projects = _config()
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
-        iid = store.create_item("x", project="horde")
+        iid = store.create_item("x", project="horde", shortcode="HORDE")
         self.assertTrue(iid.startswith("HORDE-"), iid)
 
-    def test_top_level_item_without_project_config_uses_global_shortcode(self):
+    def test_top_level_item_without_an_explicit_shortcode_uses_the_global_shortcode(self):
         config, projects = _config()
         iid = SqliteStore(config).create_item("y", project="plain")
         self.assertTrue(iid.startswith("xy-"), iid)
@@ -74,7 +74,7 @@ class TestProjectShortcode(unittest.TestCase):
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
         store.add_project("acme/saga", shortcode="SAGA")
-        horde_first = store.create_item("h1", project="horde")
-        saga_first = store.create_item("s1", project="saga")
+        horde_first = store.create_item("h1", project="horde", shortcode="HORDE")
+        saga_first = store.create_item("s1", project="saga", shortcode="SAGA")
         self.assertEqual(horde_first, "HORDE-1")
         self.assertEqual(saga_first, "SAGA-1")

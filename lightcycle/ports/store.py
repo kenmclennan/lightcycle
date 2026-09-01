@@ -145,11 +145,12 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None):
+    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None,
+                     shortcode=None):
         pass
 
     @abstractmethod
-    def create_theme(self, title, *, project=None, goal=None, workflow=None):
+    def create_theme(self, title, *, project=None, goal=None, workflow=None, shortcode=None):
         pass
 
     @abstractmethod

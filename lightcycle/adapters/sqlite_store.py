@@ -783,8 +783,9 @@ class SqliteStore(StorePort):
         self._conn.commit()
         return effective_id
 
-    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None):
-        tid = self._mint_or_adopt(id, theme, shortcode=self._shortcode_for(project))
+    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None,
+                     shortcode=None):
+        tid = self._mint_or_adopt(id, theme, shortcode=shortcode)
         self._conn.execute(
             "INSERT INTO nodes (id, type, title, state, parent, project, goal, workflow, "
             "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?, ?)",
@@ -793,16 +794,9 @@ class SqliteStore(StorePort):
         self._conn.commit()
         return tid
 
-    def _shortcode_for(self, project):
-        if not project:
-            return self._config.shortcode()
-        matches = self._match_projects(project)
-        if len(matches) == 1 and matches[0].shortcode:
-            return matches[0].shortcode
-        return self._config.shortcode()
-
-    def create_theme(self, title, *, project=None, goal=None, workflow=None, id=None):
-        tid = self._mint_or_adopt(id, None, shortcode=self._shortcode_for(project))
+    def create_theme(self, title, *, project=None, goal=None, workflow=None, id=None,
+                      shortcode=None):
+        tid = self._mint_or_adopt(id, None, shortcode=shortcode)
         self._conn.execute(
             "INSERT INTO nodes (id, type, title, state, project, goal, workflow, created_at) "
             "VALUES (?, 'theme', ?, 'backlogged', ?, ?, ?, ?)",

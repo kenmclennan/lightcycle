@@ -33,6 +33,7 @@ from lightcycle.domain.work import display_stage
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.project_of import project_of
 from lightcycle.application.work.resolve_backlog import link_resolves
+from lightcycle.application.work.resolve_shortcode import resolve_shortcode
 from lightcycle.application.work.resolve_workflow_selection import (
     ResolveWorkflowSelectionInput,
     ResolveWorkflowSelectionUseCase,
@@ -1001,13 +1002,16 @@ def cmd_new(argv):
         return 1
     if a.type == "theme":
         try:
-            resp = OpenThemeUseCase(_container.store).execute(
+            resp = OpenThemeUseCase(_container.store, _container.config).execute(
                 OpenThemeInput(objective=a.title, backlog=a.backlog,
                                project=a.project, workflow=a.workflow, repo=a.repo)
             )
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
+        if resp.shortcode_defaulted:
+            sys.stderr.write(
+                "no --project given; minted with the global shortcode '%s'\n" % resp.shortcode)
         print(resp.theme)
     elif a.type == "item":
         if a.parent:
@@ -1019,8 +1023,17 @@ def cmd_new(argv):
             if parent.type != "theme":
                 sys.stderr.write("'%s' is not a theme (type=%s)\n" % (a.parent, parent.type))
                 return 1
+        try:
+            resolved = resolve_shortcode(_container.store, _container.config, a.project)
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        if resolved.defaulted and not a.parent:
+            sys.stderr.write(
+                "no --project given; minted with the global shortcode '%s'\n" % resolved.value)
         tid = _container.store.create_item(
-            a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow)
+            a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow,
+            shortcode=resolved.value)
         repo = a.repo or (project_of(_container.store, parent) if a.parent else None)
         if repo:
             _container.store.add_artifact(tid, "repo", repo)
