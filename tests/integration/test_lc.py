@@ -950,6 +950,78 @@ class TestAdd(unittest.TestCase):
         arts = self.store.item_artifacts(new)
         self.assertEqual(arts, [])
 
+    def test_new_item_with_unregistered_project_refuses_and_creates_nothing(self):
+        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--project", "ghost/repo")
+        self.assertEqual(rc, 1)
+        self.assertIn("ghost/repo", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_item_with_ambiguous_project_refuses_and_creates_nothing(self):
+        self.store.add_project("acme/app", shortcode="ACME")
+        self.store.add_project("other/app", shortcode="OTHER")
+        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--project", "app")
+        self.assertEqual(rc, 1)
+        self.assertIn("app", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_item_with_shortcodeless_project_refuses_and_creates_nothing(self):
+        self.store.add_project("acme/ghost", local_path="/x")
+        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--project", "acme/ghost")
+        self.assertEqual(rc, 1)
+        self.assertIn("acme/ghost", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_theme_with_unregistered_project_refuses_and_creates_nothing(self):
+        rc, out, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--project", "ghost/repo")
+        self.assertEqual(rc, 1)
+        self.assertIn("ghost/repo", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_theme_with_ambiguous_project_refuses_and_creates_nothing(self):
+        self.store.add_project("acme/app", shortcode="ACME")
+        self.store.add_project("other/app", shortcode="OTHER")
+        rc, out, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--project", "app")
+        self.assertEqual(rc, 1)
+        self.assertIn("app", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_theme_with_shortcodeless_project_refuses_and_creates_nothing(self):
+        self.store.add_project("acme/ghost", local_path="/x")
+        rc, out, err = call(_cli_mod.cmd_new, "theme", "ship the thing", "--project", "acme/ghost")
+        self.assertEqual(rc, 1)
+        self.assertIn("acme/ghost", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_item_with_unresolvable_project_refuses_even_with_a_parent(self):
+        rc, theme, err = call(_cli_mod.cmd_new, "theme", "ship the thing")
+        self.assertEqual(rc, 0, err)
+        theme = theme.strip()
+        before = self.store.all_nodes()
+        rc, out, err = call(
+            _cli_mod.cmd_new, "item", "a step", "--parent", theme, "--project", "ghost/repo"
+        )
+        self.assertEqual(rc, 1)
+        self.assertIn("ghost/repo", err)
+        self.assertEqual(self.store.all_nodes(), before)
+
+    def test_new_item_with_no_project_reports_the_defaulted_prefix(self):
+        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("xy", err)
+
+    def test_new_item_with_no_project_and_a_parent_prints_no_notice(self):
+        rc, theme, err = call(_cli_mod.cmd_new, "theme", "ship the thing")
+        self.assertEqual(rc, 0, err)
+        theme = theme.strip()
+        rc, out, err = call(_cli_mod.cmd_new, "item", "a step", "--parent", theme)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(err, "")
+
+    def test_new_theme_with_no_project_reports_the_defaulted_prefix(self):
+        rc, out, err = call(_cli_mod.cmd_new, "theme", "ship the thing")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("xy", err)
+
 
 class TestProjectScanCli(unittest.TestCase):
     def setUp(self):

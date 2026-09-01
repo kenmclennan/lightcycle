@@ -76,7 +76,7 @@ The periodic retro **audit** is no longer a workflow step - it is an **engine se
 
 - **project** - a registered codebase lightcycle files work against: an **identity**, a **shortcode**, a local path, and a remote URL. Stored in the project registry, managed with `lc project add|list|rm`.
 - **identity** - the canonical `owner/name` string parsed from a repo's GitHub remote (SSH or HTTPS); the registry's lookup key. A path with no parseable GitHub remote has no identity and cannot be registered.
-- **shortcode** - the id prefix items registered under a project nest beneath (see "Identity" below). Explicit at registration (`--shortcode`) or defaulted from identity's name segment, uppercased. Per-project, not engine-wide.
+- **shortcode** - the id prefix items registered under a project nest beneath (see "Identity" below). Explicit at registration (`--shortcode`) or defaulted from identity's name segment, uppercased. Per-project, not engine-wide. An unresolvable `--project` at node creation (no match, an ambiguous match, or a match with no shortcode) is an error, never a silent fall back to the global shortcode; no `--project` given is not unresolvable and defaults to the global shortcode as before.
 - **scan** - `lc project scan [dir]`, read-only: walks a directory tree for git repos, classifying each as `new` (identity resolved, not yet registered), `already-registered`, or `no-remote` (no parseable GitHub remote). Registers nothing itself - a human or `lc project add` acts on its output.
 
 ## Identity

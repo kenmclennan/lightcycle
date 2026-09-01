@@ -23,6 +23,9 @@ class FakeConfig:
     def max_title_length(self):
         return self._cap
 
+    def shortcode(self):
+        return "XY"
+
 
 class FakeContainer:
     def __init__(self, store, cap=72):
