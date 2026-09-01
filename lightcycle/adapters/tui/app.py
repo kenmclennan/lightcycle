@@ -713,10 +713,11 @@ class LightcycleApp(App):
         self._sync_footer_shortcuts()
 
         running = PoolRunningUseCase(self._container.lock).execute().running
-        breaker = BreakerStatusUseCase(self._container.breaker).execute()
+        breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
         self.screen_stack[0].query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
+            breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
             version=__version__,
             upgrade_version=self._upgrade_version,

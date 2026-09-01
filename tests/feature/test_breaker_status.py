@@ -48,7 +48,7 @@ def _no_persisted_state(ctx):
 
 @given("the breaker status has already been read once")
 def _read_once(ctx):
-    ctx["use_case"].execute()
+    ctx["use_case"].execute(0)
 
 
 @when("the breaker's persisted state changes to open with a reset time")
@@ -61,7 +61,7 @@ def _changes_to_open(ctx):
 @when("the breaker status is read again")
 def _read(ctx):
     before = len(ctx["breaker_port"].save_calls)
-    ctx["result"] = ctx["use_case"].execute()
+    ctx["result"] = ctx["use_case"].execute(0)
     ctx["saves_during_read"] = len(ctx["breaker_port"].save_calls) - before
 
 

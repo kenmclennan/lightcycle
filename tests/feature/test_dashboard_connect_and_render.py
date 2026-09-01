@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import DataTable, Static
@@ -75,7 +77,7 @@ def _breaker_closed(ctx):
 
 @given("the breaker is open with a reset time")
 def _breaker_open(ctx):
-    ctx["reset_at"] = 1234567890.0
+    ctx["reset_at"] = time.time() + 3600
     ctx["breaker"] = FakeBreakerPort(is_open=True, reset_at=ctx["reset_at"])
 
 
@@ -140,7 +142,7 @@ def _queue_changes(ctx):
 def _state_changes(ctx):
     session = ctx["session"]
     session.app.container.lock.set_running(True)
-    session.app.container.breaker.save({"open": True, "reset_at": 999.0})
+    session.app.container.breaker.save({"open": True, "reset_at": time.time() + 3600})
 
 
 @when("one poll interval elapses")
@@ -202,8 +204,6 @@ def _reports_breaker_closed(ctx):
 
 @then("the status bar reports the breaker as open with that reset time")
 def _reports_breaker_open(ctx):
-    import time
-
     _, text, style = _rendered_segment(ctx["session"], "#status-claude")
     expected_ts = time.strftime("%H:%M:%S", time.localtime(ctx["reset_at"]))
     assert text == "%s claude unavailable · resumes %s" % (

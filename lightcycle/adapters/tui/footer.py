@@ -15,12 +15,25 @@ class StatusBar(Horizontal):
         yield Static(id="status-version")
         yield Static(id="status-upgrade")
 
-    def report(self, *, pool_running, breaker_is_open, breaker_reset_at, version, upgrade_version):
+    def report(
+        self,
+        *,
+        pool_running,
+        breaker_is_open,
+        breaker_is_probing,
+        breaker_reset_at,
+        version,
+        upgrade_version,
+    ):
         pool_glyph, pool_colour = FOOTER_GLYPHS["pool-running" if pool_running else "pool-stopped"]
         pool_text = "%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running")
         self.query_one("#status-pool", Static).update(Text(pool_text, style=COLOURS[pool_colour]))
 
-        if breaker_is_open:
+        if breaker_is_open and breaker_is_probing:
+            since_ts = time.strftime("%H:%M:%S", time.localtime(breaker_reset_at))
+            claude_glyph, claude_colour = FOOTER_GLYPHS["claude-probing"]
+            claude_text = "%s claude probing · since %s" % (claude_glyph, since_ts)
+        elif breaker_is_open:
             resume_ts = time.strftime("%H:%M:%S", time.localtime(breaker_reset_at))
             claude_glyph, claude_colour = FOOTER_GLYPHS["claude-unavailable"]
             claude_text = "%s claude unavailable · resumes %s" % (claude_glyph, resume_ts)
