@@ -195,7 +195,7 @@ class FakeStore(StorePort):
 
     def node_view(self, tid):
         t = self.get_node(tid)
-        arts = self.item_artifacts(t.parent) if t.parent else t.artifacts
+        arts = self.item_artifacts(t.parent) if t.type == "step" and t.parent else t.artifacts
         return NodeView(step=t, item_artifacts=list(arts))
 
     def present_types(self, step):

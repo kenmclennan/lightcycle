@@ -1117,6 +1117,17 @@ class TestModelV2(unittest.TestCase):
         self.assertEqual(v["parent"], item)
         self.assertEqual(v["item_artifacts"][0]["value"], "specs/X.md")
 
+    def test_themed_item_exposes_its_own_artifacts_not_its_theme(self):
+        theme = self.store.create_theme("theme e", workflow="lightcycle/spec-driven")
+        self.store.update_metadata(theme, {"artifacts": [{"type": "repo", "value": "org/theme-repo"}]})
+        item = self.store.create_item("item s", theme=theme)
+        self.store.update_metadata(item, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
+        rc, out, _ = call(_cli_mod.cmd_show, item)
+        v = json.loads(out)
+        self.assertEqual(v["type"], "item")
+        self.assertEqual(v["parent"], theme)
+        self.assertEqual([a["value"] for a in v["item_artifacts"]], ["specs/X.md"])
+
 
 class TestEpicCommand(unittest.TestCase):
     def setUp(self):
