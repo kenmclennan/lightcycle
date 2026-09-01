@@ -699,3 +699,36 @@ class StoreContractBase:
 
         got = {(a.label, a.value) for a in s.item_artifacts(sid) if a.type == "pr"}
         self.assertEqual(got, {("spec", "https://gh/spec"), (None, "https://gh/plain-2")})
+
+    def test_node_view_of_a_themed_item_shows_its_own_artifacts_not_the_theme(self):
+        s = self.make_store()
+        theme = s.create_theme("theme")
+        s.add_artifact(theme, "repo", "org/theme-repo")
+        item = s.create_item("item: foo", theme=theme)
+        s.add_artifact(item, "spec", "specs/foo.md")
+
+        view = s.node_view(item)
+
+        got = {(a.type, a.value) for a in view.item_artifacts}
+        self.assertEqual(got, {("spec", "specs/foo.md")})
+
+    def test_node_view_of_a_themeless_item_shows_its_own_artifacts(self):
+        s = self.make_store()
+        item = s.create_item("item: foo")
+        s.add_artifact(item, "spec", "specs/foo.md")
+
+        view = s.node_view(item)
+
+        got = {(a.type, a.value) for a in view.item_artifacts}
+        self.assertEqual(got, {("spec", "specs/foo.md")})
+
+    def test_node_view_of_a_step_still_shows_its_parent_item_artifacts(self):
+        s = self.make_store()
+        item = s.create_item("item: foo", theme=s.create_theme("theme"))
+        s.add_artifact(item, "spec", "specs/foo.md")
+        step = s.create_step("build: foo", parent=item)
+
+        view = s.node_view(step)
+
+        got = {(a.type, a.value) for a in view.item_artifacts}
+        self.assertEqual(got, {("spec", "specs/foo.md")})
