@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
@@ -239,7 +241,7 @@ def _tab_is_pressed(ctx):
 @when("the pool or breaker state changes")
 def _pool_or_breaker_state_changes(ctx):
     ctx["lock"].set_running(True)
-    ctx["breaker"].save({"open": True, "reset_at": 999.0})
+    ctx["breaker"].save({"open": True, "reset_at": time.time() + 3600})
 
 
 @when("one poll interval elapses")

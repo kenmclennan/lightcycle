@@ -944,7 +944,7 @@ class TestFooterClaudeSegment(unittest.TestCase):
         self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
 
     def test_open_breaker_renders_claude_unavailable_with_resume_time(self):
-        reset_at = 1234567890.0
+        reset_at = time.time() + 3600
         session = self._launch(breaker=FakeBreakerPort(is_open=True, reset_at=reset_at))
 
         _, text, style = _rendered_segment(session, "#status-claude")
@@ -958,7 +958,7 @@ class TestFooterClaudeSegment(unittest.TestCase):
         self.assertEqual(_colour_of(style), COLOURS["red"].lower())
 
     def test_breaker_closing_returns_to_claude_available_without_restart(self):
-        breaker = FakeBreakerPort(is_open=True, reset_at=1234567890.0)
+        breaker = FakeBreakerPort(is_open=True, reset_at=time.time() + 3600)
         session = self._launch(breaker=breaker)
 
         breaker.save({"open": False, "reset_at": None})
@@ -967,6 +967,30 @@ class TestFooterClaudeSegment(unittest.TestCase):
         _, text, style = _rendered_segment(session, "#status-claude")
         self.assertEqual(text, "%s claude available" % FOOTER_GLYPHS["claude-available"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
+
+    def test_probing_breaker_renders_distinctly_from_unavailable(self):
+        reset_at = time.time() - 1
+        session = self._launch(breaker=FakeBreakerPort(is_open=True, reset_at=reset_at))
+
+        _, text, style = _rendered_segment(session, "#status-claude")
+
+        self.assertNotIn("resumes", text)
+        self.assertEqual(text.split(" ", 1)[0], FOOTER_GLYPHS["claude-probing"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+
+    def test_open_not_yet_probing_breaker_still_shows_resume_time(self):
+        reset_at = time.time() + 3600
+        session = self._launch(breaker=FakeBreakerPort(is_open=True, reset_at=reset_at))
+
+        _, text, style = _rendered_segment(session, "#status-claude")
+
+        expected_ts = time.strftime("%H:%M:%S", time.localtime(reset_at))
+        self.assertEqual(
+            text,
+            "%s claude unavailable · resumes %s"
+            % (FOOTER_GLYPHS["claude-unavailable"].glyph, expected_ts),
+        )
+        self.assertEqual(_colour_of(style), COLOURS["red"].lower())
 
 
 class TestQuit(unittest.TestCase):

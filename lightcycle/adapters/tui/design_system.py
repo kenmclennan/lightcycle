@@ -44,6 +44,7 @@ FOOTER_GLYPHS = {
     "pool-stopped": Glyph("○", "dim"),
     "claude-available": Glyph("●", "cyan"),
     "claude-unavailable": Glyph("⊘", "red"),
+    "claude-probing": Glyph("◐", "amber"),
     "upgrade-available": Glyph("⬆", "amber"),
 }
 

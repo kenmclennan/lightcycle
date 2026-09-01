@@ -688,10 +688,11 @@ class ArtifactViewerScreen(Screen):
     def _refresh_footer(self) -> None:
         container = self.app.container
         running = PoolRunningUseCase(container.lock).execute().running
-        breaker = BreakerStatusUseCase(container.breaker).execute()
+        breaker = BreakerStatusUseCase(container.breaker).execute(self.app._now().timestamp())
         self.query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
+            breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
             version=__version__,
             upgrade_version=self.app.upgrade_version,
@@ -1034,10 +1035,11 @@ class NodeHubScreen(Screen):
 
     def _refresh_footer(self) -> None:
         running = PoolRunningUseCase(self._container.lock).execute().running
-        breaker = BreakerStatusUseCase(self._container.breaker).execute()
+        breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
         self.query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
+            breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
             version=__version__,
             upgrade_version=self.app.upgrade_version,
