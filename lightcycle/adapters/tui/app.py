@@ -961,15 +961,16 @@ class LightcycleApp(App):
         if table.size.width == 0:
             self._priority_needs_rebuild = True
             return
-        self._priority_needs_rebuild = False
         layout = self._priority_layout(table, rows)
         self._priority_floor = bool(rows) and layout.floor
         self._priority_stacked = layout.stacked
         if self._priority_floor:
+            self._priority_needs_rebuild = True
             self.query_one("#priority-list-floor", Static).update(
                 Text(floor_message(layout, table, len(DATA_COLUMNS)), style=COLOURS["dim"])
             )
             return
+        self._priority_needs_rebuild = False
 
         has_prior = self._last_shape is not None
         selected_id = self._selected_row_id(table) if has_prior else None

@@ -8,7 +8,9 @@ from textual.widgets import DataTable, Static
 
 from lightcycle import __version__
 from lightcycle.adapters.tui.app import (
+    DATA_COLUMNS,
     POLL_INTERVAL_SECONDS,
+    PRIORITY_CONTINUATION_INDENT,
     BacklogTable,
     BacklogView,
     LightcycleApp,
@@ -28,6 +30,7 @@ from lightcycle.adapters.tui.design_system import (
     GLOBAL_SHORTCUTS,
     STATE_GLYPHS,
 )
+from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, atomic_column_width
 from lightcycle.application.setup import UpgradeResponse
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
@@ -1373,3 +1376,58 @@ class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
             session.pause()
             rebuild.assert_not_called()
             update.assert_called_once()
+
+
+class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
+    _ID = "LC-500.1"
+    _PROJECT = "lightcycle"
+    _STEP = "code-review-rounds"
+
+    def _floor_terminal_width(self):
+        glyph_total = PRIORITY_CONTINUATION_INDENT
+        atomic_values = {
+            "id": [self._ID],
+            "project": [self._PROJECT],
+            "step": [self._STEP],
+            "time": [""],
+        }
+        atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
+        first_line_width = glyph_total + atomic_total
+        floor_width = max(first_line_width, PRIORITY_CONTINUATION_INDENT + FLEXIBLE_MINIMUM)
+        row_budget = floor_width - 1
+        return row_budget + 2 + 2 * len(DATA_COLUMNS)
+
+    def _launch(self):
+        store = FakeStore()
+        store.create_step("queued item", step=self._STEP, role="coder", id=self._ID)
+        store.add_artifact(self._ID, "repo", self._PROJECT)
+        width = self._floor_terminal_width()
+        session = launch(make_test_container(store=store), size=(width, 24))
+        self.addCleanup(session.close)
+        return session
+
+    def test_first_poll_enters_floor_state_without_populating_the_table(self):
+        session = self._launch()
+        table = session.app.query_one(PriorityTable)
+
+        self.assertTrue(session.app._priority_floor)
+        self.assertTrue(session.app._priority_needs_rebuild)
+        self.assertEqual(table.row_count, 0)
+
+    def test_second_poll_with_unchanged_shape_does_not_raise_and_stays_at_floor(self):
+        session = self._launch()
+        table = session.app.query_one(PriorityTable)
+        floor_static = session.app.query_one("#priority-list-floor")
+
+        session.poll_tick()
+
+        self.assertTrue(session.app._priority_floor)
+        self.assertTrue(session.app._priority_needs_rebuild)
+        self.assertEqual(table.row_count, 0)
+
+        region = floor_static.region
+        strips = session.app.screen._compositor.render_strips()
+        painted = "".join(
+            "".join(seg.text for seg in strips[y]) for y in range(region.y, region.y + region.height)
+        )
+        self.assertIn("Widen the terminal", painted)
