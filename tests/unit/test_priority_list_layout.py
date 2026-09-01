@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
+from lightcycle.adapters.tui.hub import ArtifactListTable, NodeHubScreen
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -54,6 +55,58 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
         self.assertFalse(screen.show_vertical_scrollbar)
         self.assertGreater(table.max_scroll_y, 0)
         self.assertTrue(table.show_vertical_scrollbar)
+
+    def test_screen_does_not_scroll_when_backlog_fits(self):
+        store = FakeStore()
+        store.create_item("single row")
+
+        session = self._launch(store)
+        session.press("tab")
+
+        screen = session.app.screen
+        table = session.app.query_one(BacklogTable)
+        self.assertEqual(screen.max_scroll_y, 0)
+        self.assertFalse(screen.show_vertical_scrollbar)
+        self.assertEqual(table.max_scroll_y, 0)
+        self.assertFalse(table.show_vertical_scrollbar)
+
+    def _open_list_artifact(self, store, item_id, size=(80, 24)):
+        session = self._launch(store, size=size)
+        screen = NodeHubScreen(session.app.container, item_id, session.app._now, initial_tab="artifacts")
+        session.run(lambda: session.app.push_screen(screen))
+        session.pause()
+        session.pause()
+        session.press("enter")
+        session.pause()
+        return session
+
+    def test_screen_does_not_scroll_when_artifact_list_overflows(self):
+        store = FakeStore()
+        item = store.create_item("Item")
+        store.add_artifact(item, "watched", "\n".join("item %02d" % i for i in range(40)), kind="list")
+
+        session = self._open_list_artifact(store, item)
+
+        screen = session.app.screen
+        table = screen.query_one(ArtifactListTable)
+        self.assertEqual(screen.max_scroll_y, 0)
+        self.assertFalse(screen.show_vertical_scrollbar)
+        self.assertGreater(table.max_scroll_y, 0)
+        self.assertTrue(table.show_vertical_scrollbar)
+
+    def test_screen_does_not_scroll_when_artifact_list_fits(self):
+        store = FakeStore()
+        item = store.create_item("Item")
+        store.add_artifact(item, "watched", "single row", kind="list")
+
+        session = self._open_list_artifact(store, item)
+
+        screen = session.app.screen
+        table = screen.query_one(ArtifactListTable)
+        self.assertEqual(screen.max_scroll_y, 0)
+        self.assertFalse(screen.show_vertical_scrollbar)
+        self.assertEqual(table.max_scroll_y, 0)
+        self.assertFalse(table.show_vertical_scrollbar)
 
 
 def _rendered_cell_text(table, row_id, column_key):
