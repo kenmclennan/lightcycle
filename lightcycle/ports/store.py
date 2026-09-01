@@ -10,6 +10,13 @@ class ProjectResolutionError(Exception):
     pass
 
 
+class NodeNotFoundError(KeyError):
+    def __str__(self):
+        if self.args:
+            return str(self.args[0])
+        return super().__str__()
+
+
 class StorePort(ABC):
     @abstractmethod
     def item_artifacts(self, item_id):

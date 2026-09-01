@@ -4,7 +4,13 @@ import sqlite3
 
 from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
 from lightcycle.domain.workspace.isolation import refuses_live_store
-from lightcycle.ports.store import ItemTextRow, ProjectEntry, ProjectResolutionError, StorePort
+from lightcycle.ports.store import (
+    ItemTextRow,
+    NodeNotFoundError,
+    ProjectEntry,
+    ProjectResolutionError,
+    StorePort,
+)
 
 _DB_FILENAME = "store.db"
 
@@ -467,7 +473,7 @@ class SqliteStore(StorePort):
             "SELECT %s FROM nodes WHERE id = ?" % ", ".join(_COLUMNS), (tid,)
         ).fetchone()
         if row is None:
-            raise KeyError("step not found: %s" % tid)
+            raise NodeNotFoundError("unknown node '%s'" % tid)
         return self._rows_to_nodes([row])[0]
 
     def node_view(self, tid):
@@ -554,7 +560,7 @@ class SqliteStore(StorePort):
     def note(self, tid, text):
         row = self._conn.execute("SELECT notes FROM nodes WHERE id = ?", (tid,)).fetchone()
         if row is None:
-            raise KeyError("step not found: %s" % tid)
+            raise NodeNotFoundError("unknown node '%s'" % tid)
         combined = (row[0] + "\n" + text) if row[0] else text
         self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (combined, tid))
         self._conn.commit()
@@ -562,7 +568,7 @@ class SqliteStore(StorePort):
     def set_notes(self, tid, text):
         row = self._conn.execute("SELECT 1 FROM nodes WHERE id = ?", (tid,)).fetchone()
         if row is None:
-            raise KeyError("step not found: %s" % tid)
+            raise NodeNotFoundError("unknown node '%s'" % tid)
         self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (text or None, tid))
         self._conn.commit()
 
