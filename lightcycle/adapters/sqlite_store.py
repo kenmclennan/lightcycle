@@ -2,7 +2,9 @@ import datetime
 import os
 import sqlite3
 
-from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
+from lightcycle.domain.work import (
+    Artifact, Node, NodeView, State, default_kind_for, derive_state, merge_condition_note,
+)
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
     ItemTextRow,
@@ -562,6 +564,14 @@ class SqliteStore(StorePort):
         if row is None:
             raise NodeNotFoundError("unknown node '%s'" % tid)
         combined = (row[0] + "\n" + text) if row[0] else text
+        self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (combined, tid))
+        self._conn.commit()
+
+    def note_condition(self, tid, text):
+        row = self._conn.execute("SELECT notes FROM nodes WHERE id = ?", (tid,)).fetchone()
+        if row is None:
+            raise NodeNotFoundError("unknown node '%s'" % tid)
+        combined = merge_condition_note(row[0] or "", text, self._now())
         self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (combined, tid))
         self._conn.commit()
 

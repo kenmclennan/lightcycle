@@ -1132,6 +1132,30 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertIn("gh read failed", notes)
         self.assertIn("boom", notes)
 
+    def test_last_push_time_failure_does_not_grow_the_note_across_polls(self):
+        url = "https://github.com/x/y/pull/50-repeat"
+        gh = FakeGitHub(
+            push_time=1000.0, timed_comments=[self._mention_comment(1500.0)],
+            failing_calls={"last_push_time"},
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        uc.execute()
+        first = store.get_node(item).notes
+        uc.execute()
+        second = store.get_node(item).notes
+
+        self.assertEqual(len(first.splitlines()), 1)
+        self.assertEqual(len(second.splitlines()), 1)
+        self.assertIn("gh read failed", second)
+        self.assertIn("boom", second)
+        self.assertIn("x2", second)
+
+        uc.execute()
+        third = store.get_node(item).notes
+        self.assertEqual(len(third.splitlines()), 1)
+        self.assertIn("x3", third)
+
     def test_comments_since_failure_declines_to_conclude_feedback(self):
         url = "https://github.com/x/y/pull/51"
         gh = FakeGitHub(

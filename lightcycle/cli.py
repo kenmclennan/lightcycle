@@ -1101,7 +1101,7 @@ def cmd_new(argv):
 
 _SET_FLAG_OWNERS = {
     "title": (None,), "description": (None,), "goal": (None,), "project": (None,),
-    "label": (None,), "backlog": (None,),
+    "label": (None,), "backlog": (None,), "notes": (None,),
     "parent": (None, "active"),
     "workflow": (None, "active"),
     "step": ("active",),
@@ -1134,7 +1134,7 @@ def _reject_flags_ineffective_for_state(a):
 def cmd_set(argv):
     ap = argparse.ArgumentParser(prog="lc set")
     for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label",
-                "needs", "branch", "pr", "reason", "tried", "step"):
+                "needs", "branch", "pr", "reason", "tried", "step", "notes"):
         ap.add_argument("--%s" % opt)
     ap.add_argument("--backlog", action="append")
     ap.add_argument("id")
@@ -1204,6 +1204,8 @@ def cmd_set(argv):
             resolved_pin = resp.value
     if a.label:
         _container.store.label_add(a.id, a.label)
+    if a.notes is not None:
+        _container.store.set_notes(a.id, a.notes)
     tid = _container.store.edit_node(
         a.id, title=a.title, description=a.description, goal=a.goal,
         project=a.project, parent=a.parent, workflow=workflow_pin)

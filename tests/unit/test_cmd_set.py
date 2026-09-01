@@ -93,6 +93,30 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.description, "d")
         self.assertEqual(t.goal, "g")
 
+    def test_notes_replaces_existing_notes(self):
+        bid = self.store.create_step("build: x", step="build", role="coder")
+        self.store.note(bid, "old note")
+        rc, out, err = call(cli.cmd_set, bid, "--notes", "replacement")
+        self.assertEqual(rc, 0, err)
+        t = self.store.get_node(bid)
+        self.assertEqual(t.notes, "replacement")
+
+    def test_notes_empty_clears_notes(self):
+        bid = self.store.create_step("build: x", step="build", role="coder")
+        self.store.note(bid, "old note")
+        rc, out, err = call(cli.cmd_set, bid, "--notes", "")
+        self.assertEqual(rc, 0, err)
+        t = self.store.get_node(bid)
+        self.assertFalse(t.notes)
+
+    def test_notes_combined_with_state_is_refused(self):
+        bid = self.store.create_step("build: x", step="build", role="coder")
+        rc, out, err = call(
+            cli.cmd_set, bid, "--state", "blocked", "--needs", "decide X", "--notes", "x"
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--notes", err)
+
 
 class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
     def test_active_with_valid_flags_succeeds(self):

@@ -9,7 +9,9 @@ from lightcycle.ports.store import (
     ProjectResolutionError,
     StorePort,
 )
-from lightcycle.domain.work import Artifact, Node, NodeView, State, default_kind_for, derive_state
+from lightcycle.domain.work import (
+    Artifact, Node, NodeView, State, default_kind_for, derive_state, merge_condition_note,
+)
 
 
 def _new_id():
@@ -250,6 +252,10 @@ class FakeStore(StorePort):
         b = self._get(tid)
         existing = b.get("notes")
         b["notes"] = (existing + "\n" + text) if existing else text
+
+    def note_condition(self, tid, text):
+        b = self._get(tid)
+        b["notes"] = merge_condition_note(b.get("notes") or "", text, self._now())
 
     def set_notes(self, tid, text):
         self._get(tid)["notes"] = text or None

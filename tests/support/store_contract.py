@@ -1,5 +1,5 @@
 from lightcycle.domain.work import NodeSpec
-from lightcycle.ports.store import ProjectResolutionError
+from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
 
 
 class StoreContractBase:
@@ -120,6 +120,57 @@ class StoreContractBase:
         s.note(tid, "alpha")
         s.set_notes(tid, "")
         self.assertFalse(s.get_node(tid).notes)
+
+    def test_note_condition_repeated_collapses_to_one_growing_line(self):
+        s = self.make_store()
+        tid = s.create_step("t")
+        s.note_condition(tid, "gh read failed")
+        once = s.get_node(tid).notes
+        s.note_condition(tid, "gh read failed")
+        twice = s.get_node(tid).notes
+        self.assertEqual(len(twice.splitlines()), 1)
+        self.assertNotEqual(once, twice)
+        self.assertIn("x2", twice)
+
+    def test_note_condition_different_text_appends_a_new_line(self):
+        s = self.make_store()
+        tid = s.create_step("t")
+        s.note_condition(tid, "condition A")
+        s.note_condition(tid, "condition B")
+        lines = s.get_node(tid).notes.splitlines()
+        self.assertEqual(len(lines), 2)
+
+    def test_note_condition_non_adjacent_recurrence_starts_a_fresh_line(self):
+        s = self.make_store()
+        tid = s.create_step("t")
+        s.note_condition(tid, "A")
+        s.note_condition(tid, "B")
+        s.note_condition(tid, "A")
+        lines = s.get_node(tid).notes.splitlines()
+        self.assertEqual(len(lines), 3)
+
+    def test_note_condition_normalizes_embedded_newlines_and_still_dedupes(self):
+        s = self.make_store()
+        tid = s.create_step("t")
+        s.note_condition(tid, "line one\nline two")
+        s.note_condition(tid, "line one\nline two")
+        lines = s.get_node(tid).notes.splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertIn("x2", lines[0])
+
+    def test_note_condition_does_not_upgrade_a_plain_note(self):
+        s = self.make_store()
+        tid = s.create_step("t")
+        s.note(tid, "X")
+        s.note_condition(tid, "X")
+        lines = s.get_node(tid).notes.splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0], "X")
+
+    def test_note_condition_unknown_node_raises_node_not_found(self):
+        s = self.make_store()
+        with self.assertRaises(NodeNotFoundError):
+            s.note_condition("does-not-exist", "gh read failed")
 
     def test_task_without_deps_is_ready(self):
         s = self.make_store()

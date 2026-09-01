@@ -118,7 +118,7 @@ class MonitorPrsUseCase:
         return None
 
     def _note_gh_read_failure(self, item_id, failure):
-        self._store.note(
+        self._store.note_condition(
             item_id,
             "gh read failed while checking outstanding feedback (exit %d): %s"
             % (failure.returncode, failure.stderr),
@@ -175,7 +175,7 @@ class MonitorPrsUseCase:
                     ParkInput(step=step.id, observation=observation, decision=decision)
                 )
             else:
-                self._store.note(item.id, base_note)
+                self._store.note_condition(item.id, base_note)
         self._store.replace_artifact(
             item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
         )
