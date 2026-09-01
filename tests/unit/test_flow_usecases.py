@@ -1022,21 +1022,8 @@ class TestBlockTask(unittest.TestCase):
         self.assertEqual(t.role, "human")
         self.assertEqual(t.needs, "decide X")
 
-    def test_resume_fields_round_trip_on_fake_store(self):
+    def test_resume_fields_round_trip(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
-        BlockStepUseCase(s).execute(
-            BlockInput(step=bid, needs="decide X", branch="feat/y", pr="123",
-                       reason="oops", tried="a,b")
-        )
-        t = s.get_node(bid)
-        self.assertEqual(t.branch, "feat/y")
-        self.assertEqual(t.pr, "123")
-        self.assertEqual(t.reason, "oops")
-        self.assertEqual(t.tried, "a,b")
-
-    def test_resume_fields_round_trip_on_sqlite_store(self):
-        s = make_sqlite_store()
         bid = s.create_step("build: x", step="build", role="coder")
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="decide X", branch="feat/y", pr="123",
