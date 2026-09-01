@@ -16,6 +16,7 @@ LC = str(ROOT / "bin" / "lc")
 
 sys.path.insert(0, str(ROOT))
 import lightcycle.cli as _cli_mod
+import lightcycle.container as _container_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
@@ -823,7 +824,7 @@ class TestRun(unittest.TestCase):
         flow_calls = []
         worktree_calls = []
         orig_make_flow = _cli_mod.make_flow_service
-        orig_make_worktrees = _cli_mod.make_worktrees
+        orig_make_worktrees = _container_mod.make_worktrees
 
         def _flow_spy(*a, **kw):
             svc = orig_make_flow(*a, **kw)
@@ -836,7 +837,7 @@ class TestRun(unittest.TestCase):
             return svc
 
         with patch.object(_cli_mod, "make_flow_service", side_effect=_flow_spy), \
-                patch.object(_cli_mod, "make_worktrees", side_effect=_worktrees_spy):
+                patch.object(_container_mod, "make_worktrees", side_effect=_worktrees_spy):
             rc, _, err = self._run_once()
 
         self.assertEqual(rc, 0, err)

@@ -119,7 +119,7 @@ from lightcycle.application.setup import (
 )
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SqliteStore
 from lightcycle.config import Config, ConfigError
-from lightcycle.container import Container, make_flow_service, make_worktrees
+from lightcycle.container import Container, make_flow_service, make_worktrees, worktrees_for
 from lightcycle.ports.store import NodeNotFoundError
 
 
@@ -145,9 +145,7 @@ def ready_roles():
 
 
 def _worktrees():
-    return make_worktrees(
-        _container.store, _container.git, _container.fs, _container.config, _flow(),
-        _container.github)
+    return worktrees_for(_container)
 
 
 def require_store():
@@ -1422,9 +1420,7 @@ def cmd_start(argv):
     signal.signal(signal.SIGTERM, _stop)
     try:
         flow_service = _flow()
-        worktrees = make_worktrees(
-            _container.store, _container.git, _container.fs, _container.config, flow_service,
-            _container.github)
+        worktrees = worktrees_for(_container, flow=flow_service)
         complete = CompleteStepUseCase(
             _container.store, flow_service, worktrees, _container.config)
         monitor = MonitorPrsUseCase(
