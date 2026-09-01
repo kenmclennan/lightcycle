@@ -8,7 +8,9 @@ from lightcycle.adapters.tui.app import (
     ProjectFilterPicker,
     ShortcutBar,
 )
-from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
+from lightcycle.adapters.tui.row_grid import (
+    FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
+)
 from tests.support.fake_store import FakeStore
 from tests.support.screen_render import DEFAULT_SIZE as RENDER_SIZE
 from tests.support.screen_render import SCREENS as RENDER_SCREENS
@@ -163,7 +165,7 @@ def _backlog_stack_terminal_width(mode):
     floor_width = max(first_line_width, glyph_total + FLEXIBLE_MINIMUM)
     breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
     row_budget = floor_width if mode == "just wide enough to clear the floor" else breakpoint_width - 1
-    return row_budget + 2 + 2 * _BACKLOG_NUM_COLUMNS
+    return row_budget + 2 + 2 * _BACKLOG_NUM_COLUMNS + scrollbar_reservation_width(BacklogTable)
 
 
 @given(parsers.parse(

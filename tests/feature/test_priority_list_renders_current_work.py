@@ -5,9 +5,11 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import DataTable
 
-from lightcycle.adapters.tui.app import LightcycleApp
+from lightcycle.adapters.tui.app import LightcycleApp, PriorityTable
 from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
-from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width
+from lightcycle.adapters.tui.row_grid import (
+    FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
+)
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -501,7 +503,7 @@ def _priority_stack_terminal_width(mode):
     floor_width = max(first_line_width, glyph_total + FLEXIBLE_MINIMUM)
     breakpoint_width = first_line_width + FLEXIBLE_MINIMUM
     row_budget = floor_width if mode == "just wide enough to clear the floor" else breakpoint_width - 1
-    return row_budget + 2 + 2 * _PRIORITY_NUM_COLUMNS
+    return row_budget + 2 + 2 * _PRIORITY_NUM_COLUMNS + scrollbar_reservation_width(PriorityTable)
 
 
 @given(parsers.parse(

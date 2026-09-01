@@ -30,7 +30,9 @@ from lightcycle.adapters.tui.design_system import (
     GLOBAL_SHORTCUTS,
     STATE_GLYPHS,
 )
-from lightcycle.adapters.tui.row_grid import FLEXIBLE_MINIMUM, atomic_column_width
+from lightcycle.adapters.tui.row_grid import (
+    FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
+)
 from lightcycle.application.setup import UpgradeResponse
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
@@ -1419,7 +1421,7 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
         first_line_width = glyph_total + atomic_total
         floor_width = max(first_line_width, PRIORITY_CONTINUATION_INDENT + FLEXIBLE_MINIMUM)
         row_budget = floor_width - 1
-        return row_budget + 2 + 2 * len(DATA_COLUMNS)
+        return row_budget + 2 + 2 * len(DATA_COLUMNS) + scrollbar_reservation_width(PriorityTable)
 
     def _launch(self):
         store = FakeStore()
