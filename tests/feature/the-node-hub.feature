@@ -224,7 +224,7 @@ Feature: The node hub
     Then the escalation panel shows no "⚠ needs you" tag and no second line
     And the blocking item's id within the reason is coloured as a link, in the cyan colour
 
-  Scenario Outline: An escalated step's escalation panel shows the tagged two-line treatment
+  Scenario Outline: An escalated step's escalation panel shows the tag on its own line, above the reason
     Given an item whose current step is escalated, needing rework
     When <key> is pressed
     Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
@@ -255,6 +255,25 @@ Feature: The node hub
       | key   |
       | Enter |
       | →     |
+
+  Scenario: An escalated step's long reason wraps across multiple lines with every word intact
+    Given an item whose current step is escalated, with a reason long enough to wrap
+    When Enter is pressed
+    Then the escalation panel shows the reason's final words
+    And the escalation panel shows no truncation ellipsis
+
+  Scenario: An escalated step's reason far longer than the cap is truncated with an explicit ellipsis
+    Given an item whose current step is escalated, with a reason far longer than the panel's line cap
+    When Enter is pressed
+    Then the escalation panel is capped at the configured line count
+    And the escalation panel's last line ends with an ellipsis
+    And text past the cut point does not appear anywhere in the escalation panel
+
+  Scenario: The escalation panel reflows its wrap when the terminal is resized
+    Given an item whose current step is escalated, with a reason that wraps differently at two widths
+    When Enter is pressed
+    And the terminal is resized narrower
+    Then the escalation panel's rendered lines match the new width, not the original
 
   Scenario Outline: An item that is not needs-attention shows no escalation reason
     Given an item that is "<status>"

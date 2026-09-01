@@ -116,6 +116,27 @@ def _human_step_store():
     return store, item
 
 
+LONG_ESCALATION_REASON = (
+    "CI still pending on PR #424 head 7d4d840 (integration and unit-feature jobs in-progress) - "
+    "scenario review itself is clean (see feedback), just waiting on CI to conclude before "
+    "posting a pass verdict. Also, the integration job flaked once and was retried successfully "
+    "before landing."
+)
+
+
+def _long_reason_store():
+    store = DemoStore(now=lambda: _at(6))
+    theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
+    item = store.item("LC-143.3", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
+    step = store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human",
+                      parent=item, attention=True)
+    store.update_metadata(
+        step,
+        {"needs": "Resolve the merge conflict manually", "reason": LONG_ESCALATION_REASON},
+    )
+    return store, item
+
+
 def _backlog_store():
     store = DemoStore()
     lc273 = store.item("LC-273", "Row title repeats the step name", project="lightcycle")
@@ -429,6 +450,11 @@ def _hub_needs_attention_human(size):
     return _open_hub(_launch(store, size=size), item)
 
 
+def _hub_escalated_long_reason(size):
+    store, item = _long_reason_store()
+    return _open_hub(_launch(store, size=size), item)
+
+
 def _hub_step_node(size):
     store, _theme, _scan, coding = _populated_store()
     return _open_hub(_launch(store, size=size), coding)
@@ -474,6 +500,7 @@ SCREENS = {
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
     "hub#needs-attention-human": _hub_needs_attention_human,
+    "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
     "hub#hierarchy-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
