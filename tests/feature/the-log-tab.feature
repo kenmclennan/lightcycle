@@ -66,6 +66,17 @@ Feature: The Log tab
       | the current step is a human step, with no worker   |
       | the current step hasn't started yet, still queued  |
 
+  Scenario Outline: Returning to the node from the Log tab
+    Given the current step is a human step, with no worker
+    When I open its Log tab
+    And <key> is pressed
+    Then the hub closes
+
+    Examples:
+      | key |
+      | Esc |
+      | ←   |
+
   Scenario: Scrolling up shows earlier lines without stopping the live tail
     Given the live log is open
     When I scroll up

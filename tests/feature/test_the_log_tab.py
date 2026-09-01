@@ -352,6 +352,21 @@ def _when_ctrl_u(ctx):
     ctx["session"].press("ctrl+u")
 
 
+@when("Esc is pressed")
+def _when_esc_pressed(ctx):
+    ctx["session"].press("escape")
+
+
+@when("← is pressed")
+def _when_left_pressed(ctx):
+    ctx["session"].press("left")
+
+
+@then("the hub closes")
+def _then_hub_closes(ctx):
+    assert not isinstance(ctx["session"].app.screen, NodeHubScreen)
+
+
 @when("the worker completes")
 def _when_worker_completes(ctx):
     ctx["workers"]._alive.discard(WORKER_PID)
