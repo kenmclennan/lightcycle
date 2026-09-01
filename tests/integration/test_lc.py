@@ -818,6 +818,32 @@ class TestRun(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
 
+    def test_run_once_builds_exactly_one_flow_service_and_worktree_service(self):
+        self.store.create_step("build: t", step="build", role="coder")
+        flow_calls = []
+        worktree_calls = []
+        orig_make_flow = _cli_mod.make_flow_service
+        orig_make_worktrees = _cli_mod.make_worktrees
+
+        def _flow_spy(*a, **kw):
+            svc = orig_make_flow(*a, **kw)
+            flow_calls.append(svc)
+            return svc
+
+        def _worktrees_spy(*a, **kw):
+            svc = orig_make_worktrees(*a, **kw)
+            worktree_calls.append((svc, a[4]))
+            return svc
+
+        with patch.object(_cli_mod, "make_flow_service", side_effect=_flow_spy), \
+                patch.object(_cli_mod, "make_worktrees", side_effect=_worktrees_spy):
+            rc, _, err = self._run_once()
+
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(flow_calls), 1)
+        self.assertEqual(len(worktree_calls), 1)
+        self.assertIs(worktree_calls[0][1], flow_calls[0])
+
     def test_run_loop_first_tick_does_not_replay_old_hook_completions(self):
         (_steps_dir(self.root) / "auditor.md").write_text(
             "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
