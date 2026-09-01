@@ -40,6 +40,7 @@ class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
         hook_completions=None, worktrees=None, git=None, backup_gate=None, fs=None,
+        flow_service=None,
     ):
         self._store = store
         self._workers = workers
@@ -51,8 +52,11 @@ class TickUseCase:
         self._breaker_gate = breaker_gate
         self._hook_completions = hook_completions
         self._backup_gate = backup_gate
+        self._flow_service = flow_service
 
     def execute(self, input: TickInput) -> TickResponse:
+        if self._flow_service:
+            self._flow_service.clear_cache()
         self._workers.reap()
         monitor_result = self._monitor.execute() if self._monitor else None
         merged = monitor_result.merged if monitor_result else []

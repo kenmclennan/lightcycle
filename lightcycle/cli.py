@@ -1410,10 +1410,13 @@ def cmd_start(argv):
     signal.signal(signal.SIGTERM, _stop)
     try:
         flow_service = _flow()
+        worktrees = make_worktrees(
+            _container.store, _container.git, _container.fs, _container.config, flow_service,
+            _container.github)
         complete = CompleteStepUseCase(
-            _container.store, flow_service, _worktrees(), _container.config)
+            _container.store, flow_service, worktrees, _container.config)
         monitor = MonitorPrsUseCase(
-            _container.store, _container.github, _worktrees(), flow_service, complete
+            _container.store, _container.github, worktrees, flow_service, complete
         )
         cadence_gate = RetroCadenceUseCase(_container.store, _container.config)
         breaker_gate = BreakerGateUseCase(
@@ -1430,10 +1433,11 @@ def cmd_start(argv):
             cadence_gate=cadence_gate,
             breaker_gate=breaker_gate,
             hook_completions=hook_completions,
-            worktrees=_worktrees(),
+            worktrees=worktrees,
             git=_container.git,
             backup_gate=backup_gate,
             fs=_container.fs,
+            flow_service=flow_service,
         )
         if a.once:
             now = time.time()

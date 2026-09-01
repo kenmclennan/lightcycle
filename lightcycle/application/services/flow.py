@@ -17,6 +17,9 @@ class FlowService:
         self._workflow_source = workflow_source
         self._graph_cache = {}
 
+    def clear_cache(self):
+        self._graph_cache = {}
+
     def _default_pin(self):
         origin = self._config.default_origin()
         sha = self._workflow_source.current_sha(origin)

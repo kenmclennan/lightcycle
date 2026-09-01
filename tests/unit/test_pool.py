@@ -701,6 +701,30 @@ class TestTick(unittest.TestCase):
         ).execute(TickInput(now=1000.0))
         self.assertEqual(result.hook_completed, [("audit", tid, "no finding")])
 
+    def test_flow_service_cache_cleared_each_tick_picks_up_bundle_edited_in_place(self):
+        s = FakeStore()
+        fs = FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_theme_close": True}})
+        flow_svc = FlowService(fs, s)
+        tid = s.create_step("audit: theme", step="audit", role="auditor",
+                            parent=s.create_item("i", workflow="wf"))
+        s.note(tid, "no finding")
+        s.close(tid, "done")
+        s._records[tid]["closed_at"] = "2026-01-01T12:00:00"
+        tick = TickUseCase(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4),
+            hook_completions=HookCompletionsUseCase(s, flow_svc),
+            flow_service=flow_svc,
+        )
+
+        first = tick.execute(TickInput(now=1000.0))
+        self.assertEqual(first.hook_completed, [("audit", tid, "no finding")])
+
+        fs._metas["auditor"] = {"model": "sonnet", "step": "audit"}
+        second = tick.execute(TickInput(now=1000.0))
+
+        self.assertEqual(second.hook_completed, [])
+        self.assertEqual(len(fs.workflow_text_calls), 2)
+
     def test_no_hook_completions_use_case_yields_empty(self):
         s = FakeStore()
         result = TickUseCase(
