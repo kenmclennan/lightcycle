@@ -678,19 +678,24 @@ def _ctrl_u_pressed(ctx):
     ctx["session"].press("ctrl+u")
 
 
-@when(parsers.parse("Enter or {arrow} is pressed"))
-def _enter_or_arrow_pressed(ctx, arrow):
+@when("Enter is pressed")
+def _enter_pressed(ctx):
     ctx["session"].press("enter")
 
 
-@when("Enter or → is pressed, without moving the selection")
-def _enter_pressed_without_moving_selection(ctx):
-    ctx["session"].press("enter")
+@when("→ is pressed")
+def _right_pressed(ctx):
+    ctx["session"].press("right")
 
 
-@when("I close it with Esc or ←")
-def _close_with_esc(ctx):
+@when("Esc is pressed")
+def _esc_pressed(ctx):
     ctx["session"].press("escape")
+
+
+@when("← is pressed")
+def _left_pressed(ctx):
+    ctx["session"].press("left")
 
 
 @when("that ancestor leaves the visible scroll area")

@@ -171,19 +171,27 @@ Feature: The hierarchy tab
 
   Scenario Outline: Selecting any node type in the hierarchy opens it into its own hub
     Given a "<type>" is highlighted in the hierarchy
-    When Enter or → is pressed
+    When <key> is pressed
     Then it opens into its own tabbed hub, landing on the tab that matches its state
 
     Examples:
-      | type  |
-      | theme |
-      | item  |
-      | step  |
+      | type  | key   |
+      | theme | Enter |
+      | theme | →     |
+      | item  | Enter |
+      | item  | →     |
+      | step  | Enter |
+      | step  | →     |
 
-  Scenario: Closing a node opened from the hierarchy returns to the hierarchy tab, same node, same position
+  Scenario Outline: Closing a node opened from the hierarchy returns to the hierarchy tab, same node, same position
     Given I opened a node from the Hierarchy tab
-    When I close it with Esc or ←
+    When <key> is pressed
     Then the Hierarchy tab reappears with that node still selected, scrolled to the same position
+
+    Examples:
+      | key |
+      | Esc |
+      | ←   |
 
   Scenario: An ancestor scrolled out of view is pinned to the top
     Given the hierarchy is scrolled past a node's parent item or theme
@@ -271,8 +279,13 @@ Feature: The hierarchy tab
     When I view the Hierarchy tab
     Then it is highlighted at the top row
 
-  Scenario: Confirming the Hierarchy tab's default selection on an in-progress item opens its current step, not the item itself
+  Scenario Outline: Confirming the Hierarchy tab's default selection on an in-progress item opens its current step, not the item itself
     Given an item with one completed step and one queued step after it
     When I view the Hierarchy tab
-    And Enter or → is pressed, without moving the selection
+    And <key> is pressed
     Then that step's own hub opens
+
+    Examples:
+      | key   |
+      | Enter |
+      | →     |

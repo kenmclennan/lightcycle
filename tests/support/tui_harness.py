@@ -23,6 +23,7 @@ from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.adapters.tui.app import LightcycleApp
+from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -205,16 +206,17 @@ class TuiSession:
         self._run(self.pilot.press(key))
         self.pause()
 
-    def _glyph_timers(self):
+    def _glyph_timer_owners(self):
         targets = [self.app, *self.app.screen_stack]
-        return [t._active_glyph_timer for t in targets if getattr(t, "_active_glyph_timer", None) is not None]
+        return [t for t in targets if getattr(t, "_active_glyph_timer", None) is not None]
 
     def pause(self):
         self._run(self.pilot.pause())
-        timers = self._glyph_timers()
-        for timer in timers:
-            timer.pause()
-        self._paused_glyph_timers = timers
+        owners = self._glyph_timer_owners()
+        for owner in owners:
+            owner._active_glyph_timer.pause()
+            owner._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
+        self._paused_glyph_timers = [owner._active_glyph_timer for owner in owners]
 
     def poll_tick(self):
         self._resume_glyph_timers()
