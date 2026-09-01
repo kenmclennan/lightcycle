@@ -13,6 +13,7 @@ from lightcycle.domain.work.node import Node
 from lightcycle.domain.work.node_queue import NodeQueue
 from lightcycle.domain.work.node_spec import NodeSpec
 from lightcycle.domain.work.node_view import NodeView
+from lightcycle.domain.work.note_condition import merge_condition_note
 from lightcycle.domain.work.projected_step import ProjectedStep
 from lightcycle.domain.work.worker_log import worker_log_filename
 
@@ -21,6 +22,7 @@ __all__ = [
     "derive_state",
     "HierarchyRow", "compose_hierarchy", "display_role", "display_stage", "has_content",
     "landing_tab", "park_resume_command", "row_bucket", "viewable_artifacts",
-    "Item", "LogKind", "LogLine", "Node", "NodeQueue", "NodeSpec", "NodeView", "ProjectedStep",
+    "Item", "LogKind", "LogLine", "Node", "NodeQueue", "NodeSpec", "NodeView",
+    "merge_condition_note", "ProjectedStep",
     "worker_log_filename",
 ]
