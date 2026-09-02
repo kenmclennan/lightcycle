@@ -3,6 +3,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.next_step import NextStepResolver
+from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.has_feedback import has_feedback
@@ -33,6 +34,7 @@ class CompleteStepUseCase:
         self._worktrees = worktrees
         self._config = config
         self._resolver = NextStepResolver(store, flow)
+        self._passes = PassBook(store, flow)
         self._completers = {
             StepKind.WORKFLOW: self._complete_workflow,
             StepKind.ENGINE_AUDIT: self._complete_engine_audit,
@@ -93,6 +95,10 @@ class CompleteStepUseCase:
             input.step, input.outcome, self._expected_assignee(), spec)
         if not won:
             return CompleteResponse(next_step=None)
+        if self._passes.ends_pass(t.step, input.outcome, name):
+            self._passes.close(t.parent, self._worktrees)
+        if new and transition:
+            self._passes.enrol(t.parent, new, transition.to_step, name)
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
             if transition:

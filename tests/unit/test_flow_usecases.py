@@ -74,6 +74,10 @@ def flow_for(metas, store):
 
 
 class FakeWorktrees:
+    def release_run(self, run, delete_remote=True):
+        self.released = getattr(self, "released", [])
+        self.released.append(run.id)
+
     def __init__(self, ensure_error=None, sync_specs_error=None):
         self.removed = []
         self._ensure_error = ensure_error

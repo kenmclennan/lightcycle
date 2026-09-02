@@ -425,6 +425,9 @@ def cmd_show(argv):
     a = ap.parse_args(argv)
     view = ShowNodeUseCase(_container.store).execute(ShowNodeInput(step=a.id)).view
     out = view.as_dict()
+    item_id = view.step.parent or view.step.id
+    out["passes"] = [p.as_dict() for p in _container.store.passes_of(item_id)]
+    out["runs"] = [r.as_dict() for r in _container.store.runs_of(item_id)]
     flow = _flow()
     skill = flow.step_skill(view.step)
     if skill:
@@ -482,6 +485,14 @@ def cmd_claim(argv):
         out["workspace"] = resp.workspace
     if resp.branch:
         out["branch"] = resp.branch
+    if resp.pr:
+        out["pr"] = resp.pr
+    runs = [
+        {"phase": r.phase, "pass": r.pass_id, "branch": r.branch, "pr": r.pr, "state": r.state}
+        for r in _container.store.runs_of(resp.view.step.parent or resp.view.step.id)
+    ]
+    if runs:
+        out["runs"] = runs
     if resp.spec_path:
         out["spec_path"] = resp.spec_path
     out["description"] = resp.description
@@ -1229,7 +1240,7 @@ def cmd_attach(argv):
         )
         return 0
     try:
-        LinkArtifactUseCase(_container.store).execute(
+        LinkArtifactUseCase(_container.store, _flow()).execute(
             LinkArtifactInput(
                 item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace,
                 internal=a.internal, kind=a.kind,

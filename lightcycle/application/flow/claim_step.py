@@ -22,6 +22,7 @@ class ClaimResponse:
     view: NodeView
     workspace: Optional[str] = None
     branch: Optional[str] = None
+    pr: Optional[str] = None
     spec_path: Optional[str] = None
     description: Optional[str] = None
     repo_path: Optional[str] = None
@@ -99,6 +100,7 @@ class ClaimStepUseCase:
         item = t.parent or t.id
         ws = self._worktrees.ensure(item)
         branch = self._worktrees.item_branch(item)
+        run = self._store.current_run(item, self._flow.phase_for(t) if pin else None)
         spec = next((a.value for a in view.item_artifacts if a.type == "spec"), None)
         spec_path = None
         if spec:
@@ -117,7 +119,8 @@ class ClaimStepUseCase:
         phase = self._flow.phase_for(t)
         step_file = self._flow.file_for_step(t.step, pin) if pin else t.step
         return ClaimResponse(
-            view=view, workspace=ws, branch=branch, spec_path=spec_path,
+            view=view, workspace=ws, branch=branch, pr=run.pr if run else None,
+            spec_path=spec_path,
             description=self._store.get_node(item).description,
             repo_path=repo_path, config=config or None, phase=phase, pin=pin,
             step_file=step_file

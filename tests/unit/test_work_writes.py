@@ -77,6 +77,10 @@ class _RaisingFlow:
 
 
 class FakeWorktrees:
+    def release_run(self, run, delete_remote=True):
+        self.released = getattr(self, "released", [])
+        self.released.append(run.id)
+
     def __init__(self):
         self.removed = []
 
@@ -478,12 +482,13 @@ def _close_item(store, item):
 
 
 class TestWorktreeServiceItemBranch(unittest.TestCase):
-    def test_none_then_branch_artifact(self):
+    def test_none_then_the_runs_branch(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         svc = WorktreeService(s, None, None, None)
         self.assertIsNone(svc.item_branch(sid))
-        s.add_artifact(sid, "branch", "feat/x")
+        rid = s.open_run(sid, s.open_pass(sid), None)
+        s.set_run_field(rid, branch="feat/x")
         self.assertEqual(svc.item_branch(sid), "feat/x")
 
 
@@ -496,10 +501,11 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
         self.assertTrue(branch.startswith("feat/%s-" % sid))
         self.assertLessEqual(len(branch), len("feat/%s-" % sid) + 40)
 
-    def test_existing_branch_artifact_wins(self):
+    def test_the_open_runs_branch_wins(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        s.add_artifact(sid, "branch", "feat/custom-branch")
+        rid = s.open_run(sid, s.open_pass(sid), None)
+        s.set_run_field(rid, branch="feat/custom-branch")
         svc = WorktreeService(s, None, None, FakeConfig())
         self.assertEqual(svc._branch_for(sid), "feat/custom-branch")
 
@@ -510,7 +516,8 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         sid = s.create_item("my item", "a description")
         s.add_project("acme/app", local_path="/projects/app")
         s.add_artifact(sid, "repo", "app")
-        s.add_artifact(sid, "branch", "feat/my-branch")
+        rid = s.open_run(sid, s.open_pass(sid), None)
+        s.set_run_field(rid, branch="feat/my-branch")
         git = FakeGitRemove(repos={"/projects/app"})
         svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
         svc.remove(sid)

@@ -30,6 +30,15 @@ def _flow_with_step(store, step_name):
     return FlowService(FakeFs({"some-role": {"step": step_name}}), store)
 
 
+
+def plant_pr(store, item, url, phase=None):
+    pid = store.current_pass(item)
+    pid = pid.id if pid else store.open_pass(item)
+    rid = store.open_run(item, pid, phase)
+    store.set_run_field(rid, pr=url)
+    return rid
+
+
 class _Workers:
     def __init__(self, workers=None):
         self._workers = workers or []
@@ -308,7 +317,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         if repo:
             s.add_artifact(item, "repo", repo)
         if pr:
-            s.add_artifact(item, "pr", pr)
+            plant_pr(s, item, pr)
         tid = s.create_step("a gate", step=step_name, role="human", parent=item)
         return item, tid
 
@@ -369,8 +378,8 @@ class TestInboxProjectAndPr(unittest.TestCase):
     def test_row_pr_prefers_current_phase_over_earlier_phase(self):
         s = FakeStore()
         item = s.create_item("an item", "a description", workflow="wf")
-        s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
-        s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
+        plant_pr(s, item, "https://example.com/pr/spec", "spec")
+        plant_pr(s, item, "https://example.com/pr/code", "code")
         tid = s.create_step("await merge", step="code-await-merge", role="human", parent=item)
         flow = FlowService(FakeFs({"some-role": {"step": "code-await-merge", "phase": "code"}}), s)
         resp = InboxUseCase(s, flow).execute(InboxInput())
@@ -380,8 +389,8 @@ class TestInboxProjectAndPr(unittest.TestCase):
     def test_row_pr_prefers_spec_phase_at_a_spec_await_merge_step(self):
         s = FakeStore()
         item = s.create_item("an item", "a description", workflow="wf")
-        s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
-        s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
+        plant_pr(s, item, "https://example.com/pr/code", "code")
+        plant_pr(s, item, "https://example.com/pr/spec", "spec")
         tid = s.create_step("await merge", step="spec-await-merge", role="human", parent=item)
         fs = FakeFs(
             metas={"await-merge": {"step": "spec-await-merge"}},

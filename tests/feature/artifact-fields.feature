@@ -14,20 +14,18 @@ Feature: Attaching an artifact resolves internal and kind fields
 
     Examples:
       | type     | kind     |
-      | pr       | url      |
       | spec     | filepath |
       | repo     | text     |
-      | branch   | text     |
       | resolves | text     |
 
   Scenario: An explicitly declared kind overrides the type default
-    When I attach a "pr" artifact "some-value" to the item with kind "text"
+    When I attach a "spec" artifact "some-value" to the item with kind "text"
     Then the attached artifact has kind "text"
 
   Scenario: An artifact attached without the internal flag is not internal
-    When I attach a "pr" artifact "some-value" to the item
+    When I attach a "design" artifact "some-value" to the item
     Then the attached artifact is not internal
 
   Scenario: An artifact attached with the internal flag is internal
-    When I attach a "pr" artifact "some-value" to the item with the internal flag
+    When I attach a "design" artifact "some-value" to the item with the internal flag
     Then the attached artifact is internal

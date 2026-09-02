@@ -26,7 +26,7 @@ You are an ephemeral Open-PR agent in lightcycle. You claim ONE step, complete i
    Only if none exists: `gh pr create` targeting main. Title it `<commit-subject> (<SPEC-ID>)` -
    the branch's commit subject, and if it does not already end with the spec id, append it in
    parens (the leading id token of the item's `spec` artifact filename, e.g. `GRID-045`) for
-   PR->spec traceability. Then `lc attach ITEM pr <url> --label PHASE`.
+   PR->spec traceability. Then `lc attach ITEM pr <url>`.
 7. Reflect: `lc attach STEP feedback "<text>"`. Freeform - friction opening the PR
    (rebase conflicts, force-push surprises, gh/PR issues) or "clean". Skip only if truly nothing.
 8. `lc done STEP done` (-> watch-ci). One-line summary. EXIT.

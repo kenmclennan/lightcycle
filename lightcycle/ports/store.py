@@ -161,6 +161,58 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def open_pass(self, item):
+        pass
+
+    @abstractmethod
+    def current_pass(self, item):
+        pass
+
+    @abstractmethod
+    def get_pass(self, pid):
+        pass
+
+    @abstractmethod
+    def passes_of(self, item):
+        pass
+
+    @abstractmethod
+    def close_pass(self, pid):
+        pass
+
+    @abstractmethod
+    def open_run(self, item, pid, phase):
+        pass
+
+    @abstractmethod
+    def get_run(self, rid):
+        pass
+
+    @abstractmethod
+    def current_run(self, item, phase):
+        pass
+
+    @abstractmethod
+    def runs_of(self, item, pid=None):
+        pass
+
+    @abstractmethod
+    def open_runs_of(self, item, pid=None):
+        pass
+
+    @abstractmethod
+    def set_run_field(self, rid, **fields):
+        pass
+
+    @abstractmethod
+    def close_run(self, rid, state="merged"):
+        pass
+
+    @abstractmethod
+    def set_step_pass(self, tid, pid):
+        pass
+
+    @abstractmethod
     def children(self, item_id):
         pass
 

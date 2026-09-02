@@ -1,6 +1,7 @@
 import datetime
 import os
 import uuid
+from dataclasses import replace
 
 from lightcycle.ports.store import (
     ItemTextRow,
@@ -9,6 +10,7 @@ from lightcycle.ports.store import (
     ProjectResolutionError,
     StorePort,
 )
+from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Node, NodeView, State, default_kind_for, derive_state, merge_condition_note,
 )
@@ -73,6 +75,7 @@ def record_to_node(record, blocked_by=None):
         blocked_by=list(blocked_by or []),
         notes=record.get("notes"),
         claimed_by=record.get("assignee"),
+        pass_id=record.get("pass_id"),
         workflow=record.get("workflow"),
         since=meta.get("since"),
         fired_at=meta.get("fired_at"),
@@ -89,6 +92,8 @@ def record_to_node(record, blocked_by=None):
 class FakeStore(StorePort):
     def __init__(self, now=None, config=None):
         self._records = {}
+        self._passes = []
+        self._runs = []
         self._deps = {}
         self._history = {}
         self._projects = {}
@@ -207,7 +212,13 @@ class FakeStore(StorePort):
 
     def present_types(self, step):
         item = step.parent or step.id
-        return {a.type for a in self.item_artifacts(item)}
+        present = {a.type for a in self.item_artifacts(item)}
+        for run in self.open_runs_of(item):
+            if run.branch:
+                present.add("branch")
+            if run.pr:
+                present.add("pr")
+        return present
 
     def reassign(self, tid, role):
         cur = self.get_node(tid).role
@@ -440,6 +451,73 @@ class FakeStore(StorePort):
         tid = b["id"]
         self._records[tid] = b
         return tid
+
+    def open_pass(self, item):
+        n = max([p.n for p in self._passes if p.item == item], default=0) + 1
+        rec = Pass(pass_id(item, n), item, n, "open", "t0", None)
+        self._passes.append(rec)
+        return rec.id
+
+    def current_pass(self, item):
+        return next(
+            (p for p in reversed(self._passes) if p.item == item and p.is_open), None
+        )
+
+    def get_pass(self, pid):
+        return next((p for p in self._passes if p.id == pid), None)
+
+    def passes_of(self, item):
+        return [p for p in self._passes if p.item == item]
+
+    def close_pass(self, pid):
+        self._passes = [
+            replace(p, state="closed", closed_at="t1") if p.id == pid and p.is_open else p
+            for p in self._passes
+        ]
+
+    def open_run(self, item, pid, phase):
+        rid = run_id(pid, phase)
+        if not any(r.id == rid for r in self._runs):
+            self._runs.append(PhaseRun(rid, item, pid, phase, opened_at="t0"))
+        return rid
+
+    def get_run(self, rid):
+        return next((r for r in self._runs if r.id == rid), None)
+
+    def current_run(self, item, phase):
+        return next(
+            (r for r in reversed(self._runs)
+             if r.item == item and r.phase == phase and r.is_open),
+            None,
+        )
+
+    def runs_of(self, item, pid=None):
+        return [
+            r for r in self._runs
+            if r.item == item and (pid is None or r.pass_id == pid)
+        ]
+
+    def open_runs_of(self, item, pid=None):
+        return [r for r in self.runs_of(item, pid) if r.is_open]
+
+    def set_run_field(self, rid, **fields):
+        allowed = {k: v for k, v in fields.items() if k in ("branch", "pr", "content_pin")}
+        if not allowed:
+            return
+        if "pr" in allowed and "content_pin" not in allowed:
+            current = self.get_run(rid)
+            if current is not None and current.pr != allowed["pr"]:
+                allowed["content_pin"] = None
+        self._runs = [replace(r, **allowed) if r.id == rid else r for r in self._runs]
+
+    def close_run(self, rid, state="merged"):
+        self._runs = [
+            replace(r, state=state, closed_at="t1") if r.id == rid and r.is_open else r
+            for r in self._runs
+        ]
+
+    def set_step_pass(self, tid, pid):
+        self._get(tid)["pass_id"] = pid
 
     def children(self, item_id):
         return [self._to_node(b) for b in self._records.values() if b.get("parent") == item_id]

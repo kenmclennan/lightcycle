@@ -279,6 +279,78 @@ class TestSqliteStoreBriefMigration(unittest.TestCase):
         self.assertEqual([a for a in reopened.item_artifacts(item) if a.type == "brief"], [])
 
 
+class TestSqliteStorePhaseArtifactFold(unittest.TestCase):
+    def _reopen(self, store):
+        return SqliteStore(store._config)
+
+    def _plant(self, store, item, atype, value, label=None):
+        store._conn.execute(
+            "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
+            "VALUES (?, ?, ?, ?, 0, 'text')", (item, atype, value, label))
+        store._conn.commit()
+
+    def test_a_phases_artifacts_become_one_run(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+        self._plant(s, item, "branch", "feat/x", "code")
+        self._plant(s, item, "pr", "https://gh/1", "code")
+        self._plant(s, item, "content-pin", "sha1", "code")
+
+        run = self._reopen(s).current_run(item, "code")
+
+        self.assertEqual(
+            (run.phase, run.branch, run.pr, run.content_pin),
+            ("code", "feat/x", "https://gh/1", "sha1"),
+        )
+
+    def test_the_recorded_pass_number_becomes_the_runs_pass(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+        self._plant(s, item, "branch", "feat/x", "code")
+        self._plant(s, item, "phase-run", "3", "code")
+
+        reopened = self._reopen(s)
+
+        self.assertEqual(reopened.current_run(item, "code").pass_id, "%s.p3" % item)
+        self.assertEqual([p.n for p in reopened.passes_of(item)], [3])
+
+    def test_two_phases_fold_into_two_runs(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+        self._plant(s, item, "branch", "spec/x", "spec")
+        self._plant(s, item, "branch", "feat/x", "code")
+
+        runs = self._reopen(s).runs_of(item)
+
+        self.assertEqual({r.phase: r.branch for r in runs}, {"spec": "spec/x", "code": "feat/x"})
+
+    def test_an_unlabelled_artifact_folds_into_a_phaseless_run(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+        self._plant(s, item, "branch", "feat/x")
+
+        run = self._reopen(s).current_run(item, None)
+
+        self.assertEqual((run.phase, run.branch), (None, "feat/x"))
+
+    def test_every_folded_artifact_is_dropped(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+        for atype, value in (("branch", "feat/x"), ("pr", "u"), ("content-pin", "sha"),
+                             ("content-pin-pr", "u"), ("phase-run", "2")):
+            self._plant(s, item, atype, value, "code")
+
+        kept = {a.type for a in self._reopen(s).item_artifacts(item)}
+
+        self.assertEqual(kept & set(SqliteStore._FOLDED_ARTIFACTS), set())
+
+    def test_an_item_with_no_phase_artifacts_gains_no_pass(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+
+        self.assertEqual(self._reopen(s).passes_of(item), [])
+
+
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
@@ -505,7 +577,6 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
         conn.executemany(
             "INSERT INTO artifacts (item_id, atype, value, label) VALUES (?, ?, ?, ?)",
             [
-                ("i-1", "pr", "https://example.com/pr/1", None),
                 ("i-1", "spec", "specs/foo.md", None),
                 ("i-1", "repo", "grid", None),
                 ("i-1", "reflection", "{}", None),
@@ -525,7 +596,6 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
         store = SqliteStore(self._config(root))
 
         arts = {a.type: a for a in store.item_artifacts("i-1")}
-        self.assertEqual(arts["pr"].kind, "url")
         self.assertEqual(arts["spec"].kind, "filepath")
         self.assertEqual(arts["repo"].kind, "text")
         self.assertEqual(arts["reflection"].kind, "text")
@@ -541,7 +611,7 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
             "feedback-spawned-through", "feedback-watermark",
         ):
             self.assertTrue(arts[atype].internal, atype)
-        for atype in ("pr", "spec", "repo"):
+        for atype in ("spec", "repo"):
             self.assertFalse(arts[atype].internal, atype)
 
     def test_migration_is_idempotent_on_reopen(self):
@@ -551,7 +621,7 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
         store = SqliteStore(self._config(root))
 
         arts = {a.type: a for a in store.item_artifacts("i-1")}
-        self.assertEqual(arts["pr"].kind, "url")
+        self.assertEqual(arts["spec"].kind, "filepath")
         self.assertTrue(arts["reflection"].internal)
 
     def test_fresh_store_artifact_has_declared_kind_and_internal(self):

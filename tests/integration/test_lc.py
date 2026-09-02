@@ -1750,10 +1750,9 @@ class TestWorktree(unittest.TestCase):
     def test_branch_artifact_autolinked_on_claim(self):
         sid = self._file()
         call(_cli_mod.cmd_claim, "agent")
-        arts = self.store.item_artifacts(sid)
-        branches = [a for a in arts if a.type == "branch"]
+        branches = [r.branch for r in self.store.runs_of(sid) if r.branch]
         self.assertEqual(len(branches), 1)
-        self.assertEqual(branches[0].value, "feat/%s-w" % sid)
+        self.assertEqual(branches[0], "feat/%s-w" % sid)
 
     def test_worktrees_dir_excluded_via_git_info_exclude(self):
         self._file()
@@ -2769,7 +2768,8 @@ class TestWorktreePushTarget(unittest.TestCase):
         store.add_project("acme/app", local_path=self.repo)
         sid = store.create_item("my-feat", "a description", workflow="lightcycle/spec-driven")
         store.add_artifact(sid, "repo", "app")
-        store.add_artifact(sid, "branch", branch)
+        rid = store.open_run(sid, store.open_pass(sid), None)
+        store.set_run_field(rid, branch=branch)
         return store, sid
 
     def test_branch_tracking_targets_feature_not_main(self):
