@@ -82,7 +82,7 @@ def _open_hub_on_artifacts(ctx, node_id):
 
 def _launch_with_item(ctx, artifacts, size=None):
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     for atype, value, kind, internal in artifacts:
         store.add_artifact(item, atype, value, internal=internal, kind=kind)
     ctx["store"] = store
@@ -160,13 +160,13 @@ def _selection_not_first(ctx):
 
 @given("an artifact is selected in the list")
 def _artifact_selected(ctx):
-    _launch_with_item(ctx, [("brief", "briefs/x.md", "text", False)])
+    _launch_with_item(ctx, [("design", "designs/x.md", "text", False)])
 
 
 @given("I opened the artifact list from a node's hub view")
 def _opened_artifact_list_from_hub(ctx):
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     store.add_artifact(item, "repo", "org/repo")
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))

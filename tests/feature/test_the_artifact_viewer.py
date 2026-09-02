@@ -71,7 +71,7 @@ def _colour_of(style):
 
 def _setup(ctx, artifacts, launcher=None, fs=None, size=None):
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     for atype, value, kind in artifacts:
         store.add_artifact(item, atype, value, kind=kind)
     ctx["store"] = store

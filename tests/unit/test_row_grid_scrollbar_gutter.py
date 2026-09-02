@@ -36,13 +36,13 @@ def _priority_active_store(count):
 def _backlog_item_store(count, title):
     store = FakeStore()
     for i in range(count):
-        store.create_item(title, id="LC-%d" % (2000 + i))
+        store.create_item(title, "a description", id="LC-%d" % (2000 + i))
     return store
 
 
 def _hierarchy_step_store(count, role):
     store = FakeStore()
-    item = store.create_item("Item", id="LC-3000")
+    item = store.create_item("Item", "a description", id="LC-3000")
     for i in range(count):
         store.create_step("step %d" % i, step="build", role=role, parent=item, id="LC-3000.%d" % (i + 1))
     return store, item
@@ -50,7 +50,7 @@ def _hierarchy_step_store(count, role):
 
 def _artifacts_item_store(count, value):
     store = FakeStore()
-    item = store.create_item("Item", id="LC-4000")
+    item = store.create_item("Item", "a description", id="LC-4000")
     for i in range(count):
         store.add_artifact(item, "type%d" % i, value)
     return store, item

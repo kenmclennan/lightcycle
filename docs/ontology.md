@@ -8,7 +8,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **item** - a unit of deliverable work, and the top of the tree. Carries artifacts. Has no parent.
 - **step** - a single action performed at one workflow **stage**, filed from the workflow. A child of an item.
 - **planned step** - a not-yet-filed future step, derived by walking an item's pinned workflow graph forward from its current step along the normal-completion edge. Display-only: never a real node, never claimed or advanced. Represented in code as `ProjectedStep`.
-- **artifact** - a typed value attached to an item: `brief`, `spec`, `repo`, `branch`, `pr`, `design`, `findings`, `reflection`. `reflection` (an agent's feedback) accumulates; the others are single by convention (expressed in the step markdown, not the engine).
+- **artifact** - a typed value attached to an item: `spec`, `repo`, `branch`, `pr`, `design`, `findings`, `reflection`. The brief is **not** an artifact - it is the item's mandatory `description`. `reflection` (an agent's feedback) accumulates; the others are single by convention (expressed in the step markdown, not the engine).
 - **role** - who performs a step: `agent` or `human`, and nothing else. It decides only whether the pool may claim the step. **Which** work a step is is its `stage`, resolved through the workflow graph when it is needed - never copied onto the step.
 - **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **state** - a node's single lifecycle position: `backlogged` -> `ready` -> `in_progress` -> `done`. One state machine (there is no separate `status`).
@@ -51,7 +51,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 Every stage name is an **action**. The stage and its markdown file are the same word by default; the `nodes:` block maps a stage to a differently named file. The role is not one of these names - it is `agent` or `human`. The built-in `spec-driven` workflow is one arc: a brief becomes a formal spec on a spec PR, and once that PR merges the same item continues into the code build. `open-pr` and `await-merge` each appear twice (the spec phase and the code phase).
 
-- **spec-writer** (agent) - author the formal spec from the item's brief, on a branch in the specs repo.
+- **spec-writer** (agent) - author the formal spec from the item's description, on a branch in the specs repo.
 - **open-pr** (agent) - push the branch and open the PR (used at both the spec and code phases).
 - **await-merge** (human) - you review and merge the PR; lightcycle never merges for you. The spec-phase `await-merge` is the review gate; merging it advances the SAME item into the code phase (no workflow flip).
 - **write-code** (agent) - implement the merged spec on a branch in the project repo.

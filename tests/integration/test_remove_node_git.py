@@ -39,7 +39,7 @@ class FakeWorktrees:
 class TestRemoveNodeAgainstUnreadableWorktree(unittest.TestCase):
     def test_refuses_to_delete_when_the_worktree_cannot_be_read(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         not_a_repo = tempfile.mkdtemp()
         wt = FakeWorktrees(not_a_repo)
 

@@ -53,7 +53,7 @@ class TestCmdRm(unittest.TestCase):
             self.store.get_node(step)
 
     def test_renders_the_refusal_and_leaves_the_node(self):
-        item = self.store.create_item("feature")
+        item = self.store.create_item("feature", "a description")
         step = self.store.create_step("build", step="build", role="agent", parent=item)
         self.store.claim_ready("agent")
         container = FakeContainer(self.store)

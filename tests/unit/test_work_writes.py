@@ -208,7 +208,7 @@ class TestEditNode(unittest.TestCase):
 
     def test_edits_parent_alone(self):
         s = FakeStore()
-        item = s.create_item("owning item")
+        item = s.create_item("owning item", "a description")
         tid = s.create_step("a step", role="human")
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, parent=item))
         t = s.get_node(tid)
@@ -216,7 +216,7 @@ class TestEditNode(unittest.TestCase):
 
     def test_edits_parent_and_title_together(self):
         s = FakeStore()
-        item = s.create_item("owning item")
+        item = s.create_item("owning item", "a description")
         tid = s.create_step("old title", role="human")
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title", parent=item))
         t = s.get_node(tid)
@@ -225,7 +225,7 @@ class TestEditNode(unittest.TestCase):
 
     def test_omitting_parent_leaves_parentage_unchanged(self):
         s = FakeStore()
-        item = s.create_item("owning item")
+        item = s.create_item("owning item", "a description")
         tid = s.create_step("a step", role="human", parent=item)
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="renamed"))
         t = s.get_node(tid)
@@ -233,8 +233,8 @@ class TestEditNode(unittest.TestCase):
 
     def test_refuses_to_reparent_an_item(self):
         s = FakeStore()
-        outer = s.create_item("outer item")
-        inner = s.create_item("inner item")
+        outer = s.create_item("outer item", "a description")
+        inner = s.create_item("inner item", "a description")
         with self.assertRaises(UseCaseError) as ctx:
             EditNodeUseCase(s).execute(EditNodeInput(step=inner, parent=outer))
         self.assertIn(inner, str(ctx.exception))
@@ -244,7 +244,7 @@ class TestEditNode(unittest.TestCase):
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/1", label="PR 1")
         )
@@ -255,7 +255,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_replace_replaces_same_type_artifact(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
         )
@@ -268,7 +268,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_declared_kind_is_persisted(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/1", kind="something-explicit")
         )
@@ -276,7 +276,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_undeclared_kind_resolves_from_type_default(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/1")
         )
@@ -284,7 +284,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_internal_defaults_false(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/1")
         )
@@ -292,7 +292,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_internal_true_is_persisted(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/1", internal=True)
         )
@@ -300,7 +300,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_spec_with_worktrees_segment_raises(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         with self.assertRaises(UseCaseError):
             LinkArtifactUseCase(s).execute(
                 LinkArtifactInput(
@@ -313,7 +313,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_spec_under_unregistered_directory_raises_naming_it(self):
         s = FakeStore()
         s.add_project("acme/widget", local_path="/tmp/widget")
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="repo", value="widget")
         )
@@ -327,7 +327,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("acme/widget", local_path="/tmp/widget")
         s.add_project("acme/gadget", local_path="/tmp/gadget")
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="repo", value="widget")
         )
@@ -342,7 +342,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_spec_bare_directory_against_owner_name_repo_succeeds(self):
         s = FakeStore()
         s.add_project("acme/lightcycle", local_path="/tmp/lc")
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="repo", value="lightcycle")
         )
@@ -354,7 +354,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_spec_owner_name_directory_against_bare_repo_succeeds(self):
         s = FakeStore()
         s.add_project("acme/lightcycle", local_path="/tmp/lc")
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="repo", value="acme/lightcycle")
         )
@@ -365,7 +365,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_spec_on_item_with_no_repo_artifact_succeeds_regardless_of_directory(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="spec", value="anywhere/LC-1.md")
         )
@@ -373,7 +373,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_spec_on_item_with_unresolvable_repo_artifact_succeeds_regardless_of_directory(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="repo", value="unregistered")
         )
@@ -384,7 +384,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_replace_with_worktrees_segment_raises_and_leaves_original(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
         )
@@ -404,7 +404,7 @@ class TestLinkArtifact(unittest.TestCase):
 class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         k = s.create_step("build: x", step="build", role="agent", parent=sid)
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
@@ -415,7 +415,7 @@ class TestCloseItem(unittest.TestCase):
     def test_closes_linked_backlog_item_on_item_close(self):
         s = FakeStore()
         backlog = s.create_step("a backlog item", role="human")
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         s.add_artifact(sid, "resolves", backlog)
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
@@ -426,14 +426,14 @@ class TestCloseItem(unittest.TestCase):
 
     def test_no_backlog_link_on_item_close_is_unaffected(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
         self.assertEqual(s.get_node(sid).state, "done")
 
     def test_closes_a_never_activated_backlogged_item_without_crashing(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         wt = WorktreeService(s, FakeGit(), FakeFs(), FakeConfig(), flow=_RaisingFlow())
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="wontfix"))
         self.assertEqual(s.get_node(sid).state, "done")
@@ -444,7 +444,7 @@ class TestCloseItemBacklogResolution(unittest.TestCase):
         s = FakeStore()
         b1 = s.create_step("a backlog item", role="human")
         b2 = s.create_step("another backlog item", role="human")
-        item = s.create_item("my item")
+        item = s.create_item("my item", "a description")
         s.add_artifact(item, "resolves", b1)
         s.add_artifact(item, "resolves", b2)
         _close_item(s, item)
@@ -457,7 +457,7 @@ class TestCloseItemBacklogResolution(unittest.TestCase):
     def test_already_done_backlog_item_is_left_alone(self):
         s = FakeStore()
         backlog = s.create_step("a backlog item", role="human")
-        item = s.create_item("my item")
+        item = s.create_item("my item", "a description")
         s.add_artifact(item, "resolves", backlog)
         s.close(backlog, "already handled")
         _close_item(s, item)
@@ -466,7 +466,7 @@ class TestCloseItemBacklogResolution(unittest.TestCase):
 
     def test_no_backlog_link_is_a_no_op(self):
         s = FakeStore()
-        item = s.create_item("my item")
+        item = s.create_item("my item", "a description")
         _close_item(s, item)
         self.assertEqual(s.get_node(item).state, "done")
 
@@ -480,7 +480,7 @@ def _close_item(store, item):
 class TestWorktreeServiceItemBranch(unittest.TestCase):
     def test_none_then_branch_artifact(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         svc = WorktreeService(s, None, None, None)
         self.assertIsNone(svc.item_branch(sid))
         s.add_artifact(sid, "branch", "feat/x")
@@ -490,10 +490,7 @@ class TestWorktreeServiceItemBranch(unittest.TestCase):
 class TestWorktreeServiceBranchFor(unittest.TestCase):
     def test_no_branch_artifact_falls_back_to_id_slug(self):
         s = FakeStore()
-        sid = s.create_item(
-            "Branch name is the entire item title slugified (100+ chars); use the item id "
-            "or a short truncated slug",
-        )
+        sid = s.create_item("Branch name is the entire item title slugified (100+ chars); use the item id " "or a short truncated slug", "a description")
         svc = WorktreeService(s, None, None, FakeConfig())
         branch = svc._branch_for(sid)
         self.assertTrue(branch.startswith("feat/%s-" % sid))
@@ -501,7 +498,7 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
 
     def test_existing_branch_artifact_wins(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         s.add_artifact(sid, "branch", "feat/custom-branch")
         svc = WorktreeService(s, None, None, FakeConfig())
         self.assertEqual(svc._branch_for(sid), "feat/custom-branch")
@@ -510,7 +507,7 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
 class TestWorktreeServiceRemove(unittest.TestCase):
     def test_remove_requests_remote_branch_delete(self):
         s = FakeStore()
-        sid = s.create_item("my item")
+        sid = s.create_item("my item", "a description")
         s.add_project("acme/app", local_path="/projects/app")
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
@@ -521,7 +518,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
 
     def test_remove_skips_remote_delete_when_not_git_repo(self):
         s = FakeStore()
-        sid = s.create_item("my item")
+        sid = s.create_item("my item", "a description")
         s.add_project("acme/app", local_path="/projects/app")
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
@@ -532,7 +529,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
 
     def test_remove_is_a_noop_without_a_repo_artifact(self):
         s = FakeStore()
-        sid = s.create_item("my item")
+        sid = s.create_item("my item", "a description")
         svc = WorktreeService(s, git=None, fs=FakeFs(), config=FakeConfig("/projects"))
         svc.remove(sid)
 
@@ -540,7 +537,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
 class TestRemoveNode(unittest.TestCase):
     def test_refuses_when_a_claimed_step_is_covered_by_a_live_worker(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove(
@@ -556,7 +553,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_refuses_when_worktree_is_dirty(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         path = wt.worktree_path(item)
@@ -569,7 +566,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_refuses_when_worktree_registered_check_is_unreadable(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         git = UnreadableGitForRemove(fails="worktree_registered")
@@ -581,7 +578,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_refuses_when_has_uncommitted_check_is_unreadable(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         git = UnreadableGitForRemove(fails="has_uncommitted")
@@ -593,7 +590,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_force_overrides_an_unreadable_worktree(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         git = UnreadableGitForRemove(fails="worktree_registered")
@@ -607,7 +604,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_stale_claim_does_not_block(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove()
@@ -621,7 +618,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_success_path_removes_worktree_and_step_rows(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
@@ -637,7 +634,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_force_overrides_dirty_worktree(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         path = wt.worktree_path(item)
@@ -652,7 +649,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_force_still_refuses_a_genuinely_live_worker(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove(
@@ -668,7 +665,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_repo_less_item_is_never_dirty_and_removes_cleanly(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove(has_repo=False)
         git = FakeGitForRemove(registered={wt.worktree_path(item)}, dirty={wt.worktree_path(item)})
@@ -686,7 +683,7 @@ class TestRemoveNode(unittest.TestCase):
 
     def test_never_activated_item_is_not_treated_as_dirty(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove(has_worktree_history=False)
         git = RaisingGitForRemove()

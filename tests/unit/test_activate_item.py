@@ -30,7 +30,7 @@ class _PinnableButUnloadableFlow:
 class TestActivateItem(unittest.TestCase):
     def test_activation_files_the_entry_step_and_flips_state(self):
         s = FakeStore()
-        item = s.create_item("add refunds")
+        item = s.create_item("add refunds", "a description")
         resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
@@ -43,13 +43,13 @@ class TestActivateItem(unittest.TestCase):
 
     def test_refuses_when_no_workflow_is_selected_or_inherited(self):
         s = FakeStore()
-        item = s.create_item("x")
+        item = s.create_item("x", "a description")
         with self.assertRaises(UseCaseError):
             ActivateItemUseCase(s, _flow(s), None, None).execute(ActivateItemInput(item=item))
 
     def test_refuses_to_activate_a_non_todo(self):
         s = FakeStore()
-        item = s.create_item("x")
+        item = s.create_item("x", "a description")
         ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
@@ -60,7 +60,7 @@ class TestActivateItem(unittest.TestCase):
 
     def test_refuses_to_activate_into_a_repo_requiring_workflow_without_repo(self):
         s = FakeStore()
-        item = s.create_item("add refunds")
+        item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
             ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None).execute(
                 ActivateItemInput(item=item, workflow="standard")
@@ -69,7 +69,7 @@ class TestActivateItem(unittest.TestCase):
 
     def test_activates_into_a_repo_requiring_workflow_with_repo_present(self):
         s = FakeStore()
-        item = s.create_item("add refunds")
+        item = s.create_item("add refunds", "a description")
         s.add_artifact(item, "repo", "saga")
         s.add_project("acme/saga", local_path=tempfile.mkdtemp())
         resp = ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None).execute(
@@ -80,7 +80,7 @@ class TestActivateItem(unittest.TestCase):
 
     def test_an_unresolvable_workflow_raises_a_use_case_error_not_the_bare_value_error(self):
         s = FakeStore()
-        item = s.create_item("add refunds")
+        item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
             ActivateItemUseCase(s, _UnresolvableFlow(), None, None).execute(
                 ActivateItemInput(item=item, workflow="ghost/whatever")
@@ -88,7 +88,7 @@ class TestActivateItem(unittest.TestCase):
 
     def test_a_pin_that_resolves_but_does_not_load_raises_before_storing_it(self):
         s = FakeStore()
-        item = s.create_item("add refunds")
+        item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
             ActivateItemUseCase(s, _PinnableButUnloadableFlow(), None, None).execute(
                 ActivateItemInput(item=item, workflow="lightcycle/does-not-exist")
@@ -97,7 +97,7 @@ class TestActivateItem(unittest.TestCase):
 
     def test_workflow_with_no_required_inputs_activates_repo_less_item(self):
         s = FakeStore()
-        item = s.create_item("trend audit")
+        item = s.create_item("trend audit", "a description")
         resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )

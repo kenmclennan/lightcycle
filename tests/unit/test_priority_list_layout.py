@@ -44,7 +44,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
     def test_screen_does_not_scroll_when_backlog_overflows(self):
         store = FakeStore()
         for i in range(30):
-            store.create_item("word " * 30 + str(i))
+            store.create_item("word " * 30 + str(i), "a description")
 
         session = self._launch(store)
         session.press("tab")
@@ -58,7 +58,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
 
     def test_screen_does_not_scroll_when_backlog_fits(self):
         store = FakeStore()
-        store.create_item("single row")
+        store.create_item("single row", "a description")
 
         session = self._launch(store)
         session.press("tab")
@@ -82,7 +82,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
 
     def test_screen_does_not_scroll_when_artifact_list_overflows(self):
         store = FakeStore()
-        item = store.create_item("Item")
+        item = store.create_item("Item", "a description")
         store.add_artifact(item, "watched", "\n".join("item %02d" % i for i in range(40)), kind="list")
 
         session = self._open_list_artifact(store, item)
@@ -96,7 +96,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
 
     def test_screen_does_not_scroll_when_artifact_list_fits(self):
         store = FakeStore()
-        item = store.create_item("Item")
+        item = store.create_item("Item", "a description")
         store.add_artifact(item, "watched", "single row", kind="list")
 
         session = self._open_list_artifact(store, item)

@@ -45,7 +45,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_story_artifacts_roundtrip(self):
         s = self._store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "spec", "specs/foo.md", "the spec")
         arts = s.item_artifacts(sid)
         self.assertEqual(
@@ -104,24 +104,24 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_tasks_closed_since_excludes_stories(self):
         s = self._store()
-        sid = s.create_item("closed item")
+        sid = s.create_item("closed item", "a description")
         s.close(sid, "merged")
         results = s.nodes_closed_since("2000-01-01")
         self.assertNotIn(sid, [t.id for t in results])
 
     def test_closed_unretroed_items_returns_closed_items(self):
         s = self._store()
-        sid = s.create_item("closed item")
+        sid = s.create_item("closed item", "a description")
         s.close(sid, "merged")
         self.assertIn(sid, [t.id for t in s.closed_unretroed_items()])
 
     def test_closed_unretroed_items_excludes_open_and_retroed_and_origin(self):
         s = self._store()
-        s.create_item("open item")
-        retroed = s.create_item("retroed item")
+        s.create_item("open item", "a description")
+        retroed = s.create_item("retroed item", "a description")
         s.close(retroed, "merged")
         s.label_add(retroed, "retroed")
-        origin = s.create_item("origin item")
+        origin = s.create_item("origin item", "a description")
         s.close(origin, "merged")
         s.label_add(origin, "retro-origin")
         ids = [t.id for t in s.closed_unretroed_items()]
@@ -130,22 +130,22 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_last_n_closed_items_returns_closed_items(self):
         s = self._store()
-        first = s.create_item("first")
+        first = s.create_item("first", "a description")
         s.close(first, "merged")
-        second = s.create_item("second")
+        second = s.create_item("second", "a description")
         s.close(second, "merged")
         results = s.last_n_closed_items(1)
         self.assertEqual(len(results), 1)
 
     def test_last_n_closed_items_excludes_open_items(self):
         s = self._store()
-        s.create_item("open item")
+        s.create_item("open item", "a description")
         results = s.last_n_closed_items(10)
         self.assertEqual(results, [])
 
     def test_last_n_closed_items_excludes_nested_steps(self):
         s = self._store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         step = s.create_step("build", parent=item)
         s.close(step, "done")
         s.close(item, "merged")
@@ -162,7 +162,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_edit_node_moving_a_step_keeps_its_id_and_everything_hanging_off_it(self):
         s = self._store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         blocker = s.create_step("blocker")
         step = s.create_step("blocked step")
         s.dep_add(step, blocker)
@@ -182,7 +182,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_edit_node_parent_move_to_own_current_parent_is_a_no_op(self):
         s = self._store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         step = s.create_step("already here", parent=item)
         new_id = s.edit_node(step, parent=item)
         self.assertEqual(new_id, step)
@@ -193,7 +193,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         workflow = graph_text_from_metas(metas, entry="build")
         flow = FlowService(FakeFs(metas, workflow=workflow), s)
 
-        item = s.create_item("add refunds")
+        item = s.create_item("add refunds", "a description")
         resp = ActivateItemUseCase(s, flow, None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
@@ -204,8 +204,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_cmd_set_parent_and_backlog_links_the_resolved_backlog_to_the_moved_step(self):
         s = self._store()
         cli.set_container(Container(store=s))
-        item = s.create_item("owning item")
-        backlog_item = s.create_item("a backlog todo")
+        item = s.create_item("owning item", "a description")
+        backlog_item = s.create_item("a backlog todo", "a description")
         step = s.create_step("adopt me")
 
         out, err = io.StringIO(), io.StringIO()
@@ -241,9 +241,42 @@ class TestSqliteStoreRoleCollapseMigration(unittest.TestCase):
 
     def test_an_item_is_left_alone(self):
         s = make_sqlite_store()
-        iid = s.create_item("an item")
+        iid = s.create_item("an item", "a description")
 
         self.assertIsNone(self._reopen(s).get_node(iid).role)
+
+
+class TestSqliteStoreBriefMigration(unittest.TestCase):
+    def _reopen(self, store):
+        return SqliteStore(store._config)
+
+    def _plant_brief(self, store, item, text):
+        store._conn.execute(
+            "INSERT INTO artifacts (item_id, atype, value, internal, kind) "
+            "VALUES (?, 'brief', ?, 0, 'filepath')", (item, text))
+        store._conn.commit()
+
+    def test_a_brief_fills_an_empty_description(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "")
+        self._plant_brief(s, item, "the settled design")
+
+        self.assertEqual(self._reopen(s).get_node(item).description, "the settled design")
+
+    def test_an_existing_description_is_not_overwritten(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "the real description")
+        self._plant_brief(s, item, "a stale brief")
+
+        self.assertEqual(self._reopen(s).get_node(item).description, "the real description")
+
+    def test_every_brief_artifact_is_dropped(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "the real description")
+        self._plant_brief(s, item, "a stale brief")
+
+        reopened = self._reopen(s)
+        self.assertEqual([a for a in reopened.item_artifacts(item) if a.type == "brief"], [])
 
 
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):

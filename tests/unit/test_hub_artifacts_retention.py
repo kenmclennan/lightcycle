@@ -22,7 +22,7 @@ class TestHubArtifactsShapeRetention(unittest.TestCase):
 
     def test_last_artifacts_shape_is_reassigned_on_the_cheap_update_path(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
 
         session = self._launch(store)

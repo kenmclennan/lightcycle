@@ -30,9 +30,9 @@ def _backlog_stack_terminal_width():
 class TestBacklogStackedRebuildRendersEachRowOnce(unittest.TestCase):
     def _launch(self):
         store = FakeStore()
-        a = store.create_item("first title long enough for a continuation line", id=_BACKLOG_ID_A)
+        a = store.create_item("first title long enough for a continuation line", "a description", id=_BACKLOG_ID_A)
         store.add_artifact(a, "repo", _BACKLOG_PROJECT)
-        b = store.create_item("second title long enough for a continuation line", id=_BACKLOG_ID_B)
+        b = store.create_item("second title long enough for a continuation line", "a description", id=_BACKLOG_ID_B)
         store.add_artifact(b, "repo", _BACKLOG_PROJECT)
         width = _backlog_stack_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))

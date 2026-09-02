@@ -15,7 +15,7 @@ from tests.support.fake_store import FakeStore
 class TestProject(unittest.TestCase):
     def test_resolves_via_parent_items_repo_artifact(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "lightcycle")
         step = store.create_step("build", step="build", role="agent", parent=item)
         node = store.get_node(step)
@@ -23,7 +23,7 @@ class TestProject(unittest.TestCase):
 
     def test_blank_when_parent_item_has_no_repo_artifact(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         step = store.create_step("build", step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "")
@@ -37,7 +37,7 @@ class TestProject(unittest.TestCase):
 
     def test_derives_the_short_label_from_a_slash_qualified_repo_artifact(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
         step = store.create_step("build", step="build", role="agent", parent=item)
         node = store.get_node(step)

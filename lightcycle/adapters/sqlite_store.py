@@ -145,6 +145,7 @@ class SqliteStore(StorePort):
         self._migrate_resume_fields()
         self._migrate_detach_items_from_themes()
         self._migrate_collapse_step_roles()
+        self._migrate_brief_artifacts_into_description()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -237,6 +238,16 @@ class SqliteStore(StorePort):
             "UPDATE nodes SET role = 'agent' "
             "WHERE type = 'step' AND role IS NOT NULL AND role NOT IN ('agent', 'human')"
         )
+
+    def _migrate_brief_artifacts_into_description(self):
+        self._conn.execute(
+            "UPDATE nodes SET description = ("
+            "  SELECT value FROM artifacts WHERE item_id = nodes.id AND atype = 'brief' LIMIT 1"
+            ") WHERE (description IS NULL OR description = '') AND id IN ("
+            "  SELECT item_id FROM artifacts WHERE atype = 'brief'"
+            ")"
+        )
+        self._conn.execute("DELETE FROM artifacts WHERE atype = 'brief'")
 
     def _row_to_node(self, row, artifacts, blocked_by):
         d = dict(zip(_COLUMNS, row))
@@ -777,13 +788,14 @@ class SqliteStore(StorePort):
         self._conn.commit()
         return tid
 
-    def create_item(self, title, *, project=None, goal=None, workflow=None, id=None,
+    def create_item(self, title, description, *, project=None, goal=None, workflow=None, id=None,
                      shortcode=None):
         tid = self._mint_or_adopt(id, None, shortcode=shortcode)
         self._conn.execute(
-            "INSERT INTO nodes (id, type, title, state, project, goal, workflow, "
-            "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?)",
-            (tid, title, project, goal, workflow, datetime.datetime.now().isoformat()),
+            "INSERT INTO nodes (id, type, title, state, description, project, goal, workflow, "
+            "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?, ?)",
+            (tid, title, description, project, goal, workflow,
+             datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
         return tid

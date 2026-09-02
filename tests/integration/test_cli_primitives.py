@@ -19,7 +19,7 @@ class TestCliPrimitives(unittest.TestCase):
         return rc, out.getvalue().strip(), err.getvalue().strip()
 
     def test_new_item_is_a_todo(self):
-        rc, item, _ = self._run("new", "item", "add refunds")
+        rc, item, _ = self._run("new", "item", "add refunds", "--description", "a description")
         self.assertEqual(rc, 0)
         node = self.h.store.get_node(item)
         self.assertEqual(node.type, "item")
@@ -31,41 +31,41 @@ class TestCliPrimitives(unittest.TestCase):
         self.assertIn("item | step", err)
 
     def test_set_state_active_activates_the_item(self):
-        _, item, _ = self._run("new", "item", "add refunds")
+        _, item, _ = self._run("new", "item", "add refunds", "--description", "a description")
         rc, step, _ = self._run("set", item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc, 0)
         self.assertEqual(self.h.store.get_node(item).state, "ready")
         self.assertEqual(self.h.store.get_node(step).step, "build")
 
     def test_set_parent_refuses_to_reparent_an_item(self):
-        _, owner, _ = self._run("new", "item", "payments")
-        _, item, _ = self._run("new", "item", "refunds")
+        _, owner, _ = self._run("new", "item", "payments", "--description", "a description")
+        _, item, _ = self._run("new", "item", "refunds", "--description", "a description")
         rc, _, err = self._run("set", item, "--parent", owner.strip())
         self.assertEqual(rc, 1)
         self.assertIn("top-level", err)
         self.assertIsNone(self.h.store.get_node(item).parent)
 
     def test_set_workflow_on_an_item_resolves_to_a_pin(self):
-        _, item, _ = self._run("new", "item", "payments")
+        _, item, _ = self._run("new", "item", "payments", "--description", "a description")
         rc, _, _ = self._run("set", item, "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc, 0)
         self.assertTrue(
             self.h.store.get_node(item).workflow.startswith("lightcycle/spec-driven@"))
 
     def test_attach_records_an_artifact(self):
-        _, item, _ = self._run("new", "item", "x")
+        _, item, _ = self._run("new", "item", "x", "--description", "a description")
         self._run("attach", item, "spec", "specs/x.md")
         arts = self.h.store.item_artifacts(item)
         self.assertTrue(any(a.type == "spec" and a.value == "specs/x.md" for a in arts))
 
     def test_dep_links_a_blocker(self):
-        _, a, _ = self._run("new", "item", "a")
-        _, b, _ = self._run("new", "item", "b")
+        _, a, _ = self._run("new", "item", "a", "--description", "a description")
+        _, b, _ = self._run("new", "item", "b", "--description", "a description")
         rc, _, _ = self._run("dep", a, "--needs", b)
         self.assertEqual(rc, 0)
 
     def test_rm_deletes_a_node(self):
-        _, item, _ = self._run("new", "item", "gone")
+        _, item, _ = self._run("new", "item", "gone", "--description", "a description")
         self._run("rm", item)
         with self.assertRaises(KeyError):
             self.h.store.get_node(item)

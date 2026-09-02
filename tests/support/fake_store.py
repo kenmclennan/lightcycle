@@ -424,11 +424,12 @@ class FakeStore(StorePort):
             b["workflow"] = workflow
         return tid
 
-    def create_item(self, title, *, project=None, goal=None, workflow=None, id=None,
+    def create_item(self, title, description, *, project=None, goal=None, workflow=None, id=None,
                      shortcode=None):
         fields = dict(
             title=title,
             type="item",
+            description=description,
             labels=labels_for(project=project, goal=goal),
             workflow=workflow,
             state="backlogged",

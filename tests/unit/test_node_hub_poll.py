@@ -13,7 +13,7 @@ WORKER_PID = 111
 
 def _running_step():
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     step = store.create_step("s", step="coder", role="agent", parent=item)
     store.claim_ready("agent")
     workers = FakeWorkers(
@@ -54,7 +54,7 @@ class _HubTestCase(unittest.TestCase):
 class TestNodeHubPollsOncePerInterval(_HubTestCase):
     def test_app_refresh_no_longer_forwards_into_the_hub_screen(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         session = self._launch(store)
         self._push_hub(session, item)
 
@@ -67,7 +67,7 @@ class TestNodeHubPollsOncePerInterval(_HubTestCase):
 
     def test_hub_own_poll_refresh_does_exactly_one_round_trip(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         session = self._launch(store)
         self._push_hub(session, item)
 
@@ -100,7 +100,7 @@ class TestNodeHubSuspendedScreenTimersArePaused(_HubTestCase):
 
     def test_suspend_and_resume_do_not_raise_when_log_timer_is_none(self):
         store = FakeStore()
-        item = store.create_item("plain item, no worker")
+        item = store.create_item("plain item, no worker", "a description")
         session = self._launch(store)
         first = self._push_hub(session, item)
         self.assertIsNone(first._log_timer)

@@ -16,7 +16,6 @@ Feature: Attaching an artifact resolves internal and kind fields
       | type     | kind     |
       | pr       | url      |
       | spec     | filepath |
-      | brief    | filepath |
       | repo     | text     |
       | branch   | text     |
       | resolves | text     |

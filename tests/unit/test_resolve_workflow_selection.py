@@ -71,7 +71,7 @@ class TestResolveWorkflowSelection(unittest.TestCase):
 class TestResolveWorkflowSelectionShadowing(unittest.TestCase):
     def test_no_descendants_reports_nothing_shadowed(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
             ResolveWorkflowSelectionInput(node_id=item, node_type="item", selector="x")
         )
@@ -79,7 +79,7 @@ class TestResolveWorkflowSelectionShadowing(unittest.TestCase):
 
     def test_a_step_with_its_own_pin_is_reported(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         step = store.create_step("build", parent=item)
         store.edit_node(step, workflow="lightcycle/solo@abc123")
         resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
@@ -89,7 +89,7 @@ class TestResolveWorkflowSelectionShadowing(unittest.TestCase):
 
     def test_a_step_with_no_pin_is_not_reported(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         store.create_step("build", parent=item)
         resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
             ResolveWorkflowSelectionInput(node_id=item, node_type="item", selector="x")
@@ -98,7 +98,7 @@ class TestResolveWorkflowSelectionShadowing(unittest.TestCase):
 
     def test_only_the_shadowing_step_is_named_not_both_and_not_neither(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         shadowing = store.create_step("shadowing", parent=item)
         store.edit_node(shadowing, workflow="lightcycle/solo@abc123")
         store.create_step("plain", parent=item)

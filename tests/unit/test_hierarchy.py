@@ -10,15 +10,15 @@ from tests.support.fake_store import FakeStore
 class TestHierarchyUseCase(unittest.TestCase):
     def test_opening_from_a_step_roots_at_its_item(self):
         s = FakeStore()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         step = s.create_step("step", step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=step)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [(item, 0), (step, 1)])
 
     def test_an_items_siblings_are_not_shown(self):
         s = FakeStore()
-        other = s.create_item("other")
-        item = s.create_item("item")
+        other = s.create_item("other", "a description")
+        item = s.create_item("item", "a description")
         step = s.create_step("step", step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([r.node.id for r in rows], [item, step])
@@ -26,14 +26,14 @@ class TestHierarchyUseCase(unittest.TestCase):
 
     def test_an_item_is_its_own_root(self):
         s = FakeStore()
-        item = s.create_item("solo")
+        item = s.create_item("solo", "a description")
         step = s.create_step("step", step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [(item, 0), (step, 1)])
 
     def test_backlog_item_with_no_steps_shows_only_itself(self):
         s = FakeStore()
-        item = s.create_item("solo")
+        item = s.create_item("solo", "a description")
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([r.node.id for r in rows], [item])
 
@@ -97,8 +97,8 @@ class TestRowBucket(unittest.TestCase):
 
     def test_dependency_blocked_item_is_queued(self):
         s = FakeStore()
-        blocker = s.create_item("blocker")
-        item = s.create_item("blocked")
+        blocker = s.create_item("blocker", "a description")
+        item = s.create_item("blocked", "a description")
         s.dep_add(item, blocker)
         self.assertEqual(row_bucket(s.get_node(item)), "queued")
 
@@ -117,26 +117,26 @@ class TestDisplayRole(unittest.TestCase):
 class TestHasContent(unittest.TestCase):
     def test_non_internal_artifact_is_content(self):
         s = FakeStore()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         s.add_artifact(item, "repo", "org/repo")
         self.assertTrue(has_content(s.get_node(item)))
 
     def test_only_internal_artifacts_is_no_content(self):
         s = FakeStore()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         s.add_artifact(item, "reflection", "text", internal=True)
         self.assertFalse(has_content(s.get_node(item)))
 
     def test_no_artifacts_is_no_content(self):
         s = FakeStore()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         self.assertFalse(has_content(s.get_node(item)))
 
 
 class TestViewableArtifacts(unittest.TestCase):
     def test_internal_artifacts_are_excluded(self):
         s = FakeStore()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         s.add_artifact(item, "repo", "org/repo")
         s.add_artifact(item, "reflection", "text", internal=True)
         result = viewable_artifacts(s.get_node(item))
@@ -144,5 +144,5 @@ class TestViewableArtifacts(unittest.TestCase):
 
     def test_no_artifacts_is_an_empty_list(self):
         s = FakeStore()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         self.assertEqual(viewable_artifacts(s.get_node(item)), [])

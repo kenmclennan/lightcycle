@@ -30,9 +30,8 @@ class RetroCadenceUseCase:
             if item_reflection_count(self._store, item) > 0
         ]
         title = "Audit of %d closed items" % len(batch)
-        item_id = self._store.create_item(title)
-        self._store.edit_node(
-            item_id, description="batch: %s" % ", ".join(sorted(i.id for i in batch)))
+        item_id = self._store.create_item(
+            title, "batch: %s" % ", ".join(sorted(i.id for i in batch)))
         self._store.label_add(item_id, "retro-origin")
         tid = self._store.create_step(
             "%s: %s" % (AUDIT_STEP, title),

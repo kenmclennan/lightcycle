@@ -11,7 +11,7 @@ class TestReopenItem(unittest.TestCase):
 
     def test_a_reopened_item_is_no_longer_done_and_keeps_its_children(self):
         store, uc = self._uc()
-        item = store.create_item("deliver the blueprint")
+        item = store.create_item("deliver the blueprint", "a description")
         first = store.create_step("s", step="coder", role="agent", parent=item)
         store.close(first, "done")
         store.close(item, "abandoned")
@@ -26,7 +26,7 @@ class TestReopenItem(unittest.TestCase):
 
     def test_a_reopened_item_runs_again_once_a_step_is_filed(self):
         store, uc = self._uc()
-        item = store.create_item("deliver the blueprint")
+        item = store.create_item("deliver the blueprint", "a description")
         store.close(store.create_step("s", step="coder", role="agent", parent=item), "done")
         store.close(item, "abandoned")
         uc.execute(ReopenItemInput(item=item))
@@ -37,14 +37,14 @@ class TestReopenItem(unittest.TestCase):
 
     def test_an_open_item_is_refused_rather_than_silently_ignored(self):
         store, uc = self._uc()
-        item = store.create_item("deliver the blueprint")
+        item = store.create_item("deliver the blueprint", "a description")
 
         with self.assertRaises(UseCaseError):
             uc.execute(ReopenItemInput(item=item))
 
     def test_a_step_is_refused_and_points_at_the_verb_that_does_work(self):
         store, uc = self._uc()
-        item = store.create_item("i")
+        item = store.create_item("i", "a description")
         step = store.create_step("s", step="coder", role="agent", parent=item)
         store.close(step, "done")
 

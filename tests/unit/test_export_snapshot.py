@@ -8,7 +8,7 @@ from lightcycle.application.setup import ExportSnapshotUseCase
 class TestExportSnapshot(unittest.TestCase):
     def test_export_reproduces_store_contents(self):
         store = make_sqlite_store()
-        item = store.create_item("some work")
+        item = store.create_item("some work", "a description")
         store.add_artifact(item, "spec", "/specs/GRID-059.md")
         step = store.create_step("build it", step="build", role="agent", parent=item)
         store.note(step, "some notes")
