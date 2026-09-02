@@ -45,7 +45,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_story_artifacts_roundtrip(self):
         s = self._store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "spec", "specs/foo.md", "the spec")
         arts = s.item_artifacts(sid)
         self.assertEqual(
@@ -104,56 +104,54 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_tasks_closed_since_excludes_stories(self):
         s = self._store()
-        sid = s.create_item("closed item", theme=s.create_theme("theme"))
+        sid = s.create_item("closed item")
         s.close(sid, "merged")
         results = s.nodes_closed_since("2000-01-01")
         self.assertNotIn(sid, [t.id for t in results])
 
     def test_closed_unretroed_items_returns_closed_items(self):
         s = self._store()
-        sid = s.create_item("closed item", theme=s.create_theme("theme"))
+        sid = s.create_item("closed item")
         s.close(sid, "merged")
         self.assertIn(sid, [t.id for t in s.closed_unretroed_items()])
 
     def test_closed_unretroed_items_excludes_open_and_retroed_and_origin(self):
         s = self._store()
-        theme = s.create_theme("theme")
-        s.create_item("open item", theme=theme)
-        retroed = s.create_item("retroed item", theme=theme)
+        s.create_item("open item")
+        retroed = s.create_item("retroed item")
         s.close(retroed, "merged")
         s.label_add(retroed, "retroed")
-        origin = s.create_item("origin item", theme=theme)
+        origin = s.create_item("origin item")
         s.close(origin, "merged")
         s.label_add(origin, "retro-origin")
         ids = [t.id for t in s.closed_unretroed_items()]
         self.assertNotIn(retroed, ids)
         self.assertNotIn(origin, ids)
 
-    def test_last_n_closed_epics_returns_closed_epics(self):
+    def test_last_n_closed_items_returns_closed_items(self):
         s = self._store()
-        epic1 = s.create_theme("epic1")
-        s.close(epic1, "merged")
-        epic2 = s.create_theme("epic2")
-        s.close(epic2, "merged")
-        results = s.last_n_closed_themes(1)
+        first = s.create_item("first")
+        s.close(first, "merged")
+        second = s.create_item("second")
+        s.close(second, "merged")
+        results = s.last_n_closed_items(1)
         self.assertEqual(len(results), 1)
 
-    def test_last_n_closed_epics_excludes_open_epics(self):
+    def test_last_n_closed_items_excludes_open_items(self):
         s = self._store()
-        s.create_theme("open theme")
-        results = s.last_n_closed_themes(10)
+        s.create_item("open item")
+        results = s.last_n_closed_items(10)
         self.assertEqual(results, [])
 
-    def test_last_n_closed_epics_excludes_nested_stories(self):
+    def test_last_n_closed_items_excludes_nested_steps(self):
         s = self._store()
-        theme = s.create_theme("theme")
-        child = s.create_item("child item", theme=theme)
-        s.close(theme, "merged")
-        s.close(child, "merged")
-        results = s.last_n_closed_themes(10)
-        result_ids = [t.id for t in results]
-        self.assertIn(theme, result_ids)
-        self.assertNotIn(child, result_ids)
+        item = s.create_item("item")
+        step = s.create_step("build", parent=item)
+        s.close(step, "done")
+        s.close(item, "merged")
+        result_ids = [t.id for t in s.last_n_closed_items(10)]
+        self.assertIn(item, result_ids)
+        self.assertNotIn(step, result_ids)
 
     def test_all_tasks_returns_many(self):
         s = self._store()
@@ -162,130 +160,65 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         for tid in created:
             self.assertIn(tid, result_ids)
 
-    def test_edit_node_reids_a_referenceless_item_into_the_new_parents_namespace(self):
+    def test_edit_node_moving_a_step_keeps_its_id_and_everything_hanging_off_it(self):
         s = self._store()
-        theme = s.create_theme("theme")
-        standalone = s.create_item("standalone")
-        new_id = s.edit_node(standalone, parent=theme)
-        sibling = s.create_item("sibling", theme=theme)
-        self.assertEqual(new_id, "%s.1" % theme)
-        self.assertEqual(sibling, "%s.2" % theme)
-        self.assertEqual(s.get_node(new_id).parent, theme)
-        with self.assertRaises(KeyError):
-            s.get_node(standalone)
-
-    def test_edit_node_keeps_id_when_item_has_a_child_step(self):
-        s = self._store()
-        theme = s.create_theme("theme")
-        item = s.create_item("has a step")
-        s.create_step("child", parent=item)
-        new_id = s.edit_node(item, parent=theme)
-        self.assertEqual(new_id, item)
-        self.assertEqual(s.get_node(item).parent, theme)
-
-    def test_edit_node_keeps_id_for_each_id_bearing_artifact_type(self):
-        s = self._store()
-        theme = s.create_theme("theme")
-        for atype in ("branch", "pr", "spec", "resolves", "filed-from", "brief"):
-            item = s.create_item("item %s" % atype)
-            s.add_artifact(item, atype, "value")
-            new_id = s.edit_node(item, parent=theme)
-            self.assertEqual(new_id, item)
-
-    def test_edit_node_still_reids_with_only_a_non_id_bearing_artifact(self):
-        s = self._store()
-        theme = s.create_theme("theme")
-        item = s.create_item("has a repo")
-        s.add_artifact(item, "repo", "saga")
-        new_id = s.edit_node(item, parent=theme)
-        self.assertEqual(new_id, "%s.1" % theme)
-
-    def test_edit_node_reid_repoints_deps_and_removes_the_old_id_everywhere(self):
-        s = self._store()
-        theme = s.create_theme("theme")
+        item = s.create_item("item")
         blocker = s.create_step("blocker")
-        item = s.create_item("blocked item")
-        s.dep_add(item, blocker)
-        s.dep_add(blocker, item)
-        s.label_add(item, "retro-origin")
-        s.update_state(item, "in_progress")
+        step = s.create_step("blocked step")
+        s.dep_add(step, blocker)
+        s.label_add(step, "retro-origin")
 
-        new_id = s.edit_node(item, parent=theme)
+        new_id = s.edit_node(step, parent=item)
 
-        deps = set(
-            s._conn.execute("SELECT node_id, blocked_by FROM deps").fetchall()
-        )
-        self.assertIn((new_id, blocker), deps)
-        self.assertIn((blocker, new_id), deps)
-        self.assertNotIn(item, [row[0] for row in deps] + [row[1] for row in deps])
-
-        self.assertEqual(
-            s._conn.execute("SELECT COUNT(*) FROM nodes WHERE id = ?", (item,)).fetchone()[0], 0
-        )
-        self.assertEqual(
-            s._conn.execute(
-                "SELECT COUNT(*) FROM history WHERE node_id = ?", (item,)
-            ).fetchone()[0],
-            0,
-        )
-        self.assertEqual(
-            s._conn.execute(
-                "SELECT COUNT(*) FROM labels WHERE node_id = ?", (item,)
-            ).fetchone()[0],
-            0,
-        )
-        new_labels = [
+        self.assertEqual(new_id, step)
+        self.assertEqual(s.get_node(step).parent, item)
+        self.assertEqual(s.get_node(step).blocked_by, [blocker])
+        labels = [
             row[0] for row in s._conn.execute(
-                "SELECT label FROM labels WHERE node_id = ?", (new_id,)
+                "SELECT label FROM labels WHERE node_id = ?", (step,)
             ).fetchall()
         ]
-        self.assertIn("retro-origin", new_labels)
+        self.assertIn("retro-origin", labels)
 
     def test_edit_node_parent_move_to_own_current_parent_is_a_no_op(self):
         s = self._store()
-        theme = s.create_theme("theme")
-        item = s.create_item("already here", theme=theme)
-        new_id = s.edit_node(item, parent=theme)
-        self.assertEqual(new_id, item)
+        item = s.create_item("item")
+        step = s.create_step("already here", parent=item)
+        new_id = s.edit_node(step, parent=item)
+        self.assertEqual(new_id, step)
 
-    def test_activate_item_use_case_threads_the_reidded_item_through_file_step(self):
+    def test_activate_item_use_case_files_the_entry_step_under_the_item(self):
         s = self._store()
         metas = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
         workflow = graph_text_from_metas(metas, entry="build")
         flow = FlowService(FakeFs(metas, workflow=workflow), s)
 
-        theme = s.create_theme("payments")
         item = s.create_item("add refunds")
         resp = ActivateItemUseCase(s, flow, None, None).execute(
-            ActivateItemInput(item=item, workflow="standard", theme=theme)
+            ActivateItemInput(item=item, workflow="standard")
         )
 
-        new_item_id = "%s.1" % theme
-        with self.assertRaises(KeyError):
-            s.get_node(item)
-        self.assertEqual(s.get_node(new_item_id).state, "ready")
-        self.assertEqual(s.get_node(resp.step).parent, new_item_id)
+        self.assertEqual(s.get_node(item).state, "ready")
+        self.assertEqual(s.get_node(resp.step).parent, item)
 
-    def test_cmd_set_parent_and_backlog_links_the_resolved_backlog_to_the_reidded_item(self):
+    def test_cmd_set_parent_and_backlog_links_the_resolved_backlog_to_the_moved_step(self):
         s = self._store()
         cli.set_container(Container(store=s))
-        theme = s.create_theme("theme")
+        item = s.create_item("owning item")
         backlog_item = s.create_item("a backlog todo")
-        item = s.create_item("adopt me")
+        step = s.create_step("adopt me")
 
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            rc = cli.cmd_set([item, "--parent", theme, "--backlog", backlog_item]) or 0
+            rc = cli.cmd_set([step, "--parent", item, "--backlog", backlog_item]) or 0
         self.assertEqual(rc, 0, err.getvalue())
 
-        new_id = "%s.1" % theme
-        self.assertEqual(out.getvalue().strip(), new_id)
-        arts = s.item_artifacts(new_id)
+        self.assertEqual(out.getvalue().strip(), step)
+        self.assertEqual(s.get_node(step).parent, item)
+        arts = s.item_artifacts(step)
         self.assertTrue(
             any(a.type == "resolves" and a.value == backlog_item for a in arts)
         )
-        with self.assertRaises(KeyError):
-            s.get_node(item)
 
 
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):

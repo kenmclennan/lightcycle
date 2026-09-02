@@ -130,19 +130,6 @@ def log_target_node(store, node):
     if node.type == "item":
         cur = current_step(store, node.id)
         return cur if cur is not None else last_completed_step(store, node.id)
-    if node.type == "theme":
-        fallback = None
-        for child in store.children(node.id):
-            if child.type != "item":
-                continue
-            cur = current_step(store, child.id)
-            if cur is not None and cur.state == State.IN_PROGRESS:
-                return cur
-            if cur is None:
-                candidate = last_completed_step(store, child.id)
-                if candidate is not None:
-                    fallback = candidate
-        return fallback
     return None
 
 
@@ -166,7 +153,6 @@ class HeaderData:
     id: str
     title: str
     project: Optional[str]
-    theme_line: Optional[str]
     workflow_line: Optional[str]
     step_field: Optional[str]
     role_field: Optional[str]
@@ -174,20 +160,9 @@ class HeaderData:
     state_field: Optional[str]
     escalation_text: Optional[str]
     escalation_target: Optional[str]
-    item_count_line: Optional[str] = None
 
 
 def build_header(store, node, now, flow_service):
-    if node.type == "theme":
-        count = sum(1 for child in store.children(node.id) if child.type == "item")
-        item_count_line = "theme · %d item%s underneath" % (count, "" if count == 1 else "s")
-        return HeaderData(
-            id=node.id, title=node.title, project=None,
-            theme_line=None, workflow_line=None,
-            step_field=None, role_field=None, elapsed_field=None, state_field=None,
-            escalation_text=None, escalation_target=None,
-            item_count_line=item_count_line,
-        )
     project = project_label(store, node) or None
     if node.type == "item":
         return _item_header(store, node, now, project, flow_service)
@@ -201,10 +176,6 @@ def _park_escalation_text(node):
 
 
 def _item_header(store, node, now, project, flow_service):
-    theme_line = None
-    if node.parent:
-        theme = store.get_node(node.parent)
-        theme_line = "%s · %s" % (theme.id, theme.title)
     workflow_line = node.workflow or None
     step_field = role_field = elapsed_field = None
     escalation_text = escalation_target = None
@@ -232,7 +203,7 @@ def _item_header(store, node, now, project, flow_service):
 
     return HeaderData(
         id=node.id, title=node.title, project=project,
-        theme_line=theme_line, workflow_line=workflow_line,
+        workflow_line=workflow_line,
         step_field=step_field, role_field=role_field, elapsed_field=elapsed_field,
         state_field=None, escalation_text=escalation_text, escalation_target=escalation_target,
     )
@@ -249,7 +220,7 @@ def _step_header(store, node, now, project):
     elapsed_field = _elapsed(store, node, now) if node.state == State.IN_PROGRESS else None
     return HeaderData(
         id=node.id, title=node.title, project=project,
-        theme_line=None, workflow_line=None,
+        workflow_line=None,
         step_field=None, role_field=display_role(node.role), elapsed_field=elapsed_field,
         state_field=row_bucket(node), escalation_text=escalation_text,
         escalation_target=escalation_target,
@@ -424,9 +395,7 @@ class HubHeader(Vertical):
     def compose(self) -> ComposeResult:
         yield Static(id="hub-id")
         yield Static(id="hub-title")
-        yield Static(id="hub-item-count")
         yield Static(id="hub-project")
-        yield Static(id="hub-theme")
         yield Static(id="hub-workflow")
         yield Static(id="hub-step")
         yield Static(id="hub-role")
@@ -437,9 +406,7 @@ class HubHeader(Vertical):
     def update(self, header) -> None:
         self.query_one("#hub-id", Static).update(Text(header.id, style=COLOURS["cyan"]))
         self.query_one("#hub-title", Static).update(header.title or "")
-        self._line("#hub-item-count", header.item_count_line)
         self._line("#hub-project", "project: %s" % header.project if header.project else None)
-        self._line("#hub-theme", "theme: %s" % header.theme_line if header.theme_line else None)
         self._line(
             "#hub-workflow", "workflow: %s" % header.workflow_line if header.workflow_line else None
         )

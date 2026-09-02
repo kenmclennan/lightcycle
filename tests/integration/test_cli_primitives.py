@@ -28,7 +28,7 @@ class TestCliPrimitives(unittest.TestCase):
     def test_new_rejects_an_unknown_type(self):
         rc, _, err = self._run("new", "widget", "x")
         self.assertEqual(rc, 2)
-        self.assertIn("theme | item | step", err)
+        self.assertIn("item | step", err)
 
     def test_set_state_active_activates_the_item(self):
         _, item, _ = self._run("new", "item", "add refunds")
@@ -37,17 +37,20 @@ class TestCliPrimitives(unittest.TestCase):
         self.assertEqual(self.h.store.get_node(item).state, "ready")
         self.assertEqual(self.h.store.get_node(step).step, "build")
 
-    def test_set_parent_moves_the_item_under_a_theme(self):
-        _, theme, _ = self._run("new", "theme", "payments")
+    def test_set_parent_refuses_to_reparent_an_item(self):
+        _, owner, _ = self._run("new", "item", "payments")
         _, item, _ = self._run("new", "item", "refunds")
-        self._run("set", item, "--parent", theme)
-        self.assertEqual(self.h.store.get_node(item).theme, theme)
+        rc, _, err = self._run("set", item, "--parent", owner.strip())
+        self.assertEqual(rc, 1)
+        self.assertIn("top-level", err)
+        self.assertIsNone(self.h.store.get_node(item).parent)
 
-    def test_set_workflow_on_a_theme_stays_unresolved(self):
-        _, theme, _ = self._run("new", "theme", "payments")
-        rc, _, _ = self._run("set", theme, "--workflow", "lightcycle/spec-driven")
+    def test_set_workflow_on_an_item_resolves_to_a_pin(self):
+        _, item, _ = self._run("new", "item", "payments")
+        rc, _, _ = self._run("set", item, "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc, 0)
-        self.assertEqual(self.h.store.get_node(theme).workflow, "lightcycle/spec-driven")
+        self.assertTrue(
+            self.h.store.get_node(item).workflow.startswith("lightcycle/spec-driven@"))
 
     def test_attach_records_an_artifact(self):
         _, item, _ = self._run("new", "item", "x")

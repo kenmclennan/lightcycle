@@ -38,7 +38,7 @@ class TestWorkerPermitted(unittest.TestCase):
         self.assertTrue(_worker_permitted("set", ["ITEM.1", "--state=blocked"]))
 
     def test_set_parent_forbidden(self):
-        self.assertFalse(_worker_permitted("set", ["ITEM", "--parent", "THEME"]))
+        self.assertFalse(_worker_permitted("set", ["STEP", "--parent", "ITEM"]))
 
     def test_set_state_active_forbidden(self):
         self.assertFalse(_worker_permitted("set", ["ITEM", "--state", "active"]))

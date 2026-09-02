@@ -36,7 +36,7 @@ lc show <step>         # one step incl. resume-state (for escalations)
 In the driver, shape a spec with the human, then:
 
 ```bash
-lc new item "<title>" --parent <theme>  # then: lc attach <item> spec <path>; lc set <item> --state active
+lc new item "<title>" --workflow <origin>/<name>  # then: lc attach <item> spec <path>; lc set <item> --state active
 ```
 
 The run-loop spawns a write-code worker within a tick; it claims, builds, and exits, then the

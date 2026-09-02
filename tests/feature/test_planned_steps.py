@@ -28,8 +28,7 @@ def _store(ctx):
 
 def _item(ctx):
     if "item" not in ctx:
-        theme = _store(ctx).create_theme("theme")
-        ctx["item"] = _store(ctx).create_item("it", theme=theme)
+        ctx["item"] = _store(ctx).create_item("it")
     return ctx["item"]
 
 

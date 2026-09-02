@@ -24,7 +24,6 @@ class Node:
     blocked_by: List[str] = field(default_factory=list)
     notes: Optional[str] = None
     claimed_by: Optional[str] = None
-    theme: Optional[str] = None
     since: Optional[str] = None
     fired_at: Optional[str] = None
     closed_at: Optional[str] = None
@@ -60,7 +59,7 @@ class Node:
             "description": self.description,
             "needs": self.needs, "outcome": self.outcome, "deps": self.deps,
             "blocked_by": self.blocked_by,
-            "notes": self.notes, "theme": self.theme, "attention": self.attention,
+            "notes": self.notes, "attention": self.attention,
             "since": self.since, "fired_at": self.fired_at, "closed_at": self.closed_at,
             "model": self.model, "workflow": self.workflow,
             "branch": self.branch, "pr": self.pr, "reason": self.reason, "tried": self.tried,

@@ -193,8 +193,7 @@ class _TripwireFlow:
 class TestMonitorPrsSkipsPrlessItems(unittest.TestCase):
     def test_backlogged_item_with_an_inherited_selector_is_never_flow_resolved(self):
         store = FakeStore()
-        theme = store.create_theme("t", workflow="lightcycle/spec-driven")
-        store.create_item("backlog", theme=theme)
+        store.create_item("backlog", workflow="lightcycle/spec-driven")
         uc = MonitorPrsUseCase(store, FakeGitHub(), FakeWorktrees(), _TripwireFlow())
         result = uc.execute()
         self.assertEqual(result.merged, [])
@@ -231,18 +230,14 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
         store = FakeStore()
         flow_service = FlowService(fs, store)
 
-        code_item = store.create_item(
-            "code feature", theme=store.create_theme("theme"), workflow="standard"
-        )
+        code_item = store.create_item("code feature", workflow="standard")
         code_url = "https://github.com/x/y/pull/100"
         store.add_artifact(code_item, "pr", code_url)
         store.create_step(
             "await-merge: code feature", step="await-merge", role="human", parent=code_item
         )
 
-        spec_item = store.create_item(
-            "a spec", theme=store.create_theme("theme2"), workflow="spec"
-        )
+        spec_item = store.create_item("a spec", workflow="spec")
         spec_url = "https://github.com/x/y/pull/101"
         store.add_artifact(spec_item, "pr", spec_url)
         store.create_step(
@@ -327,10 +322,7 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
         )
         store = FakeStore()
         flow_service = FlowService(fs, store)
-        item = store.create_item(
-            "deliver the plan", theme=store.create_theme("theme"),
-            workflow="looping", project="lightcycle",
-        )
+        item = store.create_item("deliver the plan", workflow="looping", project="lightcycle")
         store.add_artifact(item, "repo", "lightcycle")
         url = "https://github.com/x/y/pull/77"
         store.add_artifact(item, "pr", url, label="code")
@@ -368,10 +360,7 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         )
         store = FakeStore()
         flow_service = FlowService(fs, store)
-        spec_item = store.create_item(
-            "LC-59: phase c1", theme=store.create_theme("theme"),
-            workflow="spec-driven", project="lightcycle",
-        )
+        spec_item = store.create_item("LC-59: phase c1", workflow="spec-driven", project="lightcycle")
         store.add_artifact(spec_item, "repo", "lightcycle")
         store.add_artifact(spec_item, "spec", "lightcycle/LC-59-phase-c1.md")
         store.add_artifact(spec_item, "branch", "spec/LC-59-phase-c1", label="spec")
@@ -467,10 +456,7 @@ class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
         )
         store = FakeStore()
         flow_service = FlowService(fs, store)
-        item = store.create_item(
-            "LC-7: login", theme=store.create_theme("theme"),
-            workflow="bdd", project="app",
-        )
+        item = store.create_item("LC-7: login", workflow="bdd", project="app")
         store.add_artifact(item, "repo", "app")
         store.add_artifact(item, "branch", "feat/LC-7-feature-login", label="feature")
         url = "https://github.com/x/y/pull/7"
@@ -490,7 +476,7 @@ class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
 class TestMonitorPrsMerged(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()
-        item = store.create_item("my feature", theme=store.create_theme("theme"))
+        item = store.create_item("my feature")
         store.add_artifact(item, "pr", pr_url)
         step = store.create_step(
             "ready-merge: my feature", step="ready-merge", role="human", parent=item
@@ -533,7 +519,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_already_closed_story_is_skipped(self):
         url = "https://github.com/x/y/pull/4"
         store = FakeStore()
-        item = store.create_item("done feature", theme=store.create_theme("theme"))
+        item = store.create_item("done feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
             "ready-merge: done feature", step="ready-merge", role="human", parent=item
@@ -550,7 +536,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_merged_pr_closes_story_whose_live_task_is_upstream_of_ready_merge(self):
         url = "https://github.com/x/y/pull/40"
         store = FakeStore()
-        item = store.create_item("upstream feature", theme=store.create_theme("theme"))
+        item = store.create_item("upstream feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
             "build: upstream feature", step="build", role="coder", parent=item
@@ -569,7 +555,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_merged_pr_closes_story_whose_live_task_regressed_to_review(self):
         url = "https://github.com/x/y/pull/41"
         store = FakeStore()
-        item = store.create_item("regressed feature", theme=store.create_theme("theme"))
+        item = store.create_item("regressed feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
             "review: regressed feature", step="review", role="reviewer", parent=item
@@ -584,7 +570,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
     def test_task_without_pr_artifact_is_skipped(self):
         store = FakeStore()
-        item = store.create_item("no-pr feature", theme=store.create_theme("theme"))
+        item = store.create_item("no-pr feature")
         store.create_step(
             "ready-merge: no-pr feature", step="ready-merge", role="human", parent=item
         )
@@ -618,7 +604,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         )
         url = "https://github.com/x/y/pull/99"
         store = FakeStore()
-        item = store.create_item("ship it", theme=store.create_theme("theme"))
+        item = store.create_item("ship it")
         store.add_artifact(item, "pr", url)
         store.create_step("await-ship: ship it", step="await-ship", role="human", parent=item)
         worktrees = FakeWorktrees()
@@ -634,7 +620,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 class TestMonitorPrsClosedUnmerged(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()
-        item = store.create_item("abandoned feature", theme=store.create_theme("theme"))
+        item = store.create_item("abandoned feature")
         store.add_artifact(item, "pr", pr_url)
         step = store.create_step(
             "ready-merge: abandoned feature", step="ready-merge", role="human", parent=item
@@ -695,7 +681,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         )
         url = "https://github.com/x/y/pull/20"
         store = FakeStore()
-        item = store.create_item("cancelled work", theme=store.create_theme("theme"))
+        item = store.create_item("cancelled work")
         store.add_artifact(item, "pr", url)
         store.create_step(
             "await-ship: cancelled work", step="await-ship", role="human", parent=item
@@ -723,7 +709,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
     def test_closed_unmerged_pr_advances_to_a_declared_gate_instead_of_closing(self):
         url = "https://github.com/x/y/pull/23"
         store = FakeStore()
-        item = store.create_item("gated feature", theme=store.create_theme("theme"))
+        item = store.create_item("gated feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
             "ready-merge: gated feature", step="ready-merge", role="human", parent=item
@@ -747,7 +733,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
     def test_closed_unmerged_pr_closes_story_whose_live_task_is_at_watch_pr(self):
         url = "https://github.com/x/y/pull/22"
         store = FakeStore()
-        item = store.create_item("watched feature", theme=store.create_theme("theme"))
+        item = store.create_item("watched feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
             "watch-pr: watched feature", step="watch-pr", role="reviewer", parent=item
@@ -793,7 +779,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         f = flow or _FEEDBACK_FLOW
         store = FakeStore()
-        item = store.create_item("in-review feature", theme=store.create_theme("theme"))
+        item = store.create_item("in-review feature")
         store.add_artifact(item, "pr", pr_url)
         step = store.create_step(
             "ready-merge: in-review feature", step="ready-merge", role="human", parent=item
@@ -1223,7 +1209,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None, prior_conflicts=0):
         f = flow or _CONFLICT_FLOW
         store = FakeStore()
-        item = store.create_item("conflicting feature", theme=store.create_theme("theme"))
+        item = store.create_item("conflicting feature")
         store.add_artifact(item, "pr", pr_url)
         for _ in range(prior_conflicts):
             old = store.create_step("watch-step: conflicting feature", step="watch-step",
@@ -1297,7 +1283,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
             }
         })
         store = FakeStore()
-        item = store.create_item("arbitrary", theme=store.create_theme("theme"))
+        item = store.create_item("arbitrary")
         store.add_artifact(item, "pr", url)
         step = store.create_step("await-green: arbitrary", step="await-green",
                                  role="sentinel", parent=item)
@@ -1347,7 +1333,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
     def test_conflict_fires_when_step_also_declares_feedback(self):
         url = "https://github.com/x/y/pull/59"
         store = FakeStore()
-        item = store.create_item("quad feature", theme=store.create_theme("theme"))
+        item = store.create_item("quad feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step("watch-pr: quad feature", step="watch-pr", role="reviewer",
                                  parent=item)
@@ -1364,7 +1350,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
     def test_feedback_wins_over_conflict_when_both_conditions_true(self):
         url = "https://github.com/x/y/pull/60"
         store = FakeStore()
-        item = store.create_item("both quad feature", theme=store.create_theme("theme"))
+        item = store.create_item("both quad feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step("watch-pr: both quad feature", step="watch-pr", role="reviewer",
                                  parent=item)
@@ -1405,7 +1391,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
             },
         })
         store = FakeStore()
-        item = store.create_item("no-cap feature", theme=store.create_theme("theme"))
+        item = store.create_item("no-cap feature")
         store.add_artifact(item, "pr", url)
         for _ in range(5):
             old = store.create_step("watch-step: no-cap feature", step="watch-step",
@@ -1429,7 +1415,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
     def _setup(self, github, flow=None):
         f = flow or _FLOW
         store = FakeStore()
-        item = store.create_item("guarded feature", theme=store.create_theme("theme"))
+        item = store.create_item("guarded feature")
         store.add_artifact(item, "pr", self._URL)
         step = store.create_step("build: guarded feature", step="build", role="coder", parent=item)
         worktrees = FakeWorktrees()
@@ -1836,7 +1822,7 @@ class TestTickWithMonitor(unittest.TestCase):
     def test_tick_runs_monitor_and_returns_merged(self):
         url = "https://github.com/x/y/pull/5"
         store = FakeStore()
-        item = store.create_item("merge me", theme=store.create_theme("theme"))
+        item = store.create_item("merge me")
         store.add_artifact(item, "pr", url)
         store.create_step("ready-merge: merge me", step="ready-merge", role="human", parent=item)
         worktrees = FakeWorktrees()
@@ -1852,7 +1838,7 @@ class TestTickWithMonitor(unittest.TestCase):
     def test_tick_runs_monitor_and_returns_abandoned(self):
         url = "https://github.com/x/y/pull/6"
         store = FakeStore()
-        item = store.create_item("abandoned me", theme=store.create_theme("theme"))
+        item = store.create_item("abandoned me")
         store.add_artifact(item, "pr", url)
         store.create_step(
             "ready-merge: abandoned me", step="ready-merge", role="human", parent=item

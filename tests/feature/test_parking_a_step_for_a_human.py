@@ -27,14 +27,8 @@ def _isolate():
     cli.set_container(orig)
 
 
-def _new_theme(ctx, title="objective"):
-    rc, out, err = ctx["h"].run("new", "theme", title)
-    assert rc == 0, err
-    return out.strip()
-
-
-def _new_item(ctx, parent, workflow=None, title="some item"):
-    args = ["new", "item", title, "--parent", parent]
+def _new_item(ctx, workflow=None, title="some item"):
+    args = ["new", "item", title]
     if workflow:
         args += ["--workflow", workflow]
     rc, out, err = ctx["h"].run(*args)
@@ -60,8 +54,7 @@ def _flow(ctx):
 
 @given(parsers.parse('an item with workflow "{workflow}", with a spec attached'))
 def _item_with_workflow_and_spec(ctx, workflow):
-    theme = _new_theme(ctx)
-    ctx["item"] = _new_item(ctx, theme, workflow=workflow)
+    ctx["item"] = _new_item(ctx, workflow=workflow)
     ctx["h"].run("attach", ctx["item"], "spec", "specs/x.md")
 
 

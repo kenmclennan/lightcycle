@@ -59,7 +59,7 @@ class TestShowNode(unittest.TestCase):
 class TestTrace(unittest.TestCase):
     def test_assembles_story_artifacts_tasks_and_logs(self):
         s = FakeStore()
-        sid = s.create_item("st", theme=s.create_theme("theme"))
+        sid = s.create_item("st")
         s.add_artifact(sid, "spec", "specs/x.md")
         k = s.create_step("build: x", step="build", role="coder", parent=sid)
         workers = _Workers([{"role": "coder", "step": k, "log": "/l/k.log"}])
@@ -71,21 +71,21 @@ class TestTrace(unittest.TestCase):
 
     def test_step_role_survives_to_the_trace(self):
         s = FakeStore()
-        sid = s.create_item("st", theme=s.create_theme("theme"))
+        sid = s.create_item("st")
         s.create_step("build: x", step="build", role="coder", parent=sid)
         resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "coder")
 
     def test_human_role_survives_to_the_trace_unchanged(self):
         s = FakeStore()
-        sid = s.create_item("st", theme=s.create_theme("theme"))
+        sid = s.create_item("st")
         s.create_step("ready-merge: x", step="ready-merge", role="human", parent=sid)
         resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "human")
 
     def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
         s = FakeStore()
-        sid = s.create_item("st", theme=s.create_theme("theme"))
+        sid = s.create_item("st")
         k = s.create_step("build: x", step="build", role="coder", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
@@ -98,7 +98,7 @@ class TestTrace(unittest.TestCase):
 
     def test_resolves_no_log_when_pruned_and_nothing_on_disk(self):
         s = FakeStore()
-        sid = s.create_item("st", theme=s.create_theme("theme"))
+        sid = s.create_item("st")
         k = s.create_step("build: x", step="build", role="coder", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
@@ -107,7 +107,7 @@ class TestTrace(unittest.TestCase):
 
     def test_resolves_no_log_for_a_step_never_claimed(self):
         s = FakeStore()
-        sid = s.create_item("st", theme=s.create_theme("theme"))
+        sid = s.create_item("st")
         s.create_step("build: x", step="build", role="coder", parent=sid)
         root = tempfile.mkdtemp()
         resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
@@ -118,12 +118,11 @@ def _seed_mixed_store():
     s = FakeStore()
     todo_item = s.create_item("todo item")
     active_item = s.create_item("active item")
-    theme = s.create_theme("a theme")
     ready = s.create_step("ready one", step="build", role="coder")
     human = s.create_step("needs me", role="human")
     running = s.create_step("running", step="build", role="coder")
     s.assign(running, "worker-1")
-    non_steps = [todo_item, active_item, theme]
+    non_steps = [todo_item, active_item]
     return s, non_steps, {"ready": ready, "human": human, "running": running}
 
 
@@ -170,7 +169,7 @@ class TestStatus(unittest.TestCase):
         self.assertIn(blocked, [t.id for t in lanes["queue"]])
         self.assertNotIn("blocked", lanes)
 
-    def test_lanes_contain_only_steps_never_items_or_themes(self):
+    def test_lanes_contain_only_steps_never_items(self):
         s, non_steps, steps = _seed_mixed_store()
         lanes = StatusUseCase(s).execute().lanes
         self.assertEqual([t.id for t in lanes["queue"]], [steps["ready"]])
@@ -189,7 +188,7 @@ class TestActiveTasks(unittest.TestCase):
         s.assign(running, "worker-1")
         self.assertEqual([t.id for t in ActiveStepsUseCase(s).execute().steps], [running])
 
-    def test_active_contains_only_steps_never_items_or_themes(self):
+    def test_active_contains_only_steps_never_items(self):
         s, non_steps, steps = _seed_mixed_store()
         result_ids = [t.id for t in ActiveStepsUseCase(s).execute().steps]
         self.assertEqual(result_ids, [steps["running"]])
@@ -211,7 +210,7 @@ class TestQueue(unittest.TestCase):
             s.create_step("t%d" % i, step="build", role="coder")
         self.assertEqual(len(QueueUseCase(s).execute(QueueInput()).steps), 10)
 
-    def test_queue_contains_only_steps_never_items_or_themes(self):
+    def test_queue_contains_only_steps_never_items(self):
         s, non_steps, steps = _seed_mixed_store()
         result_ids = [t.id for t in QueueUseCase(s).execute(QueueInput()).steps]
         self.assertEqual(result_ids, [steps["ready"]])
@@ -229,9 +228,9 @@ class TestInboxPerItemWorkflow(unittest.TestCase):
             "wfB": graph_text_from_metas(b_metas),
         })
         flow_svc = FlowService(fs, s)
-        item_a = s.create_item("iA", theme=s.create_theme("A"), workflow="wfA")
+        item_a = s.create_item("iA", workflow="wfA")
         a = s.create_step("gate: A", step="gate", role="human", parent=item_a)
-        item_b = s.create_item("iB", theme=s.create_theme("B"), workflow="wfB")
+        item_b = s.create_item("iB", workflow="wfB")
         b = s.create_step("gate: B", step="gate", role="human", parent=item_b)
         rows = InboxUseCase(s, flow_svc).execute(InboxInput()).rows
         outcomes = {row.step.id: row.outcomes for row in rows}
@@ -270,16 +269,6 @@ class TestInboxBacklog(unittest.TestCase):
         lanes = StatusUseCase(s).execute().lanes
         lane_ids = {t.id for lane in lanes.values() for t in lane}
         self.assertNotIn(self.todo, lane_ids)
-
-
-class TestInboxNoCandidateThemes(unittest.TestCase):
-    def test_all_closed_stories_epic_never_surfaces_in_inbox(self):
-        s = FakeStore()
-        theme = s.create_theme("My Epic")
-        s.close(s.create_item("item 1", theme=theme), "done")
-        s.close(s.create_item("item 2", theme=theme), "done")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
-        self.assertNotIn(theme, [row.step.id for row in resp.rows])
 
 
 class TestInboxAttentionFlag(unittest.TestCase):

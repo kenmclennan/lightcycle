@@ -27,7 +27,7 @@ class UnblockStepUseCase:
             )
         self._store.update_metadata(
             input.step,
-            {"theme": t.theme, "since": t.since, "fired_at": t.fired_at, "needs": None},
+            {"since": t.since, "fired_at": t.fired_at, "needs": None},
         )
         kept = [l for l in (t.notes or "").splitlines() if not l.startswith("BLOCKED:")]
         self._store.set_notes(input.step, "\n".join(kept))

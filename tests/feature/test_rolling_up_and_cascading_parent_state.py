@@ -36,14 +36,8 @@ def _isolate():
     cli.set_container(orig)
 
 
-def _new_theme(ctx, title="objective"):
-    rc, out, err = ctx["h"].run("new", "theme", title)
-    assert rc == 0, err
-    return out.strip()
-
-
-def _new_item(ctx, parent, workflow=None, title="some item"):
-    args = ["new", "item", title, "--parent", parent]
+def _new_item(ctx, workflow=None, title="some item"):
+    args = ["new", "item", title]
     if workflow:
         args += ["--workflow", workflow]
     rc, out, err = ctx["h"].run(*args)
@@ -71,22 +65,20 @@ def _terminal_flow(ctx):
     ctx["workflow_name"] = DEFAULT_WORKFLOW
 
 
-@given("a theme with no items")
-def _theme_no_items(ctx):
-    ctx["theme"] = _new_theme(ctx)
+@given("an item with no steps")
+def _item_no_steps(ctx):
+    ctx["item"] = _new_item(ctx)
 
 
-@given("an item under a theme, with that workflow")
-def _item_under_theme(ctx):
-    ctx["theme"] = _new_theme(ctx)
-    ctx["item"] = _new_item(ctx, ctx["theme"], workflow=ctx["workflow_name"])
+@given("an item with that workflow")
+def _item_with_workflow(ctx):
+    ctx["item"] = _new_item(ctx, workflow=ctx["workflow_name"])
 
 
-@given("two items under the same theme, both with that workflow")
-def _two_items_under_theme(ctx):
-    ctx["theme"] = _new_theme(ctx)
-    ctx["item"] = _new_item(ctx, ctx["theme"], workflow=ctx["workflow_name"], title="first item")
-    ctx["item2"] = _new_item(ctx, ctx["theme"], workflow=ctx["workflow_name"], title="second item")
+@given("two items, both with that workflow")
+def _two_items(ctx):
+    ctx["item"] = _new_item(ctx, workflow=ctx["workflow_name"], title="first item")
+    ctx["item2"] = _new_item(ctx, workflow=ctx["workflow_name"], title="second item")
 
 
 @given("I have activated the item")
@@ -125,19 +117,9 @@ def _complete_first_item_only_step(ctx, outcome):
     assert rc == 0, err
 
 
-@then("the theme is backlogged")
-def _theme_backlogged(ctx):
-    assert ctx["h"].store.get_node(ctx["theme"]).state == "backlogged"
-
-
-@then("the theme is in progress")
-def _theme_in_progress(ctx):
-    assert ctx["h"].store.get_node(ctx["theme"]).state == "in_progress"
-
-
-@then("the theme is done")
-def _theme_done(ctx):
-    assert ctx["h"].store.get_node(ctx["theme"]).state == "done"
+@then("the item is backlogged")
+def _item_backlogged(ctx):
+    assert ctx["h"].store.get_node(ctx["item"]).state == "backlogged"
 
 
 @then("the item is done")

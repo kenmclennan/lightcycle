@@ -29,16 +29,6 @@ class _StubFlow:
 
 
 class TestResolveWorkflowSelection(unittest.TestCase):
-    def test_theme_target_passes_the_raw_selector_through_unresolved(self):
-        flow = _StubFlow()
-        resp = ResolveWorkflowSelectionUseCase(flow, FakeStore()).execute(
-            ResolveWorkflowSelectionInput(
-                node_id="item-1", node_type="theme", selector="lightcycle/solo")
-        )
-        self.assertEqual(resp.value, "lightcycle/solo")
-        self.assertFalse(resp.resolved)
-        self.assertEqual(flow.resolve_calls, [])
-
     def test_item_target_resolves_to_the_pin_flow_returns(self):
         flow = _StubFlow(pin="lightcycle/solo@abc123")
         resp = ResolveWorkflowSelectionUseCase(flow, FakeStore()).execute(
@@ -83,60 +73,37 @@ class TestResolveWorkflowSelectionShadowing(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("item")
         resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
-            ResolveWorkflowSelectionInput(node_id=item, node_type="theme", selector="x")
+            ResolveWorkflowSelectionInput(node_id=item, node_type="item", selector="x")
         )
         self.assertEqual(resp.shadowed_by, [])
 
-    def test_a_direct_child_with_its_own_pin_is_reported(self):
+    def test_a_step_with_its_own_pin_is_reported(self):
         store = FakeStore()
-        theme = store.create_theme("theme")
-        child = store.create_item("child", theme=theme)
-        store.edit_node(child, workflow="lightcycle/solo@abc123")
+        item = store.create_item("item")
+        step = store.create_step("build", parent=item)
+        store.edit_node(step, workflow="lightcycle/solo@abc123")
         resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
-            ResolveWorkflowSelectionInput(node_id=theme, node_type="theme", selector="x")
+            ResolveWorkflowSelectionInput(node_id=item, node_type="item", selector="x")
         )
-        self.assertEqual(resp.shadowed_by, [child])
+        self.assertEqual(resp.shadowed_by, [step])
 
-    def test_a_childless_descendant_with_no_pin_is_not_reported(self):
+    def test_a_step_with_no_pin_is_not_reported(self):
         store = FakeStore()
-        theme = store.create_theme("theme")
-        store.create_item("child", theme=theme)
+        item = store.create_item("item")
+        store.create_step("build", parent=item)
         resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
-            ResolveWorkflowSelectionInput(node_id=theme, node_type="theme", selector="x")
+            ResolveWorkflowSelectionInput(node_id=item, node_type="item", selector="x")
         )
         self.assertEqual(resp.shadowed_by, [])
 
-    def test_recursion_stops_at_the_nearest_shadow_not_the_grandchild_too(self):
+    def test_only_the_shadowing_step_is_named_not_both_and_not_neither(self):
         store = FakeStore()
-        theme = store.create_theme("theme")
-        child = store.create_item("child", theme=theme)
-        store.edit_node(child, workflow="lightcycle/solo@abc123")
-        grandchild = store.create_step("grandchild", parent=child)
-        store.edit_node(grandchild, workflow="lightcycle/solo@def456")
-        resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
-            ResolveWorkflowSelectionInput(node_id=theme, node_type="theme", selector="x")
-        )
-        self.assertEqual(resp.shadowed_by, [child])
-
-    def test_a_grandchild_pin_surfaces_when_the_child_has_none(self):
-        store = FakeStore()
-        theme = store.create_theme("theme")
-        child = store.create_item("child", theme=theme)
-        grandchild = store.create_step("grandchild", parent=child)
-        store.edit_node(grandchild, workflow="lightcycle/solo@abc123")
-        resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
-            ResolveWorkflowSelectionInput(node_id=theme, node_type="theme", selector="x")
-        )
-        self.assertEqual(resp.shadowed_by, [grandchild])
-
-    def test_only_the_shadowing_sibling_is_named_not_both_and_not_neither(self):
-        store = FakeStore()
-        theme = store.create_theme("theme")
-        shadowing = store.create_item("shadowing", theme=theme)
+        item = store.create_item("item")
+        shadowing = store.create_step("shadowing", parent=item)
         store.edit_node(shadowing, workflow="lightcycle/solo@abc123")
-        store.create_item("plain", theme=theme)
+        store.create_step("plain", parent=item)
         resp = ResolveWorkflowSelectionUseCase(_StubFlow(), store).execute(
-            ResolveWorkflowSelectionInput(node_id=theme, node_type="theme", selector="x")
+            ResolveWorkflowSelectionInput(node_id=item, node_type="item", selector="x")
         )
         self.assertEqual(resp.shadowed_by, [shadowing])
 

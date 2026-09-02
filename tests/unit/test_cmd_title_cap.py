@@ -50,13 +50,6 @@ class TestCmdNewTitleCap(unittest.TestCase):
         rc, out, err = call(cli.cmd_new, "item", "x" * self.cap)
         self.assertEqual(rc, 0)
 
-    def test_new_theme_title_over_cap_is_rejected(self):
-        rc, out, err = call(cli.cmd_new, "theme", "x" * (self.cap + 1))
-        self.assertEqual(rc, 1)
-        self.assertIn(str(self.cap), err)
-        self.assertIn("--description", err)
-        self.assertEqual(self.store.all_nodes(), [])
-
 
 class TestCmdSetTitleCap(unittest.TestCase):
     def setUp(self):

@@ -150,22 +150,11 @@ def _priority_with_item(ctx):
     _launch(ctx, store)
 
 
-@given("an item with a project, a theme, and a workflow")
+@given("an item with a project and a workflow")
 def _item_full_identity(ctx):
     store = FakeStore()
-    theme = store.create_theme("A theme", project="org/repo")
-    item = store.create_item("Full item", theme=theme, workflow="lightcycle/spec-driven@abc123")
+    item = store.create_item("Full item", workflow="lightcycle/spec-driven@abc123")
     store.add_artifact(item, "repo", "org/repo")
-    store.create_step("write code", step="write-code", role="write-code", parent=item)
-    ctx["item_id"] = item
-    ctx["theme_id"] = theme
-    _launch(ctx, store)
-
-
-@given("an item with no theme")
-def _item_no_theme(ctx):
-    store = FakeStore()
-    item = store.create_item("Themeless item")
     store.create_step("write code", step="write-code", role="write-code", parent=item)
     ctx["item_id"] = item
     _launch(ctx, store)
@@ -238,7 +227,7 @@ def _item_human_step_no_worker(ctx):
     _launch(ctx, store)
 
 
-@given("a step is selected, rather than an item or theme")
+@given("a step is selected, rather than an item")
 def _step_selected(ctx):
     store = FakeStore()
     item = store.create_item("Item")
@@ -259,30 +248,6 @@ def _push_hub(ctx, session, node_id):
         )
     )
     session.pause()
-
-
-@given("a theme with 4 items underneath, its hub open")
-def _theme_with_4_items(ctx):
-    store = FakeStore()
-    theme = store.create_theme("Theme")
-    for i in range(4):
-        store.create_item("Item %d" % i, theme=theme)
-    ctx["node_id"] = theme
-    session = _launch(ctx, store)
-    _push_hub(ctx, session, theme)
-
-
-@given("a theme whose items belong to different projects, its hub open")
-def _theme_items_different_projects(ctx):
-    store = FakeStore()
-    theme = store.create_theme("Theme")
-    first = store.create_item("First", theme=theme)
-    store.add_artifact(first, "repo", "org/repo-a")
-    second = store.create_item("Second", theme=theme)
-    store.add_artifact(second, "repo", "org/repo-b")
-    ctx["node_id"] = theme
-    session = _launch(ctx, store)
-    _push_hub(ctx, session, theme)
 
 
 @given(parsers.parse('a node with the status "{status}", its hub open'))
@@ -311,8 +276,6 @@ def _node_with_status(ctx, status):
         step = store.create_step("s", step="build", role="coder", parent=item)
         store.close(step, "done")
         node_id = item
-    elif status == "a theme":
-        node_id = store.create_theme("Theme")
     else:
         raise AssertionError("unhandled status %r" % status)
     ctx["node_id"] = node_id
@@ -562,8 +525,6 @@ def _opened_from_priority_row(ctx):
 def _opened_and_navigated(ctx):
     store = FakeStore()
     item = store.create_item("Target")
-    theme = store.create_theme("Theme")
-    store.edit_node(item, parent=theme)
     store.create_step("s", step="build", role="coder", parent=item)
     session = _launch(ctx, store)
     session.press("enter")
@@ -655,22 +616,14 @@ def _hub_opens_replacing_list(ctx):
     assert isinstance(ctx["session"].app.screen, NodeHubScreen)
 
 
-@then("the header shows its id, its title, its project, its theme, and its workflow")
+@then("the header shows its id, its title, its project, and its workflow")
 def _header_shows_identity(ctx):
     screen = ctx["session"].app.screen
     assert _text(screen, "#hub-id") == ctx["item_id"]
     assert _text(screen, "#hub-title") == "Full item"
     assert _text(screen, "#hub-project") is not None
     assert "repo" in _text(screen, "#hub-project")
-    theme_text = _text(screen, "#hub-theme")
-    assert theme_text is not None and ctx["theme_id"] in theme_text
     assert _text(screen, "#hub-workflow") is not None
-
-
-@then("no theme line is shown in the header")
-def _no_theme_line(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-theme") is None
 
 
 @then("no workflow line is shown in the header")
@@ -741,30 +694,9 @@ def _header_value_text_colour(ctx, key):
     assert style.color.get_truecolor().hex.lower() == COLOURS["text"].lower()
 
 
-@then(parsers.parse('the header shows "{text}"'))
-def _header_shows_text(ctx, text):
+@then("no workflow field is shown")
+def _no_workflow_field(ctx):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-item-count") == text
-
-
-@then("no project, theme, or workflow line is shown in the header")
-def _no_project_theme_workflow(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-project") is None
-    assert _text(screen, "#hub-theme") is None
-    assert _text(screen, "#hub-workflow") is None
-
-
-@then("no project line is shown in the header")
-def _no_project_line(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-project") is None
-
-
-@then("no theme or workflow fields are shown")
-def _no_theme_workflow(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-theme") is None
     assert _text(screen, "#hub-workflow") is None
 
 

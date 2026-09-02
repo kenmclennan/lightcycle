@@ -53,8 +53,8 @@ each step's `(state, role)` by `lane_for`:
 | backlogged  | any   | queue  |
 | done        | any   | done   |
 
-Lanes run over **steps only** - items and themes never appear in a lane (they live in `lc backlog`
-and the theme roll-up). A step that is `backlogged` because of an unmet dependency shows in the
+Lanes run over **steps only** - items never appear in a lane (they live in `lc backlog` and the
+item roll-up). A step that is `backlogged` because of an unmet dependency shows in the
 `queue` lane alongside runnable steps, not in a lane of its own - nothing is asked of anyone while
 it waits on its dependency, so it is not treated as an attention signal. It stays distinguishable
 by its `blocked_by` field, which every reader of the queue (`lc status`, `lc queue`, the priority

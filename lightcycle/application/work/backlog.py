@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.project_of import project_of
-from lightcycle.domain.work import Node, State
+from lightcycle.domain.work import State
 
 
 def _project_matches(store, item, short_ref):
@@ -17,20 +17,11 @@ def _project_matches(store, item, short_ref):
 class BacklogInput:
     n: Optional[int] = None
     project: Optional[str] = None
-    themes: bool = False
-
-
-@dataclass(frozen=True)
-class ThemeGroup:
-    theme: Optional[Node]
-    project: Optional[str]
-    rows: List[HumanNodeRow]
 
 
 @dataclass(frozen=True)
 class BacklogResponse:
     rows: List[HumanNodeRow]
-    groups: Optional[List[ThemeGroup]] = None
 
 
 @dataclass(frozen=True)
@@ -62,9 +53,7 @@ class BacklogUseCase:
             HumanNodeRow(kind="todo", outcomes=[], step=t, project=project_of(self._store, t))
             for t in items
         ]
-        if not input.themes:
-            return BacklogResponse(rows=rows)
-        return BacklogResponse(rows=rows, groups=self._grouped(rows))
+        return BacklogResponse(rows=rows)
 
     def counts(self) -> BacklogCountsResponse:
         items = self._backlogged_items()
@@ -88,22 +77,3 @@ class BacklogUseCase:
                 if n.type == "item" and n.state == State.BACKLOGGED
             ]
         return self._backlogged_items_cache
-
-    def _grouped(self, rows):
-        by_theme, order, no_theme = {}, [], []
-        for row in rows:
-            theme_id = row.step.theme
-            if theme_id is None:
-                no_theme.append(row)
-                continue
-            if theme_id not in by_theme:
-                by_theme[theme_id] = []
-                order.append(theme_id)
-            by_theme[theme_id].append(row)
-        groups = []
-        for theme_id in sorted(order):
-            theme = self._store.get_node(theme_id)
-            groups.append(ThemeGroup(theme, project_of(self._store, theme), by_theme[theme_id]))
-        if no_theme:
-            groups.append(ThemeGroup(None, None, no_theme))
-        return groups

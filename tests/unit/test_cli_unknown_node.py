@@ -42,10 +42,10 @@ class TestMainRefusesUnknownNodeId(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(err, "unknown node 'LC-999'\n")
 
-    def test_done_unknown_theme_id_exits_nonzero_with_no_traceback(self):
-        rc, err = self._run(["done", "LC-THEME-999", "wontfix"])
+    def test_done_unknown_id_exits_nonzero_with_no_traceback(self):
+        rc, err = self._run(["done", "LC-NOPE-999", "wontfix"])
         self.assertEqual(rc, 1)
-        self.assertEqual(err, "unknown node 'LC-THEME-999'\n")
+        self.assertEqual(err, "unknown node 'LC-NOPE-999'\n")
 
     def test_message_does_not_say_step_for_show(self):
         _, err = self._run(["show", "LC-999"])
@@ -53,9 +53,9 @@ class TestMainRefusesUnknownNodeId(unittest.TestCase):
         self.assertEqual(err, "unknown node 'LC-999'\n")
 
     def test_message_does_not_say_step_for_done(self):
-        _, err = self._run(["done", "LC-THEME-999", "wontfix"])
+        _, err = self._run(["done", "LC-NOPE-999", "wontfix"])
         self.assertNotIn("step not found", err)
-        self.assertEqual(err, "unknown node 'LC-THEME-999'\n")
+        self.assertEqual(err, "unknown node 'LC-NOPE-999'\n")
 
     def test_set_state_in_progress_on_unknown_id_exits_cleanly(self):
         rc, err = self._run(["set", "LC-999", "--state", "in_progress"])

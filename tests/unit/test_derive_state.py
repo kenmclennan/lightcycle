@@ -44,8 +44,8 @@ class DeriveContainerStateTest(unittest.TestCase):
         s = derive_state("item", closed=True, assignee=None, has_unresolved_deps=False, child_states=[])
         self.assertEqual(s, State.DONE)
 
-    def test_theme_rolls_up_like_item(self):
-        s = derive_state("theme", closed=False, assignee=None, has_unresolved_deps=False, child_states=[State.DONE])
+    def test_item_rolls_up_from_its_steps(self):
+        s = derive_state("item", closed=False, assignee=None, has_unresolved_deps=False, child_states=[State.DONE])
         self.assertEqual(s, State.DONE)
 
 

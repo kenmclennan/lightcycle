@@ -4,8 +4,6 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.ports.git import GitReadError
 
-_STRUCTURAL_TYPES = ("item", "theme")
-
 
 @dataclass(frozen=True)
 class RemoveNodeInput:
@@ -54,13 +52,6 @@ class RemoveNodeUseCase:
             raise UseCaseError("no such node: %s" % input.id)
 
         children = self._store.children(node.id)
-        structural = [c for c in children if c.type in _STRUCTURAL_TYPES]
-        if structural:
-            raise UseCaseError(
-                "refusing to delete %s: %d structural child(ren) present - delete them first"
-                % (node.id, len(structural))
-            )
-
         step_ids = {c.id for c in children if c.type == "step"}
         if node.type == "step":
             step_ids.add(node.id)

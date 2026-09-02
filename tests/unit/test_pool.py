@@ -307,7 +307,7 @@ class TestSweep(unittest.TestCase):
 
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
-        item = s.create_item("merged feature", theme=s.create_theme("theme"))
+        item = s.create_item("merged feature")
         step = s.create_step("build: merged feature", step="build", role="coder", parent=item)
         s.update_state(step, "in_progress")
         s.assign(step, "live-sp")
@@ -336,7 +336,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
         s = FakeStore()
-        item = s.create_item("feature", theme=s.create_theme("theme"))
+        item = s.create_item("feature")
         step = s.create_step("build: feature", step="build", role="coder", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -354,7 +354,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_a_clean_worktree_does_not_commit(self):
         s = FakeStore()
-        item = s.create_item("feature", theme=s.create_theme("theme"))
+        item = s.create_item("feature")
         step = s.create_step("build: feature", step="build", role="coder", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -372,7 +372,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_a_non_git_worktree_does_not_commit(self):
         s = FakeStore()
-        item = s.create_item("feature", theme=s.create_theme("theme"))
+        item = s.create_item("feature")
         step = s.create_step("build: feature", step="build", role="coder", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -419,7 +419,7 @@ class TestSweep(unittest.TestCase):
 
     def test_a_failed_commit_still_reclaims_and_is_reported(self):
         s = FakeStore()
-        item = s.create_item("feature", theme=s.create_theme("theme"))
+        item = s.create_item("feature")
         step = s.create_step("build: feature", step="build", role="coder", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -437,7 +437,7 @@ class TestSweep(unittest.TestCase):
 
     def test_an_unreadable_worktree_is_reported_as_a_capture_failure_not_a_silent_skip(self):
         s = FakeStore()
-        item = s.create_item("feature", theme=s.create_theme("theme"))
+        item = s.create_item("feature")
         step = s.create_step("build: feature", step="build", role="coder", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -467,7 +467,7 @@ class TestSweep(unittest.TestCase):
                 return super().commit_all(root, message)
 
         s = OrderTrackingStore()
-        item = s.create_item("feature", theme=s.create_theme("theme"))
+        item = s.create_item("feature")
         step = s.create_step("build: feature", step="build", role="coder", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -688,9 +688,9 @@ class TestTick(unittest.TestCase):
     def test_hook_completions_surfaced_generically(self):
         s = FakeStore()
         flow_svc = FlowService(
-            FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_theme_close": True}}), s
+            FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}}), s
         )
-        tid = s.create_step("audit: theme", step="audit", role="auditor",
+        tid = s.create_step("audit: release", step="audit", role="auditor",
                             parent=s.create_item("i", workflow="wf"))
         s.note(tid, "no finding")
         s.close(tid, "done")
@@ -703,9 +703,9 @@ class TestTick(unittest.TestCase):
 
     def test_flow_service_cache_cleared_each_tick_picks_up_bundle_edited_in_place(self):
         s = FakeStore()
-        fs = FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_theme_close": True}})
+        fs = FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}})
         flow_svc = FlowService(fs, s)
-        tid = s.create_step("audit: theme", step="audit", role="auditor",
+        tid = s.create_step("audit: release", step="audit", role="auditor",
                             parent=s.create_item("i", workflow="wf"))
         s.note(tid, "no finding")
         s.close(tid, "done")

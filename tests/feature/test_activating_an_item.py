@@ -45,17 +45,8 @@ def _isolate():
     cli.set_container(orig)
 
 
-def _new_theme(ctx, workflow=None, title="objective"):
-    args = ["new", "theme", title]
-    if workflow:
-        args += ["--workflow", workflow]
-    rc, out, err = ctx["h"].run(*args)
-    assert rc == 0, err
-    return out.strip()
-
-
-def _new_item(ctx, parent, workflow=None, title="some item"):
-    args = ["new", "item", title, "--parent", parent]
+def _new_item(ctx, workflow=None, title="some item"):
+    args = ["new", "item", title]
     if workflow:
         args += ["--workflow", workflow]
     rc, out, err = ctx["h"].run(*args)
@@ -70,8 +61,7 @@ def _flow(ctx):
 
 @given(parsers.parse('an item with workflow "{workflow}", with a spec attached'))
 def _item_with_workflow_and_spec(ctx, workflow):
-    theme = _new_theme(ctx)
-    ctx["item"] = _new_item(ctx, theme, workflow=workflow)
+    ctx["item"] = _new_item(ctx, workflow=workflow)
     ctx["h"].run("attach", ctx["item"], "spec", "specs/x.md")
 
 
@@ -99,26 +89,23 @@ def _workflow_entry_requires_spec(ctx, workflow):
 
 @given(parsers.parse('an item with that workflow, with no {atype} attached'))
 def _item_with_that_workflow_missing(ctx, atype):
-    theme = _new_theme(ctx)
-    ctx["item"] = _new_item(ctx, theme, workflow=ctx["workflow_name"])
+    ctx["item"] = _new_item(ctx, workflow=ctx["workflow_name"])
     if atype != "spec":
         ctx["h"].run("attach", ctx["item"], "spec", "specs/x.md")
 
 
-@given("a theme")
-@given("a theme with no workflow")
-def _plain_theme(ctx):
-    ctx["theme"] = _new_theme(ctx)
+@given("a step")
+def _plain_step(ctx):
+    item = _new_item(ctx, workflow="lightcycle/spec-driven")
+    ctx["h"].run("attach", item, "spec", "specs/x.md")
+    rc, out, err = ctx["h"].run("set", item, "--state", "active")
+    assert rc == 0, err
+    ctx["step"] = out.strip()
 
 
-@given(parsers.parse('a theme with workflow "{workflow}"'))
-def _theme_with_workflow(ctx, workflow):
-    ctx["theme"] = _new_theme(ctx, workflow=workflow)
-
-
-@given("an item under that theme, with no workflow of its own, and a spec attached")
-def _item_under_theme(ctx):
-    ctx["item"] = _new_item(ctx, ctx["theme"])
+@given("an item with no workflow, and a spec attached")
+def _item_no_workflow(ctx):
+    ctx["item"] = _new_item(ctx)
     ctx["h"].run("attach", ctx["item"], "spec", "specs/x.md")
 
 
@@ -154,9 +141,9 @@ def _activate_at_step(ctx, step):
     )
 
 
-@when("I activate the theme")
-def _activate_theme(ctx):
-    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("set", ctx["theme"], "--state", "active")
+@when("I activate the step")
+def _activate_step(ctx):
+    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("set", ctx["step"], "--state", "active")
 
 
 @when("the coder claims the next step")

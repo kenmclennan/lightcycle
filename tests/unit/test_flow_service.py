@@ -97,19 +97,19 @@ class TestStepSkill(unittest.TestCase):
 
     def test_human_gate_step_returns_its_skill_body(self):
         svc, store = self._svc_store()
-        item = store.create_item("i", theme=store.create_theme("t"), workflow="wf")
+        item = store.create_item("i", workflow="wf")
         step = store.create_step("gate: i", step="gate", role="human", parent=item)
         self.assertEqual(svc.step_skill(store.get_node(step)), "GATE SKILL BODY")
 
     def test_agent_step_has_no_skill(self):
         svc, store = self._svc_store()
-        item = store.create_item("i", theme=store.create_theme("t"), workflow="wf")
+        item = store.create_item("i", workflow="wf")
         step = store.create_step("review: i", step="review", role="reviewer", parent=item)
         self.assertIsNone(svc.step_skill(store.get_node(step)))
 
     def test_workflow_less_node_has_no_skill(self):
         svc, store = self._svc_store()
-        item = store.create_item("i", theme=store.create_theme("t"))
+        item = store.create_item("i")
         step = store.create_step("gate: i", step="gate", role="human", parent=item)
         self.assertIsNone(svc.step_skill(store.get_node(step)))
 
@@ -177,7 +177,7 @@ class TestFlowService(unittest.TestCase):
 class TestPhaseFor(unittest.TestCase):
     def _step(self, metas):
         store = FakeStore()
-        item = store.create_item("st", theme=store.create_theme("theme"), workflow="w")
+        item = store.create_item("st", workflow="w")
         step = store.get_node(store.create_step("b", step="build", role="coder", parent=item))
         return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
 
@@ -194,7 +194,7 @@ class TestPhaseFor(unittest.TestCase):
 class TestDisplayFor(unittest.TestCase):
     def _step(self, metas):
         store = FakeStore()
-        item = store.create_item("st", theme=store.create_theme("theme"), workflow="w")
+        item = store.create_item("st", workflow="w")
         step = store.get_node(store.create_step("b", step="build", role="coder", parent=item))
         return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
 

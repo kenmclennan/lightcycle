@@ -141,7 +141,7 @@ def _run_sweep(ctx):
 
 @given("a worker has claimed a step")
 def _claimed(ctx):
-    item = ctx["store"].create_item("feature", theme=ctx["store"].create_theme("theme"))
+    item = ctx["store"].create_item("feature")
     step = ctx["store"].create_step("build: feature", step="build", role="coder", parent=item)
     ctx["store"].update_state(step, "in_progress")
     ctx["store"].assign(step, ctx["spawnid"])

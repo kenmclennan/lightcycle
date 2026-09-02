@@ -8,8 +8,7 @@ from lightcycle.application.setup import ExportSnapshotUseCase
 class TestExportSnapshot(unittest.TestCase):
     def test_export_reproduces_store_contents(self):
         store = make_sqlite_store()
-        theme = store.create_theme("theme")
-        item = store.create_item("theme work", theme=theme)
+        item = store.create_item("some work")
         store.add_artifact(item, "spec", "/specs/GRID-059.md")
         step = store.create_step("build it", step="build", role="coder", parent=item)
         store.note(step, "some notes")
@@ -21,7 +20,7 @@ class TestExportSnapshot(unittest.TestCase):
         response = ExportSnapshotUseCase(store).execute()
         rows = {json.loads(line)["id"]: json.loads(line) for line in response.lines}
 
-        self.assertEqual(set(rows), {theme, item, step, blocker})
+        self.assertEqual(set(rows), {item, step, blocker})
 
         story_row = rows[item]
         self.assertEqual(story_row["type"], "item")

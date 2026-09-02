@@ -10,22 +10,14 @@ class HierarchyRow:
     depth: int
 
 
-def compose_hierarchy(root, items, steps_by_item):
+def compose_hierarchy(root, steps_by_item):
     rows = [HierarchyRow(root, 0)]
-    if root.type == "theme":
-        for item in items:
-            rows.append(HierarchyRow(item, 1))
-            for step in steps_by_item.get(item.id, []):
-                rows.append(HierarchyRow(step, 2))
-    else:
-        for step in steps_by_item.get(root.id, []):
-            rows.append(HierarchyRow(step, 1))
+    for step in steps_by_item.get(root.id, []):
+        rows.append(HierarchyRow(step, 1))
     return rows
 
 
 def landing_tab(node):
-    if node.type == "theme":
-        return "hierarchy"
     if node.state == State.IN_PROGRESS:
         return "log"
     if node.state == State.DONE:

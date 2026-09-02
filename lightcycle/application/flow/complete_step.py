@@ -5,7 +5,6 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.domain.audit import FINDINGS_STEP, StepKind
 from lightcycle.domain.contracts import StepContract
@@ -142,12 +141,8 @@ class CompleteStepUseCase:
         children = self._store.children(node_id)
         if not children or any(c.state != State.DONE for c in children):
             return
-        if node.type == "item":
-            CloseItemUseCase(self._store, self._worktrees).execute(
-                CloseItemInput(item=node_id, reason=_AUTO_CLOSE_REASON)
-            )
-        else:
-            CloseThemeUseCase(self._store).execute(
-                CloseThemeInput(theme=node_id, reason=_AUTO_CLOSE_REASON)
-            )
-        self._cascade_close(node.parent)
+        if node.type != "item":
+            return
+        CloseItemUseCase(self._store, self._worktrees).execute(
+            CloseItemInput(item=node_id, reason=_AUTO_CLOSE_REASON)
+        )

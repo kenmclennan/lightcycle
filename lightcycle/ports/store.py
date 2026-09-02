@@ -156,12 +156,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None,
-                     shortcode=None):
-        pass
-
-    @abstractmethod
-    def create_theme(self, title, *, project=None, goal=None, workflow=None, shortcode=None):
+    def create_item(self, title, *, project=None, goal=None, workflow=None, shortcode=None):
         pass
 
     @abstractmethod
@@ -179,11 +174,6 @@ class StorePort(ABC):
     @abstractmethod
     def nodes_closed_since(self, since_date):
         pass
-
-    @abstractmethod
-    def last_n_closed_themes(self, n):
-        pass
-
 
     @abstractmethod
     def closed_unretroed_items(self):
