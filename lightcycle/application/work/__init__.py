@@ -1,7 +1,6 @@
 from lightcycle.application.work.active_steps import ActiveStepsUseCase
 from lightcycle.application.work.add_item import AddItemInput, AddItemUseCase
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
-from lightcycle.application.work.close_theme import CloseThemeInput, CloseThemeUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.reopen_item import (
     ReopenItemInput,
@@ -17,7 +16,6 @@ from lightcycle.application.work.open_artifact import (
     OpenArtifactResult,
     OpenArtifactUseCase,
 )
-from lightcycle.application.work.open_theme import OpenThemeInput, OpenThemeResponse, OpenThemeUseCase
 from lightcycle.application.work.peek_step import PeekStepInput, PeekStepResponse, PeekStepUseCase
 from lightcycle.application.work.planned_steps import PlannedStepsInput, PlannedStepsUseCase
 from lightcycle.application.work.queue import QueueInput, QueueUseCase
@@ -33,8 +31,6 @@ __all__ = [
     "AddItemUseCase",
     "BacklogInput",
     "BacklogUseCase",
-    "CloseThemeInput",
-    "CloseThemeUseCase",
     "CloseItemInput",
     "CloseItemUseCase",
     "ReopenItemInput",
@@ -52,9 +48,6 @@ __all__ = [
     "OpenArtifactInput",
     "OpenArtifactResult",
     "OpenArtifactUseCase",
-    "OpenThemeInput",
-    "OpenThemeResponse",
-    "OpenThemeUseCase",
     "PeekStepInput",
     "PeekStepResponse",
     "PeekStepUseCase",

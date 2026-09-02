@@ -14,10 +14,9 @@ class TestFsck(unittest.TestCase):
         self.assertEqual(fsck([]), [])
 
     def test_clean_graph_has_no_problems(self):
-        theme = _node("t-1", "theme")
-        item = _node("t-1.1", "item", parent="t-1")
-        step = _node("t-1.1.1", "step", parent="t-1.1")
-        self.assertEqual(fsck([theme, item, step]), [])
+        item = _node("t-1", "item")
+        step = _node("t-1.1", "step", parent="t-1")
+        self.assertEqual(fsck([item, step]), [])
 
     def test_orphaned_node_missing_parent(self):
         step = _node("s-1", "step", parent="missing")

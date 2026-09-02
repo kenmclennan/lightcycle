@@ -295,7 +295,7 @@ class StoreContractBase:
 
     def test_story_artifacts_roundtrip(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "spec", "specs/foo.md")
         arts = s.item_artifacts(sid)
         self.assertEqual(len(arts), 1)
@@ -304,7 +304,7 @@ class StoreContractBase:
 
     def test_add_artifact_still_appends_same_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "feedback", "first note")
         s.add_artifact(sid, "feedback", "second note")
         arts = [a for a in s.item_artifacts(sid) if a.type == "feedback"]
@@ -312,7 +312,7 @@ class StoreContractBase:
 
     def test_replace_artifact_replaces_existing_same_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "spec", "specs/old.md")
         s.replace_artifact(sid, "spec", "specs/new.md")
         arts = s.item_artifacts(sid)
@@ -321,7 +321,7 @@ class StoreContractBase:
 
     def test_replace_artifact_is_generic_for_any_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "repo", "app-old")
         s.replace_artifact(sid, "repo", "app-new")
         arts = [a for a in s.item_artifacts(sid) if a.type == "repo"]
@@ -330,14 +330,14 @@ class StoreContractBase:
 
     def test_add_artifact_declared_kind_overrides_type_default(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "pr", "https://gh/1", kind="text")
         arts = s.item_artifacts(sid)
         self.assertEqual(arts[0].kind, "text")
 
     def test_add_artifact_undeclared_kind_resolves_from_type_table(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.add_artifact(sid, "spec", "specs/foo.md")
         s.add_artifact(sid, "brief", "specs/foo-brief.md")
@@ -352,7 +352,7 @@ class StoreContractBase:
 
     def test_add_artifact_internal_defaults_false_and_persists_true(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.add_artifact(sid, "reflection", "{}", internal=True)
         arts = {a.type: a for a in s.item_artifacts(sid)}
@@ -361,7 +361,7 @@ class StoreContractBase:
 
     def test_replace_artifact_applies_declared_and_default_kind_and_internal(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.replace_artifact(sid, "pr", "https://gh/2", kind="text", internal=True)
         arts = [a for a in s.item_artifacts(sid) if a.type == "pr"]
@@ -369,16 +369,12 @@ class StoreContractBase:
         self.assertEqual(arts[0].kind, "text")
         self.assertTrue(arts[0].internal)
 
-    def test_create_epic_creates_epic_typed_task(self):
-        s = self.make_store()
-        eid = s.create_theme("objective")
-        self.assertEqual(s.get_node(eid).type, "theme")
-
-    def test_create_item_without_a_theme_is_an_untethered_todo(self):
+    def test_create_item_is_a_top_level_todo(self):
         s = self.make_store()
         tid = s.create_item("item: foo")
         node = s.get_node(tid)
-        self.assertIsNone(node.theme)
+        self.assertEqual(node.type, "item")
+        self.assertIsNone(node.parent)
         self.assertEqual(node.state, "backlogged")
 
     def test_create_task_with_description(self):
@@ -415,11 +411,11 @@ class StoreContractBase:
 
     def test_edit_task_reparents(self):
         s = self.make_store()
-        theme = s.create_item("theme", theme=s.create_theme("outer theme"))
+        item = s.create_item("owning item")
         tid = s.create_step("a step")
-        s.edit_node(tid, parent=theme)
+        s.edit_node(tid, parent=item)
         t = s.get_node(tid)
-        self.assertEqual(t.parent, theme)
+        self.assertEqual(t.parent, item)
 
     def test_delete_removes_task(self):
         s = self.make_store()
@@ -429,11 +425,11 @@ class StoreContractBase:
 
     def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
         s = self.make_store()
-        theme = s.create_item("theme", theme=s.create_theme("outer theme"))
-        tid = s.create_step("a step", parent=theme)
+        item = s.create_item("owning item")
+        tid = s.create_step("a step", parent=item)
         s.edit_node(tid, title="renamed")
         t = s.get_node(tid)
-        self.assertEqual(t.parent, theme)
+        self.assertEqual(t.parent, item)
 
     def test_set_model_roundtrip(self):
         s = self.make_store()
@@ -523,14 +519,12 @@ class StoreContractBase:
         self.assertIn(open_tid, ids)
         self.assertNotIn(closed_tid, ids)
 
-    def test_all_steps_excludes_items_and_themes(self):
+    def test_all_steps_excludes_items(self):
         s = self.make_store()
-        theme = s.create_theme("theme")
-        item = s.create_item("todo item", theme=theme)
+        item = s.create_item("todo item")
         step = s.create_step("a step")
         ids = [t.id for t in s.all_steps()]
         self.assertEqual(ids, [step])
-        self.assertNotIn(theme, ids)
         self.assertNotIn(item, ids)
 
     def test_step_state_backlogged_when_blocked(self):
@@ -584,25 +578,6 @@ class StoreContractBase:
         s.close(a, "done")
         s.close(b, "done")
         self.assertEqual(s.get_node(item).state, "done")
-
-    def test_theme_state_rolls_up_through_item_with_mixed_children(self):
-        s = self.make_store()
-        theme = s.create_theme("theme")
-        item = s.create_item("item", theme=theme)
-        done_step = s.create_step("done step", parent=item)
-        s.create_step("open step", parent=item)
-        s.close(done_step, "done")
-        self.assertEqual(s.get_node(theme).state, "in_progress")
-
-    def test_theme_state_done_when_its_item_has_all_children_done(self):
-        s = self.make_store()
-        theme = s.create_theme("theme")
-        item = s.create_item("item", theme=theme)
-        a = s.create_step("a", parent=item)
-        b = s.create_step("b", parent=item)
-        s.close(a, "done")
-        s.close(b, "done")
-        self.assertEqual(s.get_node(theme).state, "done")
 
     def test_item_state_ready_when_all_children_ready(self):
         s = self.make_store()
@@ -731,7 +706,7 @@ class StoreContractBase:
 
     def test_replace_artifact_only_replaces_the_matching_label(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "branch", "feat/spec", label="spec")
         s.add_artifact(sid, "branch", "feat/code", label="code")
 
@@ -742,7 +717,7 @@ class StoreContractBase:
 
     def test_replace_artifact_without_a_label_leaves_labelled_ones_alone(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", theme=s.create_theme("theme"))
+        sid = s.create_item("item: foo")
         s.add_artifact(sid, "pr", "https://gh/spec", label="spec")
         s.add_artifact(sid, "pr", "https://gh/plain")
 
@@ -751,19 +726,7 @@ class StoreContractBase:
         got = {(a.label, a.value) for a in s.item_artifacts(sid) if a.type == "pr"}
         self.assertEqual(got, {("spec", "https://gh/spec"), (None, "https://gh/plain-2")})
 
-    def test_node_view_of_a_themed_item_shows_its_own_artifacts_not_the_theme(self):
-        s = self.make_store()
-        theme = s.create_theme("theme")
-        s.add_artifact(theme, "repo", "org/theme-repo")
-        item = s.create_item("item: foo", theme=theme)
-        s.add_artifact(item, "spec", "specs/foo.md")
-
-        view = s.node_view(item)
-
-        got = {(a.type, a.value) for a in view.item_artifacts}
-        self.assertEqual(got, {("spec", "specs/foo.md")})
-
-    def test_node_view_of_a_themeless_item_shows_its_own_artifacts(self):
+    def test_node_view_of_an_item_shows_its_own_artifacts(self):
         s = self.make_store()
         item = s.create_item("item: foo")
         s.add_artifact(item, "spec", "specs/foo.md")
@@ -775,7 +738,7 @@ class StoreContractBase:
 
     def test_node_view_of_a_step_still_shows_its_parent_item_artifacts(self):
         s = self.make_store()
-        item = s.create_item("item: foo", theme=s.create_theme("theme"))
+        item = s.create_item("item: foo")
         s.add_artifact(item, "spec", "specs/foo.md")
         step = s.create_step("build: foo", parent=item)
 

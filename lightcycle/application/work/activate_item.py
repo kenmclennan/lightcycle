@@ -11,7 +11,6 @@ from lightcycle.domain.work import Item, State
 class ActivateItemInput:
     item: str
     workflow: Optional[str] = None
-    theme: Optional[str] = None
     step: Optional[str] = None
 
 
@@ -34,16 +33,12 @@ class ActivateItemUseCase:
         if node.state != State.BACKLOGGED:
             raise UseCaseError("item '%s' is not a todo (state=%s)" % (input.item, node.state))
         item_id = input.item
-        if input.theme is not None:
-            item_id = self._store.edit_node(input.item, parent=input.theme)
-            node = self._store.get_node(item_id)
         selection = input.workflow
         if selection is None:
             selection = self._flow.inherited_selection(node)
         if selection is None:
             raise UseCaseError(
-                "no workflow selected for '%s'; pass --workflow <origin>/<name> or set one on an "
-                "ancestor theme" % input.item)
+                "no workflow selected for '%s'; pass --workflow <origin>/<name>" % input.item)
         try:
             pin = self._flow.resolve_selection(selection)
             self._flow.load_graph(pin)

@@ -1,7 +1,7 @@
 Feature: Activating an item hands it to the pool
-  Activating an item resolves a workflow - the item's own explicit selection,
-  or one inherited from its theme - and files that workflow's entry step for
-  the role that owns it, immediately ready for the pool to claim. Every
+  Activating an item resolves the workflow it is pinned to and files that
+  workflow's entry step for the role that owns it, immediately ready for the
+  pool to claim. Every
   requirement is checked before anything is written: a refusal, for any
   reason, leaves the item exactly as it was - still backlogged, with no step
   filed.
@@ -42,8 +42,8 @@ Feature: Activating an item hands it to the pool
     And the item is still backlogged, with no step filed
 
   Scenario: Activation refuses a node that is not an item
-    Given a theme
-    When I activate the theme
+    Given a step
+    When I activate the step
     Then the command is rejected
 
   Scenario: Re-activating an item that already has a step filed under it is refused
@@ -53,23 +53,15 @@ Feature: Activating an item hands it to the pool
     Then the command is rejected
     And the item still has exactly one step filed
 
-  Scenario: An item with no workflow of its own inherits its theme's, resolved fresh at activation
-    Given a theme with workflow "lightcycle/spec-driven"
-    And an item under that theme, with no workflow of its own, and a spec attached
-    When I activate the item
-    Then the entry step is filed for the coder
-
-  Scenario: An explicit workflow at activation overrides the one inherited from the theme
-    Given a theme with workflow "lightcycle/spec-driven"
+  Scenario: An explicit workflow at activation overrides the item's own pin
+    Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And a second workflow "lightcycle/reviews-first" in the same origin, entering at a step owned by the reviewer
-    And an item under that theme, with no workflow of its own, and a spec attached
     When I activate the item with workflow "lightcycle/reviews-first"
     Then the entry step is filed for the reviewer, not the coder
     And the item is pinned to the "lightcycle/reviews-first" workflow, not to "lightcycle/spec-driven"
 
-  Scenario: Activation fails when no workflow can be found anywhere, neither on the item nor on its theme
-    Given a theme with no workflow
-    And an item under that theme, with no workflow of its own, and a spec attached
+  Scenario: Activation fails when the item carries no workflow
+    Given an item with no workflow, and a spec attached
     When I activate the item
     Then the command is rejected
     And the item is still backlogged, with no step filed

@@ -164,21 +164,8 @@ def _node_showing_content_indicator(ctx):
     _launch(ctx, store, item)
 
 
-@given("an item under a theme")
-def _item_under_theme(ctx):
-    store = FakeStore()
-    theme = store.create_theme("Theme")
-    item = store.create_item("Item", theme=theme)
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    ctx["theme_id"] = theme
-    ctx["item_id"] = item
-    ctx["step_id"] = step
-    ctx["node_id"] = item
-    _launch(ctx, store, item)
-
-
-@given("a themeless item")
-def _themeless_item(ctx):
+@given("an item")
+def _an_item(ctx):
     store = FakeStore()
     item = store.create_item("Item")
     step = store.create_step("s", step="write-code", role="write-code", parent=item)
@@ -188,13 +175,11 @@ def _themeless_item(ctx):
     _launch(ctx, store, item)
 
 
-@given("the hierarchy is showing a theme, one of its items, and one of that item's steps")
-def _hierarchy_theme_item_step(ctx):
+@given("the hierarchy is showing an item and one of its steps")
+def _hierarchy_item_step(ctx):
     store = FakeStore()
-    theme = store.create_theme("Theme")
-    item = store.create_item("Item", theme=theme)
+    item = store.create_item("Item")
     step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    ctx["theme_id"] = theme
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -221,41 +206,24 @@ def _hierarchy_tab_is_open(ctx):
     _launch(ctx, store, item)
 
 
-@given(parsers.parse("a {node_type} whose current step is active, highlighted in the hierarchy"))
-def _type_with_active_current_step_highlighted(ctx, node_type):
+@given("an item whose current step is active, highlighted in the hierarchy")
+def _item_with_active_current_step_highlighted(ctx):
     store = FakeStore()
-    if node_type == "item":
-        node_id = store.create_item("Item")
-        step = store.create_step("s", step="build", role="coder", parent=node_id)
-    elif node_type == "theme":
-        node_id = store.create_theme("Theme")
-        item = store.create_item("Item", theme=node_id)
-        step = store.create_step("s", step="build", role="coder", parent=item)
-        ctx["item_id"] = item
-    else:
-        raise AssertionError("unhandled node type %r" % node_type)
+    node_id = store.create_item("Item")
+    step = store.create_step("s", step="build", role="coder", parent=node_id)
     store.claim_ready("coder")
     ctx["node_id"] = node_id
     ctx["step_id"] = step
-    ctx["expected_log_target_id"] = step if node_type == "item" else node_id
+    ctx["expected_log_target_id"] = step
     _launch(ctx, store, node_id)
 
 
-@given(parsers.parse("a {node_type} whose every step is done, highlighted in the hierarchy"))
-def _type_with_all_steps_done_highlighted(ctx, node_type):
+@given("an item whose every step is done, highlighted in the hierarchy")
+def _item_with_all_steps_done_highlighted(ctx):
     store = FakeStore()
-    if node_type == "item":
-        node_id = store.create_item("Item")
-        first = store.create_step("s1", step="build", role="coder", parent=node_id)
-        last = store.create_step("s2", step="write-code", role="write-code", parent=node_id)
-    elif node_type == "theme":
-        node_id = store.create_theme("Theme")
-        item = store.create_item("Item", theme=node_id)
-        first = store.create_step("s1", step="build", role="coder", parent=item)
-        last = store.create_step("s2", step="write-code", role="write-code", parent=item)
-        ctx["item_id"] = item
-    else:
-        raise AssertionError("unhandled node type %r" % node_type)
+    node_id = store.create_item("Item")
+    first = store.create_step("s1", step="build", role="coder", parent=node_id)
+    last = store.create_step("s2", step="write-code", role="write-code", parent=node_id)
     store.close(first, "done")
     store.close(last, "done")
     ctx["node_id"] = node_id
@@ -375,15 +343,14 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
         ctx["target_id"] = item
         width = _hierarchy_stack_terminal_width(mode, ["LC-30.100"], [], 0)
     else:
-        theme = store.create_theme("Theme")
-        item = store.create_item("Item", theme=theme, id="LC-30.100")
+        item = store.create_item("Item", id="LC-30.100")
         step = store.create_step(
             "s", step=_HSTACK_TITLE, role="coder", parent=item, id="LC-30.100.100",
         )
         ctx["item_id"] = item
         ctx["target_id"] = step
         width = _hierarchy_stack_terminal_width(
-            mode, [theme, "LC-30.100", "LC-30.100.100"], ["coder"], depth
+            mode, ["LC-30.100", "LC-30.100.100"], ["coder"], depth
         )
     ctx["target_depth"] = depth
     _launch(ctx, store, item, size=(width, 24))
@@ -401,16 +368,15 @@ def _step_blocked_on_dependency(ctx):
 
 def _build_long_store(n=30):
     store = FakeStore()
-    theme = store.create_theme("Theme")
-    item = store.create_item("Item", theme=theme)
+    item = store.create_item("Item")
     for i in range(n):
         store.create_step("s%d" % i, step="build", role="coder", parent=item)
-    return store, theme, item
+    return store, item
 
 
 @given("the hierarchy has more rows than fit on one screen")
 def _hierarchy_more_rows_than_fit(ctx):
-    store, theme, item = _build_long_store()
+    store, item = _build_long_store()
     ctx["item_id"] = item
     _launch(ctx, store, item)
 
@@ -424,7 +390,7 @@ def _selection_not_on_first(ctx):
 
 @given("the selection is on the last node in the hierarchy")
 def _selection_on_last(ctx):
-    store, theme, item = _build_long_store()
+    store, item = _build_long_store()
     ctx["item_id"] = item
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -433,7 +399,7 @@ def _selection_on_last(ctx):
 
 @given("the selection is on the first node in the hierarchy")
 def _selection_on_first(ctx):
-    store, theme, item = _build_long_store()
+    store, item = _build_long_store()
     ctx["item_id"] = item
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -442,7 +408,7 @@ def _selection_on_first(ctx):
 
 @given("the hierarchy is longer than one screen")
 def _hierarchy_longer_than_one_screen(ctx):
-    store, theme, item = _build_long_store()
+    store, item = _build_long_store()
     ctx["item_id"] = item
     _launch(ctx, store, item)
 
@@ -450,10 +416,9 @@ def _hierarchy_longer_than_one_screen(ctx):
 @given(parsers.parse('a "{node_type}" is highlighted in the hierarchy'))
 def _node_type_highlighted(ctx, node_type):
     store = FakeStore()
-    theme = store.create_theme("Theme")
-    item = store.create_item("Item", theme=theme)
+    item = store.create_item("Item")
     step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    ids = {"theme": theme, "item": item, "step": step}
+    ids = {"item": item, "step": step}
     ctx["target_id"] = ids[node_type]
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -464,10 +429,8 @@ def _node_type_highlighted(ctx, node_type):
 @given("I opened a node from the Hierarchy tab")
 def _opened_node_from_hierarchy(ctx):
     store = FakeStore()
-    theme = store.create_theme("Theme")
-    item = store.create_item("Item", theme=theme)
-    other = store.create_item("Other", theme=theme)
-    store.create_step("s", step="write-code", role="write-code", parent=other)
+    item = store.create_item("Item")
+    other = store.create_step("s", step="write-code", role="write-code", parent=item)
     ctx["item_id"] = item
     ctx["other_id"] = other
     _launch(ctx, store, item)
@@ -477,19 +440,17 @@ def _opened_node_from_hierarchy(ctx):
     ctx["session"].press("enter")
 
 
-@given("the hierarchy is scrolled past a node's parent item or theme")
+@given("the hierarchy is scrolled past a node's parent item")
 def _hierarchy_scrolled_past_ancestor(ctx):
-    store, theme, item = _build_long_store(40)
+    store, item = _build_long_store(40)
     ctx["item_id"] = item
-    ctx["theme_id"] = theme
     _launch(ctx, store, item)
 
 
 @given("an ancestor's row is pinned to the top because it scrolled out of view")
 def _ancestor_pinned(ctx):
-    store, theme, item = _build_long_store(40)
+    store, item = _build_long_store(40)
     ctx["item_id"] = item
-    ctx["theme_id"] = theme
     _launch(ctx, store, item)
     for _ in range(30):
         ctx["session"].press("down")
@@ -557,19 +518,18 @@ def _queued_step_highlighted(ctx):
     table.move_cursor(row=_row_ids(ctx).index(step))
 
 
-@given("the current node is a themeless root item")
-def _current_node_themeless_root(ctx):
+@given("the current node is a root item")
+def _current_node_root_item(ctx):
     store = FakeStore()
     item = store.create_item("Item")
     ctx["item_id"] = item
     _launch(ctx, store, item)
 
 
-@given("the current node is a step nested under an item under a theme")
+@given("the current node is a step nested under an item")
 def _current_node_nested_step(ctx):
     store = FakeStore()
-    theme = store.create_theme("Theme")
-    item = store.create_item("Item", theme=theme)
+    item = store.create_item("Item")
     step = store.create_step("s", step="write-code", role="write-code", parent=item)
     ctx["step_id"] = step
     _launch(ctx, store, step)
@@ -748,16 +708,7 @@ def _artifact_viewable(ctx):
     assert any(not a.internal for a in artifacts)
 
 
-@then("the theme is shown at the top, with all its items and their steps below")
-def _theme_at_top(ctx):
-    ids = _row_ids(ctx)
-    assert ids[0] == ctx["theme_id"]
-    assert ctx["item_id"] in ids
-    assert ctx["step_id"] in ids
-    assert ids.index(ctx["theme_id"]) < ids.index(ctx["item_id"]) < ids.index(ctx["step_id"])
-
-
-@then("that item is shown as the root, with its steps below, and no blank or missing theme row")
+@then("that item is shown as the root, with its steps below, and no row above it")
 def _item_is_root(ctx):
     ids = _row_ids(ctx)
     assert ids[0] == ctx["item_id"]
@@ -766,15 +717,13 @@ def _item_is_root(ctx):
     assert "" not in ids
 
 
-@then("its depth - theme, item, or step - is visible by indentation")
+@then("its depth - item or step - is visible by indentation")
 def _depth_visible_by_indentation(ctx):
-    theme_title = _rendered_cell_text(ctx, ctx["theme_id"], "title")
     item_title = _rendered_cell_text(ctx, ctx["item_id"], "title")
     step_title = _rendered_cell_text(ctx, ctx["step_id"], "title")
-    theme_indent = len(theme_title) - len(theme_title.lstrip(" "))
     item_indent = len(item_title) - len(item_title.lstrip(" "))
     step_indent = len(step_title) - len(step_title.lstrip(" "))
-    assert theme_indent < item_indent < step_indent
+    assert item_indent < step_indent
 
 
 @then("its own real id is shown alongside its title")

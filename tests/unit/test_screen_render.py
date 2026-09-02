@@ -59,7 +59,7 @@ def test_colour_carries_the_state_tokens_the_plain_frame_drops():
     assert "\x1b[" not in plain
 
 
-HEADER_FIELDS = ("project:", "theme:", "workflow:", "STEP:", "ROLE:", "ELAPSED:", "STATE:")
+HEADER_FIELDS = ("project:", "workflow:", "STEP:", "ROLE:", "ELAPSED:", "STATE:")
 
 
 def test_the_demo_fixtures_exercise_every_header_field_the_hub_can_render():

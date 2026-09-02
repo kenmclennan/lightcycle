@@ -16,7 +16,7 @@ from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
-    render_backlog, render_backlog_themed, render_inbox, render_queue, render_search,
+    render_backlog, render_inbox, render_queue, render_search,
     render_workflow_mermaid,
 )
 
@@ -31,7 +31,6 @@ from lightcycle.application.feedback import (
 from lightcycle.domain.feedback import format_elapsed
 from lightcycle.domain.work import display_stage
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
-from lightcycle.application.work.project_of import project_of
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_shortcode import resolve_shortcode
 from lightcycle.application.work.resolve_workflow_selection import (
@@ -43,16 +42,14 @@ from lightcycle.application.work import (
     ActiveStepsUseCase,
     BacklogInput,
     BacklogUseCase,
-    CloseThemeInput,
-    CloseThemeUseCase,
     CloseItemInput,
     CloseItemUseCase,
+    EditNodeInput,
+    EditNodeUseCase,
     InboxInput,
     InboxUseCase,
     LinkArtifactInput,
     LinkArtifactUseCase,
-    OpenThemeInput,
-    OpenThemeUseCase,
     PeekStepInput,
     PeekStepUseCase,
     QueueInput,
@@ -192,11 +189,12 @@ COMMAND_GROUPS = [
     ]),
     ("Node primitives", [
         ("new", "<type> \"title\" [--parent/--workflow/--goal/--project]",
-         "create a node; <type> is theme|item|step"),
+         "create a node; <type> is item|step"),
         ("set", "<id> [--parent/--state/--workflow/--title/--goal/--desc/--label]",
-         "update a node; --parent moves it; --state active activates an item (files the entry step)"),
-        ("rm", "<id> [--force]", "delete a node; refuses on structural children, a live "
-         "worker, or a dirty worktree - --force overrides the dirty worktree and stale claims"),
+         "update a node; --parent moves a step to another item; --state active activates an item "
+         "(files the entry step)"),
+        ("rm", "<id> [--force]", "delete a node; refuses on a live worker or a dirty worktree "
+         "- --force overrides the dirty worktree and stale claims"),
         ("attach", "<id> <type> <value> [--label] [--internal] [--kind K]", "attach an artifact"),
         ("dep", "<id> --needs <id> | --remove <id>", "add or remove a blocker on a node"),
     ]),
@@ -205,7 +203,7 @@ COMMAND_GROUPS = [
         ("done", "<id> <outcome> [--note \"<text>\"]", "close a node; a step done-with-outcome advances the flow"),
     ]),
     ("Feedback loop", [
-        ("retro", "<theme>", "gather child feedback + objective signals into a read digest"),
+        ("retro", "<item>", "gather child feedback + objective signals into a read digest"),
     ]),
     ("Maintenance", [
         ("sweep", "", "reclaim orphaned step claims and prune dead worker entries (kept: LC_WORKER_HISTORY, default 20)"),
@@ -785,10 +783,6 @@ def cmd_done(argv):
             )
             if resp.next_step:
                 print(resp.next_step)
-        elif node.type == "theme":
-            CloseThemeUseCase(_container.store).execute(
-                CloseThemeInput(theme=a.id, reason=a.outcome)
-            )
         else:
             CloseItemUseCase(_container.store, _worktrees()).execute(
                 CloseItemInput(item=a.id, reason=a.outcome)
@@ -932,16 +926,10 @@ def cmd_backlog(argv):
     ap = argparse.ArgumentParser(prog="lc backlog")
     ap.add_argument("n", nargs="?", type=int)
     ap.add_argument("--project")
-    ap.add_argument("--themes", action="store_true")
     a = ap.parse_args(argv)
     resp = BacklogUseCase(_container.store, _flow()).execute(
-        BacklogInput(n=a.n, project=a.project, themes=a.themes))
-    title_cap = _container.config.max_title_length()
-    lines = (
-        render_backlog_themed(resp.groups, title_cap)
-        if a.themes else render_backlog(resp.rows, title_cap)
-    )
-    for line in lines:
+        BacklogInput(n=a.n, project=a.project))
+    for line in render_backlog(resp.rows, _container.config.max_title_length()):
         print(line)
     return 0
 
@@ -983,14 +971,14 @@ def cmd_tui(argv):
 
 
 
-_NODE_TYPES = ("theme", "item", "step")
+_NODE_TYPES = ("item", "step")
 
 
 def cmd_new(argv):
     ap = argparse.ArgumentParser(prog="lc new")
     ap.add_argument("type")
     ap.add_argument("title")
-    ap.add_argument("--parent")
+    ap.add_argument("--parent", help="owning item, for 'lc new step'")
     ap.add_argument("--workflow")
     ap.add_argument("--project")
     ap.add_argument("--repo")
@@ -1002,7 +990,7 @@ def cmd_new(argv):
     a = ap.parse_args(argv)
     if a.type not in _NODE_TYPES:
         sys.stderr.write(
-            "unknown type '%s'; expected theme | item | step (theme > item > step)\n" % a.type
+            "unknown type '%s'; expected item | step (item > step)\n" % a.type
         )
         return 2
     try:
@@ -1010,43 +998,23 @@ def cmd_new(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    if a.type == "theme":
-        try:
-            resp = OpenThemeUseCase(_container.store, _container.config).execute(
-                OpenThemeInput(objective=a.title, backlog=a.backlog,
-                               project=a.project, workflow=a.workflow, repo=a.repo)
-            )
-        except UseCaseError as e:
-            sys.stderr.write("%s\n" % e)
-            return 1
-        if resp.shortcode_defaulted:
-            sys.stderr.write(
-                "no --project given; minted with the global shortcode '%s'\n" % resp.shortcode)
-        print(resp.theme)
-    elif a.type == "item":
+    if a.type == "item":
         if a.parent:
-            try:
-                parent = _container.store.get_node(a.parent)
-            except KeyError:
-                sys.stderr.write("unknown theme '%s'\n" % a.parent)
-                return 1
-            if parent.type != "theme":
-                sys.stderr.write("'%s' is not a theme (type=%s)\n" % (a.parent, parent.type))
-                return 1
+            sys.stderr.write("items are top-level; --parent applies to 'lc new step'\n")
+            return 2
         try:
             resolved = resolve_shortcode(_container.store, _container.config, a.project)
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
-        if resolved.defaulted and not a.parent:
+        if resolved.defaulted:
             sys.stderr.write(
                 "no --project given; minted with the global shortcode '%s'\n" % resolved.value)
         tid = _container.store.create_item(
-            a.title, theme=a.parent, project=a.project, goal=a.goal, workflow=a.workflow,
+            a.title, project=a.project, goal=a.goal, workflow=a.workflow,
             shortcode=resolved.value)
-        repo = a.repo or (project_of(_container.store, parent) if a.parent else None)
-        if repo:
-            _container.store.add_artifact(tid, "repo", repo)
+        if a.repo:
+            _container.store.add_artifact(tid, "repo", a.repo)
         if a.description or a.attention:
             _container.store.edit_node(tid, description=a.description)
             if a.attention:
@@ -1150,7 +1118,7 @@ def cmd_set(argv):
             resp = ActivateItemUseCase(
                 _container.store, _flow(), _container.git, _container.config
             ).execute(
-                ActivateItemInput(item=a.id, workflow=a.workflow, theme=a.parent, step=a.step)
+                ActivateItemInput(item=a.id, workflow=a.workflow, step=a.step)
             )
             print(resp.step)
             return 0
@@ -1206,9 +1174,14 @@ def cmd_set(argv):
         _container.store.label_add(a.id, a.label)
     if a.notes is not None:
         _container.store.set_notes(a.id, a.notes)
-    tid = _container.store.edit_node(
-        a.id, title=a.title, description=a.description, goal=a.goal,
-        project=a.project, parent=a.parent, workflow=workflow_pin)
+    try:
+        tid = EditNodeUseCase(_container.store).execute(
+            EditNodeInput(step=a.id, title=a.title, description=a.description, goal=a.goal,
+                          project=a.project, parent=a.parent, workflow=workflow_pin)
+        ).id
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if a.parent:
         print(tid)
     if resolved_pin:
@@ -1682,9 +1655,9 @@ def _fmt_signal(name, by_model):
 
 def cmd_retro(argv):
     ap = argparse.ArgumentParser(prog="lc retro")
-    ap.add_argument("id", nargs="?", default=None, help="item or theme id")
+    ap.add_argument("id", nargs="?", default=None, help="item id")
     ap.add_argument("--since", metavar="YYYY-MM-DD", help="aggregate steps closed on/after date")
-    ap.add_argument("--last", type=int, metavar="N", help="aggregate last N closed themes")
+    ap.add_argument("--last", type=int, metavar="N", help="aggregate last N closed items")
     ap.add_argument("--project", metavar="REPO", help="aggregate a project's closed unretroed items")
     ap.add_argument("--pending", action="store_true",
                      help="aggregate all closed unretroed items that carry feedback")

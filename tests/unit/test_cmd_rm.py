@@ -17,11 +17,15 @@ def call(fn, *args):
 
 
 class FakeWorkers:
+    def __init__(self, state=(), alive=False):
+        self._state = list(state)
+        self._alive = alive
+
     def workers_state(self):
-        return []
+        return self._state
 
     def pid_alive(self, pid, started=None):
-        return False
+        return self._alive
 
 
 class FakeContainer:
@@ -49,12 +53,16 @@ class TestCmdRm(unittest.TestCase):
             self.store.get_node(step)
 
     def test_renders_the_refusal_and_leaves_the_node(self):
-        theme = self.store.create_theme("theme")
-        self.store.create_item("child", theme=theme)
-        rc, out, err = call(cli.cmd_rm, theme)
+        item = self.store.create_item("feature")
+        step = self.store.create_step("build", step="build", role="coder", parent=item)
+        self.store.claim_ready("coder")
+        container = FakeContainer(self.store)
+        container.workers = FakeWorkers([{"step": step, "pid": 1}], alive=True)
+        cli.set_container(container)
+        rc, out, err = call(cli.cmd_rm, item)
         self.assertNotEqual(rc, 0)
-        self.assertIn(theme, err)
-        self.assertEqual(self.store.get_node(theme).id, theme)
+        self.assertIn(item, err)
+        self.assertEqual(self.store.get_node(item).id, item)
 
 
 if __name__ == "__main__":

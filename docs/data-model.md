@@ -1,18 +1,15 @@
 # Data model
 
-lightcycle tracks all work as **nodes** in one SQLite table (`nodes`). A node is one of three types,
-forming an optional three-level hierarchy.
+lightcycle tracks all work as **nodes** in one SQLite table (`nodes`). A node is one of two types,
+forming a fixed two-level hierarchy.
 
 ```mermaid
 graph TD
-  theme[theme - optional grouping] --> item[item - a unit of work, holds the spec]
-  item --> step[step - one workflow stage instance]
+  item[item - a unit of work, holds the spec] --> step[step - one workflow stage instance]
 ```
 
-- **theme** - a durable, optional grouping of related items (e.g. Worker resilience). Themes are a
-  backlog concern; work does not have to sit under one.
-- **item** - the unit of work. It carries the artifacts (spec, repo, branch, PR) and moves through
-  the workflow via its steps.
+- **item** - the unit of work, and the top of the tree. It carries the artifacts (spec, repo,
+  branch, PR) and moves through the workflow via its steps. An item has no parent.
 - **step** - one instance of a workflow stage (write-code, review-code, open-pr, ...). Steps are what agents
   actually claim and execute.
 
@@ -21,20 +18,15 @@ graph TD
 An id nests under its parent: a child's id is its parent's id plus `.N`.
 
 ```
-tg-18            item (filed with no theme)
+tg-18            item
   tg-18.1        step (write-code)
   tg-18.5        step (await-merge)
-
-LC-3             theme
-  LC-3.1         item
-    LC-3.1.1     step (write-code)
 ```
 
 The prefix is the owning project's **shortcode** (see "Project registry" in
 [ontology.md](ontology.md)) - explicit at registration or defaulted from the project's identity,
 uppercased. Every registered project has its own; it is not a single engine-wide config value.
-Because a theme is optional, a top-level `<shortcode>-N` may be a theme or a standalone item - the
-type comes from the node, not the id shape. (Aligning spec/branch/PR identity to the item id is
+A top-level `<shortcode>-N` is always an item. (Aligning spec/branch/PR identity to the item id is
 tracked as a backlog item.)
 
 A **planned step**'s id (see "The model (nouns)" in [ontology.md](ontology.md)) follows the same
@@ -51,8 +43,8 @@ Every node has a single `state` (see [state-lifecycle.md](state-lifecycle.md)):
 backlogged  ->  ready  ->  in_progress  ->  done
 ```
 
-A **step** stores its own state. An **item** or **theme** does not store a state - it is **derived**
-as a roll-up of its children on every read, so a parent can never disagree with its children.
+A **step** stores its own state. An **item** does not store a state - it is **derived** as a
+roll-up of its steps on every read, so an item can never disagree with its steps.
 
 Two things are kept **orthogonal** to the state (baking them in would multiply the states):
 

@@ -33,9 +33,6 @@ class ResolveWorkflowSelectionUseCase:
 
     def execute(self, input: ResolveWorkflowSelectionInput) -> ResolveWorkflowSelectionResponse:
         shadowed = self._shadowed_by(input.node_id)
-        if input.node_type == "theme":
-            return ResolveWorkflowSelectionResponse(
-                value=input.selector, resolved=False, shadowed_by=shadowed)
         try:
             pin = self._flow.resolve_selection(input.selector)
             self._flow.load_graph(pin)

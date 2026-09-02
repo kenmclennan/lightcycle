@@ -11,17 +11,11 @@ class TestItemState(unittest.TestCase):
         self.assertEqual(node.type, "item")
         self.assertEqual(node.state, "backlogged")
 
-    def test_item_can_be_created_without_a_theme(self):
+    def test_item_is_created_top_level(self):
         s = FakeStore()
-        tid = s.create_item("un-themed")
-        self.assertIsNone(s.get_node(tid).theme)
-
-    def test_item_can_be_created_under_a_theme(self):
-        s = FakeStore()
-        theme = s.create_theme("focus")
-        tid = s.create_item("themed", theme=theme)
+        tid = s.create_item("an item")
         node = s.get_node(tid)
-        self.assertEqual(node.theme, theme)
+        self.assertIsNone(node.parent)
         self.assertEqual(node.state, "backlogged")
 
 

@@ -74,7 +74,6 @@ def record_to_node(record, blocked_by=None):
         notes=record.get("notes"),
         claimed_by=record.get("assignee"),
         workflow=record.get("workflow"),
-        theme=record.get("parent") if record.get("type") == "item" else meta.get("theme"),
         since=meta.get("since"),
         fired_at=meta.get("fired_at"),
         closed_at=record.get("closed_at"),
@@ -425,12 +424,11 @@ class FakeStore(StorePort):
             b["workflow"] = workflow
         return tid
 
-    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None,
+    def create_item(self, title, *, project=None, goal=None, workflow=None, id=None,
                      shortcode=None):
         fields = dict(
             title=title,
             type="item",
-            parent=theme,
             labels=labels_for(project=project, goal=goal),
             workflow=workflow,
             state="backlogged",
@@ -438,18 +436,6 @@ class FakeStore(StorePort):
         if id is not None:
             fields["id"] = id
         b = self._new_record(**fields)
-        tid = b["id"]
-        self._records[tid] = b
-        return tid
-
-    def create_theme(self, title, *, project=None, goal=None, workflow=None, shortcode=None):
-        b = self._new_record(
-            title=title,
-            type="theme",
-            labels=labels_for(project=project, goal=goal),
-            workflow=workflow,
-            state="backlogged",
-        )
         tid = b["id"]
         self._records[tid] = b
         return tid
@@ -469,16 +455,6 @@ class FakeStore(StorePort):
             if closed_at >= since_date:
                 result.append(self._to_node(b))
         return result
-
-    def last_n_closed_themes(self, n):
-        themes = [
-            b
-            for b in self._records.values()
-            if b.get("type") == "theme" and b.get("state") == "done"
-        ]
-        themes.sort(key=lambda b: b.get("closed_at") or "", reverse=True)
-        return [self._to_node(b) for b in themes[:n]]
-
 
     def closed_unretroed_items(self):
         result = []

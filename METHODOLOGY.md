@@ -91,13 +91,6 @@ closes. _Discovered when the planner's first run blocked dependents on predecess
 close at build-done; a dependent would have started before the predecessor merged, building from a
 main that did not yet contain its work._
 
-### Epics are coherent outcomes; refinement consolidates
-
-An **theme** is a coherent _outcome_, not a promoted todo and not a matter of size: some themes are one
-big thing, some are several related small ones. Refinement is the deliberate act of shaping rough,
-cheap, overlapping backlog captures into scoped themes, consolidating related items. The payoff is that
-**active themes are the current focus areas** - the prioritisation signal a flat todo list cannot give.
-
 ### The self-improvement loop
 
 The system improves itself: reflections, objective signals, and logs feed a retro that proposes
@@ -129,8 +122,8 @@ The method is not finished. The open frontiers, where the principles are still f
 - **Engagement scheduler** - managing the human's attention and time across session modes (push a
   goal / refine / queue-and-leave / review) and an offline mode that fills their absence with bounded
   autonomous work, rate-limited to their review bandwidth.
-- **Refinement tooling** - making "rough backlog -> scoped themes" a real, supported step, with a
-  focus-area view and recorded lineage.
+- **Refinement tooling** - making "rough backlog -> scoped items" a real, supported step, with
+  recorded lineage.
 - **Measurement and the retro** - turning the lifecycle's own history into the signal that drives the
   self-improvement loop.
 - **Productization** - the engine-vs-`$HOME` split that lets a user own and customise their workflow,

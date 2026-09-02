@@ -52,13 +52,3 @@ class TestReopenItem(unittest.TestCase):
             uc.execute(ReopenItemInput(item=step))
 
         self.assertIn("--state ready", str(e.exception))
-
-    def test_a_closed_theme_is_refused_rather_than_reopened_as_an_item(self):
-        store, uc = self._uc()
-        theme = store.create_theme("objective")
-        store.close(theme, "done")
-
-        with self.assertRaises(UseCaseError) as e:
-            uc.execute(ReopenItemInput(item=theme))
-
-        self.assertIn("type=theme", str(e.exception))

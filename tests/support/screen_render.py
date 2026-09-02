@@ -27,10 +27,6 @@ class DemoStore(FakeStore):
             self._next_id = None
         return record
 
-    def theme(self, node_id, title, **kwargs):
-        self._next_id = node_id
-        return self.create_theme(title, **kwargs)
-
     def item(self, node_id, title, **kwargs):
         self._next_id = node_id
         return self.create_item(title, **kwargs)
@@ -40,7 +36,6 @@ class DemoStore(FakeStore):
         return self.create_step(title, **kwargs)
 
 
-THEME_TITLE = "Project model: github-identity registry"
 REGISTRY_TITLE = "Registry table and identity-based repo resolution"
 CLONE_TITLE = "Clone-on-demand: fetch an absent project on resolve"
 SCAN_TITLE = "lc project scan: recursive discovery by git remote"
@@ -49,9 +44,8 @@ WORKFLOW = "lightcycle/spec-driven@abfb01d"
 
 def _populated_store(claimed_minutes_ago=14):
     store = DemoStore(now=lambda: _at(claimed_minutes_ago))
-    theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
 
-    scan = store.item("LC-143.3", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
+    scan = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     store.edit_node(
         scan,
         description="Phase 3 of the registry work. lc project scan walks a tree recursively "
@@ -66,17 +60,17 @@ def _populated_store(claimed_minutes_ago=14):
     store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=scan)
     store.claim_ready("write-code")
 
-    registry = store.item("LC-143.1", REGISTRY_TITLE, theme=theme, workflow=WORKFLOW)
+    registry = store.item("LC-143.1", REGISTRY_TITLE, workflow=WORKFLOW)
     store.step("LC-143.1.4", "write the code", step="write-code", role="write-code", parent=registry)
     store.claim_ready("write-code")
 
-    clone = store.item("LC-143.2", CLONE_TITLE, theme=theme, workflow=WORKFLOW)
+    clone = store.item("LC-143.2", CLONE_TITLE, workflow=WORKFLOW)
     store.step("LC-143.2.4", "write the code", step="write-code", role="write-code", parent=clone)
 
     store.add_artifact(scan, "repo", "kenmclennan/lightcycle")
     store.add_artifact(scan, "pr", "https://github.com/kenmclennan/lightcycle/pull/143")
 
-    return store, theme, scan, coding
+    return store, scan, coding
 
 
 LONG_DESCRIPTION = (
@@ -86,8 +80,7 @@ LONG_DESCRIPTION = (
 
 def _long_description_store(description=LONG_DESCRIPTION):
     store = DemoStore(now=lambda: _at(2))
-    theme = store.theme("LC-319", THEME_TITLE, project="lightcycle")
-    item = store.item("LC-319.1", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
+    item = store.item("LC-319.1", SCAN_TITLE, workflow=WORKFLOW)
     if description is not None:
         store.edit_node(item, description=description)
     store.step("LC-319.1.4", "write the code", step="write-code", role="write-code", parent=item)
@@ -96,11 +89,10 @@ def _long_description_store(description=LONG_DESCRIPTION):
 
 def _blocked_store():
     store = DemoStore(now=lambda: _at(3))
-    theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
-    blocker = store.item("LC-143.1", REGISTRY_TITLE, theme=theme, workflow=WORKFLOW)
+    blocker = store.item("LC-143.1", REGISTRY_TITLE, workflow=WORKFLOW)
     blocking_step = store.step("LC-143.1.4", "write the code", step="write-code",
                                role="write-code", parent=blocker)
-    waiting = store.item("LC-143.2", CLONE_TITLE, theme=theme, workflow=WORKFLOW)
+    waiting = store.item("LC-143.2", CLONE_TITLE, workflow=WORKFLOW)
     store.step("LC-143.2.4", "write the code", step="write-code", role="write-code",
                parent=waiting, deps=[blocking_step])
     return store, waiting
@@ -108,8 +100,7 @@ def _blocked_store():
 
 def _human_step_store():
     store = DemoStore(now=lambda: _at(6))
-    theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
-    item = store.item("LC-143.3", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     step = store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human",
                       parent=item, attention=True)
     store.update_metadata(step, {"needs": "Resolve the merge conflict manually"})
@@ -126,8 +117,7 @@ LONG_ESCALATION_REASON = (
 
 def _long_reason_store():
     store = DemoStore(now=lambda: _at(6))
-    theme = store.theme("LC-143", THEME_TITLE, project="lightcycle")
-    item = store.item("LC-143.3", SCAN_TITLE, theme=theme, workflow=WORKFLOW)
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     step = store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human",
                       parent=item, attention=True)
     store.update_metadata(
@@ -189,7 +179,6 @@ def _stacked_artifacts_store():
 
 
 LONG_ITEM_TITLE = "Deliver the operator-monitors-the-pipeline Blueprint"
-LONG_THEME_TITLE = "Operator monitors the pipeline - deliver the node hub and tabs"
 
 _LOOP = [
     ("plan-next", "plan-next"),
@@ -208,8 +197,9 @@ _LOOP = [
 
 def _long_hierarchy_store(passes=4):
     store = DemoStore(now=lambda: _at(2))
-    theme = store.theme("LC-290", LONG_THEME_TITLE, project="lightcycle")
-    item = store.item("LC-290.1", LONG_ITEM_TITLE, theme=theme, workflow="flynns-workflows/blueprint-delivery@0333918")
+    item = store.item(
+        "LC-290.1", LONG_ITEM_TITLE, workflow="flynns-workflows/blueprint-delivery@0333918"
+    )
     n = 0
     for _ in range(passes):
         for step, role in _LOOP:
@@ -255,7 +245,7 @@ def _open_hub(session, node_id, tab=None):
 
 
 def _priority_normal(size):
-    store, _theme, _scan, _coding = _populated_store()
+    store, _scan, _coding = _populated_store()
     return _launch(store, size=size)
 
 
@@ -264,7 +254,7 @@ def _priority_empty(size):
 
 
 def _priority_claude_unavailable(size):
-    store, _theme, _scan, _coding = _populated_store()
+    store, _scan, _coding = _populated_store()
     return _launch(store, breaker_open=True, size=size)
 
 
@@ -314,7 +304,7 @@ def _backlog_claude_unavailable(size):
 
 
 def _hub_hierarchy(size):
-    store, _theme, scan, _coding = _populated_store()
+    store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="hierarchy")
 
 
@@ -336,7 +326,7 @@ _LOG_EXCERPT = (
 
 
 def _hub_active_log(size):
-    store, _theme, scan, coding = _populated_store()
+    store, scan, coding = _populated_store()
     fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT})
     workers = FakeWorkers(
         workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
@@ -347,7 +337,7 @@ def _hub_active_log(size):
 
 
 def _hub_log_finished(size):
-    store, _theme, scan, coding = _populated_store()
+    store, scan, coding = _populated_store()
     fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT})
     workers = FakeWorkers(
         workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
@@ -358,7 +348,7 @@ def _hub_log_finished(size):
 
 
 def _hub_artifacts(size):
-    store, _theme, scan, _coding = _populated_store()
+    store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="artifacts")
 
 
@@ -428,13 +418,8 @@ def _artifact_viewer_filepath_toast(size):
     return _open_artifact_at(_launch(store, size=size, fs=fs, launcher=launcher), item, 3)
 
 
-def _hub_theme(size):
-    store, theme, _scan, _coding = _populated_store()
-    return _open_hub(_launch(store, size=size), theme)
-
-
 def _hub_done_item(size):
-    store, _theme, scan, coding = _populated_store()
+    store, scan, coding = _populated_store()
     store.close(coding, "done")
     store.close(scan, "done")
     return _open_hub(_launch(store, size=size), scan)
@@ -456,7 +441,7 @@ def _hub_escalated_long_reason(size):
 
 
 def _hub_step_node(size):
-    store, _theme, _scan, coding = _populated_store()
+    store, _scan, coding = _populated_store()
     return _open_hub(_launch(store, size=size), coding)
 
 
@@ -466,7 +451,7 @@ def _hub_hierarchy_scrolled(size):
 
 
 def _hub_claude_unavailable(size):
-    store, _theme, scan, _coding = _populated_store()
+    store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, breaker_open=True, size=size), scan)
 
 
@@ -496,7 +481,6 @@ SCREENS = {
     "artifact-viewer#list": _artifact_viewer_list,
     "artifact-viewer#url-toast": _artifact_viewer_url_toast,
     "artifact-viewer#filepath-toast": _artifact_viewer_filepath_toast,
-    "hub#theme": _hub_theme,
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
     "hub#needs-attention-human": _hub_needs_attention_human,

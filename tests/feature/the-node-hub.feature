@@ -1,5 +1,5 @@
 Feature: The node hub
-  Opening any node - theme, item, or step - lands on the hub: a fixed header
+  Opening any node - item or step - lands on the hub: a fixed header
   above four tabs (Description, Hierarchy, Log, Artifacts), landing on
   whichever tab matches the node's current status. The header stays fixed
   while ] and [ cycle the tabs; Tab keeps its own global meaning, jumping
@@ -22,19 +22,9 @@ Feature: The node hub
       | →     |
 
   Scenario Outline: The header shows the item's identity
-    Given an item with a project, a theme, and a workflow
+    Given an item with a project and a workflow
     When <key> is pressed
-    Then the header shows its id, its title, its project, its theme, and its workflow
-
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: An item with no theme shows no theme line
-    Given an item with no theme
-    When <key> is pressed
-    Then no theme line is shown in the header
+    Then the header shows its id, its title, its project, and its workflow
 
     Examples:
       | key   |
@@ -102,11 +92,11 @@ Feature: The node hub
       | Enter |
       | →     |
 
-  Scenario Outline: A selected step's header shows its role and state, not theme or workflow
-    Given a step is selected, rather than an item or theme
+  Scenario Outline: A selected step's header shows its role and state, not its workflow
+    Given a step is selected, rather than an item
     When <key> is pressed
     Then the header shows its role and its state
-    And no theme or workflow fields are shown
+    And no workflow field is shown
 
     Examples:
       | key   |
@@ -127,17 +117,8 @@ Feature: The node hub
       | an item at step "write-code" performed by the role "write-code"    | ROLE    | →       |
       | an active item at step "build" claimed 14 minutes ago              | ELAPSED | Enter   |
       | an active item at step "build" claimed 14 minutes ago              | ELAPSED | →       |
-      | a step is selected, rather than an item or theme                   | STATE   | Enter   |
-      | a step is selected, rather than an item or theme                   | STATE   | →       |
-
-  Scenario: A theme's header is its id, its title, and its item count - nothing else
-    Given a theme with 4 items underneath, its hub open
-    Then the header shows "theme · 4 items underneath"
-    And no project, theme, or workflow line is shown in the header
-
-  Scenario: A theme's header shows no project line, even when its items belong to different projects
-    Given a theme whose items belong to different projects, its hub open
-    Then no project line is shown in the header
+      | a step is selected, rather than an item                            | STATE   | Enter   |
+      | a step is selected, rather than an item                            | STATE   | →       |
 
   Scenario Outline: Opening a node lands on the tab that matches its status
     Given a node with the status "<status>", its hub open
@@ -150,7 +131,6 @@ Feature: The node hub
       | blocked on another item's completion  | Hierarchy |
       | queued, not yet run                   | Hierarchy |
       | done                                  | Artifacts |
-      | a theme                               | Hierarchy |
 
   Scenario Outline: ] cycles forward through the four tabs, wrapping back to Description
     Given a node's hub is open, on the "<from>" tab

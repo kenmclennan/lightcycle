@@ -157,9 +157,9 @@ class TestHooks(unittest.TestCase):
         self.assertIn("on_event_b", hooks)
 
     def test_known_hooks_also_appear_generically(self):
-        metas = {"inspector": {"model": "sonnet", "step": "inspect", "on_theme_close": True}}
+        metas = {"inspector": {"model": "sonnet", "step": "inspect", "on_deploy_green": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.hooks().get("on_theme_close"), ["inspect"])
+        self.assertEqual(flow.hooks().get("on_deploy_green"), ["inspect"])
 
     def test_falsy_hook_value_not_included(self):
         metas = {"role": {"model": "sonnet", "step": "s", "on_event": False}}
@@ -172,7 +172,7 @@ class TestHookSteps(unittest.TestCase):
         self.assertEqual(flow.hook_steps(), [])
 
     def test_known_hook_step_included(self):
-        metas = {"auditor": {"model": "sonnet", "step": "audit", "on_theme_close": True}}
+        metas = {"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}}
         flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
 
@@ -183,13 +183,13 @@ class TestHookSteps(unittest.TestCase):
 
     def test_step_flagged_by_multiple_hooks_appears_once(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
-                              "on_theme_close": True, "on_deploy_green": True}}
+                              "on_deploy_green": True, "on_release_cut": True}}
         flow = mkflow(metas)
         self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
 
     def test_multiple_hook_steps_sorted(self):
         metas = {
-            "beta": {"model": "sonnet", "step": "zz-step", "on_theme_close": True},
+            "beta": {"model": "sonnet", "step": "zz-step", "on_deploy_green": True},
             "alpha": {"model": "sonnet", "step": "aa-step", "on_deploy_green": True},
         }
         steps = mkflow(metas).hook_steps()

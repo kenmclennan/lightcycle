@@ -116,32 +116,14 @@ class RetroUseCase:
         )
         return row, refs
 
-    def _theme_scope(self, subject_id, signals_for):
-        children = self._store.children(subject_id)
-        items = [c for c in children if c.type == "item"]
-        all_refs = []
-        rows = []
-        for item in items:
-            row, refs = self._collect_item_row(item, signals_for)
-            rows.append(row)
-            all_refs.extend(refs)
-        for child in children:
-            if child.type != "item":
-                all_refs.extend(self._reflections_of(child.id))
-        return rows, all_refs
-
     def execute(self, input: RetroInput) -> RetroResponse:
         signals_for = self._signals_resolver()
 
         if input.subject is not None:
-            children = self._store.children(input.subject)
-            if any(c.type == "item" for c in children):
-                rows, all_refs = self._theme_scope(input.subject, signals_for)
-            else:
-                subject = self._store.get_node(input.subject)
-                row, refs = self._collect_item_row(subject, signals_for)
-                rows = [row]
-                all_refs = list(refs)
+            subject = self._store.get_node(input.subject)
+            row, refs = self._collect_item_row(subject, signals_for)
+            rows = [row]
+            all_refs = list(refs)
             label = input.subject
 
         elif input.since is not None:
@@ -180,13 +162,12 @@ class RetroUseCase:
             label = "pending"
 
         else:
-            themes = self._store.last_n_closed_themes(input.last)
             all_refs = []
             rows = []
-            for theme in themes:
-                epic_rows, epic_refs = self._theme_scope(theme.id, signals_for)
-                rows.extend(epic_rows)
-                all_refs.extend(epic_refs)
+            for item in self._store.last_n_closed_items(input.last):
+                row, refs = self._collect_item_row(item, signals_for)
+                rows.append(row)
+                all_refs.extend(refs)
             label = "last:%d" % input.last
 
         reflection_count = (

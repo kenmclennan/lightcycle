@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from lightcycle.application.errors import UseCaseError
+
 
 @dataclass(frozen=True)
 class EditNodeInput:
@@ -10,6 +12,7 @@ class EditNodeInput:
     goal: Optional[str] = None
     project: Optional[str] = None
     parent: Optional[str] = None
+    workflow: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,9 @@ class EditNodeUseCase:
         self._store = store
 
     def execute(self, input: EditNodeInput) -> EditNodeResponse:
+        if input.parent is not None and self._store.get_node(input.step).type == "item":
+            raise UseCaseError(
+                "'%s' is an item; items are top-level and cannot be reparented" % input.step)
         tid = self._store.edit_node(
             input.step,
             title=input.title,
@@ -29,5 +35,6 @@ class EditNodeUseCase:
             goal=input.goal,
             project=input.project,
             parent=input.parent,
+            workflow=input.workflow,
         )
         return EditNodeResponse(id=tid)

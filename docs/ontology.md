@@ -4,9 +4,8 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 ## The model (nouns)
 
-- **node** - the atom. One row in the `nodes` table. Every theme, item, and step is a node; they differ by `type`, not by table.
-- **theme** - a grouping of related work toward a goal. Optional: an item can stand alone.
-- **item** - a unit of deliverable work. Carries artifacts. May have a parent theme.
+- **node** - the atom. One row in the `nodes` table. Every item and step is a node; they differ by `type`, not by table.
+- **item** - a unit of deliverable work, and the top of the tree. Carries artifacts. Has no parent.
 - **step** - a single action performed by a role, filed from the workflow. A child of an item.
 - **planned step** - a not-yet-filed future step, derived by walking an item's pinned workflow graph forward from its current step along the normal-completion edge. Display-only: never a real node, never claimed or advanced. Represented in code as `ProjectedStep`.
 - **artifact** - a typed value attached to an item: `brief`, `spec`, `repo`, `branch`, `pr`, `design`, `findings`, `reflection`. `reflection` (an agent's feedback) accumulates; the others are single by convention (expressed in the step markdown, not the engine).
@@ -18,7 +17,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 ## The lifecycle (verbs)
 
 - **activate** - move an item from `backlogged` into the flow by filing its entry step. Realized as `lc set <item> --state active`.
-- **new** - create a node (`lc new theme|item|step`).
+- **new** - create a node (`lc new item|step`).
 - **set** - update a node's fields (title, goal, desc, parent, state, ...).
 - **attach** - add an artifact to an item (`lc attach`); `--replace` swaps a same-type artifact.
 - **dep** - declare one node blocks another (`lc dep <id> --needs <id>`).
@@ -29,7 +28,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **reclaim** - return a stalled or dead worker's step to `ready`.
 - **stalled** - a claimed worker, past its boot window, whose log has not grown for longer than `stall-seconds` and has not yet issued a terminal command; killed on the next sweep.
 - **probe cooldown** - after the breaker's own rate-limit probe is killed for stalling, `reset_at` is re-armed `probe-cooldown-seconds` forward rather than left at its stale value; a stall is inconclusive, never treated as a successful probe.
-- **retro** - gather a theme's child feedback and signals into a digest.
+- **retro** - gather an item's step feedback and signals into a digest.
 - **content regression** - a PR's head advancing since the last poll but dropping a file the previously-pinned head touched; caught by comparing each poll's head against a stored `content-pin` and routed to a human rather than merged silently.
 - **read** - `show` (one node as JSON), `trace` (an item end-to-end: artifacts + child steps + logs), `status` / `inbox` / `backlog` / `active` / `queue` (lane views), `flow` (the assembled workflow), `worklog`, `search` (text match over title/description/notes across every state, including done), `peek` (a role's step guidance as currently pinned for a given item/step's workflow origin).
 
@@ -82,7 +81,7 @@ The periodic retro **audit** is no longer a workflow step - it is an **engine se
 ## Identity
 
 - **shortcode** - a project's id prefix (see "Project registry" above); every registered project has its own, not one engine-wide constant.
-- **id nesting** - ids nest by parent: `LC-3` (theme), `LC-3.1` (item), `LC-3.1.1` (step) - `LC` here is one project's shortcode. A standalone item takes a top-level id.
+- **id nesting** - ids nest by parent: `LC-3` (item), `LC-3.1` (step) - `LC` here is one project's shortcode.
 
 ## Naming discipline
 

@@ -5,7 +5,7 @@ from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work import Artifact, Node
 from lightcycle.render import (
-    node_extra, render_backlog, render_backlog_themed, render_inbox, render_queue,
+    node_extra, render_backlog, render_inbox, render_queue,
     render_workflow_mermaid,
 )
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
@@ -99,57 +99,6 @@ class TestRenderBacklog(unittest.TestCase):
         title = "x" * (TITLE_CAP - 1)
         lines = render_backlog([row(project="proj-a", step=tk(id="t1", title=title))], TITLE_CAP)
         self.assertIn(title, lines[0])
-
-
-class TestRenderBacklogThemed(unittest.TestCase):
-    def test_theme_heading_and_indented_items(self):
-        theme = tk(id="LC-99", title="theme title")
-        group = _group(theme, "proj-a", [row(step=tk(id="LC-99.1", title="item one"))])
-        lines = render_backlog_themed([group], TITLE_CAP)
-        self.assertEqual(lines[0], "LC-99  proj-a  theme title")
-        self.assertEqual(lines[1], "    LC-99.1  item one")
-
-    def test_no_theme_group_heading(self):
-        group = _group(None, None, [row(project=None, step=tk(id="LC-77", title="loose item"))])
-        lines = render_backlog_themed([group], TITLE_CAP)
-        self.assertEqual(lines[0], "(no theme)")
-        self.assertEqual(lines[1], _flat("LC-77", "-", "loose item"))
-
-    def test_no_theme_group_item_shows_project(self):
-        group = _group(None, None, [row(project="proj-a", step=tk(id="LC-77", title="loose item"))])
-        lines = render_backlog_themed([group], TITLE_CAP)
-        self.assertEqual(lines[0], "(no theme)")
-        self.assertEqual(lines[1], _flat("LC-77", "proj-a", "loose item"))
-
-    def test_blank_line_between_groups(self):
-        g1 = _group(tk(id="LC-1", title="t1"), "-", [row(step=tk(id="LC-1.1", title="a"))])
-        g2 = _group(None, None, [row(step=tk(id="LC-2", title="b"))])
-        lines = render_backlog_themed([g1, g2], TITLE_CAP)
-        self.assertEqual(lines[2], "")
-
-    def test_empty_groups_renders_no_lines(self):
-        self.assertEqual(render_backlog_themed([], TITLE_CAP), [])
-
-    def test_title_over_cap_is_truncated_with_ellipsis(self):
-        title = "x" * (TITLE_CAP + 20)
-        theme = tk(id="LC-99", title="theme title")
-        group = _group(theme, "proj-a", [row(step=tk(id="LC-99.1", title=title))])
-        lines = render_backlog_themed([group], TITLE_CAP)
-        self.assertIn(title[:TITLE_CAP] + "...", lines[1])
-        self.assertNotIn(title, lines[1])
-
-    def test_title_at_or_under_cap_is_untouched(self):
-        title = "x" * (TITLE_CAP - 1)
-        theme = tk(id="LC-99", title="theme title")
-        group = _group(theme, "proj-a", [row(step=tk(id="LC-99.1", title=title))])
-        lines = render_backlog_themed([group], TITLE_CAP)
-        self.assertIn(title, lines[1])
-
-
-def _group(theme, project, rows):
-    from lightcycle.application.work.backlog import ThemeGroup
-
-    return ThemeGroup(theme=theme, project=project, rows=rows)
 
 
 def _inbox(kind, id_, project, title, suffix=""):

@@ -38,11 +38,11 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "hooks:\n"
             "  pr_merge       ready-merge  merged\n"
             "  pr_conflict_cap  ready-merge  3\n"
-            "  theme_close     audit\n"
+            "  deploy_green    audit\n"
         )
         self.assertEqual(graph.hook_occurrences("pr_merge"), [["ready-merge", "merged"]])
         self.assertEqual(graph.hook_occurrences("pr_conflict_cap"), [["ready-merge", "3"]])
-        self.assertEqual(graph.hook_occurrences("theme_close"), [["audit"]])
+        self.assertEqual(graph.hook_occurrences("deploy_green"), [["audit"]])
         self.assertEqual(graph.hook_occurrences("pr_close"), [])
 
     def test_a_hook_can_fire_on_multiple_stages(self):

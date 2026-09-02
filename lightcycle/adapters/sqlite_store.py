@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS nodes (
     closed_at TEXT,
     created_at TEXT,
     attention INTEGER NOT NULL DEFAULT 0,
-    theme TEXT,
     needs TEXT,
     model TEXT,
     workflow TEXT,
@@ -105,12 +104,12 @@ CREATE TABLE IF NOT EXISTS projects (
 _COLUMNS = (
     "id", "type", "title", "state", "step", "role", "parent", "project", "goal",
     "description", "notes", "outcome", "assignee", "since", "fired_at",
-    "closed_at", "attention", "theme", "needs", "model", "workflow",
+    "closed_at", "attention", "needs", "model", "workflow",
     "branch", "pr", "reason", "tried",
 )
 
 _METADATA_COLUMNS = (
-    "theme", "needs", "since", "fired_at", "workflow", "branch", "pr", "reason", "tried",
+    "needs", "since", "fired_at", "workflow", "branch", "pr", "reason", "tried",
 )
 
 _LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
@@ -121,8 +120,6 @@ _LEGACY_STEP_NAMES = (
     "resolve", "conflict-review",
 )
 _LEGACY_ROLE_NAMES = ("coder", "reviewer", "auditor", "watch-pr", "resolve")
-
-_ID_BEARING_ARTIFACT_TYPES = {"branch", "pr", "spec", "resolves", "filed-from", "brief"}
 
 _INTERNAL_ARTIFACT_TYPES = (
     "reflection", "resolves", "resolved-by", "watched-step",
@@ -146,6 +143,7 @@ class SqliteStore(StorePort):
         self._migrate_close_reason_to_outcome()
         self._migrate_artifact_fields()
         self._migrate_resume_fields()
+        self._migrate_detach_items_from_themes()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -227,6 +225,12 @@ class SqliteStore(StorePort):
             if col not in cols:
                 self._conn.execute("ALTER TABLE nodes ADD COLUMN %s TEXT" % col)
 
+    def _migrate_detach_items_from_themes(self):
+        self._conn.execute(
+            "UPDATE nodes SET parent = NULL WHERE type = 'item' AND parent IN "
+            "(SELECT id FROM nodes WHERE type = 'theme')"
+        )
+
     def _row_to_node(self, row, artifacts, blocked_by):
         d = dict(zip(_COLUMNS, row))
         deps = len(blocked_by)
@@ -253,7 +257,6 @@ class SqliteStore(StorePort):
             blocked_by=blocked_by,
             notes=d["notes"],
             claimed_by=d["assignee"],
-            theme=d["parent"] if d["type"] == "item" else d["theme"],
             since=d["since"],
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
@@ -543,7 +546,7 @@ class SqliteStore(StorePort):
                 "parent": d["parent"], "role": d["role"], "step": d["step"],
                 "project": d["project"], "goal": d["goal"], "attention": bool(d["attention"]),
                 "description": d["description"], "notes": d["notes"],
-                "outcome": d["outcome"], "assignee": d["assignee"], "theme": d["theme"],
+                "outcome": d["outcome"], "assignee": d["assignee"],
                 "needs": d["needs"], "artifacts": [a.as_dict() for a in artifacts],
                 "blocked_by": blocked_by, "labels": labels, "since": d["since"],
                 "fired_at": d["fired_at"], "closed_at": d["closed_at"],
@@ -741,29 +744,6 @@ class SqliteStore(StorePort):
         self._conn.commit()
         return tid
 
-    def _is_referenceless(self, tid):
-        if any(c.type == "step" for c in self.children(tid)):
-            return False
-        return not any(a.type in _ID_BEARING_ARTIFACT_TYPES for a in self.item_artifacts(tid))
-
-    def _rename_node(self, old_id, new_id):
-        self._conn.execute("UPDATE nodes SET id = ? WHERE id = ?", (new_id, old_id))
-        self._conn.execute(
-            "UPDATE history SET node_id = ? WHERE node_id = ?", (new_id, old_id)
-        )
-        self._conn.execute(
-            "UPDATE labels SET node_id = ? WHERE node_id = ?", (new_id, old_id)
-        )
-        self._conn.execute(
-            "UPDATE artifacts SET item_id = ? WHERE item_id = ?", (new_id, old_id)
-        )
-        self._conn.execute(
-            "UPDATE deps SET node_id = ? WHERE node_id = ?", (new_id, old_id)
-        )
-        self._conn.execute(
-            "UPDATE deps SET blocked_by = ? WHERE blocked_by = ?", (new_id, old_id)
-        )
-
     def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
                   parent=None, workflow=None):
         updates = {}
@@ -778,44 +758,24 @@ class SqliteStore(StorePort):
         if workflow is not None:
             updates["workflow"] = workflow
 
-        effective_id = tid
         if parent is not None:
-            row = self._conn.execute(
-                "SELECT type, parent FROM nodes WHERE id = ?", (tid,)
-            ).fetchone()
-            if row is not None:
-                cur_type, cur_parent = row
-                if cur_type == "item" and parent != cur_parent and self._is_referenceless(tid):
-                    effective_id = self._mint_id(parent)
-                    self._rename_node(tid, effective_id)
             updates["parent"] = parent
 
         if updates:
             set_clause = ", ".join("%s = ?" % k for k in updates)
             self._conn.execute(
                 "UPDATE nodes SET %s WHERE id = ?" % set_clause,
-                (*updates.values(), effective_id),
+                (*updates.values(), tid),
             )
-        self._conn.commit()
-        return effective_id
-
-    def create_item(self, title, *, theme=None, project=None, goal=None, workflow=None, id=None,
-                     shortcode=None):
-        tid = self._mint_or_adopt(id, theme, shortcode=shortcode)
-        self._conn.execute(
-            "INSERT INTO nodes (id, type, title, state, parent, project, goal, workflow, "
-            "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?, ?)",
-            (tid, title, theme, project, goal, workflow, datetime.datetime.now().isoformat()),
-        )
         self._conn.commit()
         return tid
 
-    def create_theme(self, title, *, project=None, goal=None, workflow=None, id=None,
-                      shortcode=None):
+    def create_item(self, title, *, project=None, goal=None, workflow=None, id=None,
+                     shortcode=None):
         tid = self._mint_or_adopt(id, None, shortcode=shortcode)
         self._conn.execute(
-            "INSERT INTO nodes (id, type, title, state, project, goal, workflow, created_at) "
-            "VALUES (?, 'theme', ?, 'backlogged', ?, ?, ?, ?)",
+            "INSERT INTO nodes (id, type, title, state, project, goal, workflow, "
+            "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?)",
             (tid, title, project, goal, workflow, datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
@@ -838,14 +798,6 @@ class SqliteStore(StorePort):
             "type = 'step' AND state = 'done' AND substr(closed_at, 1, 10) >= ?",
             (since_date,),
         )
-
-    def last_n_closed_themes(self, n):
-        return self._select(
-            "type = 'theme' AND state = 'done'",
-            params=(n,),
-            suffix="ORDER BY closed_at DESC LIMIT ?",
-        )
-
 
     def closed_unretroed_items(self):
         return self._select(

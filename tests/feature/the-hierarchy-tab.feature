@@ -1,12 +1,11 @@
 Feature: The hierarchy tab
-  The Hierarchy tab renders a node's whole tree, from its actual root down -
-  a theme if one exists, otherwise the top-level item itself - always fully
-  expanded, never collapsed. Every row shows its own real id, its current
-  state in the same icon/colour vocabulary as the priority list, and, for a
-  step, the role that performed or is performing it. The node the hub is
-  open for is highlighted wherever it falls; as the operator scrolls past
-  its parent item or theme, that ancestor's row stays pinned to the top so
-  context is never lost. Arrow keys move the selection; Enter or → opens
+  The Hierarchy tab renders a node's whole tree, from its item down, always
+  fully expanded, never collapsed. Every row shows its own real id, its
+  current state in the same icon/colour vocabulary as the priority list,
+  and, for a step, the role that performed or is performing it. The node the
+  hub is open for is highlighted wherever it falls; as the operator scrolls
+  past its parent item, that item's row stays pinned to the top so context
+  is never lost. Arrow keys move the selection; Enter or → opens
   whatever is highlighted into its own hub; a and l jump straight to a
   highlighted node's Artifacts or Log, skipping its own contextual default.
 
@@ -30,20 +29,15 @@ Feature: The hierarchy tab
     When I open that node
     Then at least one artifact I can actually view is there
 
-  Scenario: A themed node's hierarchy shows its theme at the root
-    Given an item under a theme
+  Scenario: An item's hierarchy shows the item itself as the root
+    Given an item
     When I open the hierarchy from it or one of its steps
-    Then the theme is shown at the top, with all its items and their steps below
-
-  Scenario: A themeless item's hierarchy shows the item itself as the root
-    Given a themeless item
-    When I open the hierarchy from it or one of its steps
-    Then that item is shown as the root, with its steps below, and no blank or missing theme row
+    Then that item is shown as the root, with its steps below, and no row above it
 
   Scenario: A node's depth is visible by indentation
-    Given the hierarchy is showing a theme, one of its items, and one of that item's steps
+    Given the hierarchy is showing an item and one of its steps
     When I look at each node
-    Then its depth - theme, item, or step - is visible by indentation
+    Then its depth - item or step - is visible by indentation
 
   Scenario: Each node shows its own real id and current state
     Given a node in the hierarchy
@@ -128,8 +122,8 @@ Feature: The hierarchy tab
       | depth | at a width                            |
       | 0     | just narrow enough to force stacking  |
       | 0     | just wide enough to clear the floor   |
-      | 2     | just narrow enough to force stacking  |
-      | 2     | just wide enough to clear the floor   |
+      | 1     | just narrow enough to force stacking  |
+      | 1     | just wide enough to clear the floor   |
 
   Scenario: A node blocked on a dependency shows a dependency indicator alongside the queued state, not needs-attention
     Given a step blocked on another item's completion
@@ -176,8 +170,6 @@ Feature: The hierarchy tab
 
     Examples:
       | type  | key   |
-      | theme | Enter |
-      | theme | →     |
       | item  | Enter |
       | item  | →     |
       | step  | Enter |
@@ -194,7 +186,7 @@ Feature: The hierarchy tab
       | ←   |
 
   Scenario: An ancestor scrolled out of view is pinned to the top
-    Given the hierarchy is scrolled past a node's parent item or theme
+    Given the hierarchy is scrolled past a node's parent item
     When that ancestor leaves the visible scroll area
     Then its row stays pinned to the top instead of scrolling away
 
@@ -233,33 +225,23 @@ Feature: The hierarchy tab
     When l is pressed
     Then nothing happens, since there is no log to show
 
-  Scenario Outline: Pressing l on a highlighted item or theme with a live current step opens that step's log directly, consistent with Enter
-    Given a <type> whose current step is active, highlighted in the hierarchy
+  Scenario: Pressing l on a highlighted item with a live current step opens that step's log directly, consistent with Enter
+    Given an item whose current step is active, highlighted in the hierarchy
     When l is pressed
     Then its current step's Log tab opens directly, showing the live tail
 
-    Examples:
-      | type  |
-      | item  |
-      | theme |
-
-  Scenario Outline: l opens the Log tab for a done item or theme, in the same historical mode as a done step
-    Given a <type> whose every step is done, highlighted in the hierarchy
+  Scenario: l opens the Log tab for a done item, in the same historical mode as a done step
+    Given an item whose every step is done, highlighted in the hierarchy
     When l is pressed
     Then its Log tab opens directly, showing its last completed step's log in historical mode
 
-    Examples:
-      | type  |
-      | item  |
-      | theme |
-
   Scenario: A root node with no parent is highlighted at the top row
-    Given the current node is a themeless root item
+    Given the current node is a root item
     When I view the Hierarchy tab
     Then it is highlighted at the top row
 
   Scenario: A nested node is highlighted at its actual depth
-    Given the current node is a step nested under an item under a theme
+    Given the current node is a step nested under an item
     When I view the Hierarchy tab
     Then it is highlighted at its actual depth, not the top row
 

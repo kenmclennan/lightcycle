@@ -25,14 +25,8 @@ def _isolate():
     cli.set_container(orig)
 
 
-def _new_theme(ctx, title="objective"):
-    rc, out, err = ctx["h"].run("new", "theme", title)
-    assert rc == 0, err
-    return out.strip()
-
-
-def _new_item(ctx, parent, workflow=None, title="some item"):
-    args = ["new", "item", title, "--parent", parent]
+def _new_item(ctx, workflow=None, title="some item"):
+    args = ["new", "item", title]
     if workflow:
         args += ["--workflow", workflow]
     rc, out, err = ctx["h"].run(*args)
@@ -58,17 +52,8 @@ def _flow(ctx):
 
 @given(parsers.parse('an item with workflow "{workflow}", with a spec attached'))
 def _item_with_workflow_and_spec(ctx, workflow):
-    theme = _new_theme(ctx)
-    ctx["item"] = _new_item(ctx, theme, workflow=workflow)
+    ctx["item"] = _new_item(ctx, workflow=workflow)
     ctx["h"].run("attach", ctx["item"], "spec", "specs/x.md")
-
-
-@given("a closed theme")
-def _closed_theme(ctx):
-    theme = _new_theme(ctx)
-    rc, out, err = ctx["h"].run("done", theme, "done")
-    assert rc == 0, err
-    ctx["theme"] = theme
 
 
 @given("I have activated the item")
@@ -124,12 +109,6 @@ def _close(ctx, outcome):
 def _reopen_item(ctx):
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("set", ctx["item"], "--state", "in_progress")
 
-
-@when("I reopen the theme")
-def _reopen_theme(ctx):
-    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run(
-        "set", ctx["theme"], "--state", "in_progress"
-    )
 
 
 @when("I reopen the build step")
@@ -209,7 +188,3 @@ def _refusal_names_current_state(ctx):
     node = _item_node(ctx)
     assert ("state=%s" % node.state) in ctx["err"]
 
-
-@then("the refusal names the theme's type")
-def _refusal_names_theme_type(ctx):
-    assert "type=theme" in ctx["err"]

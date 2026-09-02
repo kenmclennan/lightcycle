@@ -41,15 +41,6 @@ class TestActivateItem(unittest.TestCase):
         self.assertEqual(step.role, "coder")
         self.assertEqual(step.parent, item)
 
-    def test_activation_can_place_the_item_under_a_theme(self):
-        s = FakeStore()
-        theme = s.create_theme("payments")
-        item = s.create_item("add refunds")
-        ActivateItemUseCase(s, _flow(s), None, None).execute(
-            ActivateItemInput(item=item, workflow="standard", theme=theme)
-        )
-        self.assertEqual(s.get_node(item).theme, theme)
-
     def test_refuses_when_no_workflow_is_selected_or_inherited(self):
         s = FakeStore()
         item = s.create_item("x")

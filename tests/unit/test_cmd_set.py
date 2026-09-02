@@ -121,7 +121,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
 class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
     def test_active_with_valid_flags_succeeds(self):
         h = Harness(["coder", "reviewer"])
-        item = h.store.create_item("st", theme=h.store.create_theme("theme"))
+        item = h.store.create_item("st")
         rc, step_id, err = h.run(
             "set", item, "--state", "active", "--workflow", DEFAULT_WORKFLOW, "--step", "build"
         )
