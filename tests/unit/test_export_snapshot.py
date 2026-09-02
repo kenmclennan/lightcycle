@@ -10,7 +10,7 @@ class TestExportSnapshot(unittest.TestCase):
         store = make_sqlite_store()
         item = store.create_item("some work")
         store.add_artifact(item, "spec", "/specs/GRID-059.md")
-        step = store.create_step("build it", step="build", role="coder", parent=item)
+        step = store.create_step("build it", step="build", role="agent", parent=item)
         store.note(step, "some notes")
         store.label_add(step, "retro-origin")
         blocker = store.create_step("blocker", parent=item)
@@ -31,7 +31,7 @@ class TestExportSnapshot(unittest.TestCase):
 
         task_row = rows[step]
         self.assertEqual(task_row["parent"], item)
-        self.assertEqual(task_row["role"], "coder")
+        self.assertEqual(task_row["role"], "agent")
         self.assertEqual(task_row["step"], "build")
         self.assertEqual(task_row["notes"], "some notes")
         self.assertIn("retro-origin", task_row["labels"])

@@ -38,7 +38,7 @@ class TestActivateItem(unittest.TestCase):
         step = s.get_node(resp.step)
         self.assertEqual(step.type, "step")
         self.assertEqual(step.step, "build")
-        self.assertEqual(step.role, "coder")
+        self.assertEqual(step.role, "agent")
         self.assertEqual(step.parent, item)
 
     def test_refuses_when_no_workflow_is_selected_or_inherited(self):

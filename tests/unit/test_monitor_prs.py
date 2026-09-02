@@ -539,7 +539,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         item = store.create_item("upstream feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
-            "build: upstream feature", step="build", role="coder", parent=item
+            "build: upstream feature", step="build", role="agent", parent=item
         )
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
@@ -558,7 +558,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         item = store.create_item("regressed feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
-            "review: regressed feature", step="review", role="reviewer", parent=item
+            "review: regressed feature", step="review", role="agent", parent=item
         )
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
@@ -736,7 +736,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         item = store.create_item("watched feature")
         store.add_artifact(item, "pr", url)
         step = store.create_step(
-            "watch-pr: watched feature", step="watch-pr", role="reviewer", parent=item
+            "watch-pr: watched feature", step="watch-pr", role="agent", parent=item
         )
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW))
@@ -830,7 +830,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertEqual(result.reworked, [item])
         spawned = self._spawned_feedback_steps(store, step)
         self.assertEqual(len(spawned), 1)
-        self.assertEqual(spawned[0].role, "handle-feedback")
+        self.assertEqual(spawned[0].role, "agent")
         self.assertEqual(spawned[0].parent, item)
         self.assertEqual(spawned[0].state, "ready")
         self.assertNotEqual(store.get_node(step).state, "done")
@@ -1213,10 +1213,10 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store.add_artifact(item, "pr", pr_url)
         for _ in range(prior_conflicts):
             old = store.create_step("watch-step: conflicting feature", step="watch-step",
-                                    role="watcher", parent=item)
+                                    role="agent", parent=item)
             store.close(old, "conflicted")
         step = store.create_step("watch-step: conflicting feature", step="watch-step",
-                                 role="watcher", parent=item)
+                                 role="agent", parent=item)
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(f))
         uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f), complete)
@@ -1286,7 +1286,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         item = store.create_item("arbitrary")
         store.add_artifact(item, "pr", url)
         step = store.create_step("await-green: arbitrary", step="await-green",
-                                 role="sentinel", parent=item)
+                                 role="agent", parent=item)
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), worktrees,
@@ -1335,7 +1335,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("quad feature")
         store.add_artifact(item, "pr", url)
-        step = store.create_step("watch-pr: quad feature", step="watch-pr", role="reviewer",
+        step = store.create_step("watch-pr: quad feature", step="watch-pr", role="agent",
                                  parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
@@ -1352,7 +1352,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("both quad feature")
         store.add_artifact(item, "pr", url)
-        step = store.create_step("watch-pr: both quad feature", step="watch-pr", role="reviewer",
+        step = store.create_step("watch-pr: both quad feature", step="watch-pr", role="agent",
                                  parent=item)
         feedback_comment = (
             1500.0,
@@ -1395,10 +1395,10 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store.add_artifact(item, "pr", url)
         for _ in range(5):
             old = store.create_step("watch-step: no-cap feature", step="watch-step",
-                                    role="watcher", parent=item)
+                                    role="agent", parent=item)
             store.close(old, "conflicted")
         step = store.create_step("watch-step: no-cap feature", step="watch-step",
-                                 role="watcher", parent=item)
+                                 role="agent", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
                                _FlowAdapter(no_cap_flow), complete)
@@ -1417,7 +1417,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("guarded feature")
         store.add_artifact(item, "pr", self._URL)
-        step = store.create_step("build: guarded feature", step="build", role="coder", parent=item)
+        step = store.create_step("build: guarded feature", step="build", role="agent", parent=item)
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f))
         return store, item, step, uc
@@ -1433,7 +1433,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(self._pin(store, item), "sha1")
         self.assertIsNone(store.get_node(step).notes)
-        self.assertEqual(store.get_node(step).role, "coder")
+        self.assertEqual(store.get_node(step).role, "agent")
 
     def test_forward_progress_updates_pin_without_escalating(self):
         gh = FakeGitHub(
@@ -1450,7 +1450,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(self._pin(store, item), "sha2")
         self.assertIsNone(store.get_node(step).notes)
-        self.assertEqual(store.get_node(step).role, "coder")
+        self.assertEqual(store.get_node(step).role, "agent")
 
     def test_regression_routes_the_active_step_to_a_human(self):
         gh = FakeGitHub(
@@ -1494,7 +1494,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(self._pin(store, item), "sha9")
         self.assertIsNone(store.get_node(step).notes)
-        self.assertEqual(store.get_node(step).role, "coder")
+        self.assertEqual(store.get_node(step).role, "agent")
 
     def test_a_real_drop_on_the_new_pr_after_a_replacement_still_escalates(self):
         old_url = self._URL
@@ -1550,8 +1550,8 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         resp = UnblockStepUseCase(store, _FlowAdapter(flow)).execute(UnblockInput(step=step))
 
-        self.assertEqual(resp.role, "coder")
-        self.assertEqual(store.get_node(step).role, "coder")
+        self.assertEqual(resp.role, "agent")
+        self.assertEqual(store.get_node(step).role, "agent")
 
     def test_running_again_after_escalation_does_not_refire(self):
         gh = FakeGitHub(
@@ -1604,7 +1604,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         node = store.get_node(step)
         self.assertEqual(node.state, "in_progress")
-        self.assertEqual(node.role, "coder")
+        self.assertEqual(node.role, "agent")
         self.assertIsNone(node.notes)
         self.assertIn("a.py", store.get_node(item).notes)
 
@@ -1650,7 +1650,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(self._pin(store, item), "sha1")
         self.assertIsNone(store.get_node(step).notes)
-        self.assertEqual(store.get_node(step).role, "coder")
+        self.assertEqual(store.get_node(step).role, "agent")
 
     def test_removal_authorized_by_a_marked_comment_is_not_parked(self):
         comment = Comment(
@@ -1672,7 +1672,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         uc.execute()
 
-        self.assertEqual(store.get_node(step).role, "coder")
+        self.assertEqual(store.get_node(step).role, "agent")
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(self._pin(store, item), "sha2")
 

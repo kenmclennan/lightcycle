@@ -50,12 +50,23 @@ def _log_path(h, role, spawnid):
     return os.path.join(h.root, "logs", worker_log_filename(role, spawnid))
 
 
+@given(parsers.parse('worker "{spawnid}" has claimed the build step'))
+def _claimed(ctx, spawnid):
+    _claim_build(ctx, spawnid)
+
+
 @given(parsers.parse(
     'worker "{spawnid}" has claimed and completed the build step with outcome "{outcome}"'
 ))
 def _claimed_and_completed(ctx, spawnid, outcome):
+    h = _claim_build(ctx, spawnid)
+    rc, out, err = h.run_as_worker(spawnid, "done", ctx["step_id"], outcome)
+    assert rc == 0, err
+
+
+def _claim_build(ctx, spawnid):
     h = ctx["h"]
-    role = "coder"
+    role = "agent"
     log_path = _log_path(h, role, spawnid)
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     with open(log_path, "w") as f:
@@ -71,8 +82,7 @@ def _claimed_and_completed(ctx, spawnid, outcome):
     ctx["spawnid"] = spawnid
     ctx["role"] = role
     ctx["log_path"] = log_path
-    rc, out, err = h.run_as_worker(spawnid, "done", claimed["id"], outcome)
-    assert rc == 0, err
+    return h
 
 
 @given(parsers.parse('the worker registry no longer has an entry for worker "{spawnid}"'))
@@ -123,9 +133,9 @@ def _resolve(ctx, surface):
     ctx["found"] = _resolve_via(ctx["h"], surface, ctx["step_id"], ctx["item"])
 
 
-@when(parsers.parse('the log for role "{role}" is resolved via the logs command'))
-def _resolve_role(ctx, role):
-    rc, _out, _err = ctx["h"].run("logs", role)
+@when(parsers.parse('the log for stage "{stage}" is resolved via the logs command'))
+def _resolve_stage(ctx, stage):
+    rc, _out, _err = ctx["h"].run("logs", stage)
     ctx["found"] = rc == 0
 
 

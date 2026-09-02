@@ -10,23 +10,23 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_label_add_idempotent(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.label_add(tid, "for:coder")
         s.label_add(tid, "for:coder")
         self.assertEqual(s._records[tid]["labels"].count("for:coder"), 1)
 
     def test_assign_clear_returns_to_ready(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "worker-1")
         s.assign(tid, "")
         self.assertEqual(s.get_node(tid).state, "ready")
 
     def test_two_deps_require_both_closed(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="coder")
-        dep2 = s.create_step("dep2", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        dep1 = s.create_step("dep1", role="agent")
+        dep2 = s.create_step("dep2", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
         s.close(dep1, "done")
@@ -38,13 +38,13 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_closed_task_not_in_ready(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.close(tid, "done")
         self.assertEqual(s.ready_steps(), [])
 
     def test_claimed_task_not_in_ready(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "worker-1")
         self.assertEqual(s.ready_steps(), [])
 
@@ -71,10 +71,10 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_claimed_tasks(self):
         s = self.make_store()
-        claimed = s.create_step("t", role="coder")
+        claimed = s.create_step("t", role="agent")
         s.update_state(claimed, "in_progress")
         s.assign(claimed, "sp-x")
-        ready = s.create_step("ready", role="coder")
+        ready = s.create_step("ready", role="agent")
         got = s.claimed_steps()
         self.assertEqual([t.id for t in got], [claimed])
         self.assertEqual(got[0].claimed_by, "sp-x")
@@ -93,7 +93,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_route_to_human(self):
         s = self.make_store()
-        tid = s.create_step("t", step="build", role="coder")
+        tid = s.create_step("t", step="build", role="agent")
         s.route_to_human(tid, "needs review")
         step = s.get_node(tid)
         self.assertEqual(step.role, "human")

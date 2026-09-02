@@ -59,8 +59,8 @@ def ctx():
 def _running_step(lines=b""):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="coder", role="coder", parent=item)
-    store.claim_ready("coder")
+    step = store.create_step("s", step="coder", role="agent", parent=item)
+    store.claim_ready("agent")
     workers = FakeWorkers(
         workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
         alive_pids={WORKER_PID},
@@ -72,8 +72,8 @@ def _running_step(lines=b""):
 def _running_step_worker_already_dead(lines):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="coder", role="coder", parent=item)
-    store.claim_ready("coder")
+    step = store.create_step("s", step="coder", role="agent", parent=item)
+    store.claim_ready("agent")
     workers = FakeWorkers(
         workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
         alive_pids=set(),
@@ -85,8 +85,8 @@ def _running_step_worker_already_dead(lines):
 def _done_step(lines):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="coder", role="coder", parent=item)
-    store.claim_ready("coder")
+    step = store.create_step("s", step="coder", role="agent", parent=item)
+    store.claim_ready("agent")
     store.close(step, "done")
     workers = FakeWorkers(
         workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
@@ -260,7 +260,7 @@ def _given_human_step(ctx):
 def _given_queued_step(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="coder", role="coder", parent=item)
+    step = store.create_step("s", step="coder", role="agent", parent=item)
     _prepare(ctx, store, item, step, FakeFs(), FakeWorkers())
 
 

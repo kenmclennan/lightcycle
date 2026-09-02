@@ -34,21 +34,21 @@ class TestPlannedStepsUseCase(unittest.TestCase):
     def test_projects_remaining_stages_with_ids_continuing_from_filed_count(self):
         s = FakeStore()
         item = s.create_item("st", workflow="spec-driven")
-        build = s.create_step("build: x", step="build", role="coder", parent=item)
+        build = s.create_step("build: x", step="build", role="agent", parent=item)
         s.close(build, "done")
-        s.create_step("review: x", step="review", role="reviewer", parent=item)
+        s.create_step("review: x", step="review", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].step, "audit")
-        self.assertEqual(result[0].role, "auditor")
+        self.assertEqual(result[0].role, "agent")
         self.assertEqual(result[0].id, "%s.3" % item)
 
     def test_terminal_step_projects_nothing(self):
         s = FakeStore()
         item = s.create_item("st", workflow="spec-driven")
-        s.create_step("audit: x", step="audit", role="auditor", parent=item)
+        s.create_step("audit: x", step="audit", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
 
@@ -57,9 +57,9 @@ class TestPlannedStepsUseCase(unittest.TestCase):
     def test_projected_ids_never_collide_with_a_filed_step_id(self):
         s = FakeStore()
         item = s.create_item("st", workflow="spec-driven")
-        build = s.create_step("build: x", step="build", role="coder", parent=item)
+        build = s.create_step("build: x", step="build", role="agent", parent=item)
         s.close(build, "done")
-        review = s.create_step("review: x", step="review", role="reviewer", parent=item)
+        review = s.create_step("review: x", step="review", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
 
@@ -77,7 +77,7 @@ class TestPlannedStepsUseCase(unittest.TestCase):
     def test_no_live_step_returns_empty_after_terminal_close(self):
         s = FakeStore()
         item = s.create_item("st", workflow="spec-driven")
-        audit = s.create_step("audit: x", step="audit", role="auditor", parent=item)
+        audit = s.create_step("audit: x", step="audit", role="agent", parent=item)
         s.close(audit, "clean")
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))

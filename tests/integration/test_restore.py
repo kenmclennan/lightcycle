@@ -72,9 +72,9 @@ class TestRestoreCommand(unittest.TestCase):
         self.assertEqual(self._store_bytes(), before)
 
     def test_force_with_lock_free_restores_snapshot_contents(self):
-        tid = self.container.store.create_step("t", role="coder")
+        tid = self.container.store.create_step("t", role="agent")
         self.container.backup.create_snapshot(time.time())
-        later_tid = self.container.store.create_step("added-after-snapshot", role="coder")
+        later_tid = self.container.store.create_step("added-after-snapshot", role="agent")
         rc, out, err = call(cli.cmd_restore, "--force")
         self.assertEqual(rc, 0, err)
         self.assertFalse(Path(self.home, ".lc-run.pid").exists())

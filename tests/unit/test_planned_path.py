@@ -135,7 +135,7 @@ class TestPlannedPathSingleOutcomeChain(unittest.TestCase):
         flow = Flow.from_graph(parse_graph(CHAIN_GRAPH_TEXT), CHAIN_METAS)
         self.assertEqual(
             planned_path(flow, "build"),
-            [("review", "reviewer"), ("audit", "auditor")],
+            [("review", "agent"), ("audit", "agent")],
         )
 
 
@@ -160,7 +160,7 @@ class TestPlannedPathTerminalStep(unittest.TestCase):
 class TestPlannedPathUndeterminableBranch(unittest.TestCase):
     def test_stops_at_the_undeterminable_branch_without_raising(self):
         flow = Flow.from_graph(parse_graph(UNDETERMINABLE_GRAPH_TEXT), UNDETERMINABLE_METAS)
-        self.assertEqual(planned_path(flow, "build"), [("open-pr", "opener")])
+        self.assertEqual(planned_path(flow, "build"), [("open-pr", "agent")])
 
 
 class TestPlannedPathPrimaryMarkedBranch(unittest.TestCase):
@@ -168,7 +168,7 @@ class TestPlannedPathPrimaryMarkedBranch(unittest.TestCase):
         flow = Flow.from_graph(parse_graph(PRIMARY_MARKED_GRAPH_TEXT), PRIMARY_MARKED_METAS)
         self.assertEqual(
             planned_path(flow, "build"),
-            [("open-pr", "opener"), ("watch-ci", "watcher")],
+            [("open-pr", "agent"), ("watch-ci", "agent")],
         )
 
 

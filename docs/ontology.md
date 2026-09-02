@@ -6,10 +6,10 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 - **node** - the atom. One row in the `nodes` table. Every item and step is a node; they differ by `type`, not by table.
 - **item** - a unit of deliverable work, and the top of the tree. Carries artifacts. Has no parent.
-- **step** - a single action performed by a role, filed from the workflow. A child of an item.
+- **step** - a single action performed at one workflow **stage**, filed from the workflow. A child of an item.
 - **planned step** - a not-yet-filed future step, derived by walking an item's pinned workflow graph forward from its current step along the normal-completion edge. Display-only: never a real node, never claimed or advanced. Represented in code as `ProjectedStep`.
 - **artifact** - a typed value attached to an item: `brief`, `spec`, `repo`, `branch`, `pr`, `design`, `findings`, `reflection`. `reflection` (an agent's feedback) accumulates; the others are single by convention (expressed in the step markdown, not the engine).
-- **role** - who performs a step. For an agent step it is the step name itself (`write-code`, `review-code`, `audit`, ...); human steps carry the role `human`.
+- **role** - who performs a step: `agent` or `human`, and nothing else. It decides only whether the pool may claim the step. **Which** work a step is is its `stage`, resolved through the workflow graph when it is needed - never copied onto the step.
 - **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **state** - a node's single lifecycle position: `backlogged` -> `ready` -> `in_progress` -> `done`. One state machine (there is no separate `status`).
 - **lane** - a derived view over `(state, role)`: `inbox` (human action + gates), `active` (running), `queue` (ready agent steps, including those held behind an unmet dependency), `done`. Lanes are computed, never stored.
@@ -21,7 +21,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **set** - update a node's fields (title, goal, desc, parent, state, ...).
 - **attach** - add an artifact to an item (`lc attach`); `--replace` swaps a same-type artifact.
 - **dep** - declare one node blocks another (`lc dep <id> --needs <id>`).
-- **claim** - a worker atomically takes the next ready step for a role (`lc claim <role>`).
+- **claim** - a worker atomically takes the next ready step for a role (`lc claim agent`). With one agent role, any worker takes any ready agent step, whatever its stage.
 - **done** / **close** - close a node with an outcome (`lc done <id> <outcome>`); a step's outcome advances the flow.
 - **advance** - file the next step for an outcome without closing (plumbing).
 - **sweep** - reclaim orphaned or stalled step claims and prune dead worker records.
@@ -30,7 +30,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **probe cooldown** - after the breaker's own rate-limit probe is killed for stalling, `reset_at` is re-armed `probe-cooldown-seconds` forward rather than left at its stale value; a stall is inconclusive, never treated as a successful probe.
 - **retro** - gather an item's step feedback and signals into a digest.
 - **content regression** - a PR's head advancing since the last poll but dropping a file the previously-pinned head touched; caught by comparing each poll's head against a stored `content-pin` and routed to a human rather than merged silently.
-- **read** - `show` (one node as JSON), `trace` (an item end-to-end: artifacts + child steps + logs), `status` / `inbox` / `backlog` / `active` / `queue` (lane views), `flow` (the assembled workflow), `worklog`, `search` (text match over title/description/notes across every state, including done), `peek` (a role's step guidance as currently pinned for a given item/step's workflow origin).
+- **read** - `show` (one node as JSON), `trace` (an item end-to-end: artifacts + child steps + logs), `status` / `inbox` / `backlog` / `active` / `queue` (lane views), `flow` (the assembled workflow), `worklog`, `search` (text match over title/description/notes across every state, including done), `peek` (a stage's step guidance as currently pinned for a given item/step's workflow origin).
 
 ## The workflow (how steps chain)
 
@@ -49,7 +49,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 ## The spec-driven pipeline (steps)
 
-Every step name is an **action**. The step name, its markdown file, and (for an agent step) the role you claim are the **same word** - one name, not two. The built-in `spec-driven` workflow is one arc: a brief becomes a formal spec on a spec PR, and once that PR merges the same item continues into the code build. `open-pr` and `await-merge` each appear twice (the spec phase and the code phase).
+Every stage name is an **action**. The stage and its markdown file are the same word by default; the `nodes:` block maps a stage to a differently named file. The role is not one of these names - it is `agent` or `human`. The built-in `spec-driven` workflow is one arc: a brief becomes a formal spec on a spec PR, and once that PR merges the same item continues into the code build. `open-pr` and `await-merge` each appear twice (the spec phase and the code phase).
 
 - **spec-writer** (agent) - author the formal spec from the item's brief, on a branch in the specs repo.
 - **open-pr** (agent) - push the branch and open the PR (used at both the spec and code phases).

@@ -66,7 +66,7 @@ def _have_activated(ctx):
 
 @given("the coder has claimed the build step")
 def _coder_has_claimed(ctx):
-    rc, out, err = ctx["h"].run("claim", "coder")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     ctx["step"] = json.loads(out)["id"]
     node = _step_node(ctx)

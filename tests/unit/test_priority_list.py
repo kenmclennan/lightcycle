@@ -17,20 +17,20 @@ class TestProject(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story")
         store.add_artifact(item, "repo", "lightcycle")
-        step = store.create_step("build", step="build", role="coder", parent=item)
+        step = store.create_step("build", step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
 
     def test_blank_when_parent_item_has_no_repo_artifact(self):
         store = FakeStore()
         item = store.create_item("story")
-        step = store.create_step("build", step="build", role="coder", parent=item)
+        step = store.create_step("build", step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "")
 
     def test_resolves_via_own_id_when_no_parent(self):
         store = FakeStore()
-        step = store.create_step("build", step="build", role="coder")
+        step = store.create_step("build", step="build", role="agent")
         store.add_artifact(step, "repo", "lightcycle")
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
@@ -39,7 +39,7 @@ class TestProject(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
-        step = store.create_step("build", step="build", role="coder", parent=item)
+        step = store.create_step("build", step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
 
@@ -47,10 +47,10 @@ class TestProject(unittest.TestCase):
 class TestQueuedRowDependencyTieBreak(unittest.TestCase):
     def test_shows_lexicographically_lowest_blocker(self):
         store = FakeStore()
-        blocker_a = store.create_step("blocker a", step="build", role="coder")
-        blocker_b = store.create_step("blocker b", step="build", role="coder")
+        blocker_a = store.create_step("blocker a", step="build", role="agent")
+        blocker_b = store.create_step("blocker b", step="build", role="agent")
         blocked = store.create_step(
-            "blocked", step="build", role="coder", deps=[blocker_a, blocker_b]
+            "blocked", step="build", role="agent", deps=[blocker_a, blocker_b]
         )
         node = store.get_node(blocked)
         expected = sorted([blocker_a, blocker_b])[0]
@@ -142,7 +142,7 @@ class TestAttentionRowDisplayPhrase(unittest.TestCase):
 class TestActiveRowDisplayPhrase(unittest.TestCase):
     def test_shows_its_declared_display_phrase(self):
         store = FakeStore()
-        step = store.create_step("building", step="build", role="coder")
+        step = store.create_step("building", step="build", role="agent")
         node = store.get_node(step)
 
         row = _active_row(store, node, "now", _FLOW_WITH_DISPLAY)
@@ -153,7 +153,7 @@ class TestActiveRowDisplayPhrase(unittest.TestCase):
 class TestQueuedRowDisplayPhrase(unittest.TestCase):
     def test_shows_its_declared_display_phrase(self):
         store = FakeStore()
-        step = store.create_step("queued build", step="build", role="coder")
+        step = store.create_step("queued build", step="build", role="agent")
         node = store.get_node(step)
 
         row = _queued_row(store, node, _FLOW_WITH_DISPLAY)
@@ -163,7 +163,7 @@ class TestQueuedRowDisplayPhrase(unittest.TestCase):
     def test_a_blocked_row_shows_the_blockers_id_not_the_declared_phrase(self):
         store = FakeStore()
         blocker = store.create_step("blocker", step="ready-merge", role="human")
-        blocked = store.create_step("blocked", step="build", role="coder", deps=[blocker])
+        blocked = store.create_step("blocked", step="build", role="agent", deps=[blocker])
         node = store.get_node(blocked)
 
         row = _queued_row(store, node, _FLOW_WITH_DISPLAY)

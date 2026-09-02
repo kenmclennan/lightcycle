@@ -8,7 +8,7 @@ from lightcycle.domain.workflows.identity import parse_pin
 @dataclass(frozen=True)
 class PeekStepInput:
     node_id: str
-    role: str
+    stage: str
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,8 @@ class PeekStepUseCase:
             fresh_pin = self._flow.resolve_selection("%s/%s" % (origin, name))
         except ValueError as e:
             raise UseCaseError(str(e))
-        parsed = resolve_agent_for_pin(self._config, input.role, fresh_pin)
+        step_file = self._flow.file_for_step(input.stage, fresh_pin)
+        parsed = resolve_agent_for_pin(self._config, step_file, fresh_pin)
         if parsed is None:
-            raise UseCaseError("no step %r in %s" % (input.role, fresh_pin))
+            raise UseCaseError("no step %r in %s" % (input.stage, fresh_pin))
         return PeekStepResponse(pin=fresh_pin, body=parsed["body"])

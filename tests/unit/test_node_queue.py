@@ -46,8 +46,8 @@ class TestByLaneAndByState(unittest.TestCase):
                 tk(id="d", state=State.DONE),
                 tk(id="a", state=State.IN_PROGRESS),
                 tk(id="h", state=State.READY, role="human"),
-                tk(id="r", state=State.READY, role="coder"),
-                tk(id="b", state=State.BACKLOGGED, role="coder"),
+                tk(id="r", state=State.READY, role="agent"),
+                tk(id="b", state=State.BACKLOGGED, role="agent"),
             ]
         )
         lanes = q.by_lane()
@@ -74,7 +74,7 @@ class TestForHuman(unittest.TestCase):
     def test_only_ready_human_tasks_are_considered(self):
         q = NodeQueue(
             [
-                tk(id="r", state=State.READY, role="coder", step=None),
+                tk(id="r", state=State.READY, role="agent", step=None),
                 tk(id="h", state=State.READY, role="human", step=None),
             ]
         )

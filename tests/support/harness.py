@@ -103,3 +103,9 @@ class Harness:
 
     def ready_steps(self, role):
         return [t for t in self.store.all_nodes() if t.state == "ready" and t.role == role]
+
+    def ready_agent_steps(self, stage=None):
+        return [
+            t for t in self.store.all_nodes()
+            if t.state == "ready" and t.role == "agent" and (stage is None or t.step == stage)
+        ]

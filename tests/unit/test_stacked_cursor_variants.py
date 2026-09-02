@@ -104,12 +104,12 @@ class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):
         store = FakeStore()
         store.create_step(
             "first title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="coder", id=_PRIORITY_ID_A,
+            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_A,
         )
         store.add_artifact(_PRIORITY_ID_A, "repo", _PRIORITY_PROJECT)
         store.create_step(
             "second title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="coder", id=_PRIORITY_ID_B,
+            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_B,
         )
         store.add_artifact(_PRIORITY_ID_B, "repo", _PRIORITY_PROJECT)
         width = _priority_stack_terminal_width()
@@ -135,12 +135,12 @@ class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
         store = FakeStore()
         store.create_step(
             "first title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="coder", id=_PRIORITY_ID_A,
+            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_A,
         )
         store.add_artifact(_PRIORITY_ID_A, "repo", _PRIORITY_PROJECT)
         store.create_step(
             "second title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="coder", id=_PRIORITY_ID_B,
+            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_B,
         )
         store.add_artifact(_PRIORITY_ID_B, "repo", _PRIORITY_PROJECT)
         for tid in active_ids:

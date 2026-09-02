@@ -28,6 +28,7 @@ class ClaimResponse:
     config: Optional[dict] = None
     phase: Optional[str] = None
     pin: Optional[str] = None
+    step_file: Optional[str] = None
 
 
 class ClaimStepUseCase:
@@ -115,7 +116,9 @@ class ClaimStepUseCase:
                 raise UseCaseError(str(e))
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
         phase = self._flow.phase_for(t)
+        step_file = self._flow.file_for_step(t.step, pin) if pin else t.step
         return ClaimResponse(
             view=view, workspace=ws, branch=branch, spec_path=spec_path, brief=brief,
-            repo_path=repo_path, config=config or None, phase=phase, pin=pin
+            repo_path=repo_path, config=config or None, phase=phase, pin=pin,
+            step_file=step_file
         )

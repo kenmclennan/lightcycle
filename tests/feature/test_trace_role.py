@@ -44,10 +44,10 @@ def _filed(ctx, spec, step):
 
 
 @given(parsers.parse(
-    'the pr-watcher has claimed and completed the {step} step with outcome "{outcome}"'
+    'an agent has claimed and completed the {step} step with outcome "{outcome}"'
 ))
 def _claimed_and_completed(ctx, step, outcome):
-    rc, out, err = ctx["h"].run("claim", "pr-watcher")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     claimed = json.loads(out)
     rc, out, err = ctx["h"].run("done", claimed["id"], outcome)

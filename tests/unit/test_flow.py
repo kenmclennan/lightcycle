@@ -39,22 +39,20 @@ HUMAN_METAS = {
 class TestFlowAssembly(unittest.TestCase):
     def test_owner_and_routes(self):
         flow = mkflow(METAS)
-        self.assertEqual(flow.owner_of("build"), "coder")
-        self.assertEqual(flow.owner_of("review"), "reviewer")
+        self.assertEqual(flow.owner_of("build"), "agent")
+        self.assertEqual(flow.owner_of("review"), "agent")
         self.assertEqual(flow.outcomes_for("build"), ["done"])
         self.assertEqual(flow.next("build", "done").to_step, "review")
 
-    def test_driver_owns_nothing(self):
+    def test_every_owned_stage_collapses_to_the_one_agent_role(self):
         flow = mkflow(METAS)
-        self.assertEqual(
-            {flow.owner_of(s) for s in flow.steps()}, {"coder", "reviewer", "pr-watcher"}
-        )
+        self.assertEqual({flow.owner_of(s) for s in flow.steps()}, {"agent"})
         self.assertEqual(flow.steps(), ["build", "open-pr", "review"])
 
 
 class TestHumanSteps(unittest.TestCase):
-    def test_agent_step_owned_by_its_basename(self):
-        self.assertEqual(mkflow(HUMAN_METAS).owner_of("watch-pr"), "watch-pr")
+    def test_a_stage_with_a_model_is_owned_by_the_agent_role_not_its_step_file(self):
+        self.assertEqual(mkflow(HUMAN_METAS).owner_of("watch-pr"), "agent")
 
     def test_no_model_step_owned_by_human(self):
         flow = mkflow(HUMAN_METAS)
@@ -73,10 +71,10 @@ class TestNext(unittest.TestCase):
     def test_owned_target_derives_role(self):
         t = self.flow.next("build", "done")
         self.assertEqual(
-            (t.from_step, t.outcome, t.to_step, t.to_role), ("build", "done", "review", "reviewer")
+            (t.from_step, t.outcome, t.to_step, t.to_role), ("build", "done", "review", "agent")
         )
         t2 = self.flow.next("review", "rejected")
-        self.assertEqual((t2.to_step, t2.to_role), ("build", "coder"))
+        self.assertEqual((t2.to_step, t2.to_role), ("build", "agent"))
 
     def test_unowned_target_is_human(self):
         t = self.flow.next("open-pr", "done")
@@ -90,14 +88,14 @@ class TestNext(unittest.TestCase):
 
 
 class TestTransition(unittest.TestCase):
-    def _t(self, from_step="build", outcome="done", to_step="review", to_role="reviewer"):
+    def _t(self, from_step="build", outcome="done", to_step="review", to_role="agent"):
         return Transition(from_step=from_step, outcome=outcome, to_step=to_step, to_role=to_role)
 
     def test_next_task_spec_uses_the_given_item_title_and_keeps_deps(self):
         spec = self._t().next_step_spec(Node(id="t-1", title="build: some stale title"), "make the thing")
         self.assertEqual(spec.title, "review: make the thing")
         self.assertEqual(spec.step, "review")
-        self.assertEqual(spec.role, "reviewer")
+        self.assertEqual(spec.role, "agent")
         self.assertIsNone(spec.parent)
         self.assertEqual(spec.deps, ("t-1",))
 
@@ -118,7 +116,7 @@ class TestTransition(unittest.TestCase):
             {
                 "title": "review: x",
                 "step": "review",
-                "role": "reviewer",
+                "role": "agent",
                 "parent": "s-9",
                 "deps": ["t-1"],
                 "project": None,
@@ -133,7 +131,7 @@ class TestTransition(unittest.TestCase):
         )
 
     def test_forward_note_preserves_text_verbatim(self):
-        t = self._t(from_step="review", outcome="rejected", to_step="build", to_role="coder")
+        t = self._t(from_step="review", outcome="rejected", to_step="build", to_role="agent")
         self.assertEqual(
             t.forward_note("add missing coverage"), "from review (rejected): add missing coverage"
         )
@@ -174,26 +172,25 @@ class TestHookSteps(unittest.TestCase):
     def test_known_hook_step_included(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
+        self.assertEqual(flow.hook_steps(), ["audit"])
 
     def test_arbitrary_hook_name_included_generically(self):
         metas = {"deployer": {"model": "sonnet", "step": "deploy", "on_deploy_green": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.hook_steps(), [("deploy", "deployer")])
+        self.assertEqual(flow.hook_steps(), ["deploy"])
 
     def test_step_flagged_by_multiple_hooks_appears_once(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit",
                               "on_deploy_green": True, "on_release_cut": True}}
         flow = mkflow(metas)
-        self.assertEqual(flow.hook_steps(), [("audit", "auditor")])
+        self.assertEqual(flow.hook_steps(), ["audit"])
 
     def test_multiple_hook_steps_sorted(self):
         metas = {
             "beta": {"model": "sonnet", "step": "zz-step", "on_deploy_green": True},
             "alpha": {"model": "sonnet", "step": "aa-step", "on_deploy_green": True},
         }
-        steps = mkflow(metas).hook_steps()
-        self.assertEqual([s for s, _ in steps], ["aa-step", "zz-step"])
+        self.assertEqual(mkflow(metas).hook_steps(), ["aa-step", "zz-step"])
 
 
 if __name__ == "__main__":

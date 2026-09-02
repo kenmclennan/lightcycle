@@ -49,7 +49,7 @@ class _Config:
 class TestShowNode(unittest.TestCase):
     def test_returns_task_view(self):
         s = FakeStore()
-        tid = s.create_step("build: x", step="build", role="coder")
+        tid = s.create_step("build: x", step="build", role="agent")
         view = ShowNodeUseCase(s).execute(ShowNodeInput(step=tid)).view
         self.assertEqual(view.step.id, tid)
         self.assertEqual(view.step.title, "build: x")
@@ -61,8 +61,8 @@ class TestTrace(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st")
         s.add_artifact(sid, "spec", "specs/x.md")
-        k = s.create_step("build: x", step="build", role="coder", parent=sid)
-        workers = _Workers([{"role": "coder", "step": k, "log": "/l/k.log"}])
+        k = s.create_step("build: x", step="build", role="agent", parent=sid)
+        workers = _Workers([{"role": "agent", "step": k, "log": "/l/k.log"}])
         resp = TraceUseCase(s, workers, _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.item.id, sid)
         self.assertEqual(resp.artifacts[0].type, "spec")
@@ -72,9 +72,9 @@ class TestTrace(unittest.TestCase):
     def test_step_role_survives_to_the_trace(self):
         s = FakeStore()
         sid = s.create_item("st")
-        s.create_step("build: x", step="build", role="coder", parent=sid)
+        s.create_step("build: x", step="build", role="agent", parent=sid)
         resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
-        self.assertEqual(resp.steps[0].role, "coder")
+        self.assertEqual(resp.steps[0].role, "agent")
 
     def test_human_role_survives_to_the_trace_unchanged(self):
         s = FakeStore()
@@ -86,11 +86,11 @@ class TestTrace(unittest.TestCase):
     def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
         s = FakeStore()
         sid = s.create_item("st")
-        k = s.create_step("build: x", step="build", role="coder", parent=sid)
+        k = s.create_step("build: x", step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
         os.makedirs(os.path.join(root, "logs"))
-        log_path = os.path.join(root, "logs", "worker-coder-sp1.log")
+        log_path = os.path.join(root, "logs", "worker-agent-sp1.log")
         with open(log_path, "w") as f:
             f.write("log\n")
         resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
@@ -99,7 +99,7 @@ class TestTrace(unittest.TestCase):
     def test_resolves_no_log_when_pruned_and_nothing_on_disk(self):
         s = FakeStore()
         sid = s.create_item("st")
-        k = s.create_step("build: x", step="build", role="coder", parent=sid)
+        k = s.create_step("build: x", step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
         resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
@@ -108,7 +108,7 @@ class TestTrace(unittest.TestCase):
     def test_resolves_no_log_for_a_step_never_claimed(self):
         s = FakeStore()
         sid = s.create_item("st")
-        s.create_step("build: x", step="build", role="coder", parent=sid)
+        s.create_step("build: x", step="build", role="agent", parent=sid)
         root = tempfile.mkdtemp()
         resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
         self.assertIsNone(resp.steps[0].log)
@@ -118,9 +118,9 @@ def _seed_mixed_store():
     s = FakeStore()
     todo_item = s.create_item("todo item")
     active_item = s.create_item("active item")
-    ready = s.create_step("ready one", step="build", role="coder")
+    ready = s.create_step("ready one", step="build", role="agent")
     human = s.create_step("needs me", role="human")
-    running = s.create_step("running", step="build", role="coder")
+    running = s.create_step("running", step="build", role="agent")
     s.assign(running, "worker-1")
     non_steps = [todo_item, active_item]
     return s, non_steps, {"ready": ready, "human": human, "running": running}
@@ -129,9 +129,9 @@ def _seed_mixed_store():
 class TestStatus(unittest.TestCase):
     def test_lanes_tasks_by_status(self):
         s = FakeStore()
-        ready = s.create_step("ready one", step="build", role="coder")
+        ready = s.create_step("ready one", step="build", role="agent")
         human = s.create_step("needs me", role="human")
-        running = s.create_step("running", step="build", role="coder")
+        running = s.create_step("running", step="build", role="agent")
         s.assign(running, "worker-1")
         lanes = StatusUseCase(s).execute().lanes
         self.assertEqual([t.id for t in lanes["queue"]], [ready])
@@ -141,7 +141,7 @@ class TestStatus(unittest.TestCase):
     def test_watched_step_leaves_the_inbox_lane_while_its_feedback_step_is_open(self):
         s = FakeStore()
         watched = s.create_step("await-merge: thing", step="await-merge", role="human")
-        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                            parent=s.get_node(watched).parent)
         s.add_artifact(fb, "watched-step", watched)
 
@@ -152,7 +152,7 @@ class TestStatus(unittest.TestCase):
     def test_watched_step_returns_to_the_inbox_lane_once_its_feedback_step_closes(self):
         s = FakeStore()
         watched = s.create_step("await-merge: thing", step="await-merge", role="human")
-        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                            parent=s.get_node(watched).parent)
         s.add_artifact(fb, "watched-step", watched)
         s.close(fb, "done")
@@ -163,8 +163,8 @@ class TestStatus(unittest.TestCase):
 
     def test_dep_blocked_task_lands_in_queue(self):
         s = FakeStore()
-        blocker = s.create_step("blocker", step="build", role="coder")
-        blocked = s.create_step("blocked", step="build", role="coder", deps=[blocker])
+        blocker = s.create_step("blocker", step="build", role="agent")
+        blocked = s.create_step("blocked", step="build", role="agent", deps=[blocker])
         lanes = StatusUseCase(s).execute().lanes
         self.assertIn(blocked, [t.id for t in lanes["queue"]])
         self.assertNotIn("blocked", lanes)
@@ -183,8 +183,8 @@ class TestStatus(unittest.TestCase):
 class TestActiveTasks(unittest.TestCase):
     def test_returns_only_in_progress(self):
         s = FakeStore()
-        s.create_step("waiting", step="build", role="coder")
-        running = s.create_step("running", step="build", role="coder")
+        s.create_step("waiting", step="build", role="agent")
+        running = s.create_step("running", step="build", role="agent")
         s.assign(running, "worker-1")
         self.assertEqual([t.id for t in ActiveStepsUseCase(s).execute().steps], [running])
 
@@ -199,7 +199,7 @@ class TestActiveTasks(unittest.TestCase):
 class TestQueue(unittest.TestCase):
     def test_lists_ready_capped_at_n(self):
         s = FakeStore()
-        ids = [s.create_step("t%d" % i, step="build", role="coder") for i in range(3)]
+        ids = [s.create_step("t%d" % i, step="build", role="agent") for i in range(3)]
         out = QueueUseCase(s).execute(QueueInput(n=2)).steps
         self.assertEqual(len(out), 2)
         self.assertTrue(set(t.id for t in out).issubset(set(ids)))
@@ -207,7 +207,7 @@ class TestQueue(unittest.TestCase):
     def test_default_n_is_ten(self):
         s = FakeStore()
         for i in range(12):
-            s.create_step("t%d" % i, step="build", role="coder")
+            s.create_step("t%d" % i, step="build", role="agent")
         self.assertEqual(len(QueueUseCase(s).execute(QueueInput()).steps), 10)
 
     def test_queue_contains_only_steps_never_items(self):
@@ -403,7 +403,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         s = FakeStore()
         _, watched = self._item_with_step(s, step_name="await-merge")
         item = s.get_node(watched).parent
-        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                             parent=item)
         s.add_artifact(fb, "watched-step", watched)
         resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
@@ -413,7 +413,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         s = FakeStore()
         _, watched = self._item_with_step(s, step_name="await-merge")
         item = s.get_node(watched).parent
-        fb = s.create_step("handle feedback", step="handle-feedback", role="handle-feedback",
+        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                             parent=item)
         s.add_artifact(fb, "watched-step", watched)
         s.close(fb, "done")

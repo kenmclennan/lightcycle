@@ -45,7 +45,7 @@ class TestCmdRm(unittest.TestCase):
         cli.set_container(FakeContainer(self.store))
 
     def test_force_flag_parses_and_delegates_to_the_use_case(self):
-        step = self.store.create_step("orphan build", role="coder")
+        step = self.store.create_step("orphan build", role="agent")
         rc, out, err = call(cli.cmd_rm, step, "--force")
         self.assertEqual(rc, 0)
         self.assertIn(step, out)
@@ -54,8 +54,8 @@ class TestCmdRm(unittest.TestCase):
 
     def test_renders_the_refusal_and_leaves_the_node(self):
         item = self.store.create_item("feature")
-        step = self.store.create_step("build", step="build", role="coder", parent=item)
-        self.store.claim_ready("coder")
+        step = self.store.create_step("build", step="build", role="agent", parent=item)
+        self.store.claim_ready("agent")
         container = FakeContainer(self.store)
         container.workers = FakeWorkers([{"step": step, "pid": 1}], alive=True)
         cli.set_container(container)

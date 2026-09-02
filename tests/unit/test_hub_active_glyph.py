@@ -15,8 +15,8 @@ def _rendered_text(widget):
 def _open_hub_on_active_step():
     store = FakeStore()
     item = store.create_item("Item")
-    store.create_step("s", step="build", role="coder", parent=item)
-    store.claim_ready("coder")
+    store.create_step("s", step="build", role="agent", parent=item)
+    store.claim_ready("agent")
     session = launch(make_test_container(store=store))
     session.run(
         lambda: session.app.push_screen(NodeHubScreen(session.app.container, item, session.app._now))
@@ -64,8 +64,8 @@ def test_pinned_ancestor_banner_pulses_when_its_own_row_is_active():
     store = FakeStore()
     item = store.create_item("Item")
     for i in range(39):
-        store.create_step("s%d" % i, step="build", role="coder", parent=item)
-    active_step = store.create_step("active", step="build", role="coder", parent=item)
+        store.create_step("s%d" % i, step="build", role="agent", parent=item)
+    active_step = store.create_step("active", step="build", role="agent", parent=item)
     store.assign(active_step, "worker-1")
     store.update_state(active_step, State.IN_PROGRESS)
 

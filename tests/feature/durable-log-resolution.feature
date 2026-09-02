@@ -4,7 +4,8 @@ Feature: A step's log is found even after its worker registry entry is pruned
   live registry entry surviving: once the registry entry for the worker that ran a step
   is gone, resolution falls back to reconstructing the log's path from the step's own
   durable role and the worker that claimed it, so a done step's log stays reachable
-  regardless of registry churn.
+  regardless of registry churn. A live registry entry is also reachable by the stage
+  its worker is running, which the role no longer names.
 
   Background:
     Given a flow where the coder builds the item
@@ -54,9 +55,14 @@ Feature: A step's log is found even after its worker registry entry is pruned
       | the trace read path |
       | the logs command    |
 
-  Scenario: Resolving a log by role alone never falls back past the live registry
+  Scenario: Resolving a log by stage alone never falls back past the live registry
     Given worker "sp1" has claimed and completed the build step with outcome "done"
     And the worker registry no longer has an entry for worker "sp1"
     And worker "sp1"'s log file still exists on disk
-    When the log for role "coder" is resolved via the logs command
-    Then the role's log is not found
+    When the log for stage "build" is resolved via the logs command
+    Then the stage's log is not found
+
+  Scenario: A live worker's log is reachable by the stage it is running
+    Given worker "sp1" has claimed the build step
+    When the log for stage "build" is resolved via the logs command
+    Then the stage's log is found

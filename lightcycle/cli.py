@@ -178,10 +178,10 @@ COMMAND_GROUPS = [
         ("active", "", "steps a worker is running right now"),
         ("queue", "[N]", "the next N ready/blocked agent steps"),
         ("ps", "[--all] [--json]", "running workers (alive only; --all includes dead)"),
-        ("logs", "<step|role|run> [-f]", "tail a worker's or the loop's log"),
+        ("logs", "<step|stage|run> [-f]", "tail a worker's or the loop's log"),
         ("show", "<id>", "one step or item as JSON (artifacts, resume-state)"),
-        ("peek", "<id> <role>", "print a role's step guidance as currently pinned for the given "
-         "item/step's workflow origin - lets a worker read another role's instructions without "
+        ("peek", "<id> <stage>", "print a stage's step guidance as currently pinned for the given "
+         "item/step's workflow origin - lets a worker read another stage's instructions without "
          "claiming them"),
         ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
@@ -448,19 +448,19 @@ def cmd_show(argv):
 def cmd_peek(argv):
     ap = argparse.ArgumentParser(prog="lc peek")
     ap.add_argument("id")
-    ap.add_argument("role")
+    ap.add_argument("stage")
     a = ap.parse_args(argv)
     try:
         resp = PeekStepUseCase(
             _container.store, _flow(), _container.config, _container.workflow_source
-        ).execute(PeekStepInput(node_id=a.id, role=a.role))
+        ).execute(PeekStepInput(node_id=a.id, stage=a.stage))
     except KeyError:
         sys.stderr.write("unknown node '%s'\n" % a.id)
         return 1
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    print("# %s @ %s\n\n%s" % (a.role, resp.pin, resp.body))
+    print("# %s @ %s\n\n%s" % (a.stage, resp.pin, resp.body))
     return 0
 
 
@@ -508,7 +508,7 @@ def cmd_ps(argv):
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    rows = ListWorkersUseCase(_container.workers).execute().workers
+    rows = ListWorkersUseCase(_container.workers, _container.store).execute().workers
     if not a.all:
         rows = [w for w in rows if w["alive"]]
     if a.json:
@@ -517,7 +517,8 @@ def cmd_ps(argv):
         for w in rows:
             print(
                 "  %-11s step=%-18s pid=%s %s"
-                % (w["role"], w.get("step") or "-", w["pid"], "alive" if w["alive"] else "dead")
+                % (w.get("stage") or w["role"], w.get("step") or "-", w["pid"],
+                   "alive" if w["alive"] else "dead")
             )
     return 0
 

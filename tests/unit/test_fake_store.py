@@ -6,11 +6,11 @@ from tests.support.fake_store import FakeStore
 class TestLabels(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_step("build: thing", step="build", role="coder")
+        self.tid = self.s.create_step("build: thing", step="build", role="agent")
 
     def test_step_and_role_split_into_separate_labels(self):
         step = self.s.get_node(self.tid)
-        self.assertEqual(step.role, "coder")
+        self.assertEqual(step.role, "agent")
         self.assertEqual(step.step, "build")
 
     def test_label_add_roundtrip(self):
@@ -29,17 +29,17 @@ class TestLabels(unittest.TestCase):
         self.assertEqual(self.s._records[self.tid]["labels"].count("tag:x"), 1)
 
     def test_structured_attrs_encoded_on_create_task(self):
-        tid = self.s.create_step("build: y", role="reviewer", project="foo", goal="ship")
+        tid = self.s.create_step("build: y", role="agent", project="foo", goal="ship")
         step = self.s.get_node(tid)
         self.assertEqual(step.project, "foo")
         self.assertEqual(step.goal, "ship")
-        self.assertEqual(step.role, "reviewer")
+        self.assertEqual(step.role, "agent")
 
 
 class TestAssignee(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_step("build: thing", role="coder")
+        self.tid = self.s.create_step("build: thing", role="agent")
 
     def test_assign_sets_in_progress(self):
         self.s.assign(self.tid, "worker-1")
@@ -59,7 +59,7 @@ class TestAssignee(unittest.TestCase):
 class TestClose(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_step("build: thing", role="coder")
+        self.tid = self.s.create_step("build: thing", role="agent")
 
     def test_close_sets_done_status(self):
         self.s.close(self.tid, "done")
@@ -137,31 +137,31 @@ class TestReady(unittest.TestCase):
         self.s = FakeStore()
 
     def test_task_without_deps_is_ready(self):
-        tid = self.s.create_step("build: thing", role="coder")
+        tid = self.s.create_step("build: thing", role="agent")
         ready = self.s.ready_steps()
         self.assertEqual(len(ready), 1)
         self.assertEqual(ready[0].id, tid)
 
     def test_task_with_open_dep_is_not_ready(self):
-        blocker = self.s.create_step("build: dep", role="coder")
-        blocked = self.s.create_step("build: thing", role="coder")
+        blocker = self.s.create_step("build: dep", role="agent")
+        blocked = self.s.create_step("build: thing", role="agent")
         self.s.dep_add(blocked, blocker)
         ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertIn(blocker, ready_ids)
         self.assertNotIn(blocked, ready_ids)
 
     def test_closing_dep_makes_task_ready(self):
-        blocker = self.s.create_step("build: dep", role="coder")
-        blocked = self.s.create_step("build: thing", role="coder")
+        blocker = self.s.create_step("build: dep", role="agent")
+        blocked = self.s.create_step("build: thing", role="agent")
         self.s.dep_add(blocked, blocker)
         self.s.close(blocker, "done")
         ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
     def test_task_with_two_deps_needs_both_closed(self):
-        dep1 = self.s.create_step("build: dep1", role="coder")
-        dep2 = self.s.create_step("build: dep2", role="coder")
-        blocked = self.s.create_step("build: thing", role="coder")
+        dep1 = self.s.create_step("build: dep1", role="agent")
+        dep2 = self.s.create_step("build: dep2", role="agent")
+        blocked = self.s.create_step("build: thing", role="agent")
         self.s.dep_add(blocked, dep1)
         self.s.dep_add(blocked, dep2)
         self.s.close(dep1, "done")
@@ -172,12 +172,12 @@ class TestReady(unittest.TestCase):
         self.assertIn(blocked, ready_ids)
 
     def test_claimed_task_not_in_ready(self):
-        tid = self.s.create_step("build: thing", role="coder")
+        tid = self.s.create_step("build: thing", role="agent")
         self.s.assign(tid, "worker-1")
         self.assertEqual(self.s.ready_steps(), [])
 
     def test_closed_task_not_in_ready(self):
-        tid = self.s.create_step("build: thing", role="coder")
+        tid = self.s.create_step("build: thing", role="agent")
         self.s.close(tid, "done")
         self.assertEqual(self.s.ready_steps(), [])
 
@@ -186,22 +186,22 @@ class TestReady(unittest.TestCase):
         self.assertEqual(self.s.ready_steps(), [])
 
     def test_claim_ready_assigns_and_returns(self):
-        tid = self.s.create_step("build: thing", role="coder")
-        result = self.s.claim_ready("coder")
+        tid = self.s.create_step("build: thing", role="agent")
+        result = self.s.claim_ready("agent")
         self.assertEqual(result.id, tid)
         self.assertEqual(result.state, "in_progress")
 
     def test_claim_ready_task_no_longer_in_ready(self):
-        self.s.create_step("build: thing", role="coder")
-        self.s.claim_ready("coder")
+        self.s.create_step("build: thing", role="agent")
+        self.s.claim_ready("agent")
         self.assertEqual(self.s.ready_steps(), [])
 
     def test_claim_ready_wrong_role_returns_none(self):
-        self.s.create_step("build: thing", role="reviewer")
-        self.assertIsNone(self.s.claim_ready("coder"))
+        self.s.create_step("build: thing", role="human")
+        self.assertIsNone(self.s.claim_ready("agent"))
 
     def test_claim_ready_no_tasks_returns_none(self):
-        self.assertIsNone(self.s.claim_ready("coder"))
+        self.assertIsNone(self.s.claim_ready("agent"))
 
 
 class TestMetadata(unittest.TestCase):
@@ -227,8 +227,8 @@ class TestListNodes(unittest.TestCase):
         self.s = FakeStore()
 
     def test_claimed_tasks_are_in_progress_with_claimer(self):
-        claimed = self.s.create_step("build: a", role="coder")
-        self.s.create_step("build: b", role="coder")
+        claimed = self.s.create_step("build: a", role="agent")
+        self.s.create_step("build: b", role="agent")
         self.s.update_state(claimed, "in_progress")
         self.s.assign(claimed, "sp-1")
         got = self.s.claimed_steps()
@@ -258,7 +258,7 @@ class TestListNodes(unittest.TestCase):
 class TestRouteToHuman(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = self.s.create_step("build: thing", step="build", role="coder")
+        self.tid = self.s.create_step("build: thing", step="build", role="agent")
 
     def test_routes_to_human(self):
         self.s.route_to_human(self.tid, "needs review")
@@ -283,7 +283,7 @@ class TestNoSubprocess(unittest.TestCase):
         from tests.support.fake_store import FakeStore as FS
 
         s = FS()
-        tid = s.create_step("build: thing", role="coder")
+        tid = s.create_step("build: thing", role="agent")
         s.note(tid, "hello")
         s.close(tid, "done")
 

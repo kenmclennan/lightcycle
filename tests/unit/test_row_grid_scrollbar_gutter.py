@@ -26,7 +26,7 @@ def _priority_active_store(count):
     store = FakeStore(now=lambda: _at(14))
     for i in range(count):
         step = store.create_step(
-            "row %d" % i, step="write-code", role="write-code", id="LC-%d.1" % (1000 + i),
+            "row %d" % i, step="write-code", role="agent", id="LC-%d.1" % (1000 + i),
         )
         store.assign(step, "worker-%d" % i)
         store.update_state(step, State.IN_PROGRESS)

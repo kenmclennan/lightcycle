@@ -33,13 +33,13 @@ class TestWorkspacePerStep(unittest.TestCase):
 
     def test_spec_phase_step_uses_specs_workspace(self):
         step = self.store.get_node(
-            self.store.create_step("s", step="spec-writer", role="spec-writer", parent=self.item))
+            self.store.create_step("s", step="spec-writer", role="agent", parent=self.item))
         self.assertEqual(_svc(self.store).workspace_for_node(step), "specs")
         self.assertEqual(_svc(self.store).phase_for(step), "spec")
 
     def test_code_phase_step_uses_project_workspace(self):
         step = self.store.get_node(
-            self.store.create_step("w", step="write-code", role="coder", parent=self.item))
+            self.store.create_step("w", step="write-code", role="agent", parent=self.item))
         self.assertEqual(_svc(self.store).workspace_for_node(step), "project")
         self.assertEqual(_svc(self.store).phase_for(step), "code")
 

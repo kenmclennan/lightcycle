@@ -49,12 +49,17 @@ STEP_METAS = {
 
 class TestFlowFromGraph(unittest.TestCase):
     def setUp(self):
-        self.flow = Flow.from_graph(parse_graph(GRAPH_TEXT), STEP_METAS)
+        self.graph = parse_graph(GRAPH_TEXT)
+        self.flow = Flow.from_graph(self.graph, STEP_METAS)
 
-    def test_owner_from_stage_file_and_model(self):
-        self.assertEqual(self.flow.owner_of("build"), "coder")
-        self.assertEqual(self.flow.owner_of("review"), "reviewer")
-        self.assertEqual(self.flow.owner_of("audit"), "auditor")
+    def test_a_stage_whose_step_file_declares_a_model_is_owned_by_the_agent_role(self):
+        self.assertEqual(self.flow.owner_of("build"), "agent")
+        self.assertEqual(self.flow.owner_of("review"), "agent")
+        self.assertEqual(self.flow.owner_of("audit"), "agent")
+
+    def test_the_owner_never_carries_the_stage_or_its_step_file(self):
+        for stage in ("build", "review", "audit"):
+            self.assertNotIn(self.flow.owner_of(stage), (stage, self.graph.file_for(stage)))
 
     def test_stage_with_a_step_file_but_no_model_is_human(self):
         self.assertEqual(self.flow.owner_of("ready-merge"), "human")
@@ -62,7 +67,7 @@ class TestFlowFromGraph(unittest.TestCase):
     def test_routing_carries_target_and_role(self):
         t = self.flow.next("build", "done")
         self.assertEqual(t.to_step, "review")
-        self.assertEqual(t.to_role, "reviewer")
+        self.assertEqual(t.to_role, "agent")
         self.assertEqual(self.flow.next("review", "rejected").to_step, "build")
 
     def test_terminal_and_conflict_outcomes(self):
@@ -73,7 +78,7 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_pr_feedback_step_registers_as_a_stage(self):
         self.assertEqual(self.flow.pr_feedback_step("ready-merge"), "handle-feedback")
-        self.assertEqual(self.flow.owner_of("handle-feedback"), "handle-feedback")
+        self.assertEqual(self.flow.owner_of("handle-feedback"), "agent")
 
     def test_pr_feedback_step_absent_by_default(self):
         self.assertIsNone(self.flow.pr_feedback_step("build"))

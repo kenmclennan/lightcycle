@@ -18,7 +18,7 @@ def _close_item(store, title, per_step_reflections=(0,)):
     eid = store.create_item(title)
     store.close(eid, "done")
     for i, count in enumerate(per_step_reflections):
-        k = store.create_step("build: %d" % i, step="build", role="coder", parent=eid)
+        k = store.create_step("build: %d" % i, step="build", role="agent", parent=eid)
         store.close(k, "done")
         for j in range(count):
             _add_reflection(store, k, "fb %d.%d" % (i, j))

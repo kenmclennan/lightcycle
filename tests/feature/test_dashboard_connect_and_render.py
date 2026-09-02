@@ -51,17 +51,17 @@ def _launch(ctx):
 @given("the lightcycle store is reachable")
 def _reachable(ctx):
     store = FakeStore()
-    store.create_step("a", step="build", role="coder")
-    store.create_step("b", step="build", role="coder")
-    blocker = store.create_step("blocker", step="build", role="coder")
-    store.create_step("c", step="build", role="coder", deps=[blocker])
+    store.create_step("a", step="build", role="agent")
+    store.create_step("b", step="build", role="agent")
+    blocker = store.create_step("blocker", step="build", role="agent")
+    store.create_step("c", step="build", role="agent", deps=[blocker])
     ctx["store"] = store
 
 
 @given("the store has more than ten queued or blocked steps")
 def _many(ctx):
     store = FakeStore()
-    ctx["ids"] = [store.create_step("t%d" % i, step="build", role="coder") for i in range(12)]
+    ctx["ids"] = [store.create_step("t%d" % i, step="build", role="agent") for i in range(12)]
     ctx["store"] = store
 
 
@@ -134,7 +134,7 @@ def _read_interval(ctx):
 def _queue_changes(ctx):
     session = ctx["session"]
     ctx["new_step"] = session.app.container.store.create_step(
-        "new", step="build", role="coder"
+        "new", step="build", role="agent"
     )
 
 

@@ -36,7 +36,7 @@ class Flow:
             meta = step_metas.get(graph.file_for(stage))
             if meta is None:
                 continue
-            owner[stage] = graph.file_for(stage) if meta.get("model") else "human"
+            owner[stage] = "agent" if meta.get("model") else "human"
         for stage in owner:
             routes[stage] = dict(graph.edges.get(stage) or {})
 
@@ -214,9 +214,7 @@ class Flow:
         return sd.pr_conflict_escalate if prior_count >= sd.pr_conflict_cap else conflict_outcome
 
     def hook_steps(self):
-        return [
-            (s, sd.owner) for s, sd in sorted(self._steps.items()) if sd.hooks and sd.owner
-        ]
+        return [s for s, sd in sorted(self._steps.items()) if sd.hooks and sd.owner]
 
     def hooks(self):
         out = {}

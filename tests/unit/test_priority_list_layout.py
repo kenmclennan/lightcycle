@@ -125,7 +125,7 @@ def _rendered_cell_text(table, row_id, column_key):
 class TestPriorityListStepColumnTruncation(unittest.TestCase):
     def test_a_phrase_longer_than_the_budget_is_shown_with_a_trailing_ellipsis(self):
         store = FakeStore()
-        step = store.create_step("build it", step="build", role="coder")
+        step = store.create_step("build it", step="build", role="agent")
         fs = FakeFs(metas={
             "coder": {
                 "model": "sonnet", "step": "build",
@@ -143,7 +143,7 @@ class TestPriorityListStepColumnTruncation(unittest.TestCase):
 
     def test_a_phrase_within_the_budget_is_shown_in_full(self):
         store = FakeStore()
-        step = store.create_step("build it", step="build", role="coder")
+        step = store.create_step("build it", step="build", role="agent")
         fs = FakeFs(metas={
             "coder": {"model": "sonnet", "step": "build", "display": "Coding"},
         })

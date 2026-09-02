@@ -91,7 +91,7 @@ def _tick(ctx):
 
 @when("the handle-feedback step is marked done without clearing the feedback")
 def _closed_without_clearing(ctx):
-    rc, out, err = ctx["h"].run("claim", "handle-feedback")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     step_id = json.loads(out)["id"]
     rc, out, err = ctx["h"].run("done", step_id, "done")
@@ -100,7 +100,7 @@ def _closed_without_clearing(ctx):
 
 @when("the handle-feedback step replies and advances the watermark")
 def _replied_and_advanced(ctx):
-    rc, out, err = ctx["h"].run("claim", "handle-feedback")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     step_id = json.loads(out)["id"]
     rc, out, err = ctx["h"].run("done", step_id, "done")
@@ -111,14 +111,14 @@ def _replied_and_advanced(ctx):
     assert rc == 0, err
 
 
-@then(parsers.parse('there is one ready step for "{role}"'))
-def _one_ready(ctx, role):
-    assert len(ctx["h"].ready_steps(role)) == 1
+@then(parsers.parse('there is one ready agent step at the "{stage}" stage'))
+def _one_ready(ctx, stage):
+    assert len(ctx["h"].ready_agent_steps(stage)) == 1
 
 
-@then(parsers.parse('there are no ready steps for "{role}"'))
-def _no_ready(ctx, role):
-    assert ctx["h"].ready_steps(role) == []
+@then(parsers.parse('there is no ready agent step at the "{stage}" stage'))
+def _no_ready(ctx, stage):
+    assert ctx["h"].ready_agent_steps(stage) == []
 
 
 @then("there is still exactly one handle-feedback step in total")
@@ -132,7 +132,7 @@ def _one_total(ctx):
 def _routes_and_closes(ctx, outcome):
     rc, out, err = ctx["h"].run("done", ctx["watched_step"], outcome, "--note", "rework needed")
     assert rc == 0, err
-    rc, out, err = ctx["h"].run("claim", "handle-feedback")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     fb_id = json.loads(out)["id"]
     rc, out, err = ctx["h"].run("done", fb_id, "done")
