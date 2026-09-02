@@ -53,8 +53,14 @@ class InboxUseCase:
         return HumanNodeRow(
             kind=kind, outcomes=outcomes, step=t,
             project=item.repo() if item else None,
-            pr=item.artifact_of("pr", label=resolver(t).phase_of(t.step)) if item else None,
+            pr=self._pr_for(t, resolver),
         )
+
+    def _pr_for(self, t, resolver):
+        if not t.parent:
+            return None
+        run = self._store.current_run(t.parent, resolver(t).phase_of(t.step))
+        return run.pr if run else None
 
     def _item(self, item_id):
         return Item(item_id, tuple(self._store.item_artifacts(item_id)))

@@ -11,11 +11,10 @@ from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseC
 from lightcycle.domain.contracts import FlowContracts, StepContract
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
-from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.state import State
 
 _ADVANCING_HOOKS = ("pr_merge", "pr_conflict")
-_PHASE_SCOPED_ARTIFACTS = ("pr", "branch")
+_RUN_FIELDS = {"pr": "pr", "branch": "branch"}
 
 
 @dataclass(frozen=True)
@@ -139,17 +138,25 @@ class WorkflowSimulateUseCase:
         meta = self._flow.meta_for_step(stage, pin)
         contract = StepContract.from_meta(meta)
         phase = self._flow.load_graph(pin).phase_for(stage)
-        present = {(a.type, a.label) for a in self._store.item_artifacts(item_id)}
+        present = {a.type for a in self._store.item_artifacts(item_id)}
         for req in contract.produces:
-            label = phase if req.type in _PHASE_SCOPED_ARTIFACTS else None
-            if (req.type, label) not in present:
-                self._store.add_artifact(item_id, req.type, "<simulated>", label=label)
-                present.add((req.type, label))
+            if req.type in _RUN_FIELDS:
+                run = self._store.current_run(item_id, phase)
+                if run is None:
+                    current = self._store.current_pass(item_id)
+                    pid = current.id if current else self._store.open_pass(item_id)
+                    run = self._store.get_run(self._store.open_run(item_id, pid, phase))
+                if getattr(run, _RUN_FIELDS[req.type]) is None:
+                    value = "<simulated-%s-%s>" % (req.type, phase or "-")
+                    self._store.set_run_field(run.id, **{_RUN_FIELDS[req.type]: value})
+                continue
+            if req.type not in present:
+                self._store.add_artifact(item_id, req.type, "<simulated>")
+                present.add(req.type)
 
     def _pr_value(self, item_id, graph, stage):
-        phase = graph.phase_for(stage)
-        artifacts = tuple(self._store.item_artifacts(item_id))
-        return Item(item_id, artifacts).artifact_of("pr", label=phase)
+        run = self._store.current_run(item_id, graph.phase_for(stage))
+        return run.pr if run else None
 
     def _item_closed(self, item_id):
         return self._store.get_node(item_id).state == State.DONE

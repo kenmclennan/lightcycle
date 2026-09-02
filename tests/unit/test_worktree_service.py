@@ -7,7 +7,6 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
-from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 
@@ -162,6 +161,21 @@ class _FakeGit:
 
     def delete_remote_branch(self, root, branch):
         self.calls.append(("delete_remote_branch", root, branch))
+
+
+
+def plant_run(store, item, phase, branch=None, n=1, state="open"):
+    while store.current_pass(item) is None or store.current_pass(item).n < n:
+        current = store.current_pass(item)
+        if current is not None:
+            store.close_pass(current.id)
+        store.open_pass(item)
+    rid = store.open_run(item, store.current_pass(item).id, phase)
+    if branch is not None:
+        store.set_run_field(rid, branch=branch)
+    if state != "open":
+        store.close_run(rid, state)
+    return rid
 
 
 class TestWorktreePath(unittest.TestCase):
@@ -322,7 +336,7 @@ class TestSpecsWorkspace(unittest.TestCase):
 
     def test_remove_targets_specs_root_without_a_repo_artifact(self):
         item = self.store.create_item("spec item", "a description")
-        self.store.add_artifact(item, "branch", "spec/x")
+        plant_run(self.store, item, "spec", "spec/x")
         git = _FakeGit()
         svc = WorktreeService(
             self.store, git, fs=None, config=_Cfg("/home/u/workspace/projects"),
@@ -372,8 +386,8 @@ class TestRemovePhaseScoped(unittest.TestCase):
 
     def test_remove_tears_down_every_recorded_phase_in_its_own_repo(self):
         store, item = self._item()
-        store.add_artifact(item, "branch", "spec/login", label="spec")
-        store.add_artifact(item, "branch", "feat/app-code-login", label="code")
+        plant_run(store, item, "spec", "spec/login")
+        plant_run(store, item, "code", "feat/app-code-login")
         target = os.path.join("/projects", "app")
         git = _FakeGit(git_repos={"/specs", target})
         svc = WorktreeService(store, git, fs=None, config=_Cfg("/projects"), flow=_CloseFlow())
@@ -397,7 +411,7 @@ class TestRemovePhaseScoped(unittest.TestCase):
 
     def test_remove_unlabeled_phase_uses_the_item_worktree_and_branch(self):
         store, item = self._item()
-        store.add_artifact(item, "branch", "feat/app-login")
+        plant_run(store, item, None, "feat/app-login")
         target = os.path.join("/projects", "app")
         git = _FakeGit(git_repos={target})
         svc = WorktreeService(store, git, fs=None, config=_Cfg("/projects"), flow=_CloseFlow())
@@ -419,7 +433,7 @@ class TestHasWorktreeHistory(unittest.TestCase):
 
         self.assertFalse(svc.has_worktree_history(item))
 
-        store.add_artifact(item, "branch", "feat/x")
+        plant_run(store, item, None, "feat/x")
 
         self.assertTrue(svc.has_worktree_history(item))
 
@@ -443,7 +457,7 @@ class TestRemoveNeverActivatedItem(unittest.TestCase):
         item = store.create_item("story", "a description")
         store.add_project("acme/saga", local_path=os.path.join("/projects", "saga"))
         store.add_artifact(item, "repo", "saga")
-        store.add_artifact(item, "branch", "feat/my-branch")
+        plant_run(store, item, None, "feat/my-branch")
         git = _FakeGit()
         svc = WorktreeService(
             store, git, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
@@ -458,36 +472,37 @@ class TestPhaseLabelledBranch(unittest.TestCase):
     def test_item_branch_ignores_a_branch_labelled_for_a_different_phase(self):
         store = FakeStore()
         item = store.create_item("spec item", "a description")
-        store.add_artifact(item, "branch", "spec/x", label="spec")
+        plant_run(store, item, "spec", "spec/x")
         svc = WorktreeService(
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
         )
 
         self.assertIsNone(svc.item_branch(item))
 
-    def test_item_branch_matches_the_current_phase_label(self):
+    def test_item_branch_reads_the_run_for_the_current_phase(self):
         store = FakeStore()
         item = store.create_item("spec item", "a description")
-        store.add_artifact(item, "branch", "spec/x", label="spec")
-        store.add_artifact(item, "branch", "feat/x", label="code")
+        plant_run(store, item, "spec", "spec/x")
+        plant_run(store, item, "code", "feat/x")
         svc = WorktreeService(
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
         )
 
         self.assertEqual(svc.item_branch(item), "feat/x")
 
-    def test_ensure_branch_artifact_labels_the_new_branch_with_the_current_phase(self):
+    def test_the_branch_lands_on_the_current_phases_run_leaving_the_others_alone(self):
         store = FakeStore()
         item = store.create_item("code item", "a description")
-        store.add_artifact(item, "branch", "spec/x", label="spec")
+        plant_run(store, item, "spec", "spec/x")
+        plant_run(store, item, "code")
         svc = WorktreeService(
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
         )
 
         svc._ensure_branch_artifact(item, "feat/y")
 
-        branches = {a.label: a.value for a in store.item_artifacts(item) if a.type == "branch"}
-        self.assertEqual(branches, {"spec": "spec/x", "code": "feat/y"})
+        self.assertEqual({r.phase: r.branch for r in store.runs_of(item)},
+                         {"spec": "spec/x", "code": "feat/y"})
 
 
 class TestEnsureNoSilentFailure(unittest.TestCase):
@@ -685,6 +700,14 @@ class _LoopFlow:
         return "project"
 
 
+class _ExplodingGitHub:
+    def is_merged(self, pr):
+        raise AssertionError("the pass number must not depend on GitHub")
+
+    def is_closed_unmerged(self, pr):
+        raise AssertionError("the pass number must not depend on GitHub")
+
+
 class TestPhaseReEntry(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
@@ -704,219 +727,84 @@ class TestPhaseReEntry(unittest.TestCase):
     def _step(self, step):
         return self.store.create_step("%s: work" % step, step=step, parent=self.item)
 
-    def _close(self, sid):
-        self.store.update_state(sid, "done")
-
-    def test_a_second_pass_through_a_phase_mints_a_new_branch(self):
-        first = self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-        first_branch = self.svc.item_branch(self.item)
-        self._close(first)
-        self._close(self._step("build"))
-
+    def test_a_first_pass_keeps_the_bare_phase_key(self):
         self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        plant_run(self.store, self.item, "spec")
 
-        self.assertNotEqual(self.svc.item_branch(self.item), first_branch)
-        self.assertIn("spec-2", self.svc.item_branch(self.item))
-
-    def test_a_second_pass_leaves_the_previous_runs_remote_branch_alone(self):
-        first = self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-        first_branch = self.svc.item_branch(self.item)
-        self._close(first)
-        self._close(self._step("build"))
-
-        self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-
-        deleted = [c for c in self.git.calls if c[0] == "delete_remote_branch"]
-        self.assertEqual(deleted, [])
-        target = os.path.join("/home/u/workspace/projects", "saga")
-        self.assertIn(("delete_branch", target, first_branch), self.git.calls)
-
-    def test_steps_within_one_pass_share_the_phases_branch(self):
-        self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-        branch = self.svc.item_branch(self.item)
-
-        self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-
-        self.assertEqual(self.svc.item_branch(self.item), branch)
-
-    def test_the_phases_branch_artifact_is_replaced_not_accumulated(self):
-        self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-        self._close(self._step("build"))
-        self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-
-        branches = [
-            a for a in self.store.item_artifacts(self.item) if a.type == "branch"
-        ]
-        self.assertEqual(len(branches), 1)
+        self.assertEqual(self.svc._phase_key(self.item), "spec")
 
     def test_a_second_pass_gets_its_own_worktree_path(self):
         self._step("spec-writer")
-        first_path = self.svc.worktree_path(self.item)
-        self._close(self._step("build"))
+        plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
+        plant_run(self.store, self.item, "spec", n=2)
+
+        self.assertTrue(self.svc.worktree_path(self.item).endswith("-spec-2"))
+
+    def test_a_second_pass_through_a_phase_mints_a_new_branch(self):
         self._step("spec-writer")
+        plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
+        plant_run(self.store, self.item, "spec", n=2)
 
-        self.assertNotEqual(self.svc.worktree_path(self.item), first_path)
+        branch = self.svc._branch_for(self.item)
 
-    def test_a_single_pass_workflow_is_unchanged(self):
+        self.assertNotEqual(branch, "spec/one")
+        self.assertIn("spec-2", branch)
+
+    def test_a_still_open_run_keeps_its_branch_rather_than_minting_another(self):
         self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        plant_run(self.store, self.item, "spec", "spec/one")
 
-        self.assertNotIn("spec-2", self.svc.item_branch(self.item))
-        self.assertTrue(self.svc.worktree_path(self.item).endswith("%s-spec" % self.item))
+        self.assertEqual(self.svc._branch_for(self.item), "spec/one")
 
-
-    def test_a_superseded_run_has_its_worktree_and_branch_released(self):
+    def test_the_run_holds_one_branch_and_replaces_it_rather_than_accumulating(self):
         self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
-        spent = self.svc.item_branch(self.item)
-        self._close(self._step("build"))
+        plant_run(self.store, self.item, "spec", "spec/one")
 
+        self.svc._ensure_branch_artifact(self.item, "spec/two")
+
+        self.assertEqual([r.branch for r in self.store.runs_of(self.item)], ["spec/two"])
+
+    def test_closing_a_run_releases_its_worktree_and_branch_with_the_item_still_open(self):
         self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        rid = plant_run(self.store, self.item, "spec", "spec/one")
+        run = self.store.get_run(rid)
 
-        saga = os.path.join("/home/u/workspace/projects", "saga")
-        self.assertIn(
-            ("remove_worktree", saga, os.path.join(saga, ".worktrees", "%s-spec" % self.item)),
-            self.git.calls,
-        )
-        self.assertIn(("delete_branch", saga, spent), self.git.calls)
+        self.svc.release_run(run)
 
-    def test_a_first_run_releases_nothing(self):
+        target = os.path.join("/home/u/workspace/projects", "saga")
+        self.assertIn(("delete_branch", target, "spec/one"), self.git.calls)
+        self.assertIn(("delete_remote_branch", target, "spec/one"), self.git.calls)
+        self.assertNotEqual(self.store.get_node(self.item).state, "done")
+
+    def test_releasing_a_run_leaves_another_passs_branch_alone(self):
         self._step("spec-writer")
-        self.svc._ensure_branch_artifact(self.item, self.svc._branch_for(self.item))
+        first = plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
+        plant_run(self.store, self.item, "spec", "spec/two", n=2)
 
-        self.assertFalse([c for c in self.git.calls if c[0] == "remove_worktree"])
+        self.svc.release_run(self.store.get_run(first))
 
+        target = os.path.join("/home/u/workspace/projects", "saga")
+        self.assertNotIn(("delete_branch", target, "spec/two"), self.git.calls)
 
-class _ExplodingGitHub:
-    def is_merged(self, pr):
-        raise AssertionError("must not query github when no pr artifact is recorded")
+    def test_a_run_with_no_branch_releases_nothing(self):
+        self._step("spec-writer")
+        rid = plant_run(self.store, self.item, "spec")
 
-    def is_closed_unmerged(self, pr):
-        raise AssertionError("must not query github when no pr artifact is recorded")
+        self.svc.release_run(self.store.get_run(rid))
 
+        self.assertEqual(self.git.calls, [])
 
-class TestPhaseReEntryWithOpenPr(unittest.TestCase):
-    def setUp(self):
-        self.store = FakeStore()
-        self.phases = {"spec-writer": "spec", "build": "code"}
-        self.flow = _LoopFlow(self.phases)
-        self.git = _FakeGit(git_repos={os.path.join("/home/u/workspace/projects", "saga")})
-        self.item = self.store.create_item("deliver the blueprint", "a description")
-        self.store.add_project(
-            "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
-        )
-        self.store.add_artifact(self.item, "repo", "saga")
-
-    def _svc(self, github):
-        return WorktreeService(
+    def test_the_pass_number_never_asks_github_anything(self):
+        self.svc = WorktreeService(
             self.store, git=self.git, fs=None,
-            config=_Cfg("/home/u/workspace/projects"), flow=self.flow, github=github,
+            config=_Cfg("/home/u/workspace/projects"), flow=self.flow,
+            github=_ExplodingGitHub(),
         )
-
-    def _step(self, step):
-        return self.store.create_step("%s: work" % step, step=step, parent=self.item)
-
-    def _close(self, sid):
-        self.store.update_state(sid, "done")
-
-    def test_a_still_open_pr_keeps_the_same_branch_and_worktree(self):
-        svc = self._svc(FakeGitHub())
-        first = self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-        first_branch = svc.item_branch(self.item)
-        first_path = svc.worktree_path(self.item)
-        self.store.add_artifact(
-            self.item, "pr", "https://github.com/x/y/pull/369", label="spec"
-        )
-        self._close(first)
-        self._close(self._step("build"))
-
         self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
+        plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
+        plant_run(self.store, self.item, "spec", n=2)
 
-        self.assertEqual(svc.item_branch(self.item), first_branch)
-        self.assertEqual(svc.worktree_path(self.item), first_path)
-        self.assertFalse([
-            c for c in self.git.calls
-            if c[0] in ("delete_branch", "delete_remote_branch", "remove_worktree")
-        ])
-
-    def test_a_still_open_pr_keeps_the_same_branch_across_repeated_boundary_crossings(self):
-        svc = self._svc(FakeGitHub())
-        first = self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-        first_branch = svc.item_branch(self.item)
-        self.store.add_artifact(
-            self.item, "pr", "https://github.com/x/y/pull/369", label="spec"
-        )
-        self._close(first)
-        self._close(self._step("build"))
-        self._close(self._step("spec-writer"))
-        self._close(self._step("build"))
-
-        self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-
-        self.assertEqual(svc.item_branch(self.item), first_branch)
-        self.assertFalse([
-            c for c in self.git.calls
-            if c[0] in ("delete_branch", "delete_remote_branch", "remove_worktree")
-        ])
-
-    def test_a_merged_pr_still_mints_a_new_branch(self):
-        pr_url = "https://github.com/x/y/pull/370"
-        svc = self._svc(FakeGitHub(merged_prs={pr_url}))
-        first = self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-        first_branch = svc.item_branch(self.item)
-        self.store.add_artifact(self.item, "pr", pr_url, label="spec")
-        self._close(first)
-        self._close(self._step("build"))
-
-        self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-
-        self.assertNotEqual(svc.item_branch(self.item), first_branch)
-        self.assertIn("spec-2", svc.item_branch(self.item))
-
-    def test_a_closed_unmerged_pr_still_mints_a_new_branch(self):
-        pr_url = "https://github.com/x/y/pull/371"
-        svc = self._svc(FakeGitHub(closed_prs={pr_url}))
-        first = self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-        first_branch = svc.item_branch(self.item)
-        self.store.add_artifact(self.item, "pr", pr_url, label="spec")
-        self._close(first)
-        self._close(self._step("build"))
-
-        self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-
-        self.assertNotEqual(svc.item_branch(self.item), first_branch)
-        self.assertIn("spec-2", svc.item_branch(self.item))
-
-    def test_no_pr_artifact_mints_a_new_branch_without_querying_github(self):
-        svc = self._svc(_ExplodingGitHub())
-        first = self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-        first_branch = svc.item_branch(self.item)
-        self._close(first)
-        self._close(self._step("build"))
-
-        self._step("spec-writer")
-        svc._ensure_branch_artifact(self.item, svc._branch_for(self.item))
-
-        self.assertNotEqual(svc.item_branch(self.item), first_branch)
-        self.assertIn("spec-2", svc.item_branch(self.item))
+        self.assertTrue(self.svc.worktree_path(self.item).endswith("-spec-2"))
 
 
 class TestNamedWorkspace(unittest.TestCase):

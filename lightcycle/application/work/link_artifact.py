@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.work.item import Item
+from lightcycle.domain.work import Item, State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
 from lightcycle.ports.store import ProjectResolutionError
 
@@ -18,13 +18,19 @@ class LinkArtifactInput:
     internal: bool = False
 
 
+_RUN_FIELDS = {"pr": "pr", "branch": "branch"}
+
+
 class LinkArtifactUseCase:
-    def __init__(self, store):
+    def __init__(self, store, flow=None):
         self._store = store
+        self._flow = flow
 
     def execute(self, input: LinkArtifactInput) -> None:
         if input.atype == "spec":
             self._validate_spec(input.item, input.value)
+        if input.atype in _RUN_FIELDS and self._to_run(input):
+            return
         if input.replace:
             self._store.replace_artifact(
                 input.item, input.atype, input.value, input.label,
@@ -35,6 +41,28 @@ class LinkArtifactUseCase:
                 input.item, input.atype, input.value, input.label,
                 internal=input.internal, kind=input.kind,
             )
+
+    def _to_run(self, input):
+        run = self._current_run(input.item)
+        if run is None:
+            return False
+        self._store.set_run_field(run.id, **{_RUN_FIELDS[input.atype]: input.value})
+        return True
+
+    def _current_run(self, item):
+        open_runs = self._store.open_runs_of(item)
+        if not open_runs:
+            return None
+        if self._flow is None or len(open_runs) == 1:
+            return open_runs[-1]
+        phase = self._active_phase(item)
+        return next((r for r in reversed(open_runs) if r.phase == phase), open_runs[-1])
+
+    def _active_phase(self, item):
+        for child in self._store.children(item):
+            if getattr(child, "type", None) == "step" and child.state != State.DONE:
+                return self._flow.phase_for(child)
+        return None
 
     def _validate_spec(self, item, value):
         if has_worktrees_component(value):

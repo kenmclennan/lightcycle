@@ -179,6 +179,14 @@ class FlowService:
         stage = node.step if getattr(node, "type", None) == "step" else None
         return graph.phase_for(stage) if stage else None
 
+    def phase_for_stage(self, stage, name=None):
+        graph, _root = self._graph_and_root(name)
+        return graph.phase_for(stage)
+
+    def ends_pass(self, stage, outcome, name=None):
+        graph, _root = self._graph_and_root(name)
+        return graph.ends_pass(stage, outcome)
+
     def display_for(self, node):
         graph = self._graph_for_node(node)
         if graph is None:

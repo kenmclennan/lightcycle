@@ -2,6 +2,7 @@ import datetime
 import os
 import sqlite3
 
+from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Node, NodeView, State, default_kind_for, derive_state, merge_condition_note,
 )
@@ -54,7 +55,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     branch TEXT,
     pr TEXT,
     reason TEXT,
-    tried TEXT
+    tried TEXT,
+    pass_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_nodes_state ON nodes(state);
@@ -93,6 +95,32 @@ CREATE TABLE IF NOT EXISTS history (
     ts TEXT
 );
 
+CREATE TABLE IF NOT EXISTS passes (
+    id        TEXT PRIMARY KEY,
+    item      TEXT NOT NULL,
+    n         INTEGER NOT NULL,
+    state     TEXT NOT NULL DEFAULT 'open',
+    opened_at TEXT,
+    closed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_passes_item ON passes(item);
+
+CREATE TABLE IF NOT EXISTS phase_runs (
+    id          TEXT PRIMARY KEY,
+    item        TEXT NOT NULL,
+    pass_id     TEXT NOT NULL,
+    phase       TEXT,
+    branch      TEXT,
+    pr          TEXT,
+    content_pin TEXT,
+    state       TEXT NOT NULL DEFAULT 'open',
+    opened_at   TEXT,
+    closed_at   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_phase_runs_item ON phase_runs(item);
+
 CREATE TABLE IF NOT EXISTS projects (
     identity   TEXT PRIMARY KEY,
     shortcode  TEXT,
@@ -105,7 +133,7 @@ _COLUMNS = (
     "id", "type", "title", "state", "step", "role", "parent", "project", "goal",
     "description", "notes", "outcome", "assignee", "since", "fired_at",
     "closed_at", "attention", "needs", "model", "workflow",
-    "branch", "pr", "reason", "tried",
+    "branch", "pr", "reason", "tried", "pass_id",
 )
 
 _METADATA_COLUMNS = (
@@ -113,6 +141,11 @@ _METADATA_COLUMNS = (
 )
 
 _LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
+
+_RUN_SELECT = (
+    "SELECT id, item, pass_id, phase, branch, pr, content_pin, state, opened_at, closed_at "
+    "FROM phase_runs"
+)
 
 
 _LEGACY_STEP_NAMES = (
@@ -146,6 +179,7 @@ class SqliteStore(StorePort):
         self._migrate_detach_items_from_themes()
         self._migrate_collapse_step_roles()
         self._migrate_brief_artifacts_into_description()
+        self._migrate_phase_artifacts_into_runs()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -223,7 +257,7 @@ class SqliteStore(StorePort):
 
     def _migrate_resume_fields(self):
         cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        for col in ("branch", "pr", "reason", "tried"):
+        for col in ("branch", "pr", "reason", "tried", "pass_id"):
             if col not in cols:
                 self._conn.execute("ALTER TABLE nodes ADD COLUMN %s TEXT" % col)
 
@@ -248,6 +282,50 @@ class SqliteStore(StorePort):
             ")"
         )
         self._conn.execute("DELETE FROM artifacts WHERE atype = 'brief'")
+
+    _FOLDED_ARTIFACTS = ("branch", "pr", "content-pin", "content-pin-pr", "phase-run")
+
+    def _migrate_phase_artifacts_into_runs(self):
+        rows = self._conn.execute(
+            "SELECT item_id, atype, value, label FROM artifacts WHERE atype IN (%s)"
+            % ",".join("?" * len(self._FOLDED_ARTIFACTS)),
+            self._FOLDED_ARTIFACTS,
+        ).fetchall()
+        if not rows:
+            return
+        folded = {}
+        for item, atype, value, label in rows:
+            entry = folded.setdefault((item, label), {})
+            if atype == "phase-run":
+                try:
+                    entry["n"] = int(value)
+                except (TypeError, ValueError):
+                    pass
+            elif atype == "content-pin":
+                entry["content_pin"] = value
+            elif atype in ("branch", "pr"):
+                entry[atype] = value
+        now = self._now()
+        for (item, phase), entry in folded.items():
+            n = entry.get("n", 1)
+            pid = pass_id(item, n)
+            self._conn.execute(
+                "INSERT OR IGNORE INTO passes (id, item, n, state, opened_at) "
+                "VALUES (?, ?, ?, 'open', ?)",
+                (pid, item, n, now),
+            )
+            self._conn.execute(
+                "INSERT OR IGNORE INTO phase_runs "
+                "(id, item, pass_id, phase, branch, pr, content_pin, state, opened_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)",
+                (run_id(pid, phase), item, pid, phase, entry.get("branch"), entry.get("pr"),
+                 entry.get("content_pin"), now),
+            )
+        self._conn.execute(
+            "DELETE FROM artifacts WHERE atype IN (%s)"
+            % ",".join("?" * len(self._FOLDED_ARTIFACTS)),
+            self._FOLDED_ARTIFACTS,
+        )
 
     def _row_to_node(self, row, artifacts, blocked_by):
         d = dict(zip(_COLUMNS, row))
@@ -275,6 +353,7 @@ class SqliteStore(StorePort):
             blocked_by=blocked_by,
             notes=d["notes"],
             claimed_by=d["assignee"],
+            pass_id=d["pass_id"],
             since=d["since"],
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
@@ -506,7 +585,13 @@ class SqliteStore(StorePort):
 
     def present_types(self, step):
         item = step.parent or step.id
-        return {a.type for a in self.item_artifacts(item)}
+        present = {a.type for a in self.item_artifacts(item)}
+        for run in self.open_runs_of(item):
+            if run.branch:
+                present.add("branch")
+            if run.pr:
+                present.add("pr")
+        return present
 
     def reassign(self, tid, role):
         cur = self.get_node(tid).role
@@ -799,6 +884,114 @@ class SqliteStore(StorePort):
         )
         self._conn.commit()
         return tid
+
+    def open_pass(self, item):
+        row = self._conn.execute(
+            "SELECT MAX(n) FROM passes WHERE item = ?", (item,)
+        ).fetchone()
+        n = (row[0] or 0) + 1
+        pid = pass_id(item, n)
+        self._conn.execute(
+            "INSERT INTO passes (id, item, n, state, opened_at) VALUES (?, ?, ?, 'open', ?)",
+            (pid, item, n, self._now()),
+        )
+        self._conn.commit()
+        return pid
+
+    def current_pass(self, item):
+        row = self._conn.execute(
+            "SELECT id, item, n, state, opened_at, closed_at FROM passes "
+            "WHERE item = ? AND state = 'open' ORDER BY n DESC LIMIT 1",
+            (item,),
+        ).fetchone()
+        return Pass(*row) if row else None
+
+    def get_pass(self, pid):
+        row = self._conn.execute(
+            "SELECT id, item, n, state, opened_at, closed_at FROM passes WHERE id = ?", (pid,)
+        ).fetchone()
+        return Pass(*row) if row else None
+
+    def passes_of(self, item):
+        rows = self._conn.execute(
+            "SELECT id, item, n, state, opened_at, closed_at FROM passes "
+            "WHERE item = ? ORDER BY n",
+            (item,),
+        ).fetchall()
+        return [Pass(*r) for r in rows]
+
+    def close_pass(self, pid):
+        self._conn.execute(
+            "UPDATE passes SET state = 'closed', closed_at = ? WHERE id = ? AND state = 'open'",
+            (self._now(), pid),
+        )
+        self._conn.commit()
+
+    def open_run(self, item, pid, phase):
+        rid = run_id(pid, phase)
+        self._conn.execute(
+            "INSERT OR IGNORE INTO phase_runs (id, item, pass_id, phase, state, opened_at) "
+            "VALUES (?, ?, ?, ?, 'open', ?)",
+            (rid, item, pid, phase, self._now()),
+        )
+        self._conn.commit()
+        return rid
+
+    def _run_row_to_record(self, row):
+        return PhaseRun(*row)
+
+    def get_run(self, rid):
+        row = self._conn.execute(
+            "%s WHERE id = ?" % _RUN_SELECT, (rid,)
+        ).fetchone()
+        return self._run_row_to_record(row) if row else None
+
+    def current_run(self, item, phase):
+        row = self._conn.execute(
+            "%s WHERE item = ? AND phase IS ? AND state = 'open' "
+            "ORDER BY opened_at DESC LIMIT 1" % _RUN_SELECT,
+            (item, phase),
+        ).fetchone()
+        return self._run_row_to_record(row) if row else None
+
+    def runs_of(self, item, pid=None):
+        if pid is None:
+            rows = self._conn.execute(
+                "%s WHERE item = ? ORDER BY opened_at" % _RUN_SELECT, (item,)
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "%s WHERE item = ? AND pass_id = ? ORDER BY opened_at" % _RUN_SELECT, (item, pid)
+            ).fetchall()
+        return [self._run_row_to_record(r) for r in rows]
+
+    def open_runs_of(self, item, pid=None):
+        return [r for r in self.runs_of(item, pid) if r.is_open]
+
+    def set_run_field(self, rid, **fields):
+        allowed = {k: v for k, v in fields.items() if k in ("branch", "pr", "content_pin")}
+        if not allowed:
+            return
+        if "pr" in allowed and "content_pin" not in allowed:
+            current = self.get_run(rid)
+            if current is not None and current.pr != allowed["pr"]:
+                allowed["content_pin"] = None
+        clause = ", ".join("%s = ?" % k for k in allowed)
+        self._conn.execute(
+            "UPDATE phase_runs SET %s WHERE id = ?" % clause, (*allowed.values(), rid)
+        )
+        self._conn.commit()
+
+    def close_run(self, rid, state=RunState.MERGED):
+        self._conn.execute(
+            "UPDATE phase_runs SET state = ?, closed_at = ? WHERE id = ? AND state = 'open'",
+            (state, self._now(), rid),
+        )
+        self._conn.commit()
+
+    def set_step_pass(self, tid, pid):
+        self._conn.execute("UPDATE nodes SET pass_id = ? WHERE id = ?", (pid, tid))
+        self._conn.commit()
 
     def children(self, item_id):
         return self._select("parent = ?", (item_id,))

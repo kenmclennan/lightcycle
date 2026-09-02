@@ -16,6 +16,10 @@ class FakeWorkers:
 
 
 class FakeWorktrees:
+    def release_run(self, run, delete_remote=True):
+        self.released = getattr(self, "released", [])
+        self.released.append(run.id)
+
     def __init__(self, target):
         self._target = target
         self.removed = []

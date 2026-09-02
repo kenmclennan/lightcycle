@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 
-_SECTIONS = ("nodes", "edges", "hooks", "signals", "display")
+_SECTIONS = ("nodes", "edges", "hooks", "signals", "display", "pass-end")
 
 
 @dataclass(frozen=True)
@@ -17,6 +17,7 @@ class WorkflowGraph:
     phases: dict = field(default_factory=dict)
     primary: dict = field(default_factory=dict)
     display: dict = field(default_factory=dict)
+    pass_ends: frozenset = field(default_factory=frozenset)
 
     def file_for(self, stage):
         return self.nodes.get(stage, stage)
@@ -32,6 +33,9 @@ class WorkflowGraph:
 
     def phase_for(self, stage):
         return self.phases.get(stage)
+
+    def ends_pass(self, stage, outcome):
+        return (stage, outcome) in self.pass_ends
 
     def workspace_for_phase(self, phase):
         for stage, ph in self.phases.items():
@@ -53,6 +57,7 @@ def parse_graph(text):
     nodes, edges, hooks, signals, workspaces, phases = {}, {}, {}, {}, {}, {}
     primary = {}
     display = {}
+    pass_ends = set()
     section = None
     for line in text.splitlines():
         if not line.strip():
@@ -99,8 +104,12 @@ def parse_graph(text):
         elif section == "display":
             stage, phrase = line.split(maxsplit=1)
             display[stage] = phrase
+        elif section == "pass-end":
+            stage, outcome = parts
+            pass_ends.add((stage, outcome))
     return WorkflowGraph(
         entry=entry, requires=requires, workspace=workspace,
         nodes=nodes, edges=edges, hooks=hooks, signals=signals,
-        workspaces=workspaces, phases=phases, primary=primary, display=display
+        workspaces=workspaces, phases=phases, primary=primary, display=display,
+        pass_ends=frozenset(pass_ends),
     )

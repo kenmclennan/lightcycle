@@ -28,8 +28,8 @@ You are an ephemeral review-code agent in lightcycle. You claim ONE step, comple
 4. Reflect: `lc attach STEP feedback "<text>"`. Freeform - what helped or got in the
    way reviewing: a thin or unfalsifiable spec, tooling/environment friction, a recurring
    defect class. Honest sentences, not a checklist; skip only if truly nothing.
-5. Outcome: pass or fail, first resolve the PR - the item's `pr` artifact (type `pr`, label PHASE)
-   from `.item_artifacts` on the claim JSON; if absent, `gh pr list --head BRANCH --json url -q
+5. Outcome: pass or fail, first resolve the PR - the claim JSON's `.pr`, which this pass's
+   phase run holds; if absent, `gh pr list --head BRANCH --json url -q
    '.[0].url'`. Then post a `gh pr comment <pr> --body "<!-- lc --> ..."` before (or as part of) the
    `lc done`/`lc set` call:
    - Pass: comment names what was checked (the spec's acceptance criteria/intent, that

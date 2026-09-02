@@ -4,14 +4,14 @@ from typing import List
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.domain.work import Item, State
+from lightcycle.domain.runs import RunState
+from lightcycle.domain.work import State
 from lightcycle.ports.github import ReadFailure
 
 LC_MARKER = "<!-- lc -->"
 _WATERMARK_ARTIFACT = "feedback-watermark"
 _SPAWN_MARK_ARTIFACT = "feedback-spawned-through"
-_CONTENT_PIN_ARTIFACT = "content-pin"
-_CONTENT_PIN_PR_ARTIFACT = "content-pin-pr"
+
 
 
 def _is_bot(author):
@@ -101,9 +101,9 @@ class MonitorPrsUseCase:
         return self._flow_service.flow_for(node)
 
     def _pr_value(self, node, item_id):
-        phase = self._flow_service.phase_for(node)
-        artifacts = tuple(self._store.item_artifacts(item_id))
-        return Item(item_id, artifacts).artifact_of("pr", label=phase)
+        phase = self._flow_for(node).phase_of(getattr(node, "step", None))
+        run = self._store.current_run(item_id, phase)
+        return run.pr if run else None
 
     def _active_step_at(self, item_id, stage):
         for child in self._store.children(item_id):
@@ -139,26 +139,14 @@ class MonitorPrsUseCase:
         return unauthorized, False
 
     def _check_content_pin(self, item, pr_value, phase):
-        head = self._github.head_sha(pr_value)
-        artifacts = tuple(self._store.item_artifacts(item.id))
-        pinned_pr = next(
-            (a.value for a in artifacts
-             if a.type == _CONTENT_PIN_PR_ARTIFACT and a.label == phase),
-            None,
-        )
-        if pinned_pr != pr_value:
-            self._store.replace_artifact(
-                item.id, _CONTENT_PIN_PR_ARTIFACT, pr_value, label=phase, internal=True
-            )
-            self._store.replace_artifact(
-                item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
-            )
+        run = self._store.current_run(item.id, phase)
+        if run is None:
             return
-        pin = next(
-            (a.value for a in artifacts
-             if a.type == _CONTENT_PIN_ARTIFACT and a.label == phase),
-            None,
-        )
+        head = self._github.head_sha(pr_value)
+        if run.pr != pr_value:
+            self._store.set_run_field(run.id, pr=pr_value, content_pin=head)
+            return
+        pin = run.content_pin
         if pin == head:
             return
         old_files = self._github.changed_files(pr_value, pin)
@@ -201,9 +189,12 @@ class MonitorPrsUseCase:
                     )
                 else:
                     self._store.note_condition(item.id, base_note)
-        self._store.replace_artifact(
-            item.id, _CONTENT_PIN_ARTIFACT, head, label=phase, internal=True
-        )
+        self._store.set_run_field(run.id, content_pin=head)
+
+    def _close_run(self, run, state):
+        self._store.close_run(run.id, state)
+        if self._worktrees is not None:
+            self._worktrees.release_run(run)
 
     def execute(self) -> MonitorPrsResponse:
         merged, abandoned, reworked, conflicted = [], [], [], []
@@ -211,14 +202,14 @@ class MonitorPrsUseCase:
         for item in self._store.all_nodes():
             if item.type != "item":
                 continue
-            artifacts = tuple(self._store.item_artifacts(item.id))
-            if not any(a.type == "pr" for a in artifacts):
+            if not any(r.pr for r in self._store.open_runs_of(item.id)):
                 continue
             flow = self._flow_for(item)
             resolved = False
             for stage in flow.merge_stages():
                 phase = flow.phase_of(stage)
-                pr_value = Item(item.id, artifacts).artifact_of("pr", label=phase)
+                run = self._store.current_run(item.id, phase)
+                pr_value = run.pr if run else None
                 if pr_value is None:
                     continue
                 self._check_content_pin(item, pr_value, phase)
@@ -230,8 +221,7 @@ class MonitorPrsUseCase:
                         step = self._active_step_at(item.id, stage)
                         if step is None:
                             continue
-                        if flow.phase_of(stage) != flow.phase_of(nxt.to_step):
-                            self._worktrees.remove(item.id)
+                        self._close_run(run, RunState.MERGED)
                         self._complete.execute(CompleteInput(step=step.id, outcome=merge_outcome))
                     else:
                         close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
@@ -243,8 +233,7 @@ class MonitorPrsUseCase:
                         step = self._active_step_at(item.id, stage)
                         if step is None:
                             continue
-                        if flow.phase_of(stage) != flow.phase_of(nxt.to_step):
-                            self._worktrees.remove(item.id)
+                        self._close_run(run, RunState.ABANDONED)
                         self._complete.execute(CompleteInput(step=step.id, outcome=close_outcome))
                     else:
                         close.execute(CloseItemInput(item=item.id, reason=close_outcome))

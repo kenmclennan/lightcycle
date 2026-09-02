@@ -1,4 +1,5 @@
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.passes import PassBook
 from lightcycle.domain.contracts import StepContract
 
 
@@ -27,6 +28,8 @@ def file_step(store, flow, item_id, node, workflow, step):
             "step '%s' requires %s; attach them before activating"
             % (step_name, ", ".join(sorted(unmet)))
         )
-    return store.create_step(
+    step_id = store.create_step(
         "%s: %s" % (step_name, node.title), step=step_name, role=role, parent=item_id
     )
+    PassBook(store, flow).enrol(item_id, step_id, step_name, workflow)
+    return step_id

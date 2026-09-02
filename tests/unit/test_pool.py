@@ -76,6 +76,10 @@ class FakeBackupGate:
 
 
 class FakeWorktrees:
+    def release_run(self, run, delete_remote=True):
+        self.released = getattr(self, "released", [])
+        self.released.append(run.id)
+
     def __init__(self, paths=None, has_repo=True):
         self.removed = []
         self._paths = paths or {}
