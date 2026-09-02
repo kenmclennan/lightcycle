@@ -25,27 +25,31 @@ class SessionPlan:
     model: str
     sysprompt: str
     workspace: Optional[str] = None
+    stage: Optional[str] = None
 
 
 def plan_session(claim, resolve, reclaim, role):
     resp = claim(role)
     if resp is None:
         return None
-    agent = resolve(role, resp.pin)
+    step_file = resp.step_file
+    agent = resolve(step_file, resp.pin)
     if agent is None:
         reclaim(resp.view.step.id)
-        raise SessionError("no agent definition for role %s" % role)
+        raise SessionError("no step definition %r" % step_file)
     model = agent["meta"].get("model")
     if not model:
         reclaim(resp.view.step.id)
-        raise SessionError("agent %s has no 'model' in frontmatter" % role)
-    return SessionPlan(model=model, sysprompt=agent["body"], workspace=resp.workspace)
+        raise SessionError("step %r has no 'model' in frontmatter" % step_file)
+    return SessionPlan(
+        model=model, sysprompt=agent["body"], workspace=resp.workspace, stage=resp.view.step.step
+    )
 
 
 def session_cwd(workspace):
     return workspace if workspace else tempfile.mkdtemp(prefix="lc-worker-")
 
-KICKOFF = ("You are the %s. Claim your next step and complete it per your role instructions, "
+KICKOFF = ("You are the %s step. Claim your next step and complete it per your step instructions, "
            "then exit.")
 NUDGE_TEXT = ("Your previous turn ended but your step is not resolved yet. Continue and finish it, "
               "reach your terminal lc outcome, then exit.")
@@ -100,7 +104,7 @@ def poll_decision(add_dir, spawnid, policy, counters, lock, processed):
     return policy.on_result(open_step), processed
 
 
-def run(add_dir, cwd, role, spawnid, model, sysprompt, max_session_seconds):
+def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds):
     proc = subprocess.Popen(build_command(model, sysprompt, add_dir), cwd=cwd,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1)
@@ -130,7 +134,7 @@ def run(add_dir, cwd, role, spawnid, model, sysprompt, max_session_seconds):
 
     reader_thread = threading.Thread(target=reader, daemon=True)
     reader_thread.start()
-    send(KICKOFF % role)
+    send(KICKOFF % stage)
 
     start = time.time()
     processed = 0
@@ -186,7 +190,7 @@ def main():
         return 1
     if plan is None:
         return 0
-    return run(config.data_root(), session_cwd(plan.workspace), role, spawnid,
+    return run(config.data_root(), session_cwd(plan.workspace), plan.stage, spawnid,
                plan.model, plan.sysprompt, config.max_session_seconds())
 
 

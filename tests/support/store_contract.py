@@ -8,10 +8,10 @@ class StoreContractBase:
 
     def test_complete_step_atomic_wins_and_files_successor(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
-            tid, "done", "w1", NodeSpec(title="next", step="review", role="reviewer"))
+            tid, "done", "w1", NodeSpec(title="next", step="review", role="agent"))
         self.assertTrue(won)
         self.assertIsNotNone(new)
         self.assertEqual(s.get_node(tid).state, "done")
@@ -19,7 +19,7 @@ class StoreContractBase:
 
     def test_complete_step_atomic_already_done_loses(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "w1")
         s.complete_step_atomic(tid, "done", "w1", None)
         won, new = s.complete_step_atomic(tid, "done", "w1", NodeSpec(title="next", step="review"))
@@ -28,7 +28,7 @@ class StoreContractBase:
 
     def test_complete_step_atomic_fences_mismatched_assignee(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
             tid, "done", "w2", NodeSpec(title="next", step="review"))
@@ -38,7 +38,7 @@ class StoreContractBase:
 
     def test_complete_step_atomic_empty_assignee_not_fenced(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "w1")
         won, _ = s.complete_step_atomic(tid, "done", "", None)
         self.assertTrue(won)
@@ -46,10 +46,10 @@ class StoreContractBase:
 
     def test_complete_step_atomic_worker_can_complete_an_unclaimed_step(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         won, new = s.complete_step_atomic(
             tid, "done", "handle-feedback-worker",
-            NodeSpec(title="next", step="review", role="reviewer"))
+            NodeSpec(title="next", step="review", role="agent"))
         self.assertTrue(won)
         self.assertIsNotNone(new)
         self.assertEqual(s.get_node(tid).state, "done")
@@ -62,13 +62,13 @@ class StoreContractBase:
 
     def test_label_remove_clears_role(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
-        s.label_remove(tid, "for:coder")
+        tid = s.create_step("t", role="agent")
+        s.label_remove(tid, "for:agent")
         self.assertIsNone(s.get_node(tid).role)
 
     def test_assign_shows_in_progress(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "worker-1")
         self.assertEqual(s.get_node(tid).state, "in_progress")
 
@@ -86,7 +86,7 @@ class StoreContractBase:
 
     def test_close_overrides_in_progress(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         s.assign(tid, "worker-1")
         s.close(tid, "done")
         self.assertEqual(s.get_node(tid).state, "done")
@@ -174,22 +174,22 @@ class StoreContractBase:
 
     def test_task_without_deps_is_ready(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(tid, ready_ids)
 
     def test_task_with_unresolved_dep_not_ready(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker = s.create_step("blocker", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, blocker)
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertNotIn(blocked, ready_ids)
 
     def test_all_deps_closed_makes_task_ready(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker = s.create_step("blocker", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, blocker)
         s.close(blocker, "done")
         ready_ids = [t.id for t in s.ready_steps()]
@@ -197,8 +197,8 @@ class StoreContractBase:
 
     def test_dep_remove_drops_blocker(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker = s.create_step("blocker", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, blocker)
         s.dep_remove(blocked, blocker)
         ready_ids = [t.id for t in s.ready_steps()]
@@ -206,23 +206,23 @@ class StoreContractBase:
 
     def test_dep_remove_of_absent_pair_removes_nothing(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker = s.create_step("blocker", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         removed = s.dep_remove(blocked, blocker)
         self.assertFalse(removed)
 
     def test_dep_remove_returns_whether_a_dep_was_removed(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker = s.create_step("blocker", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, blocker)
         self.assertTrue(s.dep_remove(blocked, blocker))
         self.assertFalse(s.dep_remove(blocked, blocker))
 
     def test_blocked_by_names_a_single_unresolved_dependency(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        dep1 = s.create_step("dep1", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, dep1)
         node = s.get_node(blocked)
         self.assertEqual(set(node.blocked_by), {dep1})
@@ -230,9 +230,9 @@ class StoreContractBase:
 
     def test_blocked_by_names_every_unresolved_dependency_at_once(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="coder")
-        dep2 = s.create_step("dep2", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        dep1 = s.create_step("dep1", role="agent")
+        dep2 = s.create_step("dep2", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
         node = s.get_node(blocked)
@@ -241,9 +241,9 @@ class StoreContractBase:
 
     def test_blocked_by_drops_only_the_dependency_that_closed(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="coder")
-        dep2 = s.create_step("dep2", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        dep1 = s.create_step("dep1", role="agent")
+        dep2 = s.create_step("dep2", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
         s.close(dep1, "done")
@@ -253,8 +253,8 @@ class StoreContractBase:
 
     def test_blocked_by_drops_a_deleted_dependency(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        dep1 = s.create_step("dep1", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.delete(dep1)
         node = s.get_node(blocked)
@@ -263,16 +263,16 @@ class StoreContractBase:
 
     def test_blocked_by_empty_when_no_dependencies(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         node = s.get_node(tid)
         self.assertEqual(node.blocked_by, [])
         self.assertEqual(node.deps, 0)
 
     def test_dep_remove_leaves_unrelated_deps_untouched(self):
         s = self.make_store()
-        blocker1 = s.create_step("blocker1", role="coder")
-        blocker2 = s.create_step("blocker2", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker1 = s.create_step("blocker1", role="agent")
+        blocker2 = s.create_step("blocker2", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, blocker1)
         s.dep_add(blocked, blocker2)
         s.dep_remove(blocked, blocker1)
@@ -284,14 +284,14 @@ class StoreContractBase:
 
     def test_claim_ready_matches_role_label(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
-        result = s.claim_ready("coder")
+        tid = s.create_step("t", role="agent")
+        result = s.claim_ready("agent")
         self.assertEqual(result.id, tid)
 
     def test_claim_ready_wrong_role_returns_none(self):
         s = self.make_store()
-        s.create_step("t", role="coder")
-        self.assertIsNone(s.claim_ready("reviewer"))
+        s.create_step("t", role="human")
+        self.assertIsNone(s.claim_ready("agent"))
 
     def test_story_artifacts_roundtrip(self):
         s = self.make_store()
@@ -488,8 +488,8 @@ class StoreContractBase:
 
     def test_history_records_claim_and_close_in_order(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
-        s.claim_ready("coder")
+        tid = s.create_step("t", role="agent")
+        s.claim_ready("agent")
         s.close(tid, "done")
         states = [state for state, _ in s.history(tid)]
         self.assertEqual(states, ["in_progress", "done"])
@@ -497,8 +497,8 @@ class StoreContractBase:
     def test_history_stamps_ts_from_injected_clock(self):
         ticks = iter(["2026-01-01T10:00:00", "2026-01-01T10:30:00"])
         s = self.make_store(now=lambda: next(ticks))
-        tid = s.create_step("t", role="coder")
-        s.claim_ready("coder")
+        tid = s.create_step("t", role="agent")
+        s.claim_ready("agent")
         s.close(tid, "done")
         self.assertEqual(
             [ts for _, ts in s.history(tid)],
@@ -507,7 +507,7 @@ class StoreContractBase:
 
     def test_history_empty_for_unclaimed_task(self):
         s = self.make_store()
-        tid = s.create_step("t", role="coder")
+        tid = s.create_step("t", role="agent")
         self.assertEqual(s.history(tid), [])
 
     def test_all_steps_excludes_closed_steps(self):

@@ -64,7 +64,7 @@ def _have_activated(ctx):
 
 @given("the coder has completed the build step with outcome \"done\"")
 def _coder_completed_build(ctx):
-    rc, out, err = ctx["h"].run("claim", "coder")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     claimed = json.loads(out)
     rc, out, err = ctx["h"].run("done", claimed["id"], "done")
@@ -73,7 +73,7 @@ def _coder_completed_build(ctx):
 
 @given("the reviewer has claimed the review step")
 def _reviewer_has_claimed(ctx):
-    rc, out, err = ctx["h"].run("claim", "reviewer")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
 
 
@@ -96,7 +96,7 @@ def _activate(ctx):
 
 @when("the coder claims the next step")
 def _claim(ctx):
-    rc, out, err = ctx["h"].run("claim", "coder")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
 
 

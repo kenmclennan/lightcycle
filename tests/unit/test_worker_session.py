@@ -33,36 +33,45 @@ REJECTED_LINE = (
 
 
 class TestPlanSession(unittest.TestCase):
-    def _resp(self, pin, step_id="s-1", workspace=None):
+    def _resp(self, pin, step_id="s-1", workspace=None, step_file="write-code", stage="write-code"):
         return types.SimpleNamespace(
-            pin=pin, view=types.SimpleNamespace(step=types.SimpleNamespace(id=step_id)),
-            workspace=workspace)
+            pin=pin,
+            view=types.SimpleNamespace(step=types.SimpleNamespace(id=step_id, step=stage)),
+            workspace=workspace, step_file=step_file)
 
     def _never_reclaim(self, step_id):
         raise AssertionError("reclaim should not be called: %s" % step_id)
 
     def test_no_work_yields_no_plan(self):
         self.assertIsNone(
-            plan_session(lambda role: None, lambda role, pin: None, self._never_reclaim, "coder"))
+            plan_session(lambda role: None, lambda f, pin: None, self._never_reclaim, "agent"))
 
-    def test_resolves_md_and_model_from_the_claimed_pin(self):
+    def test_resolves_the_step_file_from_the_claim_not_the_spawned_role(self):
         seen = {}
 
-        def resolve(role, pin):
-            seen["args"] = (role, pin)
+        def resolve(step_file, pin):
+            seen["args"] = (step_file, pin)
             return {"meta": {"model": "opus"}, "body": "B-body"}
 
         plan = plan_session(
-            lambda role: self._resp("wfB/x@sha"), resolve, self._never_reclaim, "coder")
-        self.assertEqual(seen["args"], ("coder", "wfB/x@sha"))
+            lambda role: self._resp("wfB/x@sha", step_file="write-code.md"),
+            resolve, self._never_reclaim, "agent")
+        self.assertEqual(seen["args"], ("write-code.md", "wfB/x@sha"))
         self.assertEqual((plan.model, plan.sysprompt), ("opus", "B-body"))
+
+    def test_the_plan_carries_the_claimed_stage_not_the_spawned_role(self):
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha", stage="review-code"),
+            lambda f, pin: {"meta": {"model": "opus"}, "body": "B"},
+            self._never_reclaim, "agent")
+        self.assertEqual(plan.stage, "review-code")
 
     def test_no_agent_definition_reclaims_the_pre_claim_and_raises(self):
         reclaimed = []
         with self.assertRaises(SessionError):
             plan_session(
-                lambda role: self._resp("p", "s-9"), lambda role, pin: None,
-                reclaimed.append, "coder")
+                lambda role: self._resp("p", "s-9"), lambda f, pin: None,
+                reclaimed.append, "agent")
         self.assertEqual(reclaimed, ["s-9"])
 
     def test_agent_without_model_reclaims_the_pre_claim_and_raises(self):
@@ -70,22 +79,22 @@ class TestPlanSession(unittest.TestCase):
         with self.assertRaises(SessionError):
             plan_session(
                 lambda role: self._resp("p", "s-9"),
-                lambda role, pin: {"meta": {}, "body": "x"},
-                reclaimed.append, "coder")
+                lambda f, pin: {"meta": {}, "body": "x"},
+                reclaimed.append, "agent")
         self.assertEqual(reclaimed, ["s-9"])
 
     def test_carries_workspace_through_when_present(self):
         plan = plan_session(
             lambda role: self._resp("wfB/x@sha", workspace="/work/item-1"),
-            lambda role, pin: {"meta": {"model": "opus"}, "body": "B-body"},
-            self._never_reclaim, "coder")
+            lambda f, pin: {"meta": {"model": "opus"}, "body": "B-body"},
+            self._never_reclaim, "agent")
         self.assertEqual(plan.workspace, "/work/item-1")
 
     def test_workspace_is_none_when_claim_has_none(self):
         plan = plan_session(
             lambda role: self._resp("wfB/x@sha"),
-            lambda role, pin: {"meta": {"model": "opus"}, "body": "B-body"},
-            self._never_reclaim, "coder")
+            lambda f, pin: {"meta": {"model": "opus"}, "body": "B-body"},
+            self._never_reclaim, "agent")
         self.assertIsNone(plan.workspace)
 
 

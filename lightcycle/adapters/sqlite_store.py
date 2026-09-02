@@ -144,6 +144,7 @@ class SqliteStore(StorePort):
         self._migrate_artifact_fields()
         self._migrate_resume_fields()
         self._migrate_detach_items_from_themes()
+        self._migrate_collapse_step_roles()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -229,6 +230,12 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "UPDATE nodes SET parent = NULL WHERE type = 'item' AND parent IN "
             "(SELECT id FROM nodes WHERE type = 'theme')"
+        )
+
+    def _migrate_collapse_step_roles(self):
+        self._conn.execute(
+            "UPDATE nodes SET role = 'agent' "
+            "WHERE type = 'step' AND role IS NOT NULL AND role NOT IN ('agent', 'human')"
         )
 
     def _row_to_node(self, row, artifacts, blocked_by):

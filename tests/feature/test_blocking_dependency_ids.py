@@ -76,14 +76,14 @@ def _dependency_count(ctx, count):
 @given(parsers.parse('a step "{blocked}", owned by the coder, needs a step "{dep}"'))
 def _needs_one_owned(ctx, blocked, dep):
     _create_step(ctx, dep)
-    _create_step(ctx, blocked, deps=[dep], role="coder")
+    _create_step(ctx, blocked, deps=[dep], role="agent")
 
 
 @given(parsers.parse('a step "{blocked}", owned by the coder, needs steps "{dep1}" and "{dep2}"'))
 def _needs_two_owned(ctx, blocked, dep1, dep2):
     _create_step(ctx, dep1)
     _create_step(ctx, dep2)
-    _create_step(ctx, blocked, deps=[dep1, dep2], role="coder")
+    _create_step(ctx, blocked, deps=[dep1, dep2], role="agent")
 
 
 @then(parsers.parse('"{name}" is not ready for the coder to claim'))
@@ -101,7 +101,7 @@ def _ready_for_coder(ctx, name):
 @when("the coder tries to claim the next step")
 @when("the coder claims the next step")
 def _claim(ctx):
-    ctx["claimed"] = ctx["store"].claim_ready("coder")
+    ctx["claimed"] = ctx["store"].claim_ready("agent")
 
 
 @then("nothing is claimed")

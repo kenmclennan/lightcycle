@@ -88,7 +88,7 @@ def _widget_rendered_text(ctx, widget):
 def _open_priority_list(ctx):
     store = FakeStore()
     long_id = "P" * 48
-    store.create_step(long_id, step="build", role="coder", id=long_id)
+    store.create_step(long_id, step="build", role="agent", id=long_id)
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
     ctx["floor_widget_id"] = "#priority-list-floor"
@@ -108,7 +108,7 @@ def _open_hierarchy_tab(ctx):
     store = FakeStore()
     item = store.create_item("Item")
     long_id = "H" * 50
-    store.create_step("s", step="build", role="coder", parent=item, id=long_id)
+    store.create_step("s", step="build", role="agent", parent=item, id=long_id)
     ctx["store"] = store
     session = launch(make_test_container(store=store))
     ctx["session"] = session
@@ -148,10 +148,10 @@ _FLOOR_SCREEN_SETUP = {
 @given("the lightcycle store is reachable")
 def _reachable(ctx):
     store = FakeStore()
-    store.create_step("a", step="build", role="coder")
-    store.create_step("b", step="build", role="coder")
-    blocker = store.create_step("blocker", step="build", role="coder")
-    store.create_step("c", step="build", role="coder", deps=[blocker])
+    store.create_step("a", step="build", role="agent")
+    store.create_step("b", step="build", role="agent")
+    blocker = store.create_step("blocker", step="build", role="agent")
+    store.create_step("c", step="build", role="agent", deps=[blocker])
     ctx["store"] = store
 
 

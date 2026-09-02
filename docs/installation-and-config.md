@@ -46,7 +46,7 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 | `projects` | root under which project repos live |
 | `specs` / `specs-remote` | root where spec files live / its git remote |
 | `shortcode` | id prefix for new top-level nodes (e.g. `LC` gives `LC-1`) |
-| `default-origin` | the workflow origin the spawner reads role prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
+| `default-origin` | the workflow origin the spawner reads step prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
 | `workflows-remote` | git remote for the built-in workflow origin, pulled by `lc init` |
 | `workflow-retention` | pulled bundles kept per origin (plus any a live item pins) |
 | `max-agents` | worker cap the pool fills to each tick |

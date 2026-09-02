@@ -99,7 +99,7 @@ class TestDashboardScaffold(unittest.TestCase):
 
     def test_status_bar_populates_same_frame_as_priority_list(self):
         store = FakeStore()
-        store.create_step("queued", step="build", role="coder")
+        store.create_step("queued", step="build", role="agent")
 
         session = self._launch(store=store)
 
@@ -112,7 +112,7 @@ class TestDashboardScaffold(unittest.TestCase):
 
     def test_priority_list_is_not_truncated_to_ten(self):
         store = FakeStore()
-        ids = [store.create_step("t%d" % i, step="build", role="coder") for i in range(12)]
+        ids = [store.create_step("t%d" % i, step="build", role="agent") for i in range(12)]
 
         session = self._launch(store=store)
 
@@ -123,7 +123,7 @@ class TestDashboardScaffold(unittest.TestCase):
 
     def test_header_row_is_not_shown(self):
         store = FakeStore()
-        store.create_step("queued", step="build", role="coder")
+        store.create_step("queued", step="build", role="agent")
 
         session = self._launch(store=store)
 
@@ -132,7 +132,7 @@ class TestDashboardScaffold(unittest.TestCase):
 
     def test_column_render_widths_account_for_cell_padding_and_fit_the_frame(self):
         store = FakeStore()
-        store.create_step("queued", step="build", role="coder")
+        store.create_step("queued", step="build", role="agent")
 
         session = self._launch(store=store)
 
@@ -152,7 +152,7 @@ class TestNeedsAttentionGroup(unittest.TestCase):
     def test_inbox_row_renders_above_active_and_queued(self):
         store = FakeStore()
         inbox = store.create_step("inbox item", step="triage", role="human")
-        active = store.create_step("active item", step="build", role="coder")
+        active = store.create_step("active item", step="build", role="agent")
         store.assign(active, "worker-1")
 
         session = self._launch(store)
@@ -195,7 +195,7 @@ class TestActiveGroup(unittest.TestCase):
         claimed_at = datetime.datetime(2026, 1, 1, 12, 0, 0)
         rendered_at = datetime.datetime(2026, 1, 1, 12, 14, 0)
         store = FakeStore(now=lambda: claimed_at.isoformat())
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -211,7 +211,7 @@ class TestActiveGroup(unittest.TestCase):
     def test_second_poll_updates_only_time_cell_without_full_rebuild(self):
         clock = {"now": datetime.datetime(2026, 1, 1, 12, 0, 0)}
         store = FakeStore(now=lambda: clock["now"].isoformat())
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -233,7 +233,7 @@ class TestActiveGroup(unittest.TestCase):
         claimed_at = datetime.datetime(2026, 1, 1, 12, 0, 0)
         clock = {"now": claimed_at + datetime.timedelta(minutes=9)}
         store = FakeStore(now=lambda: claimed_at.isoformat())
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -254,7 +254,7 @@ class TestActiveGroup(unittest.TestCase):
         claimed_at = datetime.datetime(2026, 1, 1, 12, 0, 0)
         clock = {"now": claimed_at + datetime.timedelta(minutes=9)}
         store = FakeStore(now=lambda: claimed_at.isoformat())
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -271,7 +271,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_active_row_rests_on_the_black_diamond(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -282,7 +282,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_active_glyph_pulses_through_four_frames_and_returns_to_rest(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -301,7 +301,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_active_glyph_animation_does_not_run_without_an_active_row(self):
         store = FakeStore()
-        store.create_step("queued item", step="build", role="coder")
+        store.create_step("queued item", step="build", role="agent")
 
         session = self._launch(store)
 
@@ -309,7 +309,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_active_glyph_animation_stops_and_resumes_with_view_toggle(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -324,7 +324,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_poll_does_not_revert_an_in_flight_pulse(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -341,7 +341,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_tick_active_glyph_is_a_no_op_when_the_table_is_not_mounted(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -353,7 +353,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_active_glyph_animation_does_not_run_at_the_floor(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -367,7 +367,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_active_glyph_animation_does_not_run_pending_a_deferred_rebuild(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -381,7 +381,7 @@ class TestActiveGroup(unittest.TestCase):
 
     def test_active_glyph_animation_restarts_after_floor_recovers_on_width_refresh(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -401,7 +401,7 @@ class TestActiveGroup(unittest.TestCase):
 
         store = FakeStore()
         item = store.create_item("active item")
-        tid = store.create_step("build it", step="build", role="coder", parent=item)
+        tid = store.create_step("build it", step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -422,7 +422,7 @@ class TestActiveGroup(unittest.TestCase):
 
         store = FakeStore()
         item = store.create_item("active item")
-        tid = store.create_step("build it", step="build", role="coder", parent=item)
+        tid = store.create_step("build it", step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -451,9 +451,9 @@ class TestQueuedGroup(unittest.TestCase):
 
     def test_queued_row_renders_below_active_with_own_icon_and_next_step(self):
         store = FakeStore()
-        active = store.create_step("active item", step="build", role="coder")
+        active = store.create_step("active item", step="build", role="agent")
         store.assign(active, "worker-1")
-        queued = store.create_step("queued item", step="build", role="coder")
+        queued = store.create_step("queued item", step="build", role="agent")
 
         session = self._launch(store)
 
@@ -466,7 +466,7 @@ class TestQueuedGroup(unittest.TestCase):
 
     def test_queued_step_transitioning_to_active_moves_group(self):
         store = FakeStore()
-        queued = store.create_step("queued item", step="build", role="coder")
+        queued = store.create_step("queued item", step="build", role="agent")
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -482,8 +482,8 @@ class TestQueuedGroup(unittest.TestCase):
 
     def test_dependency_held_step_appears_in_queued_group_with_dim_chain_glyph(self):
         store = FakeStore()
-        blocker = store.create_step("blocker", step="build", role="coder")
-        blocked = store.create_step("blocked item", step="build", role="coder", deps=[blocker])
+        blocker = store.create_step("blocker", step="build", role="agent")
+        blocked = store.create_step("blocked item", step="build", role="agent", deps=[blocker])
 
         session = self._launch(store)
 
@@ -507,7 +507,7 @@ class TestProjectColumn(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story")
         store.add_artifact(item, "repo", "lightcycle")
-        store.create_step("build", step="build", role="coder", parent=item)
+        store.create_step("build", step="build", role="agent", parent=item)
 
         session = self._launch(store)
 
@@ -518,7 +518,7 @@ class TestProjectColumn(unittest.TestCase):
 
     def test_step_with_no_registered_project_renders_blank(self):
         store = FakeStore()
-        step = store.create_step("build", step="build", role="coder")
+        step = store.create_step("build", step="build", role="agent")
 
         session = self._launch(store)
 
@@ -528,7 +528,7 @@ class TestProjectColumn(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
-        store.create_step("build", step="build", role="coder", parent=item)
+        store.create_step("build", step="build", role="agent", parent=item)
 
         session = self._launch(store)
 
@@ -546,8 +546,8 @@ class TestCursorColumn(unittest.TestCase):
 
     def test_selected_row_shows_leading_cursor_glyph(self):
         store = FakeStore()
-        first = store.create_step("first", step="build", role="coder")
-        store.create_step("second", step="build", role="coder")
+        first = store.create_step("first", step="build", role="agent")
+        store.create_step("second", step="build", role="agent")
 
         session = self._launch(store)
 
@@ -558,8 +558,8 @@ class TestCursorColumn(unittest.TestCase):
 
     def test_cursor_glyph_follows_the_selection(self):
         store = FakeStore()
-        first = store.create_step("first", step="build", role="coder")
-        second = store.create_step("second", step="build", role="coder")
+        first = store.create_step("first", step="build", role="agent")
+        second = store.create_step("second", step="build", role="agent")
 
         session = self._launch(store)
         session.press("down")
@@ -577,8 +577,8 @@ class TestCursorColumnSurvivesCheapPaths(unittest.TestCase):
 
     def test_cheap_poll_leaves_the_cursor_column_unchanged(self):
         store = FakeStore()
-        first = store.create_step("first", step="build", role="coder")
-        store.create_step("second", step="build", role="coder")
+        first = store.create_step("first", step="build", role="agent")
+        store.create_step("second", step="build", role="agent")
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -590,7 +590,7 @@ class TestCursorColumnSurvivesCheapPaths(unittest.TestCase):
 
     def test_tick_active_glyph_leaves_the_cursor_column_unchanged(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="coder")
+        tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
 
@@ -612,7 +612,7 @@ class TestScroll(unittest.TestCase):
     def test_down_moves_cursor_row_by_row(self):
         store = FakeStore()
         for i in range(30):
-            store.create_step("q%d" % i, step="build", role="coder")
+            store.create_step("q%d" % i, step="build", role="agent")
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -623,7 +623,7 @@ class TestScroll(unittest.TestCase):
     def test_up_does_not_wrap_past_first_row(self):
         store = FakeStore()
         for i in range(5):
-            store.create_step("q%d" % i, step="build", role="coder")
+            store.create_step("q%d" % i, step="build", role="agent")
 
         session = self._launch(store)
         session.press("up")
@@ -633,7 +633,7 @@ class TestScroll(unittest.TestCase):
     def test_ctrl_d_then_ctrl_u_moves_by_page_and_back(self):
         store = FakeStore()
         for i in range(60):
-            store.create_step("q%d" % i, step="build", role="coder")
+            store.create_step("q%d" % i, step="build", role="agent")
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -646,7 +646,7 @@ class TestScroll(unittest.TestCase):
         def build_store():
             store = FakeStore()
             for i in range(60):
-                store.create_step("q%d" % i, step="build", role="coder")
+                store.create_step("q%d" % i, step="build", role="agent")
             return store
 
         ctrl_session = launch(make_test_container(store=build_store()))
@@ -671,8 +671,8 @@ class TestSelectionFollow(unittest.TestCase):
 
     def test_selection_follows_item_that_changes_group(self):
         store = FakeStore()
-        store.create_step("other", step="build", role="coder")
-        target = store.create_step("target", step="build", role="coder")
+        store.create_step("other", step="build", role="agent")
+        target = store.create_step("target", step="build", role="agent")
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -688,9 +688,9 @@ class TestSelectionFollow(unittest.TestCase):
 
     def test_selection_falls_to_a_real_row_when_selected_item_is_removed(self):
         store = FakeStore()
-        first = store.create_step("first", step="build", role="coder")
-        target = store.create_step("target", step="build", role="coder")
-        last = store.create_step("last", step="build", role="coder")
+        first = store.create_step("first", step="build", role="agent")
+        target = store.create_step("target", step="build", role="agent")
+        last = store.create_step("last", step="build", role="agent")
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -723,7 +723,7 @@ class TestEmptyState(unittest.TestCase):
         store = FakeStore()
         session = self._launch(store)
 
-        store.create_step("new", step="build", role="coder")
+        store.create_step("new", step="build", role="agent")
         session.poll_tick()
 
         self.assertFalse(session.app.query_one("#empty-state").display)
@@ -775,7 +775,7 @@ class TestBell(unittest.TestCase):
         session = self._launch(store)
         calls = self._spy(session)
 
-        store.create_step("queued", step="build", role="coder")
+        store.create_step("queued", step="build", role="agent")
         session.poll_tick()
 
         self.assertEqual(calls["count"], 0)
@@ -785,8 +785,8 @@ class TestBell(unittest.TestCase):
         session = self._launch(store)
         calls = self._spy(session)
 
-        blocker = store.create_step("blocker", step="build", role="coder")
-        store.create_step("blocked", step="build", role="coder", deps=[blocker])
+        blocker = store.create_step("blocker", step="build", role="agent")
+        store.create_step("blocked", step="build", role="agent", deps=[blocker])
         session.poll_tick()
 
         self.assertEqual(calls["count"], 0)
@@ -1059,7 +1059,7 @@ class TestBacklogRows(unittest.TestCase):
         session = self._launch(store)
         self.assertIn(item, session.app.query_one(BacklogTable).rows)
 
-        store.create_step("first step", step="build", role="coder", parent=item)
+        store.create_step("first step", step="build", role="agent", parent=item)
         session.poll_tick()
 
         self.assertNotIn(item, session.app.query_one(BacklogTable).rows)
@@ -1393,7 +1393,7 @@ class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
 
     def test_unchanged_priority_shape_still_takes_the_cheap_path_after_a_poll(self):
         store = FakeStore()
-        store.create_step("queued", step="build", role="coder")
+        store.create_step("queued", step="build", role="agent")
         session = self._launch(store)
 
         with patch.object(LightcycleApp, "_rebuild_table") as rebuild, \
@@ -1425,7 +1425,7 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
 
     def _launch(self):
         store = FakeStore()
-        store.create_step("queued item", step=self._STEP, role="coder", id=self._ID)
+        store.create_step("queued item", step=self._STEP, role="agent", id=self._ID)
         store.add_artifact(self._ID, "repo", self._PROJECT)
         width = self._floor_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))

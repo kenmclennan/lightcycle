@@ -48,8 +48,8 @@ roll-up of its steps on every read, so an item can never disagree with its steps
 
 Two things are kept **orthogonal** to the state (baking them in would multiply the states):
 
-- **role** - who processes the node: `write-code`, `review-code`, `open-pr`, `watch-ci`, `human`, ... A ready
-  step with `role=human` is a human gate (it shows in the inbox); the state is still just `ready`.
+- **role** - who processes the node: `agent` or `human`. A ready step with `role=human` is a human gate
+  (it shows in the inbox); the state is still just `ready`. The stage a step performs is its `step` field.
 - **outcome** - how a `done` node ended: `done`, `merged`, `abandoned`, `rejected`, ... `done` is the
   single terminal state; the outcome records the flavour.
 
@@ -65,6 +65,6 @@ Two things are kept **orthogonal** to the state (baking them in would multiply t
 graph LR
   item[item] -->|has| art[artifacts repo spec branch pr]
   step1[step write-code] -->|blocks| step2[step review-code]
-  step1 -->|role| r[write-code]
+  step1 -->|role| r[agent]
   step1 -->|state| s[in_progress]
 ```

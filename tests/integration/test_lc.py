@@ -372,18 +372,18 @@ class TestModel(unittest.TestCase):
         _fake_setUp(self)
 
     def test_task_mapping_and_status(self):
-        bid = self.store.create_step("build: thing", step="build", role="coder")
+        bid = self.store.create_step("build: thing", step="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_show, bid)
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
-        self.assertEqual(t["role"], "coder")
+        self.assertEqual(t["role"], "agent")
         self.assertEqual(t["step"], "build")
         self.assertEqual(t["type"], "step")
         self.assertEqual(t["state"], "ready")
 
     def test_status_lanes_json(self):
         h = self.store.create_step("spec: x", step="spec", role="human")
-        c = self.store.create_step("build: y", step="build", role="coder")
+        c = self.store.create_step("build: y", step="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_status, "--json")
         self.assertEqual(rc, 0, err)
         s = json.loads(out)
@@ -396,22 +396,22 @@ class TestClaim(unittest.TestCase):
         _fake_setUp(self)
 
     def test_claim_returns_and_marks_in_progress(self):
-        c = self.store.create_step("build: y", step="build", role="coder")
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        c = self.store.create_step("build: y", step="build", role="agent")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["id"], c)
         self.assertEqual(t["state"], "in_progress")
-        rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
+        rc2, out2, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(out2.strip(), "")
 
     def test_claim_ignores_human(self):
         self.store.create_step("spec: x", step="spec", role="human")
-        rc, out, _ = call(_cli_mod.cmd_claim, "coder")
+        rc, out, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(out.strip(), "")
 
     def test_claim_assigns_worker_spawnid(self):
-        b = self.store.create_step("build: y", step="build", role="coder")
+        b = self.store.create_step("build: y", step="build", role="agent")
         cfg = write_config(projects=self.root, specs=self.root)
         inject_container(
             self, store=self.store, home=self.root, config_path=cfg,
@@ -419,7 +419,7 @@ class TestClaim(unittest.TestCase):
         )
         os.environ["LC_SPAWNID"] = "spawn-xyz"
         self.addCleanup(os.environ.pop, "LC_SPAWNID", None)
-        call(_cli_mod.cmd_claim, "coder")
+        call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(self.store.get_node(b).claimed_by, "spawn-xyz")
 
 
@@ -429,7 +429,7 @@ class TestFlow(unittest.TestCase):
 
     def test_advance_creates_next_step(self):
         item = self.store.create_item("st", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
+        b = self.store.create_step("build: t", step="build", role="agent", parent=item)
         self.store.close(b, "done")
         rc, out, err = call(_cli_mod.cmd_advance, b, "done")
         self.assertEqual(rc, 0, err)
@@ -437,13 +437,13 @@ class TestFlow(unittest.TestCase):
         self.assertTrue(new)
         rc2, out2, _ = call(_cli_mod.cmd_show, new)
         nt = json.loads(out2)
-        self.assertEqual(nt["role"], "reviewer")
+        self.assertEqual(nt["role"], "agent")
         self.assertEqual(nt["step"], "review")
 
     def test_ready_roles(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         rc, out, _ = call(_cli_mod.cmd_ready_roles)
-        self.assertIn("coder", out.split())
+        self.assertIn("agent", out.split())
 
 
 class TestDoneBlock(unittest.TestCase):
@@ -452,20 +452,20 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_closes_and_advances(self):
         item = self.store.create_item("st", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
+        b = self.store.create_step("build: t", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
         self.assertEqual(self.store.get_node(b).state, "done")
 
     def test_done_unknown_outcome_errors_without_closing(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_done, b, "banana")
         self.assertEqual(rc, 1)
         self.assertEqual(self.store.get_node(b).state, "ready")
 
     def test_block_writes_metadata_and_routes_human(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
+        b = self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(
             _cli_mod.cmd_set, b, "--state", "blocked", "--branch", "grid/x",
             "--needs", "confirm aud", "--reason", "audit was inconclusive",
@@ -477,8 +477,8 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(self.store._records[b]["metadata"]["branch"], "grid/x")
 
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
-        self.store.claim_ready("coder")
+        b = self.store.create_step("build: t", step="build", role="agent")
+        self.store.claim_ready("agent")
         rc, out, err = call(
             _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
             "--reason", "conflicts on rebase",
@@ -490,7 +490,7 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_note_forwards_to_next_task(self):
         item = self.store.create_item("st", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
+        b = self.store.create_step("build: t", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix the coverage")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -504,7 +504,7 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_without_note_unchanged(self):
         item = self.store.create_item("st", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
+        b = self.store.create_step("build: t", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -513,7 +513,7 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_note_accepts_unquoted_multiword(self):
         item = self.store.create_item("st", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
+        b = self.store.create_step("build: t", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix", "the", "flaky", "test")
         self.assertEqual(rc, 0, err)
         notes = self.store.get_node(out.strip()).notes or ""
@@ -526,8 +526,8 @@ class TestSweep(unittest.TestCase):
         (Path(self.root) / "logs").mkdir(exist_ok=True)
 
     def test_sweep_releases_orphaned_claim(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
-        self.store.claim_ready("coder")
+        b = self.store.create_step("build: t", step="build", role="agent")
+        self.store.claim_ready("agent")
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(b)
@@ -591,17 +591,17 @@ class TestSpawn(unittest.TestCase):
     def test_spawn_records_worker_log_and_lists_in_ps(self):
         env = dict(os.environ, LC_HOME=self.root, LC_SPAWN_CMD="echo started >> {log}")
         r = subprocess.run(
-            [sys.executable, LC, "spawn", "coder"], capture_output=True, text=True, env=env
+            [sys.executable, LC, "spawn", "agent"], capture_output=True, text=True, env=env
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
         self.assertEqual(len(workers), 1)
-        self.assertEqual(workers[0]["role"], "coder")
+        self.assertEqual(workers[0]["role"], "agent")
         self.assertTrue(os.path.exists(workers[0]["log"]))
         r = subprocess.run(
             [sys.executable, LC, "ps", "--all", "--json"], capture_output=True, text=True, env=env
         )
-        self.assertEqual(json.loads(r.stdout)[0]["role"], "coder")
+        self.assertEqual(json.loads(r.stdout)[0]["role"], "agent")
 
 
 class TestPs(unittest.TestCase):
@@ -693,10 +693,10 @@ class TestRun(unittest.TestCase):
         return (Path(self.root) / "logs" / "run.log").read_text()
 
     def test_run_once_spawns_for_ready_role(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
-        self.assertTrue(any(w["role"] == "coder" for w in self._workers()))
+        self.assertTrue(any(w["role"] == "agent" for w in self._workers()))
         self.assertTrue((Path(self.root) / "logs" / "run.log").exists())
         run_log = self._run_log()
         self.assertIn("state", run_log)
@@ -705,15 +705,15 @@ class TestRun(unittest.TestCase):
         self.assertIn("inflight=", run_log)
 
     def test_queue_lists_ready(self):
-        c = self.store.create_step("build: y", step="build", role="coder")
+        c = self.store.create_step("build: y", step="build", role="agent")
         rc, out, _ = call(_cli_mod.cmd_queue, "5")
         self.assertIn(c, out)
 
     def test_run_skips_role_with_inflight_worker(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         self._preset_worker(
             spawnid="boot",
-            role="coder",
+            role="agent",
             pid=os.getpid(),
             pid_started=process_start_time(os.getpid()),
             log="x",
@@ -727,16 +727,16 @@ class TestRun(unittest.TestCase):
 
     def test_run_pool_fills_up_to_max_agents(self):
         for i in range(7):
-            self.store.create_step("build: %d" % i, step="build", role="coder")
+            self.store.create_step("build: %d" % i, step="build", role="agent")
         for i in range(3):
-            self.store.create_step("review: %d" % i, step="review", role="reviewer")
+            self.store.create_step("review: %d" % i, step="review", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 5)
 
     def test_run_pool_respects_max_agents_env(self):
         for i in range(5):
-            self.store.create_step("build: %d" % i, step="build", role="coder")
+            self.store.create_step("build: %d" % i, step="build", role="agent")
         os.environ["LC_MAX_AGENTS"] = "2"
         self.addCleanup(lambda: os.environ.pop("LC_MAX_AGENTS", None))
         rc, _, err = self._run_once()
@@ -747,8 +747,8 @@ class TestRun(unittest.TestCase):
         return json.loads((Path(self.root) / "logs" / "breaker.json").read_text())
 
     def test_run_opens_breaker_on_a_rejected_rate_limit_event_and_stops_spawning(self):
-        self.store.create_step("build: t", step="build", role="coder")
-        log_path = Path(self.root) / "logs" / "worker-coder-dead.log"
+        self.store.create_step("build: t", step="build", role="agent")
+        log_path = Path(self.root) / "logs" / "worker-agent-dead.log"
         log_path.write_text(
             '{"type":"rate_limit_event","rate_limit_info":'
             '{"status":"rejected","resetsAt":9999999999}}\n'
@@ -756,7 +756,7 @@ class TestRun(unittest.TestCase):
         dead = subprocess.Popen(["true"])
         dead.wait()
         self._preset_worker(
-            spawnid="dead", role="coder", pid=dead.pid, log=str(log_path), step=None, started=0
+            spawnid="dead", role="agent", pid=dead.pid, log=str(log_path), step=None, started=0
         )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
@@ -764,7 +764,7 @@ class TestRun(unittest.TestCase):
         self.assertEqual(len(self._workers()), 1)
 
     def test_run_spawns_nothing_while_breaker_open_pre_reset(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         (Path(self.root) / "logs" / "workers.json").write_text("[]")
         (Path(self.root) / "logs" / "breaker.json").write_text(
             json.dumps({"open": True, "reset_at": time.time() + 9999})
@@ -775,12 +775,12 @@ class TestRun(unittest.TestCase):
         self.assertIn("reason=breaker-open", self._run_log())
 
     def test_run_no_free_slots_logs_reason(self):
-        self.store.create_step("build: t", step="build", role="coder")
-        self.store.create_step("review: t", step="review", role="reviewer")
-        claimed = self.store.claim_ready("reviewer")
+        self.store.create_step("build: t", step="build", role="agent")
+        self.store.create_step("review: t", step="review", role="agent")
+        claimed = self.store.claim_ready("agent")
         self._preset_worker(
             spawnid="boot",
-            role="reviewer",
+            role="agent",
             pid=os.getpid(),
             pid_started=process_start_time(os.getpid()),
             log="x",
@@ -803,7 +803,7 @@ class TestRun(unittest.TestCase):
         self.assertFalse((Path(self.root) / ".lc-run.pid").exists())
 
     def test_lc_logs_run_returns_content_after_a_tick(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         rc, out, err = call(_cli_mod.cmd_logs, "run")
@@ -811,7 +811,7 @@ class TestRun(unittest.TestCase):
         self.assertTrue(out.strip())
 
     def test_run_once_builds_exactly_one_flow_service_and_worktree_service(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         flow_calls = []
         worktree_calls = []
         orig_make_flow = _cli_mod.make_flow_service
@@ -840,7 +840,7 @@ class TestRun(unittest.TestCase):
         (_steps_dir(self.root) / "auditor.md").write_text(
             "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
         )
-        tid = self.store.create_step("audit: theme", step="audit", role="auditor")
+        tid = self.store.create_step("audit: theme", step="audit", role="agent")
         self.store.close(tid, "done")
         self.store._records[tid]["closed_at"] = "2020-01-01T00:00:00"
         with patch("time.sleep", side_effect=KeyboardInterrupt):
@@ -895,11 +895,11 @@ class TestRunSingletonLock(unittest.TestCase):
         dead = subprocess.Popen(["true"])
         dead.wait()
         self._lock_path().write_text(str(dead.pid))
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
-        self.assertTrue(any(w["role"] == "coder" for w in workers))
+        self.assertTrue(any(w["role"] == "agent" for w in workers))
 
     def test_clean_exit_releases_lock(self):
         self._run_once()
@@ -1123,7 +1123,7 @@ class TestModelV2(unittest.TestCase):
     def test_task_exposes_type_parent_and_parent_artifacts(self):
         item = self.store.create_item("item s", workflow="lightcycle/spec-driven")
         self.store.update_metadata(item, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
-        step = self.store.create_step("build: b", step="build", role="coder", parent=item)
+        step = self.store.create_step("build: b", step="build", role="agent", parent=item)
         rc, out, _ = call(_cli_mod.cmd_show, step)
         v = json.loads(out)
         self.assertEqual(v["type"], "step")
@@ -1242,10 +1242,10 @@ class TestNewStep(unittest.TestCase):
         sid = out.strip()
         node = self.store.get_node(sid)
         self.assertEqual(node.step, "build")
-        self.assertEqual(node.role, "coder")
+        self.assertEqual(node.role, "agent")
         self.assertEqual(node.title, "rework it")
         self.assertEqual(node.parent, item)
-        claimed = self.store.claim_ready("coder")
+        claimed = self.store.claim_ready("agent")
         self.assertEqual(claimed.id, sid)
 
     def test_unknown_step_name_refuses_and_lists_owned_steps(self):
@@ -1272,7 +1272,7 @@ class TestNewStep(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         node = self.store.get_node(sid)
-        self.assertEqual(node.role, "coder")
+        self.assertEqual(node.role, "agent")
         self.assertIsNone(node.parent)
 
     def test_step_owned_by_human_is_created_not_refused(self):
@@ -1317,10 +1317,10 @@ class TestFileBlockedBy(unittest.TestCase):
     def test_blocked_task_not_claimable_until_gate_closes(self):
         gate = self.store.create_step("review-plan: foo", step="review-plan", role="human")
         call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven", "--blocked-by", gate)
-        rc, out, _ = call(_cli_mod.cmd_claim, "coder")
+        rc, out, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(out.strip(), "")
         self.store.close(gate, "approved")
-        rc2, out2, _ = call(_cli_mod.cmd_claim, "coder")
+        rc2, out2, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertTrue(out2.strip())
 
     def test_multiple_blocked_by_ids(self):
@@ -1351,7 +1351,7 @@ class TestClaimArtifacts(unittest.TestCase):
 
     def test_claim_surfaces_story_artifacts(self):
         call(_file_compat, "specs/Y.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["item_artifacts"][0]["value"], "specs/Y.md")
@@ -1361,7 +1361,7 @@ class TestClaimArtifacts(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         item = out.strip()
         self.store.replace_artifact(item, "spec", "specs/Y-revised.md")
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["item_artifacts"][0]["value"], "specs/Y-revised.md")
@@ -1429,9 +1429,9 @@ class TestFlowFromAgents(unittest.TestCase):
 
     def test_flow_next_derives_role_from_owner(self):
         t = self._flow().flow_next("build", "done")
-        self.assertEqual((t.to_step, t.to_role), ("review", "reviewer"))
+        self.assertEqual((t.to_step, t.to_role), ("review", "agent"))
         t2 = self._flow().flow_next("review", "rejected")
-        self.assertEqual((t2.to_step, t2.to_role), ("build", "coder"))
+        self.assertEqual((t2.to_step, t2.to_role), ("build", "agent"))
 
     def test_flow_next_unowned_target_routes_to_human(self):
         t = self._flow().flow_next("open-pr", "done")
@@ -1462,7 +1462,7 @@ class TestFileStep(unittest.TestCase):
         _, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
         kid = self.store.get_node(self.store.children(out.strip())[0].id)
         self.assertEqual(kid.step, "build")
-        self.assertEqual(kid.role, "coder")
+        self.assertEqual(kid.role, "agent")
 
 class TestArtifactContracts(unittest.TestCase):
     def setUp(self):
@@ -1470,8 +1470,8 @@ class TestArtifactContracts(unittest.TestCase):
 
     def test_claim_escalates_when_required_input_missing(self):
         item = self.store.create_item("i", workflow="lightcycle/spec-driven")
-        b = self.store.create_step("build: x", step="build", role="coder", parent=item)
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        b = self.store.create_step("build: x", step="build", role="agent", parent=item)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.strip(), "")
         step = self.store.get_node(b)
@@ -1481,7 +1481,7 @@ class TestArtifactContracts(unittest.TestCase):
     def test_claim_proceeds_when_inputs_present(self):
         rc, out, err = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
         sid = out.strip()
-        rc2, out2, err2 = call(_cli_mod.cmd_claim, "coder")
+        rc2, out2, err2 = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc2, 0, err2)
         t = json.loads(out2)
         self.assertEqual(t["state"], "in_progress")
@@ -1562,7 +1562,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(step_id.strip())
         self.assertEqual(step.step, "spec-writer")
-        self.assertEqual(step.role, "spec-writer")
+        self.assertEqual(step.role, "agent")
 
     def test_spec_writer_advances_to_the_spec_pr(self):
         item = self._item_with_brief()
@@ -1687,7 +1687,7 @@ class TestContractsOptional(unittest.TestCase):
 
     def test_done_without_contract_needs_no_artifacts(self):
         item = self.store.create_item("st", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step("build: t", step="build", role="coder", parent=item)
+        b = self.store.create_step("build: t", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
 
@@ -1726,7 +1726,7 @@ class TestWorktree(unittest.TestCase):
 
     def test_claim_returns_isolated_workspace(self):
         sid = self._file()
-        _, out, err = call(_cli_mod.cmd_claim, "coder")
+        _, out, err = call(_cli_mod.cmd_claim, "agent")
         t = json.loads(out)
         ws = t["workspace"]
         self.assertTrue(os.path.isdir(ws))
@@ -1738,29 +1738,29 @@ class TestWorktree(unittest.TestCase):
 
     def test_claim_omits_phase_for_an_unlabeled_workflow(self):
         self._file()
-        _, out, _ = call(_cli_mod.cmd_claim, "coder")
+        _, out, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertNotIn("phase", json.loads(out))
 
     def test_claim_does_not_switch_root_branch(self):
         self._file()
         before = self._branch_of(self.root)
-        call(_cli_mod.cmd_claim, "coder")
+        call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(self._branch_of(self.root), before)
         self.assertEqual(self._branch_of(self.root), "main")
 
     def test_worktree_reused_across_roles(self):
         sid = self._file()
-        _, out, _ = call(_cli_mod.cmd_claim, "coder")
+        _, out, _ = call(_cli_mod.cmd_claim, "agent")
         ws1 = json.loads(out)["workspace"]
         build = self.store.children(sid)[0].id
         call(_cli_mod.cmd_done, build, "done")
-        _, out2, _ = call(_cli_mod.cmd_claim, "reviewer")
+        _, out2, _ = call(_cli_mod.cmd_claim, "agent")
         ws2 = json.loads(out2)["workspace"]
         self.assertEqual(ws1, ws2)
 
     def test_branch_artifact_autolinked_on_claim(self):
         sid = self._file()
-        call(_cli_mod.cmd_claim, "coder")
+        call(_cli_mod.cmd_claim, "agent")
         arts = self.store.item_artifacts(sid)
         branches = [a for a in arts if a.type == "branch"]
         self.assertEqual(len(branches), 1)
@@ -1768,7 +1768,7 @@ class TestWorktree(unittest.TestCase):
 
     def test_worktrees_dir_excluded_via_git_info_exclude(self):
         self._file()
-        call(_cli_mod.cmd_claim, "coder")
+        call(_cli_mod.cmd_claim, "agent")
         exclude = (Path(self.root) / ".git" / "info" / "exclude").read_text().splitlines()
         self.assertIn(".worktrees/", [l.strip() for l in exclude])
         self.assertFalse((Path(self.root) / ".gitignore").exists())
@@ -1812,9 +1812,9 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
     def test_claim_creates_a_worktree_inside_the_specs_repo_not_the_project(self):
         item = self.store.create_item("phase b1", workflow="lightcycle/spec-driven@%s" % _SHA)
         self.store.add_artifact(item, "brief", "briefs/LC-1.md")
-        self.store.create_step("spec-writer: x", step="spec-writer", role="spec-writer", parent=item)
+        self.store.create_step("spec-writer: x", step="spec-writer", role="agent", parent=item)
 
-        rc, out, err = call(_cli_mod.cmd_claim, "spec-writer")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
 
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
@@ -1860,8 +1860,8 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 
     def test_claim_omits_workspace_without_origin(self):
-        self.store.create_step("build: t", step="build", role="coder")
-        _, out, _ = call(_cli_mod.cmd_claim, "coder")
+        self.store.create_step("build: t", step="build", role="agent")
+        _, out, _ = call(_cli_mod.cmd_claim, "agent")
         t = json.loads(out)
         self.assertEqual(t["state"], "in_progress")
         self.assertNotIn("workspace", t)
@@ -1904,7 +1904,7 @@ class TestNamedRepo(unittest.TestCase):
         if repo:
             args += ["--repo", repo]
         call(_file_compat, *args)
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         return json.loads(out)
 
@@ -2018,8 +2018,8 @@ class TestUnblock(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_unblock_returns_blocked_task_to_agent_role(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
-        self.store.claim_ready("coder")
+        b = self.store.create_step("build: t", step="build", role="agent")
+        self.store.claim_ready("agent")
         call(
             _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
             "--reason", "conflicts on rebase",
@@ -2028,12 +2028,12 @@ class TestUnblock(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(b)
         self.assertEqual(t.state, "ready")
-        self.assertEqual(t.role, "coder")
+        self.assertEqual(t.role, "agent")
         self.assertIsNone(t.claimed_by)
 
     def test_unblock_clears_needs_and_blocked_note(self):
-        b = self.store.create_step("build: t", step="build", role="coder")
-        self.store.claim_ready("coder")
+        b = self.store.create_step("build: t", step="build", role="agent")
+        self.store.claim_ready("agent")
         call(
             _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
             "--reason", "conflicts on rebase",
@@ -2085,7 +2085,7 @@ class TestCloseWorktree(unittest.TestCase):
             _file_compat, "specs/W.md", "--step", "build", "--workflow", "lightcycle/spec-driven", "--repo", "engine"
         )
         sid = out.strip()
-        _, cout, _ = call(_cli_mod.cmd_claim, "coder")
+        _, cout, _ = call(_cli_mod.cmd_claim, "agent")
         ws = json.loads(cout)["workspace"]
         self.assertTrue(os.path.isdir(ws))
         build = self.store.children(sid)[0].id
@@ -2103,7 +2103,7 @@ class TestClose(unittest.TestCase):
 
     def test_close_item_closes_and_force_closes_its_open_steps(self):
         item = self.store.create_item("item s", workflow="lightcycle/spec-driven")
-        step = self.store.create_step("build: t", step="build", role="coder", parent=item)
+        step = self.store.create_step("build: t", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, item, "wontfix")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(item).state, "done")
@@ -2112,8 +2112,8 @@ class TestClose(unittest.TestCase):
 
     def test_close_item_attaches_no_retro_artifact(self):
         item = self.store.create_item("item s", workflow="lightcycle/spec-driven")
-        self.store.create_step("build: t", step="build", role="coder", parent=item)
-        claimed = self.store.claim_ready("coder")
+        self.store.create_step("build: t", step="build", role="agent", parent=item)
+        claimed = self.store.claim_ready("agent")
         self.store.close(claimed.id, "done")
         rc, out, err = call(_cli_mod.cmd_done, item, "done")
         self.assertEqual(rc, 0, err)
@@ -2210,7 +2210,7 @@ class TestLogRender(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
         (Path(self.root) / "logs").mkdir(exist_ok=True)
-        self.log = Path(self.root) / "logs" / "worker-coder-x.log"
+        self.log = Path(self.root) / "logs" / "worker-agent-x.log"
         self.log.write_text(
             "\n".join(
                 [
@@ -2328,7 +2328,7 @@ class TestReflect(unittest.TestCase):
         self.store.update_metadata(
             sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]}
         )
-        tid = self.store.create_step("build: feat", step="build", role="coder", parent=sid)
+        tid = self.store.create_step("build: feat", step="build", role="agent", parent=sid)
         return sid, tid
 
     def test_reflect_stores_feedback_on_task(self):
@@ -2397,7 +2397,7 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_shows_feedback(self):
         sid = self._item()
-        tid = self.store.create_step("build: s", step="build", role="coder", parent=sid)
+        tid = self.store.create_step("build: s", step="build", role="agent", parent=sid)
         call(_cli_mod.cmd_attach, tid, "feedback", "edge case coverage was thin")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -2407,8 +2407,8 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_signals_review_rounds(self):
         sid = self._item()
-        self.store.create_step("review: s", step="review", role="reviewer", parent=sid)
-        rtid = self.store.create_step("review: s2", step="review", role="reviewer", parent=sid)
+        self.store.create_step("review: s", step="review", role="agent", parent=sid)
+        rtid = self.store.create_step("review: s2", step="review", role="agent", parent=sid)
         self.store.close(rtid, "rejected")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -2416,7 +2416,7 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_signals_conflict(self):
         sid = self._item()
-        pr_tid = self.store.create_step("open-pr: s", step="open-pr", role="pr-watcher", parent=sid)
+        pr_tid = self.store.create_step("open-pr: s", step="open-pr", role="agent", parent=sid)
         self.store.close(pr_tid, "conflict-rebase")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -2424,8 +2424,8 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_shows_story_duration_for_claimed_and_closed_task(self):
         sid = self._item()
-        self.store.create_step("build: s", step="build", role="coder", parent=sid)
-        claimed = self.store.claim_ready("coder")
+        self.store.create_step("build: s", step="build", role="agent", parent=sid)
+        claimed = self.store.claim_ready("agent")
         self.store.close(claimed.id, "done")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -2433,7 +2433,7 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_shows_unknown_duration_when_task_never_claimed(self):
         sid = self._item()
-        tid = self.store.create_step("build: s", step="build", role="coder", parent=sid)
+        tid = self.store.create_step("build: s", step="build", role="agent", parent=sid)
         self.store.close(tid, "done")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -2443,13 +2443,13 @@ class TestRetro(unittest.TestCase):
         saga = self.store.create_item("saga work")
         self.store.close(saga, "merged")
         self.store.add_artifact(saga, "repo", "saga")
-        k1 = self.store.create_step("build: x", step="build", role="coder", parent=saga)
+        k1 = self.store.create_step("build: x", step="build", role="agent", parent=saga)
         self.store.close(k1, "done")
         call(_cli_mod.cmd_attach, k1, "feedback", "saga friction")
 
         orphan = self.store.create_item("orphan work")
         self.store.close(orphan, "merged")
-        k2 = self.store.create_step("build: y", step="build", role="coder", parent=orphan)
+        k2 = self.store.create_step("build: y", step="build", role="agent", parent=orphan)
         self.store.close(k2, "done")
         call(_cli_mod.cmd_attach, k2, "feedback", "orphan friction")
 
@@ -2468,7 +2468,7 @@ class TestRetro(unittest.TestCase):
         )
         saga = self.store.create_item("saga work")
         self.store.close(saga, "merged")
-        k1 = self.store.create_step("build: x", step="build", role="coder", parent=saga)
+        k1 = self.store.create_step("build: x", step="build", role="agent", parent=saga)
         self.store.close(k1, "done")
         call(_cli_mod.cmd_attach, k1, "feedback", "one")
         call(_cli_mod.cmd_attach, k1, "feedback", "two")
@@ -2486,7 +2486,7 @@ class TestRetro(unittest.TestCase):
         )
         saga = self.store.create_item("saga work")
         self.store.close(saga, "merged")
-        k1 = self.store.create_step("build: x", step="build", role="coder", parent=saga)
+        k1 = self.store.create_step("build: x", step="build", role="agent", parent=saga)
         self.store.close(k1, "done")
         call(_cli_mod.cmd_attach, k1, "feedback", "one")
         call(_cli_mod.cmd_attach, k1, "feedback", "two")
@@ -2566,7 +2566,7 @@ class TestWorklog(unittest.TestCase):
         self.assertNotIn("https://", out)
 
     def test_worklog_excludes_tasks(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_worklog)
         self.assertEqual(rc, 0, err)
         self.assertIn("no items", out)
@@ -2590,7 +2590,7 @@ class TestCadenceStepDTO(unittest.TestCase):
         _fake_setUp(self)
 
     def test_show_cadence_task_includes_since(self):
-        tid = self.store.create_step("trend: window", step="audit", role="auditor")
+        tid = self.store.create_step("trend: window", step="audit", role="agent")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
@@ -2599,9 +2599,9 @@ class TestCadenceStepDTO(unittest.TestCase):
         self.assertEqual(d["fired_at"], "2026-01-01")
 
     def test_claim_cadence_task_includes_since(self):
-        tid = self.store.create_step("trend: window", step="audit", role="auditor")
+        tid = self.store.create_step("trend: window", step="audit", role="agent")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
-        rc, out, err = call(_cli_mod.cmd_claim, "auditor")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
         self.assertEqual(d["id"], tid)
@@ -2619,7 +2619,7 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         _fake_setUp(self)
 
     def _make_task(self):
-        tid = self.store.create_step("build: t", step="build", role="coder")
+        tid = self.store.create_step("build: t", step="build", role="agent")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
         return tid
 
@@ -2633,7 +2633,7 @@ class TestNodeDTOReadSurface(unittest.TestCase):
 
     def test_claim_surfaces_agent_consumed_fields(self):
         tid = self._make_task()
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
         self.assertEqual(d["id"], tid)
@@ -2664,19 +2664,19 @@ class TestWorkflowFieldNeverGoesMissing(unittest.TestCase):
         _fake_setUp(self)
 
     def test_show_includes_workflow_key_when_unset(self):
-        tid = self.store.create_step("build: t", step="build", role="coder")
+        tid = self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
         self.assertIn("workflow", json.loads(out))
 
     def test_claim_includes_workflow_key_when_unset(self):
-        self.store.create_step("build: t", step="build", role="coder")
-        rc, out, err = call(_cli_mod.cmd_claim, "coder")
+        self.store.create_step("build: t", step="build", role="agent")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         self.assertIn("workflow", json.loads(out))
 
     def test_status_json_includes_workflow_key_when_unset(self):
-        self.store.create_step("build: t", step="build", role="coder")
+        self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_status, "--json")
         self.assertEqual(rc, 0, err)
         lanes = json.loads(out)
@@ -2703,7 +2703,7 @@ class TestShowSurfacesWorkflowResolution(unittest.TestCase):
 
     def test_inherited_workflow_sources_to_the_item_not_the_step(self):
         item = self.store.create_item("item", workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
-        step = self.store.create_step("build: x", step="build", role="coder", parent=item)
+        step = self.store.create_step("build: x", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
@@ -2722,7 +2722,7 @@ class TestShowSurfacesWorkflowResolution(unittest.TestCase):
 
     def test_broken_inherited_selector_reports_the_owner_and_the_error(self):
         item = self.store.create_item("item", workflow="ghost/whatever")
-        step = self.store.create_step("build: x", step="build", role="coder", parent=item)
+        step = self.store.create_step("build: x", step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
@@ -2743,8 +2743,8 @@ class TestClaimConfigReadSurface(unittest.TestCase):
     def test_claim_surfaces_config_ci_wait(self):
         item = self.store.create_item("st", workflow="lightcycle/spec-driven@%s" % _SHA)
         self.store.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
-        self.store.create_step("watch-pr: x", step="watch-pr", role="watch-pr", parent=item)
-        rc, out, err = call(_cli_mod.cmd_claim, "watch-pr")
+        self.store.create_step("watch-pr: x", step="watch-pr", role="agent", parent=item)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
         self.assertEqual(d["config"], {"ci-wait": "15m"})
@@ -2977,7 +2977,7 @@ class TestSetWorkflow(unittest.TestCase):
         rc, item, err = call(
             _cli_mod.cmd_new, "item", "an item", "--workflow", "lightcycle/spec-driven")
         item = item.strip()
-        step = self.store.create_step("build: x", step="build", role="coder", parent=item)
+        step = self.store.create_step("build: x", step="build", role="agent", parent=item)
         self.store.edit_node(step, workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
         rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", _DEFAULT_WORKFLOW)
         self.assertEqual(rc, 0, err)

@@ -51,21 +51,21 @@ def _populated_store(claimed_minutes_ago=14):
         description="Phase 3 of the registry work. lc project scan walks a tree recursively "
         "and lists registration candidates.",
     )
-    spec = store.step("LC-143.3.1", "write the spec", step="spec-writer", role="spec-writer",
+    spec = store.step("LC-143.3.1", "write the spec", step="spec-writer", role="agent",
                       parent=scan)
     store.close(spec, "done")
-    coding = store.step("LC-143.3.4", "write the code", step="write-code", role="write-code",
+    coding = store.step("LC-143.3.4", "write the code", step="write-code", role="agent",
                         parent=scan)
-    store.step("LC-143.3.5", "open the pr", step="code-open-pr", role="open-pr", parent=scan)
+    store.step("LC-143.3.5", "open the pr", step="code-open-pr", role="agent", parent=scan)
     store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=scan)
-    store.claim_ready("write-code")
+    store.claim_ready("agent")
 
     registry = store.item("LC-143.1", REGISTRY_TITLE, workflow=WORKFLOW)
-    store.step("LC-143.1.4", "write the code", step="write-code", role="write-code", parent=registry)
-    store.claim_ready("write-code")
+    store.step("LC-143.1.4", "write the code", step="write-code", role="agent", parent=registry)
+    store.claim_ready("agent")
 
     clone = store.item("LC-143.2", CLONE_TITLE, workflow=WORKFLOW)
-    store.step("LC-143.2.4", "write the code", step="write-code", role="write-code", parent=clone)
+    store.step("LC-143.2.4", "write the code", step="write-code", role="agent", parent=clone)
 
     store.add_artifact(scan, "repo", "kenmclennan/lightcycle")
     store.add_artifact(scan, "pr", "https://github.com/kenmclennan/lightcycle/pull/143")
@@ -83,7 +83,7 @@ def _long_description_store(description=LONG_DESCRIPTION):
     item = store.item("LC-319.1", SCAN_TITLE, workflow=WORKFLOW)
     if description is not None:
         store.edit_node(item, description=description)
-    store.step("LC-319.1.4", "write the code", step="write-code", role="write-code", parent=item)
+    store.step("LC-319.1.4", "write the code", step="write-code", role="agent", parent=item)
     return store, item
 
 
@@ -91,9 +91,9 @@ def _blocked_store():
     store = DemoStore(now=lambda: _at(3))
     blocker = store.item("LC-143.1", REGISTRY_TITLE, workflow=WORKFLOW)
     blocking_step = store.step("LC-143.1.4", "write the code", step="write-code",
-                               role="write-code", parent=blocker)
+                               role="agent", parent=blocker)
     waiting = store.item("LC-143.2", CLONE_TITLE, workflow=WORKFLOW)
-    store.step("LC-143.2.4", "write the code", step="write-code", role="write-code",
+    store.step("LC-143.2.4", "write the code", step="write-code", role="agent",
                parent=waiting, deps=[blocking_step])
     return store, waiting
 
@@ -145,7 +145,7 @@ def _stacked_priority_store():
 
     store = DemoStore(now=lambda: _at(14))
     step = store.step(
-        "LC-3900.100.100", STACKED_TITLE, step="handle-feedback", role="handle-feedback",
+        "LC-3900.100.100", STACKED_TITLE, step="handle-feedback", role="agent",
     )
     store.assign(step, "worker-1")
     store.update_state(step, State.IN_PROGRESS)
@@ -162,7 +162,7 @@ def _stacked_hierarchy_store():
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-290.1", LONG_ITEM_TITLE, project="lightcycle")
     step = store.step(
-        "LC-290.1.86", STACKED_TITLE, step="implement-features", role="implement-features",
+        "LC-290.1.86", STACKED_TITLE, step="implement-features", role="agent",
         parent=item,
     )
     return store, item, step

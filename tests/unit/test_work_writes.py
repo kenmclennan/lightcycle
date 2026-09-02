@@ -405,7 +405,7 @@ class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):
         s = FakeStore()
         sid = s.create_item("st")
-        k = s.create_step("build: x", step="build", role="coder", parent=sid)
+        k = s.create_step("build: x", step="build", role="agent", parent=sid)
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
         self.assertEqual(s.get_node(sid).state, "done")
@@ -541,7 +541,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_refuses_when_a_claimed_step_is_covered_by_a_live_worker(self):
         s = FakeStore()
         item = s.create_item("feature")
-        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove(
             workers=[{"spawnid": "live-sp", "pid": 111, "step": step, "started": 100}],
@@ -608,7 +608,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_stale_claim_does_not_block(self):
         s = FakeStore()
         item = s.create_item("feature")
-        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
@@ -622,7 +622,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_success_path_removes_worktree_and_step_rows(self):
         s = FakeStore()
         item = s.create_item("feature")
-        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        step = s.create_step("build: feature", step="build", role="agent", parent=item)
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         git = FakeGitForRemove()
@@ -653,7 +653,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_force_still_refuses_a_genuinely_live_worker(self):
         s = FakeStore()
         item = s.create_item("feature")
-        step = s.create_step("build: feature", step="build", role="coder", parent=item)
+        step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove(
             workers=[{"spawnid": "live-sp", "pid": 111, "step": step, "started": 100}],

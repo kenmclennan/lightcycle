@@ -34,7 +34,7 @@ def _close_item(store, title, repo=None, reflections=0):
     if repo is not None:
         store.add_artifact(eid, "repo", repo)
     if reflections:
-        k = store.create_step("build: x", step="build", role="coder", parent=eid)
+        k = store.create_step("build: x", step="build", role="agent", parent=eid)
         store.close(k, "done")
         for i in range(reflections):
             _add_reflection(store, k, "fb %d" % i)
@@ -65,13 +65,13 @@ class TestRetroCadenceFires(unittest.TestCase):
         result = _gate(s, interval_reflections=3).execute(0.0)
         self.assertEqual(len(result.fired), 1)
 
-    def test_fires_the_fixed_engine_audit_step_and_role(self):
+    def test_fires_the_fixed_engine_audit_stage_owned_by_the_agent_role(self):
         s = FakeStore()
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
         self.assertEqual(step.step, "audit")
-        self.assertEqual(step.role, "audit")
+        self.assertEqual(step.role, "agent")
 
     def test_fired_audit_has_a_real_item_parent_carrying_retro_origin_and_no_repo(self):
         s = FakeStore()
@@ -214,11 +214,11 @@ class TestCadenceAndPendingHeaderAgree(unittest.TestCase):
 
 class TestRetroLaneVisibility(unittest.TestCase):
     def test_ready_audit_is_in_queue(self):
-        q = NodeQueue([Node(id="a", state=State.READY, role="audit", step="audit")])
+        q = NodeQueue([Node(id="a", state=State.READY, role="agent", step="audit")])
         self.assertEqual([t.id for t in q.by_lane()["queue"]], ["a"])
 
     def test_in_progress_audit_is_active(self):
-        q = NodeQueue([Node(id="a", state=State.IN_PROGRESS, role="audit", step="audit")])
+        q = NodeQueue([Node(id="a", state=State.IN_PROGRESS, role="agent", step="audit")])
         self.assertEqual([t.id for t in q.by_lane()["active"]], ["a"])
 
 

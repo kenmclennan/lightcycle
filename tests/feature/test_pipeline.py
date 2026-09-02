@@ -43,9 +43,9 @@ def _filed(ctx, spec, step):
     ctx["item"] = item
 
 
-@given("the coder has claimed the build step")
+@given("an agent has claimed the build step")
 def _has_claimed(ctx):
-    rc, out, err = ctx["h"].run("claim", "coder")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     ctx["claimed"] = json.loads(out)
 
@@ -63,33 +63,38 @@ def _file(ctx, spec, step):
     )
 
 
-@when("the coder claims the next step")
+@when("an agent claims the next step")
 def _claim(ctx):
-    rc, out, err = ctx["h"].run("claim", "coder")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     ctx["claimed"] = json.loads(out) if out.strip() else None
 
 
-@when(parsers.parse('the coder completes it with outcome "{outcome}"'))
+@when(parsers.parse('that agent completes it with outcome "{outcome}"'))
 def _complete(ctx, outcome):
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("done", ctx["claimed"]["id"], outcome)
 
 
 @when(parsers.parse('a worker completes the ready {step} step with outcome "{outcome}"'))
 def _worker_routes(ctx, step, outcome):
-    sid = ctx["h"].ready_steps("coder")[0].id
+    sid = ctx["h"].ready_agent_steps("build")[0].id
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run_as_worker(
         "handle-feedback-worker", "done", sid, outcome)
 
 
-@then(parsers.parse("there is one ready step for the {role}"))
-def _one_ready(ctx, role):
-    assert len(ctx["h"].ready_steps(role)) == 1
+@then(parsers.parse('there is one ready agent step at the "{stage}" stage'))
+def _one_ready(ctx, stage):
+    assert len(ctx["h"].ready_agent_steps(stage)) == 1
 
 
-@then(parsers.parse("there are no ready steps for the {role}"))
-def _no_ready(ctx, role):
-    assert ctx["h"].ready_steps(role) == []
+@then("there are no ready agent steps")
+def _no_ready(ctx):
+    assert ctx["h"].ready_agent_steps() == []
+
+
+@then(parsers.parse('there is no ready agent step at the "{stage}" stage'))
+def _no_ready_at(ctx, stage):
+    assert ctx["h"].ready_agent_steps(stage) == []
 
 
 @then("the claimed step is in progress")

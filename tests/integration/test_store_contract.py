@@ -29,15 +29,15 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_create_task_roundtrips_structured_attrs(self):
         s = self._store()
-        tid = s.create_step("build: x", step="build", role="coder", project="grid", goal="ship")
+        tid = s.create_step("build: x", step="build", role="agent", project="grid", goal="ship")
         t = s.get_node(tid)
-        self.assertEqual((t.role, t.step, t.project, t.goal), ("coder", "build", "grid", "ship"))
+        self.assertEqual((t.role, t.step, t.project, t.goal), ("agent", "build", "grid", "ship"))
         self.assertEqual(t.state, "ready")
 
     def test_claim_and_close_map_status(self):
         s = self._store()
-        s.create_step("build: x", step="build", role="coder")
-        claimed = s.claim_ready("coder")
+        s.create_step("build: x", step="build", role="agent")
+        claimed = s.claim_ready("agent")
         self.assertEqual(claimed.state, "in_progress")
         s.close(claimed.id, "done")
         self.assertEqual(s.get_node(claimed.id).state, "done")
@@ -54,8 +54,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_ready_reflects_deps_and_closes(self):
         s = self._store()
-        blocker = s.create_step("blocker", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker = s.create_step("blocker", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, blocker)
         ready = [t.id for t in s.ready_steps()]
         self.assertIn(blocker, ready)
@@ -65,8 +65,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_status_queue_lane_reflects_open_blocker(self):
         s = self._store()
-        blocker = s.create_step("blocker", role="coder")
-        blocked = s.create_step("blocked", role="coder")
+        blocker = s.create_step("blocker", role="agent")
+        blocked = s.create_step("blocked", role="agent")
         s.dep_add(blocked, blocker)
         lanes = StatusUseCase(s).execute().lanes
         self.assertNotIn("blocked", lanes)
@@ -82,7 +82,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_route_to_human_relabels_and_notes(self):
         s = self._store()
-        tid = s.create_step("build: x", step="build", role="coder")
+        tid = s.create_step("build: x", step="build", role="agent")
         s.route_to_human(tid, "needs a human")
         t = s.get_node(tid)
         self.assertEqual(t.role, "human")
@@ -91,14 +91,14 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
         s = self._store()
-        tid = s.create_step("build: x", step="build", role="coder")
+        tid = s.create_step("build: x", step="build", role="agent")
         s.close(tid, "done")
         results = s.nodes_closed_since("2000-01-01")
         self.assertIn(tid, [t.id for t in results])
 
     def test_tasks_closed_since_excludes_open_tasks(self):
         s = self._store()
-        s.create_step("open step", role="coder")
+        s.create_step("open step", role="agent")
         results = s.nodes_closed_since("2000-01-01")
         self.assertEqual(results, [])
 
@@ -155,7 +155,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_all_tasks_returns_many(self):
         s = self._store()
-        created = [s.create_step("step %d" % i, role="coder") for i in range(51)]
+        created = [s.create_step("step %d" % i, role="agent") for i in range(51)]
         result_ids = {t.id for t in s.all_nodes()}
         for tid in created:
             self.assertIn(tid, result_ids)
@@ -221,6 +221,31 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         )
 
 
+class TestSqliteStoreRoleCollapseMigration(unittest.TestCase):
+    def _reopen(self, store):
+        return SqliteStore(store._config)
+
+    def test_a_stage_named_role_is_rewritten_to_agent_on_open(self):
+        s = make_sqlite_store()
+        tid = s.create_step("build: x", step="build", role="agent")
+        s._conn.execute("UPDATE nodes SET role = 'coder' WHERE id = ?", (tid,))
+        s._conn.commit()
+
+        self.assertEqual(self._reopen(s).get_node(tid).role, "agent")
+
+    def test_a_human_role_is_left_alone(self):
+        s = make_sqlite_store()
+        tid = s.create_step("await-merge: x", step="await-merge", role="human")
+
+        self.assertEqual(self._reopen(s).get_node(tid).role, "human")
+
+    def test_an_item_is_left_alone(self):
+        s = make_sqlite_store()
+        iid = s.create_item("an item")
+
+        self.assertIsNone(self._reopen(s).get_node(iid).role)
+
+
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
@@ -235,13 +260,13 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         version = store._conn.execute("PRAGMA user_version").fetchone()[0]
         self.assertEqual(version, _SCHEMA_VERSION)
 
-        tid = store.create_step("write-code: x", role="write-code")
+        tid = store.create_step("write-code: x", role="agent")
         self.assertEqual(store.get_node(tid).title, "write-code: x")
 
     def test_unstamped_current_store_is_retro_stamped_with_data_intact(self):
         root = tempfile.mkdtemp()
         store = SqliteStore(self._config(root))
-        tid = store.create_step("write-code: x", role="write-code")
+        tid = store.create_step("write-code: x", role="agent")
         store._conn.execute("PRAGMA user_version = 0")
         store._conn.commit()
         store._conn.close()
@@ -313,7 +338,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def test_store_with_legacy_step_value_is_refused(self):
         root = tempfile.mkdtemp()
         store = SqliteStore(self._config(root))
-        tid = store.create_step("old style", role="write-code")
+        tid = store.create_step("old style", role="agent")
         store._conn.execute("UPDATE nodes SET step = 'build' WHERE id = ?", (tid,))
         store._conn.execute("PRAGMA user_version = 0")
         store._conn.commit()
@@ -325,7 +350,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def test_store_with_legacy_role_value_is_refused(self):
         root = tempfile.mkdtemp()
         store = SqliteStore(self._config(root))
-        tid = store.create_step("old style", role="write-code")
+        tid = store.create_step("old style", role="agent")
         store._conn.execute("UPDATE nodes SET role = 'reviewer' WHERE id = ?", (tid,))
         store._conn.execute("PRAGMA user_version = 0")
         store._conn.commit()

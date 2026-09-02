@@ -105,7 +105,7 @@ class SmokeTest(unittest.TestCase):
                 "--workflow", "lightcycle/spec-driven", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
 
-        r = _tg("claim", "write-code", root=self.root)
+        r = _tg("claim", "agent", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         step = json.loads(r.stdout)
         self.assertEqual(step["state"], "in_progress")
@@ -119,7 +119,7 @@ class SmokeTest(unittest.TestCase):
         r = _tg("show", review_id, root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         shown = json.loads(r.stdout)
-        self.assertEqual(shown["role"], "review-code")
+        self.assertEqual(shown["role"], "agent")
         self.assertEqual(shown["step"], "review-code")
         self.assertEqual(shown["state"], "ready")
 

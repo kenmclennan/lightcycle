@@ -41,13 +41,13 @@ class TestSqliteStoreBenchmark(unittest.TestCase):
     def test_create_is_fast_relative_to_calibration(self):
         s = make_sqlite_store()
         counter = iter(range(_ITERATIONS))
-        elapsed = _median_ms(lambda: s.create_step("t%d" % next(counter), role="coder"))
+        elapsed = _median_ms(lambda: s.create_step("t%d" % next(counter), role="agent"))
         calibration = _median_ms(_calibration_ms)
         _assert_ratio_within(self, "create_step", elapsed, calibration, _SINGLE_OP_MAX_RATIO)
 
     def test_close_is_fast_relative_to_calibration(self):
         s = make_sqlite_store()
-        ids = iter([s.create_step("t%d" % i, role="coder") for i in range(_ITERATIONS)])
+        ids = iter([s.create_step("t%d" % i, role="agent") for i in range(_ITERATIONS)])
         elapsed = _median_ms(lambda: s.close(next(ids), "done"))
         calibration = _median_ms(_calibration_ms)
         _assert_ratio_within(self, "close", elapsed, calibration, _SINGLE_OP_MAX_RATIO)
@@ -55,7 +55,7 @@ class TestSqliteStoreBenchmark(unittest.TestCase):
     def test_all_nodes_over_500_is_fast_relative_to_calibration(self):
         s = make_sqlite_store()
         for i in range(500):
-            s.create_step("t%d" % i, role="coder")
+            s.create_step("t%d" % i, role="agent")
         elapsed = _median_ms(lambda: s.all_nodes(), iterations=_BATCH_ITERATIONS)
         calibration = _median_ms(_calibration_ms)
         _assert_ratio_within(self, "all_nodes", elapsed, calibration, _BATCH_500_MAX_RATIO)
@@ -63,7 +63,7 @@ class TestSqliteStoreBenchmark(unittest.TestCase):
     def test_ready_steps_over_500_is_fast_relative_to_calibration(self):
         s = make_sqlite_store()
         for i in range(500):
-            s.create_step("t%d" % i, role="coder")
+            s.create_step("t%d" % i, role="agent")
         elapsed = _median_ms(lambda: s.ready_steps(), iterations=_BATCH_ITERATIONS)
         calibration = _median_ms(_calibration_ms)
         _assert_ratio_within(self, "ready_steps", elapsed, calibration, _BATCH_500_MAX_RATIO)

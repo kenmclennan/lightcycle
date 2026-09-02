@@ -5,13 +5,13 @@ from lightcycle.domain.work import Lane, State, lane_for, roll_up
 
 class TestLaneFor(unittest.TestCase):
     def test_done_maps_to_done_lane(self):
-        self.assertEqual(lane_for(State.DONE, role="coder"), Lane.DONE)
+        self.assertEqual(lane_for(State.DONE, role="agent"), Lane.DONE)
 
     def test_in_progress_maps_to_active_lane(self):
-        self.assertEqual(lane_for(State.IN_PROGRESS, role="coder"), Lane.ACTIVE)
+        self.assertEqual(lane_for(State.IN_PROGRESS, role="agent"), Lane.ACTIVE)
 
     def test_backlogged_maps_to_queue_lane(self):
-        self.assertEqual(lane_for(State.BACKLOGGED, role="coder"), Lane.QUEUE)
+        self.assertEqual(lane_for(State.BACKLOGGED, role="agent"), Lane.QUEUE)
 
     def test_backlogged_with_human_role_maps_to_queue_lane(self):
         self.assertEqual(lane_for(State.BACKLOGGED, role="human"), Lane.QUEUE)
@@ -20,7 +20,7 @@ class TestLaneFor(unittest.TestCase):
         self.assertEqual(lane_for(State.READY, role="human"), Lane.INBOX)
 
     def test_ready_with_agent_role_maps_to_queue(self):
-        self.assertEqual(lane_for(State.READY, role="coder"), Lane.QUEUE)
+        self.assertEqual(lane_for(State.READY, role="agent"), Lane.QUEUE)
 
     def test_ready_with_no_role_maps_to_queue(self):
         self.assertEqual(lane_for(State.READY, role=None), Lane.QUEUE)

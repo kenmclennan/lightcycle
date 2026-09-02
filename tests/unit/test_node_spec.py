@@ -14,7 +14,7 @@ class TestNodeSpec(unittest.TestCase):
         spec = NodeSpec(
             title="review: x",
             step="review",
-            role="reviewer",
+            role="agent",
             parent="s-1",
             deps=("t-1", "t-2"),
             project="grid",
@@ -25,7 +25,7 @@ class TestNodeSpec(unittest.TestCase):
             {
                 "title": "review: x",
                 "step": "review",
-                "role": "reviewer",
+                "role": "agent",
                 "parent": "s-1",
                 "deps": ["t-1", "t-2"],
                 "project": "grid",

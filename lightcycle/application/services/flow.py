@@ -198,6 +198,10 @@ class FlowService:
         a = self._fs.parse_step(graph.file_for(step), root)
         return a["meta"] if a else {}
 
+    def file_for_step(self, step, name=None):
+        graph, _root = self._graph_and_root(name)
+        return graph.file_for(step)
+
     def outcomes_for(self, step, name=None):
         return self.load_flow(name).outcomes_for(step)
 

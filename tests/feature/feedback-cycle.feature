@@ -10,17 +10,17 @@ Feature: The PR-feedback cycle spawns and settles handle-feedback steps
 
   Scenario: Outstanding feedback opens exactly one handle-feedback step across ticks
     When the pool ticks
-    Then there is one ready step for "handle-feedback"
+    Then there is one ready agent step at the "handle-feedback" stage
     When the handle-feedback step is marked done without clearing the feedback
     And the pool ticks again
     Then there is still exactly one handle-feedback step in total
 
   Scenario: Advancing the watermark stops the same mention from re-triggering
     When the pool ticks
-    Then there is one ready step for "handle-feedback"
+    Then there is one ready agent step at the "handle-feedback" stage
     When the handle-feedback step replies and advances the watermark
     And the pool ticks again
-    Then there are no ready steps for "handle-feedback"
+    Then there is no ready agent step at the "handle-feedback" stage
 
   Scenario: The watched step leaves the human inbox while handle-feedback is open
     When the pool ticks

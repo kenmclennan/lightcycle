@@ -9,16 +9,16 @@ Feature: Activating an item hands it to the pool
   Background:
     Given a flow where the coder builds and the reviewer reviews
 
-  Scenario: Activating an item with no step named files the workflow's entry step for its owning role, ready immediately
+  Scenario: Activating an item with no step named files the workflow's entry stage, owned by the agent role, ready immediately
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     When I activate the item
-    Then the entry step is filed for the coder
+    Then the entry step is the "build" stage, owned by the agent role
     And it is ready
 
   Scenario: The step activation produces can be claimed by the pool
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item
-    When the coder claims the next step
+    When an agent claims the next step
     Then the claimed step is in progress
 
   Scenario: Activation refuses to file a step when the workflow itself requires an artifact the item does not have
@@ -55,9 +55,9 @@ Feature: Activating an item hands it to the pool
 
   Scenario: An explicit workflow at activation overrides the item's own pin
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
-    And a second workflow "lightcycle/reviews-first" in the same origin, entering at a step owned by the reviewer
+    And a second workflow "lightcycle/reviews-first" in the same origin, entering at a different stage
     When I activate the item with workflow "lightcycle/reviews-first"
-    Then the entry step is filed for the reviewer, not the coder
+    Then the entry step is the "review" stage, not "build"
     And the item is pinned to the "lightcycle/reviews-first" workflow, not to "lightcycle/spec-driven"
 
   Scenario: Activation fails when the item carries no workflow

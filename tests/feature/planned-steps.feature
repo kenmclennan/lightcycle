@@ -9,7 +9,7 @@ Feature: Planned-step projection from the workflow graph
     Given a flow where the coder builds, the reviewer reviews, and the auditor audits
     And the item "specs/login.md" is filed at step "build"
     When the item's planned steps are read
-    Then the planned steps are "review" for the reviewer, then "audit" for the auditor
+    Then the planned steps are "review" for the agent, then "audit" for the agent
 
   Scenario: A step where a PR merging is distinct from its other outcomes projects only the merge path
     Given a flow where "await-merge" merges the item on outcome "merged", and its "changes" and "conflicted" outcomes loop back to earlier steps
@@ -42,7 +42,7 @@ Feature: Planned-step projection from the workflow graph
     Given a flow where the coder builds, the reviewer reviews, and the auditor audits
     And the item "specs/login.md" completed step "build" and is now filed at step "review"
     When the item's planned steps are read
-    Then the planned steps are "audit" for the auditor
+    Then the planned steps are "audit" for the agent
     And its id is the item's id with position 3, following the 2 steps already filed
 
   Scenario: Projected ids never collide with an already-filed step's id

@@ -11,7 +11,7 @@ class TestHierarchyUseCase(unittest.TestCase):
     def test_opening_from_a_step_roots_at_its_item(self):
         s = FakeStore()
         item = s.create_item("item")
-        step = s.create_step("step", step="write-code", role="write-code", parent=item)
+        step = s.create_step("step", step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=step)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [(item, 0), (step, 1)])
 
@@ -19,7 +19,7 @@ class TestHierarchyUseCase(unittest.TestCase):
         s = FakeStore()
         other = s.create_item("other")
         item = s.create_item("item")
-        step = s.create_step("step", step="write-code", role="write-code", parent=item)
+        step = s.create_step("step", step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([r.node.id for r in rows], [item, step])
         self.assertNotIn(other, [r.node.id for r in rows])
@@ -27,7 +27,7 @@ class TestHierarchyUseCase(unittest.TestCase):
     def test_an_item_is_its_own_root(self):
         s = FakeStore()
         item = s.create_item("solo")
-        step = s.create_step("step", step="write-code", role="write-code", parent=item)
+        step = s.create_step("step", step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [(item, 0), (step, 1)])
 
@@ -40,8 +40,8 @@ class TestHierarchyUseCase(unittest.TestCase):
 class TestLandingTab(unittest.TestCase):
     def test_active_lands_on_log(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="coder")
-        s.claim_ready("coder")
+        step = s.create_step("s", step="build", role="agent")
+        s.claim_ready("agent")
         self.assertEqual(landing_tab(s.get_node(step)), "log")
 
     def test_needs_attention_human_step_lands_on_artifacts(self):
@@ -51,26 +51,26 @@ class TestLandingTab(unittest.TestCase):
 
     def test_dependency_blocked_lands_on_hierarchy(self):
         s = FakeStore()
-        blocker = s.create_step("b", step="build", role="coder")
-        step = s.create_step("s", step="build", role="coder", deps=[blocker])
+        blocker = s.create_step("b", step="build", role="agent")
+        step = s.create_step("s", step="build", role="agent", deps=[blocker])
         self.assertEqual(landing_tab(s.get_node(step)), "hierarchy")
 
     def test_queued_lands_on_hierarchy(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="coder")
+        step = s.create_step("s", step="build", role="agent")
         self.assertEqual(landing_tab(s.get_node(step)), "hierarchy")
 
     def test_done_lands_on_artifacts(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="coder")
+        step = s.create_step("s", step="build", role="agent")
         s.close(step, "done")
         self.assertEqual(landing_tab(s.get_node(step)), "artifacts")
 
 class TestRowBucket(unittest.TestCase):
     def test_dependency_blocked_step_is_queued(self):
         s = FakeStore()
-        blocker = s.create_step("b", step="build", role="coder")
-        step = s.create_step("s", step="build", role="coder", deps=[blocker])
+        blocker = s.create_step("b", step="build", role="agent")
+        step = s.create_step("s", step="build", role="agent", deps=[blocker])
         self.assertEqual(row_bucket(s.get_node(step)), "queued")
 
     def test_human_ready_step_is_needs_attention(self):
@@ -80,18 +80,18 @@ class TestRowBucket(unittest.TestCase):
 
     def test_queued_agent_step_is_queued(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="coder")
+        step = s.create_step("s", step="build", role="agent")
         self.assertEqual(row_bucket(s.get_node(step)), "queued")
 
     def test_in_progress_step_is_active(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="coder")
-        s.claim_ready("coder")
+        step = s.create_step("s", step="build", role="agent")
+        s.claim_ready("agent")
         self.assertEqual(row_bucket(s.get_node(step)), "active")
 
     def test_done_step_is_done(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="coder")
+        step = s.create_step("s", step="build", role="agent")
         s.close(step, "done")
         self.assertEqual(row_bucket(s.get_node(step)), "done")
 

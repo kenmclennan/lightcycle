@@ -299,7 +299,7 @@ def _switch_to_backlog(ctx):
 
 @when("that item is activated")
 def _activate_item(ctx):
-    ctx["store"].create_step("first step", step="build", role="coder", parent=ctx["item_id"])
+    ctx["store"].create_step("first step", step="build", role="agent", parent=ctx["item_id"])
 
 
 @when("one poll interval elapses")

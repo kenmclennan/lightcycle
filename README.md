@@ -67,14 +67,14 @@ Everything is a **node** - `item` or `step` - and the CLI is a small set of gene
 - **Steps can declare an artifact contract** (optional) in frontmatter: `accepts:` (inputs) and `produces:` (outputs), keyed by artifact type (`<type>: required|optional`). A required input gates the work; an optional input is read if present but never gates (e.g. write-code accepts `branch: optional`, since on a rework pass the branch already exists). `lc` enforces the required parts mechanically: a step whose required inputs are absent routes to `for:human` instead of running (precondition); `lc done` refuses to close until the required outputs are attached (postcondition); activating an item (`lc set --state active`) rejects an entry step whose inputs the item's artifacts can't satisfy; and `lc workflow check` statically checks the whole pipeline composes - every step's required inputs are guaranteed by some upstream producer on every path. Presence-only: it checks the item's artifact list, never git/GitHub reality. Agents with no contract are unconstrained.
 - **A step is a stage running.** "write-code", "open-pr", "review-code" are steps chained by dependencies; closing one makes its dependents ready. Which step is ready IS the stage. The chain is defined by the **workflow graph** (see [Workflows](#workflows)), not by the steps: a workflow file names the entry stage, the `outcome -> next-stage` edges, and which step file performs each stage. `lc` resolves each step's workflow (from its item) and routes its outcome through that graph - the next performer is the step file the target stage maps to (an unowned target is a `for:human` terminal). `lc workflow check` prints the graph.
 - **`lc` owns the domain and the processes.** It is the only caller of the store. It spawns/tracks workers and runs the loop. No tmux required.
-- **Workers are ephemeral and claim their own step.** The loop spawns a role (`write-code`/`open-pr`/`watch-ci`/`review-code`); the worker's first act is `lc claim <role>` (atomic), then it works and exits. A worker that dies before claiming leaves nothing stuck. Human steps (`await-merge`/`cleanup`) are never spawned; they surface in `lc inbox`.
+- **Workers are ephemeral and claim their own step.** The loop spawns a generic `agent` worker; its first act is `lc claim agent` (atomic), which takes the next ready agent step whatever its stage, and the step's own prompt and model are resolved from that stage. Then it works and exits. A worker that dies before claiming leaves nothing stuck. Human steps (`await-merge`/`cleanup`) are never spawned; they surface in `lc inbox`.
 - **Three homes: engine / `~/.lightcycle` / projects.** The **engine** is the pipx-installed package - code plus `prompts/` (the engine-owned agent prompt it spawns directly: `prompts/steps/audit.md`, the periodic retro). It ships no workflow library. **`~/.lightcycle/`** is everything that is _yours_: `config`, the store (`store.db`), `logs/`, `.worktrees/`, and the **pulled workflow bundles** under `workflows/<origin>/<sha>/` - independent of the engine, so upgrades never touch it (found by default, or `$LC_HOME`). **`projects/`** is the conventional default location for your repo checkouts - it's just where `lc project add --path` and `lc workflow init` conventionally point; the engine does not require repos to live there (see the project registry below).
 - **Workflows come from pullable sources, not the engine.** A **workflow source** is a git **origin** holding `source.toml` + `workflows/*.md` + `steps/*.md`; the engine pulls it into an immutable, sha-pinned **bundle**, and each item pins `<origin>/<name>@<sha>` at activation. The loader reads the flow and steps from that pin - there is no `.lightcycle/` override and no resolution chain. `lc init` pulls the built-in `lightcycle` origin (`workflows-remote`); `lc workflow add|upgrade|list|rm` manages origins; author your own with the plugin's `author-workflow` skill.
 - **The config names where your work lives.** `~/.lightcycle/config` (or `$LC_CONFIG`) names `projects` (the dir whose named subdirs are repos; default `~/workspace/projects`) and `specs` (base for relative spec paths; default `~/workspace/specs`), plus the global `shortcode` (id prefix), `default-origin`, and `workflows-remote`. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>`. `lc init` seeds it; `lc config [--edit]` shows or edits it.
 - **The project registry: a project is its GitHub identity.** A project is registered by its `owner/name` GitHub identity in the store's `projects` table, via `lc project add <owner/name> [--shortcode X] [--path P]`; `lc project list` shows every registered project and its checkout status, `lc project rm <owner/name>` unregisters one (the checkout on disk is left alone). A registered project can have its own `shortcode` (new item ids under it mint as `SHORTCODE-N`, and it's the prefix its specs use); a project absent from the registry, or matched ambiguously, inherits the global `shortcode`. `lc project scan [dir]` walks `dir` (default the current directory) for git repos and lists each as a candidate - its derived `owner/name`, a proposed shortcode, and whether it's new, already registered, or has no usable GitHub remote; `--json` emits the same list as structured data (`identity`, `path`, `shortcode`, `status`, `remote`, `registered_path`, `registered_shortcode` - `null` where not applicable). It never registers anything itself.
 - **One repo per item, anywhere.** An item targets exactly one repo, named by a `repo` artifact (`lc attach <item> repo <owner/name-or-path>`). The engine resolves that artifact through the project registry to the registered `local_path`; a bare name resolves when it unambiguously matches one registered identity's trailing segment, and an absolute path is used as-is with no registry lookup - repos need not live under `projects/`. A registered project with no local checkout is cloned into `<projects>/<owner>/<name>` via `gh repo clone` when the item is activated (`lc set --state active`); only an unregistered or ambiguous name is still a clear error, and a clone/auth failure fails activation without filing a step. Cross-repo work is handled by splitting the spec into one item per repo, never by a multi-repo workspace.
 - **`lc` owns worktree isolation.** On claim, `lc` creates (or reuses) a per-item git worktree of the item's repo on branch `feat/<slug>` (the `branch-prefix` config, default `feat`) from `origin/main`, under `~/.lightcycle/.worktrees/<item>`, and hands the worker its path as the claim JSON's `workspace` field (it also auto-attaches the `branch` artifact). The spec lives under `specs`, so the claim JSON also carries `spec_path` (absolute) - workers read the spec from there and do all git work in the worktree, never touching the primary tree.
-- **Labels route work:** `for:<role>` (who acts next), `step:<step>` (flow stage), `project:`/`goal:`. `for:human` steps never auto-run; they surface to you.
+- **Labels route work:** `for:<role>` (`agent` or `human`), `step:<step>` (flow stage), `project:`/`goal:`. `for:human` steps never auto-run; they surface to you.
 
 ## Workflows
 
@@ -108,7 +108,7 @@ signals:                    # stage  metric-name  outcome
   review-code  review_rounds  rejected
 ```
 
-- Each **stage** names a step file (step = file = role by default). The `nodes:` block maps a stage to a differently named file (or one step serving two positions); a target with no step file is a `for:human` terminal, and a step with no `model` is a human step.
+- Each **stage** names a step file (stage = file by default). The `nodes:` block maps a stage to a differently named file (or one step serving two positions); a target with no step file is a `for:human` terminal, and a step with no `model` is a human step.
 - The engine recognises a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_feedback`, `pr_conflict`/`_cap`/`_escalate`, `ci_failed_cap`, `mention_token`, `review_bot_allowlist`); the graph names which stage handles each. A workflow that omits `pr_*` never opens a PR.
 - The periodic retro **audit** is an **engine service**, not a workflow step - any item that produces feedback is audited on a cadence, with findings in `lc inbox`.
 - `lc workflow add <url>` validates a source at pull time; `lc workflow check [--json]` prints and statically checks the resolved graph.
@@ -138,7 +138,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc rm <id>` | delete a node |
 | `lc attach <id> <type> <value> [--label]` | attach an artifact (brief/spec/branch/pr/repo/...) |
 | `lc dep <id> --needs <id>` | link one node as a blocker of another |
-| `lc claim <role>` | (agents) atomically claim the next ready step for a role |
+| `lc claim agent` | (agents) atomically claim the next ready agent step, whatever its stage |
 
 **See what's happening / run**
 
@@ -151,7 +151,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc status` | all buckets: inbox / active / queue / blocked |
 | `lc inbox [N]` / `lc backlog [N]` | what needs you now (gates + blocked) / todo items to develop later |
 | `lc active` / `lc queue [N]` / `lc ps` | steps running now / next N agent steps / running workers |
-| `lc logs <step\|role\|run> [-f]` | tail a worker's or the loop's log |
+| `lc logs <step\|stage\|run> [-f]` | tail a worker's or the loop's log |
 | `lc trace <item> [--json]` | an item end to end: artifacts + child steps + logs |
 | `lc workflow check [--json]` | print + check the assembled flow (stages, routes, contracts, composition) |
 | `lc sweep` | release orphaned claims (dead worker -> step reclaimable) |
@@ -167,8 +167,8 @@ The Driver is the human's interactive seat and the performer of the human steps.
 
 ## Telemetry / logs
 
-- `logs/workers.json` - role, step (stamped at claim), pid, log path per worker. Each `lc sweep` (and so each run-loop tick) prunes dead entries, keeping all live workers plus the most recent `LC_WORKER_HISTORY` dead ones (default 20) so `lc logs` can still reach recently finished workers.
-- `logs/worker-<role>-<spawnid>.log` - each worker's output (`lc logs` finds it).
+- `logs/workers.json` - role, step (stamped at claim), pid, log path per worker; `lc ps` shows the claimed step's stage. Each `lc sweep` (and so each run-loop tick) prunes dead entries, keeping all live workers plus the most recent `LC_WORKER_HISTORY` dead ones (default 20) so `lc logs` can still reach recently finished workers.
+- `logs/worker-agent-<spawnid>.log` - each worker's output (`lc logs` finds it by step id, stage, or spawn).
 - `logs/run.log` - the run-loop's activity.
 - Node history gives cycle time, rework, throughput.
 

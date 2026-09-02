@@ -110,7 +110,7 @@ def _item_no_workflow(ctx):
 
 
 @given(parsers.parse(
-    'a second workflow "{workflow}" in the same origin, entering at a step owned by the reviewer'
+    'a second workflow "{workflow}" in the same origin, entering at a different stage'
 ))
 def _second_workflow(ctx, workflow):
     origin, name = workflow.split("/", 1)
@@ -146,26 +146,27 @@ def _activate_step(ctx):
     ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("set", ctx["step"], "--state", "active")
 
 
-@when("the coder claims the next step")
+@when("an agent claims the next step")
 def _claim(ctx):
-    rc, out, err = ctx["h"].run("claim", "coder")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     ctx["claimed"] = json.loads(out) if out.strip() else None
 
 
-@then("the entry step is filed for the coder")
-def _entry_for_coder(ctx):
+@then(parsers.parse('the entry step is the "{stage}" stage, owned by the agent role'))
+def _entry_stage_owned_by_agent(ctx, stage):
     assert ctx["rc"] == 0, ctx["err"]
     node = ctx["h"].store.get_node(ctx["filed_step"])
-    assert node.role == "coder"
+    assert node.step == stage
+    assert node.role == "agent"
 
 
-@then(parsers.parse('the entry step is filed for the {role}, not the {other_role}'))
-def _entry_for_role_not_other(ctx, role, other_role):
+@then(parsers.parse('the entry step is the "{stage}" stage, not "{other_stage}"'))
+def _entry_stage_not_other(ctx, stage, other_stage):
     assert ctx["rc"] == 0, ctx["err"]
     node = ctx["h"].store.get_node(ctx["filed_step"])
-    assert node.role == role
-    assert node.role != other_role
+    assert node.step == stage
+    assert node.step != other_stage
 
 
 @then("it is ready")

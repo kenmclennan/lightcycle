@@ -29,6 +29,9 @@ class ResolveLogUseCase:
         for w in reversed(self._workers.workers_state()):
             if w.get("step") == input.target or w.get("role") == input.target:
                 return ResolveLogResponse(path=w["log"])
+        for w in reversed(self._workers.workers_state()):
+            if self._stage_of(w.get("step")) == input.target:
+                return ResolveLogResponse(path=w["log"])
         try:
             node = self._store.get_node(input.target)
         except KeyError:
@@ -40,3 +43,11 @@ class ResolveLogUseCase:
             if os.path.exists(candidate):
                 return ResolveLogResponse(path=candidate)
         return ResolveLogResponse(path=None)
+
+    def _stage_of(self, step_id):
+        if not step_id:
+            return None
+        try:
+            return self._store.get_node(step_id).step
+        except KeyError:
+            return None

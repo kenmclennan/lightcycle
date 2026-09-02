@@ -94,7 +94,7 @@ def _have_activated_both(ctx):
 
 @when("the coder claims the next step")
 def _claim(ctx):
-    rc, out, err = ctx["h"].run("claim", "coder")
+    rc, out, err = ctx["h"].run("claim", "agent")
     assert rc == 0, err
     ctx["claimed"] = json.loads(out)
 

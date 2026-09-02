@@ -9,7 +9,7 @@ from tests.support.sqlite_store_factory import make_sqlite_store
 class TestParkTask(unittest.TestCase):
     def test_empty_observation_raises(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        bid = s.create_step("build: x", step="build", role="agent")
         with self.assertRaises(UseCaseError):
             ParkStepUseCase(s).execute(
                 ParkInput(step=bid, observation="  ", decision="decide X")
@@ -17,7 +17,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_empty_decision_raises(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        bid = s.create_step("build: x", step="build", role="agent")
         with self.assertRaises(UseCaseError):
             ParkStepUseCase(s).execute(
                 ParkInput(step=bid, observation="something happened", decision="")
@@ -25,7 +25,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_park_sets_needs_reason_role_and_note_on_fake_store(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        bid = s.create_step("build: x", step="build", role="agent")
         ParkStepUseCase(s).execute(
             ParkInput(step=bid, observation="something happened", decision="decide X")
         )
@@ -37,7 +37,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_park_sets_needs_reason_role_and_note_on_sqlite_store(self):
         s = make_sqlite_store()
-        bid = s.create_step("build: x", step="build", role="coder")
+        bid = s.create_step("build: x", step="build", role="agent")
         ParkStepUseCase(s).execute(
             ParkInput(step=bid, observation="something happened", decision="decide X")
         )
@@ -49,7 +49,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_park_carries_resume_fields_when_present(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="coder")
+        bid = s.create_step("build: x", step="build", role="agent")
         ParkStepUseCase(s).execute(
             ParkInput(
                 step=bid, observation="something happened", decision="decide X",

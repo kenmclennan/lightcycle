@@ -25,13 +25,13 @@ def _store_for(root, spawn_id=None):
 
 
 def _successor_spec(step_id):
-    return NodeSpec(title="review: x", step="review", role="reviewer", deps=(step_id,))
+    return NodeSpec(title="review: x", step="review", role="agent", deps=(step_id,))
 
 
 def _seed_claimed(root, spawn_id):
     store = _store_for(root, spawn_id)
-    store.create_step("build: x", step="build", role="coder")
-    step_id = store.claim_ready("coder").id
+    store.create_step("build: x", step="build", role="agent")
+    step_id = store.claim_ready("agent").id
     store.disconnect()
     return step_id
 
@@ -40,7 +40,7 @@ def _claim_worker(root, spawn_id, barrier, q):
     try:
         store = _store_for(root, spawn_id)
         barrier.wait()
-        node = store.claim_ready("coder")
+        node = store.claim_ready("agent")
         q.put((spawn_id, node.id if node else None))
         store.disconnect()
     except Exception as exc:
@@ -63,7 +63,7 @@ class TestAtomicClaim(unittest.TestCase):
     def test_concurrent_claim_yields_exactly_one_winner(self):
         root = _make_root()
         seed = _store_for(root)
-        step_id = seed.create_step("build: x", step="build", role="coder")
+        step_id = seed.create_step("build: x", step="build", role="agent")
         seed.disconnect()
 
         n = 8
@@ -142,7 +142,7 @@ class TestAtomicComplete(unittest.TestCase):
         store_a.reclaim(step_id)
 
         store_b = _store_for(root, "B")
-        reclaimed = store_b.claim_ready("coder")
+        reclaimed = store_b.claim_ready("agent")
         self.assertEqual(reclaimed.id, step_id)
         self.assertEqual(store_b.get_node(step_id).claimed_by, "B")
 

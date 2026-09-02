@@ -168,7 +168,7 @@ def _node_showing_content_indicator(ctx):
 def _an_item(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     ctx["node_id"] = item
@@ -179,7 +179,7 @@ def _an_item(ctx):
 def _hierarchy_item_step(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -189,8 +189,8 @@ def _hierarchy_item_step(ctx):
 def _a_node_in_the_hierarchy(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -200,7 +200,7 @@ def _a_node_in_the_hierarchy(ctx):
 def _hierarchy_tab_is_open(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="build", role="coder", parent=item)
+    step = store.create_step("s", step="build", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -210,8 +210,8 @@ def _hierarchy_tab_is_open(ctx):
 def _item_with_active_current_step_highlighted(ctx):
     store = FakeStore()
     node_id = store.create_item("Item")
-    step = store.create_step("s", step="build", role="coder", parent=node_id)
-    store.claim_ready("coder")
+    step = store.create_step("s", step="build", role="agent", parent=node_id)
+    store.claim_ready("agent")
     ctx["node_id"] = node_id
     ctx["step_id"] = step
     ctx["expected_log_target_id"] = step
@@ -222,8 +222,8 @@ def _item_with_active_current_step_highlighted(ctx):
 def _item_with_all_steps_done_highlighted(ctx):
     store = FakeStore()
     node_id = store.create_item("Item")
-    first = store.create_step("s1", step="build", role="coder", parent=node_id)
-    last = store.create_step("s2", step="write-code", role="write-code", parent=node_id)
+    first = store.create_step("s1", step="build", role="agent", parent=node_id)
+    last = store.create_step("s2", step="write-code", role="agent", parent=node_id)
     store.close(first, "done")
     store.close(last, "done")
     ctx["node_id"] = node_id
@@ -235,7 +235,7 @@ def _item_with_all_steps_done_highlighted(ctx):
 def _hierarchy_open_queued_step(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="build", role="coder", parent=item)
+    step = store.create_step("s", step="build", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -245,8 +245,8 @@ def _hierarchy_open_queued_step(ctx):
 def _hierarchy_open_active_step(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="build", role="coder", parent=item)
-    store.claim_ready("coder")
+    step = store.create_step("s", step="build", role="agent", parent=item)
+    store.claim_ready("agent")
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -268,7 +268,7 @@ def _step_title_is_step_name_and_body(ctx):
     item = store.create_item("Item")
     step = store.create_step(
         "implement-features: Deliver the operator-monitoring feature",
-        step="implement-features", role="coder", parent=item,
+        step="implement-features", role="agent", parent=item,
     )
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -280,7 +280,7 @@ def _step_title_is_step_name_and_body(ctx):
 def _step_at_stage_with_display(ctx, stage, phrase):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step=stage, role="coder", parent=item)
+    step = store.create_step("s", step=stage, role="agent", parent=item)
     ctx["step_id"] = step
     ctx["fs"] = FakeFs(metas={
         "coder": {"model": "sonnet", "step": stage, "display": phrase},
@@ -309,7 +309,7 @@ def _node_with_explicit_id(ctx, node_id, id_source):
 def _colliding_ids(ctx):
     store = FakeStore()
     item = store.create_item("Item", id="LIGHTCYCLE-3.1")
-    step = store.create_step("Step", step="build", role="coder", parent=item, id="LIGHTCYCLE-3.1.1")
+    step = store.create_step("Step", step="build", role="agent", parent=item, id="LIGHTCYCLE-3.1.1")
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -345,12 +345,12 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
     else:
         item = store.create_item("Item", id="LC-30.100")
         step = store.create_step(
-            "s", step=_HSTACK_TITLE, role="coder", parent=item, id="LC-30.100.100",
+            "s", step=_HSTACK_TITLE, role="agent", parent=item, id="LC-30.100.100",
         )
         ctx["item_id"] = item
         ctx["target_id"] = step
         width = _hierarchy_stack_terminal_width(
-            mode, ["LC-30.100", "LC-30.100.100"], ["coder"], depth
+            mode, ["LC-30.100", "LC-30.100.100"], ["agent"], depth
         )
     ctx["target_depth"] = depth
     _launch(ctx, store, item, size=(width, 24))
@@ -359,9 +359,9 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
 @given("a step blocked on another item's completion")
 def _step_blocked_on_dependency(ctx):
     store = FakeStore()
-    blocker = store.create_step("blocker", step="build", role="coder")
+    blocker = store.create_step("blocker", step="build", role="agent")
     item = store.create_item("Item")
-    step = store.create_step("s", step="build", role="coder", parent=item, deps=[blocker])
+    step = store.create_step("s", step="build", role="agent", parent=item, deps=[blocker])
     ctx["step_id"] = step
     _launch(ctx, store, item)
 
@@ -370,7 +370,7 @@ def _build_long_store(n=30):
     store = FakeStore()
     item = store.create_item("Item")
     for i in range(n):
-        store.create_step("s%d" % i, step="build", role="coder", parent=item)
+        store.create_step("s%d" % i, step="build", role="agent", parent=item)
     return store, item
 
 
@@ -417,7 +417,7 @@ def _hierarchy_longer_than_one_screen(ctx):
 def _node_type_highlighted(ctx, node_type):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
     ids = {"item": item, "step": step}
     ctx["target_id"] = ids[node_type]
     _launch(ctx, store, item)
@@ -430,7 +430,7 @@ def _node_type_highlighted(ctx, node_type):
 def _opened_node_from_hierarchy(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    other = store.create_step("s", step="write-code", role="write-code", parent=item)
+    other = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["other_id"] = other
     _launch(ctx, store, item)
@@ -463,7 +463,7 @@ def _node_highlighted_not_opened(ctx):
     store = FakeStore()
     item = store.create_item("Item")
     store.add_artifact(item, "repo", "org/repo")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -474,8 +474,8 @@ def _node_highlighted_not_opened(ctx):
 def _active_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     ctx["step_id"] = step
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -486,8 +486,8 @@ def _active_step_highlighted(ctx):
 def _done_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    store.create_step("o", step="review-code", role="review-code", parent=item)
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    store.create_step("o", step="review-code", role="agent", parent=item)
     store.close(step, "done")
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -511,7 +511,7 @@ def _human_step_highlighted(ctx):
 def _queued_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="build", role="coder", parent=item)
+    step = store.create_step("s", step="build", role="agent", parent=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -530,7 +530,7 @@ def _current_node_root_item(ctx):
 def _current_node_nested_step(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["step_id"] = step
     _launch(ctx, store, step)
 
@@ -539,8 +539,8 @@ def _current_node_nested_step(ctx):
 def _item_one_done_one_queued(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    done_step = store.create_step("s1", step="build", role="coder", parent=item)
-    queued_step = store.create_step("s2", step="write-code", role="write-code", parent=item)
+    done_step = store.create_step("s1", step="build", role="agent", parent=item)
+    queued_step = store.create_step("s2", step="write-code", role="agent", parent=item)
     store.close(done_step, "done")
     ctx["item_id"] = item
     ctx["step_id"] = queued_step
@@ -552,9 +552,9 @@ def _item_forty_done_one_queued(ctx):
     store = FakeStore()
     item = store.create_item("Item")
     for i in range(40):
-        step = store.create_step("s%d" % i, step="build", role="coder", parent=item)
+        step = store.create_step("s%d" % i, step="build", role="agent", parent=item)
         store.close(step, "done")
-    queued_step = store.create_step("s-last", step="write-code", role="write-code", parent=item)
+    queued_step = store.create_step("s-last", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = queued_step
     _launch(ctx, store, item)
@@ -565,7 +565,7 @@ def _item_every_step_done(ctx):
     store = FakeStore()
     item = store.create_item("Item")
     for i in range(3):
-        step = store.create_step("s%d" % i, step="build", role="coder", parent=item)
+        step = store.create_step("s%d" % i, step="build", role="agent", parent=item)
         store.close(step, "done")
     ctx["item_id"] = item
     _launch(ctx, store, item)
@@ -598,7 +598,7 @@ def _it_renders(ctx):
 
 @when("that step is claimed and becomes active")
 def _step_claimed_becomes_active(ctx):
-    ctx["store"].claim_ready("coder")
+    ctx["store"].claim_ready("agent")
 
 
 @when("one poll interval elapses")
@@ -797,7 +797,7 @@ def _step_row_label_is_step_name(ctx):
     title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
     role_text = _rendered_cell_text(ctx, ctx["step_id"], "role").strip()
     assert title_text == "implement-features"
-    assert role_text == "coder"
+    assert role_text == "agent"
     assert "Deliver the operator-monitoring feature" not in title_text
 
 
@@ -860,7 +860,7 @@ def _first_line_role_right_aligned(ctx):
     rest = content[GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]:]
     assert rest.startswith(ctx["target_id"])
     if ctx["target_depth"] != 0:
-        assert content.rstrip().endswith("coder")
+        assert content.rstrip().endswith("agent")
 
 
 @then(parsers.parse(

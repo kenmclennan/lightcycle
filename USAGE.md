@@ -24,7 +24,7 @@ lc inbox               # what needs YOU now (gates + blocks)
 lc backlog             # backlog items to develop later
 lc active              # what agents are working now
 lc queue 10            # next 10 upcoming agent steps
-lc ps                  # running workers: role, step, pid, alive/dead
+lc ps                  # running workers: stage, step, pid, alive/dead
 lc logs run -f         # tail the run-loop
 lc logs <step> -f      # tail the worker on a step
 lc logs write-code -f  # tail the most recent write-code worker

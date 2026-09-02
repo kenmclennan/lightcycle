@@ -143,8 +143,8 @@ def _launch(ctx, store, size=None):
 def _priority_with_item(ctx):
     store = FakeStore()
     item = store.create_item("an item")
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store)
@@ -155,7 +155,7 @@ def _item_full_identity(ctx):
     store = FakeStore()
     item = store.create_item("Full item", workflow="lightcycle/spec-driven@abc123")
     store.add_artifact(item, "repo", "org/repo")
-    store.create_step("write code", step="write-code", role="write-code", parent=item)
+    store.create_step("write code", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     _launch(ctx, store)
 
@@ -164,7 +164,7 @@ def _item_full_identity(ctx):
 def _item_no_workflow(ctx):
     store = FakeStore()
     item = store.create_item("No workflow item")
-    store.create_step("write code", step="write-code", role="write-code", parent=item)
+    store.create_step("write code", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     _launch(ctx, store)
 
@@ -173,7 +173,7 @@ def _item_no_workflow(ctx):
 def _item_at_step(ctx, step):
     store = FakeStore()
     item = store.create_item("Item")
-    store.create_step("s", step=step, role="write-code", parent=item)
+    store.create_step("s", step=step, role="agent", parent=item)
     ctx["item_id"] = item
     _launch(ctx, store)
 
@@ -187,7 +187,7 @@ def _item_at_step_with_display(ctx, step, phrase):
     })
     store = FakeStore()
     item = store.create_item("Item")
-    store.create_step("s", step=step, role="write-code", parent=item)
+    store.create_step("s", step=step, role="agent", parent=item)
     ctx["item_id"] = item
     _launch(ctx, store)
 
@@ -210,8 +210,8 @@ def _active_item_claimed_minutes_ago(ctx, step, minutes):
 
     store = FakeStore(now=lambda: claimed_at.isoformat())
     item = store.create_item("Item")
-    store.create_step("s", step=step, role="write-code", parent=item)
-    store.claim_ready("write-code")
+    store.create_step("s", step=step, role="agent", parent=item)
+    store.claim_ready("agent")
 
     ctx["item_id"] = item
     ctx["store"] = store
@@ -231,8 +231,8 @@ def _item_human_step_no_worker(ctx):
 def _step_selected(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     ctx["step_id"] = step
     session = _launch(ctx, store)
     session.press("enter")
@@ -255,8 +255,8 @@ def _node_with_status(ctx, status):
     store = FakeStore()
     if status == "active":
         item = store.create_item("Item")
-        store.create_step("s", step="build", role="coder", parent=item)
-        store.claim_ready("coder")
+        store.create_step("s", step="build", role="agent", parent=item)
+        store.claim_ready("agent")
         node_id = item
     elif status == "needs-attention on a human step":
         item = store.create_item("Item")
@@ -269,11 +269,11 @@ def _node_with_status(ctx, status):
         node_id = item
     elif status == "queued, not yet run":
         item = store.create_item("Item")
-        store.create_step("s", step="build", role="coder", parent=item)
+        store.create_step("s", step="build", role="agent", parent=item)
         node_id = item
     elif status == "done":
         item = store.create_item("Item")
-        step = store.create_step("s", step="build", role="coder", parent=item)
+        step = store.create_step("s", step="build", role="agent", parent=item)
         store.close(step, "done")
         node_id = item
     else:
@@ -296,7 +296,7 @@ def _hub_open_on_artifacts_tab(ctx):
 def _open_hub_on_tab(ctx, tab):
     store = FakeStore()
     item = store.create_item("Item")
-    store.create_step("s", step="build", role="coder", parent=item)
+    store.create_step("s", step="build", role="agent", parent=item)
     session = _launch(ctx, store)
     session.press("enter")
     screen = session.app.screen
@@ -310,7 +310,7 @@ def _open_hub_on_tab(ctx, tab):
 def _hub_open_on_tab(ctx, tab):
     store = FakeStore()
     item = store.create_item("Item")
-    store.create_step("s", step="build", role="coder", parent=item)
+    store.create_step("s", step="build", role="agent", parent=item)
     session = _launch(ctx, store)
     session.press("enter")
     screen = session.app.screen
@@ -349,7 +349,7 @@ def _item_blocked_with_step(ctx):
     blocker = store.create_item("Blocker item")
     item = store.create_item("Blocked item")
     store.dep_add(item, blocker)
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["node_id"] = item
     ctx["blocker_id"] = blocker
@@ -362,7 +362,7 @@ def _item_blocked_with_step(ctx):
 def _item_escalated_rework(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
     store.update_metadata(step, {"needs": "Resolve the merge conflict manually"})
     store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
@@ -374,7 +374,7 @@ def _item_escalated_rework(ctx):
 def _item_escalated_rework_with_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
     store.update_metadata(
         step,
         {"needs": "Resolve the merge conflict manually", "reason": "CI reported a real conflict"},
@@ -389,7 +389,7 @@ def _item_escalated_rework_with_reason(ctx):
 def _item_escalated_long_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
     store.update_metadata(
         step, {"needs": "Resolve the merge conflict manually", "reason": LC_277_6_REASON}
     )
@@ -403,7 +403,7 @@ def _item_escalated_long_reason(ctx):
 def _item_escalated_over_cap_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
     store.update_metadata(
         step, {"needs": "Resolve the merge conflict manually", "reason": LC_277_6_REASON_EXTENDED}
     )
@@ -417,7 +417,7 @@ def _item_escalated_over_cap_reason(ctx):
 def _item_escalated_resizable_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("write code", step="write-code", role="write-code", parent=item)
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
     store.update_metadata(
         step,
         {
@@ -437,10 +437,10 @@ def _item_that_is(ctx, status):
     store = FakeStore()
     item = store.create_item("Item")
     if status == "active":
-        store.create_step("s", step="build", role="coder", parent=item)
-        store.claim_ready("coder")
+        store.create_step("s", step="build", role="agent", parent=item)
+        store.claim_ready("agent")
     elif status == "queued":
-        store.create_step("s", step="build", role="coder", parent=item)
+        store.create_step("s", step="build", role="agent", parent=item)
     else:
         raise AssertionError("unhandled status %r" % status)
     ctx["item_id"] = item
@@ -479,11 +479,11 @@ def _cycle_to_tab(ctx, tab):
 def _blocked_items_hub_open_with_content(ctx):
     store = FakeStore()
     blocker = store.create_item("Blocker item")
-    store.create_step("s", step="build", role="coder", parent=blocker)
+    store.create_step("s", step="build", role="agent", parent=blocker)
     item = store.create_item("Blocked item")
     store.dep_add(item, blocker)
-    store.create_step("own step", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    store.create_step("own step", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     store.add_artifact(item, "repo", "org/repo")
     store.edit_node(item, description="A description")
     ctx["item_id"] = item
@@ -505,10 +505,10 @@ def _jump_to_blocking_item(ctx):
 def _opened_from_priority_row(ctx):
     store = FakeStore()
     other = store.create_item("Other")
-    store.create_step("other", step="build", role="coder", parent=other)
+    store.create_step("other", step="build", role="agent", parent=other)
     item = store.create_item("Target")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     store.add_artifact(item, "repo", "org/repo")
     store.edit_node(item, description="A description")
     ctx["item_id"] = item
@@ -525,7 +525,7 @@ def _opened_from_priority_row(ctx):
 def _opened_and_navigated(ctx):
     store = FakeStore()
     item = store.create_item("Target")
-    store.create_step("s", step="build", role="coder", parent=item)
+    store.create_step("s", step="build", role="agent", parent=item)
     session = _launch(ctx, store)
     session.press("enter")
     screen = session.app.screen
@@ -568,8 +568,8 @@ def _opened_backlog_hub(ctx):
 def _step_reclaimed(ctx):
     store = FakeStore()
     item = store.create_item("Item")
-    step = store.create_step("s", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     store.reclaim(step)
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -665,7 +665,7 @@ def _no_elapsed_shown(ctx):
 @then("the header shows its role and its state")
 def _header_shows_role_and_state(ctx):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-role") == "ROLE: write-code"
+    assert _text(screen, "#hub-role") == "ROLE: agent"
     assert _text(screen, "#hub-state") is not None
 
 
@@ -959,7 +959,7 @@ def _backlog_reappears_same_position(ctx):
 def _reclaimed_shows_queued(ctx):
     screen = ctx["session"].app.screen
     assert _text(screen, "#hub-role") is not None
-    assert "write-code" in _text(screen, "#hub-role")
+    assert "agent" in _text(screen, "#hub-role")
     assert _text(screen, "#hub-elapsed") is None
 
     table = screen.query_one(HierarchyPagingTable)
@@ -993,8 +993,8 @@ def _look_at_it(ctx):
 def test_hub_footer_shortcuts_include_open_blocker():
     store = FakeStore()
     item = store.create_item("an item")
-    store.create_step("write code", step="write-code", role="write-code", parent=item)
-    store.claim_ready("write-code")
+    store.create_step("write code", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
     session = launch(make_test_container(store=store))
     try:
         session.run(

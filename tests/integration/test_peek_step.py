@@ -5,6 +5,7 @@ import unittest
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.peek_step import PeekStepInput, PeekStepUseCase
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 
@@ -46,10 +47,10 @@ class TestPeekStepUseCaseReadsTheOriginsCurrentBundle(unittest.TestCase):
 
         store = FakeStore()
         item = store.create_item("an item", workflow="acme/build@sha-old")
-        flow = FlowService(None, store, config, adapter)
+        flow = FlowService(FakeFs(), store, config, adapter)
 
         resp = PeekStepUseCase(store, flow, config, adapter).execute(
-            PeekStepInput(node_id=item, role="write-code"))
+            PeekStepInput(node_id=item, stage="write-code"))
 
         self.assertEqual(resp.pin, "acme/build@sha-new")
         self.assertEqual(resp.body.strip(), "new body")

@@ -129,8 +129,7 @@ class WorkflowSimulateUseCase:
                     break
             reason = node.notes if node is not None else "no ready step"
             violations.append(
-                "walk %d: could not claim stage '%s' (role=%s): %s"
-                % (walk_index, stage, role, reason)
+                "walk %d: could not claim stage '%s': %s" % (walk_index, stage, reason)
             )
             return None
         return resp.view.step.id
@@ -178,8 +177,8 @@ class WorkflowSimulateUseCase:
             fresh = self._store.get_node(node.id)
             reason = fresh.notes or "no ready step"
             return [
-                "walk %d: could not claim stage '%s' (role=%s): %s"
-                % (walk_index, node.step, node.role, reason)
+                "walk %d: could not claim stage '%s': %s"
+                % (walk_index, node.step, reason)
             ]
         self._synthesize_produces(item_id, pin, node.step)
         try:

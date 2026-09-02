@@ -42,7 +42,7 @@ graph LR
   tick --> sweep[sweep stale claims]
   tick --> fill[fill up to max-agents]
   fill --> worker[ephemeral claude worker]
-  worker --> claim[lc claim role]
+  worker --> claim[lc claim agent]
   claim --> run[run the step markdown in a worktree]
   run --> done[lc done outcome]
   done --> next[flow creates the next step]
@@ -50,4 +50,4 @@ graph LR
 
 ## Agnostic by construction
 
-The engine and `lc` know nothing about a specific workflow. The steps (`write-code`, `review-code`, `open-pr`, ...), their roles, and their artifact contracts live in a **workflow source** - `workflows/*.md` + `steps/*.md` in a pullable git origin - composed from generic primitives (`lc new`, `lc attach`, `lc done`, `lc dep`). Point lightcycle at a different workflow - a frontend repo, a data pipeline - by authoring or pulling a different source, not by editing the code. See [installation-and-config.md](installation-and-config.md) for workflow sources.
+The engine and `lc` know nothing about a specific workflow. The stages (`write-code`, `review-code`, `open-pr`, ...) and their artifact contracts live in a **workflow source** - `workflows/*.md` + `steps/*.md` in a pullable git origin - composed from generic primitives (`lc new`, `lc attach`, `lc done`, `lc dep`). Point lightcycle at a different workflow - a frontend repo, a data pipeline - by authoring or pulling a different source, not by editing the code. See [installation-and-config.md](installation-and-config.md) for workflow sources.
