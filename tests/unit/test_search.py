@@ -12,10 +12,7 @@ from tests.support.fake_store import FakeStore
 class TestSearchUseCase(unittest.TestCase):
     def test_matches_a_phrase_only_present_in_the_description(self):
         s = FakeStore()
-        tid = s.create_item(
-            "Four step-prompt fixes",
-            project="lightcycle-workflows",
-        )
+        tid = s.create_item("Four step-prompt fixes", "a description", project="lightcycle-workflows")
         s.edit_node(tid, description="gh pr checks --json rejects 'conclusion' on old runs")
         resp = SearchUseCase(s).execute(SearchInput(text="gh pr checks"))
         self.assertEqual([m.node.id for m in resp.matches], [tid])
@@ -23,7 +20,7 @@ class TestSearchUseCase(unittest.TestCase):
 
     def test_matches_a_done_item(self):
         s = FakeStore()
-        tid = s.create_item("guard pytest-bdd step definitions")
+        tid = s.create_item("guard pytest-bdd step definitions", "a description")
         s.close(tid, "done")
         resp = SearchUseCase(s).execute(SearchInput(text="pytest-bdd step"))
         self.assertEqual([m.node.id for m in resp.matches], [tid])
@@ -31,20 +28,20 @@ class TestSearchUseCase(unittest.TestCase):
 
     def test_matches_an_in_progress_item(self):
         s = FakeStore()
-        tid = s.create_item("pytest-bdd step precedence")
+        tid = s.create_item("pytest-bdd step precedence", "a description")
         s.update_state(tid, State.IN_PROGRESS)
         resp = SearchUseCase(s).execute(SearchInput(text="pytest-bdd step"))
         self.assertEqual([m.node.id for m in resp.matches], [tid])
 
     def test_no_match_returns_empty(self):
         s = FakeStore()
-        s.create_item("something unrelated")
+        s.create_item("something unrelated", "a description")
         resp = SearchUseCase(s).execute(SearchInput(text="nowhere to be found"))
         self.assertEqual(resp.matches, [])
 
     def test_match_is_case_insensitive(self):
         s = FakeStore()
-        tid = s.create_item("Some Title With MixedCase")
+        tid = s.create_item("Some Title With MixedCase", "a description")
         resp = SearchUseCase(s).execute(SearchInput(text="mixedcase"))
         self.assertEqual([m.node.id for m in resp.matches], [tid])
 
@@ -58,7 +55,7 @@ class TestSearchUseCase(unittest.TestCase):
 class TestRenderSearch(unittest.TestCase):
     def test_line_contains_id_state_and_snippet(self):
         s = FakeStore()
-        tid = s.create_item("a title")
+        tid = s.create_item("a title", "a description")
         s.edit_node(tid, description="the matching phrase is here")
         resp = SearchUseCase(s).execute(SearchInput(text="matching phrase"))
         lines = render_search(resp.matches, 60)
@@ -81,7 +78,7 @@ class FakeContainer:
 class TestCmdSearch(unittest.TestCase):
     def test_parses_text_and_prints_matched_id(self):
         store = FakeStore()
-        tid = store.create_item("an item")
+        tid = store.create_item("an item", "a description")
         store.edit_node(tid, description="gh pr checks --json rejects 'conclusion'")
         cli.set_container(FakeContainer(store))
         out = io.StringIO()

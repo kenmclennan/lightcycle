@@ -307,7 +307,7 @@ class TestSweep(unittest.TestCase):
 
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
-        item = s.create_item("merged feature")
+        item = s.create_item("merged feature", "a description")
         step = s.create_step("build: merged feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         s.assign(step, "live-sp")
@@ -336,7 +336,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -354,7 +354,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_a_clean_worktree_does_not_commit(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -372,7 +372,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_a_non_git_worktree_does_not_commit(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -419,7 +419,7 @@ class TestSweep(unittest.TestCase):
 
     def test_a_failed_commit_still_reclaims_and_is_reported(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -437,7 +437,7 @@ class TestSweep(unittest.TestCase):
 
     def test_an_unreadable_worktree_is_reported_as_a_capture_failure_not_a_silent_skip(self):
         s = FakeStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -467,7 +467,7 @@ class TestSweep(unittest.TestCase):
                 return super().commit_all(root, message)
 
         s = OrderTrackingStore()
-        item = s.create_item("feature")
+        item = s.create_item("feature", "a description")
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
@@ -691,7 +691,7 @@ class TestTick(unittest.TestCase):
             FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}}), s
         )
         tid = s.create_step("audit: release", step="audit", role="agent",
-                            parent=s.create_item("i", workflow="wf"))
+                            parent=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
         s.close(tid, "done")
         s._records[tid]["closed_at"] = "2026-01-01T12:00:00"
@@ -706,7 +706,7 @@ class TestTick(unittest.TestCase):
         fs = FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}})
         flow_svc = FlowService(fs, s)
         tid = s.create_step("audit: release", step="audit", role="agent",
-                            parent=s.create_item("i", workflow="wf"))
+                            parent=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
         s.close(tid, "done")
         s._records[tid]["closed_at"] = "2026-01-01T12:00:00"

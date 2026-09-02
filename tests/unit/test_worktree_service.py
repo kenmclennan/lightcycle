@@ -172,7 +172,7 @@ class TestWorktreePath(unittest.TestCase):
         )
 
     def test_resolves_under_the_items_target_repo_not_data_root(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         self.store.add_project(
             "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
         )
@@ -185,7 +185,7 @@ class TestWorktreePath(unittest.TestCase):
         )
 
     def test_absolute_repo_artifact_resolves_directly_not_under_projects_root(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         self.store.add_artifact(item, "repo", "/elsewhere/app")
 
         path = self.svc.worktree_path(item)
@@ -193,12 +193,12 @@ class TestWorktreePath(unittest.TestCase):
         self.assertEqual(path, os.path.join("/elsewhere/app", ".worktrees", item))
 
     def test_two_items_with_different_repos_resolve_under_their_own_repos(self):
-        saga_item = self.store.create_item("saga story")
+        saga_item = self.store.create_item("saga story", "a description")
         self.store.add_project(
             "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
         )
         self.store.add_artifact(saga_item, "repo", "saga")
-        horde_item = self.store.create_item("horde story")
+        horde_item = self.store.create_item("horde story", "a description")
         self.store.add_project(
             "acme/horde", local_path=os.path.join("/home/u/workspace/projects", "horde")
         )
@@ -217,7 +217,7 @@ class TestWorktreePath(unittest.TestCase):
         )
 
     def test_two_phases_in_the_same_repo_get_distinct_worktrees_and_branches(self):
-        item = self.store.create_item("Login feature")
+        item = self.store.create_item("Login feature", "a description")
         self.store.add_project(
             "acme/app", local_path=os.path.join("/home/u/workspace/projects", "app")
         )
@@ -247,19 +247,19 @@ class TestItemRepoNoFallback(unittest.TestCase):
         )
 
     def test_item_repo_returns_explicit_artifact(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         self.store.add_artifact(item, "repo", "saga")
 
         self.assertEqual(self.svc.item_repo(item), "saga")
 
     def test_item_repo_raises_when_no_repo_artifact(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
 
         with self.assertRaises(UseCaseError):
             self.svc.item_repo(item)
 
     def test_has_repo_reflects_artifact_presence(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
 
         self.assertFalse(self.svc.has_repo(item))
         self.store.add_artifact(item, "repo", "saga")
@@ -271,7 +271,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         self.store = FakeStore()
 
     def test_target_repo_is_specs_root_when_workflow_sources_from_specs(self):
-        item = self.store.create_item("spec item")
+        item = self.store.create_item("spec item", "a description")
         svc = WorktreeService(
             self.store, git=None, fs=None,
             config=_Cfg("/home/u/workspace/projects"), flow=_FakeFlow(workspace="specs"),
@@ -280,7 +280,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         self.assertEqual(svc.target_repo(item), "/specs")
 
     def test_target_repo_is_projects_root_repo_when_workflow_omits_workspace(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         self.store.add_project(
             "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
         )
@@ -295,7 +295,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         )
 
     def test_target_repo_without_a_flow_falls_back_to_project(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         self.store.add_project(
             "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
         )
@@ -309,7 +309,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         )
 
     def test_ensure_does_not_silently_skip_specs_workspace_without_a_repo_artifact(self):
-        item = self.store.create_item("spec item")
+        item = self.store.create_item("spec item", "a description")
         git = _FakeGit()
         svc = WorktreeService(
             self.store, git, fs=None, config=_Cfg("/home/u/workspace/projects"),
@@ -321,7 +321,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         self.assertIn(("is_git_repo", "/specs"), git.calls)
 
     def test_remove_targets_specs_root_without_a_repo_artifact(self):
-        item = self.store.create_item("spec item")
+        item = self.store.create_item("spec item", "a description")
         self.store.add_artifact(item, "branch", "spec/x")
         git = _FakeGit()
         svc = WorktreeService(
@@ -365,7 +365,7 @@ class _CloseFlow:
 class TestRemovePhaseScoped(unittest.TestCase):
     def _item(self):
         store = FakeStore()
-        item = store.create_item("Login")
+        item = store.create_item("Login", "a description")
         store.add_project("acme/app", local_path=os.path.join("/projects", "app"))
         store.add_artifact(item, "repo", "app")
         return store, item
@@ -414,7 +414,7 @@ class TestRemovePhaseScoped(unittest.TestCase):
 class TestHasWorktreeHistory(unittest.TestCase):
     def test_false_until_ensure_creates_a_branch_artifact(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         svc = WorktreeService(store, git=None, fs=None, config=_Cfg("/projects"))
 
         self.assertFalse(svc.has_worktree_history(item))
@@ -427,7 +427,7 @@ class TestHasWorktreeHistory(unittest.TestCase):
 class TestRemoveNeverActivatedItem(unittest.TestCase):
     def test_remove_is_a_noop_for_a_never_activated_item_under_a_raising_flow(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "saga")
         git = _FakeGit()
         svc = WorktreeService(
@@ -440,7 +440,7 @@ class TestRemoveNeverActivatedItem(unittest.TestCase):
 
     def test_remove_still_tears_down_when_worktree_history_exists(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         store.add_project("acme/saga", local_path=os.path.join("/projects", "saga"))
         store.add_artifact(item, "repo", "saga")
         store.add_artifact(item, "branch", "feat/my-branch")
@@ -457,7 +457,7 @@ class TestRemoveNeverActivatedItem(unittest.TestCase):
 class TestPhaseLabelledBranch(unittest.TestCase):
     def test_item_branch_ignores_a_branch_labelled_for_a_different_phase(self):
         store = FakeStore()
-        item = store.create_item("spec item")
+        item = store.create_item("spec item", "a description")
         store.add_artifact(item, "branch", "spec/x", label="spec")
         svc = WorktreeService(
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
@@ -467,7 +467,7 @@ class TestPhaseLabelledBranch(unittest.TestCase):
 
     def test_item_branch_matches_the_current_phase_label(self):
         store = FakeStore()
-        item = store.create_item("spec item")
+        item = store.create_item("spec item", "a description")
         store.add_artifact(item, "branch", "spec/x", label="spec")
         store.add_artifact(item, "branch", "feat/x", label="code")
         svc = WorktreeService(
@@ -478,7 +478,7 @@ class TestPhaseLabelledBranch(unittest.TestCase):
 
     def test_ensure_branch_artifact_labels_the_new_branch_with_the_current_phase(self):
         store = FakeStore()
-        item = store.create_item("code item")
+        item = store.create_item("code item", "a description")
         store.add_artifact(item, "branch", "spec/x", label="spec")
         svc = WorktreeService(
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
@@ -495,7 +495,7 @@ class TestEnsureNoSilentFailure(unittest.TestCase):
         self.store = FakeStore()
 
     def test_ensure_returns_none_when_item_has_no_repo(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         git = _FakeGit()
         svc = WorktreeService(self.store, git, fs=None, config=_Cfg("/projects"))
 
@@ -503,7 +503,7 @@ class TestEnsureNoSilentFailure(unittest.TestCase):
         self.assertEqual(git.calls, [])
 
     def test_ensure_raises_when_repo_present_but_not_a_git_repo(self):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         self.store.add_project("acme/saga", local_path=os.path.join("/projects", "saga"))
         self.store.add_artifact(item, "repo", "saga")
         git = _FakeGit(git_repos=())
@@ -520,7 +520,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.projects_root, True)
 
     def _item_with_repo(self, repo="saga"):
-        item = self.store.create_item("story")
+        item = self.store.create_item("story", "a description")
         self.store.add_project(
             "acme/%s" % repo, local_path=os.path.join(self.projects_root, repo)
         )
@@ -695,7 +695,7 @@ class TestPhaseReEntry(unittest.TestCase):
             self.store, git=self.git, fs=None,
             config=_Cfg("/home/u/workspace/projects"), flow=self.flow,
         )
-        self.item = self.store.create_item("deliver the blueprint")
+        self.item = self.store.create_item("deliver the blueprint", "a description")
         self.store.add_project(
             "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
         )
@@ -810,7 +810,7 @@ class TestPhaseReEntryWithOpenPr(unittest.TestCase):
         self.phases = {"spec-writer": "spec", "build": "code"}
         self.flow = _LoopFlow(self.phases)
         self.git = _FakeGit(git_repos={os.path.join("/home/u/workspace/projects", "saga")})
-        self.item = self.store.create_item("deliver the blueprint")
+        self.item = self.store.create_item("deliver the blueprint", "a description")
         self.store.add_project(
             "acme/saga", local_path=os.path.join("/home/u/workspace/projects", "saga")
         )
@@ -923,7 +923,7 @@ class TestNamedWorkspace(unittest.TestCase):
     def setUp(self):
         self.projects_root = "/home/u/workspace/projects"
         self.store = FakeStore()
-        self.item = self.store.create_item("story")
+        self.item = self.store.create_item("story", "a description")
         self.store.add_project(
             "acme/saga", local_path=os.path.join(self.projects_root, "saga")
         )
@@ -958,7 +958,7 @@ class TestNamedWorkspace(unittest.TestCase):
             self._svc("not-a-project").target_repo(self.item)
 
     def test_a_named_workspace_needs_no_repo_artifact_on_the_item(self):
-        bare = self.store.create_item("no repo")
+        bare = self.store.create_item("no repo", "a description")
 
         target = self._svc("blueprints").target_repo(bare)
 

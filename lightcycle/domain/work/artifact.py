@@ -4,7 +4,6 @@ from typing import Optional
 _KIND_DEFAULTS = {
     "pr": "url",
     "spec": "filepath",
-    "brief": "filepath",
     "repo": "text",
     "branch": "text",
 }

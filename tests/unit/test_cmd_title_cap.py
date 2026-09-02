@@ -40,14 +40,14 @@ class TestCmdNewTitleCap(unittest.TestCase):
         cli.set_container(FakeContainer(self.store, cap=self.cap))
 
     def test_new_item_title_over_cap_is_rejected(self):
-        rc, out, err = call(cli.cmd_new, "item", "x" * (self.cap + 1))
+        rc, out, err = call(cli.cmd_new, "item", "x" * (self.cap + 1), "--description", "a description")
         self.assertEqual(rc, 1)
         self.assertIn(str(self.cap), err)
         self.assertIn("--description", err)
         self.assertEqual(self.store.all_nodes(), [])
 
     def test_new_item_title_at_cap_is_accepted(self):
-        rc, out, err = call(cli.cmd_new, "item", "x" * self.cap)
+        rc, out, err = call(cli.cmd_new, "item", "x" * self.cap, "--description", "a description")
         self.assertEqual(rc, 0)
 
 

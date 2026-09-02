@@ -123,7 +123,7 @@ def _queue_lane(ctx, name):
 
 @given(parsers.parse('an item whose only step "{blocked}" needs a step "{dep}"'))
 def _item_with_dependency_held_step(ctx, blocked, dep):
-    item = ctx["store"].create_item("some item")
+    item = ctx["store"].create_item("some item", "a description")
     ctx["ids"]["item:" + blocked] = item
     _create_step(ctx, dep)
     _create_step(ctx, blocked, deps=[dep], parent=item)

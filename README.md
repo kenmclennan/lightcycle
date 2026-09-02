@@ -43,8 +43,8 @@ lc config --edit                     # point `projects` + `specs` at your dirs (
 lc project add owner/myapp --path ./myapp   # a project is its github identity in the registry
 
 # 3. drive some work in
-item=$(lc new item "health endpoint" --workflow lightcycle/spec-driven)   # a todo item, e.g. MYAPP-1
-lc attach $item brief specs/health-brief.md    # the co-designed brief
+item=$(lc new item "health endpoint" --description "$(cat health-brief.md)" \
+  --workflow lightcycle/spec-driven)           # a todo item carrying its brief, e.g. MYAPP-1
 lc attach $item repo myapp                     # the target repo
 lc set $item --state active                    # files spec-writer; it authors the spec on a spec PR
 
@@ -63,7 +63,7 @@ Everything is a **node** - `item` or `step` - and the CLI is a small set of gene
 
 - **The engine is workflow-agnostic.** `lc` owns nodes and the flow, but has no opinion on _how you work_ - including your spec format. It only stores a spec's path as an artifact; it never parses it. The built-in `spec-driven` workflow is an _example_ (brief -> spec PR -> write-code -> open-pr -> watch-ci -> review-code -> await-merge -> cleanup). You define your own way of working by composing [workflows](#workflows), authored in a pullable **source**. A spec is whatever your steps understand.
 - **Hierarchy: item / step.** An **item** is the unit you plan and ship (one spec -> one branch -> one PR), the top of the tree, and **holds the artifacts**; a **step** is one stage of the item's workflow running (or the reusable step definition). An item is **stateful**: `todo` (captured) -> `active` (planned, running steps) -> `closed`. `lc new item` captures a todo; `lc set <item> --state active` **plans** it - filing the workflow's entry step, and first ensuring the item's repo is cloned if the registry knows it but it isn't checked out here yet.
-- **Artifacts live on the item** as a `{type, value, label?}` list (brief, spec, branch, pr, repo, ...) via `lc attach`. Steps read their parent item's artifacts - nothing is copied between steps.
+- **Artifacts live on the item** as a `{type, value, label?}` list (spec, branch, pr, repo, ...) via `lc attach`. The brief is not one of them - it is the item's mandatory `description`, which `lc new item` refuses to go without and the entry step reads. Steps read their parent item's artifacts - nothing is copied between steps.
 - **Steps can declare an artifact contract** (optional) in frontmatter: `accepts:` (inputs) and `produces:` (outputs), keyed by artifact type (`<type>: required|optional`). A required input gates the work; an optional input is read if present but never gates (e.g. write-code accepts `branch: optional`, since on a rework pass the branch already exists). `lc` enforces the required parts mechanically: a step whose required inputs are absent routes to `for:human` instead of running (precondition); `lc done` refuses to close until the required outputs are attached (postcondition); activating an item (`lc set --state active`) rejects an entry step whose inputs the item's artifacts can't satisfy; and `lc workflow check` statically checks the whole pipeline composes - every step's required inputs are guaranteed by some upstream producer on every path. Presence-only: it checks the item's artifact list, never git/GitHub reality. Agents with no contract are unconstrained.
 - **A step is a stage running.** "write-code", "open-pr", "review-code" are steps chained by dependencies; closing one makes its dependents ready. Which step is ready IS the stage. The chain is defined by the **workflow graph** (see [Workflows](#workflows)), not by the steps: a workflow file names the entry stage, the `outcome -> next-stage` edges, and which step file performs each stage. `lc` resolves each step's workflow (from its item) and routes its outcome through that graph - the next performer is the step file the target stage maps to (an unowned target is a `for:human` terminal). `lc workflow check` prints the graph.
 - **`lc` owns the domain and the processes.** It is the only caller of the store. It spawns/tracks workers and runs the loop. No tmux required.
@@ -88,7 +88,7 @@ A workflow file has these sections; only `entry` is required:
 # spec-driven
 
 entry: spec-writer
-requires: brief repo        # artifacts the item must carry to start
+requires: repo              # artifacts the item must carry to start
 
 workspace:                  # which repo a stage runs in (default: project)
   spec-writer  specs
@@ -136,7 +136,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc show <id>` | one node as JSON (artifacts, resume-state) |
 | `lc done <id> [<outcome>]` | close a node; a **step** done-with-outcome advances the flow; an item force-closes its open steps |
 | `lc rm <id>` | delete a node |
-| `lc attach <id> <type> <value> [--label]` | attach an artifact (brief/spec/branch/pr/repo/...) |
+| `lc attach <id> <type> <value> [--label]` | attach an artifact (spec/branch/pr/repo/...) |
 | `lc dep <id> --needs <id>` | link one node as a blocker of another |
 | `lc claim agent` | (agents) atomically claim the next ready agent step, whatever its stage |
 

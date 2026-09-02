@@ -14,7 +14,7 @@ def _rendered_text(widget):
 
 def _open_hub_on_active_step():
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     store.create_step("s", step="build", role="agent", parent=item)
     store.claim_ready("agent")
     session = launch(make_test_container(store=store))
@@ -62,7 +62,7 @@ def test_active_glyph_animation_restarts_after_floor_recovers_on_width_refresh()
 
 def test_pinned_ancestor_banner_pulses_when_its_own_row_is_active():
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     for i in range(39):
         store.create_step("s%d" % i, step="build", role="agent", parent=item)
     active_step = store.create_step("active", step="build", role="agent", parent=item)

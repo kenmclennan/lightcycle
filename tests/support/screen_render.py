@@ -27,9 +27,9 @@ class DemoStore(FakeStore):
             self._next_id = None
         return record
 
-    def item(self, node_id, title, **kwargs):
+    def item(self, node_id, title, description="a description", **kwargs):
         self._next_id = node_id
-        return self.create_item(title, **kwargs)
+        return self.create_item(title, description, **kwargs)
 
     def step(self, node_id, title, **kwargs):
         self._next_id = node_id

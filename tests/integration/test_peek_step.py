@@ -46,7 +46,7 @@ class TestPeekStepUseCaseReadsTheOriginsCurrentBundle(unittest.TestCase):
         adapter.write_registry("acme", "https://example.invalid/acme", "main", "sha-new")
 
         store = FakeStore()
-        item = store.create_item("an item", workflow="acme/build@sha-old")
+        item = store.create_item("an item", "a description", workflow="acme/build@sha-old")
         flow = FlowService(FakeFs(), store, config, adapter)
 
         resp = PeekStepUseCase(store, flow, config, adapter).execute(

@@ -8,7 +8,7 @@ from tests.support.fake_store import FakeStore
 class TestLinkResolves(unittest.TestCase):
     def test_adds_one_resolves_artifact_per_id_in_order(self):
         s = FakeStore()
-        owner = s.create_item("an item")
+        owner = s.create_item("an item", "a description")
         b1 = s.create_step("backlog one", role="human")
         b2 = s.create_step("backlog two", role="human")
         link_resolves(s, owner, [b1, b2])
@@ -17,7 +17,7 @@ class TestLinkResolves(unittest.TestCase):
 
     def test_unknown_id_raises_and_writes_no_artifacts(self):
         s = FakeStore()
-        owner = s.create_item("an item")
+        owner = s.create_item("an item", "a description")
         b1 = s.create_step("backlog one", role="human")
         with self.assertRaises(UseCaseError) as ctx:
             link_resolves(s, owner, [b1, "does-not-exist"])
@@ -26,7 +26,7 @@ class TestLinkResolves(unittest.TestCase):
 
     def test_resolves_artifact_is_internal(self):
         s = FakeStore()
-        owner = s.create_item("an item")
+        owner = s.create_item("an item", "a description")
         b1 = s.create_step("backlog one", role="human")
         link_resolves(s, owner, [b1])
         self.assertTrue(s.item_artifacts(owner)[0].internal)
@@ -35,7 +35,7 @@ class TestLinkResolves(unittest.TestCase):
 class TestRetireResolved(unittest.TestCase):
     def test_closes_every_linked_backlog_item_not_already_done(self):
         s = FakeStore()
-        owner = s.create_item("an item")
+        owner = s.create_item("an item", "a description")
         b1 = s.create_step("backlog one", role="human")
         b2 = s.create_step("backlog two", role="human")
         link_resolves(s, owner, [b1, b2])
@@ -51,7 +51,7 @@ class TestRetireResolved(unittest.TestCase):
 
     def test_resolved_by_artifact_is_internal(self):
         s = FakeStore()
-        owner = s.create_item("an item")
+        owner = s.create_item("an item", "a description")
         b1 = s.create_step("backlog one", role="human")
         link_resolves(s, owner, [b1])
         retire_resolved(s, owner)
@@ -59,7 +59,7 @@ class TestRetireResolved(unittest.TestCase):
 
     def test_already_done_backlog_item_is_left_alone(self):
         s = FakeStore()
-        owner = s.create_item("an item")
+        owner = s.create_item("an item", "a description")
         b1 = s.create_step("backlog one", role="human")
         link_resolves(s, owner, [b1])
         s.close(b1, "already handled")
@@ -69,7 +69,7 @@ class TestRetireResolved(unittest.TestCase):
 
     def test_no_resolves_links_is_a_no_op(self):
         s = FakeStore()
-        owner = s.create_item("an item")
+        owner = s.create_item("an item", "a description")
         retire_resolved(s, owner)
         self.assertEqual(s.item_artifacts(owner), [])
 

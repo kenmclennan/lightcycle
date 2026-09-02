@@ -17,7 +17,7 @@ def _row(id, project="", title="title"):
 class TestBacklogViewCheapPathOnUnchangedShape(unittest.TestCase):
     def _launch(self):
         store = FakeStore()
-        store.create_item("seed")
+        store.create_item("seed", "a description")
         session = launch(make_test_container(store=store))
         self.addCleanup(session.close)
         session.press("tab")
@@ -141,7 +141,7 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
 
     def _launch(self):
         store = FakeStore()
-        store.create_item("seed")
+        store.create_item("seed", "a description")
         width = self._floor_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)

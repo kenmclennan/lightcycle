@@ -46,7 +46,7 @@ def _isolate():
 
 
 def _new_item(ctx, workflow=None, title="some item"):
-    args = ["new", "item", title]
+    args = ["new", "item", title, "--description", "a description"]
     if workflow:
         args += ["--workflow", workflow]
     rc, out, err = ctx["h"].run(*args)
@@ -72,11 +72,11 @@ def _have_activated(ctx):
     ctx["filed_step"] = out.strip()
 
 
-@given(parsers.parse('a workflow "{workflow}" that requires a brief'))
-def _workflow_requires_brief(ctx, workflow):
+@given(parsers.parse('a workflow "{workflow}" that requires a design'))
+def _workflow_requires_design(ctx, workflow):
     ctx["h"] = Harness(
         ["coder", "reviewer"],
-        workflow_text=graph_text_from_metas(_METAS, entry="build", requires={"brief"}),
+        workflow_text=graph_text_from_metas(_METAS, entry="build", requires={"design"}),
     )
     ctx["workflow_name"] = workflow
 

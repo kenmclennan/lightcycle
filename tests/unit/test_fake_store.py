@@ -93,7 +93,7 @@ class TestNotes(unittest.TestCase):
 class TestParentChildren(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.item = self.s.create_item("item: foo")
+        self.item = self.s.create_item("item: foo", "a description")
         self.step = self.s.create_step("build: foo", parent=self.item)
 
     def test_child_has_parent(self):
@@ -105,7 +105,7 @@ class TestParentChildren(unittest.TestCase):
         self.assertEqual(kids[0].id, self.step)
 
     def test_children_excludes_other_records(self):
-        other_story = self.s.create_item("item: bar")
+        other_story = self.s.create_item("item: bar", "a description")
         self.s.create_step("build: bar", parent=other_story)
         self.assertEqual(len(self.s.children(self.item)), 1)
 
@@ -182,7 +182,7 @@ class TestReady(unittest.TestCase):
         self.assertEqual(self.s.ready_steps(), [])
 
     def test_stories_excluded_from_ready(self):
-        self.s.create_item("item: foo")
+        self.s.create_item("item: foo", "a description")
         self.assertEqual(self.s.ready_steps(), [])
 
     def test_claim_ready_assigns_and_returns(self):
@@ -236,7 +236,7 @@ class TestListNodes(unittest.TestCase):
         self.assertEqual(got[0].claimed_by, "sp-1")
 
     def test_closed_stories_roundtrip(self):
-        sid = self.s.create_item("item: foo")
+        sid = self.s.create_item("item: foo", "a description")
         self.s.add_artifact(sid, "spec", "specs/foo.md")
         self.s.close(sid, "done")
         items = self.s.closed_items()
@@ -251,7 +251,7 @@ class TestListNodes(unittest.TestCase):
         self.assertEqual(self.s.closed_items(), [])
 
     def test_closed_stories_excludes_open_stories(self):
-        self.s.create_item("item: open")
+        self.s.create_item("item: open", "a description")
         self.assertEqual(self.s.closed_items(), [])
 
 

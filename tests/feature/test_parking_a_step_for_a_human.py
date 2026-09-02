@@ -28,7 +28,7 @@ def _isolate():
 
 
 def _new_item(ctx, workflow=None, title="some item"):
-    args = ["new", "item", title]
+    args = ["new", "item", title, "--description", "a description"]
     if workflow:
         args += ["--workflow", workflow]
     rc, out, err = ctx["h"].run(*args)

@@ -23,7 +23,7 @@ class TestProjectShortcode(unittest.TestCase):
         config, projects = _config()
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
-        item = store.create_item("x", project="horde", shortcode="HORDE")
+        item = store.create_item("x", "a description", project="horde", shortcode="HORDE")
         step = store.create_step("s", parent=item)
         self.assertTrue(step.startswith(item + "."), step)
 
@@ -31,24 +31,24 @@ class TestProjectShortcode(unittest.TestCase):
         config, projects = _config()
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
-        iid = store.create_item("x", project="horde", shortcode="HORDE")
+        iid = store.create_item("x", "a description", project="horde", shortcode="HORDE")
         self.assertTrue(iid.startswith("HORDE-"), iid)
 
     def test_top_level_item_without_an_explicit_shortcode_uses_the_global_shortcode(self):
         config, projects = _config()
-        iid = SqliteStore(config).create_item("y", project="plain")
+        iid = SqliteStore(config).create_item("y", "a description", project="plain")
         self.assertTrue(iid.startswith("xy-"), iid)
 
     def test_top_level_item_with_no_project_uses_global_shortcode(self):
         config, _ = _config()
-        iid = SqliteStore(config).create_item("z")
+        iid = SqliteStore(config).create_item("z", "a description")
         self.assertTrue(iid.startswith("xy-"), iid)
 
     def test_a_step_ignores_the_projects_shortcode_and_takes_its_items_namespace(self):
         config, projects = _config()
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
-        item = store.create_item("x")
+        item = store.create_item("x", "a description")
         step = store.create_step("s", parent=item, project="horde")
         self.assertTrue(step.startswith(item + "."), step)
 
@@ -57,7 +57,7 @@ class TestProjectShortcode(unittest.TestCase):
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
         store.add_project("acme/saga", shortcode="SAGA")
-        horde_first = store.create_item("h1", project="horde", shortcode="HORDE")
-        saga_first = store.create_item("s1", project="saga", shortcode="SAGA")
+        horde_first = store.create_item("h1", "a description", project="horde", shortcode="HORDE")
+        saga_first = store.create_item("s1", "a description", project="saga", shortcode="SAGA")
         self.assertEqual(horde_first, "HORDE-1")
         self.assertEqual(saga_first, "SAGA-1")

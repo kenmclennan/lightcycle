@@ -15,7 +15,7 @@ def _add_reflection(store, node_id, feedback):
 
 
 def _close_item(store, title, per_step_reflections=(0,)):
-    eid = store.create_item(title)
+    eid = store.create_item(title, "a description")
     store.close(eid, "done")
     for i, count in enumerate(per_step_reflections):
         k = store.create_step("build: %d" % i, step="build", role="agent", parent=eid)

@@ -304,7 +304,7 @@ def _g_active_and_queued(ctx):
 def _g_item_active_and_queued_own(ctx):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=14))
     store = FakeStore(now=lambda: clock.now().isoformat())
-    item = store.create_item("An item with two open steps")
+    item = store.create_item("An item with two open steps", "a description")
     active = store.create_step("write the code", step="write-code", role="agent", parent=item)
     store.assign(active, "worker-1")
     store.update_state(active, State.IN_PROGRESS)
@@ -319,7 +319,7 @@ def _g_item_active_and_queued_own(ctx):
 @given("the store has an item with a step in the inbox lane and a separate active step of its own")
 def _g_item_inbox_and_active_own(ctx):
     store = FakeStore()
-    item = store.create_item("An item with an inbox step and an active step")
+    item = store.create_item("An item with an inbox step and an active step", "a description")
     store.create_step("await merge", step="code-await-merge", role="human", parent=item)
     active = store.create_step("write the code", step="write-code", role="agent", parent=item)
     store.assign(active, "worker-1")
@@ -382,19 +382,19 @@ def _g_long_title_step(ctx, group):
 def _g_three_steps_with_project(ctx, project):
     store = FakeStore()
 
-    blocked_item = store.create_item("blocked item")
+    blocked_item = store.create_item("blocked item", "a description")
     store.add_artifact(blocked_item, "repo", project)
     blocker = store.create_step("blocker", step="build", role="agent")
     store.create_step(
         "blocked step", step="build", role="agent", deps=[blocker], parent=blocked_item
     )
 
-    active_item = store.create_item("active item")
+    active_item = store.create_item("active item", "a description")
     store.add_artifact(active_item, "repo", project)
     active = store.create_step("active step", step="build", role="agent", parent=active_item)
     store.assign(active, "worker-1")
 
-    queued_item = store.create_item("queued item")
+    queued_item = store.create_item("queued item", "a description")
     store.add_artifact(queued_item, "repo", project)
     store.create_step("queued step", step="build", role="agent", parent=queued_item)
 

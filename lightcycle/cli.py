@@ -484,8 +484,7 @@ def cmd_claim(argv):
         out["branch"] = resp.branch
     if resp.spec_path:
         out["spec_path"] = resp.spec_path
-    if resp.brief:
-        out["brief"] = resp.brief
+    out["description"] = resp.description
     if resp.repo_path:
         out["repo_path"] = resp.repo_path
     if resp.config:
@@ -1003,6 +1002,12 @@ def cmd_new(argv):
         if a.parent:
             sys.stderr.write("items are top-level; --parent applies to 'lc new step'\n")
             return 2
+        if not (a.description or "").strip():
+            sys.stderr.write(
+                "--description is required for 'lc new item'; a paragraph or two describing "
+                "the work, which the entry step reads\n"
+            )
+            return 2
         try:
             resolved = resolve_shortcode(_container.store, _container.config, a.project)
         except UseCaseError as e:
@@ -1012,14 +1017,12 @@ def cmd_new(argv):
             sys.stderr.write(
                 "no --project given; minted with the global shortcode '%s'\n" % resolved.value)
         tid = _container.store.create_item(
-            a.title, project=a.project, goal=a.goal, workflow=a.workflow,
+            a.title, a.description, project=a.project, goal=a.goal, workflow=a.workflow,
             shortcode=resolved.value)
         if a.repo:
             _container.store.add_artifact(tid, "repo", a.repo)
-        if a.description or a.attention:
-            _container.store.edit_node(tid, description=a.description)
-            if a.attention:
-                _container.store.label_add(tid, "attention")
+        if a.attention:
+            _container.store.label_add(tid, "attention")
         if a.backlog:
             try:
                 link_resolves(_container.store, tid, a.backlog)

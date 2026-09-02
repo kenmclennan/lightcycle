@@ -88,7 +88,8 @@ class WorkflowSimulateUseCase:
             self._store.add_project("simulate/%s" % workspace, local_path=path)
 
     def _seed_item(self, pin, graph):
-        item_id = self._store.create_item("simulate: %s" % pin, workflow=pin)
+        item_id = self._store.create_item(
+            "simulate: %s" % pin, "simulated walk of %s" % pin, workflow=pin)
         entry_meta = self._flow.meta_for_step(graph.entry, pin)
         needed = set(graph.requires) | StepContract.from_meta(entry_meta).required_inputs()
         repo_name = "repo-%s" % item_id.replace("/", "-")

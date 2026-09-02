@@ -223,7 +223,7 @@ class TestRealStepsFlowComposition(unittest.TestCase):
     def test_spec_writer_is_the_entry_and_sources_the_specs_repo(self):
         graph, _, _ = self._graph_flow()
         self.assertEqual(graph.entry, "spec-writer")
-        self.assertEqual(graph.requires, {"brief", "repo"})
+        self.assertEqual(graph.requires, {"repo"})
         self.assertEqual(graph.workspace_for("spec-writer"), "specs")
         self.assertEqual(graph.workspace_for("write-code"), "project")
 
@@ -241,9 +241,9 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(graph.target("spec-await-merge", "spec-merged"), "write-code")
         self.assertEqual(flow.merge_outcome("code-await-merge"), "merged")
 
-    def test_spec_writer_step_accepts_brief_and_produces_spec(self):
+    def test_spec_writer_step_accepts_nothing_and_produces_spec(self):
         meta = (parse_step(_ROOT, "spec-writer") or {"meta": {}})["meta"]
-        self.assertEqual(meta.get("accepts"), {"brief": "required"})
+        self.assertIsNone(meta.get("accepts"))
         self.assertEqual(meta.get("produces"), {"spec": "required"})
 
     def test_ci_failed_cap_escalates_to_review_ci_after_three(self):

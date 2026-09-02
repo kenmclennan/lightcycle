@@ -37,9 +37,11 @@ class TestDefaultKindFor(unittest.TestCase):
     def test_pr_defaults_to_url(self):
         self.assertEqual(default_kind_for("pr"), "url")
 
-    def test_spec_and_brief_default_to_filepath(self):
+    def test_spec_defaults_to_filepath(self):
         self.assertEqual(default_kind_for("spec"), "filepath")
-        self.assertEqual(default_kind_for("brief"), "filepath")
+
+    def test_a_retired_type_falls_back_to_text(self):
+        self.assertEqual(default_kind_for("brief"), "text")
 
     def test_repo_and_branch_default_to_text(self):
         self.assertEqual(default_kind_for("repo"), "text")

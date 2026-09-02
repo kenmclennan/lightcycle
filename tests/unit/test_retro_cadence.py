@@ -29,7 +29,7 @@ def _add_reflection(store, node_id, feedback):
 
 
 def _close_item(store, title, repo=None, reflections=0):
-    eid = store.create_item(title)
+    eid = store.create_item(title, "a description")
     store.close(eid, "done")
     if repo is not None:
         store.add_artifact(eid, "repo", repo)

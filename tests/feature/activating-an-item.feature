@@ -22,8 +22,8 @@ Feature: Activating an item hands it to the pool
     Then the claimed step is in progress
 
   Scenario: Activation refuses to file a step when the workflow itself requires an artifact the item does not have
-    Given a workflow "lightcycle/spec-driven" that requires a brief
-    And an item with that workflow, with no brief attached
+    Given a workflow "lightcycle/spec-driven" that requires a design
+    And an item with that workflow, with no design attached
     When I activate the item
     Then the command is rejected
     And the item is still backlogged, with no step filed

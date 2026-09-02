@@ -12,7 +12,7 @@ def _rendered_row_text(session, widget):
 
 def _open_hub():
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     store.create_step("s", step="build", role="agent", parent=item)
     session = launch(make_test_container(store=store))
     session.press("enter")
@@ -66,7 +66,7 @@ def test_priority_list_footer_status_and_shortcut_lines_are_painted():
 
 def test_hierarchy_cursor_survives_a_layout_forced_rerender():
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     done_step = store.create_step("s1", step="build", role="agent", parent=item)
     queued_step = store.create_step("s2", step="write-code", role="agent", parent=item)
     store.close(done_step, "done")
@@ -99,7 +99,7 @@ def test_hierarchy_cursor_survives_a_layout_forced_rerender():
 
 def test_backlog_footer_status_and_shortcut_lines_are_painted():
     store = FakeStore()
-    store.create_item("todo item")
+    store.create_item("todo item", "a description")
     session = launch(make_test_container(store=store))
     try:
         session.press("tab")

@@ -97,7 +97,7 @@ def _open_priority_list(ctx):
 def _open_backlog(ctx):
     store = FakeStore()
     long_id = "B" * 68
-    store.create_item("An item", id=long_id)
+    store.create_item("An item", "a description", id=long_id)
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
     ctx["session"].press("tab")
@@ -106,7 +106,7 @@ def _open_backlog(ctx):
 
 def _open_hierarchy_tab(ctx):
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     long_id = "H" * 50
     store.create_step("s", step="build", role="agent", parent=item, id=long_id)
     ctx["store"] = store
@@ -121,7 +121,7 @@ def _open_hierarchy_tab(ctx):
 
 def _open_artifacts_tab(ctx):
     store = FakeStore()
-    item = store.create_item("Item")
+    item = store.create_item("Item", "a description")
     long_type = "A" * 69
     store.add_artifact(item, long_type, "value")
     ctx["store"] = store

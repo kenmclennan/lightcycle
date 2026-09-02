@@ -68,12 +68,13 @@ def _open_hub_on_description(ctx, node_id):
 
 def _launch_with_item(ctx, description):
     store = FakeStore()
-    item = store.create_item("Item")
-    if description is not None:
-        store.edit_node(item, description=description)
+    item = store.create_item("Item", description or "a description")
+    node = item
+    if description is None:
+        node = store.create_step("build: x", step="build", role="agent", parent=item)
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
-    _open_hub_on_description(ctx, item)
+    _open_hub_on_description(ctx, node)
     return ctx["session"]
 
 

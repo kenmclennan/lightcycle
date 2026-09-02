@@ -28,7 +28,7 @@ def _store(ctx):
 
 def _item(ctx):
     if "item" not in ctx:
-        ctx["item"] = _store(ctx).create_item("it")
+        ctx["item"] = _store(ctx).create_item("it", "a description")
     return ctx["item"]
 
 

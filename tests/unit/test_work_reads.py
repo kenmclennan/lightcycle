@@ -59,7 +59,7 @@ class TestShowNode(unittest.TestCase):
 class TestTrace(unittest.TestCase):
     def test_assembles_story_artifacts_tasks_and_logs(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         s.add_artifact(sid, "spec", "specs/x.md")
         k = s.create_step("build: x", step="build", role="agent", parent=sid)
         workers = _Workers([{"role": "agent", "step": k, "log": "/l/k.log"}])
@@ -71,21 +71,21 @@ class TestTrace(unittest.TestCase):
 
     def test_step_role_survives_to_the_trace(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         s.create_step("build: x", step="build", role="agent", parent=sid)
         resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "agent")
 
     def test_human_role_survives_to_the_trace_unchanged(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         s.create_step("ready-merge: x", step="ready-merge", role="human", parent=sid)
         resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "human")
 
     def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         k = s.create_step("build: x", step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
@@ -98,7 +98,7 @@ class TestTrace(unittest.TestCase):
 
     def test_resolves_no_log_when_pruned_and_nothing_on_disk(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         k = s.create_step("build: x", step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
@@ -107,7 +107,7 @@ class TestTrace(unittest.TestCase):
 
     def test_resolves_no_log_for_a_step_never_claimed(self):
         s = FakeStore()
-        sid = s.create_item("st")
+        sid = s.create_item("st", "a description")
         s.create_step("build: x", step="build", role="agent", parent=sid)
         root = tempfile.mkdtemp()
         resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
@@ -116,8 +116,8 @@ class TestTrace(unittest.TestCase):
 
 def _seed_mixed_store():
     s = FakeStore()
-    todo_item = s.create_item("todo item")
-    active_item = s.create_item("active item")
+    todo_item = s.create_item("todo item", "a description")
+    active_item = s.create_item("active item", "a description")
     ready = s.create_step("ready one", step="build", role="agent")
     human = s.create_step("needs me", role="human")
     running = s.create_step("running", step="build", role="agent")
@@ -228,9 +228,9 @@ class TestInboxPerItemWorkflow(unittest.TestCase):
             "wfB": graph_text_from_metas(b_metas),
         })
         flow_svc = FlowService(fs, s)
-        item_a = s.create_item("iA", workflow="wfA")
+        item_a = s.create_item("iA", "a description", workflow="wfA")
         a = s.create_step("gate: A", step="gate", role="human", parent=item_a)
-        item_b = s.create_item("iB", workflow="wfB")
+        item_b = s.create_item("iB", "a description", workflow="wfB")
         b = s.create_step("gate: B", step="gate", role="human", parent=item_b)
         rows = InboxUseCase(s, flow_svc).execute(InboxInput()).rows
         outcomes = {row.step.id: row.outcomes for row in rows}
@@ -241,7 +241,7 @@ class TestInboxPerItemWorkflow(unittest.TestCase):
 class TestInboxBacklog(unittest.TestCase):
     def _store(self):
         s = FakeStore()
-        self.todo = s.create_item("todo item")
+        self.todo = s.create_item("todo item", "a description")
         self.gate = s.create_step("a gate", step="review", role="human")
         return s
 
@@ -304,7 +304,7 @@ class TestInboxAttentionFlag(unittest.TestCase):
 
 class TestInboxProjectAndPr(unittest.TestCase):
     def _item_with_step(self, s, step_name="ready-merge", repo=None, pr=None):
-        item = s.create_item("an item")
+        item = s.create_item("an item", "a description")
         if repo:
             s.add_artifact(item, "repo", repo)
         if pr:
@@ -368,7 +368,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
 
     def test_row_pr_prefers_current_phase_over_earlier_phase(self):
         s = FakeStore()
-        item = s.create_item("an item", workflow="wf")
+        item = s.create_item("an item", "a description", workflow="wf")
         s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
         s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
         tid = s.create_step("await merge", step="code-await-merge", role="human", parent=item)
@@ -379,7 +379,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
 
     def test_row_pr_prefers_spec_phase_at_a_spec_await_merge_step(self):
         s = FakeStore()
-        item = s.create_item("an item", workflow="wf")
+        item = s.create_item("an item", "a description", workflow="wf")
         s.add_artifact(item, "pr", "https://example.com/pr/code", label="code")
         s.add_artifact(item, "pr", "https://example.com/pr/spec", label="spec")
         tid = s.create_step("await merge", step="spec-await-merge", role="human", parent=item)

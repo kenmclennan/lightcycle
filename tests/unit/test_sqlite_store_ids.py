@@ -13,13 +13,13 @@ class TestSqliteStoreIds(unittest.TestCase):
 
     def test_child_id_nests_under_parent(self):
         s = make_sqlite_store(shortcode="GRID")
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         child = s.create_step("child", parent=item)
         self.assertEqual(child, "%s.1" % item)
 
     def test_second_child_of_same_parent_increments(self):
         s = make_sqlite_store(shortcode="GRID")
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         first = s.create_step("first", parent=item)
         second = s.create_step("second", parent=item)
         self.assertEqual(first, "%s.1" % item)
@@ -27,7 +27,7 @@ class TestSqliteStoreIds(unittest.TestCase):
 
     def test_provided_id_is_adopted_when_free(self):
         s = make_sqlite_store(shortcode="GRID")
-        tid = s.create_item("spec-adopted", id="GRID-57")
+        tid = s.create_item("spec-adopted", "a description", id="GRID-57")
         self.assertEqual(tid, "GRID-57")
 
     def test_provided_id_rejected_when_taken(self):

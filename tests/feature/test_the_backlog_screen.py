@@ -92,14 +92,14 @@ def _picker_option_by_label(screen, label):
 @given("the store has a todo item")
 def _store_has_todo_item(ctx):
     store = FakeStore()
-    ctx["item_id"] = store.create_item("todo item")
+    ctx["item_id"] = store.create_item("todo item", "a description")
     ctx["store"] = store
 
 
 @given("the backlog is shown with a todo item")
 def _backlog_shown_with_item(ctx):
     store = FakeStore()
-    ctx["item_id"] = store.create_item("todo item")
+    ctx["item_id"] = store.create_item("todo item", "a description")
     _launch_and_switch(ctx, store)
 
 
@@ -108,7 +108,7 @@ def _backlog_shown_many(ctx):
     def build_store():
         store = FakeStore()
         for i in range(60):
-            store.create_item("todo %d" % i)
+            store.create_item("todo %d" % i, "a description")
         return store
 
     ctx["build_store"] = build_store
@@ -121,7 +121,7 @@ def _backlog_shown_many(ctx):
 def _backlog_shown_tagged_item(ctx, repo, project):
     store = FakeStore()
     store.add_project(project)
-    item = store.create_item("tagged item")
+    item = store.create_item("tagged item", "a description")
     store.add_artifact(item, "repo", repo)
     ctx["item_id"] = item
     _launch_and_switch(ctx, store)
@@ -130,7 +130,7 @@ def _backlog_shown_tagged_item(ctx, repo, project):
 @given("the backlog is shown with a todo item with no registered project")
 def _backlog_shown_unscoped_item(ctx):
     store = FakeStore()
-    item = store.create_item("unscoped item")
+    item = store.create_item("unscoped item", "a description")
     ctx["item_id"] = item
     _launch_and_switch(ctx, store)
 
@@ -138,7 +138,7 @@ def _backlog_shown_unscoped_item(ctx):
 @given(parsers.parse('the backlog is shown with a todo item with id "{id}" ({source})'))
 def _backlog_shown_item_with_id(ctx, id, source):
     store = FakeStore()
-    item = store.create_item("todo item", id=id)
+    item = store.create_item("todo item", "a description", id=id)
     ctx["item_id"] = item
     _launch_and_switch(ctx, store)
 
@@ -146,8 +146,8 @@ def _backlog_shown_item_with_id(ctx, id, source):
 @given(parsers.parse('the backlog is shown with two todo items whose ids are "{id_a}" and "{id_b}"'))
 def _backlog_shown_two_colliding_ids(ctx, id_a, id_b):
     store = FakeStore()
-    ctx["id_a"] = store.create_item("todo a", id=id_a)
-    ctx["id_b"] = store.create_item("todo b", id=id_b)
+    ctx["id_a"] = store.create_item("todo a", "a description", id=id_a)
+    ctx["id_b"] = store.create_item("todo b", "a description", id=id_b)
     _launch_and_switch(ctx, store)
 
 
@@ -174,7 +174,7 @@ def _backlog_stack_terminal_width(mode):
 ))
 def _backlog_row_forces_stacked(ctx, mode):
     store = FakeStore()
-    item = store.create_item(_STACK_TITLE, id=_STACK_ID)
+    item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID)
     store.add_artifact(item, "repo", _STACK_PROJECT)
     ctx["item_id"] = item
     _launch_and_switch(ctx, store, size=(_backlog_stack_terminal_width(mode), 24))
@@ -197,9 +197,9 @@ def _backlog_shown_two_projects(ctx, project_a, project_b):
     store = FakeStore()
     store.add_project(project_a)
     store.add_project(project_b)
-    item_a = store.create_item("item a")
+    item_a = store.create_item("item a", "a description")
     store.add_artifact(item_a, "repo", project_a)
-    item_b = store.create_item("item b")
+    item_b = store.create_item("item b", "a description")
     store.add_artifact(item_b, "repo", project_b)
     short_a = project_a.rsplit("/", 1)[-1]
     short_b = project_b.rsplit("/", 1)[-1]
@@ -212,7 +212,7 @@ def _backlog_shown_two_projects(ctx, project_a, project_b):
 def _backlog_shown_one_project(ctx, project):
     store = FakeStore()
     store.add_project(project)
-    item = store.create_item("item")
+    item = store.create_item("item", "a description")
     store.add_artifact(item, "repo", project)
     short = project.rsplit("/", 1)[-1]
     ctx["expected_counts"] = {short: 1}
@@ -229,10 +229,10 @@ def _backlog_shown_project_with_totals(ctx, project, total, count):
     store = FakeStore()
     store.add_project(project)
     for _ in range(count):
-        item = store.create_item("under item")
+        item = store.create_item("under item", "a description")
         store.add_artifact(item, "repo", project)
     for i in range(total - count):
-        store.create_item("other item %d" % i)
+        store.create_item("other item %d" % i, "a description")
     short = project.rsplit("/", 1)[-1]
     ctx["expected_counts"] = {short: count}
     ctx["expected_total"] = total
@@ -255,7 +255,7 @@ def _backlog_shown_project_no_items(ctx, project):
 def _backlog_shown_n_items(ctx, count):
     store = FakeStore()
     for i in range(count):
-        store.create_item("todo %d" % i)
+        store.create_item("todo %d" % i, "a description")
     _launch_and_switch(ctx, store)
 
 
@@ -269,7 +269,7 @@ def _store_items_other_project(ctx, project):
     store = FakeStore()
     store.add_project("other-project")
     for i in range(2):
-        item = store.create_item("item %d" % i)
+        item = store.create_item("item %d" % i, "a description")
         store.add_artifact(item, "repo", "other-project")
     ctx["store"] = store
 
@@ -279,7 +279,7 @@ def _backlog_shown_filtered_empty(ctx, project):
     store = FakeStore()
     store.add_project(project)
     store.add_project("other-project")
-    other = store.create_item("other item")
+    other = store.create_item("other item", "a description")
     store.add_artifact(other, "repo", "other-project")
     ctx["filter_project"] = project
     _launch_and_switch(ctx, store)
@@ -360,7 +360,7 @@ def _when_backlog_filtered(ctx, project):
 
 @when(parsers.parse('a todo item under "{project}" is created'))
 def _create_item_under_project(ctx, project):
-    item = ctx["store"].create_item("new item")
+    item = ctx["store"].create_item("new item", "a description")
     ctx["store"].add_artifact(item, "repo", project)
     ctx["new_item_id"] = item
 

@@ -295,7 +295,7 @@ class StoreContractBase:
 
     def test_story_artifacts_roundtrip(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "spec", "specs/foo.md")
         arts = s.item_artifacts(sid)
         self.assertEqual(len(arts), 1)
@@ -304,7 +304,7 @@ class StoreContractBase:
 
     def test_add_artifact_still_appends_same_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "feedback", "first note")
         s.add_artifact(sid, "feedback", "second note")
         arts = [a for a in s.item_artifacts(sid) if a.type == "feedback"]
@@ -312,7 +312,7 @@ class StoreContractBase:
 
     def test_replace_artifact_replaces_existing_same_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "spec", "specs/old.md")
         s.replace_artifact(sid, "spec", "specs/new.md")
         arts = s.item_artifacts(sid)
@@ -321,7 +321,7 @@ class StoreContractBase:
 
     def test_replace_artifact_is_generic_for_any_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "repo", "app-old")
         s.replace_artifact(sid, "repo", "app-new")
         arts = [a for a in s.item_artifacts(sid) if a.type == "repo"]
@@ -330,29 +330,28 @@ class StoreContractBase:
 
     def test_add_artifact_declared_kind_overrides_type_default(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "pr", "https://gh/1", kind="text")
         arts = s.item_artifacts(sid)
         self.assertEqual(arts[0].kind, "text")
 
     def test_add_artifact_undeclared_kind_resolves_from_type_table(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.add_artifact(sid, "spec", "specs/foo.md")
-        s.add_artifact(sid, "brief", "specs/foo-brief.md")
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/x")
         s.add_artifact(sid, "resolves", "OTHER-1")
         kinds = {a.type: a.kind for a in s.item_artifacts(sid)}
         self.assertEqual(kinds, {
-            "pr": "url", "spec": "filepath", "brief": "filepath",
+            "pr": "url", "spec": "filepath",
             "repo": "text", "branch": "text", "resolves": "text",
         })
 
     def test_add_artifact_internal_defaults_false_and_persists_true(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.add_artifact(sid, "reflection", "{}", internal=True)
         arts = {a.type: a for a in s.item_artifacts(sid)}
@@ -361,7 +360,7 @@ class StoreContractBase:
 
     def test_replace_artifact_applies_declared_and_default_kind_and_internal(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.replace_artifact(sid, "pr", "https://gh/2", kind="text", internal=True)
         arts = [a for a in s.item_artifacts(sid) if a.type == "pr"]
@@ -371,7 +370,7 @@ class StoreContractBase:
 
     def test_create_item_is_a_top_level_todo(self):
         s = self.make_store()
-        tid = s.create_item("item: foo")
+        tid = s.create_item("item: foo", "a description")
         node = s.get_node(tid)
         self.assertEqual(node.type, "item")
         self.assertIsNone(node.parent)
@@ -411,7 +410,7 @@ class StoreContractBase:
 
     def test_edit_task_reparents(self):
         s = self.make_store()
-        item = s.create_item("owning item")
+        item = s.create_item("owning item", "a description")
         tid = s.create_step("a step")
         s.edit_node(tid, parent=item)
         t = s.get_node(tid)
@@ -425,7 +424,7 @@ class StoreContractBase:
 
     def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
         s = self.make_store()
-        item = s.create_item("owning item")
+        item = s.create_item("owning item", "a description")
         tid = s.create_step("a step", parent=item)
         s.edit_node(tid, title="renamed")
         t = s.get_node(tid)
@@ -521,7 +520,7 @@ class StoreContractBase:
 
     def test_all_steps_excludes_items(self):
         s = self.make_store()
-        item = s.create_item("todo item")
+        item = s.create_item("todo item", "a description")
         step = s.create_step("a step")
         ids = [t.id for t in s.all_steps()]
         self.assertEqual(ids, [step])
@@ -564,7 +563,7 @@ class StoreContractBase:
 
     def test_item_state_rolls_up_mixed_children(self):
         s = self.make_store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         done_step = s.create_step("done step", parent=item)
         s.create_step("open step", parent=item)
         s.close(done_step, "done")
@@ -572,7 +571,7 @@ class StoreContractBase:
 
     def test_item_state_done_when_all_children_done(self):
         s = self.make_store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         a = s.create_step("a", parent=item)
         b = s.create_step("b", parent=item)
         s.close(a, "done")
@@ -581,14 +580,14 @@ class StoreContractBase:
 
     def test_item_state_ready_when_all_children_ready(self):
         s = self.make_store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         s.create_step("a", parent=item)
         s.create_step("b", parent=item)
         self.assertEqual(s.get_node(item).state, "ready")
 
     def test_empty_item_state_backlogged(self):
         s = self.make_store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         self.assertEqual(s.get_node(item).state, "backlogged")
 
     def test_step_state_ready_when_in_progress_column_but_unassigned(self):
@@ -599,7 +598,7 @@ class StoreContractBase:
 
     def test_closed_empty_container_state_done(self):
         s = self.make_store()
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         s.close(item, "done")
         self.assertEqual(s.get_node(item).state, "done")
 
@@ -706,7 +705,7 @@ class StoreContractBase:
 
     def test_replace_artifact_only_replaces_the_matching_label(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "branch", "feat/spec", label="spec")
         s.add_artifact(sid, "branch", "feat/code", label="code")
 
@@ -717,7 +716,7 @@ class StoreContractBase:
 
     def test_replace_artifact_without_a_label_leaves_labelled_ones_alone(self):
         s = self.make_store()
-        sid = s.create_item("item: foo")
+        sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "pr", "https://gh/spec", label="spec")
         s.add_artifact(sid, "pr", "https://gh/plain")
 
@@ -728,7 +727,7 @@ class StoreContractBase:
 
     def test_node_view_of_an_item_shows_its_own_artifacts(self):
         s = self.make_store()
-        item = s.create_item("item: foo")
+        item = s.create_item("item: foo", "a description")
         s.add_artifact(item, "spec", "specs/foo.md")
 
         view = s.node_view(item)
@@ -738,7 +737,7 @@ class StoreContractBase:
 
     def test_node_view_of_a_step_still_shows_its_parent_item_artifacts(self):
         s = self.make_store()
-        item = s.create_item("item: foo")
+        item = s.create_item("item: foo", "a description")
         s.add_artifact(item, "spec", "specs/foo.md")
         step = s.create_step("build: foo", parent=item)
 

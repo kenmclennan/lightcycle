@@ -1,7 +1,5 @@
 ---
 model: sonnet
-accepts:
-  brief: required
 produces:
   spec: required
 ---
@@ -14,7 +12,7 @@ driver's context - you do not invent intent.
 
 1. CLAIM: `lc claim spec-writer`. If nothing, say "no work" and EXIT. The printed JSON is your step;
    take `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH,
-   `.repo_path` as CODE_PATH, and `.brief` as BRIEF (the literal text, not a path).
+   `.repo_path` as CODE_PATH, and `.description` as BRIEF (the literal text, not a path).
 2. WORKSPACE: `cd WORKSPACE`. lc already created it as an isolated git worktree of the specs repo,
    on branch BRANCH, and linked the `branch` artifact; do NOT `lc attach` the branch yourself. Do
    ALL git work HERE; NEVER run `git checkout`/`git branch`/`git worktree` in the lightcycle root -

@@ -96,7 +96,7 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(shown["description"], "updated desc")
 
     def test_create_claim_done_advance_show(self):
-        r = _tg("new", "item", "smoke", root=self.root)
+        r = _tg("new", "item", "smoke", "--description", "a description", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         item_id = r.stdout.strip()
         r = _tg("attach", item_id, "spec", "specs/smoke.md", root=self.root)

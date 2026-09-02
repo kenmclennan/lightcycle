@@ -12,9 +12,9 @@ from tests.support.fake_store import FakeStore
 class TestBacklogDefault(unittest.TestCase):
     def test_returns_backlogged_items_sorted_by_id_with_project(self):
         s = FakeStore()
-        b = s.create_item("b item")
+        b = s.create_item("b item", "a description")
         s.add_artifact(b, "repo", "proj-b")
-        a = s.create_item("a item")
+        a = s.create_item("a item", "a description")
         s.add_artifact(a, "repo", "proj-a")
         resp = BacklogUseCase(s, None).execute(BacklogInput())
         self.assertEqual([r.step.id for r in resp.rows], sorted([a, b]))
@@ -24,7 +24,7 @@ class TestBacklogDefault(unittest.TestCase):
 
     def test_item_without_repo_artifact_has_project_none(self):
         s = FakeStore()
-        s.create_item("no repo")
+        s.create_item("no repo", "a description")
         resp = BacklogUseCase(s, None).execute(BacklogInput())
         self.assertIsNone(resp.rows[0].project)
 
@@ -32,16 +32,16 @@ class TestBacklogDefault(unittest.TestCase):
 class TestBacklogProjectFilter(unittest.TestCase):
     def test_filters_to_matching_project(self):
         s = FakeStore()
-        keep = s.create_item("keep")
+        keep = s.create_item("keep", "a description")
         s.add_artifact(keep, "repo", "proj-a")
-        drop = s.create_item("drop")
+        drop = s.create_item("drop", "a description")
         s.add_artifact(drop, "repo", "proj-b")
         resp = BacklogUseCase(s, None).execute(BacklogInput(project="proj-a"))
         self.assertEqual([r.step.id for r in resp.rows], [keep])
 
     def test_item_without_repo_artifact_is_excluded(self):
         s = FakeStore()
-        s.create_item("no repo")
+        s.create_item("no repo", "a description")
         resp = BacklogUseCase(s, None).execute(BacklogInput(project="proj-a"))
         self.assertEqual(resp.rows, [])
 
@@ -49,9 +49,9 @@ class TestBacklogProjectFilter(unittest.TestCase):
 class TestBacklogN(unittest.TestCase):
     def test_n_limits_project_filtered_items_before_grouping(self):
         s = FakeStore()
-        a = s.create_item("a")
+        a = s.create_item("a", "a description")
         s.add_artifact(a, "repo", "proj-a")
-        b = s.create_item("b")
+        b = s.create_item("b", "a description")
         s.add_artifact(b, "repo", "proj-a")
         resp = BacklogUseCase(s, None).execute(BacklogInput(project="proj-a", n=1))
         self.assertEqual(len(resp.rows), 1)
@@ -64,13 +64,13 @@ class TestBacklogCounts(unittest.TestCase):
         s.add_project("org-a/proj-a")
         s.add_project("org-b/proj-b")
         s.add_project("org-c/proj-c")
-        a1 = s.create_item("a1")
+        a1 = s.create_item("a1", "a description")
         s.add_artifact(a1, "repo", "proj-a")
-        a2 = s.create_item("a2")
+        a2 = s.create_item("a2", "a description")
         s.add_artifact(a2, "repo", "proj-a")
-        b1 = s.create_item("b1")
+        b1 = s.create_item("b1", "a description")
         s.add_artifact(b1, "repo", "proj-b")
-        s.create_item("no repo")
+        s.create_item("no repo", "a description")
         resp = BacklogUseCase(s, None).counts()
         by_project = {p.project: p.count for p in resp.projects}
         self.assertEqual(by_project, {"proj-a": 2, "proj-b": 1, "proj-c": 0})
@@ -85,7 +85,7 @@ class TestBacklogCounts(unittest.TestCase):
     def test_matched_by_bare_last_segment_of_identity(self):
         s = FakeStore()
         s.add_project("org-a/proj-a")
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         s.add_artifact(item, "repo", "proj-a")
         resp = BacklogUseCase(s, None).counts()
         self.assertEqual(resp.projects, [ProjectCount(project="proj-a", count=1)])
@@ -94,11 +94,11 @@ class TestBacklogCounts(unittest.TestCase):
         s = FakeStore()
         s.add_project("org-a/proj-a")
         s.add_project("org-b/proj-b")
-        a1 = s.create_item("a1")
+        a1 = s.create_item("a1", "a description")
         s.add_artifact(a1, "repo", "proj-a")
-        a2 = s.create_item("a2")
+        a2 = s.create_item("a2", "a description")
         s.add_artifact(a2, "repo", "proj-a")
-        b1 = s.create_item("b1")
+        b1 = s.create_item("b1", "a description")
         s.add_artifact(b1, "repo", "proj-b")
         uc = BacklogUseCase(s, None)
         counts = uc.counts()
@@ -110,14 +110,14 @@ class TestBacklogCounts(unittest.TestCase):
         s = FakeStore()
         s.add_project("org-a/proj-a")
         s.add_project("org-b/proj-b")
-        a1 = s.create_item("a1")
+        a1 = s.create_item("a1", "a description")
         s.add_artifact(a1, "repo", "proj-a")
-        a2 = s.create_item("a2")
+        a2 = s.create_item("a2", "a description")
         s.add_artifact(a2, "repo", "proj-a")
-        b1 = s.create_item("b1")
+        b1 = s.create_item("b1", "a description")
         s.add_artifact(b1, "repo", "proj-b")
-        s.create_item("no repo")
-        typo = s.create_item("typo")
+        s.create_item("no repo", "a description")
+        typo = s.create_item("typo", "a description")
         s.add_artifact(typo, "repo", "typo-project")
         resp = BacklogUseCase(s, None).counts()
         self.assertEqual(resp.total, 5)
@@ -132,7 +132,7 @@ class TestBacklogCounts(unittest.TestCase):
     def test_slash_qualified_repo_is_counted_and_matched_by_its_registered_project(self):
         s = FakeStore()
         s.add_project("org/proj")
-        item = s.create_item("item")
+        item = s.create_item("item", "a description")
         s.add_artifact(item, "repo", "org/proj")
         resp = BacklogUseCase(s, None).counts()
         self.assertEqual(resp.projects, [ProjectCount(project="proj", count=1)])
@@ -143,7 +143,7 @@ class TestBacklogCounts(unittest.TestCase):
 class TestBacklogUseCaseMemoization(unittest.TestCase):
     def _counting_store(self):
         s = FakeStore()
-        s.create_item("a")
+        s.create_item("a", "a description")
         calls = {"n": 0}
         original = s.all_nodes
 

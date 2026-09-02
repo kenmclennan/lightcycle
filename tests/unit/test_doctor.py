@@ -80,7 +80,7 @@ class TestDoctorUseCase(unittest.TestCase):
 
     def test_pin_missing_on_disk_reports_pins_problem_and_skips_contract(self):
         store = FakeStore()
-        item = store.create_item("item", workflow="acme/build@sha-gone")
+        item = store.create_item("item", "a description", workflow="acme/build@sha-gone")
         store.update_state(item, "in_progress")
         source = FakeWorkflowSource()
         config = _cfg(**_ALL_KEYS)
@@ -92,7 +92,7 @@ class TestDoctorUseCase(unittest.TestCase):
 
     def test_resolvable_pin_with_mismatched_contract_reports_contract_problem(self):
         store = FakeStore()
-        item = store.create_item("item", workflow="acme/build@sha1")
+        item = store.create_item("item", "a description", workflow="acme/build@sha1")
         store.update_state(item, "in_progress")
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 99)
@@ -213,7 +213,7 @@ class TestDoctorUseCase(unittest.TestCase):
 
     def test_store_integrity_violation_surfaces_under_store(self):
         store = FakeStore()
-        item = store.create_item("item")
+        item = store.create_item("item", "a description")
         store.edit_node(item, parent="missing-parent")
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)

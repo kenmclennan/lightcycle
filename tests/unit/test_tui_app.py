@@ -400,7 +400,7 @@ class TestActiveGroup(unittest.TestCase):
         from lightcycle.adapters.tui.hub import NodeHubScreen
 
         store = FakeStore()
-        item = store.create_item("active item")
+        item = store.create_item("active item", "a description")
         tid = store.create_step("build it", step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
@@ -421,7 +421,7 @@ class TestActiveGroup(unittest.TestCase):
         from lightcycle.adapters.tui.hub import NodeHubScreen
 
         store = FakeStore()
-        item = store.create_item("active item")
+        item = store.create_item("active item", "a description")
         tid = store.create_step("build it", step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.IN_PROGRESS)
@@ -505,7 +505,7 @@ class TestProjectColumn(unittest.TestCase):
 
     def test_step_with_registered_project_renders_it_in_cyan(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "lightcycle")
         store.create_step("build", step="build", role="agent", parent=item)
 
@@ -526,7 +526,7 @@ class TestProjectColumn(unittest.TestCase):
 
     def test_step_with_slash_qualified_repo_renders_the_short_label(self):
         store = FakeStore()
-        item = store.create_item("story")
+        item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
         store.create_step("build", step="build", role="agent", parent=item)
 
@@ -1044,7 +1044,7 @@ class TestBacklogRows(unittest.TestCase):
 
     def test_todo_items_render_as_rows_once_backlog_is_current(self):
         store = FakeStore()
-        item = store.create_item("todo item")
+        item = store.create_item("todo item", "a description")
 
         session = self._launch(store)
 
@@ -1055,7 +1055,7 @@ class TestBacklogRows(unittest.TestCase):
 
     def test_item_activated_disappears_from_backlog_without_restart(self):
         store = FakeStore()
-        item = store.create_item("todo item")
+        item = store.create_item("todo item", "a description")
         session = self._launch(store)
         self.assertIn(item, session.app.query_one(BacklogTable).rows)
 
@@ -1067,7 +1067,7 @@ class TestBacklogRows(unittest.TestCase):
     def test_ctrl_u_and_ctrl_d_page_a_long_backlog(self):
         store = FakeStore()
         for i in range(60):
-            store.create_item("todo %d" % i)
+            store.create_item("todo %d" % i, "a description")
 
         session = self._launch(store)
         table = session.app.query_one(BacklogTable)
@@ -1085,7 +1085,7 @@ class TestBacklogTableColumnWidth(unittest.TestCase):
 
     def test_title_column_is_not_clamped_to_one_char_right_after_tab(self):
         store = FakeStore()
-        store.create_item("a reasonably long backlog title")
+        store.create_item("a reasonably long backlog title", "a description")
 
         session = self._launch(store)
 
@@ -1112,7 +1112,7 @@ class TestBacklogProjectColumn(unittest.TestCase):
 
     def test_unscoped_item_shows_blank_project(self):
         store = FakeStore()
-        item = store.create_item("todo item")
+        item = store.create_item("todo item", "a description")
 
         session = self._launch(store)
 
@@ -1120,7 +1120,7 @@ class TestBacklogProjectColumn(unittest.TestCase):
 
     def test_slash_qualified_repo_shows_shortened_label_in_cyan(self):
         store = FakeStore()
-        item = store.create_item("todo item")
+        item = store.create_item("todo item", "a description")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
 
         session = self._launch(store)
@@ -1168,9 +1168,9 @@ class TestBacklogPicker(unittest.TestCase):
         store = FakeStore()
         store.add_project("org-a/proj-a")
         store.add_project("org-b/proj-b")
-        a = store.create_item("a item")
+        a = store.create_item("a item", "a description")
         store.add_artifact(a, "repo", "org-a/proj-a")
-        b = store.create_item("b item")
+        b = store.create_item("b item", "a description")
         store.add_artifact(b, "repo", "org-b/proj-b")
         return store
 
@@ -1264,7 +1264,7 @@ class TestBacklogFilterBar(unittest.TestCase):
     def test_shows_all_and_the_total_count_while_unfiltered(self):
         store = FakeStore()
         for i in range(3):
-            store.create_item("todo %d" % i)
+            store.create_item("todo %d" % i, "a description")
 
         session = self._launch(store)
 
@@ -1303,7 +1303,7 @@ class TestBacklogEmptyStates(unittest.TestCase):
     def test_filtered_empty_names_the_project_with_a_colour_split_and_a_hint(self):
         store = FakeStore()
         store.add_project("lightcycle")
-        other = store.create_item("other project item")
+        other = store.create_item("other project item", "a description")
         store.add_artifact(other, "repo", "other")
         session = self._launch(store)
 
@@ -1326,12 +1326,12 @@ class TestBacklogEmptyStates(unittest.TestCase):
     def test_item_becoming_available_replaces_the_filtered_empty_message_with_the_list(self):
         store = FakeStore()
         store.add_project("lightcycle")
-        other = store.create_item("other project item")
+        other = store.create_item("other project item", "a description")
         store.add_artifact(other, "repo", "other")
         session = self._launch(store)
         self._filter_to_lightcycle(session)
 
-        new_item = store.create_item("new item")
+        new_item = store.create_item("new item", "a description")
         store.add_artifact(new_item, "repo", "lightcycle")
         session.poll_tick()
 
@@ -1349,7 +1349,7 @@ class TestBacklogFooter(unittest.TestCase):
 
     def test_rows_present_shows_the_backlog_shortcuts(self):
         store = FakeStore()
-        store.create_item("todo item")
+        store.create_item("todo item", "a description")
 
         session = self._launch(store)
 
@@ -1363,7 +1363,7 @@ class TestBacklogFooter(unittest.TestCase):
     def test_filtered_empty_shows_the_filter_reachable_shortcuts(self):
         store = FakeStore()
         store.add_project("lightcycle")
-        other = store.create_item("other project item")
+        other = store.create_item("other project item", "a description")
         store.add_artifact(other, "repo", "other")
         session = self._launch(store)
 
@@ -1377,7 +1377,7 @@ class TestBacklogFooter(unittest.TestCase):
 
     def test_returning_to_priority_list_restores_the_global_shortcuts(self):
         store = FakeStore()
-        store.create_item("todo item")
+        store.create_item("todo item", "a description")
         session = self._launch(store)
 
         session.press("tab")

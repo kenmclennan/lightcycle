@@ -29,7 +29,7 @@ def _svc(store):
 class TestWorkspacePerStep(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
-        self.item = self.store.create_item("i", workflow="lightcycle/spec-driven")
+        self.item = self.store.create_item("i", "a description", workflow="lightcycle/spec-driven")
 
     def test_spec_phase_step_uses_specs_workspace(self):
         step = self.store.get_node(
