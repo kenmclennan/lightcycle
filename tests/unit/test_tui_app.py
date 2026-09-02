@@ -25,6 +25,7 @@ from lightcycle.adapters.tui.design_system import (
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
     BACKLOG_SHORTCUTS,
     COLOURS,
+    ACTIVE_GLYPH_FRAMES,
     CURSOR_GLYPH,
     FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
@@ -205,7 +206,7 @@ class TestActiveGroup(unittest.TestCase):
         self.assertEqual(_cell(session, tid, "time"), "14m")
         table = session.app.query_one(DataTable)
         icon = table.get_cell(tid, "icon")
-        self.assertEqual(icon.plain, STATE_GLYPHS["active"].glyph)
+        self.assertIn(icon.plain, ACTIVE_GLYPH_FRAMES)
         self.assertEqual(icon.style, COLOURS["cyan"])
 
     def test_second_poll_updates_only_time_cell_without_full_rebuild(self):
@@ -478,7 +479,7 @@ class TestQueuedGroup(unittest.TestCase):
         session.poll_tick()
 
         icon_after = table.get_cell(queued, "icon").plain
-        self.assertEqual(icon_after, STATE_GLYPHS["active"].glyph)
+        self.assertIn(icon_after, ACTIVE_GLYPH_FRAMES)
 
     def test_dependency_held_step_appears_in_queued_group_with_dim_chain_glyph(self):
         store = FakeStore()

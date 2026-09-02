@@ -6,7 +6,9 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import DataTable
 
 from lightcycle.adapters.tui.app import LightcycleApp, PriorityTable
-from lightcycle.adapters.tui.design_system import COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
+from lightcycle.adapters.tui.design_system import (
+    ACTIVE_GLYPH_FRAMES, COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS,
+)
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
 )
@@ -16,6 +18,9 @@ from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
 scenarios("priority-list-renders-current-work.feature")
+
+def _is_active_glyph(plain):
+    return plain in ACTIVE_GLYPH_FRAMES
 
 POLL_INTERVAL_SECONDS = 10
 
@@ -829,14 +834,14 @@ def _t_active_distinct(ctx):
     queued_icon = _icon(session, ctx["queued_id"])
     assert (active_icon.plain, active_icon.style) != (inbox_icon.plain, inbox_icon.style)
     assert (active_icon.plain, active_icon.style) != (queued_icon.plain, queued_icon.style)
-    assert active_icon.plain == STATE_GLYPHS["active"].glyph
+    assert _is_active_glyph(active_icon.plain)
 
 
 @then("the priority list contains a row for the in-progress step, in the active group")
 def _t_in_progress_in_active(ctx):
     session = ctx["session"]
     assert ctx["running_id"] in _row_order(session)
-    assert _icon(session, ctx["running_id"]).plain == STATE_GLYPHS["active"].glyph
+    assert _is_active_glyph(_icon(session, ctx["running_id"]).plain)
 
 
 @then(parsers.parse('the active row for that step shows "{step_name}" as its step'))
@@ -848,7 +853,7 @@ def _t_active_row_shows_step(ctx, step_name):
 def _t_item_once_in_active(ctx):
     order = _row_order(ctx["session"])
     assert order.count(ctx["item_id"]) == 1
-    assert _icon(ctx["session"], ctx["item_id"]).plain == STATE_GLYPHS["active"].glyph
+    assert _is_active_glyph(_icon(ctx["session"], ctx["item_id"]).plain)
 
 
 @then("that item's row shows the item's own id and title, not the step's")
@@ -882,7 +887,7 @@ def _t_item_once_in_attention(ctx):
 @then("that item's row does not also appear in the active group")
 def _t_item_not_in_active(ctx):
     session = ctx["session"]
-    assert _icon(session, ctx["item_id"]).plain != STATE_GLYPHS["active"].glyph
+    assert not _is_active_glyph(_icon(session, ctx["item_id"]).plain)
 
 
 @then(parsers.parse('the active row\'s elapsed time reads "{expected}"'))
@@ -923,7 +928,7 @@ def _t_queued_row_shows_step(ctx, step_name):
 
 @then("the step's row moves from the queued group into the active group")
 def _t_step_moves_to_active(ctx):
-    assert _icon(ctx["session"], ctx["target_id"]).plain == STATE_GLYPHS["active"].glyph
+    assert _is_active_glyph(_icon(ctx["session"], ctx["target_id"]).plain)
 
 
 @then("that step's row wraps its title onto a second line rather than truncating it with an ellipsis")
@@ -1133,7 +1138,7 @@ def _t_selection_follows_to_active(ctx):
     table = session.app.query_one(DataTable)
     cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
     assert cell_key.row_key.value == ctx["target_id"]
-    assert _icon(session, ctx["target_id"]).plain == STATE_GLYPHS["active"].glyph
+    assert _is_active_glyph(_icon(session, ctx["target_id"]).plain)
 
 
 @then("the selection is on a remaining row near the previous position")
