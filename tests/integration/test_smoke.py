@@ -120,7 +120,7 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         shown = json.loads(r.stdout)
         self.assertEqual(shown["role"], "agent")
-        self.assertEqual(shown["step"], "review-code")
+        self.assertEqual(shown["stage"], "review-code")
         self.assertEqual(shown["state"], "ready")
 
 
