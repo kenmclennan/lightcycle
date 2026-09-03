@@ -28,7 +28,7 @@ def _label_value(labels, prefix):
     return None
 
 
-def labels_for(*, role=None, step=None, project=None, goal=None, attention=False):
+def labels_for(*, role=None, step=None, project=None):
     parts = []
     if role:
         parts.append("for:%s" % role)
@@ -36,10 +36,6 @@ def labels_for(*, role=None, step=None, project=None, goal=None, attention=False
         parts.append("step:%s" % step)
     if project:
         parts.append("project:%s" % project)
-    if goal:
-        parts.append("goal:%s" % goal)
-    if attention:
-        parts.append("attention")
     return parts
 
 
@@ -85,6 +81,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
             "item", record.get("state") == "done", None, False, list(child_states)
         ),
         repo=record.get("repo"),
+        project=_label_value(record.get("labels") or [], "project:"),
         workflow=record.get("workflow"),
         outcome=record.get("outcome"),
         deps=record.get("dep_count") or 0,
@@ -197,10 +194,10 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_nodes(self):
-        return self.all_items() + self.all_steps()
+        return self.all_steps() + self.all_items()
 
     def all_nodes_including_done(self):
-        return self.all_items_including_done() + self.all_steps_including_done()
+        return self.all_steps_including_done() + self.all_items_including_done()
 
     def all_items(self):
         return [self._to_item(b) for b in self._records.values()
@@ -246,7 +243,7 @@ class FakeStore(StorePort):
     def node_view(self, tid):
         t = self.get_node(tid)
         item = getattr(t, "item", None)
-        arts = self.item_artifacts(item) if item else t.artifacts
+        arts = self.item_artifacts(item) if item else []
         return NodeView(step=t, item_artifacts=list(arts))
 
     def present_types(self, step):
@@ -431,14 +428,14 @@ class FakeStore(StorePort):
         return list(self._history.get(tid, []))
 
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None, description=None, attention=False, id=None):
+                    description=None, id=None):
+        if parent is None:
+            parent = self.create_item(title, "an owning item")
         fields = dict(
             title=title,
             type="step",
             parent=parent,
-            labels=labels_for(role=role, step=step, project=project, goal=goal,
-                              attention=attention),
-            description=description,
+            labels=labels_for(role=role, step=step),
         )
         if id is not None:
             fields["id"] = id
@@ -476,13 +473,13 @@ class FakeStore(StorePort):
             b["workflow"] = workflow
         return tid
 
-    def create_item(self, title, description, *, project=None, goal=None, workflow=None, id=None,
-                     shortcode=None):
+    def create_item(self, title, description, *, project=None, workflow=None, id=None,
+                    shortcode=None):
         fields = dict(
             title=title,
             type="item",
             description=description,
-            labels=labels_for(project=project, goal=goal),
+            labels=labels_for(project=project),
             workflow=workflow,
             state="backlogged",
         )

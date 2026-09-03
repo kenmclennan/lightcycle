@@ -476,6 +476,7 @@ class SqliteStore(StorePort):
             description=d["description"],
             state=derive_state("item", d["state"] == "done", None, False, child_states),
             repo=d["repo"],
+            project=d["project"],
             workflow=d["workflow"],
             outcome=d["outcome"],
             deps=len(blocked_by),
@@ -664,10 +665,10 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def all_nodes(self):
-        return self.all_items() + self.all_steps()
+        return self.all_steps() + self.all_items()
 
     def all_nodes_including_done(self):
-        return self.all_items_including_done() + self.all_steps_including_done()
+        return self.all_steps_including_done() + self.all_items_including_done()
 
     def all_items(self):
         return self._select_items("state != 'done'")
