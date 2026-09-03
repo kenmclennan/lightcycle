@@ -960,6 +960,8 @@ class SqliteStore(StorePort):
 
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
                               description=None, id=None):
+        if parent is None:
+            parent = self.create_item(title, "an owning item")
         tid = self._mint_or_adopt(id, parent)
         self._conn.execute(
             "INSERT INTO steps (id, item, title, stage, role, state, created_at) "

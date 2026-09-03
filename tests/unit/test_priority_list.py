@@ -13,7 +13,7 @@ from tests.support.fake_store import FakeStore
 
 
 class TestProject(unittest.TestCase):
-    def test_resolves_via_parent_items_repo_artifact(self):
+    def test_resolves_via_its_items_repo(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "lightcycle")
@@ -21,19 +21,18 @@ class TestProject(unittest.TestCase):
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
 
-    def test_blank_when_parent_item_has_no_repo_artifact(self):
+    def test_blank_when_its_item_has_no_repo(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
         step = store.create_step("build", step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "")
 
-    def test_resolves_via_own_id_when_no_parent(self):
+    def test_resolves_from_the_item_when_given_an_item(self):
         store = FakeStore()
-        step = store.create_step("build", step="build", role="agent")
-        store.add_artifact(step, "repo", "lightcycle")
-        node = store.get_node(step)
-        self.assertEqual(_project(store, node), "lightcycle")
+        item = store.create_item("story", "a description")
+        store.add_artifact(item, "repo", "lightcycle")
+        self.assertEqual(_project(store, store.get_item(item)), "lightcycle")
 
     def test_derives_the_short_label_from_a_slash_qualified_repo_artifact(self):
         store = FakeStore()
@@ -193,7 +192,10 @@ class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
 
         attention, _, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
 
-        self.assertEqual([row.id for row in attention], [escalation, gate])
+        self.assertEqual(
+            [row.id for row in attention],
+            [store.get_step(escalation).item, store.get_step(gate).item],
+        )
 
     def test_escalation_sorts_before_gate_when_escalation_listed_first(self):
         store = FakeStore()
@@ -207,7 +209,10 @@ class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
 
         attention, _, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
 
-        self.assertEqual([row.id for row in attention], [escalation, gate])
+        self.assertEqual(
+            [row.id for row in attention],
+            [store.get_step(escalation).item, store.get_step(gate).item],
+        )
 
 
 class TestAssembleRows(unittest.TestCase):
