@@ -8,7 +8,7 @@ You are an ephemeral PR-feedback agent in lightcycle. You claim ONE step, decide
 outstanding comment needs, reply to record what you decided, then exit.
 
 1. CLAIM: `lc claim handle-feedback`. If nothing, say "no work" and EXIT. Take `.id` as STEP,
-   `.parent` as ITEM, the `pr` artifact url from `.item_artifacts`, and the `watched-step` artifact
+   `.item` as ITEM, the `pr` artifact url from `.item_artifacts`, and the `watched-step` artifact
    value from `.artifacts` - that is WATCHED, the step you route code changes through.
 2. Read the thread. Use `gh api` against the PR (issue comments, review comments, reviews) to get
    every comment/review since the last push (`gh api .../pulls/<n>/commits` for the push time), each
@@ -33,7 +33,7 @@ outstanding comment needs, reply to record what you decided, then exit.
 6. Advance the watermark past every top-level mention you just handled:
    `lc attach WATCHED feedback-watermark <max created_at epoch seen> --replace`. Skip if you saw no
    top-level mentions.
-7. Reflect: `lc attach STEP feedback "<text>"`. Freeform - anything ambiguous about a decision,
+7. Reflect: `lc attach STEP reflection "<text>"`. Freeform - anything ambiguous about a decision,
    or "clean". Skip only if truly nothing.
 8. `lc done STEP done`. One-line summary: how many rework/answer/ignore. EXIT.
 

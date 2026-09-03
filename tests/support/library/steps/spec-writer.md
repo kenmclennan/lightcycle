@@ -11,7 +11,7 @@ The design work already happened as a human+driver conversation; you formalize i
 driver's context - you do not invent intent.
 
 1. CLAIM: `lc claim spec-writer`. If nothing, say "no work" and EXIT. The printed JSON is your step;
-   take `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH,
+   take `.id` as STEP, `.item` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH,
    `.repo_path` as CODE_PATH, and `.description` as BRIEF (the literal text, not a path).
 2. WORKSPACE: `cd WORKSPACE`. lc already created it as an isolated git worktree of the specs repo,
    on branch BRANCH, and linked the `branch` artifact; do NOT `lc attach` the branch yourself. Do
