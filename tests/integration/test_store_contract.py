@@ -396,6 +396,34 @@ class TestSqliteStorePhaseArtifactFold(unittest.TestCase):
         )
 
 
+class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
+    def _store_without_the_ledger_columns(self):
+        s = make_sqlite_store()
+        s._conn.execute("DROP TABLE phase_runs")
+        s._conn.execute(
+            "CREATE TABLE phase_runs ("
+            "  id TEXT PRIMARY KEY, item TEXT NOT NULL, pass_id TEXT NOT NULL, phase TEXT,"
+            "  branch TEXT, pr TEXT, content_pin TEXT,"
+            "  state TEXT NOT NULL DEFAULT 'open', opened_at TEXT, closed_at TEXT)"
+        )
+        s._conn.commit()
+        s.disconnect()
+        return SqliteStore(s._config)
+
+    def test_a_phase_four_runs_table_gains_the_comment_ledger(self):
+        s = self._store_without_the_ledger_columns()
+        cols = {r[1] for r in s._conn.execute("PRAGMA table_info(phase_runs)").fetchall()}
+        self.assertIn("comments_dispatched_through", cols)
+        self.assertIn("comments_handled_through", cols)
+
+    def test_reading_a_run_works_after_the_columns_are_added(self):
+        s = self._store_without_the_ledger_columns()
+        item = s.create_item("an item", "a description")
+        pid = s.open_pass(item)
+        s.open_run(item, pid, "code")
+        self.assertIsNone(s.runs_of(item)[0].comments_handled_through)
+
+
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
