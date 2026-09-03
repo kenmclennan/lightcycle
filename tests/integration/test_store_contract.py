@@ -8,7 +8,9 @@ from unittest.mock import patch
 
 import lightcycle.cli as cli
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
-from tests.support.sqlite_store_factory import make_sqlite_store
+from tests.support.sqlite_store_factory import (
+    make_legacy_sqlite_store, make_sqlite_store, plant_legacy_db,
+)
 from tests.support.store_contract import StoreContractBase
 from lightcycle.adapters.sqlite_store import SchemaVersionRefused, SqliteStore, _SCHEMA_VERSION
 from lightcycle.application.services.flow import FlowService
@@ -29,9 +31,10 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_create_task_roundtrips_structured_attrs(self):
         s = self._store()
-        tid = s.create_step("build: x", step="build", role="agent", project="grid", goal="ship")
-        t = s.get_node(tid)
-        self.assertEqual((t.role, t.step, t.project, t.goal), ("agent", "build", "grid", "ship"))
+        item = s.create_item("an item", "a description")
+        tid = s.create_step("build: x", step="build", role="agent", parent=item)
+        t = s.get_step(tid)
+        self.assertEqual((t.role, t.stage, t.item), ("agent", "build", item))
         self.assertEqual(t.state, "ready")
 
     def test_claim_and_close_map_status(self):
@@ -160,32 +163,25 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         for tid in created:
             self.assertIn(tid, result_ids)
 
-    def test_edit_node_moving_a_step_keeps_its_id_and_everything_hanging_off_it(self):
+    def test_edit_keeps_a_steps_id_and_everything_hanging_off_it(self):
         s = self._store()
         item = s.create_item("item", "a description")
-        blocker = s.create_step("blocker")
-        step = s.create_step("blocked step")
+        blocker = s.create_step("blocker", parent=item)
+        step = s.create_step("blocked step", parent=item)
         s.dep_add(step, blocker)
         s.label_add(step, "retro-origin")
 
-        new_id = s.edit_node(step, parent=item)
+        new_id = s.edit_node(step, title="renamed")
 
         self.assertEqual(new_id, step)
-        self.assertEqual(s.get_node(step).parent, item)
-        self.assertEqual(s.get_node(step).blocked_by, [blocker])
+        self.assertEqual(s.get_step(step).item, item)
+        self.assertEqual(s.get_step(step).blocked_by, [blocker])
         labels = [
             row[0] for row in s._conn.execute(
                 "SELECT label FROM labels WHERE node_id = ?", (step,)
             ).fetchall()
         ]
         self.assertIn("retro-origin", labels)
-
-    def test_edit_node_parent_move_to_own_current_parent_is_a_no_op(self):
-        s = self._store()
-        item = s.create_item("item", "a description")
-        step = s.create_step("already here", parent=item)
-        new_id = s.edit_node(step, parent=item)
-        self.assertEqual(new_id, step)
 
     def test_activate_item_use_case_files_the_entry_step_under_the_item(self):
         s = self._store()
@@ -201,20 +197,19 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         self.assertEqual(s.get_node(item).state, "ready")
         self.assertEqual(s.get_node(resp.step).parent, item)
 
-    def test_cmd_set_parent_and_backlog_links_the_resolved_backlog_to_the_moved_step(self):
+    def test_cmd_set_backlog_links_the_resolved_backlog_to_the_step(self):
         s = self._store()
         cli.set_container(Container(store=s))
         item = s.create_item("owning item", "a description")
         backlog_item = s.create_item("a backlog todo", "a description")
-        step = s.create_step("adopt me")
+        step = s.create_step("adopt me", parent=item)
 
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            rc = cli.cmd_set([step, "--parent", item, "--backlog", backlog_item]) or 0
+            rc = cli.cmd_set([step, "--backlog", backlog_item]) or 0
         self.assertEqual(rc, 0, err.getvalue())
 
-        self.assertEqual(out.getvalue().strip(), step)
-        self.assertEqual(s.get_node(step).parent, item)
+        self.assertEqual(s.get_step(step).item, item)
         arts = s.item_artifacts(step)
         self.assertTrue(
             any(a.type == "resolves" and a.value == backlog_item for a in arts)
@@ -222,81 +217,117 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
 
 class TestSqliteStoreRoleCollapseMigration(unittest.TestCase):
-    def _reopen(self, store):
-        return SqliteStore(store._config)
+    def _item(self):
+        return {"id": "GRID-1", "type": "item", "title": "an item",
+                "state": "backlogged", "description": "d"}
+
+    def _step(self, **kw):
+        base = {"id": "GRID-1.1", "type": "step", "title": "build: x", "state": "ready",
+                "step": "build", "parent": "GRID-1"}
+        base.update(kw)
+        return base
 
     def test_a_stage_named_role_is_rewritten_to_agent_on_open(self):
-        s = make_sqlite_store()
-        tid = s.create_step("build: x", step="build", role="agent")
-        s._conn.execute("UPDATE nodes SET role = 'coder' WHERE id = ?", (tid,))
-        s._conn.commit()
-
-        self.assertEqual(self._reopen(s).get_node(tid).role, "agent")
+        s = make_legacy_sqlite_store([self._item(), self._step(role="coder")])
+        self.assertEqual(s.get_step("GRID-1.1").role, "agent")
 
     def test_a_human_role_is_left_alone(self):
-        s = make_sqlite_store()
-        tid = s.create_step("await-merge: x", step="await-merge", role="human")
+        s = make_legacy_sqlite_store(
+            [self._item(), self._step(step="await-merge", role="human")])
+        self.assertEqual(s.get_step("GRID-1.1").role, "human")
 
-        self.assertEqual(self._reopen(s).get_node(tid).role, "human")
-
-    def test_an_item_is_left_alone(self):
-        s = make_sqlite_store()
-        iid = s.create_item("an item", "a description")
-
-        self.assertIsNone(self._reopen(s).get_node(iid).role)
+    def test_an_item_carries_no_role_at_all(self):
+        s = make_legacy_sqlite_store([self._item()])
+        self.assertFalse(hasattr(s.get_item("GRID-1"), "role"))
 
 
 class TestSqliteStoreBriefMigration(unittest.TestCase):
-    def _reopen(self, store):
-        return SqliteStore(store._config)
+    def _item(self, description):
+        return {"id": "GRID-1", "type": "item", "title": "an item",
+                "state": "backlogged", "description": description}
 
-    def _plant_brief(self, store, item, text):
-        store._conn.execute(
-            "INSERT INTO artifacts (item_id, atype, value, internal, kind) "
-            "VALUES (?, 'brief', ?, 0, 'filepath')", (item, text))
-        store._conn.commit()
+    def _brief(self, text):
+        return {"item_id": "GRID-1", "atype": "brief", "value": text, "kind": "filepath"}
 
     def test_a_brief_fills_an_empty_description(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "")
-        self._plant_brief(s, item, "the settled design")
-
-        self.assertEqual(self._reopen(s).get_node(item).description, "the settled design")
+        s = make_legacy_sqlite_store([self._item("")], [self._brief("the settled design")])
+        self.assertEqual(s.get_item("GRID-1").description, "the settled design")
 
     def test_an_existing_description_is_not_overwritten(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "the real description")
-        self._plant_brief(s, item, "a stale brief")
-
-        self.assertEqual(self._reopen(s).get_node(item).description, "the real description")
+        s = make_legacy_sqlite_store(
+            [self._item("the real description")], [self._brief("a stale brief")])
+        self.assertEqual(s.get_item("GRID-1").description, "the real description")
 
     def test_every_brief_artifact_is_dropped(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "the real description")
-        self._plant_brief(s, item, "a stale brief")
+        s = make_legacy_sqlite_store(
+            [self._item("the real description")], [self._brief("a stale brief")])
+        kept = [a for a in s.item_artifacts("GRID-1") if a.type == "brief"]
+        self.assertEqual(kept, [])
 
-        reopened = self._reopen(s)
-        self.assertEqual([a for a in reopened.item_artifacts(item) if a.type == "brief"], [])
+
+class TestSqliteStoreNodeSplitMigration(unittest.TestCase):
+    def test_a_legacy_store_splits_into_items_and_steps(self):
+        s = make_legacy_sqlite_store([
+            {"id": "GRID-1", "type": "item", "title": "an item", "state": "backlogged",
+             "description": "d", "workflow": "o/w@sha"},
+            {"id": "GRID-1.1", "type": "step", "title": "build: x", "state": "ready",
+             "step": "build", "role": "agent", "parent": "GRID-1", "notes": "a note"},
+        ], [{"item_id": "GRID-1", "atype": "repo", "value": "acme/app"}])
+
+        item = s.get_item("GRID-1")
+        step = s.get_step("GRID-1.1")
+
+        self.assertEqual((item.description, item.repo, item.workflow),
+                         ("d", "acme/app", "o/w@sha"))
+        self.assertEqual((step.item, step.stage, step.notes), ("GRID-1", "build", "a note"))
+        self.assertFalse(hasattr(step, "description"))
+
+    def test_a_reflection_artifact_becomes_the_steps_reflection(self):
+        s = make_legacy_sqlite_store([
+            {"id": "GRID-1", "type": "item", "title": "an item", "state": "backlogged",
+             "description": "d"},
+            {"id": "GRID-1.1", "type": "step", "title": "build: x", "state": "done",
+             "step": "build", "role": "agent", "parent": "GRID-1"},
+        ], [{"item_id": "GRID-1.1", "atype": "reflection", "value": "what got in the way",
+             "internal": True}])
+
+        self.assertEqual(s.get_step("GRID-1.1").reflection, "what got in the way")
+
+    def test_a_watched_step_artifact_becomes_the_steps_field(self):
+        s = make_legacy_sqlite_store([
+            {"id": "GRID-1", "type": "item", "title": "an item", "state": "backlogged",
+             "description": "d"},
+            {"id": "GRID-1.1", "type": "step", "title": "handle-feedback: x", "state": "ready",
+             "step": "handle-feedback", "role": "agent", "parent": "GRID-1"},
+        ], [{"item_id": "GRID-1.1", "atype": "watched-step", "value": "GRID-1.2",
+             "internal": True}])
+
+        self.assertEqual(s.get_step("GRID-1.1").watched_step, "GRID-1.2")
+
+    def test_the_nodes_table_is_dropped(self):
+        s = make_legacy_sqlite_store([
+            {"id": "GRID-1", "type": "item", "title": "an item", "state": "backlogged",
+             "description": "d"},
+        ])
+        self.assertFalse(s._has_table("nodes"))
 
 
 class TestSqliteStorePhaseArtifactFold(unittest.TestCase):
-    def _reopen(self, store):
-        return SqliteStore(store._config)
+    _ITEM = {"id": "GRID-1", "type": "item", "title": "an item",
+             "state": "backlogged", "description": "d"}
 
-    def _plant(self, store, item, atype, value, label=None):
-        store._conn.execute(
-            "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
-            "VALUES (?, ?, ?, ?, 0, 'text')", (item, atype, value, label))
-        store._conn.commit()
+    def _store(self, *artifacts):
+        return make_legacy_sqlite_store(
+            [dict(self._ITEM)],
+            [{"item_id": "GRID-1", "atype": a[0], "value": a[1],
+              "label": a[2] if len(a) > 2 else None} for a in artifacts],
+        )
 
     def test_a_phases_artifacts_become_one_run(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
-        self._plant(s, item, "branch", "feat/x", "code")
-        self._plant(s, item, "pr", "https://gh/1", "code")
-        self._plant(s, item, "content-pin", "sha1", "code")
+        s = self._store(("branch", "feat/x", "code"), ("pr", "https://gh/1", "code"),
+                        ("content-pin", "sha1", "code"))
 
-        run = self._reopen(s).current_run(item, "code")
+        run = s.current_run("GRID-1", "code")
 
         self.assertEqual(
             (run.phase, run.branch, run.pr, run.content_pin),
@@ -304,51 +335,56 @@ class TestSqliteStorePhaseArtifactFold(unittest.TestCase):
         )
 
     def test_the_recorded_pass_number_becomes_the_runs_pass(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
-        self._plant(s, item, "branch", "feat/x", "code")
-        self._plant(s, item, "phase-run", "3", "code")
+        s = self._store(("branch", "feat/x", "code"), ("phase-run", "3", "code"))
 
-        reopened = self._reopen(s)
-
-        self.assertEqual(reopened.current_run(item, "code").pass_id, "%s.p3" % item)
-        self.assertEqual([p.n for p in reopened.passes_of(item)], [3])
+        self.assertEqual(s.current_run("GRID-1", "code").pass_id, "GRID-1.p3")
+        self.assertEqual([p.n for p in s.passes_of("GRID-1")], [3])
 
     def test_two_phases_fold_into_two_runs(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
-        self._plant(s, item, "branch", "spec/x", "spec")
-        self._plant(s, item, "branch", "feat/x", "code")
+        s = self._store(("branch", "spec/x", "spec"), ("branch", "feat/x", "code"))
 
-        runs = self._reopen(s).runs_of(item)
+        runs = s.runs_of("GRID-1")
 
         self.assertEqual({r.phase: r.branch for r in runs}, {"spec": "spec/x", "code": "feat/x"})
 
     def test_an_unlabelled_artifact_folds_into_a_phaseless_run(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
-        self._plant(s, item, "branch", "feat/x")
+        s = self._store(("branch", "feat/x"))
 
-        run = self._reopen(s).current_run(item, None)
+        run = s.current_run("GRID-1", None)
 
         self.assertEqual((run.phase, run.branch), (None, "feat/x"))
 
     def test_every_folded_artifact_is_dropped(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
-        for atype, value in (("branch", "feat/x"), ("pr", "u"), ("content-pin", "sha"),
-                             ("content-pin-pr", "u"), ("phase-run", "2")):
-            self._plant(s, item, atype, value, "code")
+        s = self._store(("branch", "feat/x", "code"), ("pr", "u", "code"),
+                        ("content-pin", "sha", "code"), ("content-pin-pr", "u", "code"),
+                        ("phase-run", "2", "code"))
 
-        kept = {a.type for a in self._reopen(s).item_artifacts(item)}
+        kept = {a.type for a in s.item_artifacts("GRID-1")}
 
         self.assertEqual(kept & set(SqliteStore._FOLDED_ARTIFACTS), set())
 
     def test_an_item_with_no_phase_artifacts_gains_no_pass(self):
-        s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
+        s = self._store()
+        self.assertEqual(s.passes_of("GRID-1"), [])
 
-        self.assertEqual(self._reopen(s).passes_of(item), [])
+    def test_the_comment_ledger_folds_onto_the_run(self):
+        s = make_legacy_sqlite_store(
+            [dict(self._ITEM),
+             {"id": "GRID-1.1", "type": "step", "title": "await-merge: x", "state": "ready",
+              "step": "await-merge", "role": "human", "parent": "GRID-1"}],
+            [{"item_id": "GRID-1", "atype": "branch", "value": "feat/x", "label": "code"},
+             {"item_id": "GRID-1.1", "atype": "feedback-watermark", "value": "1500.0",
+              "internal": True},
+             {"item_id": "GRID-1.1", "atype": "feedback-spawned-through", "value": "1600.0",
+              "internal": True}],
+        )
+
+        run = s.current_run("GRID-1", "code")
+
+        self.assertEqual(
+            (run.comments_handled_through, run.comments_dispatched_through),
+            ("1500.0", "1600.0"),
+        )
 
 
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
@@ -390,13 +426,20 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         version = store._conn.execute("PRAGMA user_version").fetchone()[0]
         self.assertEqual(version, _SCHEMA_VERSION)
 
+    def _legacy(self, root, alter=None, rows=()):
+        config = self._config(root)
+        db_path = plant_legacy_db(config, rows)
+        conn = sqlite3.connect(db_path)
+        if alter:
+            conn.execute(alter)
+        conn.execute("PRAGMA user_version = 0")
+        conn.commit()
+        conn.close()
+        return config
+
     def test_store_with_status_column_present_is_refused(self):
         root = tempfile.mkdtemp()
-        store = SqliteStore(self._config(root))
-        store._conn.execute("ALTER TABLE nodes ADD COLUMN status TEXT")
-        store._conn.execute("PRAGMA user_version = 0")
-        store._conn.commit()
-        store._conn.close()
+        self._legacy(root, "ALTER TABLE nodes ADD COLUMN status TEXT")
 
         with self.assertRaises(SchemaVersionRefused) as cm:
             SqliteStore(self._config(root))
@@ -409,57 +452,39 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
 
     def test_store_missing_workflow_column_is_refused(self):
         root = tempfile.mkdtemp()
-        store = SqliteStore(self._config(root))
-        store._conn.execute("ALTER TABLE nodes DROP COLUMN workflow")
-        store._conn.execute("PRAGMA user_version = 0")
-        store._conn.commit()
-        store._conn.close()
+        self._legacy(root, "ALTER TABLE nodes DROP COLUMN workflow")
 
         with self.assertRaises(SchemaVersionRefused):
             SqliteStore(self._config(root))
 
     def test_history_status_without_state_is_refused(self):
         root = tempfile.mkdtemp()
-        store = SqliteStore(self._config(root))
-        store._conn.execute("ALTER TABLE history RENAME COLUMN state TO status")
-        store._conn.execute("PRAGMA user_version = 0")
-        store._conn.commit()
-        store._conn.close()
+        self._legacy(root, "ALTER TABLE history RENAME COLUMN state TO status")
 
         with self.assertRaises(SchemaVersionRefused):
             SqliteStore(self._config(root))
 
     def test_history_missing_ts_is_refused(self):
         root = tempfile.mkdtemp()
-        store = SqliteStore(self._config(root))
-        store._conn.execute("ALTER TABLE history DROP COLUMN ts")
-        store._conn.execute("PRAGMA user_version = 0")
-        store._conn.commit()
-        store._conn.close()
+        self._legacy(root, "ALTER TABLE history DROP COLUMN ts")
 
         with self.assertRaises(SchemaVersionRefused):
             SqliteStore(self._config(root))
 
     def test_store_with_legacy_step_value_is_refused(self):
         root = tempfile.mkdtemp()
-        store = SqliteStore(self._config(root))
-        tid = store.create_step("old style", role="agent")
-        store._conn.execute("UPDATE nodes SET step = 'build' WHERE id = ?", (tid,))
-        store._conn.execute("PRAGMA user_version = 0")
-        store._conn.commit()
-        store._conn.close()
+        self._legacy(root, rows=[{"id": "GRID-1.1", "type": "step", "title": "old style",
+                                  "state": "ready", "step": "build", "role": "agent",
+                                  "parent": "GRID-1"}])
 
         with self.assertRaises(SchemaVersionRefused):
             SqliteStore(self._config(root))
 
     def test_store_with_legacy_role_value_is_refused(self):
         root = tempfile.mkdtemp()
-        store = SqliteStore(self._config(root))
-        tid = store.create_step("old style", role="agent")
-        store._conn.execute("UPDATE nodes SET role = 'reviewer' WHERE id = ?", (tid,))
-        store._conn.execute("PRAGMA user_version = 0")
-        store._conn.commit()
-        store._conn.close()
+        self._legacy(root, rows=[{"id": "GRID-1.1", "type": "step", "title": "old style",
+                                  "state": "ready", "step": "write-code", "role": "reviewer",
+                                  "parent": "GRID-1"}])
 
         with self.assertRaises(SchemaVersionRefused):
             SqliteStore(self._config(root))
@@ -535,13 +560,10 @@ class TestSqliteStoreCloseReasonMigration(unittest.TestCase):
         self._seed_legacy_store(root)
         store = SqliteStore(self._config(root))
 
-        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        self.assertNotIn("close_reason", cols)
-        self.assertIn("outcome", cols)
-
-        self.assertEqual(store.get_node("i-merged").outcome, "merged")
-        self.assertEqual(store.get_node("s-done").outcome, "done")
-        self.assertIsNone(store.get_node("s-open").outcome)
+        self.assertFalse(store._has_table("nodes"))
+        self.assertEqual(store.get_item("i-merged").outcome, "merged")
+        self.assertEqual(store.get_step("s-done").outcome, "done")
+        self.assertIsNone(store.get_step("s-open").outcome)
 
     def test_migration_is_idempotent_on_reopen(self):
         root = tempfile.mkdtemp()
@@ -549,18 +571,18 @@ class TestSqliteStoreCloseReasonMigration(unittest.TestCase):
         SqliteStore(self._config(root))
         store = SqliteStore(self._config(root))
 
-        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        self.assertNotIn("close_reason", cols)
-        self.assertIn("outcome", cols)
-        self.assertEqual(store.get_node("i-merged").outcome, "merged")
+        self.assertFalse(store._has_table("nodes"))
+        self.assertEqual(store.get_item("i-merged").outcome, "merged")
 
-    def test_fresh_store_has_outcome_and_not_close_reason(self):
+    def test_fresh_store_has_outcome_on_both_tables(self):
         root = tempfile.mkdtemp()
         store = SqliteStore(self._config(root))
 
-        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        self.assertNotIn("close_reason", cols)
-        self.assertIn("outcome", cols)
+        for table in ("items", "steps"):
+            cols = {r[1] for r in store._conn.execute(
+                "PRAGMA table_info(%s)" % table).fetchall()}
+            self.assertNotIn("close_reason", cols)
+            self.assertIn("outcome", cols)
 
 
 class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
@@ -597,8 +619,7 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
 
         arts = {a.type: a for a in store.item_artifacts("i-1")}
         self.assertEqual(arts["spec"].kind, "filepath")
-        self.assertEqual(arts["repo"].kind, "text")
-        self.assertEqual(arts["reflection"].kind, "text")
+        self.assertEqual(arts["resolves"].kind, "text")
 
     def test_backfills_internal_true_only_for_bookkeeping_types(self):
         root = tempfile.mkdtemp()
@@ -606,13 +627,9 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
         store = SqliteStore(self._config(root))
 
         arts = {a.type: a for a in store.item_artifacts("i-1")}
-        for atype in (
-            "reflection", "resolves", "resolved-by", "watched-step",
-            "feedback-spawned-through", "feedback-watermark",
-        ):
+        for atype in ("resolves", "resolved-by"):
             self.assertTrue(arts[atype].internal, atype)
-        for atype in ("spec", "repo"):
-            self.assertFalse(arts[atype].internal, atype)
+        self.assertFalse(arts["spec"].internal)
 
     def test_migration_is_idempotent_on_reopen(self):
         root = tempfile.mkdtemp()
@@ -622,7 +639,7 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
 
         arts = {a.type: a for a in store.item_artifacts("i-1")}
         self.assertEqual(arts["spec"].kind, "filepath")
-        self.assertTrue(arts["reflection"].internal)
+        self.assertTrue(arts["resolves"].internal)
 
     def test_fresh_store_artifact_has_declared_kind_and_internal(self):
         root = tempfile.mkdtemp()
