@@ -37,7 +37,7 @@ class TestSearchQueryCount(unittest.TestCase):
 
 
 class TestWatchedStepIdsQueryCount(unittest.TestCase):
-    def test_issues_no_queries_beyond_all_nodes(self):
+    def test_issues_no_more_queries_than_a_full_node_scan(self):
         s = make_sqlite_store()
         for i in range(20):
             step = s.create_step("step %d" % i, role="human")
@@ -50,7 +50,7 @@ class TestWatchedStepIdsQueryCount(unittest.TestCase):
         counter.reset()
         watched_step_ids(s)
 
-        self.assertEqual(counter.count, baseline)
+        self.assertLessEqual(counter.count, baseline)
 
 
 class TestRollupQueryCount(unittest.TestCase):

@@ -30,9 +30,9 @@ class TestExportSnapshot(unittest.TestCase):
         )
 
         task_row = rows[step]
-        self.assertEqual(task_row["parent"], item)
+        self.assertEqual(task_row["item"], item)
         self.assertEqual(task_row["role"], "agent")
-        self.assertEqual(task_row["step"], "build")
+        self.assertEqual(task_row["stage"], "build")
         self.assertEqual(task_row["notes"], "some notes")
         self.assertIn("retro-origin", task_row["labels"])
         self.assertEqual(task_row["blocked_by"], [blocker])

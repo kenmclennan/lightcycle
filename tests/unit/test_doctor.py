@@ -213,8 +213,7 @@ class TestDoctorUseCase(unittest.TestCase):
 
     def test_store_integrity_violation_surfaces_under_store(self):
         store = FakeStore()
-        item = store.create_item("item", "a description")
-        store.edit_node(item, parent="missing-parent")
+        item = store.create_step("a step", parent="missing-parent")
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**_ALL_KEYS)
