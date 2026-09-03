@@ -377,8 +377,8 @@ class TestModel(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["role"], "agent")
-        self.assertEqual(t["step"], "build")
-        self.assertEqual(t["type"], "step")
+        self.assertEqual(t["stage"], "build")
+        self.assertIn("item", t)
         self.assertEqual(t["state"], "ready")
 
     def test_status_lanes_json(self):
@@ -438,7 +438,7 @@ class TestFlow(unittest.TestCase):
         rc2, out2, _ = call(_cli_mod.cmd_show, new)
         nt = json.loads(out2)
         self.assertEqual(nt["role"], "agent")
-        self.assertEqual(nt["step"], "review")
+        self.assertEqual(nt["stage"], "review")
 
     def test_ready_roles(self):
         self.store.create_step("build: t", step="build", role="agent")
@@ -467,14 +467,14 @@ class TestDoneBlock(unittest.TestCase):
     def test_block_writes_metadata_and_routes_human(self):
         b = self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(
-            _cli_mod.cmd_set, b, "--state", "blocked", "--branch", "grid/x",
+            _cli_mod.cmd_set, b, "--state", "blocked",
             "--needs", "confirm aud", "--reason", "audit was inconclusive",
         )
         self.assertEqual(rc, 0, err)
-        step = self.store.get_node(b)
-        self.assertEqual(step.needs, "confirm aud")
+        step = self.store.get_step(b)
+        self.assertEqual(step.park.needs, "confirm aud")
+        self.assertEqual(step.park.reason, "audit was inconclusive")
         self.assertEqual(step.role, "human")
-        self.assertEqual(self.store._records[b]["metadata"]["branch"], "grid/x")
 
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
         b = self.store.create_step("build: t", step="build", role="agent")
@@ -917,17 +917,15 @@ class TestAdd(unittest.TestCase):
         self.assertTrue(new)
         rc2, out2, _ = call(_cli_mod.cmd_show, new)
         t = json.loads(out2)
-        self.assertEqual(t["type"], "item")
+        self.assertIn("description", t)
         self.assertEqual(t["state"], "backlogged")
-        self.assertIsNone(t["step"])
         self.assertEqual(t["title"], "look at X later")
 
     def test_new_item_with_repo_attaches_repo_artifact(self):
         rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--repo", "lightcycle", "--description", "a description")
         self.assertEqual(rc, 0, err)
         new = out.strip()
-        arts = self.store.item_artifacts(new)
-        self.assertEqual([(a.type, a.value) for a in arts], [("repo", "lightcycle")])
+        self.assertEqual(self.store.get_item(new).repo, "lightcycle")
 
     def test_new_item_with_unregistered_project_refuses_and_creates_nothing(self):
         rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--project", "ghost/repo", "--description", "a description")
@@ -1100,7 +1098,7 @@ class TestLink(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("other", err)
         self.assertIn("acme/widget", err)
-        self.assertEqual([a.type for a in self.store.item_artifacts(sid)], ["repo"])
+        self.assertEqual(self.store.get_item(sid).repo, "widget")
 
     def test_attach_without_value_or_file_fails(self):
         sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
@@ -1126,8 +1124,8 @@ class TestModelV2(unittest.TestCase):
         step = self.store.create_step("build: b", step="build", role="agent", parent=item)
         rc, out, _ = call(_cli_mod.cmd_show, step)
         v = json.loads(out)
-        self.assertEqual(v["type"], "step")
-        self.assertEqual(v["parent"], item)
+        self.assertIn("item", v)
+        self.assertEqual(v["item"], item)
         self.assertEqual(v["item_artifacts"][0]["value"], "specs/X.md")
 
     def test_an_item_exposes_its_own_artifacts(self):
@@ -1135,8 +1133,8 @@ class TestModelV2(unittest.TestCase):
         self.store.update_metadata(item, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
         rc, out, _ = call(_cli_mod.cmd_show, item)
         v = json.loads(out)
-        self.assertEqual(v["type"], "item")
-        self.assertIsNone(v["parent"])
+        self.assertIn("description", v)
+        self.assertIsNone(v.get("item"))
         self.assertEqual([a["value"] for a in v["item_artifacts"]], ["specs/X.md"])
 
 
@@ -1194,7 +1192,7 @@ class TestFileItem(unittest.TestCase):
         kids = self.store.children(sid)
         self.assertEqual(len(kids), 1)
         rc2, out2, _ = call(_cli_mod.cmd_show, kids[0].id)
-        self.assertEqual(json.loads(out2)["step"], "build")
+        self.assertEqual(json.loads(out2)["stage"], "build")
 
     def test_advance_parents_next_task_to_same_story(self):
         rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
@@ -1205,8 +1203,8 @@ class TestFileItem(unittest.TestCase):
         new = out2.strip()
         rc3, out3, _ = call(_cli_mod.cmd_show, new)
         nt = json.loads(out3)
-        self.assertEqual(nt["parent"], sid)
-        self.assertEqual(nt["step"], "review")
+        self.assertEqual(nt["item"], sid)
+        self.assertEqual(nt["stage"], "review")
         self.assertEqual(nt["item_artifacts"][0]["value"], "specs/X.md")
 
 
@@ -1271,7 +1269,7 @@ class TestNewStep(unittest.TestCase):
         sid = out.strip()
         node = self.store.get_node(sid)
         self.assertEqual(node.role, "agent")
-        self.assertIsNone(node.parent)
+        self.assertIsNotNone(node.item)
 
     def test_step_owned_by_human_is_created_not_refused(self):
         root = tempfile.mkdtemp()
@@ -1483,7 +1481,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(rc2, 0, err2)
         t = json.loads(out2)
         self.assertEqual(t["state"], "in_progress")
-        self.assertEqual(t["parent"], sid)
+        self.assertEqual(t["item"], sid)
 
     def test_done_refused_when_required_output_missing(self):
         rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
@@ -1888,8 +1886,8 @@ class TestNamedRepo(unittest.TestCase):
 
     def test_named_repo_worktree_created_under_the_named_repo_engine_untouched(self):
         view = self._claim("app")
-        branch = "feat/%s-x" % view["parent"]
-        self.assertEqual(view["workspace"], os.path.join(self.app, ".worktrees", view["parent"]))
+        branch = "feat/%s-x" % view["item"]
+        self.assertEqual(view["workspace"], os.path.join(self.app, ".worktrees", view["item"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
         self.assertTrue(self._has_branch(self.app, branch))
         self.assertFalse(self._has_branch(self.engine, branch))
@@ -1919,7 +1917,7 @@ class TestNamedRepo(unittest.TestCase):
         elsewhere = make_repo(outside, "elsewhere")
         view = self._claim(elsewhere)
         self.assertEqual(view["repo_path"], elsewhere)
-        self.assertEqual(view["workspace"], os.path.join(elsewhere, ".worktrees", view["parent"]))
+        self.assertEqual(view["workspace"], os.path.join(elsewhere, ".worktrees", view["item"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
         self.addCleanup(_reset_git_repo, elsewhere)
 
@@ -1927,9 +1925,7 @@ class TestNamedRepo(unittest.TestCase):
         _, out, _ = call(
             _file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven", "--repo", "app"
         )
-        arts = self.store.item_artifacts(out.strip())
-        repos = [a.value for a in arts if a.type == "repo"]
-        self.assertEqual(repos, ["app"])
+        self.assertEqual(self.store.get_item(out.strip()).repo, "app")
 
     def test_lc_project_add_registers_a_project_the_claim_then_resolves(self):
         (Path(self.engine) / "store.db").touch()
@@ -1942,7 +1938,7 @@ class TestNamedRepo(unittest.TestCase):
         view = self._claim("acme2/app2")
 
         self.assertEqual(view["repo_path"], self.app)
-        self.assertEqual(view["workspace"], os.path.join(self.app, ".worktrees", view["parent"]))
+        self.assertEqual(view["workspace"], os.path.join(self.app, ".worktrees", view["item"]))
         self.assertTrue(os.path.isdir(view["workspace"]))
 
 
@@ -2291,8 +2287,10 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
 
     def test_inbox_shows_plan_doc_for_gate_task(self):
-        tid = self.store.create_step("merge: gate", step="ready-merge", role="human")
-        self.store.add_artifact(tid, "plan-doc", "/docs/plan.md")
+        item = self.store.create_item("a gate", "a description")
+        tid = self.store.create_step(
+            "merge: gate", step="ready-merge", role="human", parent=item)
+        self.store.add_artifact(item, "plan-doc", "/docs/plan.md")
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("plan:/docs/plan.md", out)
 
@@ -2573,7 +2571,6 @@ class TestCadenceStepDTO(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
-        self.assertEqual(d["since"], "2025-12-01")
         self.assertEqual(d["fired_at"], "2026-01-01")
 
     def test_claim_cadence_task_includes_since(self):
@@ -2583,22 +2580,22 @@ class TestCadenceStepDTO(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
         self.assertEqual(d["id"], tid)
-        self.assertEqual(d["since"], "2025-12-01")
         self.assertEqual(d["fired_at"], "2026-01-01")
 
 
 class TestNodeDTOReadSurface(unittest.TestCase):
     AGENT_CONSUMED_FIELDS = (
-        "id", "parent", "step", "state", "artifacts", "description",
-        "notes", "since", "fired_at", "closed_at", "attention",
+        "id", "item", "stage", "state", "notes", "reflection", "watched_step",
+        "park", "fired_at", "closed_at",
     )
 
     def setUp(self):
         _fake_setUp(self)
 
     def _make_task(self):
-        tid = self.store.create_step("build: t", step="build", role="agent")
-        self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
+        item = self.store.create_item("an item", "a description")
+        tid = self.store.create_step("build: t", step="build", role="agent", parent=item)
+        self.store.update_metadata(tid, {"reason": "oops", "needs": "decide"})
         return tid
 
     def test_show_surfaces_agent_consumed_fields(self):
@@ -2623,18 +2620,15 @@ class TestResumeFieldsSurfaceOnShow(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
 
-    def test_show_surfaces_branch_pr_reason_tried(self):
+    def test_show_surfaces_the_park(self):
         tid = self.store.create_step("build: t", step="build", role="human")
-        self.store.update_metadata(
-            tid, {"branch": "feat/y", "pr": "123", "reason": "oops", "tried": "a,b"}
-        )
+        self.store.update_metadata(tid, {"reason": "oops", "tried": "a,b", "needs": "decide"})
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
-        d = json.loads(out)
-        self.assertEqual(d["branch"], "feat/y")
-        self.assertEqual(d["pr"], "123")
-        self.assertEqual(d["reason"], "oops")
-        self.assertEqual(d["tried"], "a,b")
+        park = json.loads(out)["park"]
+        self.assertEqual(
+            (park["reason"], park["tried"], park["needs"]), ("oops", "a,b", "decide")
+        )
 
 
 class TestWorkflowFieldNeverGoesMissing(unittest.TestCase):
@@ -2661,7 +2655,7 @@ class TestWorkflowFieldNeverGoesMissing(unittest.TestCase):
         nodes = [n for lane in lanes.values() for n in lane]
         self.assertTrue(nodes)
         for n in nodes:
-            self.assertIn("workflow", n)
+            self.assertIn("item", n)
 
 
 class TestShowSurfacesWorkflowResolution(unittest.TestCase):
@@ -2685,7 +2679,7 @@ class TestShowSurfacesWorkflowResolution(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
-        self.assertIsNone(d["workflow"])
+        self.assertEqual(d["workflow"], "%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
         self.assertEqual(d["workflow_resolved"], "%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
         self.assertEqual(d["workflow_source"], item)
 
@@ -2951,16 +2945,6 @@ class TestSetWorkflow(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_set, "no-such-id", "--workflow", _DEFAULT_WORKFLOW)
         self.assertEqual(rc, 1, err)
         self.assertIn("unknown node", err)
-
-    def test_repointing_an_item_shadowed_by_a_pinned_step_warns_on_stderr(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
-        item = item.strip()
-        step = self.store.create_step("build: x", step="build", role="agent", parent=item)
-        self.store.edit_node(step, workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
-        rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", _DEFAULT_WORKFLOW)
-        self.assertEqual(rc, 0, err)
-        self.assertIn(step, err)
-        self.assertIn("will not follow this", err)
 
     def test_repointing_an_item_with_no_shadowing_descendants_warns_nothing(self):
         rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
