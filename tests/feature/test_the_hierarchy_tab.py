@@ -133,7 +133,7 @@ def _row_lines(ctx, row_id):
 def _node_with_visible_artifact(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.add_artifact(item, "repo", "org/repo")
+    store.add_artifact(item, "spec", "specs/x.md")
     ctx["node_id"] = item
     _launch(ctx, store, item)
 
@@ -159,7 +159,7 @@ def _node_with_no_artifacts(ctx):
 def _node_showing_content_indicator(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.add_artifact(item, "repo", "org/repo")
+    store.add_artifact(item, "spec", "specs/x.md")
     ctx["node_id"] = item
     _launch(ctx, store, item)
 
@@ -462,7 +462,7 @@ def _ancestor_pinned(ctx):
 def _node_highlighted_not_opened(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.add_artifact(item, "repo", "org/repo")
+    store.add_artifact(item, "spec", "specs/x.md")
     step = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)

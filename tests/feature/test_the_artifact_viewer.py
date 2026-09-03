@@ -159,7 +159,7 @@ def _long_list_open(ctx):
 @given(parsers.parse('I opened a "{kind}" artifact from the list'))
 def _opened_kind_from_list(ctx, kind):
     value = "some text" if kind == "text" else "a\nb\nc"
-    _setup(ctx, [("repo", "org/repo", "text"), ("finding", value, kind)])
+    _setup(ctx, [("note", "some note", "text"), ("finding", value, kind)])
     table = ctx["session"].app.screen.query_one(ArtifactsTable)
     ctx["session"].run(lambda: table.move_cursor(row=1))
     ctx["session"].pause()
