@@ -22,7 +22,7 @@ def landing_tab(node):
         return "log"
     if node.state == State.DONE:
         return "artifacts"
-    if node.state == State.READY and node.role == "human":
+    if node.state == State.READY and getattr(node, "role", None) == "human":
         return "artifacts"
     return "hierarchy"
 
@@ -32,7 +32,7 @@ def row_bucket(node):
         return "done"
     if node.state == State.IN_PROGRESS:
         return "active"
-    if node.state == State.READY and node.role == "human":
+    if node.state == State.READY and getattr(node, "role", None) == "human":
         return "needs-attention"
     return "queued"
 
@@ -50,8 +50,8 @@ def park_resume_command(node_id):
 
 
 def has_content(node):
-    return any(not a.internal for a in node.artifacts)
+    return any(not a.internal for a in getattr(node, "artifacts", ()))
 
 
 def viewable_artifacts(node):
-    return [a for a in node.artifacts if not a.internal]
+    return [a for a in getattr(node, "artifacts", ()) if not a.internal]

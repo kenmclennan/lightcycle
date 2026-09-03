@@ -4,7 +4,7 @@ from typing import Optional
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.project_clone import ensure_project_cloned
 from lightcycle.application.work.step_filing import file_step
-from lightcycle.domain.work import Item, State
+from lightcycle.domain.work import State
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class ActivateItemUseCase:
         except ValueError as e:
             raise UseCaseError(str(e))
         self._store.edit_node(item_id, workflow=pin)
-        repo = Item(item_id, tuple(self._store.item_artifacts(item_id))).repo()
+        repo = self._store.get_item(item_id).repo
         ensure_project_cloned(self._store, self._git, self._config, repo)
         step = file_step(self._store, self._flow, item_id, node, pin, input.step)
         return ActivateItemResponse(step=step)

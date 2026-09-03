@@ -3,12 +3,17 @@ from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
 
 
 class StoreContractBase:
+    def _step(self, s, title="t", **kw):
+        if kw.get("parent") is None:
+            kw["parent"] = s.create_item("owner", "an owning item")
+        return s.create_step(title, **kw)
+
     def make_store(self, now=None):
         raise NotImplementedError
 
     def test_complete_step_atomic_wins_and_files_successor(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
             tid, "done", "w1", NodeSpec(title="next", step="review", role="agent"))
@@ -19,7 +24,7 @@ class StoreContractBase:
 
     def test_complete_step_atomic_already_done_loses(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         s.complete_step_atomic(tid, "done", "w1", None)
         won, new = s.complete_step_atomic(tid, "done", "w1", NodeSpec(title="next", step="review"))
@@ -28,7 +33,7 @@ class StoreContractBase:
 
     def test_complete_step_atomic_fences_mismatched_assignee(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
             tid, "done", "w2", NodeSpec(title="next", step="review"))
@@ -38,7 +43,7 @@ class StoreContractBase:
 
     def test_complete_step_atomic_empty_assignee_not_fenced(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, _ = s.complete_step_atomic(tid, "done", "", None)
         self.assertTrue(won)
@@ -46,7 +51,7 @@ class StoreContractBase:
 
     def test_complete_step_atomic_worker_can_complete_an_unclaimed_step(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         won, new = s.complete_step_atomic(
             tid, "done", "handle-feedback-worker",
             NodeSpec(title="next", step="review", role="agent"))
@@ -56,50 +61,50 @@ class StoreContractBase:
 
     def test_label_add_visible_as_role(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.label_add(tid, "for:reviewer")
         self.assertEqual(s.get_node(tid).role, "reviewer")
 
     def test_label_remove_clears_role(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.label_remove(tid, "for:agent")
         self.assertIsNone(s.get_node(tid).role)
 
     def test_assign_shows_in_progress(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.assign(tid, "worker-1")
         self.assertEqual(s.get_node(tid).state, "in_progress")
 
     def test_close_status_is_done(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.close(tid, "done")
         self.assertEqual(s.get_node(tid).state, "done")
 
     def test_outcome_preserved(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.close(tid, "rejected")
         self.assertEqual(s.get_node(tid).outcome, "rejected")
 
     def test_close_overrides_in_progress(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.assign(tid, "worker-1")
         s.close(tid, "done")
         self.assertEqual(s.get_node(tid).state, "done")
 
     def test_note_roundtrip(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note(tid, "from review: lgtm")
         self.assertIn("from review: lgtm", s.get_node(tid).notes)
 
     def test_notes_append(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note(tid, "alpha")
         s.note(tid, "beta")
         notes = s.get_node(tid).notes
@@ -108,7 +113,7 @@ class StoreContractBase:
 
     def test_set_notes_replaces_existing_notes(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note(tid, "alpha")
         s.set_notes(tid, "replacement")
         notes = s.get_node(tid).notes
@@ -116,14 +121,14 @@ class StoreContractBase:
 
     def test_set_notes_empty_clears_notes(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note(tid, "alpha")
         s.set_notes(tid, "")
         self.assertFalse(s.get_node(tid).notes)
 
     def test_note_condition_repeated_collapses_to_one_growing_line(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note_condition(tid, "gh read failed")
         once = s.get_node(tid).notes
         s.note_condition(tid, "gh read failed")
@@ -134,7 +139,7 @@ class StoreContractBase:
 
     def test_note_condition_different_text_appends_a_new_line(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note_condition(tid, "condition A")
         s.note_condition(tid, "condition B")
         lines = s.get_node(tid).notes.splitlines()
@@ -142,7 +147,7 @@ class StoreContractBase:
 
     def test_note_condition_non_adjacent_recurrence_starts_a_fresh_line(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note_condition(tid, "A")
         s.note_condition(tid, "B")
         s.note_condition(tid, "A")
@@ -151,7 +156,7 @@ class StoreContractBase:
 
     def test_note_condition_normalizes_embedded_newlines_and_still_dedupes(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note_condition(tid, "line one\nline two")
         s.note_condition(tid, "line one\nline two")
         lines = s.get_node(tid).notes.splitlines()
@@ -160,7 +165,7 @@ class StoreContractBase:
 
     def test_note_condition_does_not_upgrade_a_plain_note(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.note(tid, "X")
         s.note_condition(tid, "X")
         lines = s.get_node(tid).notes.splitlines()
@@ -174,22 +179,22 @@ class StoreContractBase:
 
     def test_task_without_deps_is_ready(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(tid, ready_ids)
 
     def test_task_with_unresolved_dep_not_ready(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker = self._step(s, "blocker", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker)
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertNotIn(blocked, ready_ids)
 
     def test_all_deps_closed_makes_task_ready(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker = self._step(s, "blocker", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker)
         s.close(blocker, "done")
         ready_ids = [t.id for t in s.ready_steps()]
@@ -197,8 +202,8 @@ class StoreContractBase:
 
     def test_dep_remove_drops_blocker(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker = self._step(s, "blocker", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker)
         s.dep_remove(blocked, blocker)
         ready_ids = [t.id for t in s.ready_steps()]
@@ -206,23 +211,23 @@ class StoreContractBase:
 
     def test_dep_remove_of_absent_pair_removes_nothing(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker = self._step(s, "blocker", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         removed = s.dep_remove(blocked, blocker)
         self.assertFalse(removed)
 
     def test_dep_remove_returns_whether_a_dep_was_removed(self):
         s = self.make_store()
-        blocker = s.create_step("blocker", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker = self._step(s, "blocker", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker)
         self.assertTrue(s.dep_remove(blocked, blocker))
         self.assertFalse(s.dep_remove(blocked, blocker))
 
     def test_blocked_by_names_a_single_unresolved_dependency(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        dep1 = self._step(s, "dep1", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, dep1)
         node = s.get_node(blocked)
         self.assertEqual(set(node.blocked_by), {dep1})
@@ -230,9 +235,9 @@ class StoreContractBase:
 
     def test_blocked_by_names_every_unresolved_dependency_at_once(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="agent")
-        dep2 = s.create_step("dep2", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        dep1 = self._step(s, "dep1", role="agent")
+        dep2 = self._step(s, "dep2", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
         node = s.get_node(blocked)
@@ -241,9 +246,9 @@ class StoreContractBase:
 
     def test_blocked_by_drops_only_the_dependency_that_closed(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="agent")
-        dep2 = s.create_step("dep2", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        dep1 = self._step(s, "dep1", role="agent")
+        dep2 = self._step(s, "dep2", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
         s.close(dep1, "done")
@@ -253,8 +258,8 @@ class StoreContractBase:
 
     def test_blocked_by_drops_a_deleted_dependency(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        dep1 = self._step(s, "dep1", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.delete(dep1)
         node = s.get_node(blocked)
@@ -263,16 +268,16 @@ class StoreContractBase:
 
     def test_blocked_by_empty_when_no_dependencies(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         node = s.get_node(tid)
         self.assertEqual(node.blocked_by, [])
         self.assertEqual(node.deps, 0)
 
     def test_dep_remove_leaves_unrelated_deps_untouched(self):
         s = self.make_store()
-        blocker1 = s.create_step("blocker1", role="agent")
-        blocker2 = s.create_step("blocker2", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker1 = self._step(s, "blocker1", role="agent")
+        blocker2 = self._step(s, "blocker2", role="agent")
+        blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker1)
         s.dep_add(blocked, blocker2)
         s.dep_remove(blocked, blocker1)
@@ -284,13 +289,13 @@ class StoreContractBase:
 
     def test_claim_ready_matches_role_label(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         result = s.claim_ready("agent")
         self.assertEqual(result.id, tid)
 
     def test_claim_ready_wrong_role_returns_none(self):
         s = self.make_store()
-        s.create_step("t", role="human")
+        self._step(s, "t", role="human")
         self.assertIsNone(s.claim_ready("agent"))
 
     def test_story_artifacts_roundtrip(self):
@@ -378,13 +383,13 @@ class StoreContractBase:
 
     def test_create_task_with_description(self):
         s = self.make_store()
-        tid = s.create_step("my step", description="detailed info")
+        tid = self._step(s, "my step", description="detailed info")
         t = s.get_node(tid)
         self.assertEqual(t.description, "detailed info")
 
     def test_edit_task_title_and_description(self):
         s = self.make_store()
-        tid = s.create_step("old title", description="old desc")
+        tid = self._step(s, "old title", description="old desc")
         s.edit_node(tid, title="new title", description="new desc")
         t = s.get_node(tid)
         self.assertEqual(t.title, "new title")
@@ -392,7 +397,7 @@ class StoreContractBase:
 
     def test_edit_task_goal_and_project(self):
         s = self.make_store()
-        tid = s.create_step("t", goal="g1", project="p1")
+        tid = self._step(s, "t", goal="g1", project="p1")
         s.edit_node(tid, goal="g2", project="p2")
         t = s.get_node(tid)
         self.assertEqual(t.goal, "g2")
@@ -400,7 +405,7 @@ class StoreContractBase:
 
     def test_edit_task_leaves_unspecified_fields_intact(self):
         s = self.make_store()
-        tid = s.create_step("title stays", description="desc stays", goal="g1")
+        tid = self._step(s, "title stays", description="desc stays", goal="g1")
         s.edit_node(tid, project="p1")
         t = s.get_node(tid)
         self.assertEqual(t.title, "title stays")
@@ -411,34 +416,34 @@ class StoreContractBase:
     def test_edit_task_reparents(self):
         s = self.make_store()
         item = s.create_item("owning item", "a description")
-        tid = s.create_step("a step")
+        tid = self._step(s, "a step")
         s.edit_node(tid, parent=item)
         t = s.get_node(tid)
         self.assertEqual(t.parent, item)
 
     def test_delete_removes_task(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.delete(tid)
         self.assertNotIn(tid, [t.id for t in s.all_nodes()])
 
     def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
         s = self.make_store()
         item = s.create_item("owning item", "a description")
-        tid = s.create_step("a step", parent=item)
+        tid = self._step(s, "a step", parent=item)
         s.edit_node(tid, title="renamed")
         t = s.get_node(tid)
         self.assertEqual(t.parent, item)
 
     def test_set_model_roundtrip(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.set_model(tid, "sonnet")
         self.assertEqual(s.get_node(tid).model, "sonnet")
 
     def test_set_model_preserves_other_metadata(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.update_metadata(tid, {"since": "2025-01-01"})
         s.set_model(tid, "sonnet")
         t = s.get_node(tid)
@@ -447,7 +452,7 @@ class StoreContractBase:
 
     def test_update_metadata_preserves_other_metadata(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.set_model(tid, "sonnet")
         s.update_metadata(tid, {"since": "2025-01-01"})
         t = s.get_node(tid)
@@ -456,7 +461,7 @@ class StoreContractBase:
 
     def test_update_metadata_persists_resume_fields(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.update_metadata(tid, {"branch": "feat/y", "pr": "123", "reason": "oops", "tried": "a,b"})
         t = s.get_node(tid)
         self.assertEqual(t.branch, "feat/y")
@@ -466,8 +471,8 @@ class StoreContractBase:
 
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()
-        open_tid = s.create_step("open step")
-        closed_tid = s.create_step("closed step")
+        open_tid = self._step(s, "open step")
+        closed_tid = self._step(s, "closed step")
         s.close(closed_tid, "done")
         ids = [t.id for t in s.all_nodes()]
         self.assertIn(open_tid, ids)
@@ -475,8 +480,8 @@ class StoreContractBase:
 
     def test_all_nodes_including_done_includes_closed_nodes(self):
         s = self.make_store()
-        open_tid = s.create_step("open step")
-        closed_tid = s.create_step("closed step")
+        open_tid = self._step(s, "open step")
+        closed_tid = self._step(s, "closed step")
         s.close(closed_tid, "done")
         ids = [t.id for t in s.all_nodes()]
         self.assertIn(open_tid, ids)
@@ -487,7 +492,7 @@ class StoreContractBase:
 
     def test_history_records_claim_and_close_in_order(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.claim_ready("agent")
         s.close(tid, "done")
         states = [state for state, _ in s.history(tid)]
@@ -496,7 +501,7 @@ class StoreContractBase:
     def test_history_stamps_ts_from_injected_clock(self):
         ticks = iter(["2026-01-01T10:00:00", "2026-01-01T10:30:00"])
         s = self.make_store(now=lambda: next(ticks))
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         s.claim_ready("agent")
         s.close(tid, "done")
         self.assertEqual(
@@ -506,13 +511,13 @@ class StoreContractBase:
 
     def test_history_empty_for_unclaimed_task(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = self._step(s, "t", role="agent")
         self.assertEqual(s.history(tid), [])
 
     def test_all_steps_excludes_closed_steps(self):
         s = self.make_store()
-        open_tid = s.create_step("open step")
-        closed_tid = s.create_step("closed step")
+        open_tid = self._step(s, "open step")
+        closed_tid = self._step(s, "closed step")
         s.close(closed_tid, "done")
         ids = [t.id for t in s.all_steps()]
         self.assertIn(open_tid, ids)
@@ -521,59 +526,59 @@ class StoreContractBase:
     def test_all_steps_excludes_items(self):
         s = self.make_store()
         item = s.create_item("todo item", "a description")
-        step = s.create_step("a step")
+        step = self._step(s, "a step")
         ids = [t.id for t in s.all_steps()]
         self.assertEqual(ids, [step])
         self.assertNotIn(item, ids)
 
     def test_step_state_backlogged_when_blocked(self):
         s = self.make_store()
-        blocker = s.create_step("blocker")
-        blocked = s.create_step("blocked", deps=[blocker])
+        blocker = self._step(s, "blocker")
+        blocked = self._step(s, "blocked", deps=[blocker])
         self.assertEqual(s.get_node(blocked).state, "backlogged")
 
     def test_step_state_in_progress_when_assigned_despite_deps(self):
         s = self.make_store()
-        blocker = s.create_step("blocker")
-        blocked = s.create_step("blocked", deps=[blocker])
+        blocker = self._step(s, "blocker")
+        blocked = self._step(s, "blocked", deps=[blocker])
         s.assign(blocked, "w1")
         self.assertEqual(s.get_node(blocked).state, "in_progress")
 
     def test_step_state_done_when_closed(self):
         s = self.make_store()
-        blocker = s.create_step("blocker")
-        blocked = s.create_step("blocked", deps=[blocker])
+        blocker = self._step(s, "blocker")
+        blocked = self._step(s, "blocked", deps=[blocker])
         s.assign(blocked, "w1")
         s.close(blocked, "done")
         self.assertEqual(s.get_node(blocked).state, "done")
 
     def test_step_state_ready_when_unblocked(self):
         s = self.make_store()
-        blocker = s.create_step("blocker")
-        blocked = s.create_step("blocked", deps=[blocker])
+        blocker = self._step(s, "blocker")
+        blocked = self._step(s, "blocked", deps=[blocker])
         s.close(blocker, "done")
         self.assertEqual(s.get_node(blocked).state, "ready")
 
     def test_step_state_ready_when_blocker_deleted(self):
         s = self.make_store()
-        blocker = s.create_step("blocker")
-        blocked = s.create_step("blocked", deps=[blocker])
+        blocker = self._step(s, "blocker")
+        blocked = self._step(s, "blocked", deps=[blocker])
         s.delete(blocker)
         self.assertEqual(s.get_node(blocked).state, "ready")
 
     def test_item_state_rolls_up_mixed_children(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
-        done_step = s.create_step("done step", parent=item)
-        s.create_step("open step", parent=item)
+        done_step = self._step(s, "done step", parent=item)
+        self._step(s, "open step", parent=item)
         s.close(done_step, "done")
         self.assertEqual(s.get_node(item).state, "in_progress")
 
     def test_item_state_done_when_all_children_done(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
-        a = s.create_step("a", parent=item)
-        b = s.create_step("b", parent=item)
+        a = self._step(s, "a", parent=item)
+        b = self._step(s, "b", parent=item)
         s.close(a, "done")
         s.close(b, "done")
         self.assertEqual(s.get_node(item).state, "done")
@@ -581,8 +586,8 @@ class StoreContractBase:
     def test_item_state_ready_when_all_children_ready(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
-        s.create_step("a", parent=item)
-        s.create_step("b", parent=item)
+        self._step(s, "a", parent=item)
+        self._step(s, "b", parent=item)
         self.assertEqual(s.get_node(item).state, "ready")
 
     def test_empty_item_state_backlogged(self):
@@ -592,7 +597,7 @@ class StoreContractBase:
 
     def test_step_state_ready_when_in_progress_column_but_unassigned(self):
         s = self.make_store()
-        tid = s.create_step("t")
+        tid = self._step(s, "t")
         s.update_state(tid, "in_progress")
         self.assertEqual(s.get_node(tid).state, "ready")
 
@@ -739,7 +744,7 @@ class StoreContractBase:
         s = self.make_store()
         item = s.create_item("item: foo", "a description")
         s.add_artifact(item, "spec", "specs/foo.md")
-        step = s.create_step("build: foo", parent=item)
+        step = self._step(s, "build: foo", parent=item)
 
         view = s.node_view(step)
 

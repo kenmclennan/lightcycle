@@ -3,7 +3,7 @@ import time
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
-from lightcycle.domain.work import Item, State
+from lightcycle.domain.work import State
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
@@ -19,10 +19,10 @@ class WorktreeService:
         self._github = github
 
     def _item(self, item):
-        return Item(item, tuple(self._store.item_artifacts(item)))
+        return self._store.get_item(item)
 
     def has_repo(self, item):
-        return self._item(item).repo() is not None
+        return self._item(item).repo is not None
 
     def has_worktree_history(self, item):
         return any(r.branch for r in self._store.runs_of(item))
@@ -60,7 +60,7 @@ class WorktreeService:
         return self._flow.phase_for(self._workspace_node(item))
 
     def item_repo(self, item):
-        repo = self._item(item).repo()
+        repo = self._item(item).repo
         if repo is None:
             raise UseCaseError("item '%s' has no repo artifact" % item)
         return repo

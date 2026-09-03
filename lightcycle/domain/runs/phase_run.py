@@ -21,6 +21,8 @@ class PhaseRun:
     branch: Optional[str] = None
     pr: Optional[str] = None
     content_pin: Optional[str] = None
+    comments_dispatched_through: Optional[str] = None
+    comments_handled_through: Optional[str] = None
     state: str = RunState.OPEN
     opened_at: Optional[str] = None
     closed_at: Optional[str] = None

@@ -4,7 +4,8 @@ import sqlite3
 
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
-    Artifact, Node, NodeView, State, default_kind_for, derive_state, merge_condition_note,
+    Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
+    merge_condition_note,
 )
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
@@ -30,37 +31,45 @@ _SCHEMA_VERSION = 1
 _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES = "0.2.27"
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS nodes (
+CREATE TABLE IF NOT EXISTS items (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
-    state TEXT NOT NULL DEFAULT 'ready',
-    step TEXT,
-    role TEXT,
-    parent TEXT,
-    project TEXT,
-    goal TEXT,
     description TEXT,
-    notes TEXT,
-    outcome TEXT,
-    assignee TEXT,
-    since TEXT,
-    fired_at TEXT,
-    closed_at TEXT,
-    created_at TEXT,
-    attention INTEGER NOT NULL DEFAULT 0,
-    needs TEXT,
-    model TEXT,
+    state TEXT NOT NULL DEFAULT 'backlogged',
+    repo TEXT,
     workflow TEXT,
-    branch TEXT,
-    pr TEXT,
-    reason TEXT,
-    tried TEXT,
-    pass_id TEXT
+    outcome TEXT,
+    project TEXT,
+    created_at TEXT,
+    closed_at TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_nodes_state ON nodes(state);
-CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent);
+CREATE TABLE IF NOT EXISTS steps (
+    id TEXT PRIMARY KEY,
+    item TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    stage TEXT,
+    pass_id TEXT,
+    role TEXT,
+    state TEXT NOT NULL DEFAULT 'ready',
+    assignee TEXT,
+    model TEXT,
+    outcome TEXT,
+    notes TEXT,
+    reflection TEXT,
+    watched_step TEXT,
+    park_reason TEXT,
+    park_needs TEXT,
+    park_tried TEXT,
+    created_at TEXT,
+    fired_at TEXT,
+    closed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_steps_item ON steps(item);
+CREATE INDEX IF NOT EXISTS idx_steps_state ON steps(state);
+CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage);
+
 
 CREATE TABLE IF NOT EXISTS deps (
     node_id TEXT NOT NULL,
@@ -114,6 +123,8 @@ CREATE TABLE IF NOT EXISTS phase_runs (
     branch      TEXT,
     pr          TEXT,
     content_pin TEXT,
+    comments_dispatched_through TEXT,
+    comments_handled_through    TEXT,
     state       TEXT NOT NULL DEFAULT 'open',
     opened_at   TEXT,
     closed_at   TEXT
@@ -129,21 +140,26 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 """
 
-_COLUMNS = (
-    "id", "type", "title", "state", "step", "role", "parent", "project", "goal",
-    "description", "notes", "outcome", "assignee", "since", "fired_at",
-    "closed_at", "attention", "needs", "model", "workflow",
-    "branch", "pr", "reason", "tried", "pass_id",
+_ITEM_COLUMNS = (
+    "id", "title", "description", "state", "repo", "workflow", "outcome", "project",
+    "created_at", "closed_at",
 )
 
-_METADATA_COLUMNS = (
-    "needs", "since", "fired_at", "workflow", "branch", "pr", "reason", "tried",
+_STEP_COLUMNS = (
+    "id", "item", "title", "stage", "pass_id", "role", "state", "assignee", "model",
+    "outcome", "notes", "reflection", "watched_step",
+    "park_reason", "park_needs", "park_tried",
+    "created_at", "fired_at", "closed_at",
 )
 
-_LABEL_COLUMNS = {"for": "role", "step": "step", "project": "project", "goal": "goal"}
+_PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
+
+_STEP_LABEL_COLUMNS = {"for": "role", "step": "stage"}
+_ITEM_LABEL_COLUMNS = {"project": "project"}
 
 _RUN_SELECT = (
-    "SELECT id, item, pass_id, phase, branch, pr, content_pin, state, opened_at, closed_at "
+    "SELECT id, item, pass_id, phase, branch, pr, content_pin, "
+    "comments_dispatched_through, comments_handled_through, state, opened_at, closed_at "
     "FROM phase_runs"
 )
 
@@ -173,13 +189,15 @@ class SqliteStore(StorePort):
         self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(_SCHEMA)
         self._apply_schema_version_floor()
-        self._migrate_close_reason_to_outcome()
-        self._migrate_artifact_fields()
-        self._migrate_resume_fields()
-        self._migrate_detach_items_from_themes()
-        self._migrate_collapse_step_roles()
-        self._migrate_brief_artifacts_into_description()
-        self._migrate_phase_artifacts_into_runs()
+        if self._has_table("nodes"):
+            self._migrate_close_reason_to_outcome()
+            self._migrate_artifact_fields()
+            self._migrate_resume_fields()
+            self._migrate_detach_items_from_themes()
+            self._migrate_collapse_step_roles()
+            self._migrate_brief_artifacts_into_description()
+            self._migrate_phase_artifacts_into_runs()
+            self._migrate_split_nodes()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -214,6 +232,8 @@ class SqliteStore(StorePort):
         )
 
     def _is_legacy_store(self):
+        if not self._has_table("nodes"):
+            return False
         node_cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
         if "status" in node_cols or "workflow" not in node_cols:
             return True
@@ -283,6 +303,101 @@ class SqliteStore(StorePort):
         )
         self._conn.execute("DELETE FROM artifacts WHERE atype = 'brief'")
 
+    _STEP_FOLDED_ARTIFACTS = ("reflection", "watched-step")
+    _RUN_FOLDED_ARTIFACTS = ("feedback-watermark", "feedback-spawned-through")
+
+    def _has_table(self, name):
+        return self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+        ).fetchone() is not None
+
+    def _migrate_split_nodes(self):
+        if not self._has_table("nodes"):
+            return
+        self._fold_comment_ledger_into_runs()
+        step_folds = self._step_artifact_folds()
+        cols = [r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()]
+        rows = self._conn.execute("SELECT %s FROM nodes" % ", ".join(cols)).fetchall()
+        for row in rows:
+            d = dict(zip(cols, row))
+            if d.get("type") == "item":
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO items (id, title, description, state, repo, workflow, "
+                    "outcome, project, created_at, closed_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (d["id"], d["title"], d["description"], d["state"],
+                     self._repo_artifact_of(d["id"]), d.get("workflow"), d.get("outcome"),
+                     d.get("project"), d.get("created_at"), d.get("closed_at")),
+                )
+            elif d.get("parent"):
+                fold = step_folds.get(d["id"], {})
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO steps (id, item, title, stage, pass_id, role, state, "
+                    "assignee, model, outcome, notes, reflection, watched_step, "
+                    "park_reason, park_needs, park_tried, created_at, fired_at, closed_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (d["id"], d["parent"], d["title"], d.get("step"), d.get("pass_id"),
+                     d.get("role"), d["state"], d.get("assignee"), d.get("model"),
+                     d.get("outcome"), d.get("notes"), fold.get("reflection"),
+                     fold.get("watched-step"), d.get("reason"), d.get("needs"), d.get("tried"),
+                     d.get("created_at"), d.get("fired_at"), d.get("closed_at")),
+                )
+        self._conn.execute(
+            "DELETE FROM artifacts WHERE atype IN (%s)"
+            % ",".join("?" * len(self._STEP_FOLDED_ARTIFACTS)),
+            self._STEP_FOLDED_ARTIFACTS,
+        )
+        self._conn.execute("DELETE FROM artifacts WHERE atype = 'repo'")
+        self._conn.execute("DROP TABLE nodes")
+
+    def _repo_artifact_of(self, item_id):
+        row = self._conn.execute(
+            "SELECT value FROM artifacts WHERE item_id = ? AND atype = 'repo' LIMIT 1", (item_id,)
+        ).fetchone()
+        return row[0] if row else None
+
+    def _step_artifact_folds(self):
+        folds = {}
+        rows = self._conn.execute(
+            "SELECT item_id, atype, value FROM artifacts WHERE atype IN (%s)"
+            % ",".join("?" * len(self._STEP_FOLDED_ARTIFACTS)),
+            self._STEP_FOLDED_ARTIFACTS,
+        ).fetchall()
+        for node_id, atype, value in rows:
+            folds.setdefault(node_id, {})[atype] = value
+        return folds
+
+    def _fold_comment_ledger_into_runs(self):
+        rows = self._conn.execute(
+            "SELECT item_id, atype, value FROM artifacts WHERE atype IN (%s)"
+            % ",".join("?" * len(self._RUN_FOLDED_ARTIFACTS)),
+            self._RUN_FOLDED_ARTIFACTS,
+        ).fetchall()
+        for step_id, atype, value in rows:
+            owner = self._conn.execute(
+                "SELECT parent, step FROM nodes WHERE id = ?", (step_id,)
+            ).fetchone()
+            if not owner or not owner[0]:
+                continue
+            run = self._conn.execute(
+                "SELECT id FROM phase_runs WHERE item = ? ORDER BY opened_at DESC LIMIT 1",
+                (owner[0],),
+            ).fetchone()
+            if run is None:
+                continue
+            column = (
+                "comments_handled_through" if atype == "feedback-watermark"
+                else "comments_dispatched_through"
+            )
+            self._conn.execute(
+                "UPDATE phase_runs SET %s = ? WHERE id = ?" % column, (value, run[0])
+            )
+        self._conn.execute(
+            "DELETE FROM artifacts WHERE atype IN (%s)"
+            % ",".join("?" * len(self._RUN_FOLDED_ARTIFACTS)),
+            self._RUN_FOLDED_ARTIFACTS,
+        )
+
     _FOLDED_ARTIFACTS = ("branch", "pr", "content-pin", "content-pin-pr", "phase-run")
 
     def _migrate_phase_artifacts_into_runs(self):
@@ -327,104 +442,91 @@ class SqliteStore(StorePort):
             self._FOLDED_ARTIFACTS,
         )
 
-    def _row_to_node(self, row, artifacts, blocked_by):
-        d = dict(zip(_COLUMNS, row))
+    def _row_to_step(self, row, blocked_by):
+        d = dict(zip(_STEP_COLUMNS, row))
         deps = len(blocked_by)
-        closed = d["state"] == "done"
-        if d["type"] == "step" or closed:
-            state = derive_state(d["type"], closed, d["assignee"], deps, [])
-        else:
-            state = None
-        return Node(
+        return Step(
             id=d["id"],
+            item=d["item"],
             title=d["title"],
-            type=d["type"],
-            parent=d["parent"],
+            stage=d["stage"],
+            pass_id=d["pass_id"],
             role=d["role"],
-            step=d["step"],
-            state=state,
-            project=d["project"],
-            goal=d["goal"],
-            artifacts=artifacts,
-            description=d["description"],
-            needs=d["needs"],
+            state=derive_state("step", d["state"] == "done", d["assignee"], deps, []),
+            claimed_by=d["assignee"],
+            model=d["model"],
             outcome=d["outcome"],
+            notes=d["notes"],
+            reflection=d["reflection"],
+            watched_step=d["watched_step"],
+            park=Park(reason=d["park_reason"], needs=d["park_needs"], tried=d["park_tried"]),
             deps=deps,
             blocked_by=blocked_by,
-            notes=d["notes"],
-            claimed_by=d["assignee"],
-            pass_id=d["pass_id"],
-            since=d["since"],
+            created_at=d["created_at"],
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
-            attention=bool(d["attention"]),
-            model=d["model"],
-            workflow=d["workflow"],
-            branch=d["branch"],
-            pr=d["pr"],
-            reason=d["reason"],
-            tried=d["tried"],
         )
 
-    def _rollup_child_states(self, pending_ids):
-        if not pending_ids:
+    def _row_to_item(self, row, artifacts, blocked_by, child_states):
+        d = dict(zip(_ITEM_COLUMNS, row))
+        return Item(
+            id=d["id"],
+            artifacts=tuple(artifacts),
+            title=d["title"],
+            description=d["description"],
+            state=derive_state("item", d["state"] == "done", None, False, child_states),
+            repo=d["repo"],
+            workflow=d["workflow"],
+            outcome=d["outcome"],
+            deps=len(blocked_by),
+            blocked_by=blocked_by,
+            created_at=d["created_at"],
+            closed_at=d["closed_at"],
+        )
+
+    def _unresolved_deps(self, ids):
+        if not ids:
             return {}
-        placeholders = ", ".join("?" * len(pending_ids))
+        placeholders = ", ".join("?" * len(ids))
+        out = {}
+        for node_id, blocker_id in self._conn.execute(
+            "SELECT d.node_id, d.blocked_by FROM deps d "
+            "LEFT JOIN steps s ON s.id = d.blocked_by "
+            "LEFT JOIN items i ON i.id = d.blocked_by "
+            "WHERE COALESCE(s.state, i.state, 'ready') != 'done' AND d.node_id IN (%s)"
+            % placeholders,
+            ids,
+        ).fetchall():
+            out.setdefault(node_id, []).append(blocker_id)
+        return out
+
+    def _child_states_of(self, item_ids):
+        if not item_ids:
+            return {}
+        placeholders = ", ".join("?" * len(item_ids))
         rows = self._conn.execute(
-            "WITH RECURSIVE descendants(id, parent, type, state, assignee) AS ("
-            "  SELECT id, parent, type, state, assignee FROM nodes WHERE parent IN (%s)"
-            "  UNION ALL"
-            "  SELECT n.id, n.parent, n.type, n.state, n.assignee"
-            "  FROM nodes n JOIN descendants d ON n.parent = d.id"
-            "  WHERE d.state != 'done'"
-            ") SELECT id, parent, type, state, assignee FROM descendants" % placeholders,
-            pending_ids,
+            "SELECT %s FROM steps WHERE item IN (%s)"
+            % (", ".join(_STEP_COLUMNS), placeholders),
+            item_ids,
         ).fetchall()
+        deps = self._unresolved_deps([r[0] for r in rows])
+        out = {}
+        for row in rows:
+            step = self._row_to_step(row, deps.get(row[0], []))
+            out.setdefault(step.item, []).append(step.state)
+        return out
 
-        by_id = {}
-        children_of = {}
-        step_ids = []
-        for did, parent, dtype, dstate, assignee in rows:
-            by_id[did] = (dtype, dstate, assignee)
-            children_of.setdefault(parent, []).append(did)
-            if dtype == "step":
-                step_ids.append(did)
+    def _rows_to_steps(self, rows):
+        if not rows:
+            return []
+        deps = self._unresolved_deps([r[0] for r in rows])
+        return [self._row_to_step(row, deps.get(row[0], [])) for row in rows]
 
-        unresolved = set()
-        if step_ids:
-            step_placeholders = ", ".join("?" * len(step_ids))
-            unresolved = {
-                node_id
-                for (node_id,) in self._conn.execute(
-                    "SELECT DISTINCT d.node_id FROM deps d JOIN nodes t ON t.id = d.blocked_by "
-                    "WHERE t.state != 'done' AND d.node_id IN (%s)" % step_placeholders,
-                    step_ids,
-                ).fetchall()
-            }
-
-        computed = {}
-
-        def state_of(node_id):
-            if node_id not in computed:
-                dtype, dstate, assignee = by_id[node_id]
-                closed = dstate == "done"
-                if dtype == "step" or closed:
-                    computed[node_id] = derive_state(
-                        dtype, closed, assignee, node_id in unresolved, []
-                    )
-                else:
-                    child_states = [state_of(cid) for cid in children_of.get(node_id, [])]
-                    computed[node_id] = derive_state(dtype, False, assignee, False, child_states)
-            return computed[node_id]
-
-        return {pid: [state_of(cid) for cid in children_of.get(pid, [])] for pid in pending_ids}
-
-    def _rows_to_nodes(self, rows):
+    def _rows_to_items(self, rows):
         if not rows:
             return []
         ids = [r[0] for r in rows]
         placeholders = ", ".join("?" * len(ids))
-
         artifacts_by_id = {}
         for item_id, atype, value, label, internal, kind in self._conn.execute(
             "SELECT item_id, atype, value, label, internal, kind FROM artifacts "
@@ -434,37 +536,31 @@ class SqliteStore(StorePort):
             artifacts_by_id.setdefault(item_id, []).append(
                 Artifact(type=atype, value=value, label=label, internal=bool(internal), kind=kind)
             )
-
-        deps_by_id = {}
-        for node_id, blocker_id in self._conn.execute(
-            "SELECT d.node_id, d.blocked_by FROM deps d JOIN nodes t ON t.id = d.blocked_by "
-            "WHERE t.state != 'done' AND d.node_id IN (%s)" % placeholders,
-            ids,
-        ).fetchall():
-            deps_by_id.setdefault(node_id, []).append(blocker_id)
-
-        nodes = [
-            self._row_to_node(row, artifacts_by_id.get(row[0], []), deps_by_id.get(row[0], []))
+        deps = self._unresolved_deps(ids)
+        children = self._child_states_of(ids)
+        return [
+            self._row_to_item(
+                row, artifacts_by_id.get(row[0], []), deps.get(row[0], []),
+                children.get(row[0], []),
+            )
             for row in rows
         ]
-        pending = [node for node in nodes if node.state is None]
-        if pending:
-            child_states_by_id = self._rollup_child_states([node.id for node in pending])
-            for node in pending:
-                child_states = child_states_by_id.get(node.id, [])
-                node.state = derive_state(
-                    node.type, False, node.claimed_by, bool(node.deps), child_states
-                )
-        return nodes
 
-    def _select(self, where, params=(), suffix=""):
-        sql = "SELECT %s FROM nodes" % ", ".join(_COLUMNS)
+    def _select_steps(self, where, params=(), suffix=""):
+        sql = "SELECT %s FROM steps" % ", ".join(_STEP_COLUMNS)
         if where:
             sql += " WHERE " + where
         if suffix:
             sql += " " + suffix
-        rows = self._conn.execute(sql, params).fetchall()
-        return self._rows_to_nodes(rows)
+        return self._rows_to_steps(self._conn.execute(sql, params).fetchall())
+
+    def _select_items(self, where, params=(), suffix=""):
+        sql = "SELECT %s FROM items" % ", ".join(_ITEM_COLUMNS)
+        if where:
+            sql += " WHERE " + where
+        if suffix:
+            sql += " " + suffix
+        return self._rows_to_items(self._conn.execute(sql, params).fetchall())
 
     def _mint_id(self, parent, shortcode=None):
         prefix = shortcode or self.shortcode()
@@ -486,23 +582,27 @@ class SqliteStore(StorePort):
         if explicit_id is None:
             return self._mint_id(parent, shortcode)
         exists = self._conn.execute(
-            "SELECT 1 FROM nodes WHERE id = ?", (explicit_id,)
+            "SELECT 1 FROM steps WHERE id = ? UNION SELECT 1 FROM items WHERE id = ?",
+            (explicit_id, explicit_id),
         ).fetchone()
         if exists:
             raise ValueError("id already in use: %s" % explicit_id)
         return explicit_id
 
+    def _table_of(self, tid):
+        row = self._conn.execute("SELECT 1 FROM steps WHERE id = ?", (tid,)).fetchone()
+        return "steps" if row else "items"
+
     def _apply_label(self, tid, label, value):
-        if label == "attention":
-            self._conn.execute(
-                "UPDATE nodes SET attention = ? WHERE id = ?", (1 if value else 0, tid)
-            )
-            return True
         prefix, sep, val = label.partition(":")
-        column = _LABEL_COLUMNS.get(prefix) if sep else None
+        if not sep:
+            return False
+        table = self._table_of(tid)
+        column = (_STEP_LABEL_COLUMNS if table == "steps" else _ITEM_LABEL_COLUMNS).get(prefix)
         if column:
             self._conn.execute(
-                "UPDATE nodes SET %s = ? WHERE id = ?" % column, (val if value else None, tid)
+                "UPDATE %s SET %s = ? WHERE id = ?" % (table, column),
+                (val if value else None, tid),
             )
             return True
         return False
@@ -527,7 +627,13 @@ class SqliteStore(StorePort):
             for r in rows
         ]
 
+    def _set_repo(self, item_id, value):
+        self._conn.execute("UPDATE items SET repo = ? WHERE id = ?", (value, item_id))
+        self._conn.commit()
+
     def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
+        if atype == "repo":
+            return self._set_repo(item_id, value)
         resolved_kind = kind if kind is not None else default_kind_for(atype)
         self._conn.execute(
             "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
@@ -537,6 +643,8 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
+        if atype == "repo":
+            return self._set_repo(item_id, value)
         resolved_kind = kind if kind is not None else default_kind_for(atype)
         if label is None:
             self._conn.execute(
@@ -556,36 +664,58 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def all_nodes(self):
-        return self._select("state != 'done'")
+        return self.all_items() + self.all_steps()
 
     def all_nodes_including_done(self):
-        return self._select("")
+        return self.all_items_including_done() + self.all_steps_including_done()
+
+    def all_items(self):
+        return self._select_items("state != 'done'")
+
+    def all_items_including_done(self):
+        return self._select_items("")
+
+    def all_steps_including_done(self):
+        return self._select_steps("")
 
     def item_text_rows(self):
         rows = self._conn.execute(
-            "SELECT id, title, description, notes FROM nodes WHERE type = 'item'"
+            "SELECT id, title, description, NULL FROM items"
         ).fetchall()
         return [ItemTextRow(*row) for row in rows]
 
     def all_steps(self):
-        return self._select("type = 'step' AND state != 'done'")
+        return self._select_steps("state != 'done'")
+
+    def get_item(self, tid):
+        rows = self._select_items("id = ?", (tid,))
+        if not rows:
+            raise NodeNotFoundError("unknown item '%s'" % tid)
+        return rows[0]
+
+    def get_step(self, tid):
+        rows = self._select_steps("id = ?", (tid,))
+        if not rows:
+            raise NodeNotFoundError("unknown step '%s'" % tid)
+        return rows[0]
 
     def get_node(self, tid):
-        row = self._conn.execute(
-            "SELECT %s FROM nodes WHERE id = ?" % ", ".join(_COLUMNS), (tid,)
-        ).fetchone()
-        if row is None:
-            raise NodeNotFoundError("unknown node '%s'" % tid)
-        return self._rows_to_nodes([row])[0]
+        rows = self._select_steps("id = ?", (tid,))
+        if rows:
+            return rows[0]
+        return self.get_item(tid)
 
     def node_view(self, tid):
         t = self.get_node(tid)
-        arts = self.item_artifacts(t.parent) if t.type == "step" and t.parent else t.artifacts
+        item = getattr(t, "item", None)
+        arts = self.item_artifacts(item) if item else t.artifacts
         return NodeView(step=t, item_artifacts=list(arts))
 
     def present_types(self, step):
-        item = step.parent or step.id
+        item = getattr(step, "item", None) or step.id
         present = {a.type for a in self.item_artifacts(item)}
+        if self.get_item(item).repo:
+            present.add("repo")
         for run in self.open_runs_of(item):
             if run.branch:
                 present.add("branch")
@@ -594,7 +724,7 @@ class SqliteStore(StorePort):
         return present
 
     def reassign(self, tid, role):
-        cur = self.get_node(tid).role
+        cur = getattr(self.get_node(tid), "role", None)
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
@@ -607,8 +737,7 @@ class SqliteStore(StorePort):
 
     def closed_items(self):
         rows = self._conn.execute(
-            "SELECT id, title, closed_at, outcome FROM nodes "
-            "WHERE type = 'item' AND state = 'done'"
+            "SELECT id, title, closed_at, outcome FROM items WHERE state = 'done'"
         ).fetchall()
         return [
             {
@@ -625,38 +754,35 @@ class SqliteStore(StorePort):
         return self._config.shortcode()
 
     def export_rows(self):
-        export_columns = _COLUMNS + ("created_at",)
-        rows = self._conn.execute(
-            "SELECT %s FROM nodes ORDER BY rowid" % ", ".join(export_columns)
-        ).fetchall()
         result = []
-        for row in rows:
-            d = dict(zip(export_columns, row))
-            tid = d["id"]
-            artifacts = self.item_artifacts(tid)
-            blocked_by = [
-                r[0] for r in self._conn.execute(
-                    "SELECT blocked_by FROM deps WHERE node_id = ?", (tid,)
-                ).fetchall()
-            ]
-            labels = [
-                r[0] for r in self._conn.execute(
-                    "SELECT label FROM labels WHERE node_id = ?", (tid,)
-                ).fetchall()
-            ]
-            result.append({
-                "id": tid, "type": d["type"], "title": d["title"], "state": d["state"],
-                "parent": d["parent"], "role": d["role"], "step": d["step"],
-                "project": d["project"], "goal": d["goal"], "attention": bool(d["attention"]),
-                "description": d["description"], "notes": d["notes"],
-                "outcome": d["outcome"], "assignee": d["assignee"],
-                "needs": d["needs"], "artifacts": [a.as_dict() for a in artifacts],
-                "blocked_by": blocked_by, "labels": labels, "since": d["since"],
-                "fired_at": d["fired_at"], "closed_at": d["closed_at"],
-                "created_at": d["created_at"],
-                "branch": d["branch"], "pr": d["pr"], "reason": d["reason"], "tried": d["tried"],
-            })
+        for row in self._conn.execute(
+            "SELECT %s FROM items ORDER BY rowid" % ", ".join(_ITEM_COLUMNS)
+        ).fetchall():
+            d = dict(zip(_ITEM_COLUMNS, row))
+            result.append(dict(d, type="item", artifacts=[
+                a.as_dict() for a in self.item_artifacts(d["id"])
+            ], blocked_by=self._blockers_of(d["id"]), labels=self._labels_of(d["id"])))
+        for row in self._conn.execute(
+            "SELECT %s FROM steps ORDER BY rowid" % ", ".join(_STEP_COLUMNS)
+        ).fetchall():
+            d = dict(zip(_STEP_COLUMNS, row))
+            result.append(dict(d, type="step", blocked_by=self._blockers_of(d["id"]),
+                               labels=self._labels_of(d["id"])))
         return result
+
+    def _blockers_of(self, tid):
+        return [
+            r[0] for r in self._conn.execute(
+                "SELECT blocked_by FROM deps WHERE node_id = ?", (tid,)
+            ).fetchall()
+        ]
+
+    def _labels_of(self, tid):
+        return [
+            r[0] for r in self._conn.execute(
+                "SELECT label FROM labels WHERE node_id = ?", (tid,)
+            ).fetchall()
+        ]
 
     def ensure_store(self):
         pass
@@ -666,39 +792,40 @@ class SqliteStore(StorePort):
         self.assign(tid, "")
 
     def note(self, tid, text):
-        row = self._conn.execute("SELECT notes FROM nodes WHERE id = ?", (tid,)).fetchone()
+        row = self._conn.execute("SELECT notes FROM steps WHERE id = ?", (tid,)).fetchone()
         if row is None:
             raise NodeNotFoundError("unknown node '%s'" % tid)
         combined = (row[0] + "\n" + text) if row[0] else text
-        self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (combined, tid))
+        self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (combined, tid))
         self._conn.commit()
 
     def note_condition(self, tid, text):
-        row = self._conn.execute("SELECT notes FROM nodes WHERE id = ?", (tid,)).fetchone()
+        row = self._conn.execute("SELECT notes FROM steps WHERE id = ?", (tid,)).fetchone()
         if row is None:
             raise NodeNotFoundError("unknown node '%s'" % tid)
         combined = merge_condition_note(row[0] or "", text, self._now())
-        self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (combined, tid))
+        self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (combined, tid))
         self._conn.commit()
 
     def set_notes(self, tid, text):
-        row = self._conn.execute("SELECT 1 FROM nodes WHERE id = ?", (tid,)).fetchone()
+        row = self._conn.execute("SELECT 1 FROM steps WHERE id = ?", (tid,)).fetchone()
         if row is None:
             raise NodeNotFoundError("unknown node '%s'" % tid)
-        self._conn.execute("UPDATE nodes SET notes = ? WHERE id = ?", (text or None, tid))
+        self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (text or None, tid))
         self._conn.commit()
 
     def reopen(self, tid):
         self._conn.execute(
-            "UPDATE nodes SET state = 'in_progress', outcome = NULL, closed_at = NULL "
-            "WHERE id = ? AND state = 'done'",
+            "UPDATE %s SET state = 'in_progress', outcome = NULL, closed_at = NULL "
+            "WHERE id = ? AND state = 'done'" % self._table_of(tid),
             (tid,),
         )
         self._conn.commit()
 
     def close(self, tid, reason):
         self._conn.execute(
-            "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? WHERE id = ? AND state != 'done'",
+            "UPDATE %s SET state = 'done', outcome = ?, closed_at = ? "
+            "WHERE id = ? AND state != 'done'" % self._table_of(tid),
             (reason, datetime.datetime.now().isoformat(), tid),
         )
         self._record_history(tid, State.DONE)
@@ -707,7 +834,7 @@ class SqliteStore(StorePort):
     def complete_step_atomic(self, step, outcome, expected_assignee, next_step_spec):
         expected = expected_assignee or ""
         cur = self._conn.execute(
-            "UPDATE nodes SET state = 'done', outcome = ?, closed_at = ? "
+            "UPDATE steps SET state = 'done', outcome = ?, closed_at = ? "
             "WHERE id = ? AND state != 'done' "
             "AND (? = '' OR COALESCE(assignee, '') = '' OR assignee = ?)",
             (outcome, datetime.datetime.now().isoformat(), step, expected, expected),
@@ -730,17 +857,19 @@ class SqliteStore(StorePort):
         self._conn.close()
 
     def update_metadata(self, tid, meta):
-        updates = {k: v for k, v in meta.items() if k in _METADATA_COLUMNS}
+        updates = {
+            _PARK_COLUMNS[k]: v for k, v in meta.items() if k in _PARK_COLUMNS
+        }
         if not updates:
             return
         set_clause = ", ".join("%s = ?" % k for k in updates)
         self._conn.execute(
-            "UPDATE nodes SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
+            "UPDATE steps SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
         )
         self._conn.commit()
 
     def set_model(self, tid, model):
-        self._conn.execute("UPDATE nodes SET model = ? WHERE id = ?", (model, tid))
+        self._conn.execute("UPDATE steps SET model = ? WHERE id = ?", (model, tid))
         self._conn.commit()
 
     def label_add(self, tid, label):
@@ -762,13 +891,15 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def update_state(self, tid, state):
-        self._conn.execute("UPDATE nodes SET state = ? WHERE id = ?", (str(state), tid))
+        self._conn.execute(
+            "UPDATE %s SET state = ? WHERE id = ?" % self._table_of(tid), (str(state), tid)
+        )
         self._record_history(tid, state)
         self._conn.commit()
 
     def assign(self, tid, assignee):
         self._conn.execute(
-            "UPDATE nodes SET assignee = ? WHERE id = ?", (assignee or None, tid)
+            "UPDATE steps SET assignee = ? WHERE id = ?", (assignee or None, tid)
         )
         self._conn.commit()
 
@@ -793,19 +924,21 @@ class SqliteStore(StorePort):
         return cur.rowcount > 0
 
     def ready_steps(self):
-        return self._select(
-            "type = 'step' AND state = 'ready' AND NOT EXISTS ("
-            "  SELECT 1 FROM deps d JOIN nodes b ON b.id = d.blocked_by "
-            "  WHERE d.node_id = nodes.id AND b.state != 'done'"
+        return self._select_steps(
+            "state = 'ready' AND NOT EXISTS ("
+            "  SELECT 1 FROM deps d LEFT JOIN steps b ON b.id = d.blocked_by "
+            "  LEFT JOIN items bi ON bi.id = d.blocked_by "
+            "  WHERE d.node_id = steps.id AND COALESCE(b.state, bi.state, 'ready') != 'done'"
             ")"
         )
 
     def claim_ready(self, role):
         row = self._conn.execute(
-            "SELECT id FROM nodes WHERE type = 'step' AND state = 'ready' "
+            "SELECT id FROM steps WHERE state = 'ready' "
             "AND role = ? AND NOT EXISTS ("
-            "  SELECT 1 FROM deps d JOIN nodes b ON b.id = d.blocked_by "
-            "  WHERE d.node_id = nodes.id AND b.state != 'done'"
+            "  SELECT 1 FROM deps d LEFT JOIN steps b ON b.id = d.blocked_by "
+            "  LEFT JOIN items bi ON bi.id = d.blocked_by "
+            "  WHERE d.node_id = steps.id AND COALESCE(b.state, bi.state, 'ready') != 'done'"
             ") LIMIT 1",
             (role,),
         ).fetchone()
@@ -814,7 +947,7 @@ class SqliteStore(StorePort):
         tid = row[0]
         assignee = self._config.spawn_id() or role
         cur = self._conn.execute(
-            "UPDATE nodes SET assignee = ?, state = 'in_progress' "
+            "UPDATE steps SET assignee = ?, state = 'in_progress' "
             "WHERE id = ? AND state = 'ready'",
             (assignee, tid),
         )
@@ -826,13 +959,12 @@ class SqliteStore(StorePort):
         return self.get_node(tid)
 
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
-                              project=None, goal=None, description=None, attention=False, id=None):
+                              description=None, id=None):
         tid = self._mint_or_adopt(id, parent)
         self._conn.execute(
-            "INSERT INTO nodes (id, type, title, state, step, role, parent, project, goal, "
-            "description, attention, created_at) VALUES (?, 'step', ?, 'ready', ?, ?, ?, ?, ?, ?, ?, ?)",
-            (tid, title, step, role, parent, project, goal, description,
-             1 if attention else 0, datetime.datetime.now().isoformat()),
+            "INSERT INTO steps (id, item, title, stage, role, state, created_at) "
+            "VALUES (?, ?, ?, ?, ?, 'ready', ?)",
+            (tid, parent, title, step, role, datetime.datetime.now().isoformat()),
         )
         if deps:
             for dep in deps:
@@ -840,46 +972,40 @@ class SqliteStore(StorePort):
         return tid
 
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None, description=None, attention=False, id=None):
+                    description=None, id=None):
         tid = self._insert_step_nocommit(
-            title, step=step, role=role, parent=parent, deps=deps, project=project,
-            goal=goal, description=description, attention=attention, id=id)
+            title, step=step, role=role, parent=parent, deps=deps,
+            description=description, id=id)
         self._conn.commit()
         return tid
 
-    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
-                  parent=None, workflow=None):
+    def edit_node(self, tid, *, title=None, description=None, project=None,
+                  workflow=None):
+        table = self._table_of(tid)
+        allowed = ("title",) if table == "steps" else (
+            "title", "description", "project", "workflow"
+        )
         updates = {}
-        if title is not None:
-            updates["title"] = title
-        if description is not None:
-            updates["description"] = description
-        if goal is not None:
-            updates["goal"] = goal
-        if project is not None:
-            updates["project"] = project
-        if workflow is not None:
-            updates["workflow"] = workflow
-
-        if parent is not None:
-            updates["parent"] = parent
-
+        for key, value in (("title", title), ("description", description),
+                           ("project", project), ("workflow", workflow)):
+            if value is not None and key in allowed:
+                updates[key] = value
         if updates:
             set_clause = ", ".join("%s = ?" % k for k in updates)
             self._conn.execute(
-                "UPDATE nodes SET %s WHERE id = ?" % set_clause,
+                "UPDATE %s SET %s WHERE id = ?" % (table, set_clause),
                 (*updates.values(), tid),
             )
         self._conn.commit()
         return tid
 
-    def create_item(self, title, description, *, project=None, goal=None, workflow=None, id=None,
-                     shortcode=None):
+    def create_item(self, title, description, *, project=None, workflow=None, id=None,
+                    shortcode=None):
         tid = self._mint_or_adopt(id, None, shortcode=shortcode)
         self._conn.execute(
-            "INSERT INTO nodes (id, type, title, state, description, project, goal, workflow, "
-            "created_at) VALUES (?, 'item', ?, 'backlogged', ?, ?, ?, ?, ?)",
-            (tid, title, description, project, goal, workflow,
+            "INSERT INTO items (id, title, description, state, project, workflow, created_at) "
+            "VALUES (?, ?, ?, 'backlogged', ?, ?, ?)",
+            (tid, title, description, project, workflow,
              datetime.datetime.now().isoformat()),
         )
         self._conn.commit()
@@ -969,7 +1095,11 @@ class SqliteStore(StorePort):
         return [r for r in self.runs_of(item, pid) if r.is_open]
 
     def set_run_field(self, rid, **fields):
-        allowed = {k: v for k, v in fields.items() if k in ("branch", "pr", "content_pin")}
+        allowed = {
+            k: v for k, v in fields.items()
+            if k in ("branch", "pr", "content_pin",
+                     "comments_dispatched_through", "comments_handled_through")
+        }
         if not allowed:
             return
         if "pr" in allowed and "content_pin" not in allowed:
@@ -990,14 +1120,14 @@ class SqliteStore(StorePort):
         self._conn.commit()
 
     def set_step_pass(self, tid, pid):
-        self._conn.execute("UPDATE nodes SET pass_id = ? WHERE id = ?", (pid, tid))
+        self._conn.execute("UPDATE steps SET pass_id = ? WHERE id = ?", (pid, tid))
         self._conn.commit()
 
     def children(self, item_id):
-        return self._select("parent = ?", (item_id,))
+        return self._select_steps("item = ?", (item_id,))
 
     def claimed_steps(self):
-        return self._select("state = 'in_progress'")
+        return self._select_steps("state = 'in_progress'")
 
     def history(self, tid):
         rows = self._conn.execute(
@@ -1006,30 +1136,28 @@ class SqliteStore(StorePort):
         return [(r[0], r[1]) for r in rows]
 
     def nodes_closed_since(self, since_date):
-        return self._select(
-            "type = 'step' AND state = 'done' AND substr(closed_at, 1, 10) >= ?",
-            (since_date,),
+        return self._select_steps(
+            "state = 'done' AND substr(closed_at, 1, 10) >= ?", (since_date,)
         )
 
     def closed_unretroed_items(self):
-        return self._select(
-            "type = 'item' AND state = 'done' "
+        return self._select_items(
+            "state = 'done' "
             "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin') "
             "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retroed')",
         )
 
     def last_n_closed_items(self, n):
-        return self._select(
-            "type = 'item' AND state = 'done'",
-            params=(n,),
-            suffix="ORDER BY closed_at DESC LIMIT ?",
+        return self._select_items(
+            "state = 'done'", params=(n,), suffix="ORDER BY closed_at DESC LIMIT ?"
         )
 
     def steps_at_step(self, step):
-        return self._select("type = 'step' AND step = ?", (step,))
+        return self._select_steps("stage = ?", (step,))
 
     def delete(self, tid):
-        self._conn.execute("DELETE FROM nodes WHERE id = ?", (tid,))
+        self._conn.execute("DELETE FROM steps WHERE id = ?", (tid,))
+        self._conn.execute("DELETE FROM items WHERE id = ?", (tid,))
         self._conn.execute("DELETE FROM deps WHERE node_id = ? OR blocked_by = ?", (tid, tid))
         self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))
         self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))

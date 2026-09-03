@@ -34,7 +34,7 @@ def _orphan(n, by_id):
 def _dangling_artifacts(n, by_id):
     return [
         Problem("store", "%s artifact points at missing node %r" % (a.type, a.value), n.id)
-        for a in n.artifacts
+        for a in getattr(n, "artifacts", ())
         if a.type in _DANGLING_ARTIFACT_TYPES and a.value not in by_id
     ]
 

@@ -56,7 +56,7 @@ from lightcycle.application.work import (
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.work import (
-    Item, LogKind, State, display_role, display_stage, has_content, landing_tab,
+    LogKind, State, display_role, display_stage, has_content, landing_tab,
     park_resume_command, row_bucket, type_label, viewable_artifacts,
 )
 
@@ -92,7 +92,7 @@ def _owning_id(node):
 
 
 def project_label(store, node):
-    return short_project_label(project_of(store, Item(_owning_id(node))))
+    return short_project_label(project_of(store, _owning_id(node)))
 
 
 def current_step(store, item_id):
@@ -134,7 +134,7 @@ def log_target_node(store, node):
 
 
 def log_tab_mode(node):
-    if node is None or node.role == "human":
+    if node is None or getattr(node, "role", None) == "human":
         return "no-log"
     if node.state == State.IN_PROGRESS:
         return "live"
@@ -171,8 +171,9 @@ def build_header(store, node, now, flow_service):
 
 def _park_escalation_text(node):
     resume = "resume: %s" % park_resume_command(node.id)
-    tail = "%s - %s" % (node.reason, resume) if node.reason else resume
-    return "%s\n%s" % (node.needs, tail)
+    reason = node.park.reason
+    tail = "%s - %s" % (reason, resume) if reason else resume
+    return "%s\n%s" % (node.park.needs, tail)
 
 
 def _item_header(store, node, now, project, flow_service):
@@ -193,11 +194,11 @@ def _item_header(store, node, now, project, flow_service):
                 escalation_text = "Blocked · depends on %s" % escalation_target
             else:
                 step_field = display_stage(flow_service.display_for(cur), cur.step)
-                if cur.role == "human":
+                if getattr(cur, "role", None) == "human":
                     if cur.needs:
                         escalation_text = _park_escalation_text(cur)
                 else:
-                    role_field = cur.role
+                    role_field = getattr(cur, "role", None)
                     if cur.state == State.IN_PROGRESS:
                         elapsed_field = _elapsed(store, cur, now)
 
@@ -214,14 +215,14 @@ def _step_header(store, node, now, project):
     if node.blocked_by:
         escalation_target = sorted(node.blocked_by)[0]
         escalation_text = "Blocked · depends on %s" % escalation_target
-    elif node.role == "human" and node.needs:
+    elif getattr(node, "role", None) == "human" and getattr(node, "needs", None):
         escalation_text = _park_escalation_text(node)
 
     elapsed_field = _elapsed(store, node, now) if node.state == State.IN_PROGRESS else None
     return HeaderData(
         id=node.id, title=node.title, project=project,
         workflow_line=None,
-        step_field=None, role_field=display_role(node.role), elapsed_field=elapsed_field,
+        step_field=None, role_field=display_role(getattr(node, "role", None)), elapsed_field=elapsed_field,
         state_field=row_bucket(node), escalation_text=escalation_text,
         escalation_target=escalation_target,
     )
@@ -261,7 +262,8 @@ def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None):
     id_field = pad_field(node.id, layout.atomic_widths["id"])
     content_so_far = icon_field + content_field + id_field
     role_cell = (
-        Text(display_role(node.role), style=COLOURS["dim"]) if node.type == "step" else Text("")
+        Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
+        if node.type == "step" else Text("")
     )
     role_area = max(0, row_budget - len(content_so_far.plain))
     return content_so_far + pad_field_right(role_cell, role_area)
@@ -292,7 +294,10 @@ def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None, fl
         Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else ""
     )
     title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service)
-    role_cell = Text(display_role(node.role), style=COLOURS["dim"]) if node.type == "step" else ""
+    role_cell = (
+        Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
+        if node.type == "step" else ""
+    )
     return (icon_cell, content_cell, node.id, title_cell, role_cell)
 
 
@@ -1072,7 +1077,7 @@ class NodeHubScreen(Screen):
     def _hierarchy_layout(self, table, rows):
         atomic_values = {
             "id": [r.node.id for r in rows],
-            "role": [display_role(r.node.role) for r in rows if r.node.type == "step"],
+            "role": [display_role(getattr(r.node, "role", None)) for r in rows if r.node.type == "step"],
         }
         row_budget = row_budget_for(table, len(COLUMN_GRIDS["hierarchy"]))
         max_depth = max((r.depth for r in rows), default=0)

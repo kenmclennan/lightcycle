@@ -26,8 +26,7 @@ class UnblockStepUseCase:
                 "nothing to unblock: step '%s' has no agent owner" % (t.step or "(none)")
             )
         self._store.update_metadata(
-            input.step,
-            {"since": t.since, "fired_at": t.fired_at, "needs": None},
+            input.step, {"reason": None, "needs": None, "tried": None}
         )
         kept = [l for l in (t.notes or "").splitlines() if not l.startswith("BLOCKED:")]
         self._store.set_notes(input.step, "\n".join(kept))

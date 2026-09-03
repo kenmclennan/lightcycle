@@ -4,7 +4,6 @@ from lightcycle.adapters.tui.design_system import DEPENDENCY_BLOCKED_EXTRA_GLYPH
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
-from lightcycle.domain.work import Item
 
 
 @dataclass(frozen=True)
@@ -23,7 +22,7 @@ class PriorityRow:
 
 def _project(store, node):
     owning_id = node.parent or node.id
-    return short_project_label(project_of(store, Item(owning_id)))
+    return short_project_label(project_of(store, owning_id))
 
 
 def _elapsed_text(store, node, now):
