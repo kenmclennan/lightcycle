@@ -38,8 +38,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIn("--needs", err)
         self.assertIn("blocked", err)
         t = self.store.get_node(bid)
-        self.assertEqual(t.needs, "pick a colour")
-        self.assertIsNone(t.description)
+        self.assertEqual(t.park.needs, "pick a colour")
 
     def test_blocked_without_reason_is_refused(self):
         bid = self.store.create_step("build: x", step="build", role="agent")
@@ -86,12 +85,10 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIn("unknown --state", err)
 
     def test_generic_edit_with_allowed_flags_succeeds(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
-        rc, out, err = call(cli.cmd_set, bid, "--description", "d", "--goal", "g")
+        iid = self.store.create_item("an item", "old")
+        rc, out, err = call(cli.cmd_set, iid, "--description", "d")
         self.assertEqual(rc, 0)
-        t = self.store.get_node(bid)
-        self.assertEqual(t.description, "d")
-        self.assertEqual(t.goal, "g")
+        self.assertEqual(self.store.get_item(iid).description, "d")
 
     def test_notes_replaces_existing_notes(self):
         bid = self.store.create_step("build: x", step="build", role="agent")

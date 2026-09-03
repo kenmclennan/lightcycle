@@ -60,10 +60,7 @@ class FlowService:
         return resolve_pin(selector, sha)
 
     def inherited_selection(self, node):
-        for n in self._walk(node):
-            if n.workflow:
-                return n.workflow
-        return None
+        return self.workflow_for(node)
 
     def repin_name(self, current, new_name):
         parsed = parse_pin(current)
@@ -124,12 +121,6 @@ class FlowService:
         except Exception:
             return None
 
-    def _walk(self, step):
-        yield step
-        item = self._owning_item(step)
-        if item is not None and item.id != step.id:
-            yield item
-
     def workflow_for(self, step):
         item = self._owning_item(step)
         return item.workflow if item is not None else None
@@ -141,10 +132,8 @@ class FlowService:
         return None, None
 
     def project_for(self, step):
-        for node in self._walk(step):
-            if getattr(node, "project", None):
-                return node.project
-        return None
+        item = self._owning_item(step)
+        return item.project if item is not None else None
 
     def load_graph(self, name=None):
         return self._graph_and_root(name)[0]
