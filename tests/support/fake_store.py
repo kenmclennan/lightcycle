@@ -225,6 +225,18 @@ class FakeStore(StorePort):
         return [self._to_step(b) for b in self._records.values()
                 if b.get("type") == "step" and b.get("state") != "done"]
 
+    def type_of(self, tid):
+        try:
+            self.get_step(tid)
+            return "step"
+        except NodeNotFoundError:
+            pass
+        try:
+            self.get_item(tid)
+            return "item"
+        except NodeNotFoundError:
+            return None
+
     def get_item(self, tid):
         record = self._get(tid)
         if record.get("type") != "item":
@@ -428,7 +440,7 @@ class FakeStore(StorePort):
         return list(self._history.get(tid, []))
 
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    description=None, id=None):
+                    id=None):
         if parent is None:
             parent = self.create_item(title, "an owning item")
         fields = dict(

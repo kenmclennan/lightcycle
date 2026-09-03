@@ -29,7 +29,7 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.domain.feedback import format_elapsed
-from lightcycle.domain.work import display_stage
+from lightcycle.domain.work import display_stage, refuse_fields, refuse_state
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_shortcode import resolve_shortcode
@@ -188,10 +188,10 @@ COMMAND_GROUPS = [
         ("tui", "", "launch the interactive dashboard (priority list + pool/breaker status)"),
     ]),
     ("Work primitives", [
-        ("new", "<type> \"title\" [--parent/--workflow/--project]",
-         "create a node; <type> is item|step"),
-        ("set", "<id> [--state/--workflow/--title/--desc/--label]",
-         "update a node; --state active activates an item (files the entry step)"),
+        ("new", "<type> \"title\" [item: --description/--workflow/--repo | step: --parent/--step/--note]",
+         "create an item or a step; each takes only its own fields"),
+        ("set", "<id> [item: --title/--desc/--workflow/--state | step: --notes/--needs/--state]",
+         "update an item or a step; refuses a field the other one owns"),
         ("rm", "<id> [--force]", "delete a node; refuses on a live worker or a dirty worktree "
          "- --force overrides the dirty worktree and stale claims"),
         ("attach", "<id> <type> <value> [--label] [--internal] [--kind K]", "attach an artifact"),
@@ -266,8 +266,13 @@ def cmd_upgrade(argv):
 
 
 _WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search", "peek")
+_SET_FIELDS = (
+    "title", "description", "project", "workflow", "label", "backlog",
+    "notes", "needs", "reason", "tried", "step",
+)
+
 _SET_FORBIDDEN_FLAGS = (
-    "--parent", "--title", "--desc", "--description", "--project",
+    "--title", "--desc", "--description", "--project",
     "--workflow", "--backlog", "--label", "--step",
 )
 
@@ -787,9 +792,15 @@ def cmd_done(argv):
     )
     a = ap.parse_args(argv)
     note = " ".join(a.note) if a.note else None
-    node = _container.store.get_node(a.id)
+    node_type = _container.store.type_of(a.id)
+    if node_type is None:
+        sys.stderr.write("unknown node '%s'\n" % a.id)
+        return 1
+    if node_type == "item" and note:
+        sys.stderr.write("--note belongs to a step, not an item\n")
+        return 2
     try:
-        if node.type == "step":
+        if node_type == "step":
             resp = CompleteStepUseCase(
                 _container.store, _flow(), _worktrees(), _container.config).execute(
                 CompleteInput(step=a.id, outcome=a.outcome, note=note)
@@ -996,6 +1007,9 @@ def cmd_new(argv):
     ap.add_argument("--project")
     ap.add_argument("--repo")
     ap.add_argument("--description")
+    ap.add_argument(
+        "--note", nargs="+", help="an observation for whoever picks the step up"
+    )
     ap.add_argument("--backlog", action="append")
     ap.add_argument("--step")
     a = ap.parse_args(argv)
@@ -1009,6 +1023,12 @@ def cmd_new(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
+    if a.type == "step" and a.description:
+        sys.stderr.write("--description belongs to an item, not a step; use --note\n")
+        return 2
+    if a.type == "item" and a.note:
+        sys.stderr.write("--note belongs to a step, not an item; use --description\n")
+        return 2
     if a.type == "item":
         if a.parent:
             sys.stderr.write("items are top-level; --parent applies to 'lc new step'\n")
@@ -1074,20 +1094,20 @@ def cmd_new(argv):
                 % (a.step, ", ".join(flow.steps()) or "(none)")
             )
             return 1
-        print(_container.store.create_step(
-            a.title, step=a.step, role=role, parent=a.parent,
-            description=a.description))
+        tid = _container.store.create_step(
+            a.title, step=a.step, role=role, parent=a.parent)
+        if a.note:
+            _container.store.note(tid, " ".join(a.note))
+        print(tid)
     return 0
 
 
 _SET_FLAG_OWNERS = {
     "title": (None,), "description": (None,), "project": (None,),
     "label": (None,), "backlog": (None,), "notes": (None,),
-    "parent": (None, "active"),
     "workflow": (None, "active"),
     "step": ("active",),
-    "needs": ("blocked",), "branch": ("blocked",), "pr": ("blocked",),
-    "reason": ("blocked",), "tried": ("blocked",),
+    "needs": ("blocked",), "reason": ("blocked",), "tried": ("blocked",),
 }
 _SET_KNOWN_STATES = (None, "active", "blocked", "ready", "in_progress")
 
@@ -1114,12 +1134,24 @@ def _reject_flags_ineffective_for_state(a):
 
 def cmd_set(argv):
     ap = argparse.ArgumentParser(prog="lc set")
-    for opt in ("title", "description", "goal", "project", "parent", "workflow", "state", "label",
-                "needs", "branch", "pr", "reason", "tried", "step", "notes"):
+    for opt in ("title", "description", "project", "workflow", "state", "label",
+                "needs", "reason", "tried", "step", "notes"):
         ap.add_argument("--%s" % opt)
     ap.add_argument("--backlog", action="append")
     ap.add_argument("id")
     a = ap.parse_args(argv)
+    node_type = _container.store.type_of(a.id)
+    if node_type is None:
+        sys.stderr.write("unknown node '%s'\n" % a.id)
+        return 1
+    given = {f for f in _SET_FIELDS if getattr(a, f, None) is not None}
+    msg = refuse_fields(node_type, given) or refuse_state(node_type, a.state)
+    if msg:
+        sys.stderr.write("%s\n" % msg)
+        return 2
+    if not given and a.state is None:
+        sys.stderr.write("nothing to set on '%s'\n" % a.id)
+        return 2
     msg = _reject_flags_ineffective_for_state(a)
     if msg:
         sys.stderr.write(msg)
@@ -1154,11 +1186,7 @@ def cmd_set(argv):
         if a.state == "in_progress":
             ReopenItemUseCase(_container.store).execute(ReopenItemInput(item=a.id))
             return 0
-        if a.state is not None:
-            sys.stderr.write(
-                "unknown --state %r; use active, ready, blocked, or in_progress\n" % a.state
-            )
-            return 2
+
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -1192,8 +1220,6 @@ def cmd_set(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    if a.parent:
-        print(tid)
     if resolved_pin:
         print(resolved_pin)
     if a.backlog:

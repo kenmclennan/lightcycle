@@ -47,6 +47,9 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def type_of(self, tid):
+        raise NotImplementedError
+
     def get_node(self, tid):
         pass
 

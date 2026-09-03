@@ -720,6 +720,18 @@ class SqliteStore(StorePort):
     def all_steps(self):
         return self._select_steps("state != 'done'")
 
+    def type_of(self, tid):
+        try:
+            self.get_step(tid)
+            return "step"
+        except NodeNotFoundError:
+            pass
+        try:
+            self.get_item(tid)
+            return "item"
+        except NodeNotFoundError:
+            return None
+
     def get_item(self, tid):
         rows = self._select_items("id = ?", (tid,))
         if not rows:
@@ -992,7 +1004,7 @@ class SqliteStore(StorePort):
         return self.get_node(tid)
 
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
-                              description=None, id=None):
+                              id=None):
         if parent is None:
             parent = self.create_item(title, "an owning item")
         tid = self._mint_or_adopt(id, parent)
@@ -1007,10 +1019,9 @@ class SqliteStore(StorePort):
         return tid
 
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    description=None, id=None):
+                    id=None):
         tid = self._insert_step_nocommit(
-            title, step=step, role=role, parent=parent, deps=deps,
-            description=description, id=id)
+            title, step=step, role=role, parent=parent, deps=deps, id=id)
         self._conn.commit()
         return tid
 

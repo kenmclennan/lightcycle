@@ -33,7 +33,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         BlockStepUseCase(self.store).execute(
             BlockInput(step=bid, needs="pick a colour", reason="needed a decision")
         )
-        rc, out, err = call(cli.cmd_set, bid, "--needs", "", "--description", "ANSWERED")
+        rc, out, err = call(cli.cmd_set, bid, "--needs", "")
         self.assertNotEqual(rc, 0)
         self.assertIn("--needs", err)
         self.assertIn("blocked", err)
@@ -73,8 +73,8 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIn("--description", err)
 
     def test_active_refuses_generic_edit_flags(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
-        rc, out, err = call(cli.cmd_set, bid, "--state", "active", "--title", "renamed")
+        item = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, item, "--state", "active", "--title", "renamed")
         self.assertNotEqual(rc, 0)
         self.assertIn("--title", err)
 

@@ -197,20 +197,17 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         self.assertEqual(s.get_node(item).state, "ready")
         self.assertEqual(s.get_node(resp.step).parent, item)
 
-    def test_cmd_set_backlog_links_the_resolved_backlog_to_the_step(self):
+    def test_cmd_set_backlog_links_the_resolved_backlog_to_the_item(self):
         s = self._store()
         cli.set_container(Container(store=s))
         item = s.create_item("owning item", "a description")
         backlog_item = s.create_item("a backlog todo", "a description")
-        step = s.create_step("adopt me", parent=item)
-
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            rc = cli.cmd_set([step, "--backlog", backlog_item]) or 0
+            rc = cli.cmd_set([item, "--backlog", backlog_item]) or 0
         self.assertEqual(rc, 0, err.getvalue())
 
-        self.assertEqual(s.get_step(step).item, item)
-        arts = s.item_artifacts(step)
+        arts = s.item_artifacts(item)
         self.assertTrue(
             any(a.type == "resolves" and a.value == backlog_item for a in arts)
         )

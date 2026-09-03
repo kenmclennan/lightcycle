@@ -71,8 +71,9 @@ class TestCmdSetTitleCap(unittest.TestCase):
         self.assertEqual(self.store.get_node(self.step_id).title, "x" * self.cap)
 
     def test_set_without_title_is_unaffected(self):
-        rc, out, err = call(cli.cmd_set, self.step_id, "--description", "d")
-        self.assertEqual(rc, 0)
+        item = self.store.create_item("an item", "old")
+        rc, out, err = call(cli.cmd_set, item, "--description", "d")
+        self.assertEqual(rc, 0, err)
 
 
 if __name__ == "__main__":
