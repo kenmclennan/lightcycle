@@ -9,8 +9,6 @@ from lightcycle.domain.work import State
 from lightcycle.ports.github import ReadFailure
 
 LC_MARKER = "<!-- lc -->"
-_WATERMARK_ARTIFACT = "feedback-watermark"
-_SPAWN_MARK_ARTIFACT = "feedback-spawned-through"
 
 
 
@@ -61,22 +59,9 @@ def _outstanding_reviews(reviews, comments):
     return outstanding
 
 
-def _watermark(artifacts):
-    watermark = next((a for a in artifacts if a.type == _WATERMARK_ARTIFACT), None)
-    if watermark is None:
-        return 0.0
+def _epoch(value):
     try:
-        return float(watermark.value)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _spawned_through(artifacts):
-    a = next((a for a in artifacts if a.type == _SPAWN_MARK_ARTIFACT), None)
-    if a is None:
-        return 0.0
-    try:
-        return float(a.value)
+        return float(value)
     except (TypeError, ValueError):
         return 0.0
 
@@ -100,6 +85,10 @@ class MonitorPrsUseCase:
     def _flow_for(self, node):
         return self._flow_service.flow_for(node)
 
+    def _run_of(self, node):
+        phase = self._flow_for(node).phase_of(getattr(node, "step", None))
+        return self._store.current_run(node.item, phase)
+
     def _pr_value(self, node, item_id):
         phase = self._flow_for(node).phase_of(getattr(node, "step", None))
         run = self._store.current_run(item_id, phase)
@@ -117,9 +106,9 @@ class MonitorPrsUseCase:
                 return child
         return None
 
-    def _note_gh_read_failure(self, item_id, failure):
+    def _note_gh_read_failure(self, step_id, failure):
         self._store.note_condition(
-            item_id,
+            step_id,
             "gh read failed while checking outstanding feedback (exit %d): %s"
             % (failure.returncode, failure.stderr),
         )
@@ -188,8 +177,14 @@ class MonitorPrsUseCase:
                         ParkInput(step=step.id, observation=observation, decision=decision)
                     )
                 else:
-                    self._store.note_condition(item.id, base_note)
+                    target = step or self._latest_step(item.id)
+                    if target is not None:
+                        self._store.note_condition(target.id, base_note)
         self._store.set_run_field(run.id, content_pin=head)
+
+    def _latest_step(self, item_id):
+        steps = sorted(self._store.children(item_id), key=lambda s: s.id)
+        return steps[-1] if steps else None
 
     def _close_run(self, run, state):
         self._store.close_run(run.id, state)
@@ -251,7 +246,8 @@ class MonitorPrsUseCase:
             conflict_outcome = flow.pr_conflict_outcome(step.step)
             if feedback_step is None and conflict_outcome is None:
                 continue
-            pr_value = self._pr_value(step, step.parent)
+            run = self._run_of(step)
+            pr_value = run.pr if run else None
             if pr_value is None:
                 continue
             advanced = False
@@ -264,7 +260,7 @@ class MonitorPrsUseCase:
                         n.type == "step" and n.step == feedback_step and n.parent == step.parent
                         for n in self._store.all_nodes()
                     )
-                    spawned_through = _spawned_through(self._store.item_artifacts(step.id))
+                    spawned_through = _epoch(run.comments_dispatched_through) if run else 0.0
                     if not open_now and newest > spawned_through:
                         role = flow.owner_of(feedback_step)
                         title = self._store.get_node(step.parent).title
@@ -272,10 +268,11 @@ class MonitorPrsUseCase:
                             "%s: %s" % (feedback_step, title), step=feedback_step,
                             role=role, parent=step.parent,
                         )
-                        self._store.add_artifact(tid, "watched-step", step.id, internal=True)
-                        self._store.replace_artifact(
-                            step.id, _SPAWN_MARK_ARTIFACT, str(newest), internal=True
-                        )
+                        self._store.set_watched_step(tid, step.id)
+                        if run is not None:
+                            self._store.set_run_field(
+                                run.id, comments_dispatched_through=str(newest)
+                            )
                         reworked.append(step.parent)
             if not advanced and conflict_outcome and self._github.is_conflicted(pr_value):
                 prior = sum(1 for t in self._store.steps_at_step(step.step)
@@ -291,7 +288,7 @@ class MonitorPrsUseCase:
     def _outstanding_feedback(self, step, pr, flow):
         since = self._github.last_push_time(pr)
         if isinstance(since, ReadFailure):
-            self._note_gh_read_failure(step.parent, since)
+            self._note_gh_read_failure(step.id, since)
             return []
         top_level = self._github.comments_since(pr, since)
         inline = self._github.pull_comments(pr, since)
@@ -300,7 +297,7 @@ class MonitorPrsUseCase:
             (r for r in (top_level, inline, reviews) if isinstance(r, ReadFailure)), None
         )
         if failure is not None:
-            self._note_gh_read_failure(step.parent, failure)
+            self._note_gh_read_failure(step.id, failure)
             return []
 
         allowlist = flow.review_bot_allowlist(step.step)
@@ -311,7 +308,8 @@ class MonitorPrsUseCase:
 
         mention_token = flow.mention_token(step.step)
         if mention_token:
-            watermark = _watermark(self._store.item_artifacts(step.id))
+            feedback_run = self._run_of(step)
+            watermark = _epoch(feedback_run.comments_handled_through) if feedback_run else 0.0
             items += [
                 c for c in top_level
                 if LC_MARKER not in c.body and not _is_bot(c.author)

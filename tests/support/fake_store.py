@@ -554,6 +554,11 @@ class FakeStore(StorePort):
             for r in self._runs
         ]
 
+    def set_watched_step(self, tid, watched):
+        meta = dict(self._get(tid).get("metadata") or {})
+        meta["watched_step"] = watched
+        self._get(tid)["metadata"] = meta
+
     def set_step_pass(self, tid, pid):
         self._get(tid)["pass_id"] = pid
 

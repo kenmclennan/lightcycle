@@ -18,7 +18,11 @@ class LinkArtifactInput:
     internal: bool = False
 
 
-_RUN_FIELDS = {"pr": "pr", "branch": "branch"}
+_RUN_FIELDS = {
+    "pr": "pr",
+    "branch": "branch",
+    "comments-handled": "comments_handled_through",
+}
 
 
 class LinkArtifactUseCase:

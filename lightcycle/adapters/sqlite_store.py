@@ -171,8 +171,7 @@ _LEGACY_STEP_NAMES = (
 _LEGACY_ROLE_NAMES = ("coder", "reviewer", "auditor", "watch-pr", "resolve")
 
 _INTERNAL_ARTIFACT_TYPES = (
-    "reflection", "resolves", "resolved-by", "watched-step",
-    "feedback-spawned-through", "feedback-watermark",
+    "resolves", "resolved-by",
 )
 
 
@@ -1118,6 +1117,10 @@ class SqliteStore(StorePort):
             "UPDATE phase_runs SET state = ?, closed_at = ? WHERE id = ? AND state = 'open'",
             (state, self._now(), rid),
         )
+        self._conn.commit()
+
+    def set_watched_step(self, tid, watched):
+        self._conn.execute("UPDATE steps SET watched_step = ? WHERE id = ?", (watched, tid))
         self._conn.commit()
 
     def set_step_pass(self, tid, pid):

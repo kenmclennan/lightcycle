@@ -1141,7 +1141,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
         self.assertEqual(self._spawned_feedback_steps(store, step), [])
-        notes = store.get_node(item).notes
+        notes = store.get_node(step).notes
         self.assertIn("gh read failed", notes)
         self.assertIn("boom", notes)
 
@@ -1154,9 +1154,9 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         store, item, step, worktrees, uc = self._setup(url, gh)
 
         uc.execute()
-        first = store.get_node(item).notes
+        first = store.get_node(step).notes
         uc.execute()
-        second = store.get_node(item).notes
+        second = store.get_node(step).notes
 
         self.assertEqual(len(first.splitlines()), 1)
         self.assertEqual(len(second.splitlines()), 1)
@@ -1165,7 +1165,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertIn("x2", second)
 
         uc.execute()
-        third = store.get_node(item).notes
+        third = store.get_node(step).notes
         self.assertEqual(len(third.splitlines()), 1)
         self.assertIn("x3", third)
 
@@ -1181,7 +1181,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
         self.assertEqual(self._spawned_feedback_steps(store, step), [])
-        notes = store.get_node(item).notes
+        notes = store.get_node(step).notes
         self.assertIn("gh read failed", notes)
         self.assertIn("boom", notes)
 
@@ -1197,7 +1197,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
         self.assertEqual(self._spawned_feedback_steps(store, step), [])
-        notes = store.get_node(item).notes
+        notes = store.get_node(step).notes
         self.assertIn("gh read failed", notes)
         self.assertIn("boom", notes)
 
@@ -1213,7 +1213,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
         self.assertEqual(self._spawned_feedback_steps(store, step), [])
-        notes = store.get_node(item).notes
+        notes = store.get_node(step).notes
         self.assertIn("gh read failed", notes)
         self.assertIn("boom", notes)
 
@@ -1614,7 +1614,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("dropped.py", node.notes)
         self.assertNotIn("new.py", node.notes)
 
-    def test_in_progress_step_is_not_reassigned_but_item_is_noted(self):
+    def test_in_progress_step_is_not_reassigned_but_is_noted(self):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"},
             files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
@@ -1632,10 +1632,9 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         node = store.get_node(step)
         self.assertEqual(node.state, "in_progress")
         self.assertEqual(node.role, "agent")
-        self.assertIsNone(node.notes)
-        self.assertIn("a.py", store.get_node(item).notes)
+        self.assertIn("a.py", store.get_node(step).notes)
 
-    def test_no_active_step_notes_the_item(self):
+    def test_no_active_step_notes_the_last_step(self):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"},
             files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
@@ -1649,7 +1648,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         uc.execute()
 
-        self.assertIn("a.py", store.get_node(item).notes)
+        self.assertIn("a.py", store.get_node(step).notes)
 
     def test_unchanged_head_is_a_no_op(self):
         gh = FakeGitHub(head_shas={self._URL: "sha1"})
