@@ -319,7 +319,7 @@ class SqliteStore(StorePort):
         rows = self._conn.execute("SELECT %s FROM nodes" % ", ".join(cols)).fetchall()
         for row in rows:
             d = dict(zip(cols, row))
-            if d.get("type") == "item":
+            if d.get("type") != "step":
                 self._conn.execute(
                     "INSERT OR IGNORE INTO items (id, title, description, state, repo, workflow, "
                     "outcome, project, created_at, closed_at) "

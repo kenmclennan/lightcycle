@@ -304,6 +304,15 @@ class TestSqliteStoreNodeSplitMigration(unittest.TestCase):
 
         self.assertEqual(s.get_step("GRID-1.1").watched_step, "GRID-1.2")
 
+    def test_a_retired_theme_row_becomes_an_item_not_a_step(self):
+        s = make_legacy_sqlite_store([
+            {"id": "GRID-9", "type": "theme", "title": "a retired container",
+             "state": "backlogged"},
+        ])
+
+        self.assertEqual(s.get_item("GRID-9").title, "a retired container")
+        self.assertEqual(s.all_steps(), [])
+
     def test_the_nodes_table_is_dropped(self):
         s = make_legacy_sqlite_store([
             {"id": "GRID-1", "type": "item", "title": "an item", "state": "backlogged",
