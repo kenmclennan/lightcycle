@@ -87,6 +87,14 @@ HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["conten
 ARTIFACTS_CONTINUATION_INDENT = 2
 
 
+def _owning_item(store, node):
+    item_id = getattr(node, "item", None) or node.id
+    try:
+        return store.get_item(item_id)
+    except Exception:
+        return None
+
+
 def _owning_id(node):
     return node.parent if node.type == "step" else node.id
 
@@ -1056,8 +1064,9 @@ class NodeHubScreen(Screen):
         self.query_one(HubHeader).update(header)
         rows = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id)).rows
         self._render_hierarchy(rows, initial)
-        self._render_artifacts(viewable_artifacts(node), initial)
-        self._render_description(node.description)
+        owner = _owning_item(store, node)
+        self._render_artifacts(viewable_artifacts(owner or node), initial)
+        self._render_description(owner.description if owner else None)
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
         self._refresh_footer()

@@ -102,16 +102,18 @@ def _priority_stack_terminal_width():
 class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):
     def _launch(self):
         store = FakeStore()
+        store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
             "first title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_A,
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A,
         )
-        store.add_artifact(_PRIORITY_ID_A, "repo", _PRIORITY_PROJECT)
+        store.add_artifact(_PRIORITY_ID_A + "-i", "repo", _PRIORITY_PROJECT)
+        store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
             "second title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_B,
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B,
         )
-        store.add_artifact(_PRIORITY_ID_B, "repo", _PRIORITY_PROJECT)
+        store.add_artifact(_PRIORITY_ID_B + "-i", "repo", _PRIORITY_PROJECT)
         width = _priority_stack_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)
@@ -133,16 +135,18 @@ class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):
 class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
     def _launch(self, *, active_ids=()):
         store = FakeStore()
+        store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
             "first title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_A,
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A,
         )
-        store.add_artifact(_PRIORITY_ID_A, "repo", _PRIORITY_PROJECT)
+        store.add_artifact(_PRIORITY_ID_A + "-i", "repo", _PRIORITY_PROJECT)
+        store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
             "second title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", id=_PRIORITY_ID_B,
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B,
         )
-        store.add_artifact(_PRIORITY_ID_B, "repo", _PRIORITY_PROJECT)
+        store.add_artifact(_PRIORITY_ID_B + "-i", "repo", _PRIORITY_PROJECT)
         for tid in active_ids:
             store.assign(tid, "worker-1")
             store.update_state(tid, State.IN_PROGRESS)
@@ -167,12 +171,12 @@ class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
         table = session.app.query_one(PriorityTable)
         self.assertTrue(table._stacked_mode)
         selected_id = session.app._selected_row_id(table)
-        self.assertEqual(selected_id, _PRIORITY_ID_A)
-        self.assertIn("❯", table.get_cell(_PRIORITY_ID_A, "row").plain)
+        self.assertEqual(selected_id, _PRIORITY_ID_A + "-i")
+        self.assertIn("❯", table.get_cell(_PRIORITY_ID_A + "-i", "row").plain)
 
         session.run(session.app._tick_active_glyph)
 
-        self.assertIn("❯", table.get_cell(_PRIORITY_ID_A, "row").plain)
+        self.assertIn("❯", table.get_cell(_PRIORITY_ID_A + "-i", "row").plain)
 
     def test_active_glyph_tick_paints_the_glyph_only_on_the_selected_row(self):
         session = self._launch(active_ids=(_PRIORITY_ID_A, _PRIORITY_ID_B))
@@ -180,12 +184,12 @@ class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
         self.assertTrue(table._stacked_mode)
         session.press("down")
         selected_id = session.app._selected_row_id(table)
-        self.assertEqual(selected_id, _PRIORITY_ID_B)
+        self.assertEqual(selected_id, _PRIORITY_ID_B + "-i")
 
         session.run(session.app._tick_active_glyph)
 
-        self.assertNotIn("❯", table.get_cell(_PRIORITY_ID_A, "row").plain)
-        self.assertIn("❯", table.get_cell(_PRIORITY_ID_B, "row").plain)
+        self.assertNotIn("❯", table.get_cell(_PRIORITY_ID_A + "-i", "row").plain)
+        self.assertIn("❯", table.get_cell(_PRIORITY_ID_B + "-i", "row").plain)
 
 
 if __name__ == "__main__":
