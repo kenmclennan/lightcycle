@@ -24,8 +24,9 @@ def _store_for(root, spawn_id=None):
     return SqliteStore(Config(environ=environ))
 
 
-def _successor_spec(step_id):
-    return NodeSpec(title="review: x", step="review", role="agent", deps=(step_id,))
+def _successor_spec(step_id, item=None):
+    return NodeSpec(title="review: x", step="review", role="agent",
+                    parent=item, deps=(step_id,))
 
 
 def _seed_claimed(root, spawn_id):
@@ -52,7 +53,7 @@ def _complete_worker(root, spawn_id, expected_assignee, step_id, barrier, q):
         store = _store_for(root, spawn_id)
         barrier.wait()
         won, new_id = store.complete_step_atomic(
-            step_id, "done", expected_assignee, _successor_spec(step_id))
+            step_id, "done", expected_assignee, _successor_spec(step_id, store.get_step(step_id).item))
         q.put((spawn_id, won, new_id))
         store.disconnect()
     except Exception as exc:
@@ -120,7 +121,7 @@ class TestAtomicComplete(unittest.TestCase):
         root = _make_root()
         step_id = _seed_claimed(root, "A")
         store = _store_for(root, "B")
-        won, new_id = store.complete_step_atomic(step_id, "done", "B", _successor_spec(step_id))
+        won, new_id = store.complete_step_atomic(step_id, "done", "B", _successor_spec(step_id, store.get_step(step_id).item))
         self.assertFalse(won)
         self.assertIsNone(new_id)
         self.assertEqual(store.get_node(step_id).state, "in_progress")
@@ -130,7 +131,7 @@ class TestAtomicComplete(unittest.TestCase):
         root = _make_root()
         step_id = _seed_claimed(root, "A")
         store = _store_for(root)
-        won, new_id = store.complete_step_atomic(step_id, "done", "", _successor_spec(step_id))
+        won, new_id = store.complete_step_atomic(step_id, "done", "", _successor_spec(step_id, store.get_step(step_id).item))
         self.assertTrue(won)
         self.assertIsNotNone(new_id)
         self.assertEqual(store.get_node(step_id).state, "done")
@@ -147,13 +148,13 @@ class TestAtomicComplete(unittest.TestCase):
         self.assertEqual(store_b.get_node(step_id).claimed_by, "B")
 
         stale_won, stale_new = store_a.complete_step_atomic(
-            step_id, "done", "A", _successor_spec(step_id))
+            step_id, "done", "A", _successor_spec(step_id, store_b.get_step(step_id).item))
         self.assertFalse(stale_won)
         self.assertIsNone(stale_new)
         self.assertEqual(store_b.get_node(step_id).state, "in_progress")
 
         fresh_won, fresh_new = store_b.complete_step_atomic(
-            step_id, "done", "B", _successor_spec(step_id))
+            step_id, "done", "B", _successor_spec(step_id, store_b.get_step(step_id).item))
         self.assertTrue(fresh_won)
         self.assertIsNotNone(fresh_new)
         self.assertEqual(len(store_b.steps_at_step("review")), 1)

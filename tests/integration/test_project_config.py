@@ -49,7 +49,7 @@ class TestProjectShortcode(unittest.TestCase):
         store = SqliteStore(config)
         store.add_project("acme/horde", shortcode="HORDE")
         item = store.create_item("x", "a description")
-        step = store.create_step("s", parent=item, project="horde")
+        step = store.create_step("s", parent=item)
         self.assertTrue(step.startswith(item + "."), step)
 
     def test_projects_with_different_shortcodes_get_independent_counters(self):

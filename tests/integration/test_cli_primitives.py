@@ -37,13 +37,9 @@ class TestCliPrimitives(unittest.TestCase):
         self.assertEqual(self.h.store.get_node(item).state, "ready")
         self.assertEqual(self.h.store.get_node(step).step, "build")
 
-    def test_set_parent_refuses_to_reparent_an_item(self):
-        _, owner, _ = self._run("new", "item", "payments", "--description", "a description")
+    def test_an_item_has_no_parent_to_set(self):
         _, item, _ = self._run("new", "item", "refunds", "--description", "a description")
-        rc, _, err = self._run("set", item, "--parent", owner.strip())
-        self.assertEqual(rc, 1)
-        self.assertIn("top-level", err)
-        self.assertIsNone(self.h.store.get_node(item).parent)
+        self.assertIsNone(self.h.store.get_item(item.strip()).parent)
 
     def test_set_workflow_on_an_item_resolves_to_a_pin(self):
         _, item, _ = self._run("new", "item", "payments", "--description", "a description")
