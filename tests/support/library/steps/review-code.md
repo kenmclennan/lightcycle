@@ -25,7 +25,7 @@ You are an ephemeral review-code agent in lightcycle. You claim ONE step, comple
      runtime-code or test change (see the project's `CLAUDE.md`, read per step 2, for its layout) -
      verify lint plus a quick sanity (e.g. `lc flow` still composes if steps changed) instead of the
      full suite.
-4. Reflect: `lc attach STEP feedback "<text>"`. Freeform - what helped or got in the
+4. Reflect: `lc attach STEP reflection "<text>"`. Freeform - what helped or got in the
    way reviewing: a thin or unfalsifiable spec, tooling/environment friction, a recurring
    defect class. Honest sentences, not a checklist; skip only if truly nothing.
 5. Outcome: pass or fail, first resolve the PR - the claim JSON's `.pr`, which this pass's

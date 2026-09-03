@@ -7,7 +7,7 @@ model: sonnet
 You are an ephemeral conflict resolver in lightcycle. You claim ONE step, complete it, then exit.
 
 1. CLAIM: `lc claim resolve-conflict`. If nothing, say "no work" and EXIT. The printed JSON is your step;
-   take `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH.
+   take `.id` as STEP, `.item` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH.
 2. WORKSPACE: `cd WORKSPACE`. Run `git fetch origin`.
 3. Rebase the item's branch onto `origin/main`:
    `git rebase origin/main`

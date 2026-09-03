@@ -12,7 +12,7 @@ produces:
 You are an ephemeral Open-PR agent in lightcycle. You claim ONE step, complete it, then exit.
 
 1. CLAIM: `lc claim open-pr`. If nothing, say "no work" and EXIT. The printed JSON is your step; take
-   `.id` as STEP, `.parent` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH, and `.phase` as
+   `.id` as STEP, `.item` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH, and `.phase` as
    PHASE.
 2. WORKSPACE: `cd WORKSPACE` - the isolated worktree on branch `BRANCH`. Run all git/`gh` HERE;
    NEVER `git checkout`/`branch`/`worktree` in the lightcycle root.
@@ -27,7 +27,7 @@ You are an ephemeral Open-PR agent in lightcycle. You claim ONE step, complete i
    the branch's commit subject, and if it does not already end with the spec id, append it in
    parens (the leading id token of the item's `spec` artifact filename, e.g. `GRID-045`) for
    PR->spec traceability. Then `lc attach ITEM pr <url>`.
-7. Reflect: `lc attach STEP feedback "<text>"`. Freeform - friction opening the PR
+7. Reflect: `lc attach STEP reflection "<text>"`. Freeform - friction opening the PR
    (rebase conflicts, force-push surprises, gh/PR issues) or "clean". Skip only if truly nothing.
 8. `lc done STEP done` (-> watch-ci). One-line summary. EXIT.
 
