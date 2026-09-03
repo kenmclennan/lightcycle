@@ -539,7 +539,11 @@ class FakeStore(StorePort):
         return [r for r in self.runs_of(item, pid) if r.is_open]
 
     def set_run_field(self, rid, **fields):
-        allowed = {k: v for k, v in fields.items() if k in ("branch", "pr", "content_pin")}
+        allowed = {
+            k: v for k, v in fields.items()
+            if k in ("branch", "pr", "content_pin",
+                     "comments_dispatched_through", "comments_handled_through")
+        }
         if not allowed:
             return
         if "pr" in allowed and "content_pin" not in allowed:
