@@ -137,7 +137,7 @@ class TestPriorityListStepColumnTruncation(unittest.TestCase):
         self.addCleanup(session.close)
 
         table = session.app.query_one(PriorityTable)
-        text = _rendered_cell_text(table, step, "step").strip()
+        text = _rendered_cell_text(table, store.get_step(step).item, "step").strip()
         self.assertTrue(text.endswith("…"))
         self.assertEqual(len(text), STEP_PHRASE_BUDGET)
 
@@ -152,5 +152,5 @@ class TestPriorityListStepColumnTruncation(unittest.TestCase):
         self.addCleanup(session.close)
 
         table = session.app.query_one(PriorityTable)
-        text = _rendered_cell_text(table, step, "step").strip()
+        text = _rendered_cell_text(table, store.get_step(step).item, "step").strip()
         self.assertEqual(text, "Coding")

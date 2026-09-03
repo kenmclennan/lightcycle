@@ -6,8 +6,8 @@ from tests.support.sqlite_store_factory import make_sqlite_store
 class TestSqliteStoreIds(unittest.TestCase):
     def test_top_level_ids_are_shortcode_and_monotonic(self):
         s = make_sqlite_store(shortcode="GRID")
-        a = s.create_step("a")
-        b = s.create_step("b")
+        a = s.create_item("a", "a description")
+        b = s.create_item("b", "a description")
         self.assertEqual(a, "GRID-1")
         self.assertEqual(b, "GRID-2")
 

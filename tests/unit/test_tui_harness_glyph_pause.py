@@ -7,7 +7,7 @@ from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_TICKS_PER_SECOND
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import launch, make_test_container
+from tests.support.tui_harness import row_key, launch, make_test_container
 
 _TICK_INTERVAL = 1 / ACTIVE_GLYPH_TICKS_PER_SECOND
 
@@ -22,12 +22,12 @@ class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
         session = launch(make_test_container(store=store))
         self.addCleanup(session.close)
         table = session.app.query_one(DataTable)
-        baseline = table.get_cell(tid, "icon").plain
+        baseline = table.get_cell(row_key(session, tid), "icon").plain
 
         time.sleep(_TICK_INTERVAL * 4)
         session.run(lambda: None)
 
-        self.assertEqual(table.get_cell(tid, "icon").plain, baseline)
+        self.assertEqual(table.get_cell(row_key(session, tid), "icon").plain, baseline)
 
     def test_screen_level_timer_does_not_tick_between_pause_and_the_next_stimulus(self):
         store = FakeStore()
@@ -48,9 +48,9 @@ class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
         session.pause()
 
         table = screen.query_one(HierarchyPagingTable)
-        baseline = table.get_cell(tid, "icon").plain
+        baseline = table.get_cell(row_key(session, tid), "icon").plain
 
         time.sleep(_TICK_INTERVAL * 4)
         session.run(lambda: None)
 
-        self.assertEqual(table.get_cell(tid, "icon").plain, baseline)
+        self.assertEqual(table.get_cell(row_key(session, tid), "icon").plain, baseline)

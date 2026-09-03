@@ -1,5 +1,7 @@
 import os
 import unittest
+
+from lightcycle.domain.audit import FINDINGS_STEP
 from pathlib import Path
 
 from lightcycle.adapters.fsio import parse_step, step_roles, workflow_text
@@ -338,7 +340,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         self.assertNotIn(reviewed, [i.id for i in s.closed_unretroed_items()])
         human = [c for c in s.children(batch) if c.role == "human"]
         self.assertEqual(len(human), 1)
-        self.assertTrue(human[0].attention)
+        self.assertEqual(human[0].stage, FINDINGS_STEP)
         self.assertEqual(human[0].state, "ready")
 
     def test_findings_step_title_derives_from_the_batch_items_actual_title(self):
@@ -1044,7 +1046,7 @@ class TestBlockTask(unittest.TestCase):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(
-            BlockInput(step=bid, needs="decide X", reason="oops", branch="feat/y")
+            BlockInput(step=bid, needs="decide X", reason="oops")
         )
         t = s.get_node(bid)
         self.assertEqual(t.role, "human")

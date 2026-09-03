@@ -5,7 +5,7 @@ from lightcycle.domain.contracts import StepContract
 
 def file_step(store, flow, item_id, node, workflow, step):
     graph = flow.load_graph(workflow)
-    present = {a.type for a in store.item_artifacts(item_id)}
+    present = store.present_types(store.get_item(item_id))
     missing_inputs = graph.requires - present
     if missing_inputs:
         raise UseCaseError(

@@ -17,8 +17,6 @@ class TestNodeSpec(unittest.TestCase):
             role="agent",
             parent="s-1",
             deps=("t-1", "t-2"),
-            project="grid",
-            goal="ship",
         )
         self.assertEqual(
             spec.as_kwargs(),
@@ -28,9 +26,6 @@ class TestNodeSpec(unittest.TestCase):
                 "role": "agent",
                 "parent": "s-1",
                 "deps": ["t-1", "t-2"],
-                "project": "grid",
-                "goal": "ship",
-                "attention": False,
             },
         )
 
