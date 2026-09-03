@@ -180,6 +180,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
 class TuiSession:
     def __init__(self, container, now=None, upgrade_check=None, size=None):
         self.app = LightcycleApp(container, now=now, upgrade_check=upgrade_check or _no_upgrade_available)
+        self.store = container.store
         self._loop = asyncio.new_event_loop()
         self._ctx = contextvars.copy_context()
         self._run_test_cm = self.app.run_test(size=size) if size else self.app.run_test()
@@ -231,5 +232,5 @@ def launch(container, now=None, upgrade_check=None, size=None):
 
 
 def row_key(session, node_id):
-    node = session.app.container.store.get_node(node_id)
+    node = session.store.get_node(node_id)
     return getattr(node, "item", None) or node.id

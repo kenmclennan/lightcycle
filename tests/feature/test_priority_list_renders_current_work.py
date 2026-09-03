@@ -38,21 +38,27 @@ def _cell_text(value):
     return value.plain if hasattr(value, "plain") else value
 
 
+def _row_key(session, node_id):
+    node = session.store.get_node(node_id)
+    return getattr(node, "item", None) or node.id
+
+
 def _cell(session, row_id, column):
     table = session.app.query_one(DataTable)
-    return _cell_text(table.get_cell(row_id, column))
+    return _cell_text(table.get_cell(_row_key(session, row_id), column))
 
 
 def _icon(session, row_id):
     table = session.app.query_one(DataTable)
-    return table.get_cell(row_id, "icon")
+    return table.get_cell(_row_key(session, row_id), "icon")
 
 
 def _rendered_icon_style(session, row_id, glyph):
     table = session.app.query_one(DataTable)
+    key = _row_key(session, row_id)
     y = 0
     for r in table.ordered_rows:
-        if r.key.value == row_id:
+        if r.key.value == key:
             break
         y += r.height
     strip = table.render_line(y)
@@ -136,11 +142,12 @@ def _rendered_cell_text_at(table, strip, column_key):
 
 def _row_lines(session, row_id):
     table = session.app.query_one(DataTable)
+    key = _row_key(session, row_id)
     y = 0
     target = None
     height = 1
     for r in table.ordered_rows:
-        if r.key.value == row_id:
+        if r.key.value == key:
             target = y
             height = r.height
             break
@@ -467,7 +474,9 @@ def _g_more_than_one_screen(ctx):
 @given(parsers.parse('the store has a queued step with id "{id}" ({source})'))
 def _g_queued_step_with_id(ctx, id, source):
     store = FakeStore()
-    ctx["target_id"] = store.create_step("queued item", step="build", role="agent", id=id)
+    item = store.create_item("queued item", "a description", id=id)
+    ctx["target_id"] = store.create_step(
+        "queued item", step="build", role="agent", parent=item)
     ctx["store"] = store
 
 
@@ -480,8 +489,9 @@ def _g_more_than_screen_with_deep_long_id(ctx):
     for i in range(60):
         store.create_step("q%d" % i, step="build", role="agent")
     ctx["long_id"] = "LIGHTCYCLE-999.10.10"
+    item = store.create_item("deep item", "a description", id=ctx["long_id"])
     ctx["target_id"] = store.create_step(
-        "deep item", step="build", role="agent", id=ctx["long_id"]
+        "deep item", step="build", role="agent", parent=item
     )
     ctx["store"] = store
 
@@ -518,8 +528,9 @@ def _priority_stack_terminal_width(mode):
 def _g_row_forces_stacked(ctx, mode):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=_STACK_TIME_MINUTES))
     store = FakeStore(now=lambda: clock.now().isoformat())
-    tid = store.create_step(_STACK_TITLE, step=_STACK_STEP, role="agent", id=_STACK_ID)
-    store.add_artifact(tid, "repo", _STACK_PROJECT)
+    item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID)
+    tid = store.create_step(_STACK_TITLE, step=_STACK_STEP, role="agent", parent=item)
+    store.add_artifact(item, "repo", _STACK_PROJECT)
     store.assign(tid, "worker-1")
     store.update_state(tid, State.IN_PROGRESS)
     clock.set(BASE_TIME)
@@ -538,7 +549,7 @@ def _g_launched_with_selected_queued(ctx):
     ctx["target_id"] = target
     _launch(ctx)
     table = ctx["session"].app.query_one(DataTable)
-    table.move_cursor(row=table.get_row_index(target))
+    table.move_cursor(row=table.get_row_index(_row_key(ctx["session"], target)))
     ctx["session"].pause()
 
 
@@ -554,7 +565,7 @@ def _g_launched_with_selected_step(ctx):
     ctx["last_id"] = last
     _launch(ctx)
     table = ctx["session"].app.query_one(DataTable)
-    table.move_cursor(row=table.get_row_index(target))
+    table.move_cursor(row=table.get_row_index(_row_key(ctx["session"], target)))
     ctx["session"].pause()
 
 
@@ -718,8 +729,8 @@ def _w_complete_target(ctx):
 @then("the inbox step's row is grouped above the active and queued groups")
 def _t_inbox_above(ctx):
     order = _row_order(ctx["session"])
-    assert order.index(ctx["inbox_id"]) < order.index(ctx["active_id"])
-    assert order.index(ctx["inbox_id"]) < order.index(ctx["queued_id"])
+    assert order.index(_row_key(ctx["session"], ctx["inbox_id"])) < order.index(_row_key(ctx["session"], ctx["active_id"]))
+    assert order.index(_row_key(ctx["session"], ctx["inbox_id"])) < order.index(_row_key(ctx["session"], ctx["queued_id"]))
 
 
 @then(
@@ -741,9 +752,9 @@ def _t_inbox_distinct(ctx):
 @then("the dependency-held step appears in the queued group, not the needs-attention group")
 def _t_blocked_step_in_queued_group(ctx):
     order = _row_order(ctx["session"])
-    assert order.index(ctx["inbox_id"]) < order.index(ctx["blocked_id"])
-    assert order.index(ctx["active_id"]) < order.index(ctx["blocked_id"])
-    assert order.index(ctx["queued_id"]) < order.index(ctx["blocked_id"])
+    assert order.index(_row_key(ctx["session"], ctx["inbox_id"])) < order.index(_row_key(ctx["session"], ctx["blocked_id"]))
+    assert order.index(_row_key(ctx["session"], ctx["active_id"])) < order.index(_row_key(ctx["session"], ctx["blocked_id"]))
+    assert order.index(_row_key(ctx["session"], ctx["queued_id"])) < order.index(_row_key(ctx["session"], ctx["blocked_id"]))
 
 
 @then("the dependency-held step's icon is the queued glyph, not the needs-attention glyph")
@@ -782,18 +793,21 @@ def _t_escalation_step_text(ctx, text):
 @then("the escalation's row is positioned before the gate's row within the needs-attention group")
 def _t_escalation_before_gate(ctx):
     order = _row_order(ctx["session"])
-    assert order.index(ctx["escalation_id"]) < order.index(ctx["gate_id"])
+    assert order.index(_row_key(ctx["session"], ctx["escalation_id"])) < order.index(_row_key(ctx["session"], ctx["gate_id"]))
 
 
 @then("the table contains exactly 3 rows, one for each step, with no extra row of any kind")
 def _t_table_exactly_three_rows(ctx):
     order = _row_order(ctx["session"])
-    assert order == [ctx["inbox_id"], ctx["active_id"], ctx["queued_id"]]
+    assert order == [_row_key(ctx["session"], ctx["inbox_id"]), _row_key(ctx["session"], ctx["active_id"]), _row_key(ctx["session"], ctx["queued_id"])]
 
 
 @then("each row's key is a real node id")
 def _t_each_row_key_is_real_node_id(ctx):
-    known_ids = {ctx["inbox_id"], ctx["active_id"], ctx["queued_id"]}
+    known_ids = {
+        _row_key(ctx["session"], ctx[key])
+        for key in ("inbox_id", "active_id", "queued_id")
+    }
     for row_id in _row_order(ctx["session"]):
         assert row_id in known_ids
 
@@ -807,19 +821,21 @@ def _t_each_row_height_is_two(ctx):
 
 @then("the table contains exactly one row, for that queued step, with no extra row of any kind")
 def _t_table_exactly_one_row(ctx):
-    assert _row_order(ctx["session"]) == [ctx["queued_id"]]
+    assert _row_order(ctx["session"]) == [_row_key(ctx["session"], ctx["queued_id"])]
 
 
 @then("the active group renders no rows")
 def _t_active_group_empty(ctx):
-    assert _row_order(ctx["session"]) == [ctx["inbox_id"], ctx["queued_id"]]
+    assert _row_order(ctx["session"]) == [_row_key(ctx["session"], ctx["inbox_id"]), _row_key(ctx["session"], ctx["queued_id"])]
 
 
 @then("the active step's row is grouped below the needs-attention group and above the queued group")
 def _t_active_between(ctx):
     order = _row_order(ctx["session"])
-    assert order.index(ctx["inbox_id"]) < order.index(ctx["active_id"]) < order.index(
-        ctx["queued_id"]
+    assert (
+        order.index(_row_key(ctx["session"], ctx["inbox_id"]))
+        < order.index(_row_key(ctx["session"], ctx["active_id"]))
+        < order.index(_row_key(ctx["session"], ctx["queued_id"]))
     )
 
 
@@ -840,7 +856,7 @@ def _t_active_distinct(ctx):
 @then("the priority list contains a row for the in-progress step, in the active group")
 def _t_in_progress_in_active(ctx):
     session = ctx["session"]
-    assert ctx["running_id"] in _row_order(session)
+    assert _row_key(session, ctx["running_id"]) in _row_order(session)
     assert _is_active_glyph(_icon(session, ctx["running_id"]).plain)
 
 
@@ -859,7 +875,7 @@ def _t_item_once_in_active(ctx):
 @then("that item's row shows the item's own id and title, not the step's")
 def _t_item_row_shows_item_identity(ctx):
     session = ctx["session"]
-    assert ctx["item_id"] in _row_order(session)
+    assert _row_key(session, ctx["item_id"]) in _row_order(session)
     assert _cell(session, ctx["item_id"], "title").rstrip() == ctx["item_title"]
 
 
@@ -873,7 +889,7 @@ def _t_item_active_step_fields(ctx):
 @then("that item's row's rendered height includes exactly one spacer line, the same as any other row")
 def _t_item_row_height_includes_spacer(ctx):
     table = ctx["session"].app.query_one(DataTable)
-    row = next(r for r in table.ordered_rows if r.key.value == ctx["item_id"])
+    row = next(r for r in table.ordered_rows if r.key.value == _row_key(ctx["session"], ctx["item_id"]))
     assert row.height == 2
 
 
@@ -909,7 +925,7 @@ def _t_order_unchanged(ctx):
 @then("the queued step's row is grouped below the active group")
 def _t_queued_below_active(ctx):
     order = _row_order(ctx["session"])
-    assert order.index(ctx["active_id"]) < order.index(ctx["queued_id"])
+    assert order.index(_row_key(ctx["session"], ctx["active_id"])) < order.index(_row_key(ctx["session"], ctx["queued_id"]))
 
 
 @then("the queued step's row is shown with its own icon and colour, distinct from the active rows")
@@ -934,14 +950,14 @@ def _t_step_moves_to_active(ctx):
 @then("that step's row wraps its title onto a second line rather than truncating it with an ellipsis")
 def _t_title_wraps(ctx):
     table = ctx["session"].app.query_one(DataTable)
-    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    row = next(r for r in table.ordered_rows if r.key.value == _row_key(ctx["session"], ctx["target_id"]))
     assert row.height > 1
 
 
 @then("that step's row renders at a height of 3, two wrapped content lines plus one spacer line")
 def _t_wrapped_row_height_is_three(ctx):
     table = ctx["session"].app.query_one(DataTable)
-    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    row = next(r for r in table.ordered_rows if r.key.value == _row_key(ctx["session"], ctx["target_id"]))
     assert row.height == 3
 
 
@@ -1029,7 +1045,7 @@ def _t_no_mid_word_split(ctx):
 )
 def _t_stacked_row_height_is_three(ctx):
     table = ctx["session"].app.query_one(DataTable)
-    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    row = next(r for r in table.ordered_rows if r.key.value == _row_key(ctx["session"], ctx["target_id"]))
     assert row.height == 3
 
 
@@ -1076,12 +1092,12 @@ def _t_visited_each_group_once(ctx):
     for row_id in visited[1:]:
         if row_id != deduped[-1]:
             deduped.append(row_id)
-    assert deduped == [ctx["inbox_id"], ctx["active_id"], ctx["queued_id"]]
+    assert deduped == [_row_key(ctx["session"], ctx["inbox_id"]), _row_key(ctx["session"], ctx["active_id"]), _row_key(ctx["session"], ctx["queued_id"])]
 
 
 @then("the selection is still on the queued row")
 def _t_selection_still_on_queued(ctx):
-    assert ctx["down_visits"][-1] == ctx["queued_id"]
+    assert ctx["down_visits"][-1] == _row_key(ctx["session"], ctx["queued_id"])
 
 
 def _row_background_colours(session, row_id):
@@ -1181,7 +1197,7 @@ def _t_no_dependency_icon(ctx):
 @then("the runnable step's row is positioned before the dependency-held step's row")
 def _t_runnable_before_held(ctx):
     order = _row_order(ctx["session"])
-    assert order.index(ctx["runnable_id"]) < order.index(ctx["held_id"])
+    assert order.index(_row_key(ctx["session"], ctx["runnable_id"])) < order.index(_row_key(ctx["session"], ctx["held_id"]))
 
 
 @then("a calm message is shown in place of the priority list")
@@ -1202,7 +1218,7 @@ def _t_list_shown_again(ctx):
 def _t_new_row_built_at_real_width(ctx):
     session = ctx["session"]
     table = session.app.query_one(DataTable)
-    row = next(r for r in table.ordered_rows if r.key.value == ctx["target_id"])
+    row = next(r for r in table.ordered_rows if r.key.value == _row_key(ctx["session"], ctx["target_id"]))
     assert row.height == 2
 
 
