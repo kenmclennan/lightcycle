@@ -9,8 +9,6 @@ class ParkInput:
     step: str
     observation: str
     decision: str
-    branch: Optional[str] = None
-    pr: Optional[str] = None
     tried: Optional[str] = None
 
 
@@ -29,8 +27,6 @@ class ParkStepUseCase:
             )
         resume = {}
         for k, v in (
-            ("branch", input.branch),
-            ("pr", input.pr),
             ("tried", input.tried),
             ("reason", input.observation),
             ("needs", input.decision),

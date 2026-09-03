@@ -108,7 +108,7 @@ class ClaimStepUseCase:
             spec_path = (
                 spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
             )
-        repo = next((a.value for a in view.item_artifacts if a.type == "repo"), None)
+        repo = self._store.get_item(t.item).repo
         repo_path = None
         if repo:
             try:

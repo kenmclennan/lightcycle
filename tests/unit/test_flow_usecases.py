@@ -1060,12 +1060,9 @@ class TestBlockTask(unittest.TestCase):
         s = FakeStore()
         bid = s.create_step("build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(
-            BlockInput(step=bid, needs="decide X", branch="feat/y", pr="123",
-                       reason="oops", tried="a,b")
+            BlockInput(step=bid, needs="decide X", reason="oops", tried="a,b")
         )
         t = s.get_node(bid)
-        self.assertEqual(t.branch, "feat/y")
-        self.assertEqual(t.pr, "123")
         self.assertEqual(t.park.reason, "oops")
         self.assertEqual(t.park.tried, "a,b")
 

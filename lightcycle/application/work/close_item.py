@@ -26,5 +26,6 @@ class CloseItemUseCase:
         current = self._store.current_pass(input.item)
         if current is not None:
             self._store.close_pass(current.id)
-        self._worktrees.remove(input.item)
+        if self._worktrees is not None:
+            self._worktrees.remove(input.item)
         retire_resolved(self._store, input.item)
