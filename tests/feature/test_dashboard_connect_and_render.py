@@ -160,7 +160,7 @@ def _list_rendered(ctx):
     from lightcycle.domain.work import NodeQueue
 
     lanes = NodeQueue(ctx["store"].all_steps()).by_lane()
-    expected = {n.id for n in lanes["queue"]}
+    expected = {n.item for n in lanes["queue"]}
     table = ctx["session"].app.query_one(DataTable)
     actual = {key.value for key in table.rows if not key.value.startswith("__gap-")}
     assert actual == expected
@@ -181,7 +181,7 @@ def _contains_all(ctx):
     table = ctx["session"].app.query_one(DataTable)
     assert table.row_count == len(ctx["ids"])
     for tid in ctx["ids"]:
-        assert tid in table.rows
+        assert ctx["store"].get_step(tid).item in table.rows
 
 
 @then(parsers.parse("the status bar reports the pool as {state}"))
@@ -239,7 +239,7 @@ def _shows_no_upgrade_indicator(ctx):
 @then("the priority list reflects the changed queue")
 def _reflects_changed_queue(ctx):
     table = ctx["session"].app.query_one(DataTable)
-    assert ctx["new_step"] in table.rows
+    assert ctx["store"].get_step(ctx["new_step"]).item in table.rows
 
 
 @then("the status bar reflects the changed state")
