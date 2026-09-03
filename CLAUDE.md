@@ -17,7 +17,7 @@ The engine is agnostic about _which_ origin it pulls; the four-repo map above is
 
 Dependencies point inward; the domain depends on nothing.
 
-- `lightcycle/domain/` - the typed, IO-free model: entities (`Node`) and value objects (`Status`), plus the pure logic (flow assembly, artifact contracts, node projections/buckets, retro signals, worklog, workspace). **Stdlib only, no IO**: no subprocess, filesystem, network, env, and no ambient `time`/`uuid`/`random` (pass those in as explicit inputs). Unit-tests in milliseconds.
+- `lightcycle/domain/` - the typed, IO-free model: entities (`Item`, `Step`) and value objects (`Park`, `State`), plus the pure logic (flow assembly, artifact contracts, node projections/buckets, retro signals, worklog, workspace). **Stdlib only, no IO**: no subprocess, filesystem, network, env, and no ambient `time`/`uuid`/`random` (pass those in as explicit inputs). Unit-tests in milliseconds.
 - `lightcycle/ports/` - the abstract interfaces (`StorePort`, `GitPort`, `FsPort`, `WorkersPort`, `SpawnerPort`) the application depends on; adapters implement them.
 - `lightcycle/application/` - use cases (one action each, grouped by activity: `inspect`, `intake`, `flow`, `pool`, `feedback`, `setup`) + cross-cutting services (`FlowService`, `WorktreeService`). Depend on ports, not concrete adapters. This is the home for business logic.
 - `lightcycle/adapters/` - every adapter, driven and driving. Driven adapters are all IO: the sqlite store (`SqliteStore`), git, the worker spawner, the workers registry, the filesystem - the only callers of `sqlite3` / `git` / `subprocess`. Driving adapters call _into_ the application layer from outside (the TUI under `adapters/tui/`); like `cli.py`, they invoke use cases and never touch IO primitives directly.
@@ -30,7 +30,7 @@ Business logic stranded in `cli.py` or an adapter is the most common defect here
 
 Next-step resolution has one home: a use case must not inline `flow_next` -> `create_step` or reimplement the transition / ci-failed-cap logic; it routes through the shared resolver (`application/flow/next_step.py`).
 
-Node hierarchy invariant: `parent` expresses exactly one chain - `item > step` (an item is top-level and has no parent; a step's parent is its item). Every other relationship between nodes - backlog resolution, dependencies, lineage - is an artifact or edge, never an overloaded `parent`.
+Item/step invariant: a step's `item` is required and fixed at creation; an item has no parent and nothing nests below a step. `Pass` and `PhaseRun` are records against an item, not levels of the tree. Every other relationship between nodes - backlog resolution, dependencies, lineage - is an artifact or edge, never an overloaded `parent`.
 
 ## Tests
 
@@ -63,7 +63,7 @@ Node hierarchy invariant: `parent` expresses exactly one chain - `item > step` (
 
 1. the store adapter's **contract against a real `SqliteStore`** - one file (`test_store_contract.py`); extend it, never scatter ad-hoc store tests across the suite;
 2. **a genuine external-IO effect** - that an adapter's IO actually happens (a git/worktree op runs, the run-lock locks, `WorkersAdapter.kill` really signals a process). Test the EFFECT in isolation against a real disposable target - **never `os.getpid()`**;
-3. **read-surface JSON pins** - a `Node`/item field an agent consumes must be proven to survive real serialization onto `lc show`/`lc claim` output (see the read-surface bullet below).
+3. **read-surface JSON pins** - an `Item`/`Step` field an agent consumes must be proven to survive real serialization onto `lc show`/`lc claim` output (see the read-surface bullet below).
 
 **Decision vs effect (the trap that took CI down).** An integration test verifies an adapter _contract_, real IO, or wiring - it must NEVER verify a _decision_ a fake can make. `SweepUseCase` deciding _which_ worker to reclaim or kill is pure logic -> **unit** (`FakeWorkers.kill` records the pid; no real signal). Only _that `os.kill` sends SIGTERM_ is an adapter test, and it targets a real sacrificial child, never the test's own pid. Driving a decision through its real effect is slow, duplicative, and self-destructive - a sweep test that registered `os.getpid()` as a worker made the sweep SIGTERM the whole test run (exit 143), reproducibly, and took down CI for the repo.
 
@@ -73,7 +73,7 @@ This second trigger hides where the first one shouts: `cmd_start` installs its o
 
 If a change does not touch (1)-(3), it ships with a unit test, not an integration test. Get it green before `lc done`.
 
-- **Any `Node` (or item) field a step reads from `lc show`/`lc claim` JSON needs an integration test asserting the field appears in that CLI output** - a unit test on the domain entity alone does not prove the field survives `Node.as_dict()` onto the read surface agents actually consume (`tests/integration/test_tg.py::TestNodeDTOReadSurface` pins the current set; extend it, don't bypass it, when a step starts reading a new field).
+- **Any `Item` or `Step` field a step reads from `lc show`/`lc claim` JSON needs an integration test asserting the field appears in that CLI output** - a unit test on the domain entity alone does not prove the field survives `Step.as_dict()` onto the read surface agents actually consume (`tests/integration/test_tg.py::TestNodeDTOReadSurface` pins the current set; extend it, don't bypass it, when a step starts reading a new field).
 - **Never verify against the live lightcycle store.** When checking a `lc` command by hand, point it at a throwaway store (`LC_HOME` on a temp dir with its own sqlite store, as the integration tests do) - never the live lightcycle store, or you pollute (or worse, mutate) the real backlog. Same rule as the tests: isolate the store.
 - **Live-equivalent home in a subprocess: run `bin/lc` from the non-worktree copy helper.** The LC-019 guard (`refuses_live_store`) fires on any subprocess `bin/lc` launched from inside a `.worktrees/*` checkout when its target home resolves to the default data root, so a test that needs a live-equivalent home - e.g. exercising cli.py's worker-role gate against the default home - trips the guard before the code under test is reached, and the two become indistinguishable from inside a worktree. Copy the engine outside any worktree first: use `tests.support.isolation.engine_lc_outside_any_worktree()`, which returns a `bin/lc` copied to a temp dir with no `.worktrees` ancestor, and run that. Do not re-derive this per spec.
 
