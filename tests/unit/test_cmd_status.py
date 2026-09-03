@@ -5,7 +5,7 @@ from unittest import mock
 
 import lightcycle.cli as cli_mod
 from lightcycle.cli import cmd_status
-from lightcycle.domain.work import Node
+from tests.support.factories import make_step
 
 
 class FakeContainer:
@@ -38,14 +38,14 @@ class TestCmdStatusDisplayPhrase(unittest.TestCase):
         return rc, out.getvalue()
 
     def test_shows_the_phrase_and_stage_when_a_phrase_is_declared(self):
-        node = Node(id="t1", title="one", step="code-await-merge")
+        node = make_step(id="t1", title="one", step="code-await-merge")
         lanes = {"inbox": [node], "active": [], "queue": []}
         rc, out = self._run(lanes, _FixedFlowService({"code-await-merge": "Review the PR"}))
         self.assertEqual(rc, 0)
         self.assertIn("Review the PR · code-await-merge", out)
 
     def test_shows_the_bare_stage_when_no_phrase_is_declared(self):
-        node = Node(id="t1", title="one", step="build")
+        node = make_step(id="t1", title="one", step="build")
         lanes = {"inbox": [node], "active": [], "queue": []}
         rc, out = self._run(lanes, _FixedFlowService({}))
         line = next(l for l in out.splitlines() if "t1" in l)

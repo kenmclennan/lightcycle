@@ -1,11 +1,11 @@
 import unittest
 
 from lightcycle.domain.pool import PoolPlan, ReadyQueue
-from lightcycle.domain.work import Node
+from tests.support.factories import make_step
 
 
 def steps(*roles):
-    return [Node(id="t-%d" % i, role=r) for i, r in enumerate(roles)]
+    return [make_step(id="t-%d" % i, role=r) for i, r in enumerate(roles)]
 
 
 class TestReadyQueue(unittest.TestCase):

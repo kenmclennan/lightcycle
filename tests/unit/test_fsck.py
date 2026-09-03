@@ -1,12 +1,15 @@
 import unittest
 
 from lightcycle.domain.health import fsck
-from lightcycle.domain.work import Artifact, Node, State
+from lightcycle.domain.work import Artifact, State
+from tests.support.factories import make_item, make_step
 
 
-def _node(id, type, parent=None, state=State.READY, artifacts=None):
-    return Node(id=id, title=id, type=type, parent=parent, state=state,
-                artifacts=artifacts or [])
+def _node(id, type, parent=None, state=State.READY, artifacts=None, watched_step=None):
+    if type == "item":
+        return make_item(id=id, title=id, state=state, artifacts=artifacts or ())
+    return make_step(id=id, title=id, parent=parent, state=state,
+                     watched_step=watched_step)
 
 
 class TestFsck(unittest.TestCase):
@@ -39,23 +42,23 @@ class TestFsck(unittest.TestCase):
         self.assertEqual(fsck([item, step]), [])
 
     def test_dangling_resolves_artifact(self):
-        step = _node("s-1", "step", artifacts=[Artifact(type="resolves", value="missing")])
+        step = _node("s-1", "item", artifacts=[Artifact(type="resolves", value="missing")])
         problems = fsck([step])
         self.assertEqual(len(problems), 1)
         self.assertEqual(problems[0].category, "store")
         self.assertIn("resolves", problems[0].message)
 
     def test_dangling_filed_from_artifact(self):
-        step = _node("s-1", "step", artifacts=[Artifact(type="filed-from", value="missing")])
+        step = _node("s-1", "item", artifacts=[Artifact(type="filed-from", value="missing")])
         self.assertEqual(len(fsck([step])), 1)
 
-    def test_dangling_watched_step_artifact(self):
-        step = _node("s-1", "step", artifacts=[Artifact(type="watched-step", value="missing")])
+    def test_dangling_watched_step_field(self):
+        step = _node("s-1", "step", watched_step="missing")
         self.assertEqual(len(fsck([step])), 1)
 
     def test_resolving_artifact_pointing_at_existing_node_is_fine(self):
         other = _node("s-2", "step")
-        step = _node("s-1", "step", artifacts=[Artifact(type="resolves", value="s-2")])
+        step = _node("s-1", "item", artifacts=[Artifact(type="resolves", value="s-2")])
         self.assertEqual(fsck([step, other]), [])
 
     def test_other_artifact_types_are_not_checked(self):

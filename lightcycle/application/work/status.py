@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from lightcycle.application.work.watched_steps import watched_step_ids
-from lightcycle.domain.work import Node, NodeQueue
+from lightcycle.domain.work import NodeQueue, Step
 
 
 @dataclass(frozen=True)
 class StatusResponse:
-    lanes: Dict[str, List[Node]]
+    lanes: Dict[str, List[Step]]
 
 
 class StatusUseCase:

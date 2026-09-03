@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from typing import List
 
 from lightcycle.domain.work.artifact import Artifact
-from lightcycle.domain.work.node import Node
+from lightcycle.domain.work.step import Step
 
 
 @dataclass(frozen=True)
 class NodeView:
-    step: Node
+    step: Step
     item_artifacts: List[Artifact]
 
     def as_dict(self) -> dict:

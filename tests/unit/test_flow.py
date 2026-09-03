@@ -2,8 +2,8 @@ import unittest
 
 from lightcycle.domain.flow import Flow, Transition
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.work import Node
 from tests.support.fake_fs import graph_text_from_metas
+from tests.support.factories import make_step
 
 
 def mkflow(metas):
@@ -92,7 +92,7 @@ class TestTransition(unittest.TestCase):
         return Transition(from_step=from_step, outcome=outcome, to_step=to_step, to_role=to_role)
 
     def test_next_task_spec_uses_the_given_item_title_and_keeps_deps(self):
-        spec = self._t().next_step_spec(Node(id="t-1", title="build: some stale title"), "make the thing")
+        spec = self._t().next_step_spec(make_step(id="t-1", title="build: some stale title"), "make the thing")
         self.assertEqual(spec.title, "review: make the thing")
         self.assertEqual(spec.step, "review")
         self.assertEqual(spec.role, "agent")
@@ -101,16 +101,16 @@ class TestTransition(unittest.TestCase):
 
     def test_next_task_spec_ignores_the_steps_own_title_entirely(self):
         spec = self._t().next_step_spec(
-            Node(id="t-1", title="build: consolidated sweep - see PR #349"), "fix the bug"
+            make_step(id="t-1", title="build: consolidated sweep - see PR #349"), "fix the bug"
         )
         self.assertEqual(spec.title, "review: fix the bug")
 
     def test_next_task_spec_includes_parent_when_present(self):
-        spec = self._t().next_step_spec(Node(id="t-1", title="build: x", parent="s-9"), "x")
+        spec = self._t().next_step_spec(make_step(id="t-1", title="build: x", parent="s-9"), "x")
         self.assertEqual(spec.parent, "s-9")
 
     def test_next_task_spec_as_kwargs_matches_create_task(self):
-        kw = self._t().next_step_spec(Node(id="t-1", title="build: x", parent="s-9"), "x").as_kwargs()
+        kw = self._t().next_step_spec(make_step(id="t-1", title="build: x", parent="s-9"), "x").as_kwargs()
         self.assertEqual(
             kw,
             {

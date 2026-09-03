@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
-from lightcycle.domain.work.node import Node
+from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.state import State
 
 
 @dataclass(frozen=True)
 class HierarchyRow:
-    node: Node
+    node: Step
     depth: int
 
 

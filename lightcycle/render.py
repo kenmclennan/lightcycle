@@ -1,13 +1,14 @@
 from lightcycle.domain.work import display_stage, park_resume_command
+from lightcycle.domain.audit import StepKind
 
 
-def node_extra(node, *, show_description=False):
-    plan = next(
-        (a.value for a in getattr(node, "artifacts", ()) if a.type == "plan-doc"), None
-    )
+def node_extra(node, *, show_description=False, description=None, artifacts=None):
+    pool = artifacts if artifacts else getattr(node, "artifacts", ())
+    plan = next((a.value for a in pool if a.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
-    if show_description and node.description:
-        extra += "  desc:%s" % _truncate(node.description)
+    text = description if description is not None else getattr(node, "description", None)
+    if show_description and text:
+        extra += "  desc:%s" % _truncate(text)
     return extra
 
 
@@ -23,7 +24,10 @@ def render_backlog(rows, title_cap):
 def _flat_line(r, show_kind, title_cap):
     title = _truncate(r.step.title or r.step.step, title_cap)
     project = r.project or "-"
-    extra = node_extra(r.step, show_description=True)
+    extra = node_extra(
+        r.step, show_description=True,
+        description=r.description, artifacts=r.artifacts,
+    )
     if show_kind:
         return "[%s]  %-10s  %-12s  %s%s" % (r.kind, r.step.id, project, title, extra)
     return "%-10s  %-12s  %s%s" % (r.step.id, project, title, extra)
@@ -38,7 +42,10 @@ def _inbox_line(r, title_cap, flow_service=None):
     project = r.project or "-"
     line = "%-9s  %-10s  %-12s  %s" % ("[%s]" % r.kind, r.step.id, project, title)
     return (
-        line + _strategy_suffix(r) + node_extra(r.step, show_description=True)
+        line + _strategy_suffix(r) + node_extra(
+            r.step, show_description=True,
+            description=r.description, artifacts=r.artifacts,
+        )
         + _step_extra(r.step, flow_service)
     )
 
@@ -74,7 +81,7 @@ def _strategy_suffix(r):
             parts.append("reason:%s" % _truncate(r.step.park.reason))
         parts.append("resume:%s" % park_resume_command(r.step.id))
         return "  " + "  ".join(parts)
-    if r.kind == "triage" and getattr(r.step, "notes", None):
+    if StepKind.of(r.step) is StepKind.ENGINE_FINDINGS and r.step.notes:
         return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])
     if r.pr:
         return "  pr:%s" % r.pr

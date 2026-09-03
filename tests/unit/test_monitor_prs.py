@@ -1495,12 +1495,12 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(self._pin(store, item), "sha2")
         node = store.get_node(step)
         self.assertEqual(node.role, "human")
-        self.assertIn("sha1", node.reason)
-        self.assertIn("sha2", node.reason)
+        self.assertIn("sha1", node.park.reason)
+        self.assertIn("sha2", node.park.reason)
         self.assertIn("steps/a.md", node.notes)
         self.assertIn("steps/b.md", node.notes)
-        self.assertIn("steps/a.md", node.needs)
-        self.assertIn("steps/b.md", node.needs)
+        self.assertIn("steps/a.md", node.park.needs)
+        self.assertIn("steps/b.md", node.park.needs)
 
     def test_pr_replaced_between_polls_does_not_report_the_old_prs_files_as_dropped(self):
         old_url = self._URL
@@ -1550,10 +1550,10 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(self._pin(store, item), "sha10")
         node = store.get_node(step)
         self.assertEqual(node.role, "human")
-        self.assertIn("sha9", node.reason)
-        self.assertIn("sha10", node.reason)
+        self.assertIn("sha9", node.park.reason)
+        self.assertIn("sha10", node.park.reason)
         self.assertIn("d.py", node.notes)
-        self.assertIn("d.py", node.needs)
+        self.assertIn("d.py", node.park.needs)
 
     def test_escalated_step_returns_to_its_lane_via_unblock(self):
         gh = FakeGitHub(
@@ -1719,12 +1719,12 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(self._pin(store, item), "sha2")
         node = store.get_node(step)
         self.assertEqual(node.role, "human")
-        self.assertIn("sha1", node.reason)
-        self.assertIn("sha2", node.reason)
+        self.assertIn("sha1", node.park.reason)
+        self.assertIn("sha2", node.park.reason)
         self.assertIn("steps/a.md", node.notes)
         self.assertIn("steps/b.md", node.notes)
-        self.assertIn("steps/a.md", node.needs)
-        self.assertIn("steps/b.md", node.needs)
+        self.assertIn("steps/a.md", node.park.needs)
+        self.assertIn("steps/b.md", node.park.needs)
 
     def test_mixed_drop_parks_naming_only_the_unauthorized_file(self):
         comment = Comment(
@@ -1752,8 +1752,8 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(node.role, "human")
         self.assertIn("stray.py", node.notes)
         self.assertNotIn("ordered.py", node.notes)
-        self.assertIn("stray.py", node.needs)
-        self.assertNotIn("ordered.py", node.needs)
+        self.assertIn("stray.py", node.park.needs)
+        self.assertNotIn("ordered.py", node.park.needs)
 
     def test_unmarked_mention_of_the_dropped_file_does_not_authorize_it(self):
         comment = Comment(
@@ -1796,8 +1796,8 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         node = store.get_node(step)
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
-        self.assertIn("b.py", node.needs)
-        self.assertIn("could not read", node.reason.lower())
+        self.assertIn("b.py", node.park.needs)
+        self.assertIn("could not read", node.park.reason.lower())
 
 
 class FakeWorkers:

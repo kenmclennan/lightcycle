@@ -1,13 +1,13 @@
 import unittest
 
 from lightcycle.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec
-from lightcycle.domain.work import Node
 from tests.support.fake_fs import signals_from_metas
+from tests.support.factories import make_step
 
 
 def tk(**kw):
     kw.setdefault("id", "t")
-    return Node(**kw)
+    return make_step(**kw)
 
 
 class TestSignalSpec(unittest.TestCase):

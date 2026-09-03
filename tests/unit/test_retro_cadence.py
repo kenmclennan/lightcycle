@@ -5,9 +5,10 @@ from lightcycle.application.feedback.retro import RetroInput, RetroUseCase
 from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.pending_reflections import pending_reflection_count
-from lightcycle.domain.work import Node, NodeQueue, State
+from lightcycle.domain.work import NodeQueue, State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.factories import make_step
 
 
 def _flow(store):
@@ -214,11 +215,11 @@ class TestCadenceAndPendingHeaderAgree(unittest.TestCase):
 
 class TestRetroLaneVisibility(unittest.TestCase):
     def test_ready_audit_is_in_queue(self):
-        q = NodeQueue([Node(id="a", state=State.READY, role="agent", step="audit")])
+        q = NodeQueue([make_step(id="a", state=State.READY, role="agent", step="audit")])
         self.assertEqual([t.id for t in q.by_lane()["queue"]], ["a"])
 
     def test_in_progress_audit_is_active(self):
-        q = NodeQueue([Node(id="a", state=State.IN_PROGRESS, role="agent", step="audit")])
+        q = NodeQueue([make_step(id="a", state=State.IN_PROGRESS, role="agent", step="audit")])
         self.assertEqual([t.id for t in q.by_lane()["active"]], ["a"])
 
 

@@ -1,7 +1,7 @@
 from lightcycle.domain.health.problem import Problem
 from lightcycle.domain.work.state import State
 
-_DANGLING_ARTIFACT_TYPES = ("resolves", "filed-from", "watched-step")
+_DANGLING_ARTIFACT_TYPES = ("resolves", "filed-from")
 
 
 def fsck(nodes):
@@ -32,7 +32,12 @@ def _orphan(n, by_id):
 
 
 def _dangling_artifacts(n, by_id):
-    return [
+    watched = getattr(n, "watched_step", None)
+    dangling = (
+        [Problem("store", "watched-step points at missing node %r" % watched, n.id)]
+        if watched and watched not in by_id else []
+    )
+    return dangling + [
         Problem("store", "%s artifact points at missing node %r" % (a.type, a.value), n.id)
         for a in getattr(n, "artifacts", ())
         if a.type in _DANGLING_ARTIFACT_TYPES and a.value not in by_id

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-from lightcycle.domain.work import Node, NodeQueue
+from lightcycle.domain.work import NodeQueue, Step
 
 
 @dataclass(frozen=True)
@@ -11,7 +11,7 @@ class QueueInput:
 
 @dataclass(frozen=True)
 class QueueResponse:
-    steps: List[Node]
+    steps: List[Step]
 
 
 class QueueUseCase:
