@@ -4,12 +4,11 @@ from lightcycle.domain.work import Artifact, Item
 
 
 class TestItem(unittest.TestCase):
-    def test_repo_from_artifact(self):
-        s = Item("s-1", (Artifact("spec", "x.md"), Artifact("repo", "app")))
-        self.assertEqual(s.repo(), "app")
+    def test_repo_is_a_field(self):
+        self.assertEqual(Item("s-1", (Artifact("spec", "x.md"),), repo="app").repo, "app")
 
     def test_repo_absent_is_none(self):
-        self.assertIsNone(Item("s-1", (Artifact("spec", "x.md"),)).repo())
+        self.assertIsNone(Item("s-1", (Artifact("spec", "x.md"),)).repo)
 
     def test_artifact_of(self):
         s = Item("s-1", (Artifact("pr", "http://x"),))

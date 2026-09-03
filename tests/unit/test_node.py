@@ -17,14 +17,14 @@ class TestNodeSlots(unittest.TestCase):
 
 
 class TestNodeAsDictWorkflow(unittest.TestCase):
-    def test_unset_workflow_is_an_explicit_null_not_a_missing_key(self):
+    def test_unset_pass_is_an_explicit_null_not_a_missing_key(self):
         out = make_step(id="x").as_dict()
-        self.assertIn("workflow", out)
-        self.assertIsNone(out["workflow"])
+        self.assertIn("pass", out)
+        self.assertIsNone(out["pass"])
 
-    def test_set_workflow_round_trips_as_the_pin(self):
-        out = make_step(id="x", workflow="lightcycle/solo@abc123").as_dict()
-        self.assertEqual(out["workflow"], "lightcycle/solo@abc123")
+    def test_set_pass_round_trips(self):
+        out = make_step(id="x", pass_id="i-1.p2").as_dict()
+        self.assertEqual(out["pass"], "i-1.p2")
 
 
 if __name__ == "__main__":
