@@ -2288,8 +2288,7 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_inbox_shows_plan_doc_for_gate_task(self):
         item = self.store.create_item("a gate", "a description")
-        tid = self.store.create_step(
-            "merge: gate", step="ready-merge", role="human", parent=item)
+        self.store.create_step("merge: gate", step="ready-merge", role="human", parent=item)
         self.store.add_artifact(item, "plan-doc", "/docs/plan.md")
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("plan:/docs/plan.md", out)
