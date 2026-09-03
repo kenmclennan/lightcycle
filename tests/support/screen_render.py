@@ -102,7 +102,7 @@ def _human_step_store():
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     step = store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human",
-                      parent=item, attention=True)
+                      parent=item)
     store.update_metadata(step, {"needs": "Resolve the merge conflict manually"})
     return store, item
 
@@ -119,7 +119,7 @@ def _long_reason_store():
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     step = store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human",
-                      parent=item, attention=True)
+                      parent=item)
     store.update_metadata(
         step,
         {"needs": "Resolve the merge conflict manually", "reason": LONG_ESCALATION_REASON},

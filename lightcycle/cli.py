@@ -1161,7 +1161,6 @@ def cmd_set(argv):
         return 1
     workflow_pin = a.workflow
     resolved_pin = None
-    shadowed_by = []
     if a.workflow:
         try:
             node = _container.store.get_node(a.id)
@@ -1176,7 +1175,6 @@ def cmd_set(argv):
             sys.stderr.write("%s\n" % e)
             return 1
         workflow_pin = resp.value
-        shadowed_by = resp.shadowed_by
         if resp.resolved:
             resolved_pin = resp.value
     if a.label:
@@ -1195,11 +1193,6 @@ def cmd_set(argv):
         print(tid)
     if resolved_pin:
         print(resolved_pin)
-    if shadowed_by:
-        sys.stderr.write(
-            "%d descendant(s) already have their own pin and will not follow this: %s\n"
-            % (len(shadowed_by), ", ".join(sorted(shadowed_by)))
-        )
     if a.backlog:
         try:
             link_resolves(_container.store, tid, a.backlog)

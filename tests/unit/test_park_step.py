@@ -53,13 +53,10 @@ class TestParkTask(unittest.TestCase):
         ParkStepUseCase(s).execute(
             ParkInput(
                 step=bid, observation="something happened", decision="decide X",
-                branch="feat/y", pr="123", tried="a,b",
+                tried="a,b",
             )
         )
-        t = s.get_node(bid)
-        self.assertEqual(t.branch, "feat/y")
-        self.assertEqual(t.pr, "123")
-        self.assertEqual(t.park.tried, "a,b")
+        self.assertEqual(s.get_node(bid).park.tried, "a,b")
 
 
 if __name__ == "__main__":
