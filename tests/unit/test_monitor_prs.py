@@ -861,13 +861,9 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertEqual(spawned[0].parent, item)
         self.assertEqual(spawned[0].state, "ready")
         self.assertNotEqual(store.get_node(step).state, "done")
-        watched = [a for a in store.item_artifacts(spawned[0].id) if a.type == "watched-step"]
-        self.assertEqual([a.value for a in watched], [step])
-        self.assertTrue(watched[0].internal)
-        spawn_mark = [
-            a for a in store.item_artifacts(step) if a.type == "feedback-spawned-through"
-        ]
-        self.assertTrue(spawn_mark[0].internal)
+        self.assertEqual(store.get_step(spawned[0].id).watched_step, step)
+        run = store.current_run(item, None)
+        self.assertEqual(run.comments_dispatched_through, "1500.0")
 
     def test_inline_comment_without_mention_token_still_spawns(self):
         url = "https://github.com/x/y/pull/30-inline"
@@ -906,10 +902,8 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.reworked, [item])
-        spawn_mark = [
-            a for a in store.item_artifacts(step) if a.type == "feedback-spawned-through"
-        ]
-        self.assertEqual(spawn_mark[0].value, str(1300.0))
+        run = store.current_run(item, None)
+        self.assertEqual(run.comments_dispatched_through, str(1300.0))
 
     def test_allowlisted_bot_review_spawns(self):
         url = "https://github.com/x/y/pull/30-bot"
