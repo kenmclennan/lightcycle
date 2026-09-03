@@ -19,7 +19,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 - **activate** - move an item from `backlogged` into the flow by filing its entry step. Realized as `lc set <item> --state active`.
 - **new** - create a node (`lc new item|step`).
-- **set** - update an item's or a step's fields (title, desc, state, workflow, ...). A step's item is not among them.
+- **set** - update an item's or a step's fields. Each structure accepts only its own: an item takes `--title`, `--desc`, `--project`, `--workflow`, `--backlog` and `--state active|in_progress`; a step takes `--title`, `--notes`, `--needs`, `--reason`, `--tried` and `--state ready|blocked`. Anything else is refused at the boundary, before the store is touched, naming what owns the field. A step's item is never among them.
 - **attach** - add an artifact to an item (`lc attach`); `--replace` swaps a same-type artifact.
 - **dep** - declare one node blocks another (`lc dep <id> --needs <id>`).
 - **claim** - a worker atomically takes the next ready step for a role (`lc claim agent`). With one agent role, any worker takes any ready agent step, whatever its stage.
