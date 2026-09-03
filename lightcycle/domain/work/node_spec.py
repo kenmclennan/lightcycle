@@ -9,9 +9,6 @@ class NodeSpec:
     role: Optional[str] = None
     parent: Optional[str] = None
     deps: Tuple[str, ...] = ()
-    project: Optional[str] = None
-    goal: Optional[str] = None
-    attention: bool = False
 
     def as_kwargs(self) -> dict:
         return {
@@ -20,7 +17,4 @@ class NodeSpec:
             "role": self.role,
             "parent": self.parent,
             "deps": list(self.deps),
-            "project": self.project,
-            "goal": self.goal,
-            "attention": self.attention,
         }

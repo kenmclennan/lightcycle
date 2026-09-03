@@ -4,7 +4,7 @@ from typing import List, Optional
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.watched_steps import watched_step_ids
 from lightcycle.domain.flow import Flow
-from lightcycle.domain.work import Item, NodeQueue
+from lightcycle.domain.work import NodeQueue
 
 _NO_FLOW = Flow({})
 
@@ -52,7 +52,7 @@ class InboxUseCase:
         item = self._item(t.parent) if t.parent else None
         return HumanNodeRow(
             kind=kind, outcomes=outcomes, step=t,
-            project=item.repo() if item else None,
+            project=item.repo if item else None,
             pr=self._pr_for(t, resolver),
         )
 
@@ -63,4 +63,7 @@ class InboxUseCase:
         return run.pr if run else None
 
     def _item(self, item_id):
-        return Item(item_id, tuple(self._store.item_artifacts(item_id)))
+        try:
+            return self._store.get_item(item_id)
+        except Exception:
+            return None

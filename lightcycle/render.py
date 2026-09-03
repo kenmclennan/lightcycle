@@ -2,7 +2,9 @@ from lightcycle.domain.work import display_stage, park_resume_command
 
 
 def node_extra(node, *, show_description=False):
-    plan = next((a.value for a in node.artifacts if a.type == "plan-doc"), None)
+    plan = next(
+        (a.value for a in getattr(node, "artifacts", ()) if a.type == "plan-doc"), None
+    )
     extra = "  plan:%s" % plan if plan else ""
     if show_description and node.description:
         extra += "  desc:%s" % _truncate(node.description)
@@ -66,13 +68,13 @@ def render_queue(steps, title_cap):
 
 
 def _strategy_suffix(r):
-    if r.kind == "blocked" and r.step.needs:
-        parts = ["needs:%s" % r.step.needs]
-        if r.step.reason:
-            parts.append("reason:%s" % _truncate(r.step.reason))
+    if r.kind == "blocked" and r.step.park.needs:
+        parts = ["needs:%s" % r.step.park.needs]
+        if r.step.park.reason:
+            parts.append("reason:%s" % _truncate(r.step.park.reason))
         parts.append("resume:%s" % park_resume_command(r.step.id))
         return "  " + "  ".join(parts)
-    if r.kind == "triage" and r.step.notes:
+    if r.kind == "triage" and getattr(r.step, "notes", None):
         return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])
     if r.pr:
         return "  pr:%s" % r.pr

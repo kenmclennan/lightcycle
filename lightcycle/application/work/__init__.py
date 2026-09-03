@@ -1,5 +1,4 @@
 from lightcycle.application.work.active_steps import ActiveStepsUseCase
-from lightcycle.application.work.add_item import AddItemInput, AddItemUseCase
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.reopen_item import (
@@ -27,8 +26,6 @@ from lightcycle.application.work.trace import TraceInput, TraceUseCase
 
 __all__ = [
     "ActiveStepsUseCase",
-    "AddItemInput",
-    "AddItemUseCase",
     "BacklogInput",
     "BacklogUseCase",
     "CloseItemInput",

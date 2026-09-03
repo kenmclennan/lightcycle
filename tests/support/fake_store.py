@@ -12,7 +12,8 @@ from lightcycle.ports.store import (
 )
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work import (
-    Artifact, Node, NodeView, State, default_kind_for, derive_state, merge_condition_note,
+    Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
+    merge_condition_note,
 )
 
 
@@ -42,50 +43,54 @@ def labels_for(*, role=None, step=None, project=None, goal=None, attention=False
     return parts
 
 
-def record_to_node(record, blocked_by=None):
+def record_to_step(record, blocked_by=None):
     labels = record.get("labels") or []
-    role = _label_value(labels, "for:")
     meta = record.get("metadata") or {}
-    closed = record.get("state") == "done"
-    if record.get("type") == "step" or closed:
-        resolved_state = derive_state(
-            record.get("type"),
-            closed,
-            record.get("assignee"),
-            record.get("dep_count") or 0,
-            [],
-        )
-    else:
-        resolved_state = None
-    return Node(
+    deps = record.get("dep_count") or 0
+    return Step(
         id=record["id"],
+        item=record.get("parent"),
         title=record.get("title", ""),
-        type=record.get("type"),
-        parent=record.get("parent"),
-        role=role,
-        step=_label_value(labels, "step:"),
-        state=resolved_state,
-        project=_label_value(labels, "project:"),
-        goal=_label_value(labels, "goal:"),
-        artifacts=[Artifact.from_dict(a) for a in (meta.get("artifacts") or [])],
+        stage=_label_value(labels, "step:"),
+        pass_id=record.get("pass_id"),
+        role=_label_value(labels, "for:"),
+        state=derive_state(
+            "step", record.get("state") == "done", record.get("assignee"), deps, []
+        ),
+        claimed_by=record.get("assignee"),
+        model=meta.get("model"),
+        outcome=record.get("outcome"),
+        notes=record.get("notes"),
+        reflection=meta.get("reflection"),
+        watched_step=meta.get("watched_step"),
+        park=Park(
+            reason=meta.get("reason"), needs=meta.get("needs"), tried=meta.get("tried")
+        ),
+        deps=deps,
+        blocked_by=list(blocked_by or []),
+        created_at=record.get("created_at"),
+        fired_at=meta.get("fired_at"),
+        closed_at=record.get("closed_at"),
+    )
+
+
+def record_to_item(record, blocked_by=None, child_states=()):
+    meta = record.get("metadata") or {}
+    return Item(
+        id=record["id"],
+        artifacts=tuple(Artifact.from_dict(a) for a in (meta.get("artifacts") or [])),
+        title=record.get("title", ""),
         description=record.get("description"),
-        needs=meta.get("needs"),
+        state=derive_state(
+            "item", record.get("state") == "done", None, False, list(child_states)
+        ),
+        repo=record.get("repo"),
+        workflow=record.get("workflow"),
         outcome=record.get("outcome"),
         deps=record.get("dep_count") or 0,
         blocked_by=list(blocked_by or []),
-        notes=record.get("notes"),
-        claimed_by=record.get("assignee"),
-        pass_id=record.get("pass_id"),
-        workflow=record.get("workflow"),
-        since=meta.get("since"),
-        fired_at=meta.get("fired_at"),
+        created_at=record.get("created_at"),
         closed_at=record.get("closed_at"),
-        attention="attention" in labels,
-        model=meta.get("model"),
-        branch=meta.get("branch"),
-        pr=meta.get("pr"),
-        reason=meta.get("reason"),
-        tried=meta.get("tried"),
     )
 
 
@@ -128,29 +133,36 @@ class FakeStore(StorePort):
         except KeyError:
             raise NodeNotFoundError("unknown node '%s'" % tid)
 
-    def _to_node(self, record):
-        blocked_by = [
-            bid
-            for bid in self._deps.get(record["id"], ())
+    def _blocked_by(self, tid):
+        return [
+            bid for bid in self._deps.get(tid, ())
             if bid in self._records and self._records[bid].get("state") != "done"
         ]
-        node = record_to_node(record, blocked_by)
-        if node.state is None:
-            child_states = [
-                self._to_node(r).state
-                for r in self._records.values()
-                if r.get("parent") == record["id"]
-            ]
-            node.state = derive_state(
-                node.type, False, node.claimed_by, bool(node.deps), child_states
-            )
-        return node
+
+    def _to_step(self, record):
+        return record_to_step(record, self._blocked_by(record["id"]))
+
+    def _to_item(self, record):
+        child_states = [
+            self._to_step(r).state
+            for r in self._records.values()
+            if r.get("parent") == record["id"] and r.get("type") == "step"
+        ]
+        return record_to_item(record, self._blocked_by(record["id"]), child_states)
+
+    def _to_node(self, record):
+        if record.get("type") == "item":
+            return self._to_item(record)
+        return self._to_step(record)
 
     def item_artifacts(self, item_id):
         b = self._get(item_id)
         return [Artifact.from_dict(a) for a in ((b.get("metadata") or {}).get("artifacts") or [])]
 
     def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
+        if atype == "repo":
+            self._get(item_id)["repo"] = value
+            return
         b = self._get(item_id)
         meta = dict(b.get("metadata") or {})
         artifacts = list(meta.get("artifacts") or [])
@@ -165,6 +177,9 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
+        if atype == "repo":
+            self._get(item_id)["repo"] = value
+            return
         b = self._get(item_id)
         meta = dict(b.get("metadata") or {})
         artifacts = [
@@ -182,11 +197,22 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def all_nodes(self):
-        return [self._to_node(b) for b in self._records.values()
-                if b.get("state") != "done"]
+        return self.all_items() + self.all_steps()
 
     def all_nodes_including_done(self):
-        return [self._to_node(b) for b in self._records.values()]
+        return self.all_items_including_done() + self.all_steps_including_done()
+
+    def all_items(self):
+        return [self._to_item(b) for b in self._records.values()
+                if b.get("type") == "item" and b.get("state") != "done"]
+
+    def all_items_including_done(self):
+        return [self._to_item(b) for b in self._records.values()
+                if b.get("type") == "item"]
+
+    def all_steps_including_done(self):
+        return [self._to_step(b) for b in self._records.values()
+                if b.get("type") == "step"]
 
     def item_text_rows(self):
         return [
@@ -199,8 +225,20 @@ class FakeStore(StorePort):
         ]
 
     def all_steps(self):
-        return [self._to_node(b) for b in self._records.values()
+        return [self._to_step(b) for b in self._records.values()
                 if b.get("type") == "step" and b.get("state") != "done"]
+
+    def get_item(self, tid):
+        record = self._get(tid)
+        if record.get("type") != "item":
+            raise NodeNotFoundError("unknown item '%s'" % tid)
+        return self._to_item(record)
+
+    def get_step(self, tid):
+        record = self._get(tid)
+        if record.get("type") != "step":
+            raise NodeNotFoundError("unknown step '%s'" % tid)
+        return self._to_step(record)
 
     def get_node(self, tid):
         return self._to_node(self._get(tid))
@@ -211,8 +249,10 @@ class FakeStore(StorePort):
         return NodeView(step=t, item_artifacts=list(arts))
 
     def present_types(self, step):
-        item = step.parent or step.id
+        item = getattr(step, "item", None) or step.id
         present = {a.type for a in self.item_artifacts(item)}
+        if self._get(item).get("repo"):
+            present.add("repo")
         for run in self.open_runs_of(item):
             if run.branch:
                 present.add("branch")
@@ -221,7 +261,7 @@ class FakeStore(StorePort):
         return present
 
     def reassign(self, tid, role):
-        cur = self.get_node(tid).role
+        cur = getattr(self.get_node(tid), "role", None)
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)

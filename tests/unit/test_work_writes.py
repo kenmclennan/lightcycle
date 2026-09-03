@@ -3,8 +3,6 @@ import unittest
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work import (
-    AddItemInput,
-    AddItemUseCase,
     CloseItemInput,
     CloseItemUseCase,
     EditNodeInput,
@@ -156,31 +154,6 @@ class UnreadableGitForRemove:
         if self._fails == "has_uncommitted":
             raise GitReadError("git status failed in %s: fatal: not a git repository" % path)
         raise AssertionError("has_uncommitted should not be called")
-
-
-class TestAddTask(unittest.TestCase):
-    def test_creates_human_task_with_labels(self):
-        s = FakeStore()
-        resp = AddItemUseCase(s).execute(AddItemInput(title="do a thing", goal="g1", project="p1"))
-        t = s.get_node(resp.step)
-        self.assertEqual(t.state, "ready")
-        self.assertEqual(t.role, "human")
-        self.assertEqual(t.goal, "g1")
-        self.assertEqual(t.project, "p1")
-
-    def test_creates_task_with_description(self):
-        s = FakeStore()
-        resp = AddItemUseCase(s).execute(
-            AddItemInput(title="my step", description="detailed notes")
-        )
-        t = s.get_node(resp.step)
-        self.assertEqual(t.description, "detailed notes")
-
-    def test_creates_task_without_description(self):
-        s = FakeStore()
-        resp = AddItemUseCase(s).execute(AddItemInput(title="plain step"))
-        t = s.get_node(resp.step)
-        self.assertIsNone(t.description)
 
 
 class TestEditNode(unittest.TestCase):

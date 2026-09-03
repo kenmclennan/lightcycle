@@ -114,7 +114,7 @@ class CompleteStepUseCase:
             item_title = self._store.get_node(t.parent).title
             spec = NodeSpec(
                 title="%s: %s" % (FINDINGS_STEP, item_title), step=FINDINGS_STEP,
-                role="human", parent=t.parent, attention=True)
+                role="human", parent=t.parent)
         won, fid = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)
         if not won:

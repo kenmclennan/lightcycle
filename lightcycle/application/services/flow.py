@@ -117,23 +117,27 @@ class FlowService:
             return None
         return (parsed.get("body") or "").strip() or None
 
+    def _owning_item(self, node):
+        item_id = getattr(node, "item", None) or node.id
+        try:
+            return self._store.get_item(item_id)
+        except Exception:
+            return None
+
     def _walk(self, step):
-        cur, seen = step, set()
-        while cur is not None and cur.id not in seen:
-            yield cur
-            seen.add(cur.id)
-            cur = self._store.get_node(cur.parent) if cur.parent else None
+        yield step
+        item = self._owning_item(step)
+        if item is not None and item.id != step.id:
+            yield item
 
     def workflow_for(self, step):
-        for node in self._walk(step):
-            if node.workflow:
-                return node.workflow
-        return None
+        item = self._owning_item(step)
+        return item.workflow if item is not None else None
 
     def workflow_owner(self, node):
-        for n in self._walk(node):
-            if n.workflow:
-                return n.workflow, n.id
+        item = self._owning_item(node)
+        if item is not None and item.workflow:
+            return item.workflow, item.id
         return None, None
 
     def project_for(self, step):

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.work import Item, State
+from lightcycle.domain.work import State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
 from lightcycle.ports.store import ProjectResolutionError
 
@@ -77,7 +77,7 @@ class LinkArtifactUseCase:
 
     def _spec_project_mismatch(self, item, value):
         leading = value.split("/", 1)[0]
-        repo_value = Item(item, tuple(self._store.item_artifacts(item))).repo()
+        repo_value = self._store.get_item(item).repo
         if repo_value is None:
             return None
         try:

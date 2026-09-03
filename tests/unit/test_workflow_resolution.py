@@ -30,10 +30,10 @@ class TestWorkflowFor(unittest.TestCase):
         step = self._task_under(s, item_workflow="poc")
         self.assertEqual(svc(s).workflow_for(step), "poc")
 
-    def test_step_override_wins_over_its_item(self):
+    def test_a_step_cannot_carry_a_workflow_of_its_own(self):
         s = FakeStore()
         step = self._task_under(s, item_workflow="standard", step_workflow="gherkin")
-        self.assertEqual(svc(s).workflow_for(step), "gherkin")
+        self.assertEqual(svc(s).workflow_for(step), "standard")
 
     def test_unset_returns_none_when_no_ancestor_sets_it(self):
         s = FakeStore()
@@ -54,10 +54,10 @@ class TestWorkflowOwner(unittest.TestCase):
         step, item = self._task_under(s, item_workflow="poc")
         self.assertEqual(svc(s).workflow_owner(step), ("poc", item))
 
-    def test_a_steps_own_workflow_reports_the_step_as_owner(self):
+    def test_the_owner_is_always_the_item_even_if_a_step_was_given_one(self):
         s = FakeStore()
-        step, _item = self._task_under(s, item_workflow="standard", step_workflow="gherkin")
-        self.assertEqual(svc(s).workflow_owner(step), ("gherkin", step.id))
+        step, item = self._task_under(s, item_workflow="standard", step_workflow="gherkin")
+        self.assertEqual(svc(s).workflow_owner(step), ("standard", item))
 
     def test_unset_returns_no_selector_and_no_owner(self):
         s = FakeStore()
