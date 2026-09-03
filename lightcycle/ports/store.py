@@ -209,6 +209,9 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def set_watched_step(self, tid, watched):
+        raise NotImplementedError
+
     def set_step_pass(self, tid, pid):
         pass
 

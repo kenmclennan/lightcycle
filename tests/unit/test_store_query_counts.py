@@ -41,7 +41,7 @@ class TestWatchedStepIdsQueryCount(unittest.TestCase):
         s = make_sqlite_store()
         for i in range(20):
             step = s.create_step("step %d" % i, role="human")
-            s.add_artifact(step, "watched-step", "some-other-id")
+            s.set_watched_step(step, "some-other-id")
 
         counter = QueryCounter(s._conn)
         s.all_nodes()

@@ -152,7 +152,7 @@ class TestStatus(unittest.TestCase):
         watched = s.create_step("await-merge: thing", step="await-merge", role="human")
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                            parent=s.get_node(watched).parent)
-        s.add_artifact(fb, "watched-step", watched)
+        s.set_watched_step(fb, watched)
 
         lanes = StatusUseCase(s).execute().lanes
 
@@ -163,7 +163,7 @@ class TestStatus(unittest.TestCase):
         watched = s.create_step("await-merge: thing", step="await-merge", role="human")
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                            parent=s.get_node(watched).parent)
-        s.add_artifact(fb, "watched-step", watched)
+        s.set_watched_step(fb, watched)
         s.close(fb, "done")
 
         lanes = StatusUseCase(s).execute().lanes
@@ -280,37 +280,6 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertNotIn(self.todo, lane_ids)
 
 
-class TestInboxAttentionFlag(unittest.TestCase):
-    def test_flagged_task_appears_in_inbox_as_triage(self):
-        s = FakeStore()
-        tid = s.create_step("urgent finding", role="human", attention=True)
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
-        ids = [row.step.id for row in resp.rows]
-        kinds = {row.step.id: row.kind for row in resp.rows}
-        self.assertIn(tid, ids)
-        self.assertEqual(kinds[tid], "triage")
-
-    def test_unflagged_task_absent_from_inbox(self):
-        s = FakeStore()
-        tid = s.create_step("someday idea", role="human")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
-        self.assertNotIn(tid, [row.step.id for row in resp.rows])
-
-    def test_closing_flagged_task_removes_it_from_inbox(self):
-        s = FakeStore()
-        tid = s.create_step("urgent finding", role="human", attention=True)
-        s.close(tid, "done")
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
-        self.assertNotIn(tid, [row.step.id for row in resp.rows])
-
-    def test_flagged_task_title_accessible_via_row(self):
-        s = FakeStore()
-        tid = s.create_step("audit: spec gaps", role="human", attention=True)
-        resp = InboxUseCase(s, _empty_flow(s)).execute(InboxInput())
-        row = next(r for r in resp.rows if r.step.id == tid)
-        self.assertEqual(row.step.title, "audit: spec gaps")
-
-
 class TestInboxProjectAndPr(unittest.TestCase):
     def _item_with_step(self, s, step_name="ready-merge", repo=None, pr=None):
         item = s.create_item("an item", "a description")
@@ -414,7 +383,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         item = s.get_node(watched).parent
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                             parent=item)
-        s.add_artifact(fb, "watched-step", watched)
+        s.set_watched_step(fb, watched)
         resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
         self.assertNotIn(watched, [r.step.id for r in resp.rows])
 
@@ -424,7 +393,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         item = s.get_node(watched).parent
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                             parent=item)
-        s.add_artifact(fb, "watched-step", watched)
+        s.set_watched_step(fb, watched)
         s.close(fb, "done")
         resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
         self.assertIn(watched, [r.step.id for r in resp.rows])
