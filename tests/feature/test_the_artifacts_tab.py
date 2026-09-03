@@ -104,7 +104,7 @@ def _artifacts_of_three_types(ctx):
 def _internal_and_non_internal(ctx):
     _launch_with_item(ctx, [
         ("reflection", "internal note", "text", True),
-        ("repo", "org/repo", "text", False),
+        ("note", "org/repo", "text", False),
     ])
 
 
@@ -148,7 +148,7 @@ def _artifact_row_forces_stacking(ctx, mode):
 @given("the artifact list has more than one entry")
 def _more_than_one_entry(ctx):
     _launch_with_item(ctx, [
-        ("repo", "org/a", "text", False),
+        ("note", "org/a", "text", False),
         ("branch", "feat/a", "text", False),
     ])
 
@@ -167,7 +167,7 @@ def _artifact_selected(ctx):
 def _opened_artifact_list_from_hub(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.add_artifact(item, "repo", "org/repo")
+    store.add_artifact(item, "spec", "specs/x.md")
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
     session = _open_hub_on_artifacts(ctx, item)
@@ -259,7 +259,7 @@ def _no_mid_word_split_artifacts(ctx):
 def _only_non_internal_shown(ctx):
     table = ctx["session"].app.screen.query_one(ArtifactsTable)
     assert table.row_count == 1
-    assert _rendered_cell_text(table, "0", "type") == "repo"
+    assert _rendered_cell_text(table, "0", "type") == "note"
 
 
 @then("the internal artifact does not appear")
