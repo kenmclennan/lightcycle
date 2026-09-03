@@ -328,14 +328,15 @@ class SqliteStore(StorePort):
                      self._repo_artifact_of(d["id"]), d.get("workflow"), d.get("outcome"),
                      d.get("project"), d.get("created_at"), d.get("closed_at")),
                 )
-            elif d.get("parent"):
+            else:
                 fold = step_folds.get(d["id"], {})
+                owner = d.get("parent") or self._orphan_owner(d)
                 self._conn.execute(
                     "INSERT OR IGNORE INTO steps (id, item, title, stage, pass_id, role, state, "
                     "assignee, model, outcome, notes, reflection, watched_step, "
                     "park_reason, park_needs, park_tried, created_at, fired_at, closed_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (d["id"], d["parent"], d["title"], d.get("step"), d.get("pass_id"),
+                    (d["id"], owner, d["title"], d.get("step"), d.get("pass_id"),
                      d.get("role"), d["state"], d.get("assignee"), d.get("model"),
                      d.get("outcome"), d.get("notes"), fold.get("reflection"),
                      fold.get("watched-step"), d.get("reason"), d.get("needs"), d.get("tried"),
@@ -348,6 +349,17 @@ class SqliteStore(StorePort):
         )
         self._conn.execute("DELETE FROM artifacts WHERE atype = 'repo'")
         self._conn.execute("DROP TABLE nodes")
+
+    def _orphan_owner(self, d):
+        owner = "%s.orphan" % d["id"]
+        self._conn.execute(
+            "INSERT OR IGNORE INTO items (id, title, description, state, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (owner, d.get("title") or d["id"],
+             "recovered owner for a step that had none before the item/step split",
+             d.get("state") or "ready", d.get("created_at")),
+        )
+        return owner
 
     def _repo_artifact_of(self, item_id):
         row = self._conn.execute(
