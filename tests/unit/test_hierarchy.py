@@ -118,7 +118,7 @@ class TestHasContent(unittest.TestCase):
     def test_non_internal_artifact_is_content(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
-        s.add_artifact(item, "repo", "org/repo")
+        s.add_artifact(item, "spec", "specs/x.md")
         self.assertTrue(has_content(s.get_node(item)))
 
     def test_only_internal_artifacts_is_no_content(self):
@@ -137,10 +137,10 @@ class TestViewableArtifacts(unittest.TestCase):
     def test_internal_artifacts_are_excluded(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
-        s.add_artifact(item, "repo", "org/repo")
+        s.add_artifact(item, "spec", "specs/x.md")
         s.add_artifact(item, "reflection", "text", internal=True)
         result = viewable_artifacts(s.get_node(item))
-        self.assertEqual([a.type for a in result], ["repo"])
+        self.assertEqual([a.type for a in result], ["spec"])
 
     def test_no_artifacts_is_an_empty_list(self):
         s = FakeStore()

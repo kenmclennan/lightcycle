@@ -96,7 +96,7 @@ class TestTransition(unittest.TestCase):
         self.assertEqual(spec.title, "review: make the thing")
         self.assertEqual(spec.step, "review")
         self.assertEqual(spec.role, "agent")
-        self.assertIsNone(spec.parent)
+        self.assertEqual(spec.parent, "i-1")
         self.assertEqual(spec.deps, ("t-1",))
 
     def test_next_task_spec_ignores_the_steps_own_title_entirely(self):
@@ -119,9 +119,6 @@ class TestTransition(unittest.TestCase):
                 "role": "agent",
                 "parent": "s-9",
                 "deps": ["t-1"],
-                "project": None,
-                "goal": None,
-                "attention": False,
             },
         )
 
