@@ -16,7 +16,8 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
-            tid, "done", "w1", NodeSpec(title="next", step="review", role="agent"))
+            tid, "done", "w1", NodeSpec(title="next", step="review", role="agent",
+                     parent=s.get_step(tid).item))
         self.assertTrue(won)
         self.assertIsNotNone(new)
         self.assertEqual(s.get_node(tid).state, "done")
@@ -54,7 +55,8 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         won, new = s.complete_step_atomic(
             tid, "done", "handle-feedback-worker",
-            NodeSpec(title="next", step="review", role="agent"))
+            NodeSpec(title="next", step="review", role="agent",
+                     parent=s.get_step(tid).item))
         self.assertTrue(won)
         self.assertIsNotNone(new)
         self.assertEqual(s.get_node(tid).state, "done")
@@ -327,9 +329,9 @@ class StoreContractBase:
     def test_replace_artifact_is_generic_for_any_type(self):
         s = self.make_store()
         sid = s.create_item("item: foo", "a description")
-        s.add_artifact(sid, "repo", "app-old")
-        s.replace_artifact(sid, "repo", "app-new")
-        arts = [a for a in s.item_artifacts(sid) if a.type == "repo"]
+        s.add_artifact(sid, "spec", "app-old")
+        s.replace_artifact(sid, "spec", "app-new")
+        arts = [a for a in s.item_artifacts(sid) if a.type == "spec"]
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].value, "app-new")
 
@@ -345,13 +347,12 @@ class StoreContractBase:
         sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.add_artifact(sid, "spec", "specs/foo.md")
-        s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/x")
         s.add_artifact(sid, "resolves", "OTHER-1")
         kinds = {a.type: a.kind for a in s.item_artifacts(sid)}
         self.assertEqual(kinds, {
             "pr": "url", "spec": "filepath",
-            "repo": "text", "branch": "text", "resolves": "text",
+            "branch": "text", "resolves": "text",
         })
 
     def test_add_artifact_internal_defaults_false_and_persists_true(self):
@@ -381,45 +382,39 @@ class StoreContractBase:
         self.assertIsNone(node.parent)
         self.assertEqual(node.state, "backlogged")
 
-    def test_create_task_with_description(self):
+    def test_create_item_with_description(self):
         s = self.make_store()
-        tid = self._step(s, "my step", description="detailed info")
-        t = s.get_node(tid)
-        self.assertEqual(t.description, "detailed info")
+        tid = s.create_item("my item", "detailed info")
+        self.assertEqual(s.get_item(tid).description, "detailed info")
 
-    def test_edit_task_title_and_description(self):
+    def test_edit_item_title_and_description(self):
         s = self.make_store()
-        tid = self._step(s, "old title", description="old desc")
+        tid = s.create_item("old title", "old desc")
         s.edit_node(tid, title="new title", description="new desc")
-        t = s.get_node(tid)
+        t = s.get_item(tid)
         self.assertEqual(t.title, "new title")
         self.assertEqual(t.description, "new desc")
 
-    def test_edit_task_goal_and_project(self):
+    def test_edit_item_leaves_unspecified_fields_intact(self):
         s = self.make_store()
-        tid = self._step(s, "t", goal="g1", project="p1")
-        s.edit_node(tid, goal="g2", project="p2")
-        t = s.get_node(tid)
-        self.assertEqual(t.goal, "g2")
-        self.assertEqual(t.project, "p2")
-
-    def test_edit_task_leaves_unspecified_fields_intact(self):
-        s = self.make_store()
-        tid = self._step(s, "title stays", description="desc stays", goal="g1")
+        tid = s.create_item("title stays", "desc stays")
         s.edit_node(tid, project="p1")
-        t = s.get_node(tid)
+        t = s.get_item(tid)
         self.assertEqual(t.title, "title stays")
         self.assertEqual(t.description, "desc stays")
-        self.assertEqual(t.goal, "g1")
         self.assertEqual(t.project, "p1")
 
-    def test_edit_task_reparents(self):
+    def test_a_step_carries_no_description(self):
+        s = self.make_store()
+        tid = self._step(s, "a step")
+        self.assertFalse(hasattr(s.get_step(tid), "description"))
+
+    def test_a_steps_item_is_fixed_at_creation(self):
         s = self.make_store()
         item = s.create_item("owning item", "a description")
-        tid = self._step(s, "a step")
-        s.edit_node(tid, parent=item)
-        t = s.get_node(tid)
-        self.assertEqual(t.parent, item)
+        tid = self._step(s, "a step", parent=item)
+        s.edit_node(tid, title="renamed")
+        self.assertEqual(s.get_step(tid).item, item)
 
     def test_delete_removes_task(self):
         s = self.make_store()
@@ -444,28 +439,22 @@ class StoreContractBase:
     def test_set_model_preserves_other_metadata(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.update_metadata(tid, {"since": "2025-01-01"})
         s.set_model(tid, "sonnet")
         t = s.get_node(tid)
         self.assertEqual(t.model, "sonnet")
-        self.assertEqual(t.since, "2025-01-01")
 
     def test_update_metadata_preserves_other_metadata(self):
         s = self.make_store()
         tid = self._step(s, "t")
         s.set_model(tid, "sonnet")
-        s.update_metadata(tid, {"since": "2025-01-01"})
         t = s.get_node(tid)
         self.assertEqual(t.model, "sonnet")
-        self.assertEqual(t.since, "2025-01-01")
 
     def test_update_metadata_persists_resume_fields(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.update_metadata(tid, {"branch": "feat/y", "pr": "123", "reason": "oops", "tried": "a,b"})
+        s.update_metadata(tid, {"reason": "oops", "tried": "a,b"})
         t = s.get_node(tid)
-        self.assertEqual(t.branch, "feat/y")
-        self.assertEqual(t.pr, "123")
         self.assertEqual(t.park.reason, "oops")
         self.assertEqual(t.park.tried, "a,b")
 

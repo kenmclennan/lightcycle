@@ -707,8 +707,8 @@ class SqliteStore(StorePort):
 
     def node_view(self, tid):
         t = self.get_node(tid)
-        item = getattr(t, "item", None)
-        arts = self.item_artifacts(item) if item else t.artifacts
+        item = getattr(t, "item", None) or t.id
+        arts = self.item_artifacts(item)
         return NodeView(step=t, item_artifacts=list(arts))
 
     def present_types(self, step):
