@@ -29,7 +29,7 @@ class InboxUseCase:
         watched = watched_step_ids(self._store)
         steps = [t for t in self._store.all_steps() if t.id not in watched]
         rows = NodeQueue(steps).for_human(
-            resolver, {"action", "blocked", "triage"}, input.n)
+            resolver, {"action", "blocked"}, input.n)
         return InboxResponse(rows=[self._row(k, o, t, resolver) for (k, o), t in rows])
 
     def _resolver(self):
@@ -53,6 +53,8 @@ class InboxUseCase:
         return HumanNodeRow(
             kind=kind, outcomes=outcomes, step=t,
             project=item.repo if item else None,
+            description=item.description if item else None,
+            artifacts=item.artifacts if item else (),
             pr=self._pr_for(t, resolver),
         )
 

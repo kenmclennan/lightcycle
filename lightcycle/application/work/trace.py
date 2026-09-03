@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 from typing import List, Optional
 
-from lightcycle.domain.work import Artifact, Node, worker_log_filename
+from lightcycle.domain.work import Artifact, Item, worker_log_filename
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class TraceNode:
 
 @dataclass(frozen=True)
 class TraceResponse:
-    item: Node
+    item: Item
     artifacts: List[Artifact]
     steps: List[TraceNode]
 

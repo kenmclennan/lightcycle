@@ -31,8 +31,8 @@ class TestParkTask(unittest.TestCase):
         )
         t = s.get_node(bid)
         self.assertEqual(t.role, "human")
-        self.assertEqual(t.needs, "decide X")
-        self.assertEqual(t.reason, "something happened")
+        self.assertEqual(t.park.needs, "decide X")
+        self.assertEqual(t.park.reason, "something happened")
         self.assertTrue((t.notes or "").startswith("BLOCKED: decide X"))
 
     def test_park_sets_needs_reason_role_and_note_on_sqlite_store(self):
@@ -43,8 +43,8 @@ class TestParkTask(unittest.TestCase):
         )
         t = s.get_node(bid)
         self.assertEqual(t.role, "human")
-        self.assertEqual(t.needs, "decide X")
-        self.assertEqual(t.reason, "something happened")
+        self.assertEqual(t.park.needs, "decide X")
+        self.assertEqual(t.park.reason, "something happened")
         self.assertTrue((t.notes or "").startswith("BLOCKED: decide X"))
 
     def test_park_carries_resume_fields_when_present(self):
@@ -59,7 +59,7 @@ class TestParkTask(unittest.TestCase):
         t = s.get_node(bid)
         self.assertEqual(t.branch, "feat/y")
         self.assertEqual(t.pr, "123")
-        self.assertEqual(t.tried, "a,b")
+        self.assertEqual(t.park.tried, "a,b")
 
 
 if __name__ == "__main__":

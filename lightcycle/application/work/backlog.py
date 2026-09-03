@@ -50,7 +50,11 @@ class BacklogUseCase:
         if input.n is not None:
             items = items[:input.n]
         rows = [
-            HumanNodeRow(kind="todo", outcomes=[], step=t, project=project_of(self._store, t))
+            HumanNodeRow(
+                kind="todo", outcomes=[], step=t,
+                project=project_of(self._store, t),
+                description=t.description, artifacts=t.artifacts,
+            )
             for t in items
         ]
         return BacklogResponse(rows=rows)

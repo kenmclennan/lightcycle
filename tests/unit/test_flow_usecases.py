@@ -282,9 +282,9 @@ class TestCompleteTask(unittest.TestCase):
         self.assertNotEqual(node.state, "done")
         self.assertEqual(node.role, "human")
         self.assertIn("review-code", node.notes or "")
-        self.assertIn("review-code", node.needs or "")
-        self.assertTrue((node.reason or "").strip())
-        self.assertNotEqual(node.needs, node.reason)
+        self.assertIn("review-code", node.park.needs or "")
+        self.assertTrue((node.park.reason or "").strip())
+        self.assertNotEqual(node.park.needs, node.park.reason)
 
     def test_terminal_step_with_required_produce_does_not_demand_it(self):
         terminal_metas = {
@@ -867,9 +867,9 @@ class TestClaimTask(unittest.TestCase):
         self.assertIsNone(resp)
         node = s.get_node(bid)
         self.assertEqual(node.role, "human")
-        self.assertIn("missing required input(s): spec", node.needs or "")
-        self.assertTrue((node.reason or "").strip())
-        self.assertNotEqual(node.needs, node.reason)
+        self.assertIn("missing required input(s): spec", node.park.needs or "")
+        self.assertTrue((node.park.reason or "").strip())
+        self.assertNotEqual(node.park.needs, node.park.reason)
 
     def test_missing_required_input_park_can_be_unblocked_symmetrically(self):
         s = FakeStore()
@@ -880,7 +880,7 @@ class TestClaimTask(unittest.TestCase):
         ).execute(ClaimInput(role="agent"))
         UnblockStepUseCase(s, flow_for(SPEC_METAS, s)).execute(UnblockInput(step=bid))
         node = s.get_node(bid)
-        self.assertIsNone(node.needs)
+        self.assertIsNone(node.park.needs)
         self.assertNotIn("BLOCKED:", node.notes or "")
         self.assertEqual(node.role, "agent")
 
@@ -1048,7 +1048,7 @@ class TestBlockTask(unittest.TestCase):
         )
         t = s.get_node(bid)
         self.assertEqual(t.role, "human")
-        self.assertEqual(t.needs, "decide X")
+        self.assertEqual(t.park.needs, "decide X")
 
     def test_empty_reason_raises(self):
         s = FakeStore()
@@ -1066,8 +1066,8 @@ class TestBlockTask(unittest.TestCase):
         t = s.get_node(bid)
         self.assertEqual(t.branch, "feat/y")
         self.assertEqual(t.pr, "123")
-        self.assertEqual(t.reason, "oops")
-        self.assertEqual(t.tried, "a,b")
+        self.assertEqual(t.park.reason, "oops")
+        self.assertEqual(t.park.tried, "a,b")
 
 
 class TestFlowCheck(unittest.TestCase):
@@ -1124,7 +1124,7 @@ class TestUnblockTask(unittest.TestCase):
         )
         UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         t = s.get_node(bid)
-        self.assertIsNone(t.needs)
+        self.assertIsNone(t.park.needs)
         self.assertNotIn("BLOCKED:", t.notes or "")
 
     def test_preserves_notes_unrelated_to_block(self):

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.project_of import project_of
-from lightcycle.domain.work import Node
+from lightcycle.domain.work import Step
 
 _SNIPPET_WINDOW = 40
 
@@ -14,7 +14,7 @@ class SearchInput:
 
 @dataclass(frozen=True)
 class SearchMatch:
-    node: Node
+    node: Step
     project: Optional[str]
     field: str
     snippet: str

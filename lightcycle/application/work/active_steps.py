@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import List
 
-from lightcycle.domain.work import Node, NodeQueue, State
+from lightcycle.domain.work import NodeQueue, State, Step
 
 
 @dataclass(frozen=True)
 class ActiveStepsResponse:
-    steps: List[Node]
+    steps: List[Step]
 
 
 class ActiveStepsUseCase:

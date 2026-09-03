@@ -187,12 +187,11 @@ COMMAND_GROUPS = [
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
         ("tui", "", "launch the interactive dashboard (priority list + pool/breaker status)"),
     ]),
-    ("Node primitives", [
-        ("new", "<type> \"title\" [--parent/--workflow/--goal/--project]",
+    ("Work primitives", [
+        ("new", "<type> \"title\" [--parent/--workflow/--project]",
          "create a node; <type> is item|step"),
-        ("set", "<id> [--parent/--state/--workflow/--title/--goal/--desc/--label]",
-         "update a node; --parent moves a step to another item; --state active activates an item "
-         "(files the entry step)"),
+        ("set", "<id> [--state/--workflow/--title/--desc/--label]",
+         "update a node; --state active activates an item (files the entry step)"),
         ("rm", "<id> [--force]", "delete a node; refuses on a live worker or a dirty worktree "
          "- --force overrides the dirty worktree and stale claims"),
         ("attach", "<id> <type> <value> [--label] [--internal] [--kind K]", "attach an artifact"),
@@ -268,7 +267,7 @@ def cmd_upgrade(argv):
 
 _WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search", "peek")
 _SET_FORBIDDEN_FLAGS = (
-    "--parent", "--title", "--desc", "--description", "--goal", "--project",
+    "--parent", "--title", "--desc", "--description", "--project",
     "--workflow", "--backlog", "--label", "--step",
 )
 
@@ -993,10 +992,8 @@ def cmd_new(argv):
     ap.add_argument("--workflow")
     ap.add_argument("--project")
     ap.add_argument("--repo")
-    ap.add_argument("--goal")
     ap.add_argument("--description")
     ap.add_argument("--backlog", action="append")
-    ap.add_argument("--inbox", action="store_true", dest="attention")
     ap.add_argument("--step")
     a = ap.parse_args(argv)
     if a.type not in _NODE_TYPES:
@@ -1028,12 +1025,10 @@ def cmd_new(argv):
             sys.stderr.write(
                 "no --project given; minted with the global shortcode '%s'\n" % resolved.value)
         tid = _container.store.create_item(
-            a.title, a.description, project=a.project, goal=a.goal, workflow=a.workflow,
+            a.title, a.description, project=a.project, workflow=a.workflow,
             shortcode=resolved.value)
         if a.repo:
             _container.store.add_artifact(tid, "repo", a.repo)
-        if a.attention:
-            _container.store.label_add(tid, "attention")
         if a.backlog:
             try:
                 link_resolves(_container.store, tid, a.backlog)
@@ -1077,13 +1072,13 @@ def cmd_new(argv):
             )
             return 1
         print(_container.store.create_step(
-            a.title, step=a.step, role=role, parent=a.parent, project=a.project, goal=a.goal,
-            description=a.description, attention=a.attention))
+            a.title, step=a.step, role=role, parent=a.parent,
+            description=a.description))
     return 0
 
 
 _SET_FLAG_OWNERS = {
-    "title": (None,), "description": (None,), "goal": (None,), "project": (None,),
+    "title": (None,), "description": (None,), "project": (None,),
     "label": (None,), "backlog": (None,), "notes": (None,),
     "parent": (None, "active"),
     "workflow": (None, "active"),
@@ -1191,8 +1186,8 @@ def cmd_set(argv):
         _container.store.set_notes(a.id, a.notes)
     try:
         tid = EditNodeUseCase(_container.store).execute(
-            EditNodeInput(step=a.id, title=a.title, description=a.description, goal=a.goal,
-                          project=a.project, parent=a.parent, workflow=workflow_pin)
+            EditNodeInput(step=a.id, title=a.title, description=a.description,
+                          project=a.project, workflow=workflow_pin)
         ).id
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)

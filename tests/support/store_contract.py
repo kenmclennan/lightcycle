@@ -466,8 +466,8 @@ class StoreContractBase:
         t = s.get_node(tid)
         self.assertEqual(t.branch, "feat/y")
         self.assertEqual(t.pr, "123")
-        self.assertEqual(t.reason, "oops")
-        self.assertEqual(t.tried, "a,b")
+        self.assertEqual(t.park.reason, "oops")
+        self.assertEqual(t.park.tried, "a,b")
 
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()

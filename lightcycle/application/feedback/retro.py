@@ -6,7 +6,7 @@ from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.pending_reflections import pending_reflection_count
 from lightcycle.application.work.project_of import project_of
 from lightcycle.domain import feedback as cfeedback
-from lightcycle.domain.work import Node
+from lightcycle.domain.work import Item
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class FeedbackItem:
 
 @dataclass(frozen=True)
 class ItemSignals:
-    item: Node
+    item: Item
     signals: Dict[str, Dict[str, int]]
     reflections: int
     durations: Dict[str, Optional[float]] = field(default_factory=dict)

@@ -3,12 +3,14 @@ import unittest
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.work import Artifact, Node
+from lightcycle.domain.work import Artifact
+from lightcycle.domain.audit import FINDINGS_STEP
 from lightcycle.render import (
     node_extra, render_backlog, render_inbox, render_queue,
     render_workflow_mermaid,
 )
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
+from tests.support.factories import make_item, make_step
 
 
 TITLE_CAP = 72
@@ -17,7 +19,9 @@ TITLE_CAP = 72
 def tk(**kw):
     kw.setdefault("id", "t1")
     kw.setdefault("title", "a title")
-    return Node(**kw)
+    if "description" in kw or "artifacts" in kw:
+        return make_item(**kw)
+    return make_step(**kw)
 
 
 def row(**kw):
@@ -135,16 +139,18 @@ class TestRenderInbox(unittest.TestCase):
         lines = render_inbox([r], TITLE_CAP)
         self.assertEqual(lines, [_inbox("blocked", "t1", "proj-a", "one")])
 
-    def test_triage_row_with_notes(self):
-        node = tk(id="t1", title="one", notes="found: missing test coverage")
-        r = row(kind="triage", step=node)
+    def test_findings_row_with_notes(self):
+        node = tk(id="t1", title="one", step=FINDINGS_STEP,
+                  notes="found: missing test coverage")
+        r = row(kind="action", step=node)
         lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  findings:found: missing test coverage"))
 
-    def test_triage_row_multiline_notes_first_line_truncated(self):
+    def test_findings_row_multiline_notes_first_line_truncated(self):
         first_line = "x" * 80
-        node = tk(id="t1", title="one", notes=first_line + "\nsecond line")
-        r = row(kind="triage", step=node)
+        node = tk(id="t1", title="one", step=FINDINGS_STEP,
+                  notes=first_line + "\nsecond line")
+        r = row(kind="action", step=node)
         lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(lines[0].endswith("  findings:" + "x" * 60 + "..."))
 
@@ -165,23 +171,23 @@ class TestRenderInbox(unittest.TestCase):
         self.assertTrue(lines[0].startswith("[action]"))
 
     def test_desc_suffix_renders_after_strategy_suffix(self):
-        node = tk(id="t1", title="one", needs="waiting on X", description="deets")
-        r = row(kind="blocked", step=node)
+        node = tk(id="t1", title="one", needs="waiting on X")
+        r = row(kind="blocked", step=node, description="deets")
         lines = render_inbox([r], TITLE_CAP)
         self.assertTrue(
             lines[0].endswith("  needs:waiting on X  resume:lc set t1 --state ready  desc:deets")
         )
 
     def test_plan_suffix_renders_after_strategy_suffix(self):
-        node = tk(
-            id="t1", title="one", needs="waiting on X",
-            artifacts=[Artifact(type="plan-doc", value="plans/x.md")],
+        node = tk(id="t1", title="one", needs="waiting on X")
+        r = row(
+            kind="blocked", step=node,
+            artifacts=(Artifact(type="plan-doc", value="plans/x.md"),),
         )
-        r = row(kind="blocked", step=node)
         lines = render_inbox([r], TITLE_CAP)
-        self.assertTrue(lines[0].endswith(
-            "  needs:waiting on X  resume:lc set t1 --state ready  plan:plans/x.md"
-        ))
+        self.assertTrue(
+            lines[0].endswith("  needs:waiting on X  resume:lc set t1 --state ready  plan:plans/x.md")
+        )
 
     def test_mixed_kinds_align_id_column(self):
         rows = [
