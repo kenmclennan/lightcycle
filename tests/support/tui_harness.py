@@ -228,3 +228,8 @@ def launch(container, now=None, upgrade_check=None, size=None):
     session = TuiSession(container, now=now, upgrade_check=upgrade_check, size=size)
     session.pause()
     return session
+
+
+def row_key(session, node_id):
+    node = session.app.container.store.get_node(node_id)
+    return getattr(node, "item", None) or node.id

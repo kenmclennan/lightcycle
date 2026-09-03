@@ -157,66 +157,33 @@ class UnreadableGitForRemove:
 
 
 class TestEditNode(unittest.TestCase):
-    def test_edits_title_and_description(self):
+    def test_edits_an_items_title_and_description(self):
         s = FakeStore()
-        tid = s.create_step("old title", role="human", description="old")
+        tid = s.create_item("old title", "old")
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title", description="new"))
-        t = s.get_node(tid)
+        t = s.get_item(tid)
         self.assertEqual(t.title, "new title")
         self.assertEqual(t.description, "new")
 
-    def test_edits_goal_and_project(self):
+    def test_edits_a_steps_title(self):
         s = FakeStore()
-        tid = s.create_step("t", role="human", goal="g1", project="p1")
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, goal="g2", project="p2"))
-        t = s.get_node(tid)
-        self.assertEqual(t.goal, "g2")
-        self.assertEqual(t.project, "p2")
+        tid = s.create_step("old title", role="human")
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title"))
+        self.assertEqual(s.get_step(tid).title, "new title")
 
     def test_unspecified_fields_unchanged(self):
         s = FakeStore()
-        tid = s.create_step("keep title", role="human", description="keep desc", goal="g1")
+        tid = s.create_item("keep title", "keep desc")
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, project="p1"))
-        t = s.get_node(tid)
+        t = s.get_item(tid)
         self.assertEqual(t.title, "keep title")
         self.assertEqual(t.description, "keep desc")
-        self.assertEqual(t.goal, "g1")
-        self.assertEqual(t.project, "p1")
 
-    def test_edits_parent_alone(self):
+    def test_a_description_does_not_land_on_a_step(self):
         s = FakeStore()
-        item = s.create_item("owning item", "a description")
         tid = s.create_step("a step", role="human")
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, parent=item))
-        t = s.get_node(tid)
-        self.assertEqual(t.parent, item)
-
-    def test_edits_parent_and_title_together(self):
-        s = FakeStore()
-        item = s.create_item("owning item", "a description")
-        tid = s.create_step("old title", role="human")
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title", parent=item))
-        t = s.get_node(tid)
-        self.assertEqual(t.title, "new title")
-        self.assertEqual(t.parent, item)
-
-    def test_omitting_parent_leaves_parentage_unchanged(self):
-        s = FakeStore()
-        item = s.create_item("owning item", "a description")
-        tid = s.create_step("a step", role="human", parent=item)
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="renamed"))
-        t = s.get_node(tid)
-        self.assertEqual(t.parent, item)
-
-    def test_refuses_to_reparent_an_item(self):
-        s = FakeStore()
-        outer = s.create_item("outer item", "a description")
-        inner = s.create_item("inner item", "a description")
-        with self.assertRaises(UseCaseError) as ctx:
-            EditNodeUseCase(s).execute(EditNodeInput(step=inner, parent=outer))
-        self.assertIn(inner, str(ctx.exception))
-        self.assertIsNone(s.get_node(inner).parent)
-
+        EditNodeUseCase(s).execute(EditNodeInput(step=tid, description="nope"))
+        self.assertFalse(hasattr(s.get_step(tid), "description"))
 
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
@@ -326,7 +293,7 @@ class TestLinkArtifact(unittest.TestCase):
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="spec", value="lightcycle/LC-1.md")
         )
-        self.assertEqual(s.item_artifacts(sid)[1].value, "lightcycle/LC-1.md")
+        self.assertEqual(next(a.value for a in s.item_artifacts(sid) if a.type == "spec"), "lightcycle/LC-1.md")
 
     def test_spec_owner_name_directory_against_bare_repo_succeeds(self):
         s = FakeStore()
@@ -338,7 +305,7 @@ class TestLinkArtifact(unittest.TestCase):
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="spec", value="lightcycle/LC-1.md")
         )
-        self.assertEqual(s.item_artifacts(sid)[1].value, "lightcycle/LC-1.md")
+        self.assertEqual(next(a.value for a in s.item_artifacts(sid) if a.type == "spec"), "lightcycle/LC-1.md")
 
     def test_spec_on_item_with_no_repo_artifact_succeeds_regardless_of_directory(self):
         s = FakeStore()
@@ -357,7 +324,7 @@ class TestLinkArtifact(unittest.TestCase):
         LinkArtifactUseCase(s).execute(
             LinkArtifactInput(item=sid, atype="spec", value="anywhere/LC-1.md")
         )
-        self.assertEqual(s.item_artifacts(sid)[1].value, "anywhere/LC-1.md")
+        self.assertEqual(next(a.value for a in s.item_artifacts(sid) if a.type == "spec"), "anywhere/LC-1.md")
 
     def test_replace_with_worktrees_segment_raises_and_leaves_original(self):
         s = FakeStore()

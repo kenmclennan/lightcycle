@@ -13,6 +13,7 @@ class Item:
     description: Optional[str] = None
     state: State = State.BACKLOGGED
     repo: Optional[str] = None
+    project: Optional[str] = None
     workflow: Optional[str] = None
     outcome: Optional[str] = None
     deps: int = 0
@@ -53,6 +54,7 @@ class Item:
             "description": self.description,
             "state": self.state,
             "repo": self.repo,
+            "project": self.project,
             "workflow": self.workflow,
             "outcome": self.outcome,
             "artifacts": [a.as_dict() for a in self.artifacts],

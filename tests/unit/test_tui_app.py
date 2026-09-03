@@ -37,7 +37,7 @@ from lightcycle.adapters.tui.row_grid import (
 from lightcycle.application.setup import UpgradeResponse
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import FakeBreakerPort, FakeLock, launch, make_test_container
+from tests.support.tui_harness import row_key, FakeBreakerPort, FakeLock, launch, make_test_container
 
 
 def _cell_text(value):
@@ -46,7 +46,7 @@ def _cell_text(value):
 
 def _cell(session, row_id, column):
     table = session.app.query_one(DataTable)
-    return _cell_text(table.get_cell(row_id, column))
+    return _cell_text(table.get_cell(row_key(session, row_id), column))
 
 
 def _row_order(session):
@@ -120,7 +120,7 @@ class TestDashboardScaffold(unittest.TestCase):
         table = session.app.query_one(DataTable)
         self.assertEqual(table.row_count, 12)
         for tid in ids:
-            self.assertIn(tid, table.rows)
+            self.assertIn(row_key(session, tid), table.rows)
 
     def test_header_row_is_not_shown(self):
         store = FakeStore()
@@ -159,7 +159,7 @@ class TestNeedsAttentionGroup(unittest.TestCase):
         session = self._launch(store)
 
         order = _row_order(session)
-        self.assertLess(order.index(inbox), order.index(active))
+        self.assertLess(order.index(row_key(session, inbox)), order.index(row_key(session, active)))
 
     def test_inbox_row_shows_single_icon_and_current_step_styled_amber(self):
         store = FakeStore()
@@ -169,10 +169,10 @@ class TestNeedsAttentionGroup(unittest.TestCase):
 
         self.assertEqual(_cell(session, inbox, "step"), "code-await-merge")
         table = session.app.query_one(DataTable)
-        icon = table.get_cell(inbox, "icon")
+        icon = table.get_cell(row_key(session, inbox), "icon")
         self.assertEqual(icon.plain, STATE_GLYPHS["gate"].glyph)
         self.assertEqual(icon.style, COLOURS["amber"])
-        step_cell = table.get_cell(inbox, "step")
+        step_cell = table.get_cell(row_key(session, inbox), "step")
         self.assertEqual(step_cell.style, COLOURS["amber"])
 
     def test_needs_attention_row_with_long_title_wraps(self):
@@ -182,7 +182,8 @@ class TestNeedsAttentionGroup(unittest.TestCase):
         session = self._launch(store)
 
         table = session.app.query_one(DataTable)
-        row = next(r for r in table.ordered_rows if r.key.value == step)
+        key = row_key(session, step)
+        row = next(r for r in table.ordered_rows if r.key.value == key)
         self.assertGreater(row.height, 1)
 
 
@@ -205,7 +206,7 @@ class TestActiveGroup(unittest.TestCase):
         self.assertEqual(_cell(session, tid, "step"), "build")
         self.assertEqual(_cell(session, tid, "time"), "14m")
         table = session.app.query_one(DataTable)
-        icon = table.get_cell(tid, "icon")
+        icon = table.get_cell(row_key(session, tid), "icon")
         self.assertIn(icon.plain, ACTIVE_GLYPH_FRAMES)
         self.assertEqual(icon.style, COLOURS["cyan"])
 
@@ -278,7 +279,7 @@ class TestActiveGroup(unittest.TestCase):
 
         session = self._launch(store)
 
-        icon = session.app.query_one(DataTable).get_cell(tid, "icon")
+        icon = session.app.query_one(DataTable).get_cell(row_key(session, tid), "icon")
         self.assertEqual(icon.plain, "◆")
 
     def test_active_glyph_pulses_through_four_frames_and_returns_to_rest(self):
@@ -295,7 +296,7 @@ class TestActiveGroup(unittest.TestCase):
         frames = []
         for _ in range(4):
             session.run(session.app._tick_active_glyph)
-            frames.append(table.get_cell(tid, "icon").plain)
+            frames.append(table.get_cell(row_key(session, tid), "icon").plain)
         timer.resume()
 
         self.assertEqual(frames, ["◈", "◇", "◈", "◆"])
@@ -333,12 +334,12 @@ class TestActiveGroup(unittest.TestCase):
         table = session.app.query_one(DataTable)
 
         session.run(session.app._tick_active_glyph)
-        ticked = table.get_cell(tid, "icon").plain
+        ticked = table.get_cell(row_key(session, tid), "icon").plain
         self.assertNotEqual(ticked, "◆")
 
         session.poll_tick()
 
-        self.assertEqual(table.get_cell(tid, "icon").plain, ticked)
+        self.assertEqual(table.get_cell(row_key(session, tid), "icon").plain, ticked)
 
     def test_tick_active_glyph_is_a_no_op_when_the_table_is_not_mounted(self):
         store = FakeStore()
@@ -459,10 +460,10 @@ class TestQueuedGroup(unittest.TestCase):
         session = self._launch(store)
 
         order = _row_order(session)
-        self.assertLess(order.index(active), order.index(queued))
+        self.assertLess(order.index(row_key(session, active)), order.index(row_key(session, queued)))
         self.assertEqual(_cell(session, queued, "step"), "build")
         table = session.app.query_one(DataTable)
-        icon = table.get_cell(queued, "icon")
+        icon = table.get_cell(row_key(session, queued), "icon")
         self.assertEqual(icon.plain, STATE_GLYPHS["queued"].glyph)
 
     def test_queued_step_transitioning_to_active_moves_group(self):
@@ -471,14 +472,14 @@ class TestQueuedGroup(unittest.TestCase):
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
-        icon_before = table.get_cell(queued, "icon").plain
+        icon_before = table.get_cell(row_key(session, queued), "icon").plain
         self.assertEqual(icon_before, STATE_GLYPHS["queued"].glyph)
 
         store.assign(queued, "worker-1")
         store.update_state(queued, State.IN_PROGRESS)
         session.poll_tick()
 
-        icon_after = table.get_cell(queued, "icon").plain
+        icon_after = table.get_cell(row_key(session, queued), "icon").plain
         self.assertIn(icon_after, ACTIVE_GLYPH_FRAMES)
 
     def test_dependency_held_step_appears_in_queued_group_with_dim_chain_glyph(self):
@@ -490,11 +491,11 @@ class TestQueuedGroup(unittest.TestCase):
 
         self.assertEqual(_cell(session, blocked, "step"), "blocked · %s" % blocker)
         table = session.app.query_one(DataTable)
-        icon = table.get_cell(blocked, "icon")
+        icon = table.get_cell(row_key(session, blocked), "icon")
         self.assertIn(STATE_GLYPHS["queued"].glyph, icon.plain)
         self.assertIn("⛓", icon.plain)
         self.assertNotIn(STATE_GLYPHS["needs-attention"].glyph, icon.plain)
-        step_cell = table.get_cell(blocked, "step")
+        step_cell = table.get_cell(row_key(session, blocked), "step")
         self.assertEqual(step_cell.style, COLOURS["dim"])
 
 
@@ -513,7 +514,7 @@ class TestProjectColumn(unittest.TestCase):
         session = self._launch(store)
 
         table = session.app.query_one(DataTable)
-        cell = table.get_cell(item, "project")
+        cell = table.get_cell(row_key(session, item), "project")
         self.assertEqual(cell.plain, "lightcycle")
         self.assertEqual(cell.style, COLOURS["cyan"])
 
@@ -534,7 +535,7 @@ class TestProjectColumn(unittest.TestCase):
         session = self._launch(store)
 
         table = session.app.query_one(DataTable)
-        cell = table.get_cell(item, "project")
+        cell = table.get_cell(row_key(session, item), "project")
         self.assertEqual(cell.plain, "lightcycle")
         self.assertEqual(cell.style, COLOURS["cyan"])
 
@@ -553,7 +554,7 @@ class TestCursorColumn(unittest.TestCase):
         session = self._launch(store)
 
         table = session.app.query_one(DataTable)
-        first_cursor = table.get_cell(first, "cursor")
+        first_cursor = table.get_cell(row_key(session, first), "cursor")
         self.assertEqual(first_cursor.plain, CURSOR_GLYPH.glyph)
         self.assertEqual(first_cursor.style, COLOURS[CURSOR_GLYPH.colour])
 
@@ -566,8 +567,8 @@ class TestCursorColumn(unittest.TestCase):
         session.press("down")
 
         table = session.app.query_one(DataTable)
-        self.assertEqual(_cell_text(table.get_cell(first, "cursor")), "")
-        self.assertEqual(table.get_cell(second, "cursor").plain, CURSOR_GLYPH.glyph)
+        self.assertEqual(_cell_text(table.get_cell(row_key(session, first), "cursor")), "")
+        self.assertEqual(table.get_cell(row_key(session, second), "cursor").plain, CURSOR_GLYPH.glyph)
 
 
 class TestCursorColumnSurvivesCheapPaths(unittest.TestCase):
@@ -583,11 +584,11 @@ class TestCursorColumnSurvivesCheapPaths(unittest.TestCase):
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
-        self.assertEqual(table.get_cell(first, "cursor").plain, CURSOR_GLYPH.glyph)
+        self.assertEqual(table.get_cell(row_key(session, first), "cursor").plain, CURSOR_GLYPH.glyph)
 
         session.poll_tick()
 
-        self.assertEqual(table.get_cell(first, "cursor").plain, CURSOR_GLYPH.glyph)
+        self.assertEqual(table.get_cell(row_key(session, first), "cursor").plain, CURSOR_GLYPH.glyph)
 
     def test_tick_active_glyph_leaves_the_cursor_column_unchanged(self):
         store = FakeStore()
@@ -597,11 +598,11 @@ class TestCursorColumnSurvivesCheapPaths(unittest.TestCase):
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
-        self.assertEqual(table.get_cell(tid, "cursor").plain, CURSOR_GLYPH.glyph)
+        self.assertEqual(table.get_cell(row_key(session, tid), "cursor").plain, CURSOR_GLYPH.glyph)
 
         session.run(session.app._tick_active_glyph)
 
-        self.assertEqual(table.get_cell(tid, "cursor").plain, CURSOR_GLYPH.glyph)
+        self.assertEqual(table.get_cell(row_key(session, tid), "cursor").plain, CURSOR_GLYPH.glyph)
 
 
 class TestScroll(unittest.TestCase):
@@ -677,7 +678,7 @@ class TestSelectionFollow(unittest.TestCase):
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
-        table.move_cursor(row=table.get_row_index(target))
+        table.move_cursor(row=table.get_row_index(row_key(session, target)))
         session.pause()
 
         store.assign(target, "worker-1")
@@ -685,7 +686,7 @@ class TestSelectionFollow(unittest.TestCase):
         session.poll_tick()
 
         cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        self.assertEqual(cell_key.row_key.value, target)
+        self.assertEqual(cell_key.row_key.value, row_key(session, target))
 
     def test_selection_falls_to_a_real_row_when_selected_item_is_removed(self):
         store = FakeStore()
@@ -695,7 +696,7 @@ class TestSelectionFollow(unittest.TestCase):
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
-        table.move_cursor(row=table.get_row_index(target))
+        table.move_cursor(row=table.get_row_index(row_key(session, target)))
         session.pause()
 
         store.close(target, "done")
@@ -703,7 +704,9 @@ class TestSelectionFollow(unittest.TestCase):
 
         cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
         remaining_id = cell_key.row_key.value
-        self.assertIn(remaining_id, (first, last))
+        self.assertIn(
+            remaining_id, (row_key(session, first), row_key(session, last))
+        )
 
 
 class TestEmptyState(unittest.TestCase):
@@ -1021,7 +1024,7 @@ def _launch_backlog(store, **kwargs):
 
 def _backlog_cell(session, row_id, column):
     table = session.app.query_one(BacklogTable)
-    return _cell_text(table.get_cell(row_id, column))
+    return _cell_text(table.get_cell(row_key(session, row_id), column))
 
 
 def _rendered_text(widget):
@@ -1127,7 +1130,7 @@ class TestBacklogProjectColumn(unittest.TestCase):
         session = self._launch(store)
 
         table = session.app.query_one(BacklogTable)
-        cell = table.get_cell(item, "project")
+        cell = table.get_cell(row_key(session, item), "project")
         self.assertEqual(cell.plain, "lightcycle")
         self.assertEqual(cell.style, COLOURS["cyan"])
 
@@ -1406,6 +1409,7 @@ class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
 
 
 class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
+    _ITEM = "LC-500"
     _ID = "LC-500.1"
     _PROJECT = "lightcycle"
     _STEP = "code-review-rounds"
@@ -1413,7 +1417,7 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
     def _floor_terminal_width(self):
         glyph_total = PRIORITY_CONTINUATION_INDENT
         atomic_values = {
-            "id": [self._ID],
+            "id": [self._ITEM],
             "project": [self._PROJECT],
             "step": [self._STEP],
             "time": [""],
@@ -1426,8 +1430,10 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
 
     def _launch(self):
         store = FakeStore()
-        store.create_step("queued item", step=self._STEP, role="agent", id=self._ID)
-        store.add_artifact(self._ID, "repo", self._PROJECT)
+        store.create_item("queued item", "a description", id=self._ITEM)
+        store.create_step("queued item", step=self._STEP, role="agent",
+                          parent=self._ITEM, id=self._ID)
+        store.add_artifact(self._ITEM, "repo", self._PROJECT)
         width = self._floor_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)
