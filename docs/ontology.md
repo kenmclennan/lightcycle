@@ -4,21 +4,22 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 ## The model (nouns)
 
-- **node** - the atom. One row in the `nodes` table. Every item and step is a node; they differ by `type`, not by table.
-- **item** - a unit of deliverable work, and the top of the tree. Carries artifacts. Has no parent.
-- **step** - a single action performed at one workflow **stage**, filed from the workflow. A child of an item.
+- **item** and **step** are the two structures work is made of, in their own tables, with no shared shape. "Node" survives only as a loose word for "an item or a step" in a few command names; nothing in the model is one.
+- **item** - a unit of deliverable work, and the top of the tree. Carries the `description` (the brief), the artifacts, the `repo` and the workflow pin. Has no parent.
+- **step** - a single action performed at one workflow **stage**, filed from the workflow. Its `item` is required and fixed at creation. Carries the `role`, the claim, the `notes`, its `reflection`, and its `park`. It has no description, no artifacts and no workflow of its own.
 - **planned step** - a not-yet-filed future step, derived by walking an item's pinned workflow graph forward from its current step along the normal-completion edge. Display-only: never a real node, never claimed or advanced. Represented in code as `ProjectedStep`.
-- **artifact** - a typed value attached to an item: `spec`, `repo`, `branch`, `pr`, `design`, `findings`, `reflection`. The brief is **not** an artifact - it is the item's mandatory `description`. `reflection` (an agent's feedback) accumulates; the others are single by convention (expressed in the step markdown, not the engine).
+- **artifact** - a workflow-defined value attached to an item: `spec`, `design`, `findings`, and whatever a personal origin invents. The engine reads none of them by name. What it does know is a field: the brief is the item's `description`, the target repo its `repo`, an agent's feedback the step's `reflection`, and the branch, PR and comment ledger belong to the phase run.
 - **role** - who performs a step: `agent` or `human`, and nothing else. It decides only whether the pool may claim the step. **Which** work a step is is its `stage`, resolved through the workflow graph when it is needed - never copied onto the step.
 - **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **state** - a node's single lifecycle position: `backlogged` -> `ready` -> `in_progress` -> `done`. One state machine (there is no separate `status`).
+- **park** - what a step carries when an agent hands it to a human: the `reason` it stopped, what the human `needs` to decide, and what it already `tried`. Parking is what makes an escalation legible at a glance.
 - **lane** - a derived view over `(state, role)`: `inbox` (human action + gates), `active` (running), `queue` (ready agent steps, including those held behind an unmet dependency), `done`. Lanes are computed, never stored.
 
 ## The lifecycle (verbs)
 
 - **activate** - move an item from `backlogged` into the flow by filing its entry step. Realized as `lc set <item> --state active`.
 - **new** - create a node (`lc new item|step`).
-- **set** - update a node's fields (title, goal, desc, parent, state, ...).
+- **set** - update an item's or a step's fields (title, desc, state, workflow, ...). A step's item is not among them.
 - **attach** - add an artifact to an item (`lc attach`); `--replace` swaps a same-type artifact.
 - **dep** - declare one node blocks another (`lc dep <id> --needs <id>`).
 - **claim** - a worker atomically takes the next ready step for a role (`lc claim agent`). With one agent role, any worker takes any ready agent step, whatever its stage.
