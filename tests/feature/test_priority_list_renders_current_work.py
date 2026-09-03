@@ -1163,7 +1163,10 @@ def _t_selection_falls_near(ctx):
     table = session.app.query_one(DataTable)
     cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
     row_id = cell_key.row_key.value
-    assert row_id in (ctx["first_id"], ctx["last_id"])
+    assert row_id in (
+        _row_key(ctx["session"], ctx["first_id"]),
+        _row_key(ctx["session"], ctx["last_id"]),
+    )
 
 
 @then("that step's row shows the dependency chain-link icon alongside its queued icon")
