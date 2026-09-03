@@ -424,7 +424,9 @@ def cmd_show(argv):
     a = ap.parse_args(argv)
     view = ShowNodeUseCase(_container.store).execute(ShowNodeInput(step=a.id)).view
     out = view.as_dict()
-    item_id = view.step.parent or view.step.id
+    item_id = getattr(view.step, "item", None) or view.step.id
+    if "workflow" not in out:
+        out["workflow"] = _container.store.get_item(item_id).workflow
     out["passes"] = [p.as_dict() for p in _container.store.passes_of(item_id)]
     out["runs"] = [r.as_dict() for r in _container.store.runs_of(item_id)]
     flow = _flow()
@@ -480,6 +482,7 @@ def cmd_claim(argv):
     if resp is None:
         return 0
     out = resp.view.as_dict()
+    out["workflow"] = _container.store.get_item(resp.view.step.item).workflow
     if resp.workspace:
         out["workspace"] = resp.workspace
     if resp.branch:
