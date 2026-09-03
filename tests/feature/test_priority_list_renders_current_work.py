@@ -1153,7 +1153,7 @@ def _t_selection_follows_to_active(ctx):
     session = ctx["session"]
     table = session.app.query_one(DataTable)
     cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-    assert cell_key.row_key.value == ctx["target_id"]
+    assert cell_key.row_key.value == _row_key(ctx["session"], ctx["target_id"])
     assert _is_active_glyph(_icon(session, ctx["target_id"]).plain)
 
 

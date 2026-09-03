@@ -15,7 +15,7 @@ Feature: Attaching an artifact resolves internal and kind fields
     Examples:
       | type     | kind     |
       | spec     | filepath |
-      | repo     | text     |
+      | note     | text     |
       | resolves | text     |
 
   Scenario: An explicitly declared kind overrides the type default
