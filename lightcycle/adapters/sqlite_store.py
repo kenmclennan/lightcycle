@@ -197,6 +197,7 @@ class SqliteStore(StorePort):
             self._migrate_brief_artifacts_into_description()
             self._migrate_phase_artifacts_into_runs()
             self._migrate_split_nodes()
+        self._migrate_add_missing_columns()
         self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
@@ -304,6 +305,26 @@ class SqliteStore(StorePort):
 
     _STEP_FOLDED_ARTIFACTS = ("reflection", "watched-step")
     _RUN_FOLDED_ARTIFACTS = ("feedback-watermark", "feedback-spawned-through")
+
+    _ADDED_COLUMNS = {
+        "phase_runs": (
+            ("comments_dispatched_through", "TEXT"),
+            ("comments_handled_through", "TEXT"),
+        ),
+    }
+
+    def _migrate_add_missing_columns(self):
+        for table, columns in self._ADDED_COLUMNS.items():
+            if not self._has_table(table):
+                continue
+            present = {
+                r[1] for r in self._conn.execute("PRAGMA table_info(%s)" % table).fetchall()
+            }
+            for name, decl in columns:
+                if name not in present:
+                    self._conn.execute(
+                        "ALTER TABLE %s ADD COLUMN %s %s" % (table, name, decl)
+                    )
 
     def _has_table(self, name):
         return self._conn.execute(
