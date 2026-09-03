@@ -88,7 +88,8 @@ def _widget_rendered_text(ctx, widget):
 def _open_priority_list(ctx):
     store = FakeStore()
     long_id = "P" * 48
-    store.create_step(long_id, step="build", role="agent", id=long_id)
+    item = store.create_item(long_id, "a description", id=long_id)
+    store.create_step(long_id, step="build", role="agent", parent=item)
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
     ctx["floor_widget_id"] = "#priority-list-floor"
