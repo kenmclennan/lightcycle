@@ -1142,8 +1142,7 @@ def cmd_set(argv):
                 )
                 return 2
             BlockStepUseCase(_container.store).execute(
-                BlockInput(step=a.id, needs=a.needs, reason=a.reason, branch=a.branch, pr=a.pr,
-                           tried=a.tried)
+                BlockInput(step=a.id, needs=a.needs, reason=a.reason, tried=a.tried)
             )
             return 0
         if a.state == "ready":
