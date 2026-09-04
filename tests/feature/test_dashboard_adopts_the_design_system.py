@@ -500,10 +500,10 @@ def _dependency_blocked_primary(ctx):
     assert ctx["primary_glyph"].colour == "red"
 
 
-@then("it additionally carries an amber chain-link glyph")
+@then("it additionally carries the dim dependency-held glyph")
 def _dependency_blocked_extra(ctx):
-    assert ctx["extra_glyph"].glyph == "⛓"
-    assert ctx["extra_glyph"].colour == "amber"
+    assert ctx["extra_glyph"].glyph == "⊣"
+    assert ctx["extra_glyph"].colour == "dim"
 
 
 @then("it is cursor, icon, id, project, title, step, time")

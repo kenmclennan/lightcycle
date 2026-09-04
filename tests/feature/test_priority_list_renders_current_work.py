@@ -1169,7 +1169,7 @@ def _t_selection_falls_near(ctx):
     )
 
 
-@then("that step's row shows the dependency chain-link icon alongside its queued icon")
+@then("that step's row shows the dependency-held icon alongside its queued icon")
 def _t_shows_dependency_icon(ctx):
     icon = _icon(ctx["session"], ctx["target_id"]).plain
     assert STATE_GLYPHS["queued"].glyph in icon
@@ -1191,7 +1191,7 @@ def _t_shows_blocking_id_not_phrase(ctx, phrase):
     assert phrase not in step_text
 
 
-@then("that step's row shows no dependency chain-link icon")
+@then("that step's row shows no dependency-held icon")
 def _t_no_dependency_icon(ctx):
     icon = _icon(ctx["session"], ctx["target_id"]).plain
     assert DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph not in icon

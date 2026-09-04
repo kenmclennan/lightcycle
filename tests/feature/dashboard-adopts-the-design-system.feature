@@ -130,11 +130,11 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | active          | ◆     | cyan   |
       | queued          | ○     | dim    |
 
-  Scenario: The dependency-blocked needs-attention state adds the amber chain-link without losing the red dot
+  Scenario: The dependency-blocked needs-attention state adds the dim dependency-held glyph without losing the red dot
     Given the shared state vocabulary
     When the glyph and colour for the dependency-blocked needs-attention state are looked up
     Then its first glyph and colour are the same red dot as the plain needs-attention state
-    And it additionally carries an amber chain-link glyph
+    And it additionally carries the dim dependency-held glyph
 
   Scenario: The shared vocabulary defines the priority list's column order
     Given the shared column grids

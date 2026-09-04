@@ -33,7 +33,7 @@ def next_active_glyph_frame(index):
     return (index + 1) % len(ACTIVE_GLYPH_FRAMES)
 
 
-DEPENDENCY_BLOCKED_EXTRA_GLYPH = Glyph("⛓", "amber")
+DEPENDENCY_BLOCKED_EXTRA_GLYPH = Glyph("⊣", "dim")
 
 DONE_GLYPH = Glyph("○", "dim")
 
