@@ -34,19 +34,24 @@ class TickResponse:
     breaker_opened: bool = False
     breaker_closed: bool = False
     breaker_rearmed: bool = False
+    spin_open: bool = False
+    spin_opened: bool = False
 
 
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
         hook_completions=None, worktrees=None, git=None, backup_gate=None, fs=None,
-        flow_service=None,
+        flow_service=None, spin_port=None,
     ):
         self._store = store
         self._workers = workers
         self._spawner = spawner
         self._config = config
-        self._sweep = SweepUseCase(store, workers, worktrees, git, fs)
+        self._sweep = SweepUseCase(
+            store, workers, worktrees, git, fs,
+            spin_port=spin_port, spin_cap=config.spin_cap() if spin_port else None,
+        )
         self._monitor = monitor
         self._cadence_gate = cadence_gate
         self._breaker_gate = breaker_gate
@@ -81,6 +86,8 @@ class TickUseCase:
         cap = breaker.spawn_cap(input.now, alive_count)
         if cap is not None:
             slots = min(slots, cap)
+        if breaker_result and breaker_result.spin_open:
+            slots = min(slots, 1)
         inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
         inflight_total = sum(inflight_dict.values())
         ready_roles = ReadyQueue(self._store.ready_steps()).roles()
@@ -112,4 +119,6 @@ class TickUseCase:
             breaker_opened=breaker_result.opened if breaker_result else False,
             breaker_closed=breaker_result.closed if breaker_result else False,
             breaker_rearmed=breaker_result.rearmed if breaker_result else False,
+            spin_open=breaker_result.spin_open if breaker_result else False,
+            spin_opened=breaker_result.spin_opened if breaker_result else False,
         )

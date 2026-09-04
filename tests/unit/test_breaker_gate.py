@@ -1,12 +1,19 @@
+import copy
 import json
 import unittest
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_store import FakeStore
 
 _REJECTED = (
     '{"type":"rate_limit_event","rate_limit_info":'
     '{"status":"rejected","resetsAt":%d}}'
+)
+_NO_WORK_LOG = (
+    b"session started\n"
+    b"Failed to authenticate: OAuth session expired and could not be refreshed\n"
+    b"error: api_error"
 )
 
 
@@ -62,10 +69,13 @@ class FakeBreakerPort:
 
 
 class FakeConfig:
-    def __init__(self, max_boot_seconds=120, stall_seconds=1800, probe_cooldown_seconds=1800):
+    def __init__(
+        self, max_boot_seconds=120, stall_seconds=1800, probe_cooldown_seconds=1800, spin_cap=2
+    ):
         self._max_boot_seconds = max_boot_seconds
         self._stall_seconds = stall_seconds
         self._probe_cooldown_seconds = probe_cooldown_seconds
+        self._spin_cap = spin_cap
 
     def max_boot_seconds(self):
         return self._max_boot_seconds
@@ -75,6 +85,20 @@ class FakeConfig:
 
     def probe_cooldown_seconds(self):
         return self._probe_cooldown_seconds
+
+    def spin_cap(self):
+        return self._spin_cap
+
+
+class FakeSpinPort:
+    def __init__(self, state=None):
+        self._state = state or {}
+
+    def load(self):
+        return copy.deepcopy(self._state)
+
+    def save(self, state):
+        self._state = copy.deepcopy(state)
 
 
 class TestBreakerGateUseCase(unittest.TestCase):
@@ -352,6 +376,136 @@ class TestBreakerGateUseCase(unittest.TestCase):
         self.assertFalse(result.breaker.is_open)
         self.assertIn("/l/probe.log", fs.iter_lines_calls)
         self.assertNotIn("/l/other.log", fs.iter_lines_calls)
+
+    def test_a_dead_worker_with_no_rejection_and_no_session_activity_does_not_close_a_probe(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "probe-sp", "pid": 3, "log": "/l/probe.log", "started": 0}]
+        )
+        fs = FakeFs(files={"/l/probe.log": _NO_WORK_LOG})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=500)
+        self.assertFalse(result.closed)
+        self.assertTrue(result.breaker.is_open)
+
+
+class TestBreakerGatePoolWideSpin(unittest.TestCase):
+    def _dead_worker(self, spawnid, pid, step, no_work=True):
+        return {"spawnid": spawnid, "pid": pid, "step": step, "log": "/l/%s.log" % spawnid, "started": 0}
+
+    def _no_work_fs(self, files):
+        return FakeFs(files=files)
+
+    def test_two_no_work_deaths_with_steps_trips_the_pool_wide_guard_and_parks_a_step(self):
+        s = FakeStore()
+        step1 = s.create_step("build: a", step="build", role="agent")
+        step2 = s.create_step("build: b", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[
+                self._dead_worker("w1", 1, step1),
+                self._dead_worker("w2", 2, step2),
+            ]
+        )
+        fs = FakeFs(files={"/l/w1.log": _NO_WORK_LOG, "/l/w2.log": _NO_WORK_LOG})
+        result = BreakerGateUseCase(
+            workers, fs, FakeBreakerPort(), FakeConfig(spin_cap=1),
+            spin_port=FakeSpinPort(), store=s,
+        ).execute(now=100)
+        self.assertTrue(result.spin_open)
+        self.assertTrue(result.spin_opened)
+        parked = [n for n in (step1, step2) if s.get_node(n).role == "human"]
+        self.assertEqual(len(parked), 1)
+
+    def test_a_single_dead_worker_with_no_work_does_not_trip_the_guard(self):
+        s = FakeStore()
+        step1 = s.create_step("build: a", step="build", role="agent")
+        workers = FakeWorkers(workers=[self._dead_worker("w1", 1, step1)])
+        fs = FakeFs(files={"/l/w1.log": _NO_WORK_LOG})
+        result = BreakerGateUseCase(
+            workers, fs, FakeBreakerPort(), FakeConfig(spin_cap=2),
+            spin_port=FakeSpinPort(), store=s,
+        ).execute(now=100)
+        self.assertFalse(result.spin_open)
+        self.assertFalse(result.spin_opened)
+
+    def test_a_rejection_takes_precedence_over_the_pool_wide_no_work_tally(self):
+        s = FakeStore()
+        step1 = s.create_step("build: a", step="build", role="agent")
+        step2 = s.create_step("build: b", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[
+                self._dead_worker("w1", 1, step1),
+                self._dead_worker("w2", 2, step2),
+            ]
+        )
+        fs = FakeFs(
+            files={"/l/w1.log": _NO_WORK_LOG, "/l/w2.log": (_REJECTED % 5000).encode()}
+        )
+        result = BreakerGateUseCase(
+            workers, fs, FakeBreakerPort(), FakeConfig(spin_cap=2),
+            spin_port=FakeSpinPort(), store=s,
+        ).execute(now=100)
+        self.assertFalse(result.spin_open)
+
+    def test_a_dead_worker_with_no_assigned_step_never_counts(self):
+        s = FakeStore()
+        workers = FakeWorkers(workers=[self._dead_worker("w1", 1, None)])
+        fs = FakeFs(files={"/l/w1.log": _NO_WORK_LOG})
+        result = BreakerGateUseCase(
+            workers, fs, FakeBreakerPort(), FakeConfig(spin_cap=1),
+            spin_port=FakeSpinPort(), store=s,
+        ).execute(now=100)
+        self.assertFalse(result.spin_open)
+
+    def test_real_activity_resets_an_advancing_streak(self):
+        s = FakeStore()
+        step1 = s.create_step("build: a", step="build", role="agent")
+        step2 = s.create_step("build: b", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[
+                self._dead_worker("w1", 1, step1),
+                self._dead_worker("w2", 2, step2),
+            ]
+        )
+        fs = FakeFs(
+            files={
+                "/l/w1.log": _NO_WORK_LOG,
+                "/l/w2.log": b'{"type":"result","subtype":"success"}',
+            }
+        )
+        spin_port = FakeSpinPort({"pool": {"streak": 1, "tripped": False}})
+        result = BreakerGateUseCase(
+            workers, fs, FakeBreakerPort(), FakeConfig(spin_cap=3),
+            spin_port=spin_port, store=s,
+        ).execute(now=100)
+        self.assertFalse(result.spin_open)
+        self.assertEqual(spin_port.load()["pool"]["streak"], 0)
+
+    def test_streak_accumulates_one_check_at_a_time_until_the_cap(self):
+        s = FakeStore()
+        spin_port = FakeSpinPort()
+        config = FakeConfig(spin_cap=3)
+        for i in range(3):
+            step1 = s.create_step("build: a%d" % i, step="build", role="agent")
+            step2 = s.create_step("build: b%d" % i, step="build", role="agent")
+            workers = FakeWorkers(
+                workers=[
+                    self._dead_worker("w1-%d" % i, 100 + i * 2, step1),
+                    self._dead_worker("w2-%d" % i, 101 + i * 2, step2),
+                ]
+            )
+            fs = FakeFs(
+                files={
+                    "/l/w1-%d.log" % i: _NO_WORK_LOG,
+                    "/l/w2-%d.log" % i: _NO_WORK_LOG,
+                }
+            )
+            result = BreakerGateUseCase(
+                workers, fs, FakeBreakerPort(), config, spin_port=spin_port, store=s,
+            ).execute(now=100 + i)
+            if i < 2:
+                self.assertFalse(result.spin_open, "tripped too early on check %d" % i)
+            else:
+                self.assertTrue(result.spin_open)
 
 
 if __name__ == "__main__":

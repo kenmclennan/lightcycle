@@ -1185,6 +1185,44 @@ class TestUnblockTask(unittest.TestCase):
         self.assertIn("reason=line one line two", history_lines[0])
         self.assertNotIn("line one\nline two", notes)
 
+    def test_clears_the_steps_spin_streak(self):
+        class FakeSpinPort:
+            def __init__(self, state):
+                self._state = state
+
+            def load(self):
+                return self._state
+
+            def save(self, state):
+                self._state = state
+
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="human")
+        spin_port = FakeSpinPort({"steps": {bid: {"count": 3, "since": 0, "last_line": "x"}}})
+        UnblockStepUseCase(s, flow_for(METAS, s), spin_port=spin_port).execute(
+            UnblockInput(step=bid)
+        )
+        self.assertNotIn(bid, spin_port.load().get("steps") or {})
+
+    def test_unblock_without_a_spin_streak_is_a_noop_for_spin_state(self):
+        class FakeSpinPort:
+            def __init__(self, state):
+                self._state = state
+
+            def load(self):
+                return self._state
+
+            def save(self, state):
+                self._state = state
+
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="human")
+        spin_port = FakeSpinPort({})
+        UnblockStepUseCase(s, flow_for(METAS, s), spin_port=spin_port).execute(
+            UnblockInput(step=bid)
+        )
+        self.assertEqual(spin_port.load(), {})
+
 
 if __name__ == "__main__":
     unittest.main()

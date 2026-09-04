@@ -67,7 +67,6 @@ Feature: Breaker recovers when its probe worker stalls
     When the pool's breaker gate runs
     Then the breaker closes
 
-  @wip
   Scenario: A probe that dies having done no work is not treated as a successful probe either
     Given the breaker is open and past its reset time
     And the probe worker is dead, unchecked, and its log carries neither a rejection nor any session activity

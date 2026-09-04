@@ -885,7 +885,8 @@ def cmd_trace(argv):
 
 def cmd_sweep(argv):
     result = SweepUseCase(
-        _container.store, _container.workers, _worktrees(), _container.git, _container.fs
+        _container.store, _container.workers, _worktrees(), _container.git, _container.fs,
+        spin_port=_container.spin, spin_cap=_container.config.spin_cap(),
     ).execute(time.time(), _container.config.max_boot_seconds(), _container.config.stall_seconds())
     for bid in result.swept:
         print("swept %s" % bid)
@@ -893,6 +894,8 @@ def cmd_sweep(argv):
         print("preserved %s" % bid)
     for bid in result.capture_failed:
         sys.stderr.write("failed to preserve uncommitted work for %s\n" % bid)
+    for bid in result.parked:
+        print("parked %s" % bid)
     for spawnid in result.killed:
         print("killed %s" % spawnid)
     if result.pruned:
@@ -1216,7 +1219,9 @@ def cmd_set(argv):
             )
             return 0
         if a.state == "ready":
-            UnblockStepUseCase(_container.store, _flow()).execute(UnblockInput(step=a.id))
+            UnblockStepUseCase(
+                _container.store, _flow(), spin_port=_container.spin
+            ).execute(UnblockInput(step=a.id))
             return 0
         if a.state == "in_progress":
             ReopenItemUseCase(_container.store).execute(ReopenItemInput(item=a.id))
@@ -1389,6 +1394,10 @@ def _tick_event_lines(result, ts):
     if result.breaker_rearmed:
         reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
         lines.append("%s  %-7s  %s" % (ts, "breaker", "probe stalled, retrying after %s" % reset_ts))
+    if result.spin_opened:
+        lines.append(
+            "%s  %-7s  %s" % (ts, "spin", "opened - workers died with no observed work")
+        )
     return lines
 
 
@@ -1403,10 +1412,14 @@ def _state_line(result, ts, reason=None):
 
 
 def _idle_reason(result):
-    if result.spawned or not result.ready:
+    if not result.ready:
         return None
     if result.breaker_open:
         return "breaker-open"
+    if result.spin_open:
+        return "spin-open"
+    if result.spawned:
+        return None
     if result.free_slots <= 0:
         return "no-free-slots"
     return "ready-role-already-inflight"
@@ -1457,6 +1470,7 @@ def _stop_pool():
         _container.store, _container.workers,
         worktrees=worktrees_for(_container, flow=_flow()),
         git=_container.git, fs=_container.fs,
+        spin_port=_container.spin, spin_cap=_container.config.spin_cap(),
     )
     resp = StopPoolUseCase(_container.workers, sweep).execute(
         time.time(), _container.config.max_boot_seconds(),
@@ -1499,7 +1513,8 @@ def cmd_start(argv):
         )
         cadence_gate = RetroCadenceUseCase(_container.store, _container.config)
         breaker_gate = BreakerGateUseCase(
-            _container.workers, _container.fs, _container.breaker, _container.config
+            _container.workers, _container.fs, _container.breaker, _container.config,
+            spin_port=_container.spin, store=_container.store,
         )
         hook_completions = HookCompletionsUseCase(_container.store, flow_service)
         backup_gate = BackupUseCase(_container.backup, _container.config)
@@ -1517,6 +1532,7 @@ def cmd_start(argv):
             backup_gate=backup_gate,
             fs=_container.fs,
             flow_service=flow_service,
+            spin_port=_container.spin,
         )
         if a.once:
             now = time.time()

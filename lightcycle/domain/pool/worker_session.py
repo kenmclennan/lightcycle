@@ -32,6 +32,20 @@ def saw_terminal_command(lines):
     return False
 
 
+def saw_session_activity(lines):
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(data, dict) and data.get("type") in ("assistant", "result"):
+            return True
+    return False
+
+
 class SessionPolicy:
     def __init__(self):
         self._terminal = False
