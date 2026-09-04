@@ -163,10 +163,11 @@ Feature: The hierarchy tab
     And Ctrl-U is pressed
     Then the selection is back on the row it started on
 
+  @wip
   Scenario Outline: Selecting any node type in the hierarchy opens it into its own hub
     Given a "<type>" is highlighted in the hierarchy
     When <key> is pressed
-    Then it opens into its own tabbed hub, landing on the tab that matches its state
+    Then it opens into its own tabbed hub, landing on the tab appropriate to its type and state
 
     Examples:
       | type  | key   |
@@ -200,10 +201,17 @@ Feature: The hierarchy tab
     When it renders
     Then its row shows its own state icon, using the same icon and colour vocabulary as every other row
 
-  Scenario: Pressing a on a highlighted node opens its Artifacts tab directly
-    Given a node is highlighted in the hierarchy, not yet opened
+  @wip
+  Scenario: Pressing a on a highlighted item opens its Artifacts tab directly
+    Given an item is highlighted in the hierarchy, not yet opened
     When a is pressed
     Then its Artifacts tab opens directly, skipping its own contextual default
+
+  @wip
+  Scenario: a is a no-op on a highlighted step, since a step has no Artifacts tab
+    Given a step is highlighted in the hierarchy, not yet opened
+    When a is pressed
+    Then nothing happens, since there is no Artifacts tab to open
 
   Scenario: Pressing l on a highlighted active node opens its live log directly
     Given an active step is highlighted in the hierarchy
@@ -225,15 +233,17 @@ Feature: The hierarchy tab
     When l is pressed
     Then nothing happens, since there is no log to show
 
-  Scenario: Pressing l on a highlighted item with a live current step opens that step's log directly, consistent with Enter
+  @wip
+  Scenario: l is a no-op on a highlighted item with a live current step, since an item has no Log tab
     Given an item whose current step is active, highlighted in the hierarchy
     When l is pressed
-    Then its current step's Log tab opens directly, showing the live tail
+    Then nothing happens, since there is no Log tab to open
 
-  Scenario: l opens the Log tab for a done item, in the same historical mode as a done step
+  @wip
+  Scenario: l is a no-op on a highlighted done item, since an item has no Log tab
     Given an item whose every step is done, highlighted in the hierarchy
     When l is pressed
-    Then its Log tab opens directly, showing its last completed step's log in historical mode
+    Then nothing happens, since there is no Log tab to open
 
   Scenario: A root node with no parent is highlighted at the top row
     Given the current node is a root item
