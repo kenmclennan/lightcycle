@@ -1,14 +1,17 @@
 Feature: The node hub
-  Opening any node - item or step - lands on the hub: a fixed header
-  above four tabs (Description, Hierarchy, Log, Artifacts), landing on
-  whichever tab matches the node's current status. The header stays fixed
-  while ] and [ cycle the tabs; Tab keeps its own global meaning, jumping
-  straight to the backlog (or back to current work) from any tab, at any
-  depth, without first backing out through Esc. Closing the hub always
-  returns to wherever it was opened from - the priority list or the backlog
-  - at the same position. Each tab's own content beyond this shared shell is
-  specified in its own feature file - Description, Hierarchy, Log, and
-  Artifacts alike.
+  Opening any node - item or step - lands on the hub: a fixed header above a
+  tab strip that is type-aware, since an item and a step share no tabs. An
+  item's strip is Description, Hierarchy, and Artifacts; a step's is Detail
+  and Log. Landing follows what the node is: an item always lands on
+  Description, whatever its status; a step lands on Log while its worker is
+  running, and on Detail otherwise. The header stays fixed while ] and [
+  cycle the tabs within whichever strip the type has; Tab keeps its own
+  global meaning, jumping straight to the backlog (or back to current work)
+  from any tab, at any depth, without first backing out through Esc. Closing
+  the hub always returns to wherever it was opened from - the priority list
+  or the backlog - at the same position. Each tab's own content beyond this
+  shared shell is specified in its own feature file - Description,
+  Hierarchy, Detail, Log, and Artifacts alike.
 
   Scenario Outline: Confirming a selected row opens its hub, replacing the list
     Given the priority list is showing with an item
@@ -120,43 +123,91 @@ Feature: The node hub
       | a step is selected, rather than an item                            | STATE   | Enter   |
       | a step is selected, rather than an item                            | STATE   | →       |
 
-  Scenario Outline: Opening a node lands on the tab that matches its status
-    Given a node with the status "<status>", its hub open
+  @wip
+  Scenario: An item's tab strip is Description, Hierarchy, and Artifacts, never Detail or Log
+    Given an item, its hub open
+    Then its tab strip shows exactly "Description", "Hierarchy", and "Artifacts", in that order
+    And no "Detail" tab and no "Log" tab is shown
+
+  @wip
+  Scenario: A step's tab strip is Detail and Log, never Description, Hierarchy, or Artifacts
+    Given a step, its hub open
+    Then its tab strip shows exactly "Detail" and "Log", in that order
+    And no "Description" tab, no "Hierarchy" tab, and no "Artifacts" tab is shown
+
+  @wip
+  Scenario Outline: An item's hub lands on the Description tab, whatever its status
+    Given an item with the status "<status>", its hub open
+    Then it lands on the Description tab
+
+    Examples:
+      | status                                |
+      | active                                |
+      | needs-attention on a human step       |
+      | blocked on another item's completion  |
+      | queued, not yet run                   |
+      | done                                  |
+
+  @wip
+  Scenario Outline: A step's hub lands on Log while its worker runs, and on Detail otherwise
+    Given a step with the status "<status>", its hub open
     Then it lands on the "<tab>" tab
 
     Examples:
-      | status                                | tab       |
-      | active                                | Log       |
-      | needs-attention on a human step       | Artifacts |
-      | blocked on another item's completion  | Hierarchy |
-      | queued, not yet run                   | Hierarchy |
-      | done                                  | Artifacts |
+      | status                                | tab    |
+      | active                                | Log    |
+      | needs-attention, a human step         | Detail |
+      | blocked on another item's completion  | Detail |
+      | queued, not yet run                   | Detail |
+      | done                                  | Detail |
 
-  Scenario Outline: ] cycles forward through the four tabs, wrapping back to Description
-    Given a node's hub is open, on the "<from>" tab
+  @wip
+  Scenario Outline: ] cycles forward through an item's three tabs, wrapping back to Description
+    Given an item's hub is open, on the "<from>" tab
     When ] is pressed
     Then the "<to>" tab becomes active
 
     Examples:
       | from        | to          |
       | Description | Hierarchy   |
-      | Hierarchy   | Log         |
-      | Log         | Artifacts   |
+      | Hierarchy   | Artifacts   |
       | Artifacts   | Description |
 
-  Scenario Outline: [ cycles backward through the same four tabs, in reverse
-    Given a node's hub is open, on the "<from>" tab
+  @wip
+  Scenario Outline: [ cycles backward through an item's three tabs, in reverse
+    Given an item's hub is open, on the "<from>" tab
     When [ is pressed
     Then the "<to>" tab becomes active
 
     Examples:
       | from        | to          |
       | Description | Artifacts   |
-      | Artifacts   | Log         |
-      | Log         | Hierarchy   |
+      | Artifacts   | Hierarchy   |
       | Hierarchy   | Description |
 
-  Scenario Outline: Tab jumps straight to the backlog from any tab in an open node's hub, without cycling tabs
+  @wip
+  Scenario Outline: ] cycles forward through a step's two tabs, wrapping straight back
+    Given a step's hub is open, on the "<from>" tab
+    When ] is pressed
+    Then the "<to>" tab becomes active
+
+    Examples:
+      | from   | to     |
+      | Detail | Log    |
+      | Log    | Detail |
+
+  @wip
+  Scenario Outline: [ cycles backward through a step's two tabs, the same as forward since there are only two
+    Given a step's hub is open, on the "<from>" tab
+    When [ is pressed
+    Then the "<to>" tab becomes active
+
+    Examples:
+      | from   | to     |
+      | Detail | Log    |
+      | Log    | Detail |
+
+  Scenario Outline: Tab jumps straight to the backlog from any tab in an open item's hub, without cycling tabs
     Given the priority list is showing with an item
     When <key> is pressed
     And the "<tab>" tab is active
@@ -167,23 +218,39 @@ Feature: The node hub
       | tab         | key   |
       | Hierarchy   | Enter |
       | Hierarchy   | →     |
-      | Log         | Enter |
-      | Log         | →     |
       | Artifacts   | Enter |
       | Artifacts   | →     |
       | Description | Enter |
       | Description | →     |
 
-  Scenario Outline: Tab jumps straight back to current work from a node opened out of the backlog
+  @wip
+  Scenario Outline: Tab jumps straight to the backlog from any tab in an open step's hub, without cycling tabs
+    Given a step is selected, rather than an item
+    When the "<tab>" tab is active
+    And Tab is pressed
+    Then the backlog is shown in place of the hub
+
+    Examples:
+      | tab    |
+      | Detail |
+      | Log    |
+
+  @wip
+  Scenario Outline: Tab jumps straight back to current work from any tab in an open item's hub, without cycling tabs
     Given the backlog is showing with a todo item
     When <key> is pressed
+    And the "<tab>" tab is active
     And Tab is pressed
     Then the priority list is shown in place of the hub
 
     Examples:
-      | key   |
-      | Enter |
-      | →     |
+      | tab         | key   |
+      | Hierarchy   | Enter |
+      | Hierarchy   | →     |
+      | Artifacts   | Enter |
+      | Artifacts   | →     |
+      | Description | Enter |
+      | Description | →     |
 
   Scenario: A dependency-blocked item's escalation reason names the blocking item
     Given an item blocked on another item's completion, its hub open
@@ -215,21 +282,24 @@ Feature: The node hub
       | Enter |
       | →     |
 
-  Scenario Outline: An escalated step's escalation panel names the resume command on its third line
+  @wip
+  Scenario Outline: An escalated step's escalation panel names no resume command, since resuming is a keypress on Detail now
     Given an item whose current step is escalated, needing rework
     When <key> is pressed
-    Then the escalation panel's third line names the resume command
+    Then the escalation panel shows no resume command
+    And the escalation panel has no third line
 
     Examples:
       | key   |
       | Enter |
       | →     |
 
-  Scenario Outline: An escalated step with a recorded reason shows it alongside the resume command
+  @wip
+  Scenario Outline: An escalated step with a recorded reason shows it on the third line, with no resume command alongside it
     Given an item whose current step is escalated, needing rework, with a recorded reason
     When <key> is pressed
-    Then the escalation panel's third line names the resume command
-    And the escalation panel's third line also names the recorded reason
+    Then the escalation panel's third line names the recorded reason
+    And the escalation panel shows no resume command
 
     Examples:
       | key   |
@@ -272,6 +342,13 @@ Feature: The node hub
     When b is pressed
     Then the blocking item's own hub opens
 
+  @wip
+  Scenario: Following the blocker link shows the blocking item's own brief, not a teleport into its running step
+    Given an item's hub is open, showing an escalation reason that names a blocking item whose own current step is active
+    When b is pressed
+    Then the blocking item's own hub opens, landing on the Description tab
+    And it is not redirected into its running step
+
   Scenario Outline: b does nothing when the escalation has no blocker to name
     Given an item whose current step is escalated, needing rework
     When <key> is pressed
@@ -283,14 +360,15 @@ Feature: The node hub
       | Enter |
       | →     |
 
-  Scenario: The hierarchy table is focused on landing, even when the escalation panel is shown
+  @wip
+  Scenario: The description pane is focused on landing, even when the escalation panel is shown
     Given an item blocked on another item's completion, its hub open
-    Then the hierarchy table has focus, not the escalation panel
+    Then the description pane has focus, not the escalation panel
 
+  @wip
   Scenario Outline: Cycling into the Hierarchy tab still focuses the table, not the escalation panel
     Given an item whose current step is escalated, needing rework
     When <key> is pressed
-    And ] is pressed
     And ] is pressed
     Then the hierarchy table has focus, not the escalation panel
 
@@ -299,25 +377,33 @@ Feature: The node hub
       | Enter |
       | →     |
 
+  @wip
   Scenario: Down moves the hierarchy selection when the escalation panel is shown
     Given an item blocked on another item's completion, with a step of its own, its hub open
+    And I cycle to the "Hierarchy" tab with ]
     When Down is pressed
     Then the selection has moved to the next node
 
+  @wip
   Scenario: Enter opens the highlighted row, not the escalation's blocker, when the escalation panel is shown
     Given an item blocked on another item's completion, with a step of its own, its hub open
+    And I cycle to the "Hierarchy" tab with ]
     When Down is pressed
     And Enter is pressed
     Then that step's own hub opens, not the blocking item's
 
+  @wip
   Scenario: Confirming the hub's own row in the Hierarchy tab does nothing, even when the hierarchy has other rows
     Given an item blocked on another item's completion, with a step of its own, its hub open
+    And I cycle to the "Hierarchy" tab with ]
     When Enter is pressed
     Then the screen stack still has depth 2, unchanged by the confirm
 
+  @wip
   Scenario Outline: Confirming the hub's own row in the Hierarchy tab does nothing
     Given the backlog is showing with a todo item
     When <key> is pressed
+    And I cycle to the "Hierarchy" tab with ]
     And Enter is pressed
     Then the screen stack still has depth 2, unchanged by the confirm
 
@@ -337,8 +423,6 @@ Feature: The node hub
       | tab         | key |
       | Hierarchy   | Esc |
       | Hierarchy   | ←   |
-      | Log         | Esc |
-      | Log         | ←   |
       | Artifacts   | Esc |
       | Artifacts   | ←   |
       | Description | Esc |
@@ -354,8 +438,6 @@ Feature: The node hub
       | tab         | key |
       | Hierarchy   | Esc |
       | Hierarchy   | ←   |
-      | Log         | Esc |
-      | Log         | ←   |
       | Artifacts   | Esc |
       | Artifacts   | ←   |
       | Description | Esc |
@@ -371,11 +453,23 @@ Feature: The node hub
       | Esc |
       | ←   |
 
-  Scenario Outline: Opening a backlog item lands on the Hierarchy tab, showing only that item
+  @wip
+  Scenario Outline: Opening a backlog item lands on the Description tab
     Given the backlog is showing with a todo item
     When <key> is pressed
-    Then its hub opens, landing on the Hierarchy tab
-    And the hierarchy shows only that item, with no step children
+    Then its hub opens, landing on the Description tab
+
+    Examples:
+      | key   |
+      | Enter |
+      | →     |
+
+  @wip
+  Scenario Outline: A backlog item's Hierarchy tab shows only that item, with no step children
+    Given the backlog is showing with a todo item
+    When <key> is pressed
+    And I cycle to the "Hierarchy" tab with ]
+    Then the hierarchy shows only that item, with no step children
 
     Examples:
       | key   |
@@ -392,8 +486,6 @@ Feature: The node hub
       | tab         | key |
       | Hierarchy   | Esc |
       | Hierarchy   | ←   |
-      | Log         | Esc |
-      | Log         | ←   |
       | Artifacts   | Esc |
       | Artifacts   | ←   |
       | Description | Esc |
