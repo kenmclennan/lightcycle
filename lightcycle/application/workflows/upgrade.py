@@ -3,7 +3,14 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.workflows.add import prune_origin
-from lightcycle.application.workflows.bundle_check import check_bundle_references
+from lightcycle.application.workflows.bundle_check import (
+    check_bundle_references,
+    check_prompts,
+)
+from lightcycle.application.workflows.prompt_check import (
+    engine_sources,
+    prompt_drift_warnings,
+)
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.source import parse_source_manifest
@@ -15,6 +22,7 @@ class UpgradeResponse:
     sha: str
     changed: bool
     pruned: List[str] = field(default_factory=list)
+    prompt_warnings: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -59,12 +67,15 @@ class UpgradeWorkflowSourceUseCase:
                 )
                 raise WorkflowSourceError(
                     "bundle has composition problem(s) - %s" % detail)
+            warnings = prompt_drift_warnings(
+                check_prompts(self._fs, checkout, *engine_sources())
+            )
             self._source.materialize(origin, sha, checkout)
             self._source.write_registry(origin, registry["url"], registry["ref"], sha)
             pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
         finally:
             self._source.cleanup(checkout)
-        return UpgradeResponse(origin=origin, sha=sha, changed=(sha != previous), pruned=pruned)
+        return UpgradeResponse(origin=origin, sha=sha, changed=(sha != previous), pruned=pruned, prompt_warnings=warnings)
 
 
 class UpgradeWorkflowSourcesUseCase:

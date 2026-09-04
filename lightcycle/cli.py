@@ -380,6 +380,8 @@ def cmd_workflow(argv):
             if resp.pruned:
                 msg += " (pruned %d)" % len(resp.pruned)
             print(msg)
+            for line in resp.prompt_warnings:
+                sys.stderr.write("%s\n" % line)
             return 0
         if a.sub == "init":
             resp = InitWorkflowOriginUseCase(c.config, c.git, c.workflow_source, c.store, c.fs).execute(a.name)
@@ -396,6 +398,8 @@ def cmd_workflow(argv):
                     print("upgraded %s @ %s" % (r.origin, r.sha))
                 else:
                     print("%s already current (%s)" % (r.origin, r.sha))
+                for line in r.prompt_warnings:
+                    sys.stderr.write("%s\n" % line)
             for f in resp.failures:
                 sys.stderr.write("lc workflow: %s: %s\n" % (f.origin, f.error))
             return 1 if resp.failures else 0
