@@ -2,7 +2,13 @@ Feature: The hierarchy tab
   The Hierarchy tab renders a node's whole tree, from its item down, always
   fully expanded, never collapsed. Every row shows its own real id, its
   current state in the same icon/colour vocabulary as the priority list,
-  and, for a step, the role that performed or is performing it. The node the
+  and, for a step, the role that performed or is performing it. A step's
+  label also carries its phase, and, past the item's first pass, its pass
+  number. When an item has run more than one pass, its steps are grouped
+  under a pass header - a record, not a parent, so a pass header sits one
+  level below the item and its own steps sit one level below that, never a
+  third level of nesting - and a pass header is never opened, jumped to, or
+  collapsed, only ever rendered like any other row. The node the
   hub is open for is highlighted wherever it falls; as the operator scrolls
   past its parent item, that item's row stays pinned to the top so context
   is never lost. Arrow keys move the selection; Enter or → opens
@@ -81,6 +87,44 @@ Feature: The hierarchy tab
     Given a step at stage "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage
     When it renders in the hierarchy
     Then the step's row label reads "Review the PR", not "code-await-merge"
+
+  @wip
+  Scenario: A step row shows its declared phase name ahead of its display phrase
+    Given a step at stage "code-await-merge" whose workflow declares the phase "code" and the display phrase "Review the PR" for that stage
+    When it renders in the hierarchy
+    Then the step's row label includes "code" ahead of "Review the PR"
+
+  @wip
+  Scenario: A step in an item's first pass shows no pass number in its label
+    Given a step in an item's first pass
+    When it renders in the hierarchy
+    Then the step's row label does not mention a pass number
+
+  @wip
+  Scenario: A step past an item's first pass shows its pass number in its label
+    Given a step in an item's second pass
+    When it renders in the hierarchy
+    Then the step's row label mentions its pass number
+
+  @wip
+  Scenario: An item with two passes shows a header for each, each followed by its own steps
+    Given an item with two passes, each with its own steps
+    When it renders in the hierarchy
+    Then two pass-header rows appear, in pass order
+    And each pass's own steps render one level deeper than its own header, directly beneath it, in their original order
+
+  @wip
+  Scenario: A closed pass's header shows the done glyph
+    Given an item with a closed pass whose steps are all done
+    When it renders in the hierarchy
+    Then that pass's header shows the done icon and colour, the same vocabulary every other row uses
+
+  @wip
+  Scenario: An open pass's header participates in the active-glyph pulse alongside its active step
+    Given the hierarchy is open, showing an open pass with an active step inside it
+    Then the pass header's icon rests on the black diamond
+    When the active-glyph animation ticks four times
+    Then the pass header's icon cycles through the diamond pulse frames and returns to the black diamond
 
   Scenario Outline: The id column widens to fit the longest id in the tree, whatever produced it, without truncating or wrapping it
     Given a node in the hierarchy with id "<id>" (<id source>)
@@ -200,6 +244,12 @@ Feature: The hierarchy tab
     When it renders
     Then its row shows its own state icon, using the same icon and colour vocabulary as every other row
 
+  @wip
+  Scenario: Scrolling past both a pass header and its item pins the pass header, not the item
+    Given the hierarchy is scrolled past a pass header, and that pass's item has also scrolled out of view
+    When I look at the pinned-ancestor banner
+    Then it shows the pass header, not the item
+
   Scenario: Pressing a on a highlighted item opens its Artifacts tab directly
     Given an item is highlighted in the hierarchy, not yet opened
     When a is pressed
@@ -239,6 +289,19 @@ Feature: The hierarchy tab
     Given an item whose every step is done, highlighted in the hierarchy
     When l is pressed
     Then nothing happens, since there is no Log tab to open
+
+  @wip
+  Scenario Outline: A pass header is a no-op for every key that would open or jump to it
+    Given a pass header is highlighted in the hierarchy
+    When <key> is pressed
+    Then nothing happens, since a pass header cannot be opened
+
+    Examples:
+      | key   |
+      | Enter |
+      | →     |
+      | a     |
+      | l     |
 
   Scenario: A root node with no parent is highlighted at the top row
     Given the current node is a root item
