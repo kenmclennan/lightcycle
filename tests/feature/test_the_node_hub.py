@@ -248,6 +248,7 @@ def _push_hub(ctx, session, node_id):
         )
     )
     session.pause()
+    session.pause()
 
 
 @given(parsers.parse('a node with the status "{status}", its hub open'))

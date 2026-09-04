@@ -497,7 +497,7 @@ class LightcycleApp(App):
     }}
     DataTable > .datatable--cursor {{
         background: {COLOURS["selected-bg"]};
-        color: {COLOURS["cyan"]};
+        color: {COLOURS["text"]};
     }}
     RichLog {{
         background: {COLOURS["bg"]};

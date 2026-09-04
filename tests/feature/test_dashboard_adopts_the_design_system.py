@@ -304,6 +304,39 @@ def _selected_row_background(ctx):
     assert style.background.hex.lower() == COLOURS["selected-bg"].lower()
 
 
+@then("selecting a row changes its background only, leaving every cell its own colour")
+def _cursor_recolours_nothing(ctx):
+    table = ctx["session"].app.query_one(DataTable)
+    style = table.get_component_styles("datatable--cursor")
+    assert style.color.hex.lower() == COLOURS["text"].lower()
+
+
+def _selected_row_segments(session):
+    selected_bg = COLOURS["selected-bg"].lower()
+    for strip in session.app.screen._compositor.render_strips():
+        segments = [
+            s for s in strip
+            if s.style and s.style.bgcolor
+            and s.style.bgcolor.get_truecolor().hex.lower() == selected_bg
+        ]
+        if any(s.text.strip() for s in segments):
+            return segments
+    return []
+
+
+@then("a selected row's title is the text colour, not the cyan a coloured cell carries")
+def _selected_row_title_is_text(ctx):
+    segments = _selected_row_segments(ctx["session"])
+    assert segments, "no selected row was rendered"
+    painted = {
+        s.style.color.get_truecolor().hex.lower()
+        for s in segments if s.text.strip() and s.style.color
+    }
+    assert COLOURS["text"].lower() in painted, (
+        "every cell on the selected row was recoloured; none kept the text token: %s" % sorted(painted)
+    )
+
+
 @then("the selection cursor glyph is rendered in the cyan colour")
 def _selection_cursor_glyph_cyan(ctx):
     table = ctx["session"].app.query_one(DataTable)
