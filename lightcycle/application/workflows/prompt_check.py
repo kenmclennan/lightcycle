@@ -62,14 +62,17 @@ def engine_sources():
     return cli, domain
 
 
-def prompt_drift_warnings(drift):
+def prompt_drift_detail(drift):
     if not drift:
-        return []
+        return None
     lines = [
-        "%d prompt(s) do not match this engine - a step following them gets an error "
-        "or a null:" % sum(len(m) for m in drift.values())
+        "%d prompt problem(s) - a step following them gets an error or a null:"
+        % sum(len(m) for m in drift.values())
     ]
     for step, messages in sorted(drift.items()):
         for message in messages:
             lines.append("  %s %s" % (step, message))
-    return lines
+    lines.append(
+        "fix the step prompts in the source and push, or pull a ref that targets this engine."
+    )
+    return "\n".join(lines)
