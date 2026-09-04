@@ -23,7 +23,6 @@ Feature: The Description tab
     When I open its Description tab
     Then a calm message is shown in place of the text, not a blank area
 
-  @wip
   Scenario: The Description tab is present even on an item with no description
     Given an item has no description
     When its hub is open

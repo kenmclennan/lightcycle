@@ -114,7 +114,9 @@ def _open_hierarchy_tab(ctx):
     session = launch(make_test_container(store=store))
     ctx["session"] = session
     session.run(
-        lambda: session.app.push_screen(NodeHubScreen(session.app.container, item, session.app._now))
+        lambda: session.app.push_screen(
+            NodeHubScreen(session.app.container, item, session.app._now, initial_tab="hierarchy")
+        )
     )
     session.pause()
     ctx["floor_widget_id"] = "#hierarchy-floor"

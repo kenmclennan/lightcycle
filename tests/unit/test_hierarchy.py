@@ -38,33 +38,38 @@ class TestHierarchyUseCase(unittest.TestCase):
         self.assertEqual([r.node.id for r in rows], [item])
 
 class TestLandingTab(unittest.TestCase):
-    def test_active_lands_on_log(self):
+    def test_item_lands_on_description(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        self.assertEqual(landing_tab(s.get_node(item)), "description")
+
+    def test_active_step_lands_on_log(self):
         s = FakeStore()
         step = s.create_step("s", step="build", role="agent")
         s.claim_ready("agent")
         self.assertEqual(landing_tab(s.get_node(step)), "log")
 
-    def test_needs_attention_human_step_lands_on_artifacts(self):
+    def test_needs_attention_human_step_lands_on_detail(self):
         s = FakeStore()
         step = s.create_step("s", step="await-merge", role="human")
-        self.assertEqual(landing_tab(s.get_node(step)), "artifacts")
+        self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
-    def test_dependency_blocked_lands_on_hierarchy(self):
+    def test_dependency_blocked_step_lands_on_detail(self):
         s = FakeStore()
         blocker = s.create_step("b", step="build", role="agent")
         step = s.create_step("s", step="build", role="agent", deps=[blocker])
-        self.assertEqual(landing_tab(s.get_node(step)), "hierarchy")
+        self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
-    def test_queued_lands_on_hierarchy(self):
+    def test_queued_step_lands_on_detail(self):
         s = FakeStore()
         step = s.create_step("s", step="build", role="agent")
-        self.assertEqual(landing_tab(s.get_node(step)), "hierarchy")
+        self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
-    def test_done_lands_on_artifacts(self):
+    def test_done_step_lands_on_detail(self):
         s = FakeStore()
         step = s.create_step("s", step="build", role="agent")
         s.close(step, "done")
-        self.assertEqual(landing_tab(s.get_node(step)), "artifacts")
+        self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
 class TestRowBucket(unittest.TestCase):
     def test_dependency_blocked_step_is_queued(self):
