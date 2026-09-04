@@ -499,7 +499,10 @@ def cmd_claim(argv):
     if resp.pr:
         out["pr"] = resp.pr
     runs = [
-        {"phase": r.phase, "pass": r.pass_id, "branch": r.branch, "pr": r.pr, "state": r.state}
+        {"phase": r.phase, "pass": r.pass_id, "branch": r.branch, "pr": r.pr,
+         "comments_handled_through": r.comments_handled_through,
+         "comments_dispatched_through": r.comments_dispatched_through,
+         "state": r.state}
         for r in _container.store.runs_of(resp.view.step.parent or resp.view.step.id)
     ]
     if runs:

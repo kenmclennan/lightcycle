@@ -2582,6 +2582,42 @@ class TestCadenceStepDTO(unittest.TestCase):
         self.assertEqual(d["fired_at"], "2026-01-01")
 
 
+class TestRunReadSurface(unittest.TestCase):
+    RUN_FIELDS_A_STEP_READS = (
+        "phase", "pass", "branch", "pr",
+        "comments_handled_through", "comments_dispatched_through", "state",
+    )
+
+    def setUp(self):
+        _fake_setUp(self)
+
+    def _item_with_a_run(self):
+        item = self.store.create_item("an item", "a description")
+        step = self.store.create_step("build: x", step="build", role="agent", parent=item)
+        pid = self.store.open_pass(item)
+        rid = self.store.open_run(item, pid, None)
+        self.store.set_run_field(rid, comments_handled_through="1500.0")
+        return item, step
+
+    def test_show_surfaces_every_run_field_a_step_reads(self):
+        item, _step = self._item_with_a_run()
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        run = json.loads(out)["runs"][0]
+        for field in ("comments_handled_through", "comments_dispatched_through"):
+            self.assertIn(field, run, "lc show dropped run field: %s" % field)
+        self.assertEqual(run["comments_handled_through"], "1500.0")
+
+    def test_claim_surfaces_every_run_field_a_step_reads(self):
+        self._item_with_a_run()
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        run = json.loads(out)["runs"][0]
+        for field in self.RUN_FIELDS_A_STEP_READS:
+            self.assertIn(field, run, "lc claim dropped run field: %s" % field)
+        self.assertEqual(run["comments_handled_through"], "1500.0")
+
+
 class TestNodeDTOReadSurface(unittest.TestCase):
     AGENT_CONSUMED_FIELDS = (
         "id", "item", "stage", "state", "notes", "reflection", "watched_step",
