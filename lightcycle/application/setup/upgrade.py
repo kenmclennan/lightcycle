@@ -35,8 +35,12 @@ def parse_process_list(text):
     return processes
 
 
-def filter_holders(processes, root, exclude_pid):
-    return [(pid, command) for pid, command in processes if pid != exclude_pid and root in command]
+def filter_holders(processes, signatures, exclude_pid):
+    return [
+        (pid, command)
+        for pid, command in processes
+        if pid != exclude_pid and any(sig in command for sig in signatures)
+    ]
 
 
 def format_holders_message(holders):
@@ -46,8 +50,13 @@ def format_holders_message(holders):
     return "\n".join(lines)
 
 
-def venv_root():
-    return os.path.realpath(sys.prefix)
+def own_entry_points():
+    bindir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    return [os.path.join(bindir, "lc"), os.path.join(bindir, "lightcycle")]
+
+
+def venv_signatures():
+    return own_entry_points() + ["-m lightcycle"]
 
 
 def list_processes():
@@ -62,9 +71,9 @@ def list_processes():
     return result.stdout.decode()
 
 
-def scan_venv_holders(exclude_pid=None):
+def scan_venv_holders(exclude_pid=None, list_processes=list_processes):
     return filter_holders(
-        parse_process_list(list_processes()), venv_root(), exclude_pid or os.getpid()
+        parse_process_list(list_processes()), venv_signatures(), exclude_pid or os.getpid()
     )
 
 
