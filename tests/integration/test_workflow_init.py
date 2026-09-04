@@ -21,6 +21,9 @@ _GIT_IDENTITY_ENV = {
 
 
 class FakeStore:
+    def all_items(self):
+        return []
+
     def all_nodes(self):
         return []
 

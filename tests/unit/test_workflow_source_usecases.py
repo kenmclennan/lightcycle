@@ -87,6 +87,9 @@ class FakeStore:
     def all_nodes(self):
         return list(self._nodes)
 
+    def all_items(self):
+        return [n for n in self._nodes if getattr(n, "type", "item") == "item"]
+
 
 class FakeConfig:
     def __init__(self, retention=3, projects_root="/projects"):
