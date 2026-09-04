@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lightcycle.application.setup.upgrade import scan_venv_holders
+from lightcycle.application.setup.upgrade import filter_holders, scan_venv_holders
 
 ROOT = Path(__file__).resolve().parents[2]
 LC = str(ROOT / "bin" / "lc")
@@ -33,13 +33,20 @@ class TestUpgradeCommand(unittest.TestCase):
         )
 
 
-class TestScanVenvHolders(unittest.TestCase):
-    def test_finds_the_current_process_when_not_excluded(self):
-        holders = scan_venv_holders(exclude_pid=1)
-        self.assertIn(os.getpid(), [pid for pid, _ in holders])
+class TestFilterHolders(unittest.TestCase):
+    def test_finds_a_process_running_under_the_venv(self):
+        processes = [(11, "/venv/bin/python -m lightcycle"), (12, "/bin/zsh")]
+        holders = filter_holders(processes, "/venv", exclude_pid=1)
+        self.assertEqual([(11, "/venv/bin/python -m lightcycle")], holders)
 
     def test_excludes_the_given_pid(self):
-        holders = scan_venv_holders(exclude_pid=os.getpid())
+        processes = [(11, "/venv/bin/python -m lightcycle")]
+        self.assertEqual([], filter_holders(processes, "/venv", exclude_pid=11))
+
+
+class TestScanVenvHolders(unittest.TestCase):
+    def test_never_reports_the_scanning_process_as_a_holder(self):
+        holders = scan_venv_holders()
         self.assertNotIn(os.getpid(), [pid for pid, _ in holders])
 
 
