@@ -34,20 +34,44 @@ class TestUpgradeCommand(unittest.TestCase):
 
 
 class TestFilterHolders(unittest.TestCase):
-    def test_finds_a_process_running_under_the_venv(self):
-        processes = [(11, "/venv/bin/python -m lightcycle"), (12, "/bin/zsh")]
-        holders = filter_holders(processes, "/venv", exclude_pid=1)
-        self.assertEqual([(11, "/venv/bin/python -m lightcycle")], holders)
+    def test_matches_a_process_whose_command_contains_a_signature(self):
+        processes = [(11, "/opt/py/python -m lightcycle.adapters.worker_session"), (12, "/bin/zsh")]
+        holders = filter_holders(processes, ["-m lightcycle"], exclude_pid=1)
+        self.assertEqual([(11, "/opt/py/python -m lightcycle.adapters.worker_session")], holders)
 
-    def test_excludes_the_given_pid(self):
-        processes = [(11, "/venv/bin/python -m lightcycle")]
-        self.assertEqual([], filter_holders(processes, "/venv", exclude_pid=11))
+    def test_returns_exactly_the_matching_processes_from_a_mix(self):
+        processes = [
+            (11, "/opt/py/python -m lightcycle.adapters.worker_session"),
+            (12, "/bin/zsh"),
+            (13, "/usr/bin/vim"),
+        ]
+        holders = filter_holders(processes, ["-m lightcycle"], exclude_pid=1)
+        self.assertEqual([(11, "/opt/py/python -m lightcycle.adapters.worker_session")], holders)
+
+    def test_excludes_the_given_pid_even_when_its_command_matches(self):
+        processes = [(11, "/opt/py/python -m lightcycle.adapters.worker_session")]
+        self.assertEqual([], filter_holders(processes, ["-m lightcycle"], exclude_pid=11))
 
 
 class TestScanVenvHolders(unittest.TestCase):
     def test_never_reports_the_scanning_process_as_a_holder(self):
         holders = scan_venv_holders()
         self.assertNotIn(os.getpid(), [pid for pid, _ in holders])
+
+    def test_reports_a_re_execd_worker_process_via_the_module_invocation_shape(self):
+        line = (
+            "4242 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/"
+            "Versions/3.14/Resources/Python.app/Contents/MacOS/Python "
+            "-m lightcycle.adapters.worker_session"
+        )
+        holders = scan_venv_holders(list_processes=lambda: line)
+        self.assertEqual([4242], [pid for pid, _ in holders])
+
+    def test_reports_a_console_script_invocation_via_the_entry_point_shape(self):
+        bindir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        line = "4343 %s/lc --version" % bindir
+        holders = scan_venv_holders(list_processes=lambda: line)
+        self.assertEqual([4343], [pid for pid, _ in holders])
 
 
 if __name__ == "__main__":

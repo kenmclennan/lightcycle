@@ -47,20 +47,20 @@ class TestFilterHolders(unittest.TestCase):
             (3, "/usr/bin/vim"),
         ]
 
-    def test_matches_processes_whose_command_contains_root(self):
+    def test_matches_processes_whose_command_contains_a_signature(self):
         self.assertEqual(
-            filter_holders(self.processes, "/venv", exclude_pid=999),
+            filter_holders(self.processes, ["/venv"], exclude_pid=999),
             [(1, "/venv/bin/python -m lightcycle.pool"), (2, "/venv/bin/lc logs -f LC-59.6")],
         )
 
     def test_excludes_the_given_pid_even_when_its_command_matches(self):
         self.assertEqual(
-            filter_holders(self.processes, "/venv", exclude_pid=1),
+            filter_holders(self.processes, ["/venv"], exclude_pid=1),
             [(2, "/venv/bin/lc logs -f LC-59.6")],
         )
 
     def test_returns_empty_when_nothing_matches(self):
-        self.assertEqual(filter_holders(self.processes, "/no-such-root", exclude_pid=999), [])
+        self.assertEqual(filter_holders(self.processes, ["/no-such-signature"], exclude_pid=999), [])
 
 
 class TestFormatHoldersMessage(unittest.TestCase):
