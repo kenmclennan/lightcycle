@@ -110,6 +110,7 @@ def write_config(projects=None, specs=None):
         "worktree-retry-sleep: 0.25",
         "max-boot-seconds: 120",
         "stall-seconds: 1800",
+        "spin-cap: 3",
         "poll-seconds: 5",
         "worker-history: 20",
         "editor: vi",
@@ -762,6 +763,48 @@ class TestRun(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertEqual(self._breaker_state(), {"open": True, "reset_at": 9999999999})
         self.assertEqual(len(self._workers()), 1)
+
+    def test_run_pool_wide_spin_guard_trips_and_logs_reason(self):
+        step1 = self.store.create_step("build: a", step="build", role="agent")
+        step2 = self.store.create_step("build: b", step="build", role="agent")
+        no_work_text = (
+            "session started\n"
+            "Failed to authenticate: OAuth session expired and could not be refreshed\n"
+            "error: api_error\n"
+        )
+        for i in range(3):
+            log1 = Path(self.root) / "logs" / ("dead-a-%d.log" % i)
+            log2 = Path(self.root) / "logs" / ("dead-b-%d.log" % i)
+            log1.write_text(no_work_text)
+            log2.write_text(no_work_text)
+            dead1 = subprocess.Popen(["true"])
+            dead1.wait()
+            dead2 = subprocess.Popen(["true"])
+            dead2.wait()
+            (Path(self.root) / "logs" / "workers.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "spawnid": "dead-a-%d" % i, "pid": dead1.pid, "step": step1,
+                            "log": str(log1), "started": 0,
+                        },
+                        {
+                            "spawnid": "dead-b-%d" % i, "pid": dead2.pid, "step": step2,
+                            "log": str(log2), "started": 0,
+                        },
+                    ]
+                )
+            )
+            rc, _, err = self._run_once()
+            self.assertEqual(rc, 0, err)
+        self.assertIn("reason=spin-open", self._run_log())
+        spin_state = json.loads((Path(self.root) / "logs" / "spin.json").read_text())
+        self.assertTrue(spin_state["pool"]["tripped"])
+        parked = [
+            n for n in (self.store.get_node(step1), self.store.get_node(step2))
+            if n.role == "human"
+        ]
+        self.assertEqual(len(parked), 1)
 
     def test_run_spawns_nothing_while_breaker_open_pre_reset(self):
         self.store.create_step("build: t", step="build", role="agent")

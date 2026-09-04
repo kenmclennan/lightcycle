@@ -157,6 +157,10 @@ class TestIdleReason(unittest.TestCase):
         result = _result(ready=2, spawned=[], breaker_open=False, free_slots=3)
         self.assertEqual(_idle_reason(result), "ready-role-already-inflight")
 
+    def test_spin_open_returns_spin_open(self):
+        result = _result(ready=2, spawned=[], breaker_open=False, spin_open=True)
+        self.assertEqual(_idle_reason(result), "spin-open")
+
 
 class TestRunLogLines(unittest.TestCase):
     def test_idle_tick_still_produces_a_state_line(self):
@@ -177,6 +181,18 @@ class TestRunLogLines(unittest.TestCase):
         text = _run_log_lines(result, _NOW)
         state_line = [l for l in text.splitlines() if "state" in l][0]
         self.assertIn("reason=breaker-open", state_line)
+
+    def test_spin_open_tick_includes_reason(self):
+        result = _result(ready=2, spawned=[], breaker_open=False, spin_open=True)
+        text = _run_log_lines(result, _NOW)
+        state_line = [l for l in text.splitlines() if "state" in l][0]
+        self.assertIn("reason=spin-open", state_line)
+
+    def test_spin_opened_produces_a_tick_event_line(self):
+        result = _result(ready=2, spawned=[], spin_opened=True)
+        lines, _ = _format_tick(result, None, _NOW)
+        spin_lines = [l for l in lines if "spin" in l]
+        self.assertEqual(len(spin_lines), 1)
 
 
 if __name__ == "__main__":

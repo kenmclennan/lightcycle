@@ -18,6 +18,11 @@ _REJECTED = (
     '{"status":"rejected","resetsAt":%d}}'
 )
 _NO_REJECTION = '{"type":"result","subtype":"success"}'
+_NO_WORK_LOG = (
+    "session started\n"
+    "Failed to authenticate: OAuth session expired and could not be refreshed\n"
+    "error: api_error"
+)
 _TERMINAL_MARKER = json.dumps(
     {
         "type": "assistant",
@@ -190,6 +195,12 @@ def _probe_dead_rejected(ctx):
     spawnid = _add_worker(ctx, "probe", alive=False)
     ctx["rejection_reset_at"] = ctx["now"] + 5000
     ctx["fs"].set_file(spawnid, _REJECTED % ctx["rejection_reset_at"])
+
+
+@given("the probe worker is dead, unchecked, and its log carries neither a rejection nor any session activity")
+def _probe_dead_no_work(ctx):
+    spawnid = _add_worker(ctx, "probe", alive=False)
+    ctx["fs"].set_file(spawnid, _NO_WORK_LOG)
 
 
 @given("the breaker's reset time was re-armed by a probe cooldown")

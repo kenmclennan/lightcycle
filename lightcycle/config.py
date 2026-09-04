@@ -19,6 +19,7 @@ _ENV_OVERRIDE_VARS = {
     "max-session-seconds": "LC_MAX_SESSION_SECONDS",
     "stall-seconds": "LC_STALL_SECONDS",
     "probe-cooldown-seconds": "LC_PROBE_COOLDOWN_SECONDS",
+    "spin-cap": "LC_SPIN_CAP",
     "poll-seconds": "LC_POLL_SECONDS",
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
@@ -52,6 +53,7 @@ _SEED_KEYS = [
     ("max-session-seconds", "1800"),
     ("stall-seconds", "1800"),
     ("probe-cooldown-seconds", "1800"),
+    ("spin-cap", "3"),
     ("poll-seconds", "5"),
     ("worker-history", "20"),
     ("editor", "vi"),
@@ -312,6 +314,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("probe-cooldown-seconds")
+
+    def spin_cap(self):
+        env = self._env_int("LC_SPIN_CAP", None)
+        if env is not None:
+            return env
+        return self._required_int("spin-cap")
 
     def poll_seconds(self):
         env = self._env_int("LC_POLL_SECONDS", None)

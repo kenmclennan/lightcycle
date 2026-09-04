@@ -22,6 +22,7 @@ from lightcycle.domain.pool.worker_session import (
     NUDGE,
     SessionPolicy,
     is_terminal_command,
+    saw_session_activity,
 )
 
 REJECTED_LINE = (
@@ -112,6 +113,29 @@ class TestTerminalCommand(unittest.TestCase):
     def test_empty(self):
         self.assertFalse(is_terminal_command(""))
         self.assertFalse(is_terminal_command(None))
+
+
+class TestSawSessionActivity(unittest.TestCase):
+    def test_true_for_an_assistant_event(self):
+        line = json.dumps({"type": "assistant", "message": {"content": []}})
+        self.assertTrue(saw_session_activity([line]))
+
+    def test_true_for_a_result_event(self):
+        self.assertTrue(saw_session_activity(['{"type":"result","subtype":"success"}']))
+
+    def test_false_for_a_rate_limit_only_log(self):
+        self.assertFalse(saw_session_activity([REJECTED_LINE]))
+
+    def test_false_for_an_empty_log(self):
+        self.assertFalse(saw_session_activity([]))
+
+    def test_false_for_plain_non_json_diagnostic_text(self):
+        lines = [
+            "session started",
+            "Failed to authenticate: OAuth session expired and could not be refreshed",
+            "error: api_error",
+        ]
+        self.assertFalse(saw_session_activity(lines))
 
 
 class TestSessionPolicy(unittest.TestCase):

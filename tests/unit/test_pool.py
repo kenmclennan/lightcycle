@@ -60,11 +60,12 @@ class FakeWorkers:
 
 
 class FakeBreakerGate:
-    def __init__(self, breaker):
+    def __init__(self, breaker, spin_open=False):
         self._breaker = breaker
+        self._spin_open = spin_open
 
     def execute(self, now):
-        return BreakerGateResponse(breaker=self._breaker)
+        return BreakerGateResponse(breaker=self._breaker, spin_open=self._spin_open)
 
 
 class FakeBackupGate:
@@ -239,6 +240,25 @@ class TestTailLog(unittest.TestCase):
         )
         self.assertEqual(result.data, b"456789")
         self.assertEqual(result.offset, 10)
+
+
+class FakeSpinPort:
+    def __init__(self, state=None):
+        self._state = state or {}
+
+    def load(self):
+        return json.loads(json.dumps(self._state))
+
+    def save(self, state):
+        self._state = json.loads(json.dumps(state))
+
+
+_NO_WORK_LOG = (
+    b"session started\n"
+    b"Failed to authenticate: OAuth session expired and could not be refreshed\n"
+    b"error: api_error"
+)
+_REAL_ACTIVITY_LOG = b'{"type":"result","subtype":"success"}'
 
 
 class TestSweep(unittest.TestCase):
@@ -595,6 +615,126 @@ class TestSweep(unittest.TestCase):
         self.assertIn(step, result.swept)
         self.assertEqual(s.get_node(step).state, "ready")
 
+    def _dead_no_work_setup(self, spin_port, spawnid="dead-sp", pid=1):
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="agent")
+        s.update_state(step, "in_progress")
+        s.assign(step, spawnid)
+        log = "/l/%s.log" % spawnid
+        workers = FakeWorkers(workers=[{"spawnid": spawnid, "pid": pid, "step": step, "started": 0, "log": log}])
+        fs = FakeFs(files={log: _NO_WORK_LOG})
+        return s, step, workers, fs
+
+    def test_a_no_work_death_below_the_cap_is_reclaimed_not_parked(self):
+        spin_port = FakeSpinPort()
+        s, step, workers, fs = self._dead_no_work_setup(spin_port)
+        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+            now=1000, max_boot=120, stall_seconds=1800
+        )
+        self.assertIn(step, result.swept)
+        self.assertEqual(result.parked, [])
+        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).role, "agent")
+
+    def test_the_spin_cap_th_consecutive_no_work_death_parks_instead_of_reclaiming(self):
+        spin_port = FakeSpinPort()
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="agent")
+        for i in range(3):
+            s.update_state(step, "in_progress")
+            spawnid = "dead-sp-%d" % i
+            s.assign(step, spawnid)
+            log = "/l/%s.log" % spawnid
+            workers = FakeWorkers(
+                workers=[{"spawnid": spawnid, "pid": i + 1, "step": step, "started": 0, "log": log}]
+            )
+            fs = FakeFs(files={log: _NO_WORK_LOG})
+            result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+                now=1000 + i, max_boot=120, stall_seconds=1800
+            )
+        self.assertEqual(result.parked, [step])
+        self.assertNotIn(step, result.swept)
+        self.assertEqual(s.get_node(step).role, "human")
+        self.assertIn("BLOCKED:", s.get_node(step).notes or "")
+
+    def test_real_session_activity_resets_the_no_work_streak(self):
+        spin_port = FakeSpinPort()
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="agent")
+
+        for i in range(2):
+            s.update_state(step, "in_progress")
+            spawnid = "dead-no-work-%d" % i
+            s.assign(step, spawnid)
+            log = "/l/%s.log" % spawnid
+            workers = FakeWorkers(
+                workers=[{"spawnid": spawnid, "pid": i + 1, "step": step, "started": 0, "log": log}]
+            )
+            fs = FakeFs(files={log: _NO_WORK_LOG})
+            SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+                now=1000 + i, max_boot=120, stall_seconds=1800
+            )
+
+        s.update_state(step, "in_progress")
+        s.assign(step, "dead-real-activity")
+        log = "/l/dead-real-activity.log"
+        workers = FakeWorkers(
+            workers=[{"spawnid": "dead-real-activity", "pid": 50, "step": step, "started": 0, "log": log}]
+        )
+        fs = FakeFs(files={log: _REAL_ACTIVITY_LOG})
+        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+            now=2000, max_boot=120, stall_seconds=1800
+        )
+        self.assertIn(step, result.swept)
+        self.assertEqual(result.parked, [])
+
+        for i in range(2):
+            s.update_state(step, "in_progress")
+            spawnid = "dead-after-reset-%d" % i
+            s.assign(step, spawnid)
+            log = "/l/%s.log" % spawnid
+            workers = FakeWorkers(
+                workers=[{"spawnid": spawnid, "pid": 60 + i, "step": step, "started": 0, "log": log}]
+            )
+            fs = FakeFs(files={log: _NO_WORK_LOG})
+            result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+                now=3000 + i, max_boot=120, stall_seconds=1800
+            )
+        self.assertEqual(result.parked, [], "streak should not yet have reached the cap again")
+
+    def test_no_dead_worker_record_reclaims_normally_and_leaves_spin_state_untouched(self):
+        spin_port = FakeSpinPort()
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="agent")
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        result = SweepUseCase(s, workers, spin_port=spin_port, spin_cap=3).execute(
+            now=1000, max_boot=120, stall_seconds=1800
+        )
+        self.assertIn(step, result.swept)
+        self.assertEqual(result.parked, [])
+        self.assertEqual(spin_port.load(), {})
+
+    def test_a_stalled_alive_reclaim_never_touches_the_spin_state(self):
+        spin_port = FakeSpinPort()
+        s = FakeStore()
+        step = s.create_step("t", step="build", role="agent")
+        s.update_state(step, "in_progress")
+        s.assign(step, "stalled-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "stalled-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
+            ],
+            alive_pids={999},
+            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
+        )
+        result = SweepUseCase(s, workers, spin_port=spin_port, spin_cap=3).execute(
+            now=1000, max_boot=120, stall_seconds=1800
+        )
+        self.assertIn(step, result.swept)
+        self.assertEqual(result.parked, [])
+        self.assertEqual(spin_port.load(), {})
+
 
 class TestTick(unittest.TestCase):
     def test_reaps_dead_children_before_probing_liveness(self):
@@ -688,6 +828,31 @@ class TestTick(unittest.TestCase):
         ).execute(TickInput(now=1000.0))
         self.assertEqual(len(spawner.spawned), 2)
         self.assertFalse(result.breaker_open)
+
+    def test_spin_open_caps_slots_at_one_even_with_more_free_slots(self):
+        s = FakeStore()
+        s.create_step("b1", step="build", role="agent")
+        s.create_step("b2", step="build", role="agent")
+        s.create_step("b3", step="build", role="agent")
+        spawner = FakeSpawner()
+        breaker_gate = FakeBreakerGate(Breaker(), spin_open=True)
+        result = TickUseCase(
+            s, FakeWorkers(), spawner, FakeConfig(max_agents=4), breaker_gate=breaker_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertLessEqual(len(spawner.spawned), 1)
+        self.assertTrue(result.spin_open)
+
+    def test_spin_closed_does_not_limit_slots(self):
+        s = FakeStore()
+        s.create_step("b1", step="build", role="agent")
+        s.create_step("b2", step="build", role="agent")
+        spawner = FakeSpawner()
+        breaker_gate = FakeBreakerGate(Breaker(), spin_open=False)
+        result = TickUseCase(
+            s, FakeWorkers(), spawner, FakeConfig(max_agents=4), breaker_gate=breaker_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(len(spawner.spawned), 2)
+        self.assertFalse(result.spin_open)
 
     def test_hook_completions_surfaced_generically(self):
         s = FakeStore()

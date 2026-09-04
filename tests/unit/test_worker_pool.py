@@ -94,6 +94,25 @@ class TestWorkerPool(unittest.TestCase):
             [w.spawnid for w in pool.dead_unchecked(probe({2}))], ["dead"]
         )
 
+    def test_dead_for_step_returns_none_when_no_worker_is_on_record(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "other"}])
+        self.assertIsNone(pool.dead_for_step(probe(set()), "b-1"))
+
+    def test_dead_for_step_returns_none_when_the_only_matching_worker_is_alive(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1"}])
+        self.assertIsNone(pool.dead_for_step(probe({1}), "b-1"))
+
+    def test_dead_for_step_returns_the_most_recently_started_dead_entry(self):
+        pool = WorkerPool.from_state(
+            [
+                {"spawnid": "older", "pid": 1, "step": "b-1", "started": 100},
+                {"spawnid": "newer", "pid": 2, "step": "b-1", "started": 200},
+                {"spawnid": "other-step", "pid": 3, "step": "b-2", "started": 300},
+            ]
+        )
+        dead = pool.dead_for_step(probe(set()), "b-1")
+        self.assertEqual(dead.spawnid, "newer")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -55,6 +55,7 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 | `max-boot-seconds` / `max-session-seconds` | worker boot and session caps |
 | `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step |
 | `probe-cooldown-seconds` | how long the breaker waits before allowing another probe after the previous one stalled |
+| `spin-cap` | consecutive no-work worker deaths, on one step or pool-wide, before the pool parks the step / caps itself to one worker |
 | `retro-interval-reflections` | reflections pending across un-retroed items, between engine retro audits |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
 | `max-title-length` | cap on an item's or step's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description` |

@@ -47,3 +47,7 @@ class WorkerPool:
 
     def dead_unchecked(self, probe):
         return [w for w in self._workers if w.spawnid and not w.checked and not w.is_alive(probe)]
+
+    def dead_for_step(self, probe, step_id):
+        matches = [w for w in self._workers if w.step == step_id and not w.is_alive(probe)]
+        return max(matches, key=lambda w: w.started, default=None)
