@@ -1045,17 +1045,17 @@ class TestLink(unittest.TestCase):
 
     def test_link_appends_artifact(self):
         sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
-        rc, out, err = call(_cli_mod.cmd_attach, sid, "pr", "https://gh/9", "--label", "PR 9")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "design", "https://gh/9", "--label", "PR 9")
         self.assertEqual(rc, 0, err)
         arts = self.store.item_artifacts(sid)
-        self.assertEqual(arts[0].type, "pr")
+        self.assertEqual(arts[0].type, "design")
         self.assertEqual(arts[0].value, "https://gh/9")
         self.assertEqual(arts[0].label, "PR 9")
 
     def test_attach_internal_and_kind_flags_round_trip(self):
         sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
         rc, out, err = call(
-            _cli_mod.cmd_attach, sid, "pr", "https://gh/9", "--internal", "--kind", "sometext"
+            _cli_mod.cmd_attach, sid, "design", "https://gh/9", "--internal", "--kind", "sometext"
         )
         self.assertEqual(rc, 0, err)
         arts = self.store.item_artifacts(sid)
@@ -1576,6 +1576,16 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         self.assertEqual(rc2, 1)
         self.assertIn("repo", err2)
         self.assertEqual(self.store.children(item), [])
+
+    def test_attaching_a_run_field_to_a_step_id_refuses(self):
+        item = self._armed_item()
+        _, step_id, _ = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
+        step_id = step_id.strip()
+        rc, out, err = call(_cli_mod.cmd_attach, step_id, "pr", "https://gh/1")
+        self.assertEqual(rc, 1)
+        self.assertIn(step_id, err)
+        self.assertIn("step", err)
+        self.assertEqual(len(err.strip().splitlines()), 1)
 
 
 class TestPruneWorkers(unittest.TestCase):

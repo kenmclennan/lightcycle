@@ -14,6 +14,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.ports.git import GitReadError
+from lightcycle.ports.store import NodeNotFoundError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -190,10 +191,10 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
-            LinkArtifactInput(item=sid, atype="pr", value="http://x/1", label="PR 1")
+            LinkArtifactInput(item=sid, atype="design", value="http://x/1", label="PR 1")
         )
         arts = s.item_artifacts(sid)
-        self.assertEqual(arts[0].type, "pr")
+        self.assertEqual(arts[0].type, "design")
         self.assertEqual(arts[0].value, "http://x/1")
         self.assertEqual(arts[0].label, "PR 1")
 
@@ -214,7 +215,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
-            LinkArtifactInput(item=sid, atype="pr", value="http://x/1", kind="something-explicit")
+            LinkArtifactInput(item=sid, atype="design", value="http://x/1", kind="something-explicit")
         )
         self.assertEqual(s.item_artifacts(sid)[0].kind, "something-explicit")
 
@@ -222,15 +223,15 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
-            LinkArtifactInput(item=sid, atype="pr", value="http://x/1")
+            LinkArtifactInput(item=sid, atype="design", value="http://x/1")
         )
-        self.assertEqual(s.item_artifacts(sid)[0].kind, "url")
+        self.assertEqual(s.item_artifacts(sid)[0].kind, "text")
 
     def test_internal_defaults_false(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
-            LinkArtifactInput(item=sid, atype="pr", value="http://x/1")
+            LinkArtifactInput(item=sid, atype="design", value="http://x/1")
         )
         self.assertFalse(s.item_artifacts(sid)[0].internal)
 
@@ -238,7 +239,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         LinkArtifactUseCase(s).execute(
-            LinkArtifactInput(item=sid, atype="pr", value="http://x/1", internal=True)
+            LinkArtifactInput(item=sid, atype="design", value="http://x/1", internal=True)
         )
         self.assertTrue(s.item_artifacts(sid)[0].internal)
 
@@ -343,6 +344,43 @@ class TestLinkArtifact(unittest.TestCase):
         arts = s.item_artifacts(sid)
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].value, "specs/old.md")
+
+    def test_run_field_on_a_step_id_raises_and_writes_no_orphan(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        tid = s.create_step("t", parent=sid)
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=tid, atype="pr", value="http://x/1")
+            )
+        self.assertEqual(s.item_artifacts(sid), [])
+        self.assertEqual(s.item_artifacts(tid), [])
+
+    def test_run_field_on_an_item_with_no_open_run_raises_and_writes_no_orphan(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="branch", value="grid/x")
+            )
+        self.assertEqual(s.item_artifacts(sid), [])
+
+    def test_run_field_on_an_item_with_an_open_run_routes_to_the_run(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        rid = s.open_run(sid, s.open_pass(sid), "spec")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="comments-handled", value="1700000000")
+        )
+        self.assertEqual(s.get_run(rid).comments_handled_through, "1700000000")
+        self.assertEqual(s.item_artifacts(sid), [])
+
+    def test_run_field_on_an_unknown_id_raises_node_not_found(self):
+        s = FakeStore()
+        with self.assertRaises(NodeNotFoundError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item="LC-999", atype="pr", value="http://x/1")
+            )
 
 
 class TestCloseItem(unittest.TestCase):
