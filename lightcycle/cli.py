@@ -1255,6 +1255,9 @@ def cmd_set(argv):
     return 0
 
 
+_REFLECTION_TYPES = ("reflection", "feedback")
+
+
 def cmd_attach(argv):
     ap = argparse.ArgumentParser(prog="lc attach")
     ap.add_argument("id")
@@ -1274,7 +1277,7 @@ def cmd_attach(argv):
             sys.stderr.write("no such file: %s\n" % a.file)
             return 1
         value = data.decode()
-    if a.type == "feedback":
+    if a.type in _REFLECTION_TYPES:
         ReflectUseCase(_container.store, _container.fs).execute(
             ReflectInput(step=a.id, feedback=value)
         )
@@ -1688,7 +1691,7 @@ def _print_retro(resp, interval=None):
         for item in resp.feedback:
             print("  [%s] %s" % (item.step, item.text))
     elif resp.reflection_count == 0:
-        print("no reflections yet - agents call `lc reflect --feedback` before `lc done`")
+        print("no reflections yet - agents call `lc attach <step> reflection` before `lc done`")
     print("\nPer-item signals:")
     for row in resp.item_signals:
         sig_str = "  ".join(_fmt_signal(k, row.signals[k]) for k in sorted(row.signals))

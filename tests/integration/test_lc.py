@@ -2321,6 +2321,32 @@ class TestReflect(unittest.TestCase):
         self.assertEqual(data["feedback"], "pytest not found; spec thin on errors")
         self.assertEqual(data["step"], tid)
 
+    def test_the_name_the_step_prompts_use_is_stored_readably(self):
+        sid, tid = self._file_story()
+        rc, out, err = call(
+            _cli_mod.cmd_attach, tid, "reflection", "the spec was thin on errors"
+        )
+        self.assertEqual(rc, 0, err)
+        refs = [a for a in self.store.item_artifacts(tid) if a.type == "reflection"]
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(
+            json.loads(refs[0].value)["feedback"], "the spec was thin on errors"
+        )
+
+    def test_a_reflection_survives_all_the_way_to_what_the_retro_reads(self):
+        from lightcycle.application.feedback.retro import RetroUseCase
+
+        sid, tid = self._file_story()
+        call(_cli_mod.cmd_attach, tid, "reflection", "the spec was thin on errors")
+        self.store.close(tid, "done")
+        self.store.close(sid, "done")
+
+        reflections = RetroUseCase(self.store, _cli_mod._flow())._reflections_of(tid)
+
+        self.assertEqual(
+            [r.feedback for r in reflections], ["the spec was thin on errors"]
+        )
+
     def test_reflect_multiple_calls_append(self):
         sid, tid = self._file_story()
         call(_cli_mod.cmd_attach, tid, "feedback", "first")
