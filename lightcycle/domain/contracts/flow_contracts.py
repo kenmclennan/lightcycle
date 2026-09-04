@@ -96,6 +96,22 @@ class FlowContracts:
         known = set(self._steps) | set(self.terminals())
         return sorted(s for s in self._graph.display if s not in known)
 
+    def unknown_pass_ends(self):
+        known = set(self._steps) | set(self.terminals())
+        return sorted(
+            "%s %s" % (stage, outcome)
+            for stage, outcome in self._graph.pass_ends
+            if stage not in known
+        )
+
+    def unreachable_pass_ends(self):
+        return sorted(
+            "%s %s" % (stage, outcome)
+            for stage, outcome in self._graph.pass_ends
+            if stage in set(self._steps) | set(self.terminals())
+            and outcome not in (self._graph.edges.get(stage) or {})
+        )
+
     def phase_conflicts(self):
         groups = {}
         for stage, phase in self._graph.phases.items():
@@ -109,6 +125,7 @@ class FlowContracts:
             not self.missing() and not self._dups
             and not self.phase_gaps() and not self.unknown_phases() and not self.phase_conflicts()
             and not self.unknown_display()
+            and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
         )
 
     def as_dict(self):
@@ -126,5 +143,7 @@ class FlowContracts:
             "unknown_phases": self.unknown_phases(),
             "phase_conflicts": self.phase_conflicts(),
             "unknown_display": self.unknown_display(),
+            "unknown_pass_ends": self.unknown_pass_ends(),
+            "unreachable_pass_ends": self.unreachable_pass_ends(),
             "ok": self.ok(),
         }

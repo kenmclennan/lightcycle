@@ -637,6 +637,8 @@ def _workflow_check(selector, as_json):
     unknown_phases = an["unknown_phases"]
     phase_conflicts = an["phase_conflicts"]
     unknown_display = an["unknown_display"]
+    unknown_pass_ends = an["unknown_pass_ends"]
+    unreachable_pass_ends = an["unreachable_pass_ends"]
 
     hooks = resp.hooks
     if as_json:
@@ -659,6 +661,8 @@ def _workflow_check(selector, as_json):
                     "unknown_phases": unknown_phases,
                     "phase_conflicts": phase_conflicts,
                     "unknown_display": unknown_display,
+                    "unknown_pass_ends": unknown_pass_ends,
+                    "unreachable_pass_ends": unreachable_pass_ends,
                     "ok": ok,
                 },
                 indent=2,
@@ -711,6 +715,16 @@ def _workflow_check(selector, as_json):
             "display phrase declared for a stage this bundle does not reference: %s\n"
             % ", ".join(unknown_display)
         )
+    if unknown_pass_ends:
+        sys.stderr.write(
+            "pass-end: declared for a stage this bundle does not reference: %s\n"
+            % ", ".join(unknown_pass_ends)
+        )
+    if unreachable_pass_ends:
+        sys.stderr.write(
+            "pass-end: names an outcome the stage cannot emit (no such edge): %s\n"
+            % ", ".join(unreachable_pass_ends)
+        )
     return 0 if ok else 1
 
 
@@ -737,6 +751,9 @@ def _workflow_describe(selector, as_mermaid=False):
     phases = sorted({p for p in graph.phases.values()})
     if phases:
         print("  phases       %s" % ", ".join(phases))
+    if graph.pass_ends:
+        print("  pass ends    %s" % ", ".join(
+            "%s %s" % pair for pair in sorted(graph.pass_ends)))
     print(
         "  steps        %s"
         % ", ".join(display_stage(assembled.display_of(s), s) for s in assembled.steps())

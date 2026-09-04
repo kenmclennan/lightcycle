@@ -32,6 +32,16 @@ def check_bundle_references(fs, root):
                 "display phrase declared for a stage this bundle does not reference: %s"
                 % ", ".join(contracts.unknown_display())
             )
+        if contracts.unknown_pass_ends():
+            messages.append(
+                "pass-end declared for a stage this bundle does not reference: %s"
+                % ", ".join(contracts.unknown_pass_ends())
+            )
+        if contracts.unreachable_pass_ends():
+            messages.append(
+                "pass-end names an outcome the stage cannot emit (no such edge): %s"
+                % ", ".join(contracts.unreachable_pass_ends())
+            )
         if messages:
             problems[name] = messages
     return problems
