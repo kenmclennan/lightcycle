@@ -120,12 +120,31 @@ class FlowContracts:
             groups.setdefault(phase, set()).add(self._flow.workspace_of(stage))
         return {p: sorted(ws) for p, ws in groups.items() if len(ws) > 1}
 
+    def _collect_hook_phase_mismatch(self, mismatches, hook, occ, target_index):
+        if len(occ) <= target_index:
+            return
+        gate, target = occ[0], occ[target_index]
+        if not self._flow.owner_of(target):
+            return
+        gate_phase, target_phase = self._flow.phase_of(gate), self._flow.phase_of(target)
+        if gate_phase and target_phase and gate_phase != target_phase:
+            mismatches.append((hook, gate, gate_phase, target, target_phase))
+
+    def hook_phase_mismatches(self):
+        mismatches = []
+        for occ in self._graph.hook_occurrences("pr_feedback"):
+            self._collect_hook_phase_mismatch(mismatches, "pr_feedback", occ, 1)
+        for occ in self._graph.hook_occurrences("ci_failed_cap"):
+            self._collect_hook_phase_mismatch(mismatches, "ci_failed_cap", occ, 3)
+        return sorted(mismatches)
+
     def ok(self):
         return (
             not self.missing() and not self._dups
             and not self.phase_gaps() and not self.unknown_phases() and not self.phase_conflicts()
             and not self.unknown_display()
             and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
+            and not self.hook_phase_mismatches()
         )
 
     def as_dict(self):
@@ -145,5 +164,6 @@ class FlowContracts:
             "unknown_display": self.unknown_display(),
             "unknown_pass_ends": self.unknown_pass_ends(),
             "unreachable_pass_ends": self.unreachable_pass_ends(),
+            "hook_phase_mismatches": self.hook_phase_mismatches(),
             "ok": self.ok(),
         }

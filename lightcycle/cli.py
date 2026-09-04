@@ -650,6 +650,7 @@ def _workflow_check(selector, as_json):
     unknown_display = an["unknown_display"]
     unknown_pass_ends = an["unknown_pass_ends"]
     unreachable_pass_ends = an["unreachable_pass_ends"]
+    hook_phase_mismatches = an["hook_phase_mismatches"]
 
     hooks = resp.hooks
     if as_json:
@@ -674,6 +675,7 @@ def _workflow_check(selector, as_json):
                     "unknown_display": unknown_display,
                     "unknown_pass_ends": unknown_pass_ends,
                     "unreachable_pass_ends": unreachable_pass_ends,
+                    "hook_phase_mismatches": hook_phase_mismatches,
                     "ok": ok,
                 },
                 indent=2,
@@ -721,6 +723,11 @@ def _workflow_check(selector, as_json):
         )
     for phase, workspaces in sorted(phase_conflicts.items()):
         sys.stderr.write("phase: phase '%s' spans workspaces: %s\n" % (phase, ", ".join(workspaces)))
+    for hook, gate, gate_phase, target, target_phase in hook_phase_mismatches:
+        sys.stderr.write(
+            "phase: %s on '%s' (phase '%s') targets '%s' in a different phase ('%s')\n"
+            % (hook, gate, gate_phase, target, target_phase)
+        )
     if unknown_display:
         sys.stderr.write(
             "display phrase declared for a stage this bundle does not reference: %s\n"

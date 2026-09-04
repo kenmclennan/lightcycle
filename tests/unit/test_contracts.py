@@ -173,6 +173,112 @@ class TestPhaseContracts(unittest.TestCase):
         self.assertEqual(a.phase_conflicts(), {})
 
 
+class TestHookPhaseMismatches(unittest.TestCase):
+    def test_pr_feedback_across_phases_is_flagged(self):
+        metas = {
+            "gate": {"step": "gate", "phase": "spec", "on_pr_feedback": "target"},
+            "target": {"step": "target", "phase": "code"},
+        }
+        a = contracts(metas)
+        self.assertEqual(
+            a.hook_phase_mismatches(), [("pr_feedback", "gate", "spec", "target", "code")]
+        )
+        self.assertFalse(a.ok())
+
+    def test_pr_feedback_same_phase_is_not_flagged(self):
+        metas = {
+            "gate": {"step": "gate", "phase": "spec", "on_pr_feedback": "target"},
+            "target": {"step": "target", "phase": "spec"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.hook_phase_mismatches(), [])
+        self.assertTrue(a.ok())
+
+    def test_ci_failed_cap_across_phases_is_flagged(self):
+        text = (
+            "entry: gate\n\n"
+            "hooks:\n  ci_failed_cap  gate  ci-failed  3  target\n\n"
+            "phase:\n  gate  spec\n  target  code\n"
+        )
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(
+            a.hook_phase_mismatches(), [("ci_failed_cap", "gate", "spec", "target", "code")]
+        )
+        self.assertFalse(a.ok())
+
+    def test_ci_failed_cap_same_phase_is_not_flagged(self):
+        text = (
+            "entry: gate\n\n"
+            "hooks:\n  ci_failed_cap  gate  ci-failed  3  target\n\n"
+            "phase:\n  gate  spec\n  target  spec\n"
+        )
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.hook_phase_mismatches(), [])
+        self.assertTrue(a.ok())
+
+    def test_mixed_gates_flags_only_the_mismatched_pair(self):
+        metas = {
+            "gate1": {"step": "gate1", "phase": "spec", "on_pr_feedback": "target1"},
+            "target1": {"step": "target1", "phase": "spec"},
+            "gate2": {"step": "gate2", "phase": "spec", "on_pr_feedback": "target2"},
+            "target2": {"step": "target2", "phase": "code"},
+        }
+        a = contracts(metas)
+        self.assertEqual(
+            a.hook_phase_mismatches(), [("pr_feedback", "gate2", "spec", "target2", "code")]
+        )
+
+    def test_pr_conflict_escalate_is_not_treated_as_a_direct_stage_reference(self):
+        metas = {
+            "gate": {
+                "step": "gate", "phase": "spec",
+                "on_pr_conflict_escalate": "escalate", "routes": {"escalate": "target"},
+            },
+            "target": {"step": "target", "phase": "code"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.hook_phase_mismatches(), [])
+
+    def test_pr_merge_crossing_phases_via_edges_is_not_flagged(self):
+        metas = {
+            "gate": {
+                "step": "gate", "phase": "spec",
+                "on_pr_merge": "merged", "routes": {"merged": "target"},
+            },
+            "target": {"step": "target", "phase": "code"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.hook_phase_mismatches(), [])
+
+    def test_fileless_terminal_target_is_exempt(self):
+        metas = {"gate": {"step": "gate", "phase": "spec", "on_pr_feedback": "review-conflict"}}
+        a = contracts(metas)
+        self.assertEqual(a.hook_phase_mismatches(), [])
+        self.assertTrue(a.ok())
+
+    def test_no_phase_block_at_all_produces_no_mismatches(self):
+        metas = {
+            "gate": {"step": "gate", "on_pr_feedback": "target"},
+            "target": {"step": "target"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.hook_phase_mismatches(), [])
+
+    def test_as_dict_includes_hook_phase_mismatches(self):
+        metas = {
+            "gate": {"step": "gate", "phase": "spec", "on_pr_feedback": "target"},
+            "target": {"step": "target", "phase": "code"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.as_dict()["hook_phase_mismatches"], a.hook_phase_mismatches())
+
+
 class TestDisplayContracts(unittest.TestCase):
     def test_display_for_destination_only_fileless_target_is_not_unknown(self):
         text = (
