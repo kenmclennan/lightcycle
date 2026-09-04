@@ -2027,6 +2027,10 @@ class TestUnblock(unittest.TestCase):
         t = self.store.get_node(b)
         self.assertIsNone(t.needs)
         self.assertNotIn("BLOCKED:", t.notes or "")
+        self.assertIn(
+            "PARK RESOLVED: reason=conflicts on rebase | needs=rebase first",
+            t.notes or "",
+        )
 
     def test_unblock_refuses_human_step(self):
         (_steps_dir(self.root) / "ready-merge.md").write_text(

@@ -13,3 +13,10 @@ class Park:
 
     def as_dict(self) -> dict:
         return {"reason": self.reason, "needs": self.needs, "tried": self.tried}
+
+    def as_history_note(self):
+        fields = (("reason", self.reason), ("needs", self.needs), ("tried", self.tried))
+        parts = [
+            "%s=%s" % (name, " ".join(value.split())) for name, value in fields if value
+        ]
+        return "PARK RESOLVED: %s" % " | ".join(parts) if parts else None
