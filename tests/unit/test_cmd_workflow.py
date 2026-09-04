@@ -117,6 +117,9 @@ class FakeStore:
     def __init__(self, nodes=None):
         self._nodes = nodes or []
 
+    def all_items(self):
+        return [n for n in self._nodes if getattr(n, "type", "item") == "item"]
+
     def all_nodes(self):
         return list(self._nodes)
 

@@ -205,6 +205,9 @@ class TestListingAndRemoval(unittest.TestCase):
 
 
 class _Store:
+    def all_items(self):
+        return []
+
     def all_nodes(self):
         return []
 
