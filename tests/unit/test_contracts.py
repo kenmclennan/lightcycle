@@ -256,3 +256,34 @@ class TestRealStepsFlowComposition(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPassEndContracts(unittest.TestCase):
+    def _contracts(self, graph_text):
+        graph = parse_graph(graph_text)
+        flow = Flow.from_graph(graph, CONTRACT_METAS)
+        return FlowContracts(flow, graph, CONTRACT_METAS)
+
+    _BASE = (
+        "entry: build\n\n"
+        "nodes:\n  build  coder\n  review  reviewer\n\n"
+        "edges:\n  build   done  review\n  review  done\n"
+    )
+
+    def test_a_pass_end_naming_an_unreferenced_stage_is_a_problem(self):
+        c = self._contracts(self._BASE + "\npass-end:\n  nowhere  done\n")
+        self.assertEqual(c.unknown_pass_ends(), ["nowhere done"])
+
+    def test_a_pass_end_naming_an_outcome_the_stage_cannot_emit_is_a_problem(self):
+        c = self._contracts(self._BASE + "\npass-end:\n  build  nonsense\n")
+        self.assertEqual(c.unreachable_pass_ends(), ["build nonsense"])
+
+    def test_a_pass_end_on_a_real_stage_and_outcome_is_accepted(self):
+        c = self._contracts(self._BASE + "\npass-end:\n  build  done\n")
+        self.assertEqual(c.unknown_pass_ends(), [])
+        self.assertEqual(c.unreachable_pass_ends(), [])
+
+    def test_no_pass_end_at_all_is_accepted(self):
+        c = self._contracts(self._BASE)
+        self.assertEqual(c.unknown_pass_ends(), [])
+        self.assertEqual(c.unreachable_pass_ends(), [])
