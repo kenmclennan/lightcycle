@@ -35,5 +35,7 @@ class PhaseRun:
         return {
             "id": self.id, "item": self.item, "pass_id": self.pass_id, "phase": self.phase,
             "branch": self.branch, "pr": self.pr, "content_pin": self.content_pin,
+            "comments_dispatched_through": self.comments_dispatched_through,
+            "comments_handled_through": self.comments_handled_through,
             "state": self.state, "opened_at": self.opened_at, "closed_at": self.closed_at,
         }
