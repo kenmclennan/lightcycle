@@ -2774,6 +2774,81 @@ class TestShowSurfacesWorkflowResolution(unittest.TestCase):
         self.assertIsNotNone(d["workflow_error"])
 
 
+class TestShowSurfacesPhaseAndPr(unittest.TestCase):
+    _METAS = {
+        "spec-await-merge": {"step": "spec-await-merge", "phase": "spec"},
+        "code-await-merge": {"step": "code-await-merge", "phase": "code"},
+    }
+
+    def setUp(self):
+        _fake_setUp(self)
+        write_workflow(self.root, self._METAS)
+        self.item = self.store.create_item(
+            "item", "a description", workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA)
+        )
+        self.pid = self.store.open_pass(self.item)
+
+    def _open_run(self, phase, pr=None):
+        rid = self.store.open_run(self.item, self.pid, phase)
+        if pr:
+            self.store.set_run_field(rid, pr=pr)
+        return rid
+
+    def test_step_in_code_phase_gets_its_own_phase_and_pr(self):
+        self._open_run("spec", "https://example.com/pr/spec")
+        self._open_run("code", "https://example.com/pr/code")
+        step = self.store.create_step(
+            "await merge", step="code-await-merge", role="human", parent=self.item
+        )
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["phase"], "code")
+        self.assertEqual(d["pr"], "https://example.com/pr/code")
+
+    def test_sibling_step_in_spec_phase_gets_the_spec_run(self):
+        self._open_run("spec", "https://example.com/pr/spec")
+        self._open_run("code", "https://example.com/pr/code")
+        step = self.store.create_step(
+            "await merge", step="spec-await-merge", role="human", parent=self.item
+        )
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["phase"], "spec")
+        self.assertEqual(d["pr"], "https://example.com/pr/spec")
+
+    def test_step_with_no_workflow_anywhere_gets_neither_key(self):
+        item = self.store.create_item("item", "a description")
+        step = self.store.create_step(
+            "await merge", step="code-await-merge", role="human", parent=item
+        )
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertNotIn("phase", d)
+        self.assertNotIn("pr", d)
+
+    def test_phase_present_without_a_pr_when_the_run_has_none_set(self):
+        self._open_run("code")
+        step = self.store.create_step(
+            "await merge", step="code-await-merge", role="human", parent=self.item
+        )
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["phase"], "code")
+        self.assertNotIn("pr", d)
+
+    def test_bare_item_with_a_legacy_unphased_run_gets_neither_key(self):
+        self._open_run(None, "https://example.com/pr/legacy")
+        rc, out, err = call(_cli_mod.cmd_show, self.item)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertNotIn("phase", d)
+        self.assertNotIn("pr", d)
+
+
 class TestClaimConfigReadSurface(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
