@@ -101,6 +101,15 @@ def _given_view_scrolled_forward(ctx):
     ctx["session"].press("down")
 
 
+@given("an item has no description")
+def _item_has_no_description(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "")
+    ctx["store"] = store
+    ctx["item_id"] = item
+    ctx["session"] = launch(make_test_container(store=store))
+
+
 @when("I open its Description tab")
 def _open_description_tab(ctx):
     pass
@@ -108,7 +117,12 @@ def _open_description_tab(ctx):
 
 @when("its hub is open")
 def _hub_is_open(ctx):
-    pass
+    session = ctx["session"]
+    screen = NodeHubScreen(session.app.container, ctx["item_id"], session.app._now)
+    session.run(lambda: session.app.push_screen(screen))
+    session.pause()
+    session.pause()
+    ctx["node_id"] = ctx["item_id"]
 
 
 @when("Down is pressed")
@@ -162,11 +176,10 @@ def _calm_message_shown(ctx):
     assert _widget_text(ctx["session"], empty) != ""
 
 
-@then("the Description tab is present, alongside Hierarchy, Log, and Artifacts")
+@then("the Description tab is present, alongside Hierarchy and Artifacts")
 def _description_tab_present(ctx):
     screen = ctx["session"].app.screen
     assert _widget_text(ctx["session"], screen.query_one("#hub-tab-hierarchy", Static)) == "Hierarchy"
-    assert _widget_text(ctx["session"], screen.query_one("#hub-tab-log", Static)) == "Log"
     assert _widget_text(ctx["session"], screen.query_one("#hub-tab-artifacts", Static)) == "Artifacts"
     assert _widget_text(ctx["session"], screen.query_one("#hub-tab-description", Static)) == "Description"
 

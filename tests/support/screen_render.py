@@ -326,25 +326,25 @@ _LOG_EXCERPT = (
 
 
 def _hub_active_log(size):
-    store, scan, coding = _populated_store()
+    store, _scan, coding = _populated_store()
     fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT})
     workers = FakeWorkers(
         workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
                   "log": _LOG_PATH}],
         alive_pids={4242},
     )
-    return _open_hub(_launch(store, size=size, fs=fs, workers=workers), scan, tab="log")
+    return _open_hub(_launch(store, size=size, fs=fs, workers=workers), coding, tab="log")
 
 
 def _hub_log_finished(size):
-    store, scan, coding = _populated_store()
+    store, _scan, coding = _populated_store()
     fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT})
     workers = FakeWorkers(
         workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
                   "log": _LOG_PATH}],
         alive_pids=set(),
     )
-    return _open_hub(_launch(store, size=size, fs=fs, workers=workers), scan, tab="log")
+    return _open_hub(_launch(store, size=size, fs=fs, workers=workers), coding, tab="log")
 
 
 def _hub_artifacts(size):
@@ -445,6 +445,28 @@ def _hub_step_node(size):
     return _open_hub(_launch(store, size=size), coding)
 
 
+def _detail_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item,
+    )
+    pid = store.open_pass(item)
+    store.set_step_pass(step, pid)
+    rid = store.open_run(item, pid, "code")
+    store.set_run_field(
+        rid, branch="feat/LC-143-scan", pr="https://github.com/kenmclennan/lightcycle/pull/143"
+    )
+    store.set_notes(step, "opened for review")
+    return store, step
+
+
+def _hub_detail(size):
+    store, step = _detail_store()
+    fs = FakeFs(metas={"code-await-merge": {"step": "code-await-merge", "phase": "code"}})
+    return _open_hub(_launch(store, size=size, fs=fs), step)
+
+
 def _hub_hierarchy_scrolled(size):
     store, item = _long_hierarchy_store()
     return _open_hub(_launch(store, size=size), item, tab="hierarchy")
@@ -486,6 +508,7 @@ SCREENS = {
     "hub#needs-attention-human": _hub_needs_attention_human,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
+    "hub#detail": _hub_detail,
     "hub#hierarchy-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
     "hub#long-description": _hub_long_description,

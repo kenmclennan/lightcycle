@@ -5,7 +5,9 @@ from textual.widgets import Static
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
 from lightcycle.adapters.tui.design_system import COLOURS, HUB_SHORTCUTS, STATE_GLYPHS
 from lightcycle.adapters.tui.footer import ShortcutBar
-from lightcycle.adapters.tui.hub import EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen
+from lightcycle.adapters.tui.hub import (
+    DescriptionPane, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
+)
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -102,14 +104,20 @@ def _painted_spans(strip):
     return spans
 
 
-_HUB_TABS = (
-    ("description", "Description"), ("hierarchy", "Hierarchy"), ("log", "Log"),
-    ("artifacts", "Artifacts"),
-)
+_HUB_TABS_BY_TYPE = {
+    "item": (("description", "Description"), ("hierarchy", "Hierarchy"), ("artifacts", "Artifacts")),
+    "step": (("detail", "Detail"), ("log", "Log")),
+}
+
+
+def _hub_tabs(session):
+    screen = session.app.screen
+    node_type = screen.container.store.get_node(screen._node_id).type
+    return _HUB_TABS_BY_TYPE[node_type]
 
 
 def _assert_tab_strip_rendered(session, active_tab):
-    for tab_id, label in _HUB_TABS:
+    for tab_id, label in _hub_tabs(session):
         widget = session.app.screen.query_one("#hub-tab-%s" % tab_id, Static)
         strip = _painted_row(session, widget.region.y)
         start, end = widget.region.x, widget.region.x + widget.region.width
@@ -124,12 +132,13 @@ def _assert_tab_strip_rendered(session, active_tab):
             % (label, expected, colours)
         )
 
+    tabs = _hub_tabs(session)
     xs = [
         session.app.screen.query_one("#hub-tab-%s" % tab_id, Static).region.x
-        for tab_id, _ in _HUB_TABS
+        for tab_id, _ in tabs
     ]
     assert xs == sorted(xs), "tabs not rendered left to right as %r; x positions were %r" % (
-        [label for _, label in _HUB_TABS], xs
+        [label for _, label in tabs], xs
     )
 
 
@@ -137,6 +146,28 @@ def _launch(ctx, store, size=None):
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store, fs=ctx.get("fs")), size=size)
     return ctx["session"]
+
+
+@given("an item, its hub open")
+def _item_hub_open(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    ctx["item_id"] = item
+    ctx["node_id"] = item
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
+
+
+@given("a step, its hub open")
+def _step_hub_open(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    ctx["node_id"] = step
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, step)
 
 
 @given("the priority list is showing with an item")
@@ -251,8 +282,8 @@ def _push_hub(ctx, session, node_id):
     session.pause()
 
 
-@given(parsers.parse('a node with the status "{status}", its hub open'))
-def _node_with_status(ctx, status):
+@given(parsers.parse('an item with the status "{status}", its hub open'))
+def _item_with_status(ctx, status):
     store = FakeStore()
     if status == "active":
         item = store.create_item("Item", "a description")
@@ -284,36 +315,57 @@ def _node_with_status(ctx, status):
     _push_hub(ctx, session, node_id)
 
 
-@given("a node's hub is open, on the Log tab")
-def _hub_open_on_log_tab(ctx):
-    _open_hub_on_tab(ctx, "log")
+@given(parsers.parse('a step with the status "{status}", its hub open'))
+def _step_with_status(ctx, status):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    if status == "active":
+        step = store.create_step("s", step="build", role="agent", parent=item)
+        store.claim_ready("agent")
+    elif status == "needs-attention, a human step":
+        step = store.create_step("s", step="await-merge", role="human", parent=item)
+    elif status == "blocked on another item's completion":
+        blocker = store.create_item("Blocker", "a description")
+        step = store.create_step("s", step="build", role="agent", parent=item)
+        store.dep_add(step, blocker)
+    elif status == "queued, not yet run":
+        step = store.create_step("s", step="build", role="agent", parent=item)
+    elif status == "done":
+        step = store.create_step("s", step="build", role="agent", parent=item)
+        store.close(step, "done")
+    else:
+        raise AssertionError("unhandled status %r" % status)
+    ctx["node_id"] = step
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, step)
 
 
-@given("a node's hub is open, on the Artifacts tab")
-def _hub_open_on_artifacts_tab(ctx):
-    _open_hub_on_tab(ctx, "artifacts")
-
-
-def _open_hub_on_tab(ctx, tab):
+@given(parsers.parse('an item\'s hub is open, on the "{tab}" tab'))
+def _item_hub_open_on_tab(ctx, tab):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     store.create_step("s", step="build", role="agent", parent=item)
+    ctx["item_id"] = item
+    ctx["node_id"] = item
     session = _launch(ctx, store)
-    session.press("enter")
+    _push_hub(ctx, session, item)
     screen = session.app.screen
-    screen._active_tab = tab
+    screen._active_tab = tab.lower()
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
     session.run(screen._apply_tab_visibility)
     session.pause()
 
 
-@given(parsers.parse('a node\'s hub is open, on the "{tab}" tab'))
-def _hub_open_on_tab(ctx, tab):
+@given(parsers.parse('a step\'s hub is open, on the "{tab}" tab'))
+def _step_hub_open_on_tab(ctx, tab):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step("s", step="build", role="agent", parent=item)
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    ctx["node_id"] = step
     session = _launch(ctx, store)
-    session.press("enter")
+    _push_hub(ctx, session, step)
     screen = session.app.screen
     screen._active_tab = tab.lower()
     screen.query_one(HubTabStrip).set_active(screen._active_tab)
@@ -462,16 +514,34 @@ def _hub_open_with_escalation(ctx):
     session.pause()
 
 
-_TAB_CYCLE_ORDER = ("description", "hierarchy", "log", "artifacts")
+@given(
+    "an item's hub is open, showing an escalation reason that names a blocking item "
+    "whose own current step is active"
+)
+def _hub_open_with_escalation_active_blocker(ctx):
+    store = FakeStore()
+    blocker = store.create_item("Blocker item", "a description")
+    store.create_step("s", step="build", role="agent", parent=blocker)
+    store.claim_ready("agent")
+    item = store.create_item("Blocked item", "a description")
+    store.dep_add(item, blocker)
+    ctx["blocker_id"] = blocker
+    session = _launch(ctx, store)
+    session.run(
+        lambda: session.app.push_screen(NodeHubScreen(session.app.container, item, session.app._now))
+    )
+    session.pause()
 
 
 @given(parsers.parse('I cycle to the "{tab}" tab with ]'))
+@when(parsers.parse('I cycle to the "{tab}" tab with ]'))
 def _cycle_to_tab(ctx, tab):
     screen = ctx["session"].app.screen
     tab_id = tab.lower()
-    current = _TAB_CYCLE_ORDER.index(screen._active_tab)
-    target = _TAB_CYCLE_ORDER.index(tab_id)
-    for _ in range((target - current) % len(_TAB_CYCLE_ORDER)):
+    order = screen._tab_order
+    current = order.index(screen._active_tab)
+    target = order.index(tab_id)
+    for _ in range((target - current) % len(order)):
         ctx["session"].press("]")
     ctx["target_tab"] = tab_id
 
@@ -709,12 +779,43 @@ def _lands_on_tab(ctx, tab):
     _assert_tab_strip_rendered(session, tab_id)
 
 
+@then("it lands on the Description tab")
+def _lands_on_description_tab(ctx):
+    _lands_on_tab(ctx, "Description")
+
+
 @then(parsers.parse('the "{tab}" tab becomes active'))
 def _tab_becomes_active(ctx, tab):
     session = ctx["session"]
     tab_id = tab.lower()
     assert session.app.screen._active_tab == tab_id
     _assert_tab_strip_rendered(session, tab_id)
+
+
+@then(parsers.parse('its tab strip shows exactly "{a}", "{b}", and "{c}", in that order'))
+def _tab_strip_shows_three(ctx, a, b, c):
+    tabs = _hub_tabs(ctx["session"])
+    assert [label for _, label in tabs] == [a, b, c]
+
+
+@then(parsers.parse('its tab strip shows exactly "{a}" and "{b}", in that order'))
+def _tab_strip_shows_two(ctx, a, b):
+    tabs = _hub_tabs(ctx["session"])
+    assert [label for _, label in tabs] == [a, b]
+
+
+@then(parsers.parse('no "{a}" tab and no "{b}" tab is shown'))
+def _no_two_tabs_shown(ctx, a, b):
+    screen = ctx["session"].app.screen
+    for label in (a, b):
+        assert len(screen.query("#hub-tab-%s" % label.lower())) == 0
+
+
+@then(parsers.parse('no "{a}" tab, no "{b}" tab, and no "{c}" tab is shown'))
+def _no_three_tabs_shown(ctx, a, b, c):
+    screen = ctx["session"].app.screen
+    for label in (a, b, c):
+        assert len(screen.query("#hub-tab-%s" % label.lower())) == 0
 
 
 @then("the backlog is shown in place of the hub")
@@ -766,7 +867,7 @@ def _escalation_tag_bold_amber(ctx, tag):
     assert style is not None
     assert style.bold
     assert style.color.get_truecolor().hex.lower() == COLOURS["amber"].lower()
-    assert panel.size.height == 3
+    assert panel.size.height == 2
 
 
 @then(parsers.parse('the escalation panel shows no "{tag}" tag and no second line'))
@@ -778,17 +879,22 @@ def _escalation_no_tag_one_line(ctx, tag):
     assert panel.size.height == 1
 
 
-@then("the escalation panel's third line names the resume command")
-def _escalation_resume_third_line(ctx):
-    from lightcycle.domain.work import park_resume_command
-
+@then("the escalation panel shows no resume command")
+def _escalation_no_resume_command(ctx):
     screen = ctx["session"].app.screen
     panel = screen.query_one(EscalationPanel)
     assert panel.display
-    assert park_resume_command(ctx["step_id"]) in _rendered_line_text(panel, 2)
+    assert "resume" not in _rendered_panel_text(panel).lower()
 
 
-@then("the escalation panel's third line also names the recorded reason")
+@then("the escalation panel has no third line")
+def _escalation_no_third_line(ctx):
+    screen = ctx["session"].app.screen
+    panel = screen.query_one(EscalationPanel)
+    assert panel.size.height == 2
+
+
+@then("the escalation panel's third line names the recorded reason")
 def _escalation_reason_third_line(ctx):
     screen = ctx["session"].app.screen
     panel = screen.query_one(EscalationPanel)
@@ -824,13 +930,10 @@ def _escalation_link_cyan(ctx):
 
 @then("the escalation panel shows the reason's final words")
 def _escalation_shows_final_words(ctx):
-    from lightcycle.domain.work import park_resume_command
-
     screen = ctx["session"].app.screen
     panel = screen.query_one(EscalationPanel)
     text = _rendered_panel_text(panel)
     assert "pass verdict" in text
-    assert park_resume_command(ctx["step_id"]) in text
 
 
 @then("the escalation panel shows no truncation ellipsis")
@@ -879,6 +982,21 @@ def _blocking_item_hub_opens(ctx):
     assert screen._node_id == ctx["blocker_id"]
 
 
+@then("the blocking item's own hub opens, landing on the Description tab")
+def _blocking_item_hub_opens_landing_description(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["blocker_id"]
+    assert screen._active_tab == "description"
+    _assert_tab_strip_rendered(ctx["session"], "description")
+
+
+@then("it is not redirected into its running step")
+def _not_redirected_into_running_step(ctx):
+    screen = ctx["session"].app.screen
+    assert screen._node_id == ctx["blocker_id"]
+
+
 @then("nothing happens, since there is no blocker to jump to")
 def _b_no_op(ctx):
     session = ctx["session"]
@@ -890,6 +1008,13 @@ def _b_no_op(ctx):
 def _hierarchy_table_focused(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen.focused, HierarchyPagingTable)
+    assert not isinstance(screen.focused, EscalationPanel)
+
+
+@then("the description pane has focus, not the escalation panel")
+def _description_pane_focused(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen.focused, DescriptionPane)
     assert not isinstance(screen.focused, EscalationPanel)
 
 
@@ -934,12 +1059,12 @@ def _priority_list_scroll_unaffected(ctx):
     assert table.cursor_row == 0
 
 
-@then("its hub opens, landing on the Hierarchy tab")
-def _hub_opens_landing_hierarchy(ctx):
+@then("its hub opens, landing on the Description tab")
+def _hub_opens_landing_description(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen, NodeHubScreen)
-    assert screen._active_tab == "hierarchy"
-    _assert_tab_strip_rendered(ctx["session"], "hierarchy")
+    assert screen._active_tab == "description"
+    _assert_tab_strip_rendered(ctx["session"], "description")
 
 
 @then("the hierarchy shows only that item, with no step children")
@@ -962,6 +1087,9 @@ def _reclaimed_shows_queued(ctx):
     assert _text(screen, "#hub-role") is not None
     assert "agent" in _text(screen, "#hub-role")
     assert _text(screen, "#hub-elapsed") is None
+
+    if screen._active_tab != "hierarchy":
+        ctx["session"].press("]")
 
     table = screen.query_one(HierarchyPagingTable)
     step_id = ctx["step_id"]

@@ -55,6 +55,7 @@ COLUMN_GRIDS = {
     "backlog": ("cursor", "id", "project", "title"),
     "hierarchy": ("icon", "content", "id", "title", "role"),
     "artifacts": ("type", "value"),
+    "detail": ("key", "value"),
 }
 
 GLOBAL_SHORTCUTS = (

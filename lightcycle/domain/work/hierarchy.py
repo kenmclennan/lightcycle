@@ -18,13 +18,9 @@ def compose_hierarchy(root, steps_by_item):
 
 
 def landing_tab(node):
-    if node.state == State.IN_PROGRESS:
-        return "log"
-    if node.state == State.DONE:
-        return "artifacts"
-    if node.state == State.READY and getattr(node, "role", None) == "human":
-        return "artifacts"
-    return "hierarchy"
+    if node.type == "item":
+        return "description"
+    return "log" if node.state == State.IN_PROGRESS else "detail"
 
 
 def row_bucket(node):

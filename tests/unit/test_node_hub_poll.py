@@ -81,13 +81,13 @@ class TestNodeHubPollsOncePerInterval(_HubTestCase):
 
 class TestNodeHubSuspendedScreenTimersArePaused(_HubTestCase):
     def test_poll_and_log_timers_pause_on_suspend_and_resume_on_resume(self):
-        store, item, step, fs, workers = _running_step()
+        store, _item, step, fs, workers = _running_step()
         session = self._launch(store, fs=fs, workers=workers)
-        first = self._push_hub(session, item)
+        first = self._push_hub(session, step)
         self.assertIsNotNone(first._poll_timer)
         self.assertIsNotNone(first._log_timer)
 
-        self._push_hub(session, item)
+        self._push_hub(session, step)
 
         self.assertFalse(first._poll_timer._active.is_set())
         self.assertFalse(first._log_timer._active.is_set())

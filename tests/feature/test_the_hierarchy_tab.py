@@ -8,7 +8,7 @@ from lightcycle.adapters.tui.design_system import (
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     STATE_GLYPHS,
 )
-from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
+from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen, _tab_order
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
 )
@@ -214,8 +214,8 @@ def _item_with_active_current_step_highlighted(ctx):
     store.claim_ready("agent")
     ctx["node_id"] = node_id
     ctx["step_id"] = step
-    ctx["expected_log_target_id"] = step
     _launch(ctx, store, node_id)
+    _table(ctx).move_cursor(row=_row_ids(ctx).index(node_id))
 
 
 @given("an item whose every step is done, highlighted in the hierarchy")
@@ -229,6 +229,7 @@ def _item_with_all_steps_done_highlighted(ctx):
     ctx["node_id"] = node_id
     ctx["last_step_id"] = last
     _launch(ctx, store, node_id)
+    _table(ctx).move_cursor(row=_row_ids(ctx).index(node_id))
 
 
 @given("the hierarchy is open, showing a queued step")
@@ -458,11 +459,21 @@ def _ancestor_pinned(ctx):
     assert banner.display
 
 
-@given("a node is highlighted in the hierarchy, not yet opened")
-def _node_highlighted_not_opened(ctx):
+@given("an item is highlighted in the hierarchy, not yet opened")
+def _item_highlighted_not_opened(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     store.add_artifact(item, "spec", "specs/x.md")
+    ctx["item_id"] = item
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=_row_ids(ctx).index(item))
+
+
+@given("a step is highlighted in the hierarchy, not yet opened")
+def _step_highlighted_not_opened(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
     step = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -532,7 +543,7 @@ def _current_node_nested_step(ctx):
     item = store.create_item("Item", "a description")
     step = store.create_step("s", step="write-code", role="agent", parent=item)
     ctx["step_id"] = step
-    _launch(ctx, store, step)
+    _launch(ctx, store, item)
 
 
 @given("an item with one completed step and one queued step after it")
@@ -937,11 +948,12 @@ def _selection_back_on_start(ctx):
     assert table.cursor_row == ctx["start_row"]
 
 
-@then("it opens into its own tabbed hub, landing on the tab that matches its state")
+@then("it opens into its own tabbed hub, landing on the tab appropriate to its type and state")
 def _opens_into_own_hub(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen, NodeHubScreen)
     assert screen._node_id == ctx["target_id"]
+    assert screen._active_tab in _tab_order(ctx["store"].get_node(ctx["target_id"]))
 
 
 @then("the Hierarchy tab reappears with that node still selected, scrolled to the same position")
@@ -990,6 +1002,11 @@ def _artifacts_tab_opens_directly(ctx):
     assert screen._active_tab == "artifacts"
 
 
+@then("nothing happens, since there is no Artifacts tab to open")
+def _nothing_happens_no_artifacts_tab(ctx):
+    assert ctx["session"].app.screen is ctx["hub_screen"]
+
+
 @then("its Log tab opens directly, showing the live tail")
 def _log_tab_opens_live(ctx):
     screen = ctx["session"].app.screen
@@ -1009,25 +1026,9 @@ def _nothing_happens_no_log(ctx):
     assert ctx["session"].app.screen is ctx["hub_screen"]
 
 
-@then("its current step's Log tab opens directly, showing the live tail")
-def _current_step_log_tab_opens_live(ctx):
-    screen = ctx["session"].app.screen
-    assert isinstance(screen, NodeHubScreen)
-    assert screen._node_id == ctx["expected_log_target_id"]
-    assert screen._active_tab == "log"
-
-
-@then("its Log tab opens directly, showing its last completed step's log in historical mode")
-def _log_tab_opens_last_completed_historical(ctx):
-    from lightcycle.adapters.tui.hub import log_tab_mode
-
-    screen = ctx["session"].app.screen
-    store = ctx["store"]
-    assert isinstance(screen, NodeHubScreen)
-    assert screen._node_id == ctx["node_id"]
-    assert screen._active_tab == "log"
-    assert screen._log_target == ctx["last_step_id"]
-    assert log_tab_mode(store.get_node(ctx["last_step_id"])) == "historical"
+@then("nothing happens, since there is no Log tab to open")
+def _nothing_happens_no_log_tab(ctx):
+    assert ctx["session"].app.screen is ctx["hub_screen"]
 
 
 @then("it is highlighted at the top row")

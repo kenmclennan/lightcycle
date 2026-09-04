@@ -113,6 +113,15 @@ def _no_viewable_artifacts(ctx):
     _launch_with_item(ctx, [])
 
 
+@given("an item has no non-internal artifacts")
+def _item_has_no_non_internal_artifacts(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    ctx["store"] = store
+    ctx["item_id"] = item
+    ctx["session"] = launch(make_test_container(store=store))
+
+
 @given(parsers.parse('a node has an artifact of type "{atype}"'))
 def _artifact_of_type(ctx, atype):
     ctx["artifact_type"] = atype
@@ -181,7 +190,12 @@ def _open_artifacts_tab(ctx):
 
 @when("its hub is open")
 def _hub_is_open(ctx):
-    pass
+    session = ctx["session"]
+    screen = NodeHubScreen(session.app.container, ctx["item_id"], session.app._now)
+    session.run(lambda: session.app.push_screen(screen))
+    session.pause()
+    session.pause()
+    ctx["node_id"] = ctx["item_id"]
 
 
 @when(parsers.parse("{key} is pressed"))
@@ -278,11 +292,11 @@ def _calm_message_shown(ctx):
     assert _widget_text(empty) != ""
 
 
-@then("the Artifacts tab is present, alongside Hierarchy and Log")
+@then("the Artifacts tab is present, alongside Description and Hierarchy")
 def _artifacts_tab_present(ctx):
     screen = ctx["session"].app.screen
+    assert _widget_text(screen.query_one("#hub-tab-description", Static)) == "Description"
     assert _widget_text(screen.query_one("#hub-tab-hierarchy", Static)) == "Hierarchy"
-    assert _widget_text(screen.query_one("#hub-tab-log", Static)) == "Log"
     assert _widget_text(screen.query_one("#hub-tab-artifacts", Static)) == "Artifacts"
 
 

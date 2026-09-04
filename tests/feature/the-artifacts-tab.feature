@@ -44,7 +44,6 @@ Feature: The Artifacts tab
     When I open its Artifacts tab
     Then a calm message is shown in place of the list, not a blank area
 
-  @wip
   Scenario: The Artifacts tab is present even on an item with no viewable artifacts
     Given an item has no non-internal artifacts
     When its hub is open
