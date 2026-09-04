@@ -259,10 +259,10 @@ Feature: Priority list renders current work
     And one poll interval elapses
     Then the selection is on a remaining row near the previous position
 
-  Scenario: A queued row that is dependency-held shows the dependency chain-link icon and the blocking item's id
+  Scenario: A queued row that is dependency-held shows the dependency-held icon and the blocking item's id
     Given the store has a step blocked on another item's completion
     When I launch the dashboard
-    Then that step's row shows the dependency chain-link icon alongside its queued icon
+    Then that step's row shows the dependency-held icon alongside its queued icon
     And that step's row shows the blocking item's id in its step cell
 
   Scenario: A dependency-held row keeps showing the blocking item's id even when its own stage has a declared display phrase
@@ -273,7 +273,7 @@ Feature: Priority list renders current work
   Scenario: A needs-attention row sourced from the inbox lane shows no dependency indicator
     Given the store has a step in the inbox lane
     When I launch the dashboard
-    Then that step's row shows no dependency chain-link icon
+    Then that step's row shows no dependency-held icon
 
   Scenario: Within the queued group, runnable work is positioned before dependency-held work
     Given the store has a runnable queued step and a dependency-held queued step
