@@ -25,10 +25,13 @@ class UnblockStepUseCase:
             raise UseCaseError(
                 "nothing to unblock: step '%s' has no agent owner" % (t.step or "(none)")
             )
+        kept = [l for l in (t.notes or "").splitlines() if not l.startswith("BLOCKED:")]
+        history = t.park.as_history_note()
+        if history:
+            kept.append(history)
         self._store.update_metadata(
             input.step, {"reason": None, "needs": None, "tried": None}
         )
-        kept = [l for l in (t.notes or "").splitlines() if not l.startswith("BLOCKED:")]
         self._store.set_notes(input.step, "\n".join(kept))
         self._store.reassign(input.step, role)
         return UnblockResponse(role=role)

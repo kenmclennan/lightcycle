@@ -880,10 +880,17 @@ class TestClaimTask(unittest.TestCase):
         ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
         ).execute(ClaimInput(role="agent"))
+        node_before = s.get_node(bid)
+        expected_reason = node_before.park.reason
+        expected_needs = node_before.park.needs
         UnblockStepUseCase(s, flow_for(SPEC_METAS, s)).execute(UnblockInput(step=bid))
         node = s.get_node(bid)
         self.assertIsNone(node.park.needs)
         self.assertNotIn("BLOCKED:", node.notes or "")
+        self.assertIn(
+            "PARK RESOLVED: reason=%s | needs=%s" % (expected_reason, expected_needs),
+            node.notes or "",
+        )
         self.assertEqual(node.role, "agent")
 
     def test_resolves_spec_path_against_specs_root(self):
@@ -1092,6 +1099,7 @@ class TestUnblockTask(unittest.TestCase):
         resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         self.assertEqual(resp.role, "agent")
         self.assertEqual(s.get_node(bid).role, "agent")
+        self.assertEqual(s.get_node(bid).notes or "", "")
 
     def test_block_then_single_unblock_restores_role_on_fake_store(self):
         s = FakeStore()
@@ -1125,6 +1133,22 @@ class TestUnblockTask(unittest.TestCase):
         t = s.get_node(bid)
         self.assertIsNone(t.park.needs)
         self.assertNotIn("BLOCKED:", t.notes or "")
+        self.assertIn("PARK RESOLVED: reason=oops | needs=confirm approach", t.notes or "")
+
+    def test_unblock_history_note_includes_tried(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="agent")
+        BlockStepUseCase(s).execute(
+            BlockInput(step=bid, needs="decide X", reason="oops", tried="a,b")
+        )
+        UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        t = s.get_node(bid)
+        self.assertIsNone(t.park.reason)
+        self.assertIsNone(t.park.needs)
+        self.assertIsNone(t.park.tried)
+        self.assertIn(
+            "PARK RESOLVED: reason=oops | needs=decide X | tried=a,b", t.notes or ""
+        )
 
     def test_preserves_notes_unrelated_to_block(self):
         s = FakeStore()
@@ -1135,8 +1159,31 @@ class TestUnblockTask(unittest.TestCase):
         )
         UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         t = s.get_node(bid)
-        self.assertIn("from review: lgtm", t.notes or "")
-        self.assertNotIn("BLOCKED:", t.notes or "")
+        notes = t.notes or ""
+        self.assertIn("from review: lgtm", notes)
+        self.assertNotIn("BLOCKED:", notes)
+        self.assertIn("PARK RESOLVED: reason=oops | needs=confirm approach", notes)
+        self.assertLess(
+            notes.index("from review: lgtm"),
+            notes.index("PARK RESOLVED:"),
+        )
+
+    def test_unblock_collapses_multiline_reason_into_one_history_line(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="agent")
+        BlockStepUseCase(s).execute(
+            BlockInput(step=bid, needs="decide X", reason="line one\nline two")
+        )
+        before_lines = (s.get_node(bid).notes or "").split("\n")
+        UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        t = s.get_node(bid)
+        notes = t.notes or ""
+        lines = notes.split("\n")
+        self.assertEqual(len(lines), len(before_lines))
+        history_lines = [l for l in lines if l.startswith("PARK RESOLVED:")]
+        self.assertEqual(len(history_lines), 1)
+        self.assertIn("reason=line one line two", history_lines[0])
+        self.assertNotIn("line one\nline two", notes)
 
 
 if __name__ == "__main__":
