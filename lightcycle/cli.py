@@ -451,6 +451,13 @@ def cmd_show(argv):
             out["workflow_error"] = str(e)
         else:
             out["workflow_resolved"] = pin
+    if out["workflow_resolved"]:
+        phase = flow.phase_for(view.step)
+        if phase:
+            out["phase"] = phase
+            run = _container.store.current_run(item_id, phase)
+            if run and run.pr:
+                out["pr"] = run.pr
     print(json.dumps(out, indent=2))
     return 0
 
