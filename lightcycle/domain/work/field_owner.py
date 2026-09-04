@@ -5,6 +5,10 @@ FIELDS_BY_TYPE = {
     "step": frozenset({"title", "notes", "needs", "reason", "tried", "label"}),
 }
 
+REQUIRED_WITH_STATE = {
+    "blocked": ("needs", "reason"),
+}
+
 STATES_BY_TYPE = {
     "item": frozenset({"active", "in_progress"}),
     "step": frozenset({"ready", "blocked"}),
@@ -54,3 +58,7 @@ def refuse_state(node_type, state):
     takes = ", ".join("--state %s" % s for s in sorted(STATES_BY_TYPE[node_type]))
     return "--state %s applies to %s, not %s; %s takes %s" % (
         state, _named(owner), _named(node_type), _named(node_type), takes)
+
+
+def missing_for_state(state, given):
+    return [f for f in REQUIRED_WITH_STATE.get(state, ()) if f not in given]

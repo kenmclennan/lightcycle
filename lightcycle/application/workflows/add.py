@@ -1,7 +1,14 @@
 from dataclasses import dataclass, field
 from typing import List
 
-from lightcycle.application.workflows.bundle_check import check_bundle_references
+from lightcycle.application.workflows.bundle_check import (
+    check_bundle_references,
+    check_prompts,
+)
+from lightcycle.application.workflows.prompt_check import (
+    engine_sources,
+    prompt_drift_warnings,
+)
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.pinned import pinned_shas
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -14,6 +21,7 @@ class AddResponse:
     origin: str
     sha: str
     pruned: List[str] = field(default_factory=list)
+    prompt_warnings: List[str] = field(default_factory=list)
 
 
 def prune_origin(source, store, origin, keep_n):
@@ -57,9 +65,12 @@ class AddWorkflowSourceUseCase:
                 )
                 raise WorkflowSourceError(
                     "bundle has composition problem(s) - %s" % detail)
+            warnings = prompt_drift_warnings(
+                check_prompts(self._fs, checkout, *engine_sources())
+            )
             self._source.materialize(origin, sha, checkout)
             self._source.write_registry(origin, url, ref, sha)
             pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
         finally:
             self._source.cleanup(checkout)
-        return AddResponse(origin=origin, sha=sha, pruned=pruned)
+        return AddResponse(origin=origin, sha=sha, pruned=pruned, prompt_warnings=warnings)

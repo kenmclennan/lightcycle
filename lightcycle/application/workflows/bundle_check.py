@@ -1,6 +1,16 @@
+from lightcycle.application.workflows.prompt_check import check_prompt_commands
 from lightcycle.domain.contracts import FlowContracts
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
+
+
+def check_prompts(fs, root, cli_source, domain_sources):
+    texts = {}
+    for role in fs.step_roles(root):
+        parsed = fs.parse_step(role, root)
+        if parsed and parsed.get("body"):
+            texts["steps/%s.md" % role] = parsed["body"]
+    return check_prompt_commands(texts, cli_source, domain_sources)
 
 
 def check_bundle_references(fs, root):
