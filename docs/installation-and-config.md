@@ -27,13 +27,13 @@ graph TD
   end
   subgraph projects[PROJECTS - your repos]
     repo[project working tree]
-    cfg[optional .lightcycle - per-project config and shortcode]
+    reg[registered in the project registry - identity, shortcode, local path]
   end
 ```
 
 - **Engine** (`~/.local/pipx/venvs/lightcycle`) - the code plus `prompts/` (the engine-owned agent prompts it spawns directly: `driver.md`, `audit.md`). This is the only thing an upgrade changes; the engine ships no workflow library.
 - **Data** (`~/.lightcycle`, the `data_root`) - `store.db`, the `config` file, `logs/`, `.worktrees/` (isolated per-item checkouts), `backups/`, the `.lc-run.pid` singleton lock, and `workflows/<origin>/<sha>/` (the immutable, sha-pinned workflow bundles pulled from origins).
-- **Projects** - your repos under the configured projects root; each may carry a `.lightcycle/` with a per-project `config` (its own `shortcode`). There is no step/workflow override.
+- **Projects** - your repos, wherever they live. Each is named to lightcycle by registering it (`lc project add <owner/name> [--shortcode X] [--path P]`); the registry holds the identity, the shortcode ids are minted from, and the local path. A project carries no lightcycle config of its own, and there is no step or workflow override.
 
 Workflows are not shadowed or resolved through a chain: each item pins one sha-pinned bundle (`<origin>/<name>@<sha>`) and the loader reads the flow and steps from that pin. `LC_HOME` names the data home (the store); the integration tests point it at a throwaway store. Never run against the live store by hand.
 
@@ -72,7 +72,7 @@ lc workflow list              # origins + on-disk bundle paths
 lc workflow rm <origin>
 ```
 
-Each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves its flow and steps from that pin. A project customises its workflow by authoring its own source (see the `author-workflow` skill in the plugin), not by dropping override files into `.lightcycle/`. `lc init <project>` still scaffolds a project's `.lightcycle/config` for a per-project `shortcode`.
+Each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves its flow and steps from that pin. A project customises its workflow by authoring its own source (see the `author-workflow` skill in the plugin), not by dropping override files anywhere. A project's `shortcode` is set when it is registered: `lc project add <owner/name> --shortcode X`.
 
 ## Upgrades
 
@@ -83,6 +83,6 @@ lc upgrade --check    # report only, do not install
 
 `lc upgrade` compares the installed `__version__` against the version on the repo's `main`, and if newer runs `UV_VENV_CLEAR=1 pipx install --force git+...` (the `UV_VENV_CLEAR=1` is required when pipx uses the `uv` backend, which otherwise refuses to overwrite the existing venv).
 
-What an upgrade **changes**: the engine venv (code + `prompts/`). What it **does not touch**: `~/.lightcycle` (your store, config, logs, worktrees, and pulled workflow bundles) or a project's `.lightcycle/config`. Your data and pulled workflows survive every upgrade; workflows are updated separately with `lc workflow upgrade`.
+What an upgrade **changes**: the engine venv (code + `prompts/`). What it **does not touch**: `~/.lightcycle` - your store, config, logs, worktrees, pulled workflow bundles, and the project registry. Your data and pulled workflows survive every upgrade; workflows are updated separately with `lc workflow upgrade`.
 
 Schema changes are handled separately: when a new engine first opens a store written by an older schema, it **backs the store up** (gzipped, into `~/.lightcycle/backups/`) and migrates in place. Migrations are idempotent. Stop the pool loop before upgrading, so the old engine is not running against a newly-migrated store; restart it after.
