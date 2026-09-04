@@ -54,6 +54,8 @@ Feature: The dashboard adopts the design system's visual vocabulary
     When I launch the dashboard
     Then a selected row's background is the selected-row colour
     And the selection cursor glyph is rendered in the cyan colour
+    And selecting a row changes its background only, leaving every cell its own colour
+    And a selected row's title is the text colour, not the cyan a coloured cell carries
 
   Scenario Outline: Every row not under the selection cursor paints the shared bg colour, never a widget's own default row surface
     Given the "<state>" screen state is rendered
