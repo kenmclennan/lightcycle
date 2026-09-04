@@ -33,7 +33,8 @@ class LinkArtifactUseCase:
     def execute(self, input: LinkArtifactInput) -> None:
         if input.atype == "spec":
             self._validate_spec(input.item, input.value)
-        if input.atype in _RUN_FIELDS and self._to_run(input):
+        if input.atype in _RUN_FIELDS:
+            self._route_to_run(input)
             return
         if input.replace:
             self._store.replace_artifact(
@@ -46,12 +47,21 @@ class LinkArtifactUseCase:
                 internal=input.internal, kind=input.kind,
             )
 
-    def _to_run(self, input):
+    def _route_to_run(self, input):
+        node = self._store.get_node(input.item)
+        if node.type == "step":
+            raise UseCaseError(
+                "'%s' is a step; '%s' attaches to an item's open phase run - pass the item id"
+                % (input.item, input.atype)
+            )
+        if node.type != "item":
+            raise UseCaseError("'%s' is not an item (type=%s)" % (input.item, node.type))
         run = self._current_run(input.item)
         if run is None:
-            return False
+            raise UseCaseError(
+                "item '%s' has no open phase run to attach '%s' to" % (input.item, input.atype)
+            )
         self._store.set_run_field(run.id, **{_RUN_FIELDS[input.atype]: input.value})
-        return True
 
     def _current_run(self, item):
         open_runs = self._store.open_runs_of(item)
