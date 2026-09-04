@@ -111,7 +111,7 @@ signals:                    # stage  metric-name  outcome
 - Each **stage** names a step file (stage = file by default). The `nodes:` block maps a stage to a differently named file (or one step serving two positions); a target with no step file is a `for:human` terminal, and a step with no `model` is a human step.
 - The engine recognises a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_feedback`, `pr_conflict`/`_cap`/`_escalate`, `ci_failed_cap`, `mention_token`, `review_bot_allowlist`); the graph names which stage handles each. A workflow that omits `pr_*` never opens a PR.
 - The periodic retro **audit** is an **engine service**, not a workflow step - any item that produces feedback is audited on a cadence, with findings in `lc inbox`.
-- `lc workflow add <url>` validates a source at pull time; `lc workflow check [--json]` prints and statically checks the resolved graph.
+- `lc workflow add <url>` and `lc workflow upgrade` validate a source at pull time and **refuse** rather than materialize a bundle that fails: the graph must compose, and every `lc` call and JSON field read in `steps/*.md` must exist on the engine doing the pull - a prompt naming a command, flag, state or field the engine does not have is a step that gets an error or a null at runtime, so the pull stops and the origin stays on its current sha. `lc workflow check [--json]` prints and statically checks the resolved graph.
 
 **Selecting a workflow.** There is no default; selection lives on the item:
 

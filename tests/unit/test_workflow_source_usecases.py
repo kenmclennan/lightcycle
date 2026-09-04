@@ -174,6 +174,35 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(source.list_origins(), [])
         self.assertEqual(source.cleaned, ["checkout-1"])
 
+    def test_prompt_drift_raises_and_registers_nothing(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        fs = FakeFs(
+            metas={"code": {"model": "x", "step": "code"}},
+            workflows={"build": "entry: code\n"},
+            bodies={"code": "1. Run `lc frobnicate STEP` and exit."},
+        )
+        with self.assertRaises(WorkflowSourceError) as caught:
+            _add(source, fs=fs).execute(url="u", ref="main", name=None)
+        self.assertIn("`lc frobnicate` is not a command", str(caught.exception))
+        self.assertEqual(source.list_origins(), [])
+        self.assertEqual(source.cleaned, ["checkout-1"])
+
+    def test_prompt_drift_names_the_step_and_the_remedy(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        fs = FakeFs(
+            metas={"code": {"model": "x", "step": "code"}},
+            workflows={"build": "entry: code\n"},
+            bodies={"code": "1. Take `.parent` as ITEM."},
+        )
+        with self.assertRaises(WorkflowSourceError) as caught:
+            _add(source, fs=fs).execute(url="u", ref="main", name=None)
+        message = str(caught.exception)
+        self.assertIn("steps/code.md", message)
+        self.assertIn("the engine emits no `.parent`", message)
+        self.assertIn("fix the step prompts in the source", message)
+
     def test_destination_only_fileless_terminal_pulls_cleanly(self):
         source = FakeSource()
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
@@ -196,6 +225,21 @@ class TestUpgrade(unittest.TestCase):
         self.assertEqual(resp.sha, "sha2")
         self.assertTrue(resp.changed)
         self.assertEqual(source.read_registry("acme")["current"], "sha2")
+
+    def test_upgrade_refuses_prompt_drift_and_leaves_the_current_sha(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        _add(source).execute(url="u", ref="main", name=None)
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
+        fs = FakeFs(
+            metas={"code": {"model": "x", "step": "code"}},
+            workflows={"build": "entry: code\n"},
+            bodies={"code": "1. Run `lc frobnicate STEP` and exit."},
+        )
+        with self.assertRaises(WorkflowSourceError):
+            UpgradeWorkflowSourceUseCase(source, FakeStore(), FakeConfig(), fs).execute("acme")
+        self.assertEqual(source.read_registry("acme")["current"], "sha1")
+        self.assertFalse(source.has_version("acme", "sha2"))
 
     def test_upgrade_unregistered_origin_raises(self):
         with self.assertRaises(WorkflowSourceError):

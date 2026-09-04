@@ -9,7 +9,7 @@ from lightcycle.application.workflows.bundle_check import (
 )
 from lightcycle.application.workflows.prompt_check import (
     engine_sources,
-    prompt_drift_warnings,
+    prompt_drift_detail,
 )
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -22,7 +22,6 @@ class UpgradeResponse:
     sha: str
     changed: bool
     pruned: List[str] = field(default_factory=list)
-    prompt_warnings: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -67,15 +66,17 @@ class UpgradeWorkflowSourceUseCase:
                 )
                 raise WorkflowSourceError(
                     "bundle has composition problem(s) - %s" % detail)
-            warnings = prompt_drift_warnings(
+            detail = prompt_drift_detail(
                 check_prompts(self._fs, checkout, *engine_sources())
             )
+            if detail:
+                raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
             self._source.materialize(origin, sha, checkout)
             self._source.write_registry(origin, registry["url"], registry["ref"], sha)
             pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
         finally:
             self._source.cleanup(checkout)
-        return UpgradeResponse(origin=origin, sha=sha, changed=(sha != previous), pruned=pruned, prompt_warnings=warnings)
+        return UpgradeResponse(origin=origin, sha=sha, changed=(sha != previous), pruned=pruned)
 
 
 class UpgradeWorkflowSourcesUseCase:
