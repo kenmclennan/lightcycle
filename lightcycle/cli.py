@@ -100,6 +100,7 @@ from lightcycle.application.pool import (
     ResolveLogInput,
     ResolveLogUseCase,
     RetroCadenceUseCase,
+    StopPoolUseCase,
     SweepUseCase,
     TickInput,
     TickUseCase,
@@ -1438,6 +1439,28 @@ def _upgrade_notice(check=lambda: upgrade(__version__, check_only=True)):
     return "a newer lightcycle is available (%s -> %s); run lc upgrade" % (resp.current, resp.remote)
 
 
+def _stop_pool():
+    sweep = SweepUseCase(
+        _container.store, _container.workers,
+        worktrees=worktrees_for(_container, flow=_flow()),
+        git=_container.git, fs=_container.fs,
+    )
+    resp = StopPoolUseCase(_container.workers, sweep).execute(
+        time.time(), _container.config.max_boot_seconds(),
+        _container.config.stall_seconds(),
+    )
+    lines = ["lc start stopped: %d worker(s) stopped, %d step(s) reclaimed"
+             % (len(resp.stopped), len(resp.reclaimed))]
+    if resp.preserved:
+        lines.append("  preserved uncommitted work on: %s" % ", ".join(resp.preserved))
+    if resp.capture_failed:
+        lines.append(
+            "  COULD NOT read the worktree to preserve work on: %s - check it by hand"
+            % ", ".join(resp.capture_failed)
+        )
+    return lines
+
+
 def cmd_start(argv):
     ap = argparse.ArgumentParser(prog="lc start")
     ap.add_argument("--once", action="store_true")
@@ -1507,7 +1530,14 @@ def cmd_start(argv):
             prev_now = now
             time.sleep(interval)
     except KeyboardInterrupt:
-        print("\ntg run stopped")
+        print("\nlc start stopping - press Ctrl-C again only if it hangs")
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        try:
+            for line in _stop_pool():
+                print(line)
+        except Exception as e:
+            sys.stderr.write("shutdown could not finish cleanly: %s\n" % e)
         return 0
     finally:
         ReleaseRunLockUseCase(_container.lock).execute()
