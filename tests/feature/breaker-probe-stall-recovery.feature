@@ -3,7 +3,9 @@ Feature: Breaker recovers when its probe worker stalls
   probe worker to test whether capacity has returned. If that probe stalls
   instead of finishing, a stall is inconclusive - it is never treated as a
   successful probe, because a stall says nothing about whether Claude is
-  available. The breaker's own reset time is re-armed forward by a
+  available. A probe worker that dies outright, having produced no session
+  activity at all, is inconclusive for the same reason and is likewise never
+  treated as a successful probe. The breaker's own reset time is re-armed forward by a
   configured probe cooldown instead, so a fresh probe becomes eligible
   later rather than the breaker being left with a stale reset time and no
   path back to recovery.
@@ -64,6 +66,13 @@ Feature: Breaker recovers when its probe worker stalls
     And the probe worker is dead, unchecked, and its log carries no rejection
     When the pool's breaker gate runs
     Then the breaker closes
+
+  @wip
+  Scenario: A probe that dies having done no work is not treated as a successful probe either
+    Given the breaker is open and past its reset time
+    And the probe worker is dead, unchecked, and its log carries neither a rejection nor any session activity
+    When the pool's breaker gate runs
+    Then the breaker does not close
 
   Scenario: A probe that completes with a rejection still re-trips the breaker
     Given the breaker is open and past its reset time
