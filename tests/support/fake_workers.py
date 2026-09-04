@@ -2,6 +2,7 @@ class FakeWorkers:
     def __init__(self, workers=None, alive_pids=()):
         self._workers = workers or []
         self._alive = set(alive_pids)
+        self.killed = []
 
     def workers_state(self):
         return list(self._workers)
@@ -16,7 +17,8 @@ class FakeWorkers:
         pass
 
     def kill(self, pid):
-        pass
+        self.killed.append(pid)
+        self._alive.discard(pid)
 
     def prune_workers(self, keep_dead=None):
         return 0
