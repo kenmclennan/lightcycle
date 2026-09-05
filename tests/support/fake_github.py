@@ -4,7 +4,7 @@ from lightcycle.ports.github import GitHubEventsPort, ReadFailure
 class FakeGitHub(GitHubEventsPort):
     def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
                  timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
-                 failing_calls=()):
+                 ci_pending_by_sha=None, failing_calls=()):
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
         self._conflicted = set(conflicted_prs)
@@ -13,6 +13,7 @@ class FakeGitHub(GitHubEventsPort):
         self._timed_reviews = timed_reviews or []
         self._head_shas = head_shas or {}
         self._files_by_sha = files_by_sha or {}
+        self._ci_pending_by_sha = ci_pending_by_sha or {}
         self._failing_calls = set(failing_calls)
 
     def is_merged(self, pr):
@@ -51,3 +52,8 @@ class FakeGitHub(GitHubEventsPort):
         if "changed_files" in self._failing_calls:
             return ReadFailure(1, "boom")
         return self._files_by_sha.get((pr, sha), frozenset())
+
+    def ci_pending(self, pr, sha):
+        if "ci_pending" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        return self._ci_pending_by_sha.get((pr, sha), True)

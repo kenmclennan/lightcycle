@@ -3,12 +3,17 @@ from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.runs import RunState
 from lightcycle.domain.work import State
 from lightcycle.ports.github import ReadFailure
 
 LC_MARKER = "<!-- lc -->"
+
+CI_PENDING_LABEL = "ci-pending"
+CI_RELEASED_PREFIX = "ci-released:"
+CI_RELEASE_CAP = 3
 
 
 
@@ -72,6 +77,7 @@ class MonitorPrsResponse:
     abandoned: List[str] = field(default_factory=list)
     reworked: List[str] = field(default_factory=list)
     conflicted: List[str] = field(default_factory=list)
+    ci_released: List[str] = field(default_factory=list)
 
 
 class MonitorPrsUseCase:
@@ -182,6 +188,44 @@ class MonitorPrsUseCase:
                         self._store.note_condition(target.id, base_note)
         self._store.set_run_field(run.id, content_pin=head)
 
+    def _release_ci_pending(self):
+        released = []
+        for step in self._store.all_nodes():
+            if step.type != "step" or step.state == State.DONE:
+                continue
+            if step.role != "human":
+                continue
+            labels = self._store.labels_of(step.id)
+            if CI_PENDING_LABEL not in labels:
+                continue
+            run = self._run_of(step)
+            pr_value = run.pr if run else None
+            if not pr_value:
+                continue
+            sha = self._github.head_sha(pr_value)
+            if not sha:
+                continue
+            pending = self._github.ci_pending(pr_value, sha)
+            if isinstance(pending, ReadFailure) or pending:
+                continue
+            released_so_far = sum(1 for l in labels if l.startswith(CI_RELEASED_PREFIX))
+            if released_so_far >= CI_RELEASE_CAP:
+                self._store.note_condition(
+                    step.id,
+                    "CI concluded but the automatic release cap (%d) was already reached; "
+                    "a human must resume this step." % CI_RELEASE_CAP,
+                )
+                continue
+            UnblockStepUseCase(self._store, self._flow_service).execute(
+                UnblockInput(step=step.id)
+            )
+            self._store.label_remove(step.id, CI_PENDING_LABEL)
+            self._store.label_add(
+                step.id, "%s%d" % (CI_RELEASED_PREFIX, released_so_far + 1)
+            )
+            released.append(step.parent)
+        return released
+
     def _latest_step(self, item_id):
         steps = sorted(self._store.children(item_id), key=lambda s: s.id)
         return steps[-1] if steps else None
@@ -281,8 +325,10 @@ class MonitorPrsUseCase:
                 outcome = flow.pr_conflict_transition(step.step, conflict_outcome, prior)
                 self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
                 conflicted.append(step.parent)
+        ci_released = self._release_ci_pending()
         return MonitorPrsResponse(
-            merged=merged, abandoned=abandoned, reworked=reworked, conflicted=conflicted
+            merged=merged, abandoned=abandoned, reworked=reworked, conflicted=conflicted,
+            ci_released=ci_released,
         )
 
     def _outstanding_feedback(self, step, pr, flow):

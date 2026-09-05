@@ -80,6 +80,13 @@ class TestFormatTick(unittest.TestCase):
         self.assertTrue(any("merge" in l and "abc.1" in l for l in lines))
         self.assertTrue(any("sweep" in l and "xyz.2" in l for l in lines))
 
+    def test_ci_released_rendered_as_ci_release_line(self):
+        result = _result(ci_released=["LC-1"])
+        lines, _ = _format_tick(result, None, _NOW)
+        release_lines = [l for l in lines if "ci-release" in l]
+        self.assertEqual(len(release_lines), 1)
+        self.assertIn("LC-1", release_lines[0])
+
     def test_event_order_spawn_before_merge_before_sweep(self):
         result = _result(spawned=["coder"], merged=["m.1"], swept=["s.1"],
                          alive=1, max_agents=4)

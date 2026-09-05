@@ -174,6 +174,9 @@ class ScriptedGitHub(GitHubEventsPort):
     def changed_files(self, pr, sha):
         return frozenset()
 
+    def ci_pending(self, pr, sha):
+        return True
+
 
 class NullWorkers(WorkersPort):
     def _refuse(self, name):

@@ -65,3 +65,7 @@ class GitHubEventsPort(ABC):
     @abstractmethod
     def changed_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
         pass
+
+    @abstractmethod
+    def ci_pending(self, pr: str, sha: str) -> Union[bool, ReadFailure]:
+        pass

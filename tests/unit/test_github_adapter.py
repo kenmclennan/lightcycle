@@ -461,5 +461,70 @@ class TestChangedFiles(unittest.TestCase):
         self.assertEqual(files, frozenset())
 
 
+class TestCiPending(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def _run(self, payload):
+        return MagicMock(return_value=_proc(json.dumps(payload)))
+
+    def test_matching_sha_all_completed_is_not_pending(self):
+        mock_run = self._run({
+            "headRefOid": "sha1",
+            "statusCheckRollup": [
+                {"status": "COMPLETED", "conclusion": "SUCCESS"},
+                {"status": "COMPLETED", "conclusion": "FAILURE"},
+            ],
+        })
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            pending = self.adapter.ci_pending(_PR, "sha1")
+
+        self.assertFalse(pending)
+
+    def test_matching_sha_with_in_progress_check_is_pending(self):
+        mock_run = self._run({
+            "headRefOid": "sha1",
+            "statusCheckRollup": [
+                {"status": "COMPLETED", "conclusion": "SUCCESS"},
+                {"status": "IN_PROGRESS"},
+            ],
+        })
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            pending = self.adapter.ci_pending(_PR, "sha1")
+
+        self.assertTrue(pending)
+
+    def test_empty_rollup_is_pending(self):
+        mock_run = self._run({"headRefOid": "sha1", "statusCheckRollup": []})
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            pending = self.adapter.ci_pending(_PR, "sha1")
+
+        self.assertTrue(pending)
+
+    def test_mismatched_head_sha_is_pending(self):
+        mock_run = self._run({
+            "headRefOid": "sha2",
+            "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}],
+        })
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            pending = self.adapter.ci_pending(_PR, "sha1")
+
+        self.assertTrue(pending)
+
+    def test_non_zero_exit_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            pending = self.adapter.ci_pending(_PR, "sha1")
+
+        self.assertEqual(pending, ReadFailure(1, "gh: auth error"))
+
+    def test_invalid_json_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("not json", returncode=0))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            pending = self.adapter.ci_pending(_PR, "sha1")
+
+        self.assertIsInstance(pending, ReadFailure)
+
+
 if __name__ == "__main__":
     unittest.main()

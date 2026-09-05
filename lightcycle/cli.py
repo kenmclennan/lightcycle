@@ -1380,6 +1380,8 @@ def _tick_event_lines(result, ts):
         lines.append("%s  %-7s  %s" % (ts, "rework", sid))
     for sid in result.conflicted:
         lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
+    for sid in result.ci_released:
+        lines.append("%s  %-7s  %s" % (ts, "ci-release", sid))
     for bid in result.swept:
         lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
     for sid in result.cadence_fired:

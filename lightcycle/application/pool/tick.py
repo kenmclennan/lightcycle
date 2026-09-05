@@ -20,6 +20,7 @@ class TickResponse:
     abandoned: List[str] = field(default_factory=list)
     reworked: List[str] = field(default_factory=list)
     conflicted: List[str] = field(default_factory=list)
+    ci_released: List[str] = field(default_factory=list)
     cadence_fired: List[str] = field(default_factory=list)
     hook_completed: List[Tuple[str, str, str]] = field(default_factory=list)
     backed_up: Optional[str] = None
@@ -68,6 +69,7 @@ class TickUseCase:
         abandoned = monitor_result.abandoned if monitor_result else []
         reworked = monitor_result.reworked if monitor_result else []
         conflicted = monitor_result.conflicted if monitor_result else []
+        ci_released = monitor_result.ci_released if monitor_result else []
         cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
         cadence_fired = cadence_result.fired if cadence_result else []
         hook_result = self._hook_completions.execute(input.since) if self._hook_completions else None
@@ -105,6 +107,7 @@ class TickUseCase:
             abandoned=abandoned,
             reworked=reworked,
             conflicted=conflicted,
+            ci_released=ci_released,
             cadence_fired=cadence_fired,
             hook_completed=hook_completed,
             backed_up=backup_result.created if backup_result else None,
