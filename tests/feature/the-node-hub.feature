@@ -9,91 +9,76 @@ Feature: The node hub
   global meaning, jumping straight to the backlog (or back to current work)
   from any tab, at any depth, without first backing out through Esc. Closing
   the hub always returns to wherever it was opened from - the priority list
-  or the backlog - at the same position. Each tab's own content beyond this
+  or the backlog - at the same position. From a step's hub, i opens its
+  owning item's hub on top, landing on Description; Esc or ← returns to the
+  step's hub beneath it, the same push-on-top/pop-back mechanism used to jump
+  to a blocking item. Pressing i on an item's own hub does nothing, since an
+  item is already its own owning item. Each tab's own content beyond this
   shared shell is specified in its own feature file - Description,
   Hierarchy, Detail, Log, and Artifacts alike.
 
-  Scenario Outline: Confirming a selected row opens its hub, replacing the list
+  @wip
+  Scenario Outline: Confirming a selected row opens the step it reports, not the item
     Given the priority list is showing with an item
     When I select that item's row
     And <key> is pressed
-    Then the item's hub opens, replacing the list on screen
+    Then the step's own hub opens, replacing the list on screen
+    And it lands on the "Log" tab
 
     Examples:
       | key   |
       | Enter |
       | →     |
 
-  Scenario Outline: The header shows the item's identity
-    Given an item with a project and a workflow
-    When <key> is pressed
+  @wip
+  Scenario: Confirming a needs-attention row opens the step's Detail tab, not the item
+    Given the priority list is showing with a needs-attention step
+    When I select that step's row
+    And Enter is pressed
+    Then the step's own hub opens, landing on the "Detail" tab
+
+  @wip
+  Scenario: Confirming a queued row opens the step's Detail tab, not the item
+    Given the priority list is showing with a queued step
+    When I select that step's row
+    And Enter is pressed
+    Then the step's own hub opens, landing on the "Detail" tab
+
+  @wip
+  Scenario: The header shows the item's identity
+    Given an item with a project and a workflow, its hub open
     Then the header shows its id, its title, its project, and its workflow
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: An item with no workflow shows no workflow line
-    Given an item with no workflow
-    When <key> is pressed
+  @wip
+  Scenario: An item with no workflow shows no workflow line
+    Given an item with no workflow, its hub open
     Then no workflow line is shown in the header
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: The header names the current step
-    Given an item at step "write-code"
-    When <key> is pressed
+  @wip
+  Scenario: The header names the current step
+    Given an item at step "write-code", its hub open
     Then the header names "write-code" as the current step
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: The header shows the current step's declared display phrase alongside its stage name
-    Given an item at step "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage
-    When <key> is pressed
+  @wip
+  Scenario: The header shows the current step's declared display phrase alongside its stage name
+    Given an item at step "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage, its hub open
     Then the header names "Review the PR · code-await-merge" as the current step
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: The header shows the role performing the current step
-    Given an item at step "write-code" performed by the role "write-code"
-    When <key> is pressed
+  @wip
+  Scenario: The header shows the role performing the current step
+    Given an item at step "write-code" performed by the role "write-code", its hub open
     Then the header shows "write-code" as the role
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: An active item's header shows its elapsed time, matching the list's own format
-    Given an active item at step "build" claimed 14 minutes ago
-    When <key> is pressed
+  @wip
+  Scenario: An active item's header shows its elapsed time, matching the list's own format
+    Given an active item at step "build" claimed 14 minutes ago, its hub open
     Then the header's elapsed time reads "14m"
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: A human step with no worker shows no role and no elapsed time
-    Given an item at a human step, with no worker
-    When <key> is pressed
+  @wip
+  Scenario: A human step with no worker shows no role and no elapsed time
+    Given an item at a human step, with no worker, its hub open
     Then no role is shown in the header
     And no elapsed time is shown in the header
-
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
 
   Scenario Outline: A selected step's header shows its role and state, not its workflow
     Given a step is selected, rather than an item
@@ -106,6 +91,18 @@ Feature: The node hub
       | Enter |
       | →     |
 
+  @wip
+  Scenario Outline: An item fieldset field's key stays dim while its value renders at full text brightness
+    Given <given>
+    Then the header's "<key>" key is shown in the dim colour
+    And the header's "<key>" value is shown in the text colour
+
+    Examples:
+      | given                                                                             | key     |
+      | an item at step "write-code", its hub open                                        | STEP    |
+      | an item at step "write-code" performed by the role "write-code", its hub open      | ROLE    |
+      | an active item at step "build" claimed 14 minutes ago, its hub open                | ELAPSED |
+
   Scenario Outline: A fieldset field's key stays dim while its value renders at full text brightness
     Given <given>
     When <trigger> is pressed
@@ -113,15 +110,9 @@ Feature: The node hub
     And the header's "<key>" value is shown in the text colour
 
     Examples:
-      | given                                                              | key     | trigger |
-      | an item at step "write-code"                                       | STEP    | Enter   |
-      | an item at step "write-code"                                       | STEP    | →       |
-      | an item at step "write-code" performed by the role "write-code"    | ROLE    | Enter   |
-      | an item at step "write-code" performed by the role "write-code"    | ROLE    | →       |
-      | an active item at step "build" claimed 14 minutes ago              | ELAPSED | Enter   |
-      | an active item at step "build" claimed 14 minutes ago              | ELAPSED | →       |
-      | a step is selected, rather than an item                            | STATE   | Enter   |
-      | a step is selected, rather than an item                            | STATE   | →       |
+      | given                                     | key   | trigger |
+      | a step is selected, rather than an item   | STATE | Enter   |
+      | a step is selected, rather than an item   | STATE | →       |
 
   Scenario: An item's tab strip is Description, Hierarchy, and Artifacts, never Detail or Log
     Given an item, its hub open
@@ -199,21 +190,18 @@ Feature: The node hub
       | Detail | Log    |
       | Log    | Detail |
 
+  @wip
   Scenario Outline: Tab jumps straight to the backlog from any tab in an open item's hub, without cycling tabs
-    Given the priority list is showing with an item
-    When <key> is pressed
-    And the "<tab>" tab is active
+    Given an item, its hub open
+    When the "<tab>" tab is active
     And Tab is pressed
     Then the backlog is shown in place of the hub
 
     Examples:
-      | tab         | key   |
-      | Hierarchy   | Enter |
-      | Hierarchy   | →     |
-      | Artifacts   | Enter |
-      | Artifacts   | →     |
-      | Description | Enter |
-      | Description | →     |
+      | tab         |
+      | Hierarchy   |
+      | Artifacts   |
+      | Description |
 
   Scenario Outline: Tab jumps straight to the backlog from any tab in an open step's hub, without cycling tabs
     Given a step is selected, rather than an item
@@ -246,84 +234,62 @@ Feature: The node hub
     Given an item blocked on another item's completion, its hub open
     Then the escalation reason names the specific blocking item
 
-  Scenario Outline: An escalated step's escalation reason names what's being asked
-    Given an item whose current step is escalated, needing rework
-    When <key> is pressed
+  @wip
+  Scenario: An escalated step's escalation reason names what's being asked
+    Given an item whose current step is escalated, needing rework, its hub open
     Then the escalation reason names what's being asked of the operator
-
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
 
   Scenario: A dependency-blocked item's escalation panel shows a single untagged line
     Given an item blocked on another item's completion, its hub open
     Then the escalation panel shows no "⚠ needs you" tag and no second line
     And the blocking item's id within the reason is coloured as a link, in the cyan colour
 
-  Scenario Outline: An escalated step's escalation panel shows the tag on its own line, above the reason
-    Given an item whose current step is escalated, needing rework
-    When <key> is pressed
+  @wip
+  Scenario: An escalated step's escalation panel shows the tag on its own line, above the reason
+    Given an item whose current step is escalated, needing rework, its hub open
     Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
     And the reason is shown on a second line below the tag, in the text colour
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: An escalated step's escalation panel names no resume command, since resuming is a keypress on Detail now
-    Given an item whose current step is escalated, needing rework
-    When <key> is pressed
+  @wip
+  Scenario: An escalated step's escalation panel names no resume command, since resuming is a keypress on Detail now
+    Given an item whose current step is escalated, needing rework, its hub open
     Then the escalation panel shows no resume command
     And the escalation panel has no third line
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
-  Scenario Outline: An escalated step with a recorded reason shows it on the third line, with no resume command alongside it
-    Given an item whose current step is escalated, needing rework, with a recorded reason
-    When <key> is pressed
+  @wip
+  Scenario: An escalated step with a recorded reason shows it on the third line, with no resume command alongside it
+    Given an item whose current step is escalated, needing rework, with a recorded reason, its hub open
     Then the escalation panel's third line names the recorded reason
     And the escalation panel shows no resume command
 
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
-
+  @wip
   Scenario: An escalated step's long reason wraps across multiple lines with every word intact
-    Given an item whose current step is escalated, with a reason long enough to wrap
-    When Enter is pressed
+    Given an item whose current step is escalated, with a reason long enough to wrap, its hub open
     Then the escalation panel shows the reason's final words
     And the escalation panel shows no truncation ellipsis
 
+  @wip
   Scenario: An escalated step's reason far longer than the cap is truncated with an explicit ellipsis
-    Given an item whose current step is escalated, with a reason far longer than the panel's line cap
-    When Enter is pressed
+    Given an item whose current step is escalated, with a reason far longer than the panel's line cap, its hub open
     Then the escalation panel is capped at the configured line count
     And the escalation panel's last line ends with an ellipsis
     And text past the cut point does not appear anywhere in the escalation panel
 
+  @wip
   Scenario: The escalation panel reflows its wrap when the terminal is resized
-    Given an item whose current step is escalated, with a reason that wraps differently at two widths
-    When Enter is pressed
-    And the terminal is resized narrower
+    Given an item whose current step is escalated, with a reason that wraps differently at two widths, its hub open
+    When the terminal is resized narrower
     Then the escalation panel's rendered lines match the new width, not the original
 
+  @wip
   Scenario Outline: An item that is not needs-attention shows no escalation reason
-    Given an item that is "<status>"
-    When <key> is pressed
+    Given an item that is "<status>", its hub open
     Then no escalation reason is shown
 
     Examples:
-      | status | key   |
-      | active | Enter |
-      | active | →     |
-      | queued | Enter |
-      | queued | →     |
+      | status |
+      | active |
+      | queued |
 
   Scenario: b jumps straight to the escalation's named blocking item's own hub
     Given an item's hub is open, showing an escalation reason that names a blocking item
@@ -336,31 +302,21 @@ Feature: The node hub
     Then the blocking item's own hub opens, landing on the Description tab
     And it is not redirected into its running step
 
-  Scenario Outline: b does nothing when the escalation has no blocker to name
-    Given an item whose current step is escalated, needing rework
-    When <key> is pressed
-    And b is pressed
+  @wip
+  Scenario: b does nothing when the escalation has no blocker to name
+    Given an item whose current step is escalated, needing rework, its hub open
+    When b is pressed
     Then nothing happens, since there is no blocker to jump to
-
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
 
   Scenario: The description pane is focused on landing, even when the escalation panel is shown
     Given an item blocked on another item's completion, its hub open
     Then the description pane has focus, not the escalation panel
 
-  Scenario Outline: Cycling into the Hierarchy tab still focuses the table, not the escalation panel
-    Given an item whose current step is escalated, needing rework
-    When <key> is pressed
-    And ] is pressed
+  @wip
+  Scenario: Cycling into the Hierarchy tab still focuses the table, not the escalation panel
+    Given an item whose current step is escalated, needing rework, its hub open
+    When ] is pressed
     Then the hierarchy table has focus, not the escalation panel
-
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
 
   Scenario: Down moves the hierarchy selection when the escalation panel is shown
     Given an item blocked on another item's completion, with a step of its own, its hub open
@@ -393,6 +349,31 @@ Feature: The node hub
       | Enter |
       | →     |
 
+  @wip
+  Scenario: Pressing i on a step's hub opens its owning item's hub, on top of the step's
+    Given a step, its hub open
+    When i is pressed
+    Then the item's own hub opens, on top of the step's, landing on the Description tab
+
+  @wip
+  Scenario Outline: Returning from a step's owning-item hub goes back to the step's hub, not the list
+    Given a step, its hub open
+    And i is pressed
+    When <key> is pressed
+    Then the step's own hub reappears
+
+    Examples:
+      | key |
+      | Esc |
+      | ←   |
+
+  @wip
+  Scenario: Pressing i on an item's own hub does nothing
+    Given an item, its hub open
+    When i is pressed
+    Then the screen stack still has depth 2, unchanged by the keypress
+
+  @wip
   Scenario Outline: Returning from a blocking item's hub goes back to the original blocked item's hub, not the list
     Given a blocked item's hub is open, with content on every tab
     And I cycle to the "<tab>" tab with ]
@@ -409,6 +390,7 @@ Feature: The node hub
       | Description | Esc |
       | Description | ←   |
 
+  @wip
   Scenario Outline: Closing the hub returns to the list with the same row selected and the same scroll position
     Given I opened an item's hub from a specific row in the priority list, with content on every tab
     And I cycle to the "<tab>" tab with ]
@@ -416,14 +398,13 @@ Feature: The node hub
     Then the priority list reappears with that row still selected, at the same scroll position
 
     Examples:
-      | tab         | key |
-      | Hierarchy   | Esc |
-      | Hierarchy   | ←   |
-      | Artifacts   | Esc |
-      | Artifacts   | ←   |
-      | Description | Esc |
-      | Description | ←   |
+      | tab    | key |
+      | Detail | Esc |
+      | Detail | ←   |
+      | Log    | Esc |
+      | Log    | ←   |
 
+  @wip
   Scenario Outline: Anything done inside the hub leaves the list's own scroll position untouched
     Given I opened an item's hub and scrolled or navigated within it
     When <key> is pressed
@@ -470,12 +451,7 @@ Feature: The node hub
       | Description | Esc |
       | Description | ←   |
 
-  Scenario Outline: A step reclaimed after the breaker killed its worker shows its real, queued state
-    Given an item's step was active when the breaker tripped and killed its worker, and was reclaimed to ready
-    When <key> is pressed
+  @wip
+  Scenario: A step reclaimed after the breaker killed its worker shows its real, queued state
+    Given an item's step was active when the breaker tripped and killed its worker, and was reclaimed to ready, its hub open
     Then the header and the hierarchy show the step as queued, not active
-
-    Examples:
-      | key   |
-      | Enter |
-      | →     |
