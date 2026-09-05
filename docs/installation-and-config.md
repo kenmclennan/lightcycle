@@ -57,6 +57,8 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 | `probe-cooldown-seconds` | how long the breaker waits before allowing another probe after the previous one stalled |
 | `retro-interval-reflections` | reflections pending across un-retroed items, between engine retro audits |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
+| `max-title-length` | cap on an item's or step's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description` |
+| `personal-origin` | the workflow origin `lc workflow init` scaffolded and registered, if you made one |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |
 | `personal-origin` | the user's own workflow-origin repo, set by `lc workflow init`. Optional - unset (empty) until one exists |
 
