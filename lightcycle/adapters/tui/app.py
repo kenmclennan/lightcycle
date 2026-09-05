@@ -773,8 +773,11 @@ class LightcycleApp(App):
             return
         if table.id == "priority-list":
             event.stop()
-            node = self._container.store.get_node(row_id)
-            self.push_screen(NodeHubScreen(self._container, node.id, self._now))
+            rows_by_id = {row.id: row for row in self._last_priority_rows}
+            row = rows_by_id.get(row_id)
+            if row is None:
+                return
+            self.push_screen(NodeHubScreen(self._container, row.step_id, self._now))
         elif table.id == "backlog-table":
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))

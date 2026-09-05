@@ -168,6 +168,7 @@ def _step_hub_open(ctx):
     ctx["node_id"] = step
     session = _launch(ctx, store)
     _push_hub(ctx, session, step)
+    ctx["original_screen"] = session.app.screen
 
 
 @given("the priority list is showing with an item")
@@ -181,36 +182,60 @@ def _priority_with_item(ctx):
     _launch(ctx, store)
 
 
-@given("an item with a project and a workflow")
+@given("the priority list is showing with a needs-attention step")
+def _priority_with_needs_attention_step(ctx):
+    store = FakeStore()
+    item = store.create_item("an item", "a description")
+    step = store.create_step("await merge", step="await-merge", role="human", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store)
+
+
+@given("the priority list is showing with a queued step")
+def _priority_with_queued_step(ctx):
+    store = FakeStore()
+    item = store.create_item("an item", "a description")
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store)
+
+
+@given("an item with a project and a workflow, its hub open")
 def _item_full_identity(ctx):
     store = FakeStore()
     item = store.create_item("Full item", "a description", workflow="lightcycle/spec-driven@abc123")
     store.add_artifact(item, "repo", "org/repo")
     store.create_step("write code", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given("an item with no workflow")
+@given("an item with no workflow, its hub open")
 def _item_no_workflow(ctx):
     store = FakeStore()
     item = store.create_item("No workflow item", "a description")
     store.create_step("write code", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given(parsers.parse('an item at step "{step}"'))
+@given(parsers.re(r'an item at step "(?P<step>[^"]+)", its hub open'))
 def _item_at_step(ctx, step):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     store.create_step("s", step=step, role="agent", parent=item)
     ctx["item_id"] = item
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given(parsers.parse(
-    'an item at step "{step}" whose workflow declares the display phrase "{phrase}" for that stage'
+@given(parsers.re(
+    r'an item at step "(?P<step>[^"]+)" whose workflow declares the display phrase '
+    r'"(?P<phrase>[^"]+)" for that stage, its hub open'
 ))
 def _item_at_step_with_display(ctx, step, phrase):
     ctx["fs"] = FakeFs(metas={
@@ -220,19 +245,23 @@ def _item_at_step_with_display(ctx, step, phrase):
     item = store.create_item("Item", "a description")
     store.create_step("s", step=step, role="agent", parent=item)
     ctx["item_id"] = item
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given(parsers.parse('an item at step "{step}" performed by the role "{role}"'))
+@given(parsers.re(
+    r'an item at step "(?P<step>[^"]+)" performed by the role "(?P<role>[^"]+)", its hub open'
+))
 def _item_at_step_with_role(ctx, step, role):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     store.create_step("s", step=step, role=role, parent=item)
     ctx["item_id"] = item
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given(parsers.parse('an active item at step "{step}" claimed {minutes:d} minutes ago'))
+@given(parsers.parse('an active item at step "{step}" claimed {minutes:d} minutes ago, its hub open'))
 def _active_item_claimed_minutes_ago(ctx, step, minutes):
     import datetime
 
@@ -247,15 +276,17 @@ def _active_item_claimed_minutes_ago(ctx, step, minutes):
     ctx["item_id"] = item
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store), now=lambda: now)
+    _push_hub(ctx, ctx["session"], item)
 
 
-@given("an item at a human step, with no worker")
+@given("an item at a human step, with no worker, its hub open")
 def _item_human_step_no_worker(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     store.create_step("await-merge", step="await-merge", role="human", parent=item)
     ctx["item_id"] = item
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
 @given("a step is selected, rather than an item")
@@ -264,12 +295,10 @@ def _step_selected(ctx):
     item = store.create_item("Item", "a description")
     step = store.create_step("write code", step="write-code", role="agent", parent=item)
     store.claim_ready("agent")
+    ctx["item_id"] = item
     ctx["step_id"] = step
     session = _launch(ctx, store)
     session.press("enter")
-    screen = session.app.screen
-    session.run(lambda: screen.open_at(step))
-    session.pause()
 
 
 def _push_hub(ctx, session, node_id):
@@ -411,7 +440,7 @@ def _item_blocked_with_step(ctx):
     _push_hub(ctx, session, item)
 
 
-@given("an item whose current step is escalated, needing rework")
+@given("an item whose current step is escalated, needing rework, its hub open")
 def _item_escalated_rework(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -420,10 +449,11 @@ def _item_escalated_rework(ctx):
     store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given("an item whose current step is escalated, needing rework, with a recorded reason")
+@given("an item whose current step is escalated, needing rework, with a recorded reason, its hub open")
 def _item_escalated_rework_with_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -435,10 +465,11 @@ def _item_escalated_rework_with_reason(ctx):
     store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
-@given("an item whose current step is escalated, with a reason long enough to wrap")
+@given("an item whose current step is escalated, with a reason long enough to wrap, its hub open")
 def _item_escalated_long_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -449,10 +480,14 @@ def _item_escalated_long_reason(ctx):
     store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
-    _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+    session = _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+    _push_hub(ctx, session, item)
 
 
-@given("an item whose current step is escalated, with a reason far longer than the panel's line cap")
+@given(
+    "an item whose current step is escalated, with a reason far longer than the panel's line cap, "
+    "its hub open"
+)
 def _item_escalated_over_cap_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -463,10 +498,14 @@ def _item_escalated_over_cap_reason(ctx):
     store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
-    _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+    session = _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+    _push_hub(ctx, session, item)
 
 
-@given("an item whose current step is escalated, with a reason that wraps differently at two widths")
+@given(
+    "an item whose current step is escalated, with a reason that wraps differently at two widths, "
+    "its hub open"
+)
 def _item_escalated_resizable_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -482,10 +521,11 @@ def _item_escalated_resizable_reason(ctx):
     store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
-    _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+    session = _launch(ctx, store, size=WRAPPING_HUB_SIZE)
+    _push_hub(ctx, session, item)
 
 
-@given(parsers.parse('an item that is "{status}"'))
+@given(parsers.parse('an item that is "{status}", its hub open'))
 def _item_that_is(ctx, status):
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -497,7 +537,8 @@ def _item_that_is(ctx, status):
     else:
         raise AssertionError("unhandled status %r" % status)
     ctx["item_id"] = item
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
 @given("an item's hub is open, showing an escalation reason that names a blocking item")
@@ -560,10 +601,7 @@ def _blocked_items_hub_open_with_content(ctx):
     ctx["item_id"] = item
     ctx["blocker_id"] = blocker
     session = _launch(ctx, store)
-    table = session.app.query_one(PriorityTable)
-    ids = [row.key.value for row in table.ordered_rows]
-    table.move_cursor(row=ids.index(item))
-    session.press("enter")
+    _push_hub(ctx, session, item)
     ctx["original_screen"] = session.app.screen
 
 
@@ -598,10 +636,7 @@ def _opened_and_navigated(ctx):
     item = store.create_item("Target", "a description")
     store.create_step("s", step="build", role="agent", parent=item)
     session = _launch(ctx, store)
-    session.press("enter")
-    screen = session.app.screen
-    screen._active_tab = "hierarchy"
-    session.run(screen._apply_tab_visibility)
+    _push_hub(ctx, session, item)
     session.press("down")
 
 
@@ -634,7 +669,7 @@ def _opened_backlog_hub(ctx):
 
 @given(
     "an item's step was active when the breaker tripped and killed its worker, "
-    "and was reclaimed to ready"
+    "and was reclaimed to ready, its hub open"
 )
 def _step_reclaimed(ctx):
     store = FakeStore()
@@ -644,9 +679,11 @@ def _step_reclaimed(ctx):
     store.reclaim(step)
     ctx["item_id"] = item
     ctx["step_id"] = step
-    _launch(ctx, store)
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
 
 
+@given(parsers.parse("{key} is pressed"))
 @when(parsers.parse("{key} is pressed"))
 def _key_pressed(ctx, key):
     keymap = {
@@ -658,6 +695,13 @@ def _key_pressed(ctx, key):
 
 @when("I select that item's row")
 def _select_item_row(ctx):
+    table = ctx["session"].app.query_one(PriorityTable)
+    ids = [row.key.value for row in table.ordered_rows]
+    table.move_cursor(row=ids.index(ctx["item_id"]))
+
+
+@when("I select that step's row")
+def _select_step_row(ctx):
     table = ctx["session"].app.query_one(PriorityTable)
     ids = [row.key.value for row in table.ordered_rows]
     table.move_cursor(row=ids.index(ctx["item_id"]))
@@ -682,9 +726,21 @@ def _terminal_resized_narrower(ctx):
 
 
 
-@then("the item's hub opens, replacing the list on screen")
+@then("the step's own hub opens, replacing the list on screen")
 def _hub_opens_replacing_list(ctx):
-    assert isinstance(ctx["session"].app.screen, NodeHubScreen)
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["step_id"]
+
+
+@then(parsers.parse('the step\'s own hub opens, landing on the "{tab}" tab'))
+def _step_hub_opens_landing_on_tab(ctx, tab):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["step_id"]
+    tab_id = tab.lower()
+    assert screen._active_tab == tab_id
+    _assert_tab_strip_rendered(ctx["session"], tab_id)
 
 
 @then("the header shows its id, its title, its project, and its workflow")
@@ -1034,6 +1090,28 @@ def _steps_own_hub_opens(ctx):
 @then("the screen stack still has depth 2, unchanged by the confirm")
 def _stack_depth_still_2(ctx):
     assert len(ctx["session"].app.screen_stack) == 2
+
+
+@then("the screen stack still has depth 2, unchanged by the keypress")
+def _stack_depth_still_2_keypress(ctx):
+    assert len(ctx["session"].app.screen_stack) == 2
+
+
+@then("the item's own hub opens, on top of the step's, landing on the Description tab")
+def _item_hub_opens_on_top_of_step(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._node_id == ctx["item_id"]
+    assert screen._active_tab == "description"
+    assert len(ctx["session"].app.screen_stack) == 3
+    _assert_tab_strip_rendered(ctx["session"], "description")
+
+
+@then("the step's own hub reappears")
+def _step_hub_reappears(ctx):
+    screen = ctx["session"].app.screen
+    assert screen is ctx["original_screen"]
+    assert screen._node_id == ctx["step_id"]
 
 
 @then("the original blocked item's hub reappears, at the tab I was on")
