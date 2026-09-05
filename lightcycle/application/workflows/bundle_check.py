@@ -42,6 +42,10 @@ def check_bundle_references(fs, root):
                 "%s on %r (phase %r) targets %r in a different phase (%r)"
                 % (hook, gate, gate_phase, target, target_phase)
             )
+        for hook, gate, target in contracts.unresolved_hook_targets():
+            messages.append(
+                "%s on %r targets %r, which resolves to nothing" % (hook, gate, target)
+            )
         if contracts.unknown_display():
             messages.append(
                 "display phrase declared for a stage this bundle does not reference: %s"

@@ -138,6 +138,23 @@ class FlowContracts:
             self._collect_hook_phase_mismatch(mismatches, "ci_failed_cap", occ, 3)
         return sorted(mismatches)
 
+    def _collect_unresolved_hook_target(self, unresolved, hook, occ, target_index, known):
+        if len(occ) <= target_index:
+            return
+        gate, target = occ[0], occ[target_index]
+        if target not in known:
+            unresolved.append((hook, gate, target))
+
+    def unresolved_hook_targets(self):
+        unresolved = []
+        owned = set(self._steps)
+        known = owned | set(self.terminals())
+        for occ in self._graph.hook_occurrences("pr_feedback"):
+            self._collect_unresolved_hook_target(unresolved, "pr_feedback", occ, 1, owned)
+        for occ in self._graph.hook_occurrences("ci_failed_cap"):
+            self._collect_unresolved_hook_target(unresolved, "ci_failed_cap", occ, 3, known)
+        return sorted(unresolved)
+
     def ok(self):
         return (
             not self.missing() and not self._dups
@@ -145,6 +162,7 @@ class FlowContracts:
             and not self.unknown_display()
             and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
             and not self.hook_phase_mismatches()
+            and not self.unresolved_hook_targets()
         )
 
     def as_dict(self):
@@ -165,5 +183,6 @@ class FlowContracts:
             "unknown_pass_ends": self.unknown_pass_ends(),
             "unreachable_pass_ends": self.unreachable_pass_ends(),
             "hook_phase_mismatches": self.hook_phase_mismatches(),
+            "unresolved_hook_targets": self.unresolved_hook_targets(),
             "ok": self.ok(),
         }
