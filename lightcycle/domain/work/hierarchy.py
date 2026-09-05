@@ -39,12 +39,12 @@ class PassHeader:
 def compose_hierarchy(root, steps_by_item, passes_by_item):
     passes = {p.id: p for p in passes_by_item.get(root.id, ())}
     rows = [HierarchyRow(root, 0)]
-    current = None
+    headed = set()
     for step in steps_by_item.get(root.id, []):
         pid = step.pass_id if step.pass_id in passes else None
-        if pid != current and pid is not None:
+        if pid is not None and pid not in headed:
+            headed.add(pid)
             rows.append(HierarchyRow(PassHeader(passes[pid]), 1))
-        current = pid
         rows.append(HierarchyRow(step, 2 if pid is not None else 1))
     return rows
 

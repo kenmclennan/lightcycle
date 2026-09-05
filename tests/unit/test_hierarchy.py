@@ -80,6 +80,20 @@ class TestHierarchyUseCase(unittest.TestCase):
             (item, 0), (legacy, 1), (pid, 1), (enrolled, 2),
         ])
 
+    def test_an_unpassed_step_between_enrolled_ones_does_not_repeat_the_header(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        pid = s.open_pass(item)
+        first = s.create_step("first", step="build", role="agent", parent=item)
+        s.set_step_pass(first, pid)
+        feedback = s.create_step("feedback", step="handle-feedback", role="agent", parent=item)
+        second = s.create_step("second", step="build", role="agent", parent=item)
+        s.set_step_pass(second, pid)
+        rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
+        self.assertEqual([(r.node.id, r.depth) for r in rows], [
+            (item, 0), (pid, 1), (first, 2), (feedback, 1), (second, 2),
+        ])
+
     def test_a_pass_with_no_enrolled_steps_produces_no_header(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
