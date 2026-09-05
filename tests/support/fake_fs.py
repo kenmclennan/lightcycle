@@ -19,7 +19,9 @@ def graph_text_from_metas(metas, entry=None, requires=None):
     nodes, edges, hooks, signals, phases, display = [], [], [], [], [], []
     for role in sorted(metas):
         meta = metas[role] or {}
-        step = meta.get("step")
+        if "step" not in meta:
+            raise ValueError("meta for role %r has no 'step' key" % role)
+        step = meta["step"]
         if not step:
             continue
         if step != role:

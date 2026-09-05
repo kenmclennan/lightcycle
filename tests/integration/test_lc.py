@@ -200,10 +200,9 @@ def write_steps(root, roles=("coder", "reviewer", "pr-watcher", "driver")):
     for r in roles:
         model, step, routes = _AGENT_SPECS[r]
         fm = ["---", "model: %s" % model]
-        meta = {"model": model}
+        meta = {"model": model, "step": step}
         if step:
             fm.append("step: %s" % step)
-            meta["step"] = step
         if routes:
             fm.append("routes:")
             fm += ["  %s: %s" % (o, n) for o, n in routes.items()]
@@ -667,7 +666,7 @@ class TestRun(unittest.TestCase):
         (Path(self.root) / "store.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
             (_steps_dir(self.root) / ("%s.md" % r)).write_text(
-                "---\nmodel: sonnet\n---\nstub %s" % r
+                "---\nmodel: sonnet\nstep: %s\n---\nstub %s" % (_AGENT_SPECS[r][1], r)
             )
         write_workflow_from_steps(self.root)
         os.environ["LC_HOME"] = self.root
@@ -901,7 +900,7 @@ class TestRunSingletonLock(unittest.TestCase):
         (Path(self.root) / "store.db").touch()
         for r in ("coder", "reviewer", "pr-watcher"):
             (_steps_dir(self.root) / ("%s.md" % r)).write_text(
-                "---\nmodel: sonnet\n---\nstub %s" % r
+                "---\nmodel: sonnet\nstep: %s\n---\nstub %s" % (_AGENT_SPECS[r][1], r)
             )
         write_workflow_from_steps(self.root)
         os.environ["LC_HOME"] = self.root
