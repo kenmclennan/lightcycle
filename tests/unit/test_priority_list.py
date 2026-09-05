@@ -246,6 +246,55 @@ class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
         )
 
 
+class TestBuildPriorityRowsStepId(unittest.TestCase):
+    def test_attention_row_step_id_is_the_step_not_the_owning_item(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step("await merge", step="ready-merge", role="human", parent=item)
+        lanes = {"inbox": [store.get_node(step)], "queue": [], "active": []}
+
+        attention, _, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual(attention[0].id, item)
+        self.assertEqual(attention[0].step_id, step)
+
+    def test_active_row_step_id_is_the_step_not_the_owning_item(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step("building", step="build", role="agent", parent=item)
+        lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
+
+        _, active, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual(active[0].id, item)
+        self.assertEqual(active[0].step_id, step)
+
+    def test_queued_row_step_id_is_the_step_not_the_owning_item(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step("queued build", step="build", role="agent", parent=item)
+        lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
+
+        _, _, queued = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual(queued[0].id, item)
+        self.assertEqual(queued[0].step_id, step)
+
+    def test_queued_dependency_held_row_step_id_is_the_step_not_the_owning_item(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        blocker = store.create_step("blocker", step="ready-merge", role="human")
+        step = store.create_step(
+            "blocked build", step="build", role="agent", parent=item, deps=[blocker]
+        )
+        lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
+
+        _, _, queued = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual(queued[0].id, item)
+        self.assertEqual(queued[0].step_id, step)
+
+
 class TestAssembleRows(unittest.TestCase):
     def test_concatenates_all_three_groups_with_no_separator(self):
         self.assertEqual(assemble_rows(["a"], ["b"], ["c"]), ["a", "b", "c"])

@@ -9,6 +9,7 @@ from lightcycle.domain.feedback import Duration, format_elapsed
 @dataclass(frozen=True)
 class PriorityRow:
     id: str
+    step_id: str
     group: str
     icon: str
     icon_colour: str
@@ -44,6 +45,7 @@ def _attention_row(store, node, flow):
     step = _resolved_step(node, flow)
     return PriorityRow(
         id=node.id,
+        step_id=node.id,
         group="attention",
         icon=glyph.glyph,
         icon_colour=glyph.colour,
@@ -60,6 +62,7 @@ def _active_row(store, node, now, flow):
     glyph = STATE_GLYPHS["active"]
     return PriorityRow(
         id=node.id,
+        step_id=node.id,
         group="active",
         icon=glyph.glyph,
         icon_colour=glyph.colour,
@@ -78,6 +81,7 @@ def _queued_row(store, node, flow):
         blocker_id = sorted(node.blocked_by)[0]
         return PriorityRow(
             id=node.id,
+            step_id=node.id,
             group="queued",
             icon=glyph.glyph,
             icon_colour=glyph.colour,
@@ -90,6 +94,7 @@ def _queued_row(store, node, flow):
         )
     return PriorityRow(
         id=node.id,
+        step_id=node.id,
         group="queued",
         icon=glyph.glyph,
         icon_colour=glyph.colour,

@@ -874,6 +874,7 @@ class NodeHubScreen(Screen):
         Binding("t", "toggle_thinking", "Thinking", show=False),
         Binding("b", "open_blocker", "Open blocker", show=False),
         Binding("r", "resume", "Resume", show=False),
+        Binding("i", "open_item", "Open item", show=False),
     ]
 
     CSS = f"""
@@ -1634,6 +1635,12 @@ class NodeHubScreen(Screen):
         target_id = self.query_one(EscalationPanel).target_id
         if target_id:
             self.open_at(target_id)
+
+    def action_open_item(self) -> None:
+        node = self._container.store.get_node(self._node_id)
+        if node.type != "step":
+            return
+        self.open_at(node.parent)
 
     def action_resume(self) -> None:
         store = self._container.store
