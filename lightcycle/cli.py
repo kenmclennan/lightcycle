@@ -652,6 +652,7 @@ def _workflow_check(selector, as_json):
     unreachable_pass_ends = an["unreachable_pass_ends"]
     hook_phase_mismatches = an["hook_phase_mismatches"]
     unresolved_hook_targets = an["unresolved_hook_targets"]
+    reserved_step_names = an["reserved_step_names"]
 
     hooks = resp.hooks
     if as_json:
@@ -678,6 +679,7 @@ def _workflow_check(selector, as_json):
                     "unreachable_pass_ends": unreachable_pass_ends,
                     "hook_phase_mismatches": hook_phase_mismatches,
                     "unresolved_hook_targets": unresolved_hook_targets,
+                    "reserved_step_names": reserved_step_names,
                     "ok": ok,
                 },
                 indent=2,
@@ -733,6 +735,11 @@ def _workflow_check(selector, as_json):
     for hook, gate, target in unresolved_hook_targets:
         sys.stderr.write(
             "%s on '%s' targets '%s', which resolves to nothing\n" % (hook, gate, target)
+        )
+    for stage, phrase in reserved_step_names:
+        sys.stderr.write(
+            "'%s' is reserved for the engine's own step (%r) and cannot name a bundle stage\n"
+            % (stage, phrase)
         )
     if unknown_display:
         sys.stderr.write(

@@ -1,3 +1,4 @@
+from lightcycle.domain.audit import engine_display_of
 from lightcycle.domain.contracts.step_contract import StepContract
 
 FILE_PROVIDES = {"spec"}
@@ -155,6 +156,11 @@ class FlowContracts:
             self._collect_unresolved_hook_target(unresolved, "ci_failed_cap", occ, 3, known)
         return sorted(unresolved)
 
+    def reserved_step_names(self):
+        return sorted(
+            (s, engine_display_of(s)) for s in self._steps if engine_display_of(s) is not None
+        )
+
     def ok(self):
         return (
             not self.missing() and not self._dups
@@ -163,6 +169,7 @@ class FlowContracts:
             and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
             and not self.hook_phase_mismatches()
             and not self.unresolved_hook_targets()
+            and not self.reserved_step_names()
         )
 
     def as_dict(self):
@@ -184,5 +191,6 @@ class FlowContracts:
             "unreachable_pass_ends": self.unreachable_pass_ends(),
             "hook_phase_mismatches": self.hook_phase_mismatches(),
             "unresolved_hook_targets": self.unresolved_hook_targets(),
+            "reserved_step_names": self.reserved_step_names(),
             "ok": self.ok(),
         }
