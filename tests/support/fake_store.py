@@ -120,6 +120,7 @@ class FakeStore(StorePort):
             "notes": None,
             "closed_at": None,
             "description": None,
+            "created_at": self._now(),
         }
         b.update(fields)
         return b

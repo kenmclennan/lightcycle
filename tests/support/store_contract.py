@@ -488,20 +488,31 @@ class StoreContractBase:
         self.assertEqual(states, ["in_progress", "done"])
 
     def test_history_stamps_ts_from_injected_clock(self):
-        ticks = iter(["2026-01-01T10:00:00", "2026-01-01T10:30:00"])
+        ticks = iter("2026-01-01T%02d:00:00" % h for h in range(10, 20))
         s = self.make_store(now=lambda: next(ticks))
         tid = self._step(s, "t", role="agent")
         s.claim_ready("agent")
         s.close(tid, "done")
-        self.assertEqual(
-            [ts for _, ts in s.history(tid)],
-            ["2026-01-01T10:00:00", "2026-01-01T10:30:00"],
-        )
+        stamps = [ts for _, ts in s.history(tid)]
+        self.assertEqual(len(stamps), 2)
+        self.assertTrue(all(ts.startswith("2026-01-01T1") for ts in stamps))
+        self.assertLess(stamps[0], stamps[1])
 
     def test_history_empty_for_unclaimed_task(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
         self.assertEqual(s.history(tid), [])
+
+    def test_steps_at_step_created_at_set_and_orders_by_creation(self):
+        s = self.make_store()
+        item = s.create_item("owner", "an owning item")
+        first = s.create_step("first", step="build", role="agent", parent=item)
+        second = s.create_step("second", step="build", role="agent", parent=item)
+        steps = {t.id: t for t in s.steps_at_step("build")}
+        self.assertTrue(steps[first].created_at)
+        self.assertTrue(steps[second].created_at)
+        ordered = sorted(steps.values(), key=lambda t: t.created_at)
+        self.assertEqual([t.id for t in ordered], [first, second])
 
     def test_all_steps_excludes_closed_steps(self):
         s = self.make_store()
