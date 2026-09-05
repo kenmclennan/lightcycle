@@ -256,11 +256,10 @@ class TestHookPhaseMismatches(unittest.TestCase):
         a = contracts(metas)
         self.assertEqual(a.hook_phase_mismatches(), [])
 
-    def test_fileless_terminal_target_is_exempt(self):
+    def test_fileless_terminal_target_is_exempt_from_the_phase_check(self):
         metas = {"gate": {"step": "gate", "phase": "spec", "on_pr_feedback": "review-conflict"}}
         a = contracts(metas)
         self.assertEqual(a.hook_phase_mismatches(), [])
-        self.assertTrue(a.ok())
 
     def test_no_phase_block_at_all_produces_no_mismatches(self):
         metas = {
@@ -277,6 +276,93 @@ class TestHookPhaseMismatches(unittest.TestCase):
         }
         a = contracts(metas)
         self.assertEqual(a.as_dict()["hook_phase_mismatches"], a.hook_phase_mismatches())
+
+
+class TestUnresolvedHookTargets(unittest.TestCase):
+    def test_pr_feedback_target_with_no_meta_at_all_is_flagged(self):
+        metas = {"gate": {"step": "gate", "on_pr_feedback": "target"}}
+        a = contracts(metas)
+        self.assertEqual(a.unresolved_hook_targets(), [("pr_feedback", "gate", "target")])
+        self.assertFalse(a.ok())
+
+    def test_pr_feedback_target_that_is_owned_is_not_flagged(self):
+        metas = {
+            "gate": {"step": "gate", "on_pr_feedback": "target"},
+            "target": {"step": "target"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.unresolved_hook_targets(), [])
+        self.assertTrue(a.ok())
+
+    def test_pr_feedback_target_reachable_only_via_edges_is_still_flagged(self):
+        metas = {
+            "gate": {"step": "gate", "on_pr_feedback": "target"},
+            "other": {"step": "other", "routes": {"done": "target"}},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.unresolved_hook_targets(), [("pr_feedback", "gate", "target")])
+        self.assertFalse(a.ok())
+
+    def test_ci_failed_cap_target_with_no_meta_at_all_is_flagged(self):
+        text = "entry: gate\n\nhooks:\n  ci_failed_cap  gate  ci-failed  3  target\n"
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unresolved_hook_targets(), [("ci_failed_cap", "gate", "target")])
+        self.assertFalse(a.ok())
+
+    def test_ci_failed_cap_target_that_is_owned_is_not_flagged(self):
+        text = "entry: gate\n\nhooks:\n  ci_failed_cap  gate  ci-failed  3  target\n"
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unresolved_hook_targets(), [])
+        self.assertTrue(a.ok())
+
+    def test_ci_failed_cap_target_reachable_only_via_edges_is_exempt(self):
+        text = (
+            "entry: gate\n\n"
+            "edges:\n  other  done  target\n\n"
+            "hooks:\n  ci_failed_cap  gate  ci-failed  3  target\n"
+        )
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "other": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unresolved_hook_targets(), [])
+        self.assertTrue(a.ok())
+
+    def test_mixed_gates_flags_only_the_unresolved_pair(self):
+        metas = {
+            "gate1": {"step": "gate1", "on_pr_feedback": "target1"},
+            "target1": {"step": "target1"},
+            "gate2": {"step": "gate2", "on_pr_feedback": "target2"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.unresolved_hook_targets(), [("pr_feedback", "gate2", "target2")])
+
+    def test_outcome_shaped_hooks_are_never_flagged(self):
+        metas = {
+            "gate": {
+                "step": "gate",
+                "on_pr_merge": "ghost1",
+                "on_pr_close": "ghost2",
+                "on_pr_conflict": "ghost3",
+                "on_pr_conflict_cap": 3,
+                "on_pr_conflict_escalate": "ghost4",
+                "on_mention_token": "@bot",
+                "on_review_bot_allowlist": ["bot-a", "bot-b"],
+            },
+        }
+        a = contracts(metas)
+        self.assertEqual(a.unresolved_hook_targets(), [])
+
+    def test_as_dict_includes_unresolved_hook_targets(self):
+        metas = {"gate": {"step": "gate", "on_pr_feedback": "target"}}
+        a = contracts(metas)
+        self.assertEqual(a.as_dict()["unresolved_hook_targets"], a.unresolved_hook_targets())
 
 
 class TestDisplayContracts(unittest.TestCase):

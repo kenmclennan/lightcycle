@@ -651,6 +651,7 @@ def _workflow_check(selector, as_json):
     unknown_pass_ends = an["unknown_pass_ends"]
     unreachable_pass_ends = an["unreachable_pass_ends"]
     hook_phase_mismatches = an["hook_phase_mismatches"]
+    unresolved_hook_targets = an["unresolved_hook_targets"]
 
     hooks = resp.hooks
     if as_json:
@@ -676,6 +677,7 @@ def _workflow_check(selector, as_json):
                     "unknown_pass_ends": unknown_pass_ends,
                     "unreachable_pass_ends": unreachable_pass_ends,
                     "hook_phase_mismatches": hook_phase_mismatches,
+                    "unresolved_hook_targets": unresolved_hook_targets,
                     "ok": ok,
                 },
                 indent=2,
@@ -727,6 +729,10 @@ def _workflow_check(selector, as_json):
         sys.stderr.write(
             "phase: %s on '%s' (phase '%s') targets '%s' in a different phase ('%s')\n"
             % (hook, gate, gate_phase, target, target_phase)
+        )
+    for hook, gate, target in unresolved_hook_targets:
+        sys.stderr.write(
+            "%s on '%s' targets '%s', which resolves to nothing\n" % (hook, gate, target)
         )
     if unknown_display:
         sys.stderr.write(
