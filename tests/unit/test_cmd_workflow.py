@@ -12,7 +12,7 @@ from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work.hierarchy import display_stage
 from lightcycle.render import render_workflow_mermaid
 from tests.support.fake_fs import FakeFs
-from tests.support.fake_store import FakeStore as SupportStore
+from tests.support.fake_store import FakeStore
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
 
 
@@ -26,7 +26,7 @@ class TestWorkflowListSummaries(unittest.TestCase):
             "spec-driven": "---\nsummary: spec to merged\n---\nentry: x\n",
             "bdd-driven": "---\nsummary: gherkin first\n---\nentry: y\n",
         })
-        resp = ListWorkflowSourcesUseCase(source, SupportStore(), fs).execute()
+        resp = ListWorkflowSourcesUseCase(source, FakeStore(), fs).execute()
         wfs = dict(resp.origins[0].workflows)
         self.assertEqual(wfs["spec-driven"], "spec to merged")
         self.assertEqual(wfs["bdd-driven"], "gherkin first")
@@ -107,22 +107,6 @@ class FakeSource:
 
     def cleanup(self, checkout_dir):
         pass
-
-
-class _Node:
-    def __init__(self, workflow):
-        self.workflow = workflow
-
-
-class FakeStore:
-    def __init__(self, nodes=None):
-        self._nodes = nodes or []
-
-    def all_items(self):
-        return [n for n in self._nodes if getattr(n, "type", "item") == "item"]
-
-    def all_nodes(self):
-        return list(self._nodes)
 
 
 class FakeConfig:
@@ -334,7 +318,8 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertEqual(self.source.list_origins(), [])
 
     def test_rm_refuses_when_pinned(self):
-        self.store = FakeStore([_Node("acme/build@sha1")])
+        self.store = FakeStore()
+        self.store.create_item("t", "d", workflow="acme/build@sha1")
         cli.set_container(FakeContainer(self.source, self.store))
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         call(cli.cmd_workflow, "add", "u")
