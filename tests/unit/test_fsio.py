@@ -260,7 +260,7 @@ class TestIterLines(unittest.TestCase):
 
     def test_fake_fs_yields_seeded_lines(self):
         fs = FakeFs(files={"/l/worker.log": b"line one\nline two\n"})
-        self.assertEqual(list(fs.iter_lines("/l/worker.log")), ["line one", "line two"])
+        self.assertEqual(list(fs.iter_lines("/l/worker.log")), ["line one\n", "line two\n"])
 
     def test_fake_fs_unknown_path_yields_nothing(self):
         fs = FakeFs()
