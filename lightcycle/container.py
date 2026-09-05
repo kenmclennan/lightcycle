@@ -49,10 +49,10 @@ def make_flow_service(fs, store, config, workflow_source):
     return FlowService(fs, store, config, workflow_source)
 
 
-def make_worktrees(store, git, fs, config, flow, github=None):
+def make_worktrees(store, git, fs, config, flow):
     from lightcycle.application.services.worktree import WorktreeService
 
-    return WorktreeService(store, git, fs, config, flow, github=github)
+    return WorktreeService(store, git, fs, config, flow)
 
 
 def worktrees_for(container, flow=None):
@@ -62,5 +62,4 @@ def worktrees_for(container, flow=None):
         )
     return make_worktrees(
         container.store, container.git, container.fs, container.config, flow,
-        github=container.github,
     )
