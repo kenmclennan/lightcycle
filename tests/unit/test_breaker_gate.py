@@ -230,7 +230,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         self.assertFalse(result.rearmed)
         self.assertEqual(result.breaker.reset_at, 500)
 
-    def test_a_stalled_worker_with_a_terminal_marker_is_not_treated_as_a_stalled_probe(self):
+    def test_a_probes_terminal_command_is_itself_activity_that_closes_the_breaker(self):
         workers = FakeWorkers(
             workers=[
                 {
@@ -257,6 +257,66 @@ class TestBreakerGateUseCase(unittest.TestCase):
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
         ).execute(now=1000)
+        self.assertTrue(result.closed)
+        self.assertFalse(result.rearmed)
+
+    def test_a_live_probes_session_activity_closes_the_breaker(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "probe-sp", "pid": 3, "log": "/l/probe.log", "started": 0}],
+            alive_pids={3},
+        )
+        fs = FakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=500)
+        self.assertTrue(result.closed)
+        self.assertFalse(result.breaker.is_open)
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(workers.checked, [])
+
+    def test_a_live_probes_pending_rejection_does_not_close_or_rearm(self):
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                }
+            ],
+            alive_pids={3},
+        )
+        log = "\n".join([_REJECTED % 900, '{"type":"result","subtype":"error"}'])
+        fs = FakeFs(files={"/l/probe.log": log.encode()})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=500)
+        self.assertFalse(result.closed)
+        self.assertFalse(result.opened)
+        self.assertFalse(result.rearmed)
+        self.assertEqual(result.breaker.reset_at, 500)
+
+    def test_success_wins_over_a_stale_mtime_when_a_probe_both_worked_and_later_stalled(self):
+        workers = FakeWorkers(
+            workers=[
+                {
+                    "spawnid": "probe-sp",
+                    "pid": 3,
+                    "step": "probe",
+                    "log": "/l/probe.log",
+                    "started": 0,
+                }
+            ],
+            alive_pids={3},
+            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
+        )
+        fs = FakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(
+            workers, fs, breaker_port, FakeConfig()
+        ).execute(now=1000)
+        self.assertTrue(result.closed)
         self.assertFalse(result.rearmed)
 
     def test_rearming_only_happens_while_actually_probing(self):

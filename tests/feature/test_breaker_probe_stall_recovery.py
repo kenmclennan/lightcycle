@@ -177,6 +177,19 @@ def _probe_terminal_marker(ctx):
     ctx["fs"].set_file(ctx["spawnids"]["probe"], _TERMINAL_MARKER)
 
 
+@given("the probe worker is alive and has produced session activity")
+def _probe_alive_with_activity(ctx):
+    spawnid = _add_worker(ctx, "probe", alive=True)
+    ctx["fs"].set_file(spawnid, _NO_REJECTION)
+
+
+@given("the probe worker is alive and its log carries a rate-limit rejection")
+def _probe_alive_rejected(ctx):
+    spawnid = _add_worker(ctx, "probe", alive=True)
+    ctx["rejection_reset_at"] = ctx["now"] + 5000
+    ctx["fs"].set_file(spawnid, _REJECTED % ctx["rejection_reset_at"])
+
+
 @given("a different worker is dead, unchecked, and its log carries a rate-limit rejection")
 def _dead_rejected_worker(ctx):
     spawnid = _add_worker(ctx, "rejected", alive=False)
