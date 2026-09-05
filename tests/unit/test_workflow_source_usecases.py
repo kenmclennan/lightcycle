@@ -11,6 +11,7 @@ from lightcycle.application.workflows.upgrade import (
     UpgradeWorkflowSourceUseCase, UpgradeWorkflowSourcesUseCase,
 )
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_store import FakeStore
 
 
 class FakeSource:
@@ -73,22 +74,6 @@ class FakeSource:
 
     def cleanup(self, checkout_dir):
         self.cleaned.append(checkout_dir)
-
-
-class _Node:
-    def __init__(self, workflow):
-        self.workflow = workflow
-
-
-class FakeStore:
-    def __init__(self, nodes=None):
-        self._nodes = nodes or []
-
-    def all_nodes(self):
-        return list(self._nodes)
-
-    def all_items(self):
-        return [n for n in self._nodes if getattr(n, "type", "item") == "item"]
 
 
 class FakeConfig:
@@ -250,7 +235,8 @@ class TestUpgrade(unittest.TestCase):
 
     def test_upgrade_prunes_beyond_retention_but_keeps_pinned(self):
         source = FakeSource()
-        store = FakeStore([_Node("acme/build@sha1")])
+        store = FakeStore()
+        store.create_item("t", "d", workflow="acme/build@sha1")
         cfg = FakeConfig(retention=1)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         AddWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute(url="u", ref="main", name=None)
@@ -282,7 +268,8 @@ class TestUpgradeAll(unittest.TestCase):
 class TestRemove(unittest.TestCase):
     def test_remove_refuses_when_a_live_item_pins_a_version(self):
         source = FakeSource()
-        store = FakeStore([_Node("acme/build@sha1")])
+        store = FakeStore()
+        store.create_item("t", "d", workflow="acme/build@sha1")
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         AddWorkflowSourceUseCase(source, store, FakeConfig(), FakeFs()).execute(url="u", ref="main", name=None)
         with self.assertRaises(WorkflowSourceError):
@@ -304,7 +291,8 @@ class TestRemove(unittest.TestCase):
 class TestList(unittest.TestCase):
     def test_list_reports_origins_versions_and_pins(self):
         source = FakeSource()
-        store = FakeStore([_Node("acme/build@sha1")])
+        store = FakeStore()
+        store.create_item("t", "d", workflow="acme/build@sha1")
         cfg = FakeConfig(retention=5)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         AddWorkflowSourceUseCase(source, store, cfg, FakeFs()).execute(url="u", ref="main", name=None)

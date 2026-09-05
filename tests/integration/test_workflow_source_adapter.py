@@ -8,6 +8,7 @@ from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
+from tests.support.fake_store import FakeStore
 
 
 class FakeConfig:
@@ -204,14 +205,6 @@ class TestListingAndRemoval(unittest.TestCase):
         adapter.cleanup(checkout)
 
 
-class _Store:
-    def all_items(self):
-        return []
-
-    def all_nodes(self):
-        return []
-
-
 class _Config:
     def workflow_retention(self):
         return 5
@@ -241,7 +234,7 @@ class TestBundleReferenceValidation(unittest.TestCase):
         source = _adapter()
         fs = FsAdapter(None)
         with self.assertRaises(WorkflowSourceError):
-            AddWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute(
+            AddWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute(
                 url=repo, ref="main", name=None)
         self.assertIsNone(source.read_registry("acme"))
         self.assertEqual(source.list_versions("acme"), [])
@@ -250,14 +243,14 @@ class TestBundleReferenceValidation(unittest.TestCase):
         repo, head = _make_source_repo()
         source = _adapter()
         fs = FsAdapter(None)
-        AddWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute(
+        AddWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute(
             url=repo, ref="main", name="acme")
         with open(os.path.join(repo, "workflows", "build.md"), "w") as f:
             f.write("entry: missing-step\n")
         _git(repo, "add", "-A")
         _git(repo, "commit", "-q", "-m", "break entry")
         with self.assertRaises(WorkflowSourceError):
-            UpgradeWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute("acme")
+            UpgradeWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute("acme")
         self.assertEqual(source.current_sha("acme"), head)
 
 
@@ -266,7 +259,7 @@ class TestUpgradeReplaysNoRefOrigin(unittest.TestCase):
         repo, head = _make_source_repo(branch="trunk")
         source = _adapter()
         fs = FsAdapter(None)
-        AddWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute(
+        AddWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute(
             url=repo, ref=None, name="acme")
         self.assertEqual(source.current_sha("acme"), head)
         with open(os.path.join(repo, "source.toml"), "w") as f:
@@ -276,7 +269,7 @@ class TestUpgradeReplaysNoRefOrigin(unittest.TestCase):
         new_head = subprocess.run(
             ["git", "-C", repo, "rev-parse", "HEAD"], capture_output=True, text=True
         ).stdout.strip()
-        resp = UpgradeWorkflowSourceUseCase(source, _Store(), _Config(), fs).execute("acme")
+        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute("acme")
         self.assertEqual(resp.sha, new_head)
         self.assertEqual(source.current_sha("acme"), new_head)
 

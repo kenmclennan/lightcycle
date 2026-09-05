@@ -11,6 +11,7 @@ from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.config import Config, ConfigError
+from tests.support.fake_store import FakeStore
 
 _GIT_IDENTITY_ENV = {
     "GIT_AUTHOR_NAME": "t",
@@ -18,14 +19,6 @@ _GIT_IDENTITY_ENV = {
     "GIT_COMMITTER_NAME": "t",
     "GIT_COMMITTER_EMAIL": "t@t",
 }
-
-
-class FakeStore:
-    def all_items(self):
-        return []
-
-    def all_nodes(self):
-        return []
 
 
 class FakeConfig:
