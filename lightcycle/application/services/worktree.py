@@ -11,13 +11,12 @@ from lightcycle.ports.store import ProjectResolutionError
 
 
 class WorktreeService:
-    def __init__(self, store, git, fs, config, flow=None, *, github=None):
+    def __init__(self, store, git, fs, config, flow=None):
         self._store = store
         self._git = git
         self._fs = fs
         self._config = config
         self._flow = flow
-        self._github = github
 
     def _item(self, item):
         return self._store.get_item(item)

@@ -700,14 +700,6 @@ class _LoopFlow:
         return "project"
 
 
-class _ExplodingGitHub:
-    def is_merged(self, pr):
-        raise AssertionError("the pass number must not depend on GitHub")
-
-    def is_closed_unmerged(self, pr):
-        raise AssertionError("the pass number must not depend on GitHub")
-
-
 class TestPhaseReEntry(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
@@ -795,11 +787,6 @@ class TestPhaseReEntry(unittest.TestCase):
         self.assertEqual(self.git.calls, [])
 
     def test_the_pass_number_never_asks_github_anything(self):
-        self.svc = WorktreeService(
-            self.store, git=self.git, fs=None,
-            config=_Cfg("/home/u/workspace/projects"), flow=self.flow,
-            github=_ExplodingGitHub(),
-        )
         self._step("spec-writer")
         plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
         plant_run(self.store, self.item, "spec", n=2)
