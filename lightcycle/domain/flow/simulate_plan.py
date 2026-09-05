@@ -14,6 +14,7 @@ class PlannedStep:
     repeat_index: Optional[int] = None
     repeat_total: Optional[int] = None
     expected_phase: Optional[str] = None
+    crosses_pass_end: bool = False
 
     def key(self):
         if self.kind == "hook":
@@ -228,6 +229,34 @@ def _feedback_walk(graph, entry, stage, feedback_step, bound):
     return PlannedWalk(tuple(steps), incomplete=resume.incomplete, stuck_at=resume.stuck_at)
 
 
+def _pass_end_hook(graph, stage, outcome):
+    for name in _HOOK_OUTCOME_NAMES:
+        for occ in graph.hook_occurrences(name):
+            if len(occ) > 1 and occ[0] == stage and occ[1] == outcome:
+                return name
+    return None
+
+
+def _pass_boundary_walk(graph, entry, stage, outcome, bound):
+    entry_path = _bfs_path(graph, entry, stage)
+    if entry_path is None:
+        return PlannedWalk(())
+    target = (graph.edges.get(stage) or {}).get(outcome)
+    if target is None:
+        return PlannedWalk(())
+    hook = _pass_end_hook(graph, stage, outcome)
+    steps = list(entry_path)
+    steps.append(
+        PlannedStep(
+            stage=stage, kind="hook" if hook else "edge", hook=hook, outcome=outcome,
+            crosses_pass_end=True,
+        )
+    )
+    resume = _walk_from_entry(graph, target, set(), bound)
+    steps.extend(resume.steps)
+    return PlannedWalk(tuple(steps), incomplete=resume.incomplete, stuck_at=resume.stuck_at)
+
+
 def build_coverage_plan(graph, flow):
     entry = graph.entry
     remaining = set(_edge_transitions(graph)) | set(_hook_transitions(graph))
@@ -248,5 +277,8 @@ def build_coverage_plan(graph, flow):
 
     for stage, feedback_step in _feedback_occurrences(graph):
         walks.append(_feedback_walk(graph, entry, stage, feedback_step, bound))
+
+    for stage, outcome in sorted(graph.pass_ends):
+        walks.append(_pass_boundary_walk(graph, entry, stage, outcome, bound))
 
     return CoveragePlan(tuple(w for w in walks if w.steps))
