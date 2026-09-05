@@ -98,10 +98,20 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         t = self.store.get_node(bid)
         self.assertEqual(t.notes, "replacement")
 
-    def test_notes_empty_clears_notes(self):
+    def test_notes_empty_is_refused(self):
         bid = self.store.create_step("build: x", step="build", role="agent")
         self.store.note(bid, "old note")
         rc, out, err = call(cli.cmd_set, bid, "--notes", "")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--notes", err)
+        self.assertIn("--unset", err)
+        t = self.store.get_node(bid)
+        self.assertEqual(t.notes, "old note")
+
+    def test_unset_notes_clears_notes(self):
+        bid = self.store.create_step("build: x", step="build", role="agent")
+        self.store.note(bid, "old note")
+        rc, out, err = call(cli.cmd_set, bid, "--unset", "notes")
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(bid)
         self.assertFalse(t.notes)
@@ -113,6 +123,151 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("--notes", err)
+
+
+class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        cli.set_container(FakeContainer(self.store))
+
+    def test_title_empty_is_refused(self):
+        iid = self.store.create_item("original title", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--title", "")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--title", err)
+        self.assertEqual(self.store.get_item(iid).title, "original title")
+
+    def test_description_empty_is_refused(self):
+        iid = self.store.create_item("an item", "original description")
+        rc, out, err = call(cli.cmd_set, iid, "--description", "")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--description", err)
+        self.assertIn("--unset description", err)
+        self.assertEqual(self.store.get_item(iid).description, "original description")
+
+    def test_project_empty_is_refused(self):
+        iid = self.store.create_item("an item", "a description", project="alpha")
+        rc, out, err = call(cli.cmd_set, iid, "--project", "")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--unset project", err)
+        self.assertEqual(self.store.get_item(iid).project, "alpha")
+
+    def test_workflow_empty_is_refused(self):
+        iid = self.store.create_item("an item", "a description", workflow="custom@sha")
+        rc, out, err = call(cli.cmd_set, iid, "--workflow", "")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--unset workflow", err)
+        self.assertEqual(self.store.get_item(iid).workflow, "custom@sha")
+
+    def test_label_empty_is_refused(self):
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--label", "")
+        self.assertNotEqual(rc, 0)
+
+    def test_tried_empty_combined_with_state_blocked_is_refused_before_parking(self):
+        bid = self.store.create_step("build: x", step="build", role="agent")
+        rc, out, err = call(
+            cli.cmd_set, bid, "--state", "blocked", "--needs", "X", "--reason", "Y", "--tried", ""
+        )
+        self.assertNotEqual(rc, 0)
+        t = self.store.get_node(bid)
+        self.assertEqual(t.role, "agent")
+        self.assertFalse(t.park)
+
+    def test_unset_description_clears_description(self):
+        iid = self.store.create_item("an item", "original description")
+        rc, out, err = call(cli.cmd_set, iid, "--unset", "description")
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(self.store.get_item(iid).description)
+
+    def test_unset_project_clears_project(self):
+        iid = self.store.create_item("an item", "a description", project="alpha")
+        rc, out, err = call(cli.cmd_set, iid, "--unset", "project")
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(self.store.get_item(iid).project)
+
+    def test_unset_workflow_clears_workflow(self):
+        iid = self.store.create_item("an item", "a description", workflow="custom@sha")
+        rc, out, err = call(cli.cmd_set, iid, "--unset", "workflow")
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(self.store.get_item(iid).workflow)
+
+    def test_unset_several_fields_in_one_call(self):
+        iid = self.store.create_item(
+            "an item", "original description", workflow="custom@sha"
+        )
+        rc, out, err = call(
+            cli.cmd_set, iid, "--unset", "description", "--unset", "workflow"
+        )
+        self.assertEqual(rc, 0, err)
+        item = self.store.get_item(iid)
+        self.assertFalse(item.description)
+        self.assertFalse(item.workflow)
+
+    def test_unset_title_is_refused(self):
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--unset", "title")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("a title must not be blank", err)
+
+    def test_unset_label_is_refused(self):
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--unset", "label")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("there is no way to clear a label this way", err)
+
+    def test_unset_needs_is_refused(self):
+        bid = self.store.create_step("build: x", step="build", role="agent")
+        rc, out, err = call(cli.cmd_set, bid, "--unset", "needs")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--state ready", err)
+
+    def test_unset_reason_is_refused(self):
+        bid = self.store.create_step("build: x", step="build", role="agent")
+        rc, out, err = call(cli.cmd_set, bid, "--unset", "reason")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--state ready", err)
+
+    def test_unset_tried_is_refused(self):
+        bid = self.store.create_step("build: x", step="build", role="agent")
+        rc, out, err = call(cli.cmd_set, bid, "--unset", "tried")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--state ready", err)
+
+    def test_unset_description_on_a_step_is_refused_by_field_ownership(self):
+        bid = self.store.create_step("build: x", step="build", role="agent")
+        rc, out, err = call(cli.cmd_set, bid, "--unset", "description")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--description", err)
+        self.assertIn("a step", err)
+
+    def test_unset_notes_on_an_item_is_refused_by_field_ownership(self):
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--unset", "notes")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--notes", err)
+        self.assertIn("an item", err)
+
+    def test_value_and_unset_on_the_same_field_is_a_contradiction(self):
+        iid = self.store.create_item("an item", "a description", project="alpha")
+        rc, out, err = call(cli.cmd_set, iid, "--project", "x", "--unset", "project")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--project", err)
+        self.assertEqual(self.store.get_item(iid).project, "alpha")
+
+    def test_unset_combined_with_state_is_refused(self):
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(
+            cli.cmd_set, iid, "--state", "active", "--unset", "description"
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--unset", err)
+
+    def test_unset_description_alone_succeeds(self):
+        iid = self.store.create_item("an item", "original description")
+        rc, out, err = call(cli.cmd_set, iid, "--unset", "description")
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("nothing to set", err)
 
 
 class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
