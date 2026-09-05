@@ -6,6 +6,7 @@ from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_REST_INDEX,
     COLOURS,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
+    DONE_GLYPH,
     STATE_GLYPHS,
 )
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen, _tab_order
@@ -287,6 +288,130 @@ def _step_at_stage_with_display(ctx, stage, phrase):
         "coder": {"model": "sonnet", "step": stage, "display": phrase},
     })
     _launch(ctx, store, item)
+
+
+@given(parsers.parse(
+    'a step at stage "{stage}" whose workflow declares the phase "{phase}" and the display '
+    'phrase "{phrase}" for that stage'
+))
+def _step_at_stage_with_phase_and_display(ctx, stage, phase, phrase):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    step = store.create_step("s", step=stage, role="agent", parent=item)
+    ctx["step_id"] = step
+    ctx["fs"] = FakeFs(metas={
+        "coder": {"model": "sonnet", "step": stage, "display": phrase, "phase": phase},
+    })
+    _launch(ctx, store, item)
+
+
+@given("a step in an item's first pass")
+def _step_in_first_pass(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    pid = store.open_pass(item)
+    step = store.create_step("s", step="build", role="agent", parent=item)
+    store.set_step_pass(step, pid)
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given("a step in an item's second pass")
+def _step_in_second_pass(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    pid1 = store.open_pass(item)
+    step1 = store.create_step("s1", step="build", role="agent", parent=item)
+    store.set_step_pass(step1, pid1)
+    store.close_pass(pid1)
+    pid2 = store.open_pass(item)
+    step2 = store.create_step("s2", step="build", role="agent", parent=item)
+    store.set_step_pass(step2, pid2)
+    ctx["step_id"] = step2
+    _launch(ctx, store, item)
+
+
+@given("an item with two passes, each with its own steps")
+def _item_with_two_passes_own_steps(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    pid1 = store.open_pass(item)
+    step1a = store.create_step("s1a", step="build", role="agent", parent=item)
+    store.set_step_pass(step1a, pid1)
+    step1b = store.create_step("s1b", step="write-code", role="agent", parent=item)
+    store.set_step_pass(step1b, pid1)
+    store.close_pass(pid1)
+    pid2 = store.open_pass(item)
+    step2a = store.create_step("s2a", step="build", role="agent", parent=item)
+    store.set_step_pass(step2a, pid2)
+    step2b = store.create_step("s2b", step="write-code", role="agent", parent=item)
+    store.set_step_pass(step2b, pid2)
+    ctx["item_id"] = item
+    ctx["pass1_id"] = pid1
+    ctx["pass2_id"] = pid2
+    ctx["pass1_steps"] = [step1a, step1b]
+    ctx["pass2_steps"] = [step2a, step2b]
+    _launch(ctx, store, item)
+
+
+@given("an item with a closed pass whose steps are all done")
+def _item_with_closed_pass_all_done(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    pid = store.open_pass(item)
+    step1 = store.create_step("s1", step="build", role="agent", parent=item)
+    store.set_step_pass(step1, pid)
+    store.close(step1, "done")
+    step2 = store.create_step("s2", step="write-code", role="agent", parent=item)
+    store.set_step_pass(step2, pid)
+    store.close(step2, "done")
+    store.close_pass(pid)
+    ctx["pass_id"] = pid
+    _launch(ctx, store, item)
+
+
+@given("the hierarchy is open, showing an open pass with an active step inside it")
+def _open_pass_with_active_step(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    pid = store.open_pass(item)
+    step = store.create_step("s", step="build", role="agent", parent=item)
+    store.set_step_pass(step, pid)
+    store.claim_ready("agent")
+    ctx["pass_id"] = pid
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given(
+    "the hierarchy is scrolled past a pass header, and that pass's item has also scrolled out "
+    "of view"
+)
+def _scrolled_past_pass_header_and_item(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    pid = store.open_pass(item)
+    for i in range(40):
+        step = store.create_step("s%d" % i, step="build", role="agent", parent=item)
+        store.set_step_pass(step, pid)
+    ctx["item_id"] = item
+    ctx["pass_id"] = pid
+    _launch(ctx, store, item)
+    for _ in range(30):
+        ctx["session"].press("down")
+
+
+@given("a pass header is highlighted in the hierarchy")
+def _pass_header_highlighted(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    pid = store.open_pass(item)
+    step = store.create_step("s", step="build", role="agent", parent=item)
+    store.set_step_pass(step, pid)
+    ctx["pass_id"] = pid
+    _launch(ctx, store, item)
+    table = _table(ctx)
+    table.move_cursor(row=_row_ids(ctx).index(pid))
 
 
 @given(parsers.parse('a step whose role is "{role}"'))
@@ -700,6 +825,11 @@ def _view_hierarchy_tab(ctx):
     pass
 
 
+@when("I look at the pinned-ancestor banner")
+def _look_at_pinned_ancestor_banner(ctx):
+    pass
+
+
 @then("it shows a content indicator")
 def _shows_content_indicator(ctx):
     text = _rendered_cell_text(ctx, ctx["node_id"], "content")
@@ -780,10 +910,14 @@ def _tick_active_glyph_four_times(ctx):
     screen = ctx["hub_screen"]
     session = ctx["session"]
     frames = []
+    pass_frames = []
     for _ in range(4):
         session.run(screen._tick_active_glyph)
         frames.append(_rendered_cell_text(ctx, ctx["step_id"], "icon").strip())
+        if "pass_id" in ctx:
+            pass_frames.append(_rendered_cell_text(ctx, ctx["pass_id"], "icon").strip())
     ctx["frames"] = frames
+    ctx["pass_frames"] = pass_frames
 
 
 @then("the step's icon cycles through the diamond pulse frames and returns to the black diamond")
@@ -817,6 +951,86 @@ def _step_row_label_reads_phrase(ctx, phrase, stage):
     title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
     assert title_text == phrase
     assert stage not in title_text
+
+
+@then(parsers.parse('the step\'s row label includes "{phase}" ahead of "{phrase}"'))
+def _step_row_label_includes_phase_ahead(ctx, phase, phrase):
+    title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
+    assert phase in title_text
+    assert phrase in title_text
+    assert title_text.index(phase) < title_text.index(phrase)
+
+
+@then("the step's row label does not mention a pass number")
+def _step_row_label_no_pass_number(ctx):
+    title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
+    assert "pass" not in title_text.lower()
+
+
+@then("the step's row label mentions its pass number")
+def _step_row_label_mentions_pass_number(ctx):
+    title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
+    assert "pass 2" in title_text.lower()
+
+
+@then("two pass-header rows appear, in pass order")
+def _two_pass_header_rows_in_order(ctx):
+    ids = _row_ids(ctx)
+    assert ids.index(ctx["pass1_id"]) < ids.index(ctx["pass2_id"])
+
+
+@then(
+    "each pass's own steps render one level deeper than its own header, directly beneath it, "
+    "in their original order"
+)
+def _each_passes_steps_render_beneath_own_header(ctx):
+    ids = _row_ids(ctx)
+    for pid, steps in (
+        (ctx["pass1_id"], ctx["pass1_steps"]), (ctx["pass2_id"], ctx["pass2_steps"]),
+    ):
+        header_index = ids.index(pid)
+        following_ids = ids[header_index + 1: header_index + 1 + len(steps)]
+        assert following_ids == steps
+        header_title = _rendered_cell_text(ctx, pid, "title")
+        header_indent = len(header_title) - len(header_title.lstrip(" "))
+        for step_id in steps:
+            step_title = _rendered_cell_text(ctx, step_id, "title")
+            step_indent = len(step_title) - len(step_title.lstrip(" "))
+            assert step_indent > header_indent
+
+
+@then("that pass's header shows the done icon and colour, the same vocabulary every other row uses")
+def _pass_header_shows_done_icon(ctx):
+    icon_text = _rendered_cell_text(ctx, ctx["pass_id"], "icon")
+    assert DONE_GLYPH.glyph in icon_text
+    style = _rendered_icon_style(ctx, ctx["pass_id"], DONE_GLYPH.glyph)
+    assert style.color.get_truecolor().hex.lower() == COLOURS[DONE_GLYPH.colour].lower()
+
+
+@then("the pass header's icon rests on the black diamond")
+def _pass_header_icon_rests_on_black_diamond(ctx):
+    icon_text = _rendered_cell_text(ctx, ctx["pass_id"], "icon")
+    assert "◆" in icon_text
+
+
+@then("the pass header's icon cycles through the diamond pulse frames and returns to the black diamond")
+def _pass_header_icon_cycles_through_pulse_frames(ctx):
+    assert ctx["pass_frames"] == ["◈", "◇", "◈", "◆"]
+
+
+@then("it shows the pass header, not the item")
+def _pinned_banner_shows_pass_header_not_item(ctx):
+    banner = ctx["hub_screen"].query_one("#pinned-ancestor", Static)
+    assert banner.display
+    text = _rendered_text(banner)
+    assert ctx["pass_id"] in text
+    assert "Pass 1" in text
+    assert "Item" not in text
+
+
+@then("nothing happens, since a pass header cannot be opened")
+def _nothing_happens_pass_header(ctx):
+    assert ctx["session"].app.screen is ctx["hub_screen"]
 
 
 @then("its id is shown in full, on one line")

@@ -3,6 +3,7 @@ import time
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import State
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
@@ -96,7 +97,7 @@ class WorktreeService:
 
     @staticmethod
     def _key_for(run):
-        n = int(run.pass_id.rsplit(".p", 1)[-1]) if ".p" in run.pass_id else 1
+        n = pass_number(run.pass_id)
         if run.phase is None or n <= 1:
             return run.phase
         return "%s-%d" % (run.phase, n)

@@ -4,8 +4,8 @@ from lightcycle.domain.work.state import State, lane_for
 from lightcycle.domain.work.rollup import roll_up
 from lightcycle.domain.work.derive import derive_state
 from lightcycle.domain.work.hierarchy import (
-    HierarchyRow, compose_hierarchy, display_role, display_stage, has_content, landing_tab,
-    park_resume_command, row_bucket, viewable_artifacts,
+    HierarchyRow, PassHeader, compose_hierarchy, display_role, display_stage, has_content,
+    landing_tab, park_resume_command, row_bucket, viewable_artifacts,
 )
 from lightcycle.domain.work.field_owner import (
     FIELDS_BY_TYPE, REQUIRED_WITH_STATE, STATES_BY_TYPE, all_states,
@@ -25,8 +25,8 @@ from lightcycle.domain.work.worker_log import worker_log_filename
 __all__ = [
     "Artifact", "default_kind_for", "type_label", "Lane", "State", "lane_for", "roll_up",
     "derive_state",
-    "HierarchyRow", "compose_hierarchy", "display_role", "display_stage", "has_content",
-    "landing_tab", "park_resume_command", "row_bucket", "viewable_artifacts",
+    "HierarchyRow", "PassHeader", "compose_hierarchy", "display_role", "display_stage",
+    "has_content", "landing_tab", "park_resume_command", "row_bucket", "viewable_artifacts",
     "FIELDS_BY_TYPE", "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "all_states",
     "missing_for_state", "refuse_fields", "refuse_state",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
