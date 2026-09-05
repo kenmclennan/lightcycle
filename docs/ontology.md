@@ -12,7 +12,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **role** - who performs a step: `agent` or `human`, and nothing else. It decides only whether the pool may claim the step. **Which** work a step is is its `stage`, resolved through the workflow graph when it is needed - never copied onto the step.
 - **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **state** - a node's single lifecycle position: `backlogged` -> `ready` -> `in_progress` -> `done`. One state machine (there is no separate `status`).
-- **park** - what a step carries when an agent hands it to a human: the `reason` it stopped, what the human `needs` to decide, and what it already `tried`. Parking is what makes an escalation legible at a glance.
+- **park** - what a step carries when an agent hands it to a human: the `reason` it stopped, what the human `needs` to decide, and what it already `tried`. Parking is what makes an escalation legible at a glance. Resuming the step clears all three - the condition is spent - but first folds them into a `PARK RESOLVED:` line on the step's `notes`, so what the agent found outlives the pause it found it in.
 - **lane** - a derived view over `(state, role)`: `inbox` (human action + gates), `active` (running), `queue` (ready agent steps, including those held behind an unmet dependency), `done`. Lanes are computed, never stored.
 
 ## The lifecycle (verbs)
