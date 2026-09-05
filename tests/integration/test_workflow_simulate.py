@@ -184,6 +184,33 @@ class TestGoodBundlePasses(SimulateTestCase):
         self.assertEqual(rc, 0)
 
 
+_WORKFLOW_TEXT_PHASED = _WORKFLOW_TEXT.replace(
+    "edges:\n",
+    "phase:\n"
+    "  write-code        code\n"
+    "  open-pr           code\n"
+    "  watch-ci          code\n"
+    "  review-code       code\n"
+    "  await-merge       code\n"
+    "  cleanup           code\n"
+    "  resolve-conflict  code\n"
+    "  review-ci         code\n"
+    "  handle-feedback   code\n"
+    "\n"
+    "edges:\n",
+    1,
+)
+
+
+class TestPhasedGoodBundlePasses(SimulateTestCase):
+    def test_pr_feedback_and_ci_failed_cap_with_matching_phases_still_passes(self):
+        selector = self._install(_WORKFLOW_TEXT_PHASED, _STEPS)
+
+        rc = cli._workflow_simulate(selector)
+
+        self.assertEqual(rc, 0)
+
+
 class TestCmdWorkflowSimulateDispatch(SimulateTestCase):
     def test_cmd_workflow_simulate_dispatches_and_prints_pass(self):
         import io

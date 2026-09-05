@@ -268,6 +268,167 @@ if __name__ == "__main__":
     unittest.main()
 
 
+_PHASE_GRAPH = """
+entry: build
+
+phase:
+  build            code
+  watch            code
+  await-merge      code
+  handle-feedback  code
+  review-ci        code
+
+edges:
+  build        done         watch
+  watch        done         await-merge
+  watch        ci-failed    build
+  await-merge  merged       cleanup
+
+hooks:
+  pr_merge       await-merge  merged
+  pr_feedback    await-merge  handle-feedback
+  ci_failed_cap  watch        ci-failed   2  review-ci
+"""
+
+_NO_PHASE_GRAPH = _PHASE_GRAPH.replace(
+    "phase:\n"
+    "  build            code\n"
+    "  watch            code\n"
+    "  await-merge      code\n"
+    "  handle-feedback  code\n"
+    "  review-ci        code\n"
+    "\n",
+    "",
+)
+
+_PHASE_GRAPH_METAS = {
+    "coder": {"step": "build"},
+    "watcher": {"step": "watch"},
+    "merger": {"step": "await-merge"},
+    "feedback-handler": {"step": "handle-feedback"},
+    "ci-reviewer": {"step": "review-ci"},
+}
+
+
+class TestExpectedPhaseOnFeedbackStep(unittest.TestCase):
+    def test_pr_feedback_step_expects_the_gates_own_phase(self):
+        plan, graph, _ = _plan(_PHASE_GRAPH, _PHASE_GRAPH_METAS)
+        feedback_steps = [
+            s for w in plan.walks for s in w.steps
+            if s.kind == "hook" and s.hook == "pr_feedback"
+        ]
+        self.assertEqual(len(feedback_steps), 1)
+        self.assertEqual(feedback_steps[0].expected_phase, graph.phase_for("await-merge"))
+        self.assertEqual(feedback_steps[0].expected_phase, "code")
+
+
+class TestExpectedPhaseIsNoneForOrdinaryAndAdvancingHookSteps(unittest.TestCase):
+    def test_ordinary_edges_and_advancing_hook_steps_never_get_an_expected_phase(self):
+        plan, _, _ = _plan(_PHASE_GRAPH, _PHASE_GRAPH_METAS)
+        for walk in plan.walks:
+            for step in walk.steps:
+                is_ordinary_edge = step.kind == "edge" and step.repeat_total is None
+                is_advancing_hook = step.kind == "hook" and step.hook == "pr_merge"
+                if is_ordinary_edge or is_advancing_hook:
+                    self.assertIsNone(step.expected_phase)
+
+
+class TestExpectedPhaseOnlyOnFinalCiFailedCapRepeat(unittest.TestCase):
+    def test_only_the_final_repeat_of_a_ci_failed_cap_walk_gets_an_expected_phase(self):
+        plan, graph, _ = _plan(_PHASE_GRAPH, _PHASE_GRAPH_METAS)
+        repeat_walks = [
+            w for w in plan.walks
+            if any(s.repeat_total == 3 for s in w.steps)
+        ]
+        self.assertEqual(len(repeat_walks), 1)
+        repeats = [
+            s for s in repeat_walks[0].steps
+            if s.stage == "watch" and s.outcome == "ci-failed"
+        ]
+        self.assertEqual(len(repeats), 3)
+        for r in repeats[:-1]:
+            self.assertIsNone(r.expected_phase)
+        self.assertEqual(repeats[-1].expected_phase, graph.phase_for("watch"))
+        self.assertEqual(repeats[-1].expected_phase, "code")
+
+
+_MIXED_CAP_GRAPH = """
+entry: build
+
+phase:
+  build      code
+  watch      code
+  open-pr    code
+  await      code
+  resolve    code
+  review-ci  code
+
+edges:
+  build    done        watch
+  watch    done        open-pr
+  watch    ci-failed   build
+  open-pr  done        await
+  await    merged      cleanup
+  await    conflicted  resolve
+  resolve  resolved    open-pr
+  resolve  escalate    gave-up
+
+hooks:
+  ci_failed_cap    watch   ci-failed   2   review-ci
+  pr_conflict      await   conflicted
+  pr_conflict_cap  await   2
+"""
+
+_MIXED_CAP_METAS = {
+    "coder": {"step": "build"},
+    "watcher": {"step": "watch"},
+    "pr-watcher": {"step": "open-pr"},
+    "merger": {"step": "await"},
+    "resolver": {"step": "resolve"},
+    "ci-reviewer": {"step": "review-ci"},
+}
+
+
+class TestExpectedPhaseDistinguishesCiFailedCapFromPrConflictCap(unittest.TestCase):
+    def test_only_the_ci_failed_cap_walks_final_repeat_gets_an_expected_phase(self):
+        plan, graph, _ = _plan(_MIXED_CAP_GRAPH, _MIXED_CAP_METAS)
+
+        ci_repeat_walks = [
+            w for w in plan.walks
+            if any(s.repeat_total == 3 and s.kind == "edge" for s in w.steps)
+        ]
+        self.assertEqual(len(ci_repeat_walks), 1)
+        ci_repeats = [
+            s for s in ci_repeat_walks[0].steps
+            if s.stage == "watch" and s.outcome == "ci-failed"
+        ]
+        self.assertEqual(len(ci_repeats), 3)
+        self.assertIsNone(ci_repeats[0].expected_phase)
+        self.assertIsNone(ci_repeats[1].expected_phase)
+        self.assertEqual(ci_repeats[2].expected_phase, graph.phase_for("watch"))
+
+        conflict_repeat_walks = [
+            w for w in plan.walks
+            if any(s.repeat_total == 3 and s.kind == "hook" for s in w.steps)
+        ]
+        self.assertEqual(len(conflict_repeat_walks), 1)
+        conflict_repeats = [
+            s for s in conflict_repeat_walks[0].steps
+            if s.stage == "await" and s.kind == "hook" and s.hook == "pr_conflict"
+        ]
+        self.assertEqual(len(conflict_repeats), 3)
+        for r in conflict_repeats:
+            self.assertIsNone(r.expected_phase)
+
+
+class TestExpectedPhaseIsNoneWithoutAPhaseBlock(unittest.TestCase):
+    def test_no_phase_block_means_no_expected_phase_anywhere(self):
+        plan, _, _ = _plan(_NO_PHASE_GRAPH, _PHASE_GRAPH_METAS)
+        for walk in plan.walks:
+            for step in walk.steps:
+                self.assertIsNone(step.expected_phase)
+
+
 class TestNamedWorkspaceSeeding(unittest.TestCase):
     def _graph(self, workspaces, default="project"):
         return SimpleNamespace(workspaces=workspaces, workspace=default)
