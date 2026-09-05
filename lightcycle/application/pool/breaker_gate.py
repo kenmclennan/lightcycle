@@ -3,7 +3,7 @@ from typing import List
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import Breaker, WorkerPool, parse_rate_limit_event
-from lightcycle.domain.pool.worker_session import saw_session_activity, saw_terminal_command
+from lightcycle.domain.pool.worker_session import saw_session_activity
 
 
 @dataclass(frozen=True)
@@ -61,6 +61,21 @@ class BreakerGateUseCase:
         self._spin_port.save(state)
         return tripped, spin_opened
 
+    def _probe_signal(self, w, now):
+        event = parse_rate_limit_event(self._fs.iter_lines(w.log))
+        if event and event.is_rejected:
+            return "rejected"
+        if saw_session_activity(self._fs.iter_lines(w.log)):
+            return "success"
+        if w.is_stalled(
+            now,
+            self._config.max_boot_seconds(),
+            self._config.stall_seconds(),
+            self._workers.log_mtime,
+        ):
+            return "stalled"
+        return None
+
     def execute(self, now) -> BreakerGateResponse:
         state = Breaker.from_state(self._breaker_port.load())
         pool = WorkerPool.from_state(self._workers.workers_state())
@@ -100,22 +115,20 @@ class BreakerGateUseCase:
             for alive in pool.alive(probe):
                 self._workers.kill(alive.pid)
                 killed.append(alive.spawnid)
-        elif was_probing and any_success:
-            state = state.close()
-            closed = True
         elif was_probing:
-            stalled_probes = [
-                w
-                for w in pool.stalled(
-                    probe,
-                    now,
-                    self._config.max_boot_seconds(),
-                    self._config.stall_seconds(),
-                    self._workers.log_mtime,
-                )
-                if not saw_terminal_command(self._fs.iter_lines(w.log))
-            ]
-            if stalled_probes:
+            stalled = []
+            if not any_success:
+                for w in pool.alive(probe):
+                    signal = self._probe_signal(w, now)
+                    if signal == "success":
+                        any_success = True
+                        break
+                    if signal == "stalled":
+                        stalled.append(w)
+            if any_success:
+                state = state.close()
+                closed = True
+            elif stalled:
                 state = state.rearm(now + self._config.probe_cooldown_seconds())
                 rearmed = True
 
