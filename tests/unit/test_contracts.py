@@ -365,6 +365,52 @@ class TestUnresolvedHookTargets(unittest.TestCase):
         self.assertEqual(a.as_dict()["unresolved_hook_targets"], a.unresolved_hook_targets())
 
 
+class TestReservedStepNames(unittest.TestCase):
+    def test_stage_owned_as_audit_is_flagged(self):
+        metas = {"audit": {"step": "audit", "routes": {"done": "next"}}}
+        a = contracts(metas)
+        self.assertEqual(a.reserved_step_names(), [("audit", "Auditing recent work")])
+        self.assertFalse(a.ok())
+
+    def test_stage_owned_as_review_findings_is_flagged(self):
+        metas = {"review-findings": {"step": "review-findings", "routes": {"done": "next"}}}
+        a = contracts(metas)
+        self.assertEqual(a.reserved_step_names(), [("review-findings", "Review the findings")])
+        self.assertFalse(a.ok())
+
+    def test_ordinary_stage_name_is_not_flagged(self):
+        metas = {"build": {"step": "build", "routes": {"done": "next"}}}
+        a = contracts(metas)
+        self.assertEqual(a.reserved_step_names(), [])
+        self.assertTrue(a.ok())
+
+    def test_file_aliased_to_reserved_stage_name_is_flagged(self):
+        metas = {"myfile": {"step": "audit", "routes": {"done": "next"}}}
+        a = contracts(metas)
+        self.assertEqual(a.reserved_step_names(), [("audit", "Auditing recent work")])
+
+    def test_file_literally_named_audit_with_other_stage_name_is_not_flagged(self):
+        metas = {"audit": {"step": "something-else", "routes": {"done": "next"}}}
+        a = contracts(metas)
+        self.assertEqual(a.reserved_step_names(), [])
+
+    def test_both_reserved_names_owned_together_are_both_flagged_sorted(self):
+        metas = {
+            "audit": {"step": "audit", "routes": {"done": "next"}},
+            "review-findings": {"step": "review-findings", "routes": {"done": "next"}},
+        }
+        a = contracts(metas)
+        self.assertEqual(
+            a.reserved_step_names(),
+            [("audit", "Auditing recent work"), ("review-findings", "Review the findings")],
+        )
+
+    def test_as_dict_includes_reserved_step_names(self):
+        metas = {"audit": {"step": "audit", "routes": {"done": "next"}}}
+        a = contracts(metas)
+        self.assertEqual(a.as_dict()["reserved_step_names"], a.reserved_step_names())
+
+
 class TestDisplayContracts(unittest.TestCase):
     def test_display_for_destination_only_fileless_target_is_not_unknown(self):
         text = (

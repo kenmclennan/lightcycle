@@ -46,6 +46,11 @@ def check_bundle_references(fs, root):
             messages.append(
                 "%s on %r targets %r, which resolves to nothing" % (hook, gate, target)
             )
+        for stage, phrase in contracts.reserved_step_names():
+            messages.append(
+                "'%s' is reserved for the engine's own step (%r) and cannot name a bundle stage"
+                % (stage, phrase)
+            )
         if contracts.unknown_display():
             messages.append(
                 "display phrase declared for a stage this bundle does not reference: %s"
