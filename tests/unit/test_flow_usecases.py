@@ -593,6 +593,56 @@ class TestCiFailedCapRouting(unittest.TestCase):
         resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "build")
 
+    def test_reset_prevents_escalation_despite_total_rejections_exceeding_cap(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._fail_n_times(s, item, 2)
+        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        s.close(passed, "done")
+        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
+
+    def test_boundary_exactly_n_rejections_since_last_pass_still_escalates(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._fail_n_times(s, item, 2)
+        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        s.close(passed, "done")
+        self._fail_n_times(s, item, 2)
+        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+
+    def test_one_rejection_short_of_cap_since_last_pass_routes_normally(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._fail_n_times(s, item, 2)
+        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        s.close(passed, "done")
+        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
+
+    def test_tie_broken_by_numeric_suffix_not_insertion_order(self):
+        s = FakeStore(now=lambda: "2026-01-01T00:00:00")
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        pass_id = s.create_step(
+            "watch: x", step="watch", role="agent", parent=item, id="%s.30" % item
+        )
+        s.close(pass_id, "done")
+        reject_a = s.create_step(
+            "watch: x", step="watch", role="agent", parent=item, id="%s.10" % item
+        )
+        s.close(reject_a, "ci-failed")
+        reject_b = s.create_step(
+            "watch: x", step="watch", role="agent", parent=item, id="%s.20" % item
+        )
+        s.close(reject_b, "ci-failed")
+        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
+
 
 class TestCiFailedCapAdvancePath(unittest.TestCase):
     GRAPH_TEXT = TestCiFailedCapRouting.GRAPH_TEXT
@@ -662,6 +712,17 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         self.assertEqual(
             s.get_node(advanced.next_step).step, s2.get_node(completed.next_step).step
         )
+
+    def test_advance_step_observes_the_same_reset_on_pass(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._fail_n_times(s, item, 2)
+        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        s.close(passed, "done")
+        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
+        resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).step, "build")
 
 
 class TestCiFailedCapWithRealSteps(unittest.TestCase):
