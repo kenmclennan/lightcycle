@@ -2,6 +2,7 @@ import unittest
 
 from lightcycle.application.flow.flow_check import FlowCheckInput, FlowCheckUseCase
 from lightcycle.application.services.flow import FlowService
+from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
@@ -207,12 +208,19 @@ class TestDisplayFor(unittest.TestCase):
         service, step = self._step({"coder": {"model": "sonnet", "step": "build"}})
         self.assertIsNone(service.display_for(step))
 
-    def test_is_none_for_a_workflow_less_node_without_a_crash(self):
+    def test_is_the_engine_phrase_for_a_workflow_less_audit_node_without_a_crash(self):
         store = FakeStore()
         service = FlowService(
             FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
-        step = store.get_node(store.create_step("audit: x", step="audit", role="agent"))
-        self.assertIsNone(service.display_for(step))
+        step = store.get_node(store.create_step("audit: x", step=AUDIT_STEP, role="agent"))
+        self.assertEqual(service.display_for(step), "Auditing recent work")
+
+    def test_is_the_engine_phrase_for_a_workflow_less_findings_node_without_a_crash(self):
+        store = FakeStore()
+        service = FlowService(
+            FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
+        step = store.get_node(store.create_step("findings: x", step=FINDINGS_STEP, role="human"))
+        self.assertEqual(service.display_for(step), "Review the findings")
 
 
 class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):

@@ -8,6 +8,8 @@ from lightcycle.adapters.tui.priority_list import (
     build_priority_rows,
     assemble_rows,
 )
+from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
+from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
 
@@ -169,6 +171,35 @@ class TestQueuedRowDisplayPhrase(unittest.TestCase):
 
         self.assertEqual(row.step, "blocked · %s" % blocker)
         self.assertNotIn("Coding", row.step)
+
+
+class TestEngineStepDisplayPhrase(unittest.TestCase):
+    def test_a_findings_gate_shows_the_engine_phrase(self):
+        store = FakeStore()
+        step = store.create_step("review findings", step=FINDINGS_STEP, role="human")
+        node = store.get_node(step)
+
+        row = _attention_row(store, node, _FLOW)
+
+        self.assertEqual(row.step, "Review the findings")
+
+    def test_an_active_audit_shows_the_engine_phrase(self):
+        store = FakeStore()
+        step = store.create_step("auditing", step=AUDIT_STEP, role="agent")
+        node = store.get_node(step)
+
+        row = _active_row(store, node, "now", _FLOW)
+
+        self.assertEqual(row.step, truncate_field("Auditing recent work", STEP_PHRASE_BUDGET))
+
+    def test_a_queued_audit_shows_the_engine_phrase(self):
+        store = FakeStore()
+        step = store.create_step("queued audit", step=AUDIT_STEP, role="agent")
+        node = store.get_node(step)
+
+        row = _queued_row(store, node, _FLOW)
+
+        self.assertEqual(row.step, truncate_field("Auditing recent work", STEP_PHRASE_BUDGET))
 
 
 class FixedFlowService:

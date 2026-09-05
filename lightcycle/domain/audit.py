@@ -3,6 +3,15 @@ from enum import Enum
 AUDIT_STEP = "audit"
 FINDINGS_STEP = "review-findings"
 
+ENGINE_STEP_DISPLAY = {
+    AUDIT_STEP: "Auditing recent work",
+    FINDINGS_STEP: "Review the findings",
+}
+
+
+def engine_display_of(step):
+    return ENGINE_STEP_DISPLAY.get(step)
+
 
 class StepKind(Enum):
     WORKFLOW = "workflow"
