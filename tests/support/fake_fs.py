@@ -66,13 +66,14 @@ def graph_text_from_metas(metas, entry=None, requires=None):
 
 class FakeFs:
     def __init__(self, metas=None, files=None, dirs=None, workflow=None, workflows=None,
-                 bodies=None):
+                 bodies=None, store_ready=True):
         self._metas = metas or {}
-        self._files = files or {}
+        self._files = dict(files or {})
         self._dirs = dirs or {}
         self._workflow = workflow
         self._workflows = workflows or {}
         self._bodies = bodies or {}
+        self._store_ready = store_ready
         self.workflow_text_calls = []
 
     def workflow_text(self, name, root=None):
@@ -111,7 +112,7 @@ class FakeFs:
         return os.path.join(root, ".worktrees")
 
     def store_ready(self):
-        return True
+        return self._store_ready
 
     def read_bytes(self, path):
         return self._files.get(path)
@@ -120,7 +121,7 @@ class FakeFs:
         content = self._files.get(path)
         if content is None:
             return
-        for line in content.decode("utf-8", errors="replace").splitlines():
+        for line in content.decode("utf-8", errors="replace").splitlines(keepends=True):
             yield line
 
     def exists(self, path):
@@ -151,7 +152,11 @@ class FakeFs:
         return sorted(self._dirs.get(path, []))
 
     def ensure_logs_dir(self):
-        return "/tmp/fake-logs"
+        return "logs"
 
     def ensure_worktrees_ignored(self, git_dir):
         pass
+
+    def append_run_log(self, text):
+        path = os.path.join(self.ensure_logs_dir(), "run.log")
+        self._files[path] = self._files.get(path, b"") + text.encode("utf-8")

@@ -21,7 +21,15 @@ class FakeWorkers:
         self._alive.discard(pid)
 
     def prune_workers(self, keep_dead=None):
-        return 0
+        if keep_dead is None:
+            return 0
+        dead_idx = [i for i, w in enumerate(self._workers) if w.get("pid") not in self._alive]
+        n_drop = max(0, len(dead_idx) - keep_dead)
+        if not n_drop:
+            return 0
+        drop = set(dead_idx[:n_drop])
+        self._workers = [w for i, w in enumerate(self._workers) if i not in drop]
+        return n_drop
 
     def set_step(self, spawnid, step):
         for w in self._workers:
@@ -35,7 +43,9 @@ class FakeWorkers:
         return None
 
     def mark_checked(self, spawnid):
-        pass
+        for w in self._workers:
+            if w.get("spawnid") == spawnid:
+                w["checked"] = True
 
     def log_mtime(self, path):
         return None
