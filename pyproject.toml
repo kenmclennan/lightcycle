@@ -28,6 +28,7 @@ path = "lightcycle/__init__.py"
 dev = [
     "pytest>=8",
     "pytest-bdd>=7",
+    "pytest-xdist>=3",
     "ruff>=0.9",
 ]
 

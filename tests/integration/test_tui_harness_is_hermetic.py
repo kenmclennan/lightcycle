@@ -62,7 +62,7 @@ def test_tui_suite_passes_with_empty_home_and_lc_home():
     env.pop("LC_CONFIG", None)
 
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", *files],
+        [sys.executable, "-m", "pytest", "-n", "auto", "--dist=loadgroup", *files],
         cwd=str(REPO_ROOT),
         env=env,
         capture_output=True,

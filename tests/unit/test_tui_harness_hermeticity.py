@@ -108,6 +108,7 @@ def test_sweep_temp_roots_does_not_raise_with_nothing_tracked():
     _sweep_temp_roots()
 
 
+@pytest.mark.xdist_group("tui_harness_hermeticity")
 def test_autouse_fixture_sweeps_the_temp_root_after_the_test_that_built_it(monkeypatch, tmp_path):
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
 
@@ -117,6 +118,7 @@ def test_autouse_fixture_sweeps_the_temp_root_after_the_test_that_built_it(monke
     _swept_root_from_previous_test.append(tui_harness._TEMP_ROOTS[-1])
 
 
+@pytest.mark.xdist_group("tui_harness_hermeticity")
 def test_autouse_fixture_already_swept_the_previous_tests_temp_root():
     assert _swept_root_from_previous_test
     assert not os.path.exists(_swept_root_from_previous_test[0])
