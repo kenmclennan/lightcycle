@@ -1357,6 +1357,9 @@ def cmd_attach(argv):
             sys.stderr.write("no such file: %s\n" % a.file)
             return 1
         value = data.decode()
+        if value == "":
+            sys.stderr.write("file '%s' is empty; pass a file with content\n" % a.file)
+            return 1
     if a.type in _REFLECTION_TYPES:
         ReflectUseCase(_container.store, _container.fs).execute(
             ReflectInput(step=a.id, feedback=value)

@@ -198,6 +198,100 @@ class TestLinkArtifact(unittest.TestCase):
         self.assertEqual(arts[0].value, "http://x/1")
         self.assertEqual(arts[0].label, "PR 1")
 
+    def test_empty_value_raises_and_writes_no_orphan(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="design", value="")
+            )
+        self.assertEqual(s.item_artifacts(sid), [])
+
+    def test_replace_empty_value_raises_and_leaves_original(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="spec", value="", replace=True)
+            )
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "specs/old.md")
+
+    def test_repo_empty_value_raises_and_leaves_repo_unset(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="repo", value="")
+            )
+        self.assertIsNone(s.get_item(sid).repo)
+
+    def test_repo_empty_value_raises_and_leaves_existing_repo_unchanged(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="widget")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="repo", value="")
+            )
+        self.assertEqual(s.get_item(sid).repo, "widget")
+
+    def test_run_field_empty_pr_raises_and_leaves_run_unchanged(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        rid = s.open_run(sid, s.open_pass(sid), "spec")
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="pr", value="")
+            )
+        self.assertIsNone(s.get_run(rid).pr)
+
+    def test_run_field_empty_branch_raises_and_leaves_run_unchanged(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        rid = s.open_run(sid, s.open_pass(sid), "spec")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="branch", value="grid/x")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="branch", value="")
+            )
+        self.assertEqual(s.get_run(rid).branch, "grid/x")
+
+    def test_run_field_empty_comments_handled_raises_and_leaves_run_unchanged(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        rid = s.open_run(sid, s.open_pass(sid), "spec")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="comments-handled", value="1700000000")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="comments-handled", value="")
+            )
+        self.assertEqual(s.get_run(rid).comments_handled_through, "1700000000")
+
+    def test_empty_spec_value_raises_before_project_mismatch_check(self):
+        s = FakeStore()
+        s.add_project("acme/widget", local_path="/tmp/widget")
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="widget")
+        )
+        with self.assertRaises(UseCaseError) as ctx:
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="spec", value="")
+            )
+        message = str(ctx.exception)
+        self.assertNotIn("not a registered project", message)
+
     def test_replace_replaces_same_type_artifact(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")

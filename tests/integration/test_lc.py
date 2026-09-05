@@ -1155,6 +1155,38 @@ class TestLink(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("nope.md", err)
 
+    def test_attach_empty_value_is_refused(self):
+        sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "design", "")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.store.item_artifacts(sid), [])
+
+    def test_attach_replace_empty_value_does_not_wipe_existing_artifact(self):
+        sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        call(_cli_mod.cmd_attach, sid, "spec", "specs/old.md")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "spec", "", "--replace")
+        self.assertEqual(rc, 1)
+        arts = self.store.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "specs/old.md")
+
+    def test_attach_repo_empty_value_is_refused(self):
+        self.store.add_project("acme/widget", local_path=tempfile.mkdtemp())
+        sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        call(_cli_mod.cmd_attach, sid, "repo", "widget")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "repo", "")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.store.get_item(sid).repo, "widget")
+
+    def test_attach_file_empty_file_is_refused_with_a_distinct_message(self):
+        sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        f = Path(self.root) / "empty-brief.md"
+        f.write_text("")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "brief", "--file", str(f))
+        self.assertEqual(rc, 1)
+        self.assertIn(str(f), err)
+        self.assertEqual(self.store.item_artifacts(sid), [])
+
 
 class TestModelV2(unittest.TestCase):
     def setUp(self):
@@ -1542,6 +1574,15 @@ class TestArtifactContracts(unittest.TestCase):
         rc2, out2, err2 = call(_cli_mod.cmd_done, step, "done")
         self.assertEqual(rc2, 0, err2)
         self.assertEqual(self.store.get_node(step).state, "done")
+
+    def test_attach_run_field_empty_value_is_refused(self):
+        rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
+        sid = out.strip()
+        call(_cli_mod.cmd_attach, sid, "branch", "grid/x")
+        rc2, out2, err2 = call(_cli_mod.cmd_attach, sid, "branch", "")
+        self.assertEqual(rc2, 1)
+        run = self.store.open_runs_of(sid)[-1]
+        self.assertEqual(run.branch, "grid/x")
 
     def test_file_rejects_non_entry_step(self):
         rc, out, err = call(_file_compat, "specs/X.md", "--step", "review", "--workflow", "lightcycle/spec-driven")
@@ -2433,6 +2474,16 @@ class TestReflect(unittest.TestCase):
             next(a for a in self.store.item_artifacts(tid) if a.type == "reflection").value
         )
         self.assertEqual(data["feedback"], "")
+
+    def test_reflect_empty_file_is_refused(self):
+        sid, tid = self._file_story()
+        f = Path(self.root) / "empty-feedback.txt"
+        f.write_text("")
+        rc, out, err = call(_cli_mod.cmd_attach, tid, "feedback", "--file", str(f))
+        self.assertEqual(rc, 1)
+        self.assertIn(str(f), err)
+        refs = [a for a in self.store.item_artifacts(tid) if a.type == "reflection"]
+        self.assertEqual(refs, [])
 
 
 class TestRetro(unittest.TestCase):

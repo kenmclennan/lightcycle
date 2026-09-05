@@ -31,6 +31,11 @@ class LinkArtifactUseCase:
         self._flow = flow
 
     def execute(self, input: LinkArtifactInput) -> None:
+        if input.value == "":
+            raise UseCaseError(
+                "empty value for '%s' on '%s' is refused - attach has no way to store or "
+                "clear a blank artifact" % (input.atype, input.item)
+            )
         if input.atype == "spec":
             self._validate_spec(input.item, input.value)
         if input.atype in _RUN_FIELDS:
