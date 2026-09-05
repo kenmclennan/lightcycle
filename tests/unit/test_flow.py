@@ -21,7 +21,7 @@ METAS = {
         "step": "open-pr",
         "routes": {"done": "ready-merge", "ci-failed": "build"},
     },
-    "driver": {"model": "opus"},
+    "driver": {"model": "opus", "step": None},
 }
 
 HUMAN_METAS = {
@@ -32,7 +32,7 @@ HUMAN_METAS = {
     },
     "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
     "cleanup": {"step": "cleanup"},
-    "driver": {"model": "opus"},
+    "driver": {"model": "opus", "step": None},
 }
 
 
@@ -188,6 +188,17 @@ class TestHookSteps(unittest.TestCase):
             "alpha": {"model": "sonnet", "step": "aa-step", "on_deploy_green": True},
         }
         self.assertEqual(mkflow(metas).hook_steps(), ["aa-step", "zz-step"])
+
+
+class TestGraphTextFromMetasStepKey(unittest.TestCase):
+    def test_missing_step_key_raises_naming_the_role(self):
+        with self.assertRaises(ValueError) as ctx:
+            graph_text_from_metas({"ghost": {"model": "x"}})
+        self.assertIn("ghost", str(ctx.exception))
+
+    def test_explicit_falsy_step_is_skipped_without_error(self):
+        text = graph_text_from_metas({"driver": {"model": "opus", "step": None}})
+        self.assertNotIn("driver", text)
 
 
 if __name__ == "__main__":

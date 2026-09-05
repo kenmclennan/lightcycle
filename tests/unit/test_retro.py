@@ -39,7 +39,7 @@ class TestSignals(unittest.TestCase):
         "reviewer": {"step": "review", "signals": {"review_rounds": "rejected"}},
         "pr-watcher": {"step": "open-pr", "signals": {"conflicts": "~conflict"}},
         "coder": {"step": "build"},
-        "driver": {"model": "opus"},
+        "driver": {"model": "opus", "step": None},
     }
 
     def test_from_metas_reads_declarations(self):
