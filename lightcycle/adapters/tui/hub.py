@@ -59,6 +59,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
+from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, display_role, display_stage, has_content, landing_tab,
     row_bucket, type_label, viewable_artifacts,
@@ -299,8 +300,16 @@ def _hierarchy_label(node, flow_service):
     if node.type != "step":
         return node.title
     if flow_service is None:
-        return node.step
-    return flow_service.display_for(node) or node.step
+        base, phase = node.step, None
+    else:
+        base, phase = flow_service.display_for(node) or node.step, flow_service.phase_for(node)
+    n = pass_number(node.pass_id)
+    parts = (["pass %d" % n] if n > 1 else []) + ([phase] if phase else [])
+    return " · ".join(parts + [base]) if parts else base
+
+
+def _row_node(rows, row_id):
+    return next((r.node for r in rows if r.node.id == row_id), None)
 
 
 def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None, flow_service=None):
@@ -600,8 +609,8 @@ class HierarchyPagingTable(DataTable):
         row_id = self._highlighted_id()
         if row_id is None or not isinstance(self.screen, NodeHubScreen):
             return
-        store = self.screen.container.store
-        if store.get_node(row_id).type != "item":
+        node = _row_node(self.screen._last_rows, row_id)
+        if node is None or node.type != "item":
             return
         self.screen.open_at(row_id, initial_tab="artifacts")
 
@@ -609,9 +618,8 @@ class HierarchyPagingTable(DataTable):
         row_id = self._highlighted_id()
         if row_id is None or not isinstance(self.screen, NodeHubScreen):
             return
-        store = self.screen.container.store
-        node = store.get_node(row_id)
-        if node.type != "step" or log_tab_mode(node) == "no-log":
+        node = _row_node(self.screen._last_rows, row_id)
+        if node is None or node.type != "step" or log_tab_mode(node) == "no-log":
             return
         self.screen.open_at(row_id, initial_tab="log")
 
@@ -1655,6 +1663,9 @@ class NodeHubScreen(Screen):
             return
         row_id = event.row_key.value
         if row_id is None or row_id == self._node_id:
+            return
+        node = _row_node(self._last_rows, row_id)
+        if node is not None and node.type == "pass":
             return
         self.open_at(row_id)
 

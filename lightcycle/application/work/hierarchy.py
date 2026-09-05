@@ -22,7 +22,8 @@ class HierarchyUseCase:
         node = self._store.get_node(input.node)
         root = self._resolve_root(node)
         steps_by_item = {root.id: self._store.children(root.id)}
-        return HierarchyResponse(rows=compose_hierarchy(root, steps_by_item))
+        passes_by_item = {root.id: self._store.passes_of(root.id)}
+        return HierarchyResponse(rows=compose_hierarchy(root, steps_by_item, passes_by_item))
 
     def _resolve_root(self, node):
         return node if node.type == "item" else self._store.get_node(node.parent)
