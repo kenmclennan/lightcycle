@@ -1,3 +1,4 @@
+from lightcycle.domain.audit import engine_display_of
 from lightcycle.domain.flow.step_def import CiCap, StepDef
 from lightcycle.domain.flow.transition import Transition
 
@@ -144,6 +145,9 @@ class Flow:
         return sd.phase if sd else None
 
     def display_of(self, step):
+        phrase = engine_display_of(step)
+        if phrase is not None:
+            return phrase
         sd = self._steps.get(step)
         return sd.display if sd else None
 

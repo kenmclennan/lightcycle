@@ -9,6 +9,7 @@ from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
+from lightcycle.domain.work.hierarchy import display_stage
 from lightcycle.render import render_workflow_mermaid
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore as SupportStore
@@ -357,7 +358,9 @@ class TestCmdWorkflow(unittest.TestCase):
         expected = (
             "acme/build@sha1\n"
             "  entry        build\n"
-            "  steps        %s\n" % ", ".join(flow.steps())
+            "  steps        %s\n" % ", ".join(
+                display_stage(flow.display_of(s), s) for s in flow.steps()
+            )
         )
         self.assertEqual(out, expected)
         self.assertNotIn("flowchart", out)

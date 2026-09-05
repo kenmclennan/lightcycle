@@ -1,5 +1,6 @@
 import unittest
 
+from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 
@@ -146,8 +147,9 @@ DISPLAY_GRAPH_TEXT = """
 entry: build
 
 nodes:
-  build   coder
-  review  reviewer
+  build    coder
+  review   reviewer
+  cleanup  cleaner
 
 edges:
   build   done  review
@@ -167,4 +169,8 @@ class TestFlowDisplayOf(unittest.TestCase):
         self.assertEqual(self.flow.display_of("review"), "Review the PR")
 
     def test_returns_none_for_a_stage_with_no_declared_phrase(self):
-        self.assertIsNone(self.flow.display_of("audit"))
+        self.assertIsNone(self.flow.display_of("cleanup"))
+
+    def test_returns_the_engine_phrase_for_engine_steps_even_when_undeclared(self):
+        self.assertEqual(self.flow.display_of(AUDIT_STEP), "Auditing recent work")
+        self.assertEqual(self.flow.display_of(FINDINGS_STEP), "Review the findings")
