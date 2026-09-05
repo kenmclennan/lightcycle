@@ -26,6 +26,16 @@ def _phase_mismatch(walk_index, hook, gate, target, expected, actual):
     ]
 
 
+def _pass_end_coverage_violations(graph, plan):
+    exercised = {(s.stage, s.outcome) for w in plan.walks for s in w.steps}
+    return [
+        "walk plan: declared pass-end '%s %s' is never exercised by any planned walk"
+        % (stage, outcome)
+        for stage, outcome in sorted(graph.pass_ends)
+        if (stage, outcome) not in exercised
+    ]
+
+
 @dataclass(frozen=True)
 class SimulateInput:
     workflow: str
@@ -73,7 +83,7 @@ class WorkflowSimulateUseCase:
         self._seed_named_workspaces(graph)
         plan = build_coverage_plan(graph, dom_flow)
         trace = []
-        violations = []
+        violations = list(_pass_end_coverage_violations(graph, plan))
         for index, walk in enumerate(plan.walks):
             if walk.incomplete:
                 violations.append(
@@ -349,6 +359,9 @@ class WorkflowSimulateUseCase:
                 if v:
                     break
                 continue
+            before_pass = (
+                self._store.current_pass(item_id) if planned.crosses_pass_end else None
+            )
             step_id = self._claim_stage(pin, planned.stage, walk_index, violations)
             if step_id is None:
                 break
@@ -361,10 +374,39 @@ class WorkflowSimulateUseCase:
             violations += v
             if v:
                 break
+            if planned.crosses_pass_end:
+                violations += self._pass_boundary_violations(walk_index, item_id, before_pass)
         if not self._item_closed(item_id):
             violations.append(
                 "walk %d: item %s did not terminate (walk ended without closing)"
                 % (walk_index, item_id)
+            )
+        return violations
+
+    def _pass_boundary_violations(self, walk_index, item_id, before_pass):
+        if before_pass is None:
+            return []
+        closed = self._store.get_pass(before_pass.id)
+        if closed is None or closed.is_open:
+            return [
+                "walk %d: pass %s did not close when its declared pass-end fired"
+                % (walk_index, before_pass.id)
+            ]
+        violations = []
+        torn_branches = {b for _, b in self._git.torn_down_branches()}
+        for run in self._store.runs_of(item_id, before_pass.id):
+            if run.branch and run.branch not in torn_branches:
+                violations.append(
+                    "walk %d: pass %s closed but run %s's branch %s was not torn down "
+                    "before the next pass began" % (walk_index, before_pass.id, run.id, run.branch)
+                )
+        if self._item_closed(item_id):
+            return violations
+        after = self._store.current_pass(item_id)
+        if after is None or after.n != before_pass.n + 1:
+            violations.append(
+                "walk %d: pass %s closed but no new pass opened after it (current pass: %s)"
+                % (walk_index, before_pass.id, after.id if after else None)
             )
         return violations
 

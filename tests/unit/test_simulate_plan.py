@@ -5,7 +5,10 @@ from lightcycle.application.workflows.simulate import _named_workspaces
 
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.flow.simulate_plan import build_coverage_plan, _walk_from_entry, _feedback_walk
+from lightcycle.domain.flow.simulate_plan import (
+    build_coverage_plan, _walk_from_entry, _feedback_walk, _pass_boundary_walk,
+    PlannedStep, PlannedWalk,
+)
 
 CONTRACT_METAS = {
     "coder": {
@@ -454,3 +457,143 @@ class TestNamedWorkspaceSeeding(unittest.TestCase):
         )
 
         self.assertEqual(_named_workspaces(graph), {"blueprints", "docs"})
+
+
+_PASS_END_EDGE_GRAPH = """
+entry: build
+
+edges:
+  build    done    review
+  review   done    cleanup
+  review   escape  finish
+  cleanup  done    build
+
+pass-end:
+  cleanup  done
+"""
+
+
+class TestPassEndCoverageEdgeKind(unittest.TestCase):
+    def test_a_declared_edge_kind_pass_end_gets_a_dedicated_crossing_walk(self):
+        graph = parse_graph(_PASS_END_EDGE_GRAPH)
+        plan = build_coverage_plan(graph, None)
+
+        crossing = PlannedStep(
+            stage="cleanup", kind="edge", outcome="done", crosses_pass_end=True
+        )
+        matching = [w for w in plan.walks if crossing in w.steps]
+        self.assertEqual(len(matching), 1)
+        self.assertFalse(matching[0].incomplete)
+
+
+_PASS_END_HOOK_GRAPH = """
+entry: build
+
+edges:
+  build    done    review
+  review   done    cleanup
+  review   escape  finish
+  cleanup  done    build
+
+hooks:
+  pr_merge  cleanup  done
+
+pass-end:
+  cleanup  done
+"""
+
+
+class TestPassEndCoverageHookKind(unittest.TestCase):
+    def test_a_declared_hook_kind_pass_end_is_driven_via_the_hook_not_an_edge(self):
+        graph = parse_graph(_PASS_END_HOOK_GRAPH)
+        plan = build_coverage_plan(graph, None)
+
+        crossing = [
+            s for w in plan.walks for s in w.steps
+            if s.stage == "cleanup" and s.outcome == "done" and s.crosses_pass_end
+        ]
+        self.assertEqual(len(crossing), 1)
+        self.assertEqual(crossing[0].kind, "hook")
+        self.assertEqual(crossing[0].hook, "pr_merge")
+
+
+_MIXED_PASS_END_GRAPH = """
+entry: build
+
+edges:
+  build        done       review
+  build        merge-out  await-merge
+  review       done       cleanup
+  review       escape     finish
+  cleanup      done       build
+  await-merge  merged     build
+
+hooks:
+  pr_merge  await-merge  merged
+
+pass-end:
+  cleanup      done
+  await-merge  merged
+"""
+
+
+class TestMixedPassEndCoverage(unittest.TestCase):
+    def test_both_an_edge_kind_and_a_hook_kind_pass_end_get_their_own_walk(self):
+        graph = parse_graph(_MIXED_PASS_END_GRAPH)
+        plan = build_coverage_plan(graph, None)
+
+        edge_crossing = [
+            s for w in plan.walks for s in w.steps
+            if s.stage == "cleanup" and s.outcome == "done" and s.crosses_pass_end
+        ]
+        hook_crossing = [
+            s for w in plan.walks for s in w.steps
+            if s.stage == "await-merge" and s.outcome == "merged" and s.crosses_pass_end
+        ]
+        self.assertEqual(len(edge_crossing), 1)
+        self.assertEqual(edge_crossing[0].kind, "edge")
+        self.assertEqual(len(hook_crossing), 1)
+        self.assertEqual(hook_crossing[0].kind, "hook")
+        self.assertEqual(hook_crossing[0].hook, "pr_merge")
+
+
+class TestNoPassEndLeavesCoveragePlanUnchanged(unittest.TestCase):
+    def test_a_graph_with_no_declared_pass_end_produces_the_same_walks_as_before(self):
+        graph = parse_graph(_CI_CAP_GRAPH)
+        plan = build_coverage_plan(graph, None)
+
+        self.assertEqual(len(plan.walks), 3)
+        for step in (s for w in plan.walks for s in w.steps):
+            self.assertFalse(step.crosses_pass_end)
+        covered = set()
+        for walk in plan.walks:
+            covered |= walk.covered()
+        self.assertEqual(
+            covered,
+            {
+                ("edge", "build", "done"),
+                ("edge", "watch", "done"),
+                ("edge", "watch", "ci-failed"),
+                ("edge", "review", "done"),
+            },
+        )
+
+
+_PASS_END_UNREACHABLE_GRAPH = """
+entry: build
+
+edges:
+  build  done  finish
+
+pass-end:
+  isolated  done
+"""
+
+
+class TestUnreachablePassEndGateReturnsEmptyWalk(unittest.TestCase):
+    def test_pass_boundary_walk_returns_an_empty_walk_when_the_gate_is_unreachable(self):
+        graph = parse_graph(_PASS_END_UNREACHABLE_GRAPH)
+
+        walk = _pass_boundary_walk(graph, graph.entry, "isolated", "done", bound=8)
+
+        self.assertEqual(walk, PlannedWalk(()))

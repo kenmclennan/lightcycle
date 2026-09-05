@@ -1,11 +1,18 @@
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
 import lightcycle.cli as cli
+from lightcycle.adapters.simulate import NullWorkers, RecordingGit, SimulateConfig
+from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.application.flow.claim_step import ClaimStepUseCase
+from lightcycle.application.flow.complete_step import CompleteStepUseCase
+from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
 from lightcycle.config import Config
-from lightcycle.container import Container
+from lightcycle.container import Container, make_flow_service, make_worktrees
+from lightcycle.domain.runs.phase_run import RunState
 
 _WORKFLOW_TEXT = """entry: write-code
 
@@ -37,6 +44,23 @@ hooks:
 
 _NO_ESCALATE_EDGE_WORKFLOW_TEXT = _WORKFLOW_TEXT.replace(
     "  await-merge       gave-up      review-conflict\n", ""
+)
+
+_EDGE_PASS_END_TEXT = _WORKFLOW_TEXT.replace(
+    "  await-merge       merged       cleanup\n",
+    "  await-merge       merged       cleanup\n"
+    "  cleanup           done         write-code\n",
+).replace(
+    "  mention_token         await-merge  @lc\n",
+    "  mention_token         await-merge  @lc\n"
+    "\n"
+    "pass-end:\n"
+    "  cleanup  done\n",
+)
+
+_HOOK_PASS_END_TEXT = _WORKFLOW_TEXT + (
+    "\npass-end:\n"
+    "  await-merge  merged\n"
 )
 
 _STUCK_LOOP_WORKFLOW_TEXT = """entry: build
@@ -175,6 +199,34 @@ class SimulateTestCase(unittest.TestCase):
         config = Config(environ={"LC_HOME": home, "LC_CONFIG": cfg_path})
         cli.set_container(Container(config=config))
         return "acme/build"
+
+    def _run_direct(self, workflow_text, steps):
+        selector = self._install(workflow_text, steps)
+        c = cli._container
+        scratch = tempfile.mkdtemp(prefix="lc-simulate-test-")
+        self.addCleanup(lambda: shutil.rmtree(scratch, ignore_errors=True))
+        store_home = os.path.join(scratch, "home")
+        specs_root = os.path.join(scratch, "specs")
+        projects_root = os.path.join(scratch, "projects")
+        os.makedirs(store_home, exist_ok=True)
+        os.makedirs(specs_root, exist_ok=True)
+        os.makedirs(projects_root, exist_ok=True)
+        cfg_path = os.path.join(store_home, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: SIM\n")
+        store_config = Config(environ={"LC_HOME": store_home, "LC_CONFIG": cfg_path})
+        store = SqliteStore(store_config)
+        sim_config = SimulateConfig(c.config, specs_root, projects_root)
+        git = RecordingGit()
+        flow = make_flow_service(c.fs, store, c.config, c.workflow_source)
+        worktrees = make_worktrees(store, git, c.fs, sim_config, flow)
+        claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
+        complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
+        use_case = WorkflowSimulateUseCase(
+            store, flow, worktrees, claim, complete, projects_root, git
+        )
+        resp = use_case.execute(SimulateInput(workflow=selector))
+        return resp, store
 
 
 class TestGoodBundlePasses(SimulateTestCase):
@@ -357,3 +409,55 @@ class TestTwoPhaseBundleSeedsAPrPerPhase(SimulateTestCase):
         rc = cli._workflow_simulate(selector)
 
         self.assertEqual(rc, 0)
+
+
+class TestEdgeKindPassEndPasses(SimulateTestCase):
+    def test_a_looping_workflows_edge_kind_pass_end_is_simulated_cleanly(self):
+        selector = self._install(_EDGE_PASS_END_TEXT, _STEPS)
+        rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 0)
+
+
+class TestHookKindPassEndPasses(SimulateTestCase):
+    def test_a_looping_workflows_hook_kind_pass_end_is_simulated_cleanly(self):
+        selector = self._install(_HOOK_PASS_END_TEXT, _STEPS)
+        rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 0)
+
+
+class TestPassBoundaryClosesPassOneAndMergesItsRuns(SimulateTestCase):
+    def test_crossing_the_pass_end_closes_pass_one_with_every_run_merged(self):
+        resp, store = self._run_direct(_EDGE_PASS_END_TEXT, _STEPS)
+        self.assertTrue(resp.ok, resp.violations)
+
+        multi_pass_items = [
+            item for item in store.all_items_including_done()
+            if len(store.passes_of(item.id)) >= 2
+        ]
+        self.assertTrue(multi_pass_items)
+        item = multi_pass_items[0]
+        passes = sorted(store.passes_of(item.id), key=lambda p: p.n)
+        pass1 = passes[0]
+        self.assertEqual(pass1.state, "closed")
+        for run in store.runs_of(item.id, pass1.id):
+            self.assertEqual(run.state, RunState.MERGED)
+
+
+class TestPreExistingSimulateFixturesStillPassUnmodified(SimulateTestCase):
+    def test_good_bundle_still_passes(self):
+        selector = self._install(_WORKFLOW_TEXT, _STEPS)
+        self.assertEqual(cli._workflow_simulate(selector), 0)
+
+    def test_phased_good_bundle_still_passes(self):
+        selector = self._install(_WORKFLOW_TEXT_PHASED, _STEPS)
+        self.assertEqual(cli._workflow_simulate(selector), 0)
+
+    def test_routing_soundness_violation_still_fires(self):
+        selector = self._install(_NO_ESCALATE_EDGE_WORKFLOW_TEXT, _STEPS)
+        self.assertEqual(cli._workflow_simulate(selector), 1)
+
+    def test_teardown_violation_still_surfaces_from_a_stuck_walk(self):
+        steps = dict(_STEPS)
+        steps["review-ci"] = _MISSING_INPUT_REVIEW_CI
+        selector = self._install(_WORKFLOW_TEXT, steps)
+        self.assertEqual(cli._workflow_simulate(selector), 1)
