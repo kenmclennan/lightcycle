@@ -806,13 +806,13 @@ class SqliteStore(StorePort):
             d = dict(zip(_ITEM_COLUMNS, row))
             result.append(dict(d, type="item", artifacts=[
                 a.as_dict() for a in self.item_artifacts(d["id"])
-            ], blocked_by=self._blockers_of(d["id"]), labels=self._labels_of(d["id"])))
+            ], blocked_by=self._blockers_of(d["id"]), labels=self.labels_of(d["id"])))
         for row in self._conn.execute(
             "SELECT %s FROM steps ORDER BY rowid" % ", ".join(_STEP_COLUMNS)
         ).fetchall():
             d = dict(zip(_STEP_COLUMNS, row))
             result.append(dict(d, type="step", blocked_by=self._blockers_of(d["id"]),
-                               labels=self._labels_of(d["id"])))
+                               labels=self.labels_of(d["id"])))
         return result
 
     def _blockers_of(self, tid):
@@ -822,7 +822,7 @@ class SqliteStore(StorePort):
             ).fetchall()
         ]
 
-    def _labels_of(self, tid):
+    def labels_of(self, tid):
         return [
             r[0] for r in self._conn.execute(
                 "SELECT label FROM labels WHERE node_id = ?", (tid,)

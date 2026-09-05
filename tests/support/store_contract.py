@@ -73,6 +73,15 @@ class StoreContractBase:
         s.label_remove(tid, "for:agent")
         self.assertIsNone(s.get_node(tid).role)
 
+    def test_labels_of_reflects_add_and_remove(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.label_add(tid, "ci-pending")
+        s.label_add(tid, "ci-released:1")
+        self.assertEqual(set(s.labels_of(tid)), {"ci-pending", "ci-released:1"})
+        s.label_remove(tid, "ci-pending")
+        self.assertEqual(set(s.labels_of(tid)), {"ci-released:1"})
+
     def test_assign_shows_in_progress(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

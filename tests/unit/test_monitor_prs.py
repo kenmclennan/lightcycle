@@ -1,6 +1,8 @@
 import unittest
 
 from lightcycle.application.flow import (
+    BlockInput,
+    BlockStepUseCase,
     CompleteStepUseCase,
     UnblockInput,
     UnblockStepUseCase,
@@ -1574,6 +1576,32 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(resp.role, "agent")
         self.assertEqual(store.get_node(step).role, "agent")
 
+    def test_drop_escalated_park_is_never_auto_released_by_ci(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        flow = flow_from_metas({
+            "coder": {
+                "model": "sonnet", "step": "build", "routes": {"done": "review"},
+                "on_pr_merge": "done",
+            },
+        })
+        store, item, step, uc = self._setup(gh, flow=flow)
+        uc.execute()
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+
+        gh._ci_pending_by_sha[(self._URL, "sha2")] = False
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+
     def test_running_again_after_escalation_does_not_refire(self):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"},
@@ -1881,6 +1909,176 @@ class TestTickWithMonitor(unittest.TestCase):
         self.assertEqual(result.merged, [])
         self.assertEqual(result.abandoned, [])
         self.assertEqual(result.reworked, [])
+
+
+_CI_PENDING_FLOW = flow_from_metas({
+    "review-features": {
+        "model": "sonnet",
+        "step": "review-features",
+        "routes": {"done": "await-merge"},
+    },
+})
+
+
+class TestMonitorPrsCiPendingRelease(unittest.TestCase):
+    _URL = "https://github.com/x/y/pull/90"
+
+    def _setup(self, github):
+        store = FakeStore()
+        item = store.create_item("reviewed feature", "a description")
+        plant_pr(store, item, self._URL)
+        step = store.create_step(
+            "review-features: reviewed feature", step="review-features", role="human",
+            parent=item,
+        )
+        worktrees = FakeWorktrees()
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(_CI_PENDING_FLOW))
+        return store, item, step, uc
+
+    def _label_and_park(self, store, step, reason="something odd", needs="confirm CI"):
+        store.label_add(step, "ci-pending")
+        BlockStepUseCase(store).execute(BlockInput(step=step, needs=needs, reason=reason))
+
+    def test_ci_still_pending_does_not_release(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): True}
+        )
+        store, item, step, uc = self._setup(gh)
+        self._label_and_park(store, step)
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+
+    def test_ci_concluded_releases_exactly_once(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        self._label_and_park(store, step)
+
+        result = uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "agent")
+        self.assertEqual(node.state, "ready")
+        self.assertEqual(result.ci_released, [item])
+        self.assertIn("ci-released:1", store.labels_of(step))
+
+    def test_release_clears_the_label_so_a_later_unrelated_park_is_not_auto_released(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        self._label_and_park(store, step)
+
+        uc.execute()
+        self.assertNotIn("ci-pending", store.labels_of(step))
+
+        BlockStepUseCase(store).execute(
+            BlockInput(step=step, needs="confirm scenarios", reason="cannot review the scenarios")
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+
+    def test_finding_survives_automatic_release(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        self._label_and_park(store, step, reason="something odd", needs="confirm CI")
+
+        uc.execute()
+
+        self.assertIn(
+            "PARK RESOLVED: reason=something odd | needs=confirm CI",
+            store.get_node(step).notes,
+        )
+
+    def test_read_failure_never_releases(self):
+        gh = FakeGitHub(head_shas={self._URL: "sha1"}, failing_calls={"ci_pending"})
+        store, item, step, uc = self._setup(gh)
+        self._label_and_park(store, step)
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+        self.assertNotIn("ci-released:1", store.labels_of(step))
+
+    def test_empty_head_sha_never_releases(self):
+        gh = FakeGitHub()
+        store, item, step, uc = self._setup(gh)
+        self._label_and_park(store, step)
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+
+    def test_park_without_the_label_is_never_released(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        BlockStepUseCase(store).execute(
+            BlockInput(step=step, needs="confirm CI", reason="waiting")
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+
+    def test_prose_mentioning_ci_pending_is_never_released_without_the_label(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        BlockStepUseCase(store).execute(BlockInput(
+            step=step, needs="check CI pending state",
+            reason="waiting on CI, pending forever it seems",
+        ))
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+
+    def test_cap_leaves_a_fourth_park_for_a_human(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        for _ in range(3):
+            self._label_and_park(store, step)
+            uc.execute()
+        self._label_and_park(store, step)
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertNotIn(item, result.ci_released)
+        self.assertNotIn("ci-released:4", store.labels_of(step))
+        self.assertIn("automatic release cap", store.get_node(step).notes)
+
+    def test_cap_is_read_fresh_from_labels_not_tracked_across_calls(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        store.label_add(step, "ci-released:1")
+        store.label_add(step, "ci-released:2")
+        self._label_and_park(store, step)
+
+        result = uc.execute()
+
+        self.assertIn(item, result.ci_released)
+        self.assertIn("ci-released:3", store.labels_of(step))
 
 
 if __name__ == "__main__":

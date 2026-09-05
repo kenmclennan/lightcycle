@@ -211,6 +211,24 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return frozenset()
         return frozenset(f for f in filenames if f)
 
+    def ci_pending(self, pr: str, sha: str) -> Union[bool, ReadFailure]:
+        result = subprocess.run(
+            ["gh", "pr", "view", pr, "--json", "headRefOid,statusCheckRollup"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            data = json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(result.returncode, result.stdout)
+        if data.get("headRefOid") != sha:
+            return True
+        rollup = data.get("statusCheckRollup") or []
+        if not rollup:
+            return True
+        return any((c.get("status") or "").upper() != "COMPLETED" for c in rollup)
+
     def reviews(self, pr: str, since: float):
         parts = _repo_parts(pr)
         if not parts:

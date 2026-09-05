@@ -381,6 +381,9 @@ class FakeStore(StorePort):
         b = self._get(tid)
         b["labels"] = [l for l in b["labels"] if l != label]
 
+    def labels_of(self, tid):
+        return list(self._get(tid).get("labels") or [])
+
     def update_state(self, tid, state):
         self._get(tid)["state"] = str(state)
         self._record_history(tid, state)
