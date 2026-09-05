@@ -274,7 +274,7 @@ _SET_FIELDS = (
 
 _SET_FORBIDDEN_FLAGS = (
     "--title", "--desc", "--description", "--project",
-    "--workflow", "--backlog", "--label", "--step",
+    "--workflow", "--backlog", "--label", "--step", "--unset",
 )
 
 
@@ -1152,8 +1152,21 @@ _SET_FLAG_OWNERS = {
     "workflow": (None, "active"),
     "step": ("active",),
     "needs": ("blocked",), "reason": ("blocked",), "tried": ("blocked",),
+    "unset": (None,),
 }
 _SET_KNOWN_STATES = (None, "active", "blocked", "ready", "in_progress")
+
+_SET_UNSETTABLE_FIELDS = ("description", "project", "workflow", "notes")
+
+_SET_UNSET_REFUSAL_REASONS = {
+    "title": "a title must not be blank; there is nothing to clear, only to replace",
+    "label": "there is no way to clear a label this way",
+    "needs": "a park's fields are cleared as a whole, via --state ready",
+    "reason": "a park's fields are cleared as a whole, via --state ready",
+    "tried": "a park's fields are cleared as a whole, via --state ready",
+    "backlog": "backlog is a list of ids to resolve, not a value to clear",
+    "step": "step is a one-shot input to activation, not a persisted field",
+}
 
 
 def _set_state_label(state):
@@ -1176,19 +1189,61 @@ def _reject_flags_ineffective_for_state(a):
     return "%s does not accept %s\n" % (_set_state_label(a.state), "; ".join(parts))
 
 
+def _reject_blank_values(a):
+    for f in ("title", "description", "project", "workflow", "label", "notes", "tried"):
+        if getattr(a, f, None) != "":
+            continue
+        if f in _SET_UNSETTABLE_FIELDS:
+            return "--%s \"\" is refused; use --unset %s to clear it\n" % (f, f)
+        return "--%s \"\" is refused; %s\n" % (
+            f, _SET_UNSET_REFUSAL_REASONS.get(f, "it may not be blank")
+        )
+    return None
+
+
+def _reject_unset_contradiction(given_values, unset_fields):
+    overlap = given_values & unset_fields
+    if not overlap:
+        return None
+    named = ", ".join("--%s" % f for f in sorted(overlap))
+    return "given a value and --unset in the same call: %s\n" % named
+
+
+def _reject_unset_targets(unset_fields):
+    bad = sorted(f for f in unset_fields if f not in _SET_UNSETTABLE_FIELDS)
+    if not bad:
+        return None
+    parts = [
+        "--unset %s: %s" % (f, _SET_UNSET_REFUSAL_REASONS.get(f, "not a field lc set can clear"))
+        for f in bad
+    ]
+    return "; ".join(parts) + "\n"
+
+
 def cmd_set(argv):
     ap = argparse.ArgumentParser(prog="lc set")
     for opt in ("title", "description", "project", "workflow", "state", "label",
                 "needs", "reason", "tried", "step", "notes"):
         ap.add_argument("--%s" % opt)
     ap.add_argument("--backlog", action="append")
+    ap.add_argument("--unset", action="append")
     ap.add_argument("id")
     a = ap.parse_args(argv)
     node_type = _container.store.type_of(a.id)
     if node_type is None:
         sys.stderr.write("unknown node '%s'\n" % a.id)
         return 1
-    given = {f for f in _SET_FIELDS if getattr(a, f, None) is not None}
+    given_values = {f for f in _SET_FIELDS if getattr(a, f, None) is not None}
+    unset_fields = set(a.unset or [])
+    msg = (
+        _reject_blank_values(a)
+        or _reject_unset_contradiction(given_values, unset_fields)
+        or _reject_unset_targets(unset_fields)
+    )
+    if msg:
+        sys.stderr.write(msg)
+        return 2
+    given = given_values | unset_fields
     msg = refuse_fields(node_type, given) or refuse_state(node_type, a.state)
     if msg:
         sys.stderr.write("%s\n" % msg)
@@ -1236,7 +1291,7 @@ def cmd_set(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    workflow_pin = a.workflow
+    workflow_pin = "" if "workflow" in unset_fields else a.workflow
     resolved_pin = None
     if a.workflow:
         try:
@@ -1256,12 +1311,15 @@ def cmd_set(argv):
             resolved_pin = resp.value
     if a.label:
         _container.store.label_add(a.id, a.label)
-    if a.notes is not None:
-        _container.store.set_notes(a.id, a.notes)
+    effective_description = "" if "description" in unset_fields else a.description
+    effective_project = "" if "project" in unset_fields else a.project
+    effective_notes = "" if "notes" in unset_fields else a.notes
+    if effective_notes is not None:
+        _container.store.set_notes(a.id, effective_notes)
     try:
         tid = EditNodeUseCase(_container.store).execute(
-            EditNodeInput(step=a.id, title=a.title, description=a.description,
-                          project=a.project, workflow=workflow_pin)
+            EditNodeInput(step=a.id, title=a.title, description=effective_description,
+                          project=effective_project, workflow=workflow_pin)
         ).id
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)

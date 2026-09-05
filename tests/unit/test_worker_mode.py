@@ -51,6 +51,18 @@ class TestWorkerPermitted(unittest.TestCase):
             _worker_permitted("set", ["ITEM", "--state", "blocked", "--title", "renamed"])
         )
 
+    def test_unset_without_state_forbidden(self):
+        self.assertFalse(
+            _worker_permitted("set", ["ITEM", "--unset", "description"])
+        )
+
+    def test_unset_alongside_blocked_is_still_forbidden(self):
+        self.assertFalse(
+            _worker_permitted(
+                "set", ["ITEM", "--state", "blocked", "--unset", "description"]
+            )
+        )
+
 
 class TestIsWorker(unittest.TestCase):
     def test_true_when_flag_set(self):

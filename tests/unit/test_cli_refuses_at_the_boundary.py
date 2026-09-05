@@ -51,7 +51,7 @@ class TestNoCommandExitsZeroHavingDoneNothing(unittest.TestCase):
     def test_clearing_a_note_is_a_real_change_not_an_empty_one(self):
         step = self.store.create_step("build: x", step="build", role="agent")
         self.store.note(step, "something")
-        rc, out, err = call(cli.cmd_set, step, "--notes", "")
+        rc, out, err = call(cli.cmd_set, step, "--unset", "notes")
         self.assertEqual(rc, 0, err)
 
 
