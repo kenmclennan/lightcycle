@@ -17,6 +17,15 @@ _ADVANCING_HOOKS = ("pr_merge", "pr_conflict")
 _RUN_FIELDS = {"pr": "pr", "branch": "branch"}
 
 
+def _phase_mismatch(walk_index, hook, gate, target, expected, actual):
+    if expected is None or actual is None or expected == actual:
+        return []
+    return [
+        "walk %d: %s from '%s' opened '%s' into phase %r but expected phase %r "
+        "(the gate's own phase)" % (walk_index, hook, gate, target, actual, expected)
+    ]
+
+
 @dataclass(frozen=True)
 class SimulateInput:
     workflow: str
@@ -153,6 +162,7 @@ class WorkflowSimulateUseCase:
             if req.type not in present:
                 self._store.add_artifact(item_id, req.type, "<simulated>")
                 present.add(req.type)
+        return phase
 
     def _pr_value(self, item_id, graph, stage):
         run = self._store.current_run(item_id, graph.phase_for(stage))
@@ -161,7 +171,8 @@ class WorkflowSimulateUseCase:
     def _item_closed(self, item_id):
         return self._store.get_node(item_id).state == State.DONE
 
-    def _handle_landing(self, item_id, pin, graph, next_step_id, trace, walk_index):
+    def _handle_landing(self, item_id, pin, graph, next_step_id, trace, walk_index,
+                        phase_check=None):
         node = self._store.get_node(next_step_id)
         trace.append("walk %d: -> %s" % (walk_index, node.step))
         if not self._flow.owner_of(node.step, pin):
@@ -172,14 +183,15 @@ class WorkflowSimulateUseCase:
             return []
         if not self._is_walk_terminal(graph, node.step):
             return []
-        return self._complete_terminal(item_id, pin, node, trace, walk_index)
+        return self._complete_terminal(item_id, pin, node, trace, walk_index,
+                                        phase_check=phase_check)
 
     def _close_item(self, item_id, reason):
         CloseItemUseCase(self._store, self._worktrees).execute(
             CloseItemInput(item=item_id, reason=reason)
         )
 
-    def _complete_terminal(self, item_id, pin, node, trace, walk_index):
+    def _complete_terminal(self, item_id, pin, node, trace, walk_index, phase_check=None):
         resp = self._claim.execute(ClaimInput(role=node.role))
         if resp is None:
             fresh = self._store.get_node(node.id)
@@ -188,18 +200,22 @@ class WorkflowSimulateUseCase:
                 "walk %d: could not claim stage '%s': %s"
                 % (walk_index, node.step, reason)
             ]
-        self._synthesize_produces(item_id, pin, node.step)
+        actual = self._synthesize_produces(item_id, pin, node.step)
+        violations = []
+        if phase_check is not None:
+            hook, gate, expected = phase_check
+            violations += _phase_mismatch(walk_index, hook, gate, node.step, expected, actual)
         try:
             self._complete.execute(CompleteInput(step=node.id, outcome="done"))
         except UseCaseError as e:
-            return ["walk %d: %s[done] raised: %s" % (walk_index, node.step, e)]
+            return violations + ["walk %d: %s[done] raised: %s" % (walk_index, node.step, e)]
         if not self._item_closed(item_id):
-            return [
+            return violations + [
                 "walk %d: terminal stage '%s' completed but the item did not close"
                 % (walk_index, node.step)
             ]
         trace.append("walk %d: %s[done] (terminal, item closed)" % (walk_index, node.step))
-        return []
+        return violations
 
     def _advance_edge(self, item_id, pin, graph, step_id, planned, trace, walk_index):
         declared_target = (graph.edges.get(planned.stage) or {}).get(planned.outcome)
@@ -222,7 +238,12 @@ class WorkflowSimulateUseCase:
                     % (walk_index, planned.stage, planned.outcome)
                 ]
             return []
-        return self._handle_landing(item_id, pin, graph, resp.next_step, trace, walk_index)
+        phase_check = (
+            ("ci_failed_cap", planned.stage, planned.expected_phase)
+            if planned.expected_phase is not None else None
+        )
+        return self._handle_landing(item_id, pin, graph, resp.next_step, trace, walk_index,
+                                     phase_check=phase_check)
 
     def _advance_hook(self, item_id, pin, graph, step_id, planned, github, monitor, trace,
                       walk_index):
@@ -259,7 +280,8 @@ class WorkflowSimulateUseCase:
                 "walk %d: hook %s at '%s' completed with no next step and the item did not close"
                 % (walk_index, planned.hook, planned.stage)
             ]
-        return self._handle_landing(item_id, pin, graph, new_children[0].id, trace, walk_index)
+        return self._handle_landing(item_id, pin, graph, new_children[0].id, trace, walk_index,
+                                     phase_check=None)
 
     def _mention_token(self, graph, stage):
         for occ in graph.hook_occurrences("mention_token"):
@@ -298,18 +320,22 @@ class WorkflowSimulateUseCase:
                 % (walk_index, planned.stage, planned.outcome)
             ]
         feedback_step = new_children[0]
-        self._synthesize_produces(item_id, pin, planned.outcome)
+        actual = self._synthesize_produces(item_id, pin, planned.outcome)
+        violations = _phase_mismatch(
+            walk_index, "pr_feedback", planned.stage, planned.outcome,
+            planned.expected_phase, actual,
+        )
         try:
             self._complete.execute(CompleteInput(step=feedback_step.id, outcome="done"))
         except UseCaseError as e:
-            return [
+            return violations + [
                 "walk %d: completing rework step '%s' raised: %s"
                 % (walk_index, planned.outcome, e)
             ]
         trace.append(
             "walk %d: %s pr_feedback -> %s (resumed)" % (walk_index, planned.stage, planned.outcome)
         )
-        return []
+        return violations
 
     def _drive(self, item_id, pin, graph, walk, github, monitor, trace, walk_index):
         violations = []

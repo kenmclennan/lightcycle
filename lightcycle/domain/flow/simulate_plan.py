@@ -13,6 +13,7 @@ class PlannedStep:
     hook: Optional[str] = None
     repeat_index: Optional[int] = None
     repeat_total: Optional[int] = None
+    expected_phase: Optional[str] = None
 
     def key(self):
         if self.kind == "hook":
@@ -189,12 +190,15 @@ def _forced_repeat_walk(graph, entry, stage, outcome, times, kind, hook=None):
         return PlannedWalk(())
     steps.extend(entry_path)
     normal_target = (graph.edges.get(stage) or {}).get(outcome)
+    gate_phase = graph.phase_for(stage)
+    phase_gated = kind == "edge" and hook is None
     for i in range(times):
         final = i == times - 1
         steps.append(
             PlannedStep(
                 stage=stage, kind=kind, hook=hook, outcome=outcome,
                 repeat_index=i + 1, repeat_total=times,
+                expected_phase=gate_phase if (final and phase_gated) else None,
             )
         )
         if final:
@@ -213,7 +217,12 @@ def _feedback_walk(graph, entry, stage, feedback_step, bound):
     if entry_path is None:
         return PlannedWalk(())
     steps = list(entry_path)
-    steps.append(PlannedStep(stage=stage, kind="hook", hook="pr_feedback", outcome=feedback_step))
+    steps.append(
+        PlannedStep(
+            stage=stage, kind="hook", hook="pr_feedback", outcome=feedback_step,
+            expected_phase=graph.phase_for(stage),
+        )
+    )
     resume = _walk_from_entry(graph, stage, set(), bound)
     steps.extend(resume.steps)
     return PlannedWalk(tuple(steps), incomplete=resume.incomplete, stuck_at=resume.stuck_at)
