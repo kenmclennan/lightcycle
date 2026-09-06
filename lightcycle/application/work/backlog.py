@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.project_of import project_of
-from lightcycle.domain.work import State
+from lightcycle.domain.work import State, node_id_key
 
 
 def _project_matches(store, item, short_ref):
@@ -46,7 +46,7 @@ class BacklogUseCase:
     def execute(self, input: BacklogInput) -> BacklogResponse:
         items = self._backlogged_items()
         items = [t for t in items if _project_matches(self._store, t, input.project)]
-        items.sort(key=lambda t: t.id)
+        items.sort(key=lambda t: node_id_key(t.id))
         if input.n is not None:
             items = items[:input.n]
         rows = [

@@ -22,6 +22,13 @@ class TestBacklogDefault(unittest.TestCase):
         self.assertEqual(by_id[a], "proj-a")
         self.assertEqual(by_id[b], "proj-b")
 
+    def test_orders_a_two_digit_suffix_after_a_one_digit_suffix(self):
+        s = FakeStore()
+        s.create_item("ten", "a description", id="proj-10")
+        s.create_item("nine", "a description", id="proj-9")
+        resp = BacklogUseCase(s, None).execute(BacklogInput())
+        self.assertEqual([r.step.id for r in resp.rows], ["proj-9", "proj-10"])
+
     def test_item_without_repo_artifact_has_project_none(self):
         s = FakeStore()
         s.create_item("no repo", "a description")

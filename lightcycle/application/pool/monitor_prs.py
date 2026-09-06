@@ -6,7 +6,7 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.runs import RunState
-from lightcycle.domain.work import State
+from lightcycle.domain.work import State, node_id_key
 from lightcycle.ports.github import ReadFailure
 
 LC_MARKER = "<!-- lc -->"
@@ -227,7 +227,9 @@ class MonitorPrsUseCase:
         return released
 
     def _latest_step(self, item_id):
-        steps = sorted(self._store.children(item_id), key=lambda s: s.id)
+        steps = sorted(
+            self._store.children(item_id), key=lambda s: (s.created_at or "", node_id_key(s.id))
+        )
         return steps[-1] if steps else None
 
     def _close_run(self, run, state):

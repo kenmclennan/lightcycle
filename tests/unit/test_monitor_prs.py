@@ -1672,6 +1672,37 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertIn("a.py", store.get_node(step).notes)
 
+    def test_no_active_step_notes_the_most_recently_created_step_not_the_id_string_max(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        clock = {"now": "2026-01-01T00:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        item = store.create_item("guarded feature", "a description")
+        plant_pr(store, item, self._URL)
+        step_9 = store.create_step(
+            "build: guarded feature", step="build", role="agent", parent=item,
+            id="%s.9" % item,
+        )
+        clock["now"] = "2026-01-01T00:00:01"
+        step_10 = store.create_step(
+            "build: guarded feature", step="build", role="agent", parent=item,
+            id="%s.10" % item,
+        )
+        store.close(step_9, "done")
+        store.close(step_10, "done")
+        uc = MonitorPrsUseCase(store, gh, FakeWorktrees(), _FlowAdapter(_FLOW))
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        self.assertIsNone(store.get_node(step_9).notes)
+        self.assertIn("a.py", store.get_node(step_10).notes)
+
     def test_unchanged_head_is_a_no_op(self):
         gh = FakeGitHub(head_shas={self._URL: "sha1"})
         store, item, step, uc = self._setup(gh)

@@ -1,4 +1,5 @@
 from lightcycle.domain.work.lane import Lane
+from lightcycle.domain.work.node_id import node_id_key
 from lightcycle.domain.work.state import State, lane_for
 
 
@@ -22,5 +23,5 @@ class NodeQueue:
             if t.state == State.READY and getattr(t, "role", None) == "human"
         ]
         rows = [(c, t) for c, t in rows if c[0] in kinds]
-        rows.sort(key=lambda r: r[1].id)
+        rows.sort(key=lambda r: node_id_key(r[1].id))
         return rows[:n] if n is not None else rows

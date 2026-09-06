@@ -45,6 +45,13 @@ class TestSearchUseCase(unittest.TestCase):
         resp = SearchUseCase(s).execute(SearchInput(text="mixedcase"))
         self.assertEqual([m.node.id for m in resp.matches], [tid])
 
+    def test_orders_a_two_digit_suffix_after_a_one_digit_suffix(self):
+        s = FakeStore()
+        s.create_item("ten", "pytest-bdd step", id="proj-10")
+        s.create_item("nine", "pytest-bdd step", id="proj-9")
+        resp = SearchUseCase(s).execute(SearchInput(text="pytest-bdd step"))
+        self.assertEqual([m.node.id for m in resp.matches], ["proj-9", "proj-10"])
+
     def test_step_nodes_are_excluded(self):
         s = FakeStore()
         item = s.create_item("an unrelated item", "an unrelated description")

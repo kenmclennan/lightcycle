@@ -6,7 +6,7 @@ from lightcycle.application.work.pending_reflections import (
     pending_reflection_count,
 )
 from lightcycle.domain.audit import AUDIT_STEP
-from lightcycle.domain.work import State
+from lightcycle.domain.work import State, node_id_key
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class RetroCadenceUseCase:
         ]
         title = "Audit of %d closed items" % len(batch)
         item_id = self._store.create_item(
-            title, "batch: %s" % ", ".join(sorted(i.id for i in batch)))
+            title, "batch: %s" % ", ".join(sorted((i.id for i in batch), key=node_id_key)))
         self._store.label_add(item_id, "retro-origin")
         tid = self._store.create_step(
             "%s: %s" % (AUDIT_STEP, title),
