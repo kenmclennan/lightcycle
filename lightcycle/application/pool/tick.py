@@ -4,6 +4,8 @@ from typing import List, Optional, Tuple
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.domain.pool import Breaker, PoolPlan, ReadyQueue, WorkerPool
 
+_ACTIVE_ACCRUAL_CAP_TICKS = 3
+
 
 @dataclass(frozen=True)
 class TickInput:
@@ -82,6 +84,13 @@ class TickUseCase:
         )
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
+        covered = pool.covered_steps(probe)
+        if covered and input.since is not None:
+            delta = min(
+                input.now - input.since, self._config.poll_seconds() * _ACTIVE_ACCRUAL_CAP_TICKS
+            )
+            if delta > 0:
+                self._store.accrue_active_seconds(covered, delta)
         max_agents = self._config.max_agents()
         slots = pool.free_slots(max_agents, probe)
         alive_count = max_agents - slots

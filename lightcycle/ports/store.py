@@ -157,6 +157,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def accrue_active_seconds(self, step_ids, seconds):
+        pass
+
+    @abstractmethod
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):
         pass

@@ -67,6 +67,7 @@ def record_to_step(record, blocked_by=None):
         created_at=record.get("created_at"),
         fired_at=meta.get("fired_at"),
         closed_at=record.get("closed_at"),
+        active_seconds=meta.get("active_seconds"),
     )
 
 
@@ -439,6 +440,15 @@ class FakeStore(StorePort):
         b["state"] = "in_progress"
         self._record_history(b["id"], State.IN_PROGRESS)
         return self._to_node(b)
+
+    def accrue_active_seconds(self, step_ids, seconds):
+        for tid in step_ids:
+            b = self._records.get(tid)
+            if b is None:
+                continue
+            meta = dict(b.get("metadata") or {})
+            meta["active_seconds"] = (meta.get("active_seconds") or 0) + seconds
+            b["metadata"] = meta
 
     def history(self, tid):
         return list(self._history.get(tid, []))

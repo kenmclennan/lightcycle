@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS steps (
     park_tried TEXT,
     created_at TEXT,
     fired_at TEXT,
-    closed_at TEXT
+    closed_at TEXT,
+    active_seconds REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_steps_item ON steps(item);
@@ -149,7 +150,7 @@ _STEP_COLUMNS = (
     "id", "item", "title", "stage", "pass_id", "role", "state", "assignee", "model",
     "outcome", "notes", "reflection", "watched_step",
     "park_reason", "park_needs", "park_tried",
-    "created_at", "fired_at", "closed_at",
+    "created_at", "fired_at", "closed_at", "active_seconds",
 )
 
 _PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
@@ -310,6 +311,9 @@ class SqliteStore(StorePort):
         "phase_runs": (
             ("comments_dispatched_through", "TEXT"),
             ("comments_handled_through", "TEXT"),
+        ),
+        "steps": (
+            ("active_seconds", "REAL"),
         ),
     }
 
@@ -497,6 +501,7 @@ class SqliteStore(StorePort):
             created_at=d["created_at"],
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
+            active_seconds=d["active_seconds"],
         )
 
     def _row_to_item(self, row, artifacts, blocked_by, child_states):
@@ -1002,6 +1007,18 @@ class SqliteStore(StorePort):
         self._record_history(tid, State.IN_PROGRESS)
         self._conn.commit()
         return self.get_node(tid)
+
+    def accrue_active_seconds(self, step_ids, seconds):
+        ids = list(step_ids)
+        if not ids:
+            return
+        placeholders = ", ".join("?" * len(ids))
+        self._conn.execute(
+            "UPDATE steps SET active_seconds = COALESCE(active_seconds, 0) + ? "
+            "WHERE id IN (%s)" % placeholders,
+            (seconds, *ids),
+        )
+        self._conn.commit()
 
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
                               id=None):

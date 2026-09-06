@@ -467,6 +467,39 @@ class StoreContractBase:
         self.assertEqual(t.park.reason, "oops")
         self.assertEqual(t.park.tried, "a,b")
 
+    def test_new_step_has_no_active_seconds(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        t = s.get_node(tid)
+        self.assertIsNone(t.active_seconds)
+        self.assertIsNone(t.as_dict()["active_seconds"])
+
+    def test_accrue_active_seconds_accumulates_not_overwrites(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.accrue_active_seconds([tid], 5.0)
+        self.assertEqual(s.get_node(tid).active_seconds, 5.0)
+        s.accrue_active_seconds([tid], 2.5)
+        self.assertEqual(s.get_node(tid).active_seconds, 7.5)
+
+    def test_accrue_active_seconds_credits_every_id_the_same_delta(self):
+        s = self.make_store()
+        tid_a = self._step(s, "a")
+        tid_b = self._step(s, "b")
+        s.accrue_active_seconds([tid_a, tid_b], 4.0)
+        self.assertEqual(s.get_node(tid_a).active_seconds, 4.0)
+        self.assertEqual(s.get_node(tid_b).active_seconds, 4.0)
+
+    def test_accrue_active_seconds_empty_ids_is_a_noop(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.accrue_active_seconds([], 5.0)
+        self.assertIsNone(s.get_node(tid).active_seconds)
+
+    def test_accrue_active_seconds_unknown_id_does_not_raise(self):
+        s = self.make_store()
+        s.accrue_active_seconds(["unknown-id"], 5.0)
+
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()
         open_tid = self._step(s, "open step")
