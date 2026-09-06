@@ -18,7 +18,10 @@ from lightcycle.domain.work import (
 
 
 def _new_id():
-    return "fake-" + uuid.uuid4().hex[:8]
+    suffix = uuid.uuid4().hex[:8]
+    if suffix.isdigit():
+        suffix = "a" + suffix[1:]
+    return "fake-" + suffix
 
 
 def _label_value(labels, prefix):

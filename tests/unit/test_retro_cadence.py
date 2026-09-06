@@ -5,7 +5,7 @@ from lightcycle.application.feedback.retro import RetroInput, RetroUseCase
 from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.pending_reflections import pending_reflection_count
-from lightcycle.domain.work import NodeQueue, State
+from lightcycle.domain.work import NodeQueue, State, node_id_key
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.factories import make_step
@@ -29,8 +29,8 @@ def _add_reflection(store, node_id, feedback):
     )
 
 
-def _close_item(store, title, repo=None, reflections=0):
-    eid = store.create_item(title, "a description")
+def _close_item(store, title, repo=None, reflections=0, id=None):
+    eid = store.create_item(title, "a description", id=id)
     store.close(eid, "done")
     if repo is not None:
         store.add_artifact(eid, "repo", repo)
@@ -140,8 +140,19 @@ class TestRetroCadenceFires(unittest.TestCase):
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
         parent = s.get_node(step.parent)
         self.assertEqual(parent.title, "Audit of 3 closed items")
-        self.assertEqual(parent.description, "batch: %s" % ", ".join(sorted(feedback_ids)))
+        self.assertEqual(
+            parent.description,
+            "batch: %s" % ", ".join(sorted(feedback_ids, key=node_id_key)),
+        )
         self.assertNotIn(no_feedback_id, parent.description)
+
+    def test_fired_audit_description_orders_ids_numerically_not_by_string(self):
+        s = FakeStore()
+        _close_item(s, "ten", reflections=1, id="proj-10")
+        _close_item(s, "nine", reflections=1, id="proj-9")
+        step = s.get_node(_gate(s, interval_reflections=2).execute(0.0).fired[0])
+        parent = s.get_node(step.parent)
+        self.assertEqual(parent.description, "batch: proj-9, proj-10")
 
     def test_parent_item_reads_in_progress_once_audit_is_claimed(self):
         s = FakeStore()

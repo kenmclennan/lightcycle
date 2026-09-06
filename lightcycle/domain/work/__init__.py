@@ -15,6 +15,7 @@ from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.park import Park
 from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.log_line import LogKind, LogLine
+from lightcycle.domain.work.node_id import node_id_key
 from lightcycle.domain.work.node_queue import NodeQueue
 from lightcycle.domain.work.node_spec import NodeSpec
 from lightcycle.domain.work.node_view import NodeView
@@ -30,7 +31,7 @@ __all__ = [
     "FIELDS_BY_TYPE", "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "all_states",
     "missing_for_state", "refuse_fields", "refuse_state",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
-    "Step",
+    "Step", "node_id_key",
     "merge_condition_note", "ProjectedStep",
     "worker_log_filename",
 ]

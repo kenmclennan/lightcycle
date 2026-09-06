@@ -103,6 +103,21 @@ class TestForHuman(unittest.TestCase):
             [t.id for _, t in q.for_human(fixed(FLOW), {"action"})], ["b-1", "b-2", "b-3"]
         )
 
+    def test_sorted_numerically_within_a_project_not_by_string(self):
+        q = self._queue(
+            [
+                tk(id="b-1", state=State.READY, role="human", step=None),
+                tk(id="b-2", state=State.READY, role="human", step=None),
+                tk(id="b-3", state=State.READY, role="human", step=None),
+                tk(id="b-10", state=State.READY, role="human", step=None),
+                tk(id="b-9", state=State.READY, role="human", step=None),
+            ]
+        )
+        self.assertEqual(
+            [t.id for _, t in q.for_human(fixed(FLOW), {"action"})],
+            ["b-1", "b-2", "b-3", "b-9", "b-10"],
+        )
+
     def test_limit_n(self):
         q = self._queue(
             [tk(id="c-%d" % i, state=State.READY, role="human", step=None) for i in range(5)]

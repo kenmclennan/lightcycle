@@ -1,9 +1,5 @@
+from lightcycle.domain.work.node_id import node_id_key
 from lightcycle.domain.work.state import State
-
-
-def _tie_break(step_id):
-    tail = step_id.rsplit(".", 1)[-1]
-    return int(tail) if tail.isdigit() else 0
 
 
 class NextStepResolver:
@@ -23,7 +19,7 @@ class NextStepResolver:
                     s for s in self._store.steps_at_step(t.step)
                     if s.parent == t.parent and s.state == State.DONE
                 ),
-                key=lambda s: (s.created_at or "", _tie_break(s.id)),
+                key=lambda s: (s.created_at or "", node_id_key(s.id)),
             )
             for s in history:
                 prior = prior + 1 if s.outcome == outcome else 0

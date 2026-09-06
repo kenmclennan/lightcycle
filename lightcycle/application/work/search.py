@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.project_of import project_of
-from lightcycle.domain.work import Step
+from lightcycle.domain.work import Step, node_id_key
 
 _SNIPPET_WINDOW = 40
 
@@ -51,7 +51,7 @@ class SearchUseCase:
     def execute(self, input: SearchInput) -> SearchResponse:
         needle = input.text.lower()
         matches = []
-        rows = sorted(self._store.item_text_rows(), key=lambda r: r.id)
+        rows = sorted(self._store.item_text_rows(), key=lambda r: node_id_key(r.id))
         for row in rows:
             hit = _first_match(row, needle)
             if hit is None:
