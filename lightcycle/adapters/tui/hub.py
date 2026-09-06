@@ -431,11 +431,8 @@ def escalation_reason_text(header, width):
     return _reason_lines_text(header, width)
 
 
-def escalation_panel_text(header, width):
-    text = Text(ESCALATION_TAG, style="bold %s" % COLOURS["amber"])
-    text.append("\n")
-    text.append_text(_reason_lines_text(header, width))
-    return text
+def escalation_panel_text():
+    return Text(ESCALATION_TAG, style="bold %s" % COLOURS["amber"])
 
 
 class EscalationPanel(Static):
@@ -485,10 +482,7 @@ class HubHeader(Vertical):
         if header.escalation_text:
             is_demand = header.escalation_target is None
             width = max(1, panel.size.width)
-            painted = (
-                escalation_panel_text(header, width) if is_demand
-                else escalation_reason_text(header, width)
-            )
+            painted = escalation_panel_text() if is_demand else escalation_reason_text(header, width)
             panel.update(painted)
             panel.target_id = header.escalation_target
             panel.display = True
