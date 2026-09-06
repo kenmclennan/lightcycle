@@ -42,6 +42,19 @@ def _close_item(store, title, repo=None, reflections=0, id=None):
     return eid
 
 
+def _open_item_with_closed_pass(store, title, reflections=0):
+    eid = store.create_item(title, "a description")
+    pid = store.open_pass(eid)
+    if reflections:
+        k = store.create_step("build: x", step="build", role="agent", parent=eid)
+        store.set_step_pass(k, pid)
+        store.close(k, "done")
+        for i in range(reflections):
+            _add_reflection(store, k, "fb %d" % i)
+    store.close_pass(pid)
+    return eid, pid
+
+
 def _gate(store, interval_reflections=3):
     return RetroCadenceUseCase(store, FakeConfig(interval_reflections))
 
@@ -92,7 +105,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
-        self.assertEqual(step.title, "audit: Audit of 3 closed items")
+        self.assertEqual(step.title, "audit: Audit of 3 closed items, 0 closed passes")
 
     def test_items_without_feedback_do_not_count(self):
         s = FakeStore()
@@ -139,7 +152,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         no_feedback_id = _close_item(s, "no feedback item")
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
         parent = s.get_node(step.parent)
-        self.assertEqual(parent.title, "Audit of 3 closed items")
+        self.assertEqual(parent.title, "Audit of 3 closed items, 0 closed passes")
         self.assertEqual(
             parent.description,
             "batch: %s" % ", ".join(sorted(feedback_ids, key=node_id_key)),
@@ -210,6 +223,76 @@ class TestRetroCadenceExcludes(unittest.TestCase):
         for i in range(2):
             _close_item(s, "real %d" % i, reflections=1)
         s.label_add(_close_item(s, "already retroed", reflections=1), "retroed")
+        self.assertEqual(_gate(s, interval_reflections=3).execute(0.0).fired, [])
+
+
+class TestRetroCadenceFiresForOpenItemPasses(unittest.TestCase):
+    def test_reflections_on_closed_passes_of_items_that_never_close_still_fire(self):
+        s = FakeStore()
+        for i in range(3):
+            _open_item_with_closed_pass(s, "loop %d" % i, reflections=1)
+        result = _gate(s, interval_reflections=3).execute(0.0)
+        self.assertEqual(len(result.fired), 1)
+
+    def test_mixed_batch_of_closed_items_and_closed_passes_fires_exactly_one_audit(self):
+        s = FakeStore()
+        _close_item(s, "closed item", reflections=2)
+        _open_item_with_closed_pass(s, "looping item", reflections=1)
+        result = _gate(s, interval_reflections=3).execute(0.0)
+        self.assertEqual(len(result.fired), 1)
+
+    def test_fired_audit_description_names_both_item_and_pass_ids(self):
+        s = FakeStore()
+        item_id = _close_item(s, "closed item", reflections=2)
+        looping_item, pid = _open_item_with_closed_pass(s, "looping item", reflections=1)
+        step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
+        parent = s.get_node(step.parent)
+        self.assertEqual(parent.title, "Audit of 1 closed items, 1 closed passes")
+        self.assertEqual(
+            parent.description, "batch: %s" % ", ".join(sorted([item_id, pid]))
+        )
+
+
+class TestRetroCadenceNoRunawayForPasses(unittest.TestCase):
+    def test_does_not_refire_while_an_audit_is_open(self):
+        s = FakeStore()
+        for i in range(3):
+            _open_item_with_closed_pass(s, "loop %d" % i, reflections=1)
+        gate = _gate(s, interval_reflections=3)
+        self.assertEqual(len(gate.execute(0.0).fired), 1)
+        self.assertEqual(gate.execute(0.0).fired, [])
+
+    def test_manually_retroed_pass_does_not_cause_refire(self):
+        s = FakeStore()
+        _, pid = _open_item_with_closed_pass(s, "loop", reflections=3)
+        s.label_add(pid, "retroed")
+        self.assertEqual(_gate(s, interval_reflections=3).execute(0.0).fired, [])
+
+    def test_fresh_pass_on_a_different_still_open_item_does_refire(self):
+        s = FakeStore()
+        _, pid = _open_item_with_closed_pass(s, "loop", reflections=3)
+        s.label_add(pid, "retroed")
+        gate = _gate(s, interval_reflections=3)
+        self.assertEqual(gate.execute(0.0).fired, [])
+        _open_item_with_closed_pass(s, "fresh loop", reflections=3)
+        self.assertEqual(len(gate.execute(0.0).fired), 1)
+
+
+class TestRetroCadenceExcludesPasses(unittest.TestCase):
+    def test_retro_origin_pass_excluded(self):
+        s = FakeStore()
+        for i in range(2):
+            _close_item(s, "real %d" % i, reflections=1)
+        _, pid = _open_item_with_closed_pass(s, "retro origin loop", reflections=1)
+        s.label_add(pid, "retro-origin")
+        self.assertEqual(_gate(s, interval_reflections=3).execute(0.0).fired, [])
+
+    def test_retroed_pass_excluded(self):
+        s = FakeStore()
+        for i in range(2):
+            _close_item(s, "real %d" % i, reflections=1)
+        _, pid = _open_item_with_closed_pass(s, "already retroed loop", reflections=1)
+        s.label_add(pid, "retroed")
         self.assertEqual(_gate(s, interval_reflections=3).execute(0.0).fired, [])
 
 

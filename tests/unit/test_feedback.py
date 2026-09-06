@@ -244,6 +244,58 @@ class TestRetroPendingScope(unittest.TestCase):
         self.assertEqual(resp.reflection_count, 2)
         self.assertEqual(len(resp.item_signals), 1)
 
+    def test_pending_scope_surfaces_feedback_from_a_closed_pass_of_a_still_open_item(self):
+        s = FakeStore()
+        item = s.create_item("looping item", "a description")
+        pid = s.open_pass(item)
+        k = s.create_step("build: x", step="build", role="agent", parent=item)
+        s.set_step_pass(k, pid)
+        s.close(k, "done")
+        _add_reflection(s, k, "loop friction")
+        s.close_pass(pid)
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual({row.item.id for row in resp.item_signals}, {item})
+        self.assertEqual([f.text for f in resp.feedback], ["loop friction"])
+
+    def test_pending_scope_excludes_a_closed_pass_already_labelled_retroed(self):
+        s = FakeStore()
+        item = s.create_item("looping item", "a description")
+        pid = s.open_pass(item)
+        k = s.create_step("build: x", step="build", role="agent", parent=item)
+        s.set_step_pass(k, pid)
+        s.close(k, "done")
+        _add_reflection(s, k, "loop friction")
+        s.close_pass(pid)
+        s.label_add(pid, "retroed")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual(resp.item_signals, [])
+
+    def test_pending_scope_never_resurfaces_a_retroed_pass_reflection_after_item_closes(self):
+        s = FakeStore()
+        item = s.create_item("looping item", "a description")
+
+        pid1 = s.open_pass(item)
+        k1 = s.create_step("build: 0", step="build", role="agent", parent=item)
+        s.set_step_pass(k1, pid1)
+        s.close(k1, "done")
+        _add_reflection(s, k1, "pass one friction")
+        s.close_pass(pid1)
+        s.label_add(pid1, "retroed")
+
+        pid2 = s.open_pass(item)
+        k2 = s.create_step("build: 1", step="build", role="agent", parent=item)
+        s.set_step_pass(k2, pid2)
+        s.close(k2, "done")
+        _add_reflection(s, k2, "pass two friction")
+        s.close_pass(pid2)
+
+        s.close(item, "done")
+
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        texts = [f.text for f in resp.feedback]
+        self.assertIn("pass two friction", texts)
+        self.assertNotIn("pass one friction", texts)
+
 
 class TestRetroLastScope(unittest.TestCase):
     def _make_closed_item(self, s, title):

@@ -98,6 +98,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
 class FakeStore(StorePort):
     def __init__(self, now=None, config=None):
         self._records = {}
+        self._labels = {}
         self._passes = []
         self._runs = []
         self._deps = {}
@@ -377,16 +378,27 @@ class FakeStore(StorePort):
         b["metadata"] = meta
 
     def label_add(self, tid, label):
-        b = self._get(tid)
-        if label not in b["labels"]:
-            b["labels"].append(label)
+        b = self._records.get(tid)
+        if b is not None:
+            if label not in b["labels"]:
+                b["labels"].append(label)
+            return
+        labels = self._labels.setdefault(tid, [])
+        if label not in labels:
+            labels.append(label)
 
     def label_remove(self, tid, label):
-        b = self._get(tid)
-        b["labels"] = [l for l in b["labels"] if l != label]
+        b = self._records.get(tid)
+        if b is not None:
+            b["labels"] = [l for l in b["labels"] if l != label]
+            return
+        self._labels[tid] = [l for l in self._labels.get(tid, []) if l != label]
 
     def labels_of(self, tid):
-        return list(self._get(tid).get("labels") or [])
+        b = self._records.get(tid)
+        if b is not None:
+            return list(b.get("labels") or [])
+        return list(self._labels.get(tid, []))
 
     def update_state(self, tid, state):
         self._get(tid)["state"] = str(state)
@@ -620,6 +632,19 @@ class FakeStore(StorePort):
             if "retro-origin" in labels or "retroed" in labels:
                 continue
             result.append(self._to_node(b))
+        return result
+
+    def closed_unretroed_passes(self):
+        result = []
+        for p in self._passes:
+            if p.state != "closed":
+                continue
+            item_rec = self._records.get(p.item)
+            if item_rec is None or item_rec.get("state") == "done":
+                continue
+            if "retro-origin" in self.labels_of(p.id) or "retroed" in self.labels_of(p.id):
+                continue
+            result.append(p)
         return result
 
     def last_n_closed_items(self, n):

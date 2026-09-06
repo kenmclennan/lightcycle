@@ -3,6 +3,7 @@ from typing import List
 
 from lightcycle.application.work.pending_reflections import (
     item_reflection_count,
+    pass_reflection_count,
     pending_reflection_count,
 )
 from lightcycle.domain.audit import AUDIT_STEP
@@ -25,13 +26,19 @@ class RetroCadenceUseCase:
         if pending_reflection_count(self._store) < interval or self._open_audit():
             return RetroCadenceResponse()
 
-        batch = [
+        item_batch = [
             item for item in self._store.closed_unretroed_items()
             if item_reflection_count(self._store, item) > 0
         ]
-        title = "Audit of %d closed items" % len(batch)
-        item_id = self._store.create_item(
-            title, "batch: %s" % ", ".join(sorted((i.id for i in batch), key=node_id_key)))
+        pass_batch = [
+            p for p in self._store.closed_unretroed_passes()
+            if pass_reflection_count(self._store, p) > 0
+        ]
+        title = "Audit of %d closed items, %d closed passes" % (len(item_batch), len(pass_batch))
+        description = "batch: %s" % ", ".join(
+            sorted([i.id for i in item_batch] + [p.id for p in pass_batch], key=node_id_key)
+        )
+        item_id = self._store.create_item(title, description)
         self._store.label_add(item_id, "retro-origin")
         tid = self._store.create_step(
             "%s: %s" % (AUDIT_STEP, title),

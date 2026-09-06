@@ -7,6 +7,7 @@ from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.has_feedback import has_feedback
+from lightcycle.application.work.pending_reflections import pass_reflection_count
 from lightcycle.domain.audit import FINDINGS_STEP, StepKind
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeSpec
@@ -139,6 +140,9 @@ class CompleteStepUseCase:
         for item in self._store.closed_unretroed_items():
             if has_feedback(self._store, item):
                 self._store.label_add(item.id, "retroed")
+        for pass_record in self._store.closed_unretroed_passes():
+            if pass_reflection_count(self._store, pass_record) > 0:
+                self._store.label_add(pass_record.id, "retroed")
 
     def _cascade_close(self, node_id):
         if not node_id:
