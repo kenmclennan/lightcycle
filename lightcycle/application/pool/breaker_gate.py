@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
-from lightcycle.domain.pool import Breaker, WorkerPool, parse_rate_limit_event
+from lightcycle.domain.pool import Breaker, WorkerPool, parse_rate_limit_event, parse_usage_event
 from lightcycle.domain.pool.worker_session import saw_session_activity
 
 
@@ -91,6 +91,13 @@ class BreakerGateUseCase:
         for w in pool.dead_unchecked(probe):
             event = parse_rate_limit_event(self._fs.iter_lines(w.log))
             no_work = not saw_session_activity(self._fs.iter_lines(w.log))
+            if self._store is not None and w.step is not None:
+                usage = parse_usage_event(self._fs.iter_lines(w.log))
+                self._store.record_usage(
+                    w.step, usage.input_tokens, usage.output_tokens,
+                    usage.cache_read_tokens, usage.cache_creation_tokens, usage.cost_usd,
+                    usage.cost_basis, usage.thinking_tokens,
+                )
             self._workers.mark_checked(w.spawnid)
             if event and event.is_rejected:
                 rejected_reset_ats.append(event.reset_at)

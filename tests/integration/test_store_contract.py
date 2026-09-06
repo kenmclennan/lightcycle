@@ -719,5 +719,98 @@ class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
         self.assertFalse(art.internal)
 
 
+_PRE_USAGE_STEPS_SCHEMA = """
+CREATE TABLE steps (
+    id TEXT PRIMARY KEY,
+    item TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    stage TEXT,
+    pass_id TEXT,
+    role TEXT,
+    state TEXT NOT NULL DEFAULT 'ready',
+    assignee TEXT,
+    model TEXT,
+    outcome TEXT,
+    notes TEXT,
+    reflection TEXT,
+    watched_step TEXT,
+    park_reason TEXT,
+    park_needs TEXT,
+    park_tried TEXT,
+    created_at TEXT,
+    fired_at TEXT,
+    closed_at TEXT,
+    active_seconds REAL
+);
+
+CREATE TABLE items (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT,
+    state TEXT NOT NULL DEFAULT 'backlogged',
+    repo TEXT,
+    workflow TEXT,
+    outcome TEXT,
+    project TEXT,
+    created_at TEXT,
+    closed_at TEXT
+);
+"""
+
+
+class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def _seed_pre_usage_store(self, root):
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.executescript(_PRE_USAGE_STEPS_SCHEMA)
+        conn.execute(
+            "INSERT INTO steps (id, item, state, created_at) "
+            "VALUES ('s-1', 'i-1', 'ready', '2026-01-01')"
+        )
+        conn.commit()
+        conn.close()
+
+    def test_existing_store_gains_usage_columns_defaulted_and_the_outcome_index(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        for col in (
+            "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
+            "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis",
+            "usage_thinking_tokens",
+        ):
+            self.assertIn(col, cols)
+
+        t = store.get_step("s-1")
+        self.assertEqual(t.usage_input_tokens, 0)
+        self.assertEqual(t.usage_output_tokens, 0)
+        self.assertEqual(t.usage_cache_read_tokens, 0)
+        self.assertEqual(t.usage_cache_creation_tokens, 0)
+        self.assertEqual(t.usage_cost_usd, 0.0)
+        self.assertIsNone(t.usage_cost_basis)
+        self.assertIsNone(t.usage_thinking_tokens)
+
+        idx = store._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_steps_outcome'"
+        ).fetchone()
+        self.assertIsNotNone(idx)
+
+    def test_migration_is_idempotent_on_reopen(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        SqliteStore(self._config(root))
+        store = SqliteStore(self._config(root))
+
+        t = store.get_step("s-1")
+        self.assertEqual(t.usage_input_tokens, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -161,6 +161,11 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+        pass
+
+    @abstractmethod
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):
         pass

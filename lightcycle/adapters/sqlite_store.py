@@ -64,12 +64,20 @@ CREATE TABLE IF NOT EXISTS steps (
     created_at TEXT,
     fired_at TEXT,
     closed_at TEXT,
-    active_seconds REAL
+    active_seconds REAL,
+    usage_input_tokens INTEGER NOT NULL DEFAULT 0,
+    usage_output_tokens INTEGER NOT NULL DEFAULT 0,
+    usage_cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    usage_cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+    usage_cost_usd REAL NOT NULL DEFAULT 0,
+    usage_cost_basis TEXT,
+    usage_thinking_tokens INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_steps_item ON steps(item);
 CREATE INDEX IF NOT EXISTS idx_steps_state ON steps(state);
 CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage);
+CREATE INDEX IF NOT EXISTS idx_steps_outcome ON steps(outcome);
 
 
 CREATE TABLE IF NOT EXISTS deps (
@@ -151,6 +159,9 @@ _STEP_COLUMNS = (
     "outcome", "notes", "reflection", "watched_step",
     "park_reason", "park_needs", "park_tried",
     "created_at", "fired_at", "closed_at", "active_seconds",
+    "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
+    "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis",
+    "usage_thinking_tokens",
 )
 
 _PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
@@ -314,6 +325,13 @@ class SqliteStore(StorePort):
         ),
         "steps": (
             ("active_seconds", "REAL"),
+            ("usage_input_tokens", "INTEGER NOT NULL DEFAULT 0"),
+            ("usage_output_tokens", "INTEGER NOT NULL DEFAULT 0"),
+            ("usage_cache_read_tokens", "INTEGER NOT NULL DEFAULT 0"),
+            ("usage_cache_creation_tokens", "INTEGER NOT NULL DEFAULT 0"),
+            ("usage_cost_usd", "REAL NOT NULL DEFAULT 0"),
+            ("usage_cost_basis", "TEXT"),
+            ("usage_thinking_tokens", "INTEGER"),
         ),
     }
 
@@ -502,6 +520,13 @@ class SqliteStore(StorePort):
             fired_at=d["fired_at"],
             closed_at=d["closed_at"],
             active_seconds=d["active_seconds"],
+            usage_input_tokens=d["usage_input_tokens"],
+            usage_output_tokens=d["usage_output_tokens"],
+            usage_cache_read_tokens=d["usage_cache_read_tokens"],
+            usage_cache_creation_tokens=d["usage_cache_creation_tokens"],
+            usage_cost_usd=d["usage_cost_usd"],
+            usage_cost_basis=d["usage_cost_basis"],
+            usage_thinking_tokens=d["usage_thinking_tokens"],
         )
 
     def _row_to_item(self, row, artifacts, blocked_by, child_states):
@@ -1017,6 +1042,24 @@ class SqliteStore(StorePort):
             "UPDATE steps SET active_seconds = COALESCE(active_seconds, 0) + ? "
             "WHERE id IN (%s)" % placeholders,
             (seconds, *ids),
+        )
+        self._conn.commit()
+
+    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+        self._conn.execute(
+            "UPDATE steps SET "
+            "usage_input_tokens = usage_input_tokens + ?, "
+            "usage_output_tokens = usage_output_tokens + ?, "
+            "usage_cache_read_tokens = usage_cache_read_tokens + ?, "
+            "usage_cache_creation_tokens = usage_cache_creation_tokens + ?, "
+            "usage_cost_usd = usage_cost_usd + ?, "
+            "usage_cost_basis = COALESCE(?, usage_cost_basis), "
+            "usage_thinking_tokens = CASE WHEN ? IS NULL THEN usage_thinking_tokens "
+            "ELSE COALESCE(usage_thinking_tokens, 0) + ? END "
+            "WHERE id = ?",
+            (input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+             cost_usd, cost_basis, thinking_tokens, thinking_tokens, tid),
         )
         self._conn.commit()
 

@@ -27,6 +27,13 @@ class Step:
     fired_at: Optional[str] = None
     closed_at: Optional[str] = None
     active_seconds: Optional[float] = None
+    usage_input_tokens: int = 0
+    usage_output_tokens: int = 0
+    usage_cache_read_tokens: int = 0
+    usage_cache_creation_tokens: int = 0
+    usage_cost_usd: float = 0.0
+    usage_cost_basis: Optional[str] = None
+    usage_thinking_tokens: Optional[int] = None
 
     @property
     def parent(self):
@@ -73,4 +80,11 @@ class Step:
             "fired_at": self.fired_at,
             "closed_at": self.closed_at,
             "active_seconds": self.active_seconds,
+            "usage_input_tokens": self.usage_input_tokens,
+            "usage_output_tokens": self.usage_output_tokens,
+            "usage_cache_read_tokens": self.usage_cache_read_tokens,
+            "usage_cache_creation_tokens": self.usage_cache_creation_tokens,
+            "usage_cost_usd": self.usage_cost_usd,
+            "usage_cost_basis": self.usage_cost_basis,
+            "usage_thinking_tokens": self.usage_thinking_tokens,
         }

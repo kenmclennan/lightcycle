@@ -17,6 +17,19 @@ _NO_WORK_LOG = (
 )
 
 
+class RecordingFakeStore(FakeStore):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.record_usage_calls = []
+
+    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+        self.record_usage_calls.append(
+            (tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+             cost_usd, cost_basis, thinking_tokens)
+        )
+
+
 class RecordingFakeFs(FakeFs):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -446,6 +459,49 @@ class TestBreakerGateUseCase(unittest.TestCase):
         result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=500)
         self.assertFalse(result.closed)
         self.assertTrue(result.breaker.is_open)
+
+    def test_a_dead_worker_with_a_step_and_usage_records_it_on_the_store(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        line = json.dumps({
+            "type": "result",
+            "modelUsage": {
+                "claude-sonnet-5": {
+                    "inputTokens": 68, "outputTokens": 16478,
+                    "cacheReadInputTokens": 2190437, "cacheCreationInputTokens": 72581,
+                    "thinkingTokens": 9899, "costUSD": 0.8933274, "costBasis": "list",
+                }
+            },
+        })
+        fs = FakeFs(files={"/l/1.log": line.encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(
+            store.record_usage_calls,
+            [(tid, 68, 16478, 2190437, 72581, 0.8933274, "list", 9899)],
+        )
+
+    def test_a_dead_worker_with_no_step_causes_no_record_usage_call(self):
+        store = RecordingFakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "log": "/l/1.log", "started": 0}]
+        )
+        fs = FakeFs(files={"/l/1.log": b'{"type":"result","modelUsage":{}}'})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.record_usage_calls, [])
+
+    def test_reaping_a_dead_worker_without_a_store_does_not_raise(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": "s-1", "log": "/l/1.log", "started": 0}]
+        )
+        fs = FakeFs(files={"/l/1.log": b'{"type":"result","modelUsage":{}}'})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig()).execute(now=100)
+        self.assertEqual(workers.checked, ["sp-1"])
 
 
 class TestBreakerGatePoolWideSpin(unittest.TestCase):

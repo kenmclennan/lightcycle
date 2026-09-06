@@ -71,6 +71,13 @@ def record_to_step(record, blocked_by=None):
         fired_at=meta.get("fired_at"),
         closed_at=record.get("closed_at"),
         active_seconds=meta.get("active_seconds"),
+        usage_input_tokens=meta.get("usage_input_tokens") or 0,
+        usage_output_tokens=meta.get("usage_output_tokens") or 0,
+        usage_cache_read_tokens=meta.get("usage_cache_read_tokens") or 0,
+        usage_cache_creation_tokens=meta.get("usage_cache_creation_tokens") or 0,
+        usage_cost_usd=meta.get("usage_cost_usd") or 0.0,
+        usage_cost_basis=meta.get("usage_cost_basis"),
+        usage_thinking_tokens=meta.get("usage_thinking_tokens"),
     )
 
 
@@ -464,6 +471,27 @@ class FakeStore(StorePort):
             meta = dict(b.get("metadata") or {})
             meta["active_seconds"] = (meta.get("active_seconds") or 0) + seconds
             b["metadata"] = meta
+
+    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+        b = self._get(tid)
+        meta = dict(b.get("metadata") or {})
+        meta["usage_input_tokens"] = (meta.get("usage_input_tokens") or 0) + input_tokens
+        meta["usage_output_tokens"] = (meta.get("usage_output_tokens") or 0) + output_tokens
+        meta["usage_cache_read_tokens"] = (
+            (meta.get("usage_cache_read_tokens") or 0) + cache_read_tokens
+        )
+        meta["usage_cache_creation_tokens"] = (
+            (meta.get("usage_cache_creation_tokens") or 0) + cache_creation_tokens
+        )
+        meta["usage_cost_usd"] = (meta.get("usage_cost_usd") or 0.0) + cost_usd
+        if cost_basis is not None:
+            meta["usage_cost_basis"] = cost_basis
+        if thinking_tokens is not None:
+            meta["usage_thinking_tokens"] = (
+                (meta.get("usage_thinking_tokens") or 0) + thinking_tokens
+            )
+        b["metadata"] = meta
 
     def history(self, tid):
         return list(self._history.get(tid, []))
