@@ -82,10 +82,42 @@ class RetroUseCase:
         for item in self._store.closed_unretroed_items():
             if not has_feedback(self._store, item):
                 continue
-            row, refs = self._collect_item_row(item, signals_for)
+            row, refs = self._collect_pending_item_row(item, signals_for)
+            if not refs:
+                continue
             rows.append(row)
             all_refs.extend(refs)
+        for pass_record in self._store.closed_unretroed_passes():
+            steps = [
+                s for s in self._store.children(pass_record.item) if s.pass_id == pass_record.id
+            ]
+            refs = []
+            for t in steps:
+                refs.extend(self._reflections_of(t.id))
+            if not refs:
+                continue
+            item = self._store.get_node(pass_record.item)
+            rows.append(ItemSignals(
+                item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
+                durations=self._durations_of(steps),
+            ))
+            all_refs.extend(refs)
         return rows, all_refs
+
+    def _collect_pending_item_row(self, item, signals_for):
+        retroed_passes = {
+            p.id for p in self._store.passes_of(item.id) if "retroed" in self._store.labels_of(p.id)
+        }
+        children = self._store.children(item.id)
+        steps = [c for c in children if c.type == "step" and c.pass_id not in retroed_passes]
+        refs = []
+        for t in steps:
+            refs.extend(self._reflections_of(t.id))
+        row = ItemSignals(
+            item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
+            durations=self._durations_of(steps),
+        )
+        return row, refs
 
     def _reflections_of(self, node_id):
         out = []

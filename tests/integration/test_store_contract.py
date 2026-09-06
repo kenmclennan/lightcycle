@@ -131,6 +131,40 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         self.assertNotIn(retroed, ids)
         self.assertNotIn(origin, ids)
 
+    def test_closed_unretroed_passes_returns_a_closed_pass_of_a_still_open_item(self):
+        s = self._store()
+        item = s.create_item("looping item", "a description")
+        pid = s.open_pass(item)
+        s.close_pass(pid)
+        self.assertIn(pid, [p.id for p in s.closed_unretroed_passes()])
+
+    def test_closed_unretroed_passes_excludes_closed_item_open_retroed_and_origin(self):
+        s = self._store()
+
+        closed_item = s.create_item("closed item", "a description")
+        closed_item_pass = s.open_pass(closed_item)
+        s.close_pass(closed_item_pass)
+        s.close(closed_item, "merged")
+
+        open_item = s.create_item("open item", "a description")
+        open_pass = s.open_pass(open_item)
+
+        retroed_item = s.create_item("retroed pass item", "a description")
+        retroed_pass = s.open_pass(retroed_item)
+        s.close_pass(retroed_pass)
+        s.label_add(retroed_pass, "retroed")
+
+        origin_item = s.create_item("origin pass item", "a description")
+        origin_pass = s.open_pass(origin_item)
+        s.close_pass(origin_pass)
+        s.label_add(origin_pass, "retro-origin")
+
+        ids = [p.id for p in s.closed_unretroed_passes()]
+        self.assertNotIn(closed_item_pass, ids)
+        self.assertNotIn(open_pass, ids)
+        self.assertNotIn(retroed_pass, ids)
+        self.assertNotIn(origin_pass, ids)
+
     def test_last_n_closed_items_returns_closed_items(self):
         s = self._store()
         first = s.create_item("first", "a description")

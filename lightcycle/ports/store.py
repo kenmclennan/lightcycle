@@ -251,6 +251,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def closed_unretroed_passes(self):
+        pass
+
+    @abstractmethod
     def last_n_closed_items(self, n):
         pass
 

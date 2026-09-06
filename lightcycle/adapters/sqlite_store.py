@@ -1214,6 +1214,16 @@ class SqliteStore(StorePort):
             "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retroed')",
         )
 
+    def closed_unretroed_passes(self):
+        rows = self._conn.execute(
+            "SELECT id, item, n, state, opened_at, closed_at FROM passes "
+            "WHERE state = 'closed' "
+            "AND item IN (SELECT id FROM items WHERE state != 'done') "
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin') "
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retroed')"
+        ).fetchall()
+        return [Pass(*r) for r in rows]
+
     def last_n_closed_items(self, n):
         return self._select_items(
             "state = 'done'", params=(n,), suffix="ORDER BY closed_at DESC LIMIT ?"
