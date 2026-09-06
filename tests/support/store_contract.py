@@ -500,6 +500,61 @@ class StoreContractBase:
         s = self.make_store()
         s.accrue_active_seconds(["unknown-id"], 5.0)
 
+    def test_new_step_has_zeroed_usage(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 0)
+        self.assertEqual(t.usage_output_tokens, 0)
+        self.assertEqual(t.usage_cache_read_tokens, 0)
+        self.assertEqual(t.usage_cache_creation_tokens, 0)
+        self.assertEqual(t.usage_cost_usd, 0.0)
+        self.assertIsNone(t.usage_cost_basis)
+        self.assertIsNone(t.usage_thinking_tokens)
+
+    def test_record_usage_roundtrips_all_seven_fields(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_usage(tid, 10, 20, 30, 40, 1.5, "list", 5)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 10)
+        self.assertEqual(t.usage_output_tokens, 20)
+        self.assertEqual(t.usage_cache_read_tokens, 30)
+        self.assertEqual(t.usage_cache_creation_tokens, 40)
+        self.assertEqual(t.usage_cost_usd, 1.5)
+        self.assertEqual(t.usage_cost_basis, "list")
+        self.assertEqual(t.usage_thinking_tokens, 5)
+
+    def test_record_usage_second_call_adds_to_the_numeric_fields(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_usage(tid, 10, 20, 30, 40, 1.5, None, None)
+        s.record_usage(tid, 1, 2, 3, 4, 0.5, None, None)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 11)
+        self.assertEqual(t.usage_output_tokens, 22)
+        self.assertEqual(t.usage_cache_read_tokens, 33)
+        self.assertEqual(t.usage_cache_creation_tokens, 44)
+        self.assertEqual(t.usage_cost_usd, 2.0)
+
+    def test_record_usage_none_cost_basis_and_thinking_tokens_leave_prior_values_untouched(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_usage(tid, 1, 1, 1, 1, 1.0, "list", 5)
+        s.record_usage(tid, 1, 1, 1, 1, 1.0, None, None)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_cost_basis, "list")
+        self.assertEqual(t.usage_thinking_tokens, 5)
+
+    def test_record_usage_first_none_then_real_values_moves_off_null(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_usage(tid, 1, 1, 1, 1, 1.0, None, None)
+        s.record_usage(tid, 1, 1, 1, 1, 1.0, "list", 5)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_cost_basis, "list")
+        self.assertEqual(t.usage_thinking_tokens, 5)
+
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()
         open_tid = self._step(s, "open step")
