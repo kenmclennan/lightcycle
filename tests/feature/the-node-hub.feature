@@ -222,45 +222,31 @@ Feature: The node hub
     Given an item blocked on another item's completion, its hub open
     Then the escalation reason names the specific blocking item
 
-  Scenario: An escalated step's escalation reason names what's being asked
-    Given an item whose current step is escalated, needing rework, its hub open
-    Then the escalation reason names what's being asked of the operator
-
   Scenario: A dependency-blocked item's escalation panel shows a single untagged line
     Given an item blocked on another item's completion, its hub open
     Then the escalation panel shows no "⚠ needs you" tag and no second line
     And the blocking item's id within the reason is coloured as a link, in the cyan colour
 
-  Scenario: An escalated step's escalation panel shows the tag on its own line, above the reason
+  Scenario: An escalated step's escalation panel shows only the tag, on its own line
     Given an item whose current step is escalated, needing rework, its hub open
     Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
-    And the reason is shown on a second line below the tag, in the text colour
+    And the escalation panel has no second line
 
-  Scenario: An escalated step's escalation panel names no resume command, since resuming is a keypress on Detail now
-    Given an item whose current step is escalated, needing rework, its hub open
-    Then the escalation panel shows no resume command
-    And the escalation panel has no third line
-
-  Scenario: An escalated step with a recorded reason shows it on the third line, with no resume command alongside it
+  Scenario: An escalated step with a recorded reason still shows only the tag
     Given an item whose current step is escalated, needing rework, with a recorded reason, its hub open
-    Then the escalation panel's third line names the recorded reason
-    And the escalation panel shows no resume command
+    Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
+    And the escalation panel has no second line
 
-  Scenario: An escalated step's long reason wraps across multiple lines with every word intact
-    Given an item whose current step is escalated, with a reason long enough to wrap, its hub open
-    Then the escalation panel shows the reason's final words
-    And the escalation panel shows no truncation ellipsis
+  Scenario: A parked step's own hub shows only the tag in its escalation panel too
+    Given a step parked with a needs and a reason recorded, its hub open
+    Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
+    And the escalation panel has no second line
 
-  Scenario: An escalated step's reason far longer than the cap is truncated with an explicit ellipsis
+  Scenario: An escalated step's escalation panel stays one line however long the recorded reason is
     Given an item whose current step is escalated, with a reason far longer than the panel's line cap, its hub open
-    Then the escalation panel is capped at the configured line count
-    And the escalation panel's last line ends with an ellipsis
-    And text past the cut point does not appear anywhere in the escalation panel
-
-  Scenario: The escalation panel reflows its wrap when the terminal is resized
-    Given an item whose current step is escalated, with a reason that wraps differently at two widths, its hub open
-    When the terminal is resized narrower
-    Then the escalation panel's rendered lines match the new width, not the original
+    Then the escalation panel shows a bold amber tag reading "⚠ needs you" on its own line
+    And the escalation panel has no second line
+    And the escalation panel shows no truncation ellipsis
 
   Scenario Outline: An item that is not needs-attention shows no escalation reason
     Given an item that is "<status>", its hub open
