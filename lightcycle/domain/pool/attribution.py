@@ -1,0 +1,63 @@
+import json
+from dataclasses import dataclass, field
+from typing import Dict
+
+
+@dataclass(frozen=True)
+class ToolUsage:
+    calls: int = 0
+    bytes: int = 0
+
+
+@dataclass(frozen=True)
+class AttributionEvent:
+    turn_count: int = 0
+    tool_usage: Dict[str, ToolUsage] = field(default_factory=dict)
+
+
+def _content_bytes(content):
+    if content is None:
+        return 0
+    if isinstance(content, str):
+        return len(content.encode("utf-8"))
+    if isinstance(content, list):
+        text = "".join(
+            block.get("text", "") for block in content if isinstance(block, dict)
+        )
+        return len(text.encode("utf-8"))
+    return 0
+
+
+def parse_attribution_event(lines) -> AttributionEvent:
+    message_ids = set()
+    tool_names = {}
+    tool_usage = {}
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        content_blocks = (data.get("message") or {}).get("content") or []
+        if data.get("type") == "assistant":
+            message_id = (data.get("message") or {}).get("id")
+            if message_id:
+                message_ids.add(message_id)
+            for block in content_blocks:
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    tool_names[block.get("id")] = block.get("name")
+        elif data.get("type") == "user":
+            for block in content_blocks:
+                if not isinstance(block, dict) or block.get("type") != "tool_result":
+                    continue
+                name = tool_names.get(block.get("tool_use_id"), "unknown")
+                usage = tool_usage.setdefault(name, ToolUsage())
+                tool_usage[name] = ToolUsage(
+                    calls=usage.calls + 1,
+                    bytes=usage.bytes + _content_bytes(block.get("content")),
+                )
+    return AttributionEvent(turn_count=len(message_ids), tool_usage=tool_usage)

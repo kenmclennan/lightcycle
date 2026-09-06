@@ -10,6 +10,7 @@ from lightcycle.ports.store import (
     ProjectResolutionError,
     StorePort,
 )
+from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
@@ -78,6 +79,7 @@ def record_to_step(record, blocked_by=None):
         usage_cost_usd=meta.get("usage_cost_usd") or 0.0,
         usage_cost_basis=meta.get("usage_cost_basis"),
         usage_thinking_tokens=meta.get("usage_thinking_tokens"),
+        turn_count=meta.get("turn_count") or 0,
     )
 
 
@@ -111,6 +113,8 @@ class FakeStore(StorePort):
         self._deps = {}
         self._history = {}
         self._projects = {}
+        self._tool_usage = {}
+        self._backfill_log = {}
         self._now = now or (lambda: datetime.datetime.now().isoformat())
         self._config = config
 
@@ -492,6 +496,37 @@ class FakeStore(StorePort):
                 (meta.get("usage_thinking_tokens") or 0) + thinking_tokens
             )
         b["metadata"] = meta
+
+    def record_attribution(self, tid, turn_count, tool_usage):
+        b = self._get(tid)
+        meta = dict(b.get("metadata") or {})
+        meta["turn_count"] = (meta.get("turn_count") or 0) + turn_count
+        b["metadata"] = meta
+        for tool, usage in tool_usage.items():
+            existing = self._tool_usage.get((tid, tool), ToolUsage())
+            self._tool_usage[(tid, tool)] = ToolUsage(
+                calls=existing.calls + usage.calls, bytes=existing.bytes + usage.bytes
+            )
+
+    def tool_usage_for(self, step_id):
+        return {
+            tool: usage for (tid, tool), usage in self._tool_usage.items() if tid == step_id
+        }
+
+    def usage_backfilled_logs(self):
+        return set(self._backfill_log)
+
+    def record_backfilled_usage(self, log_file, step_id, usage, attribution):
+        stored = step_id is not None and step_id in self._records
+        if stored:
+            self.record_usage(
+                step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                usage.thinking_tokens,
+            )
+            self.record_attribution(step_id, attribution.turn_count, attribution.tool_usage)
+        self._backfill_log[log_file] = step_id
+        return stored
 
     def history(self, tid):
         return list(self._history.get(tid, []))

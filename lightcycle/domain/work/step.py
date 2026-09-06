@@ -34,6 +34,7 @@ class Step:
     usage_cost_usd: float = 0.0
     usage_cost_basis: Optional[str] = None
     usage_thinking_tokens: Optional[int] = None
+    turn_count: int = 0
 
     @property
     def parent(self):
@@ -87,4 +88,5 @@ class Step:
             "usage_cost_usd": self.usage_cost_usd,
             "usage_cost_basis": self.usage_cost_basis,
             "usage_thinking_tokens": self.usage_thinking_tokens,
+            "turn_count": self.turn_count,
         }
