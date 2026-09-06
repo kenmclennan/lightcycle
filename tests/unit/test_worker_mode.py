@@ -27,7 +27,7 @@ class TestWorkerPermitted(unittest.TestCase):
 
     def test_destructive_verbs_forbidden(self):
         for v in ("rm", "init", "new", "start", "sweep", "dep", "config",
-                  "workflow"):
+                  "workflow", "backfill-usage"):
             self.assertFalse(_worker_permitted(v, ["x"]), v)
 
     def test_set_state_blocked_allowed(self):

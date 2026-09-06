@@ -2,6 +2,7 @@ import datetime
 import os
 import sqlite3
 
+from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
@@ -71,13 +72,30 @@ CREATE TABLE IF NOT EXISTS steps (
     usage_cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
     usage_cost_usd REAL NOT NULL DEFAULT 0,
     usage_cost_basis TEXT,
-    usage_thinking_tokens INTEGER
+    usage_thinking_tokens INTEGER,
+    turn_count INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_steps_item ON steps(item);
 CREATE INDEX IF NOT EXISTS idx_steps_state ON steps(state);
 CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage);
 CREATE INDEX IF NOT EXISTS idx_steps_outcome ON steps(outcome);
+
+CREATE TABLE IF NOT EXISTS step_tool_usage (
+    step  TEXT NOT NULL,
+    tool  TEXT NOT NULL,
+    calls INTEGER NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (step, tool)
+);
+
+CREATE INDEX IF NOT EXISTS idx_step_tool_usage_tool ON step_tool_usage(tool);
+
+CREATE TABLE IF NOT EXISTS usage_backfill_log (
+    log_file    TEXT PRIMARY KEY,
+    step        TEXT,
+    ingested_at TEXT
+);
 
 
 CREATE TABLE IF NOT EXISTS deps (
@@ -161,7 +179,7 @@ _STEP_COLUMNS = (
     "created_at", "fired_at", "closed_at", "active_seconds",
     "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
     "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis",
-    "usage_thinking_tokens",
+    "usage_thinking_tokens", "turn_count",
 )
 
 _PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
@@ -332,6 +350,7 @@ class SqliteStore(StorePort):
             ("usage_cost_usd", "REAL NOT NULL DEFAULT 0"),
             ("usage_cost_basis", "TEXT"),
             ("usage_thinking_tokens", "INTEGER"),
+            ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
         ),
     }
 
@@ -527,6 +546,7 @@ class SqliteStore(StorePort):
             usage_cost_usd=d["usage_cost_usd"],
             usage_cost_basis=d["usage_cost_basis"],
             usage_thinking_tokens=d["usage_thinking_tokens"],
+            turn_count=d["turn_count"],
         )
 
     def _row_to_item(self, row, artifacts, blocked_by, child_states):
@@ -1045,9 +1065,9 @@ class SqliteStore(StorePort):
         )
         self._conn.commit()
 
-    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
-        self._conn.execute(
+    def _record_usage_nocommit(self, tid, input_tokens, output_tokens, cache_read_tokens,
+                                cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+        cursor = self._conn.execute(
             "UPDATE steps SET "
             "usage_input_tokens = usage_input_tokens + ?, "
             "usage_output_tokens = usage_output_tokens + ?, "
@@ -1061,7 +1081,61 @@ class SqliteStore(StorePort):
             (input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
              cost_usd, cost_basis, thinking_tokens, thinking_tokens, tid),
         )
+        return cursor.rowcount
+
+    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+        self._record_usage_nocommit(
+            tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+            cost_usd, cost_basis, thinking_tokens,
+        )
         self._conn.commit()
+
+    def _record_attribution_nocommit(self, tid, turn_count, tool_usage):
+        self._conn.execute(
+            "UPDATE steps SET turn_count = turn_count + ? WHERE id = ?", (turn_count, tid),
+        )
+        for tool, usage in tool_usage.items():
+            self._conn.execute(
+                "INSERT INTO step_tool_usage (step, tool, calls, bytes) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(step, tool) DO UPDATE SET "
+                "calls = calls + excluded.calls, bytes = bytes + excluded.bytes",
+                (tid, tool, usage.calls, usage.bytes),
+            )
+
+    def record_attribution(self, tid, turn_count, tool_usage):
+        self._record_attribution_nocommit(tid, turn_count, tool_usage)
+        self._conn.commit()
+
+    def tool_usage_for(self, step_id):
+        rows = self._conn.execute(
+            "SELECT tool, calls, bytes FROM step_tool_usage WHERE step = ?", (step_id,)
+        ).fetchall()
+        return {tool: ToolUsage(calls=calls, bytes=bytes_) for tool, calls, bytes_ in rows}
+
+    def usage_backfilled_logs(self):
+        rows = self._conn.execute("SELECT log_file FROM usage_backfill_log").fetchall()
+        return {r[0] for r in rows}
+
+    def record_backfilled_usage(self, log_file, step_id, usage, attribution):
+        stored = False
+        if step_id is not None:
+            rowcount = self._record_usage_nocommit(
+                step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                usage.thinking_tokens,
+            )
+            stored = rowcount > 0
+            if stored:
+                self._record_attribution_nocommit(
+                    step_id, attribution.turn_count, attribution.tool_usage
+                )
+        self._conn.execute(
+            "INSERT INTO usage_backfill_log (log_file, step, ingested_at) VALUES (?, ?, ?)",
+            (log_file, step_id, self._now()),
+        )
+        self._conn.commit()
+        return stored
 
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
                               id=None):

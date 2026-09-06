@@ -784,7 +784,7 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         for col in (
             "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
             "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis",
-            "usage_thinking_tokens",
+            "usage_thinking_tokens", "turn_count",
         ):
             self.assertIn(col, cols)
 
@@ -796,9 +796,24 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         self.assertEqual(t.usage_cost_usd, 0.0)
         self.assertIsNone(t.usage_cost_basis)
         self.assertIsNone(t.usage_thinking_tokens)
+        self.assertEqual(t.turn_count, 0)
 
         idx = store._conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_steps_outcome'"
+        ).fetchone()
+        self.assertIsNotNone(idx)
+
+    def test_existing_store_gains_step_tool_usage_and_backfill_log_tables(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+
+        for table in ("step_tool_usage", "usage_backfill_log"):
+            self.assertTrue(store._has_table(table))
+
+        idx = store._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+            "AND name = 'idx_step_tool_usage_tool'"
         ).fetchone()
         self.assertIsNotNone(idx)
 

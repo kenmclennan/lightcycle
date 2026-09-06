@@ -21,6 +21,7 @@ class RecordingFakeStore(FakeStore):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.record_usage_calls = []
+        self.record_attribution_calls = []
 
     def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
                       cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
@@ -28,6 +29,9 @@ class RecordingFakeStore(FakeStore):
             (tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
              cost_usd, cost_basis, thinking_tokens)
         )
+
+    def record_attribution(self, tid, turn_count, tool_usage):
+        self.record_attribution_calls.append((tid, turn_count, tool_usage))
 
 
 class RecordingFakeFs(FakeFs):
@@ -493,6 +497,46 @@ class TestBreakerGateUseCase(unittest.TestCase):
         breaker_port = FakeBreakerPort()
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
         self.assertEqual(store.record_usage_calls, [])
+
+    def test_a_dead_worker_with_a_step_and_a_log_causes_attribution_to_be_recorded(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "message": {"id": "msg-1", "content": [
+                    {"type": "tool_use", "id": "tu-1", "name": "Read"},
+                ]},
+            }),
+            json.dumps({
+                "type": "user",
+                "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "tu-1", "content": "hello"},
+                ]},
+            }),
+        ]
+        fs = FakeFs(files={"/l/1.log": "\n".join(lines).encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(len(store.record_attribution_calls), 1)
+        recorded_tid, turn_count, tool_usage = store.record_attribution_calls[0]
+        self.assertEqual(recorded_tid, tid)
+        self.assertEqual(turn_count, 1)
+        self.assertEqual(tool_usage["Read"].calls, 1)
+        self.assertEqual(tool_usage["Read"].bytes, len(b"hello"))
+
+    def test_a_dead_worker_with_no_step_causes_no_record_attribution_call(self):
+        store = RecordingFakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "log": "/l/1.log", "started": 0}]
+        )
+        fs = FakeFs(files={"/l/1.log": b'{"type":"result","modelUsage":{}}'})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.record_attribution_calls, [])
 
     def test_reaping_a_dead_worker_without_a_store_does_not_raise(self):
         workers = FakeWorkers(

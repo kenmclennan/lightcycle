@@ -1,3 +1,4 @@
+from lightcycle.domain.pool import AttributionEvent, ToolUsage, UsageEvent
 from lightcycle.domain.work import NodeSpec
 from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
 
@@ -554,6 +555,71 @@ class StoreContractBase:
         t = s.get_node(tid)
         self.assertEqual(t.usage_cost_basis, "list")
         self.assertEqual(t.usage_thinking_tokens, 5)
+
+    def test_record_attribution_roundtrips_turn_count_and_tool_usage(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_attribution(tid, 3, {"Read": ToolUsage(calls=2, bytes=100)})
+        t = s.get_node(tid)
+        self.assertEqual(t.turn_count, 3)
+        self.assertEqual(s.tool_usage_for(tid), {"Read": ToolUsage(calls=2, bytes=100)})
+
+    def test_record_attribution_second_call_adds_to_turn_count_and_existing_tool_rows(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_attribution(tid, 3, {"Read": ToolUsage(calls=2, bytes=100)})
+        s.record_attribution(tid, 1, {"Read": ToolUsage(calls=1, bytes=50)})
+        t = s.get_node(tid)
+        self.assertEqual(t.turn_count, 4)
+        self.assertEqual(s.tool_usage_for(tid), {"Read": ToolUsage(calls=3, bytes=150)})
+
+    def test_record_attribution_new_tool_adds_a_row_without_disturbing_existing_ones(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_attribution(tid, 1, {"Read": ToolUsage(calls=1, bytes=10)})
+        s.record_attribution(tid, 1, {"Grep": ToolUsage(calls=1, bytes=5)})
+        usage = s.tool_usage_for(tid)
+        self.assertEqual(usage["Read"], ToolUsage(calls=1, bytes=10))
+        self.assertEqual(usage["Grep"], ToolUsage(calls=1, bytes=5))
+
+    def test_record_backfilled_usage_with_step_id_writes_usage_attribution_and_ledger(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="list")
+        attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
+        stored = s.record_backfilled_usage("/l/x.log", tid, usage, attribution)
+        self.assertTrue(stored)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 5)
+        self.assertEqual(t.turn_count, 2)
+        self.assertEqual(s.tool_usage_for(tid), {"Read": ToolUsage(calls=1, bytes=10)})
+        self.assertIn("/l/x.log", s.usage_backfilled_logs())
+
+    def test_record_backfilled_usage_with_none_step_id_writes_only_the_ledger_row(self):
+        s = self.make_store()
+        usage = UsageEvent()
+        attribution = AttributionEvent()
+        stored = s.record_backfilled_usage("/l/unmatched.log", None, usage, attribution)
+        self.assertFalse(stored)
+        self.assertIn("/l/unmatched.log", s.usage_backfilled_logs())
+
+    def test_record_backfilled_usage_with_orphaned_step_id_reports_unstored_and_writes_only_the_ledger_row(self):
+        s = self.make_store()
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="list")
+        attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
+        stored = s.record_backfilled_usage("/l/orphaned.log", "does-not-exist", usage, attribution)
+        self.assertFalse(stored)
+        self.assertIn("/l/orphaned.log", s.usage_backfilled_logs())
+        self.assertEqual(s.tool_usage_for("does-not-exist"), {})
+
+    def test_usage_backfilled_logs_reflects_every_log_passed_matched_or_not(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_backfilled_usage("/l/matched.log", tid, UsageEvent(), AttributionEvent())
+        s.record_backfilled_usage("/l/unmatched.log", None, UsageEvent(), AttributionEvent())
+        self.assertEqual(
+            s.usage_backfilled_logs(), {"/l/matched.log", "/l/unmatched.log"}
+        )
 
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()

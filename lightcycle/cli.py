@@ -91,6 +91,7 @@ from lightcycle.application.flow import (
 )
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
+    BackfillUsageUseCase,
     BackupUseCase,
     BreakerGateUseCase,
     HookCompletionsUseCase,
@@ -210,6 +211,8 @@ COMMAND_GROUPS = [
         ("restore", "[<snapshot>] --force", "overwrite the live store from a backup snapshot "
          "(newest if omitted); refuses without --force or while lc start is running"),
         ("doctor", "[--json]", "read-only diagnostics: store fsck + pinned-bundle/config/origin drift"),
+        ("backfill-usage", "", "capture usage/attribution from historical worker logs in "
+         "$LC_HOME/logs that predate live capture"),
     ]),
     ("Plumbing (the loop uses these)", [
         ("advance", "<id> <outcome>", "create the next step for an outcome without closing"),
@@ -984,6 +987,21 @@ def cmd_doctor(argv):
             print("  %s%s" % (p.message, suffix))
     print("healthy" if report.healthy() else "unhealthy")
     return 0 if report.healthy() else 1
+
+
+def cmd_backfill_usage(argv):
+    ap = argparse.ArgumentParser(prog="lc backfill-usage")
+    ap.parse_args(argv)
+    resp = BackfillUsageUseCase(
+        _container.store, _container.fs, _container.workers, _container.config
+    ).execute()
+    print(
+        "backfilled %d/%d logs (%d matched, %d orphaned (step no longer exists), "
+        "%d unmatched, %d left for live capture)"
+        % (resp.stored, resp.total, resp.matched, resp.orphaned, resp.unmatched,
+           resp.skipped_pending)
+    )
+    return 0
 
 
 def cmd_inbox(argv):

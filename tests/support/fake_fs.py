@@ -160,3 +160,12 @@ class FakeFs:
     def append_run_log(self, text):
         path = os.path.join(self.ensure_logs_dir(), "run.log")
         self._files[path] = self._files.get(path, b"") + text.encode("utf-8")
+
+    def list_worker_log_files(self, root):
+        prefix = root + "/logs/"
+        return sorted(
+            f for f in self._files
+            if f.startswith(prefix)
+            and os.path.basename(f).startswith("worker-")
+            and f.endswith(".log")
+        )

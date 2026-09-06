@@ -69,3 +69,7 @@ class FsPort(ABC):
     @abstractmethod
     def append_run_log(self, text):
         pass
+
+    @abstractmethod
+    def list_worker_log_files(self, root):
+        pass

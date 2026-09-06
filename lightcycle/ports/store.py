@@ -166,6 +166,22 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def record_attribution(self, tid, turn_count, tool_usage):
+        pass
+
+    @abstractmethod
+    def tool_usage_for(self, step_id):
+        pass
+
+    @abstractmethod
+    def usage_backfilled_logs(self):
+        pass
+
+    @abstractmethod
+    def record_backfilled_usage(self, log_file, step_id, usage, attribution):
+        pass
+
+    @abstractmethod
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):
         pass
