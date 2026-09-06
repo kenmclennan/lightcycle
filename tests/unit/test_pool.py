@@ -127,11 +127,13 @@ class FakeSpawner:
 
 
 class FakeConfig:
-    def __init__(self, max_agents=4, max_boot=120, stall_seconds=1800, root="/grid"):
+    def __init__(self, max_agents=4, max_boot=120, stall_seconds=1800, root="/grid",
+                 poll_seconds=5):
         self._ma = max_agents
         self._mb = max_boot
         self._ss = stall_seconds
         self._root = root
+        self._ps = poll_seconds
 
     def max_agents(self):
         return self._ma
@@ -141,6 +143,9 @@ class FakeConfig:
 
     def stall_seconds(self):
         return self._ss
+
+    def poll_seconds(self):
+        return self._ps
 
     def engine_root(self):
         return self._root
@@ -919,6 +924,90 @@ class TestTick(unittest.TestCase):
         ).execute(TickInput(now=1000.0))
         self.assertIsNone(result.backed_up)
         self.assertEqual(result.backup_pruned, [])
+
+    def test_active_seconds_credited_for_covered_step_under_the_cap(self):
+        s = FakeStore()
+        tid = s.create_step("b1", step="build", role="agent")
+        s.claim_ready("agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
+                      "started": 900.0}],
+            alive_pids={1},
+        )
+        TickUseCase(s, workers, FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1005.0, since=1000.0)
+        )
+        self.assertEqual(s.get_node(tid).active_seconds, 5.0)
+
+    def test_active_seconds_capped_on_a_large_gap(self):
+        s = FakeStore()
+        tid = s.create_step("b1", step="build", role="agent")
+        s.claim_ready("agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
+                      "started": 500.0}],
+            alive_pids={1},
+        )
+        TickUseCase(s, workers, FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1000.0, since=600.0)
+        )
+        self.assertEqual(s.get_node(tid).active_seconds, 15.0)
+
+    def test_active_seconds_credits_every_covered_step_the_same_delta(self):
+        s = FakeStore()
+        tid_a = s.create_step("b1", step="build", role="agent")
+        tid_b = s.create_step("b2", step="build", role="agent")
+        s.claim_ready("agent")
+        s.claim_ready("agent")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid_a, "started": 900.0},
+                {"spawnid": "sp-2", "role": "agent", "pid": 2, "step": tid_b, "started": 900.0},
+            ],
+            alive_pids={1, 2},
+        )
+        TickUseCase(s, workers, FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1005.0, since=1000.0)
+        )
+        self.assertEqual(s.get_node(tid_a).active_seconds, 5.0)
+        self.assertEqual(s.get_node(tid_b).active_seconds, 5.0)
+
+    def test_active_seconds_stays_none_without_a_live_worker(self):
+        s = FakeStore()
+        tid = s.create_step("b1", step="build", role="agent")
+        s.claim_ready("agent")
+        TickUseCase(s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1005.0, since=1000.0)
+        )
+        self.assertIsNone(s.get_node(tid).active_seconds)
+
+    def test_active_seconds_untouched_when_since_is_none(self):
+        s = FakeStore()
+        tid = s.create_step("b1", step="build", role="agent")
+        s.claim_ready("agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
+                      "started": 900.0}],
+            alive_pids={1},
+        )
+        TickUseCase(s, workers, FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1005.0)
+        )
+        self.assertIsNone(s.get_node(tid).active_seconds)
+
+    def test_active_seconds_not_credited_when_delta_is_not_positive(self):
+        s = FakeStore()
+        tid = s.create_step("b1", step="build", role="agent")
+        s.claim_ready("agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
+                      "started": 900.0}],
+            alive_pids={1},
+        )
+        TickUseCase(s, workers, FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1000.0, since=1000.0)
+        )
+        self.assertIsNone(s.get_node(tid).active_seconds)
 
 
 if __name__ == "__main__":
