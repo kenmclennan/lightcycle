@@ -89,7 +89,7 @@ BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
 HUB_SHORTCUTS = (
     ("[/]", "switch tab"),
     ("↑↓", "scroll"),
-    ("enter/→", "open node"),
+    ("enter/→", "open"),
     ("b", "open blocker"),
     ("esc/←", "back"),
     ("tab", "backlog"),
