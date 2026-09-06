@@ -3,6 +3,7 @@ import unittest
 
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
 from lightcycle.adapters.tui.hub import ArtifactsTable, HierarchyPagingTable, NodeHubScreen
+from lightcycle.adapters.tui.row_grid import scrollbar_reservation_width
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -85,6 +86,11 @@ class TestPriorityTableScrollbarDoesNotClipTime(unittest.TestCase):
         self.assertFalse(table.show_horizontal_scrollbar)
         self.assertIn("14m", _frame_text(session))
 
+    def test_scrollbar_reservation_width_matches_mounted_gutter(self):
+        session = self._launch(_SHORT_COUNT)
+        table = session.app.query_one(PriorityTable)
+        self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(PriorityTable))
+
 
 class TestBacklogTableScrollbarDoesNotClipTitle(unittest.TestCase):
     _TITLE = "Widget"
@@ -110,6 +116,11 @@ class TestBacklogTableScrollbarDoesNotClipTitle(unittest.TestCase):
         self.assertFalse(table.show_horizontal_scrollbar)
         self.assertIn(self._TITLE, _frame_text(session))
 
+    def test_scrollbar_reservation_width_matches_mounted_gutter(self):
+        session = self._launch(_SHORT_COUNT)
+        table = session.app.query_one(BacklogTable)
+        self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(BacklogTable))
+
 
 class TestHierarchyTableScrollbarDoesNotClipRole(unittest.TestCase):
     _ROLE = "coder"
@@ -134,6 +145,11 @@ class TestHierarchyTableScrollbarDoesNotClipRole(unittest.TestCase):
         self.assertFalse(table.show_horizontal_scrollbar)
         self.assertIn(self._ROLE, _frame_text(session))
 
+    def test_scrollbar_reservation_width_matches_mounted_gutter(self):
+        session = self._launch(_SHORT_COUNT)
+        table = session.app.screen.query_one(HierarchyPagingTable)
+        self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(HierarchyPagingTable))
+
 
 class TestArtifactsTableScrollbarDoesNotClipValue(unittest.TestCase):
     _VALUE = "shortval"
@@ -157,3 +173,8 @@ class TestArtifactsTableScrollbarDoesNotClipValue(unittest.TestCase):
         self.assertTrue(table.show_vertical_scrollbar)
         self.assertFalse(table.show_horizontal_scrollbar)
         self.assertIn(self._VALUE, _frame_text(session))
+
+    def test_scrollbar_reservation_width_matches_mounted_gutter(self):
+        session = self._launch(_SHORT_COUNT)
+        table = session.app.screen.query_one(ArtifactsTable)
+        self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(ArtifactsTable))
