@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from lightcycle.domain.runs import Pass
 from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.state import State
 
@@ -11,41 +10,10 @@ class HierarchyRow:
     depth: int
 
 
-@dataclass(frozen=True)
-class PassHeader:
-    pass_record: Pass
-
-    @property
-    def id(self):
-        return self.pass_record.id
-
-    @property
-    def type(self):
-        return "pass"
-
-    @property
-    def title(self):
-        return "Pass %d" % self.pass_record.n
-
-    @property
-    def state(self):
-        return State.DONE if self.pass_record.state == "closed" else State.IN_PROGRESS
-
-    @property
-    def blocked_by(self):
-        return []
-
-
-def compose_hierarchy(root, steps_by_item, passes_by_item):
-    passes = {p.id: p for p in passes_by_item.get(root.id, ())}
+def compose_hierarchy(root, steps_by_item):
     rows = [HierarchyRow(root, 0)]
-    headed = set()
     for step in steps_by_item.get(root.id, []):
-        pid = step.pass_id if step.pass_id in passes else None
-        if pid is not None and pid not in headed:
-            headed.add(pid)
-            rows.append(HierarchyRow(PassHeader(passes[pid]), 1))
-        rows.append(HierarchyRow(step, 2 if pid is not None else 1))
+        rows.append(HierarchyRow(step, 1))
     return rows
 
 

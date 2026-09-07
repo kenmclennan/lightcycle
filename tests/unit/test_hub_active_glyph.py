@@ -51,7 +51,9 @@ def test_active_glyph_animation_restarts_after_floor_recovers_on_width_refresh()
         screen._active_glyph_timer.stop()
         screen._active_glyph_timer = None
 
-        session.run(lambda: screen._render_hierarchy(screen._last_rows, initial=True))
+        session.run(
+            lambda: screen._render_hierarchy(screen._last_rows, screen._last_multi_pass, initial=True)
+        )
         session.run(screen._apply_tab_visibility)
         session.pause()
 
