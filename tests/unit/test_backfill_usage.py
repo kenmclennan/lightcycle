@@ -44,6 +44,9 @@ class FakeConfig:
     def data_root(self):
         return self._root
 
+    def usage_pricing(self):
+        return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
+
 
 class TestBackfillUsageUseCase(unittest.TestCase):
     def test_first_run_records_matched_and_unmatched_logs(self):
@@ -65,6 +68,8 @@ class TestBackfillUsageUseCase(unittest.TestCase):
         self.assertEqual(resp.skipped_pending, 0)
         self.assertEqual(resp.orphaned, 0)
         self.assertEqual(resp.stored, 2)
+        self.assertEqual(resp.reclassified, 0)
+        self.assertEqual(resp.recovered, 0)
         self.assertEqual(
             store.usage_backfilled_logs(),
             {"/home/logs/worker-a.log", "/home/logs/worker-b.log", "/home/logs/worker-c.log"},
@@ -114,6 +119,73 @@ class TestBackfillUsageUseCase(unittest.TestCase):
         self.assertEqual(resp.unmatched, 0)
         self.assertEqual(resp.skipped_pending, 1)
         self.assertEqual(store.usage_backfilled_logs(), set())
+
+
+def _assistant_usage_log(input_tokens):
+    return json.dumps({
+        "type": "assistant",
+        "message": {
+            "id": "msg-1", "content": [],
+            "usage": {
+                "input_tokens": input_tokens, "output_tokens": 0,
+                "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+            },
+        },
+    }).encode()
+
+
+def _result_log():
+    return b'{"type":"result","modelUsage":{"claude-sonnet-5":{"inputTokens":5,"costUSD":0.1,"costBasis":"list"}}}'
+
+
+class TestBackfillUsageReclassification(unittest.TestCase):
+    def test_an_unclassified_row_that_still_has_no_result_line_recovers_and_prices_usage(self):
+        store = FakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        store.set_model(tid, "sonnet")
+        log_file = "/home/logs/worker-a.log"
+        fs = FakeFs(files={log_file: _assistant_usage_log(1_000_000)})
+        store._backfill_log[log_file] = (tid, None)
+        workers = FakeWorkers()
+
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+
+        self.assertEqual(resp.reclassified, 1)
+        self.assertEqual(resp.recovered, 1)
+        t = store.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 1_000_000)
+        self.assertAlmostEqual(t.usage_cost_usd, 2.0)
+        self.assertEqual(t.usage_cost_basis, "derived")
+
+    def test_an_unclassified_row_that_turns_out_to_have_a_result_line_only_flips_classification(self):
+        store = FakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        log_file = "/home/logs/worker-a.log"
+        fs = FakeFs(files={log_file: _result_log()})
+        store._backfill_log[log_file] = (tid, None)
+        workers = FakeWorkers()
+
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+
+        self.assertEqual(resp.reclassified, 1)
+        self.assertEqual(resp.recovered, 0)
+        t = store.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 0)
+        self.assertEqual(t.usage_cost_usd, 0.0)
+
+    def test_an_empty_unclassified_set_leaves_the_main_loop_behavior_unchanged(self):
+        store = FakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        fs = FakeFs(files={"/home/logs/worker-a.log": _claim_result_log(tid)})
+        workers = FakeWorkers()
+
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+
+        self.assertEqual(resp.reclassified, 0)
+        self.assertEqual(resp.recovered, 0)
+        self.assertEqual(resp.total, 1)
+        self.assertEqual(resp.matched, 1)
+        self.assertEqual(resp.stored, 1)
 
 
 if __name__ == "__main__":

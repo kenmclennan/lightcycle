@@ -111,6 +111,9 @@ class FakeConfig:
     def max_agents(self):
         return self._max_agents
 
+    def usage_pricing(self):
+        return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
+
 
 class FakeSpawner:
     def __init__(self):

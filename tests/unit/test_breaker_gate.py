@@ -22,6 +22,7 @@ class RecordingFakeStore(FakeStore):
         super().__init__(*args, **kwargs)
         self.record_usage_calls = []
         self.record_attribution_calls = []
+        self.get_node_calls = []
 
     def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
                       cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
@@ -32,6 +33,10 @@ class RecordingFakeStore(FakeStore):
 
     def record_attribution(self, tid, turn_count, tool_usage):
         self.record_attribution_calls.append((tid, turn_count, tool_usage))
+
+    def get_node(self, tid):
+        self.get_node_calls.append(tid)
+        return super().get_node(tid)
 
 
 class RecordingFakeFs(FakeFs):
@@ -105,6 +110,9 @@ class FakeConfig:
 
     def spin_cap(self):
         return self._spin_cap
+
+    def usage_pricing(self):
+        return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
 
 
 class FakeSpinPort:
@@ -537,6 +545,86 @@ class TestBreakerGateUseCase(unittest.TestCase):
         breaker_port = FakeBreakerPort()
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
         self.assertEqual(store.record_attribution_calls, [])
+
+    def test_a_result_line_log_skips_the_model_lookup_entirely(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        line = json.dumps({
+            "type": "result",
+            "modelUsage": {"claude-sonnet-5": {"inputTokens": 68, "costUSD": 0.5, "costBasis": "list"}},
+        })
+        fs = FakeFs(files={"/l/1.log": line.encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.get_node_calls, [])
+        self.assertEqual(len(store.record_usage_calls), 1)
+
+    def test_no_result_line_with_recoverable_usage_looks_up_the_model_and_derives_cost(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        store.set_model(tid, "sonnet")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        line = json.dumps({
+            "type": "assistant",
+            "message": {
+                "id": "msg-1", "content": [],
+                "usage": {
+                    "input_tokens": 1_000_000, "output_tokens": 0,
+                    "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+                },
+            },
+        })
+        fs = FakeFs(files={"/l/1.log": line.encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.get_node_calls, [tid])
+        self.assertEqual(len(store.record_usage_calls), 1)
+        recorded = store.record_usage_calls[0]
+        self.assertEqual(recorded[0], tid)
+        self.assertEqual(recorded[1], 1_000_000)
+        self.assertAlmostEqual(recorded[5], 2.0)
+        self.assertEqual(recorded[6], "derived")
+
+    def test_a_vanished_step_still_records_usage_with_no_derived_cost(self):
+        store = RecordingFakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": "gone", "log": "/l/1.log", "started": 0}]
+        )
+        line = json.dumps({
+            "type": "assistant",
+            "message": {
+                "id": "msg-1", "content": [],
+                "usage": {"input_tokens": 5, "output_tokens": 0,
+                          "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
+            },
+        })
+        fs = FakeFs(files={"/l/1.log": line.encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.get_node_calls, ["gone"])
+        self.assertEqual(len(store.record_usage_calls), 1)
+        recorded = store.record_usage_calls[0]
+        self.assertEqual(recorded[5], 0.0)
+        self.assertIsNone(recorded[6])
+
+    def test_no_result_line_and_nothing_recoverable_skips_the_model_lookup(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        fs = FakeFs(files={"/l/1.log": b'{"type":"assistant","message":{"id":"msg-1","content":[]}}'})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.get_node_calls, [])
+        self.assertEqual(
+            store.record_usage_calls, [(tid, 0, 0, 0, 0, 0.0, None, None)],
+        )
 
     def test_reaping_a_dead_worker_without_a_store_does_not_raise(self):
         workers = FakeWorkers(

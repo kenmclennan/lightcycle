@@ -64,6 +64,10 @@ _SEED_KEYS = [
     ("workflow-retention", "5"),
     ("max-title-length", "72"),
     ("personal-origin", ""),
+    ("price-sonnet-input-per-mtok", "2.00"),
+    ("price-sonnet-output-per-mtok", "10.00"),
+    ("price-sonnet-cache-write-per-mtok", "2.50"),
+    ("price-sonnet-cache-read-per-mtok", "0.20"),
 ]
 
 
@@ -359,6 +363,28 @@ class Config:
 
     def max_title_length(self):
         return self._required_int("max-title-length")
+
+    def price_sonnet_input_per_mtok(self):
+        return self._required_float("price-sonnet-input-per-mtok")
+
+    def price_sonnet_output_per_mtok(self):
+        return self._required_float("price-sonnet-output-per-mtok")
+
+    def price_sonnet_cache_write_per_mtok(self):
+        return self._required_float("price-sonnet-cache-write-per-mtok")
+
+    def price_sonnet_cache_read_per_mtok(self):
+        return self._required_float("price-sonnet-cache-read-per-mtok")
+
+    def usage_pricing(self):
+        return {
+            "sonnet": {
+                "input": self.price_sonnet_input_per_mtok(),
+                "output": self.price_sonnet_output_per_mtok(),
+                "cache_write": self.price_sonnet_cache_write_per_mtok(),
+                "cache_read": self.price_sonnet_cache_read_per_mtok(),
+            },
+        }
 
     def personal_origin(self):
         v = self.load_config().get("personal-origin")

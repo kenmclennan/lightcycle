@@ -4,8 +4,10 @@ from typing import List
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import (
     Breaker, WorkerPool, parse_attribution_event, parse_rate_limit_event, parse_usage_event,
+    resolve_usage,
 )
 from lightcycle.domain.pool.worker_session import saw_session_activity
+from lightcycle.ports.store import NodeNotFoundError
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,7 @@ class BreakerGateUseCase:
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
         was_probing = state.is_probing(now)
+        rates = self._config.usage_pricing()
 
         rejected_reset_ats = []
         any_success = False
@@ -95,12 +98,22 @@ class BreakerGateUseCase:
             no_work = not saw_session_activity(self._fs.iter_lines(w.log))
             if self._store is not None and w.step is not None:
                 usage = parse_usage_event(self._fs.iter_lines(w.log))
+                attribution = parse_attribution_event(self._fs.iter_lines(w.log))
+                if not usage.has_result_line and (
+                    attribution.recovered_input_tokens or attribution.recovered_output_tokens
+                    or attribution.recovered_cache_read_tokens
+                    or attribution.recovered_cache_creation_tokens
+                ):
+                    try:
+                        model = self._store.get_node(w.step).model
+                    except NodeNotFoundError:
+                        model = None
+                    usage = resolve_usage(usage, attribution, model, rates)
                 self._store.record_usage(
                     w.step, usage.input_tokens, usage.output_tokens,
                     usage.cache_read_tokens, usage.cache_creation_tokens, usage.cost_usd,
                     usage.cost_basis, usage.thinking_tokens,
                 )
-                attribution = parse_attribution_event(self._fs.iter_lines(w.log))
                 self._store.record_attribution(
                     w.step, attribution.turn_count, attribution.tool_usage
                 )

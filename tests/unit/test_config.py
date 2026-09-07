@@ -211,20 +211,7 @@ class TestEnsureConfig(unittest.TestCase):
     def test_noop_returns_false_when_all_keys_present(self):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
-        all_keys = (
-            "projects: /p\nspecs: /s\nspecs-remote: git@github.com:x/specs.git\n"
-            "branch-prefix: feat\nshortcode: PROJ\n"
-            "default-origin: lightcycle\n"
-            "workflows-remote: git@github.com:kenmclennan/lightcycle-workflows.git\nmax-agents: 5\n"
-            "worktree-retries: 6\nworktree-retry-sleep: 0.25\nmax-boot-seconds: 120\n"
-            "max-session-seconds: 1800\nstall-seconds: 1800\nprobe-cooldown-seconds: 1800\n"
-            "spin-cap: 3\n"
-            "poll-seconds: 5\nworker-history: 20\neditor: vi\n"
-            "retro-interval-reflections: 20\n"
-            "backups-dir: ~/.lightcycle-backups\nbackup-interval-minutes: 15\n"
-            "backup-retention: 96\nworkflow-retention: 5\nmax-title-length: 72\n"
-            "personal-origin: \n"
-        )
+        all_keys = "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)
         Path(p).write_text(all_keys)
         c = Config(environ={"LC_CONFIG": p})
         result = c.ensure_config()
@@ -528,6 +515,31 @@ class TestResolvedSettings(unittest.TestCase):
             s = settings[key]
             self.assertEqual(s.state, "default", key)
             self.assertTrue(os.path.isabs(s.value), key)
+
+
+class TestUsagePricing(unittest.TestCase):
+    def test_returns_sonnet_rates_parsed_as_floats_from_a_config_file_that_sets_them(self):
+        c = _cfg(
+            price_sonnet_input_per_mtok="3.00",
+            price_sonnet_output_per_mtok="15.00",
+            price_sonnet_cache_write_per_mtok="3.75",
+            price_sonnet_cache_read_per_mtok="0.30",
+        )
+        rates = c.usage_pricing()
+        self.assertEqual(rates, {
+            "sonnet": {
+                "input": 3.00, "output": 15.00, "cache_write": 3.75, "cache_read": 0.30,
+            },
+        })
+
+    def test_a_missing_price_key_raises_config_error(self):
+        c = _cfg(
+            price_sonnet_input_per_mtok="3.00",
+            price_sonnet_output_per_mtok="15.00",
+            price_sonnet_cache_write_per_mtok="3.75",
+        )
+        with self.assertRaises(ConfigError):
+            c.usage_pricing()
 
 
 if __name__ == "__main__":

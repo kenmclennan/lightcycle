@@ -119,6 +119,10 @@ def write_config(projects=None, specs=None):
         "backup-interval-minutes: 15",
         "backup-retention: 96",
         "max-title-length: 72",
+        "price-sonnet-input-per-mtok: 2.00",
+        "price-sonnet-output-per-mtok: 10.00",
+        "price-sonnet-cache-write-per-mtok: 2.50",
+        "price-sonnet-cache-read-per-mtok: 0.20",
     ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p

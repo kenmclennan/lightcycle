@@ -94,7 +94,8 @@ CREATE INDEX IF NOT EXISTS idx_step_tool_usage_tool ON step_tool_usage(tool);
 CREATE TABLE IF NOT EXISTS usage_backfill_log (
     log_file    TEXT PRIMARY KEY,
     step        TEXT,
-    ingested_at TEXT
+    ingested_at TEXT,
+    had_result_line INTEGER
 );
 
 
@@ -351,6 +352,9 @@ class SqliteStore(StorePort):
             ("usage_cost_basis", "TEXT"),
             ("usage_thinking_tokens", "INTEGER"),
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
+        ),
+        "usage_backfill_log": (
+            ("had_result_line", "INTEGER"),
         ),
     }
 
@@ -1131,11 +1135,42 @@ class SqliteStore(StorePort):
                     step_id, attribution.turn_count, attribution.tool_usage
                 )
         self._conn.execute(
-            "INSERT INTO usage_backfill_log (log_file, step, ingested_at) VALUES (?, ?, ?)",
-            (log_file, step_id, self._now()),
+            "INSERT INTO usage_backfill_log (log_file, step, ingested_at, had_result_line) "
+            "VALUES (?, ?, ?, ?)",
+            (log_file, step_id, self._now(), 1 if usage.has_result_line else 0),
         )
         self._conn.commit()
         return stored
+
+    def _seed_unclassified_backfill_row(self, log_file, step_id):
+        self._conn.execute(
+            "INSERT INTO usage_backfill_log (log_file, step, ingested_at, had_result_line) "
+            "VALUES (?, ?, ?, NULL)",
+            (log_file, step_id, self._now()),
+        )
+        self._conn.commit()
+
+    def unclassified_backfill_logs(self):
+        rows = self._conn.execute(
+            "SELECT log_file, step FROM usage_backfill_log WHERE had_result_line IS NULL"
+        ).fetchall()
+        return [(r[0], r[1]) for r in rows]
+
+    def reclassify_backfilled_log(self, log_file, step_id, usage, attribution):
+        recovered = False
+        if not usage.has_result_line and step_id is not None:
+            rowcount = self._record_usage_nocommit(
+                step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                usage.thinking_tokens,
+            )
+            recovered = rowcount > 0
+        self._conn.execute(
+            "UPDATE usage_backfill_log SET had_result_line = ? WHERE log_file = ?",
+            (1 if usage.has_result_line else 0, log_file),
+        )
+        self._conn.commit()
+        return recovered
 
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
                               id=None):

@@ -40,6 +40,9 @@ class FakeConfig:
     def reconcile_config(self):
         pass
 
+    def usage_pricing(self):
+        return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
+
 
 class FakeContainer:
     def __init__(self, store=None, fs=None, workers=None, config=None):
@@ -64,6 +67,24 @@ class TestCmdBackfillUsage(unittest.TestCase):
             rc, out, err = call(cli.main, "backfill-usage")
         self.assertEqual(rc, 1)
         self.assertIn("workers may not run 'backfill-usage'", err)
+
+
+class TestCmdBackfillUsageSummary(unittest.TestCase):
+    def test_printed_summary_includes_reclassified_and_recovered_counts(self):
+        store = FakeStore()
+        store._backfill_log["/l/a.log"] = ("s-1", True)
+        store._backfill_log["/l/b.log"] = ("s-2", False)
+        fake_resp = mock.Mock(
+            stored=1, total=2, matched=1, orphaned=0, unmatched=1, skipped_pending=0,
+            reclassified=122, recovered=118,
+        )
+        with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)), \
+                mock.patch.object(cli, "BackfillUsageUseCase") as UseCase:
+            UseCase.return_value.execute.return_value = fake_resp
+            rc, out, err = call(cli.main, "backfill-usage")
+        self.assertEqual(rc, 0)
+        self.assertIn("122/2 ledger rows reclassified", out)
+        self.assertIn("118 recovered usage", out)
 
 
 if __name__ == "__main__":

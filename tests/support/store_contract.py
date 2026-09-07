@@ -621,6 +621,74 @@ class StoreContractBase:
             s.usage_backfilled_logs(), {"/l/matched.log", "/l/unmatched.log"}
         )
 
+    def test_record_backfilled_usage_writes_had_result_line_matching_the_usage_event(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_backfilled_usage(
+            "/l/with-result.log", tid, UsageEvent(has_result_line=True), AttributionEvent()
+        )
+        s.record_backfilled_usage(
+            "/l/without-result.log", tid, UsageEvent(has_result_line=False), AttributionEvent()
+        )
+        self.assertEqual(s.unclassified_backfill_logs(), [])
+
+    def test_unclassified_backfill_logs_returns_only_rows_with_no_classification(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_backfilled_usage(
+            "/l/classified.log", tid, UsageEvent(has_result_line=True), AttributionEvent()
+        )
+        s._seed_unclassified_backfill_row("/l/unclassified.log", tid)
+        self.assertEqual(s.unclassified_backfill_logs(), [("/l/unclassified.log", tid)])
+
+    def test_reclassify_with_a_result_line_only_flips_classification_leaving_usage_untouched(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_usage(tid, 1, 1, 1, 1, 1.0, "list", None)
+        s._seed_unclassified_backfill_row("/l/x.log", tid)
+        before = s.get_node(tid).usage_cost_usd
+
+        recovered = s.reclassify_backfilled_log(
+            "/l/x.log", tid, UsageEvent(has_result_line=True), AttributionEvent()
+        )
+
+        self.assertFalse(recovered)
+        after = s.get_node(tid).usage_cost_usd
+        self.assertEqual(before, after)
+        self.assertEqual(s.unclassified_backfill_logs(), [])
+
+    def test_reclassify_with_no_result_line_adds_usage_and_flips_classification(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s._seed_unclassified_backfill_row("/l/x.log", tid)
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="derived")
+        attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
+
+        recovered = s.reclassify_backfilled_log("/l/x.log", tid, usage, attribution)
+
+        self.assertTrue(recovered)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 5)
+        self.assertEqual(s.unclassified_backfill_logs(), [])
+
+    def test_reclassify_leaves_attribution_already_recorded_at_original_ingest_untouched(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_attribution(tid, 246, {"Read": ToolUsage(calls=3, bytes=100)})
+        s._seed_unclassified_backfill_row("/l/x.log", tid)
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="derived")
+        attribution = AttributionEvent(
+            turn_count=246, tool_usage={"Read": ToolUsage(calls=3, bytes=100)}
+        )
+
+        recovered = s.reclassify_backfilled_log("/l/x.log", tid, usage, attribution)
+
+        self.assertTrue(recovered)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 5)
+        self.assertEqual(t.turn_count, 246)
+        self.assertEqual(s.tool_usage_for(tid), {"Read": ToolUsage(calls=3, bytes=100)})
+
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()
         open_tid = self._step(s, "open step")

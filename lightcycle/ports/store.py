@@ -182,6 +182,14 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def unclassified_backfill_logs(self):
+        pass
+
+    @abstractmethod
+    def reclassify_backfilled_log(self, log_file, step_id, usage, attribution):
+        pass
+
+    @abstractmethod
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):
         pass

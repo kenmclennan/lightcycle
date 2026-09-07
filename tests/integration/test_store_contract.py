@@ -826,6 +826,24 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         t = store.get_step("s-1")
         self.assertEqual(t.usage_input_tokens, 0)
 
+    def test_existing_backfill_log_row_gains_had_result_line_as_null(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        SqliteStore(self._config(root))
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.execute(
+            "INSERT INTO usage_backfill_log (log_file, step, ingested_at) "
+            "VALUES ('/l/legacy.log', 's-1', '2026-01-01')"
+        )
+        conn.commit()
+        conn.close()
+
+        store = SqliteStore(self._config(root))
+
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(usage_backfill_log)").fetchall()}
+        self.assertIn("had_result_line", cols)
+        self.assertEqual(store.unclassified_backfill_logs(), [("/l/legacy.log", "s-1")])
+
 
 if __name__ == "__main__":
     unittest.main()

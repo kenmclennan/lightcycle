@@ -12,6 +12,7 @@ class UsageEvent:
     cost_usd: float = 0.0
     cost_basis: Optional[str] = None
     thinking_tokens: Optional[int] = None
+    has_result_line: bool = False
 
 
 def parse_usage_event(lines) -> UsageEvent:
@@ -56,4 +57,37 @@ def _from_model_usage(model_usage) -> UsageEvent:
         cost_usd=cost_usd,
         cost_basis=cost_basis,
         thinking_tokens=thinking_tokens,
+        has_result_line=True,
+    )
+
+
+def price_tokens(model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, rates):
+    model_rates = rates.get(model)
+    if model_rates is None:
+        return 0.0, None
+    cost = (
+        input_tokens / 1_000_000 * model_rates["input"]
+        + output_tokens / 1_000_000 * model_rates["output"]
+        + cache_read_tokens / 1_000_000 * model_rates["cache_read"]
+        + cache_creation_tokens / 1_000_000 * model_rates["cache_write"]
+    )
+    return cost, "derived"
+
+
+def resolve_usage(usage, attribution, model, rates) -> UsageEvent:
+    if usage.has_result_line:
+        return usage
+    if not (attribution.recovered_input_tokens or attribution.recovered_output_tokens
+            or attribution.recovered_cache_read_tokens or attribution.recovered_cache_creation_tokens):
+        return usage
+    cost_usd, cost_basis = price_tokens(
+        model, attribution.recovered_input_tokens, attribution.recovered_output_tokens,
+        attribution.recovered_cache_read_tokens, attribution.recovered_cache_creation_tokens, rates,
+    )
+    return UsageEvent(
+        input_tokens=attribution.recovered_input_tokens,
+        output_tokens=attribution.recovered_output_tokens,
+        cache_read_tokens=attribution.recovered_cache_read_tokens,
+        cache_creation_tokens=attribution.recovered_cache_creation_tokens,
+        cost_usd=cost_usd, cost_basis=cost_basis, thinking_tokens=None,
     )
