@@ -590,7 +590,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         self.assertAlmostEqual(recorded[5], 2.0)
         self.assertEqual(recorded[6], "derived")
 
-    def test_a_vanished_step_still_records_usage_with_no_derived_cost(self):
+    def test_a_vanished_step_looks_up_the_model_but_records_no_usage_or_attribution(self):
         store = RecordingFakeStore()
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": "gone", "log": "/l/1.log", "started": 0}]
@@ -607,10 +607,47 @@ class TestBreakerGateUseCase(unittest.TestCase):
         breaker_port = FakeBreakerPort()
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
         self.assertEqual(store.get_node_calls, ["gone"])
-        self.assertEqual(len(store.record_usage_calls), 1)
-        recorded = store.record_usage_calls[0]
-        self.assertEqual(recorded[5], 0.0)
-        self.assertIsNone(recorded[6])
+        self.assertEqual(store.record_usage_calls, [])
+        self.assertEqual(store.record_attribution_calls, [])
+
+    def test_a_vanished_step_creates_no_orphan_step_tool_usage_row(self):
+        store = FakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": "gone", "log": "/l/1.log", "started": 0}]
+        )
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "message": {"id": "msg-1", "content": [
+                    {"type": "tool_use", "id": "tu-1", "name": "Read"},
+                ]},
+            }),
+            json.dumps({
+                "type": "user",
+                "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "tu-1", "content": "hello"},
+                ]},
+            }),
+        ]
+        fs = FakeFs(files={"/l/1.log": "\n".join(lines).encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.tool_usage_for("gone"), {})
+
+    def test_a_dead_worker_with_a_step_and_usage_results_in_one_ledger_entry(self):
+        store = FakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        line = json.dumps({
+            "type": "result",
+            "modelUsage": {"claude-sonnet-5": {"inputTokens": 68, "costUSD": 0.5, "costBasis": "list"}},
+        })
+        fs = FakeFs(files={"/l/1.log": line.encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(store.usage_backfilled_logs(), {"/l/1.log"})
 
     def test_no_result_line_and_nothing_recoverable_skips_the_model_lookup(self):
         store = RecordingFakeStore()

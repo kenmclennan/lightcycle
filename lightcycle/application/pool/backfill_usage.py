@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from lightcycle.domain.pool import (
     extract_claimed_step, parse_attribution_event, parse_usage_event, resolve_usage,
+    sum_attribution_events, sum_usage_events,
 )
 from lightcycle.ports.store import NodeNotFoundError
 
@@ -16,6 +17,9 @@ class BackfillUsageResponse:
     stored: int
     reclassified: int
     recovered: int
+    repair_examined: int = 0
+    repair_corrected: int = 0
+    repair_missing_logs: int = 0
 
 
 class BackfillUsageUseCase:
@@ -31,7 +35,46 @@ class BackfillUsageUseCase:
         except NodeNotFoundError:
             return None
 
-    def execute(self) -> BackfillUsageResponse:
+    def _repair(self, rates):
+        examined = corrected = missing_logs = 0
+        for step in self._store.all_steps_including_done():
+            log_files = self._store.logs_for_step(step.id)
+            if not log_files:
+                continue
+            examined += 1
+            usage_events = []
+            attribution_events = []
+            for log_file in log_files:
+                if not self._fs.exists(log_file):
+                    missing_logs += 1
+                    continue
+                usage = parse_usage_event(self._fs.iter_lines(log_file))
+                attribution = parse_attribution_event(self._fs.iter_lines(log_file))
+                if not usage.has_result_line:
+                    usage = resolve_usage(usage, attribution, step.model, rates)
+                usage_events.append(usage)
+                attribution_events.append(attribution)
+            usage_totals = sum_usage_events(usage_events)
+            turn_count, tool_usage_totals = sum_attribution_events(attribution_events)
+            current_tool_usage = self._store.tool_usage_for(step.id)
+            if (
+                usage_totals.input_tokens != step.usage_input_tokens
+                or usage_totals.output_tokens != step.usage_output_tokens
+                or usage_totals.cache_read_tokens != step.usage_cache_read_tokens
+                or usage_totals.cache_creation_tokens != step.usage_cache_creation_tokens
+                or usage_totals.cost_usd != step.usage_cost_usd
+                or usage_totals.cost_basis != step.usage_cost_basis
+                or usage_totals.thinking_tokens != step.usage_thinking_tokens
+                or turn_count != step.turn_count
+                or tool_usage_totals != current_tool_usage
+            ):
+                self._store.overwrite_usage_and_attribution(
+                    step.id, usage_totals, turn_count, tool_usage_totals
+                )
+                corrected += 1
+        return examined, corrected, missing_logs
+
+    def execute(self, repair=False) -> BackfillUsageResponse:
         root = self._config.data_root()
         files = self._fs.list_worker_log_files(root)
         already_ingested = self._store.usage_backfilled_logs()
@@ -76,7 +119,13 @@ class BackfillUsageUseCase:
                 else:
                     orphaned += 1
 
+        repair_examined = repair_corrected = repair_missing_logs = 0
+        if repair:
+            repair_examined, repair_corrected, repair_missing_logs = self._repair(rates)
+
         return BackfillUsageResponse(
             total=total, matched=matched, unmatched=unmatched, skipped_pending=skipped_pending,
             orphaned=orphaned, stored=stored, reclassified=reclassified, recovered=recovered,
+            repair_examined=repair_examined, repair_corrected=repair_corrected,
+            repair_missing_logs=repair_missing_logs,
         )

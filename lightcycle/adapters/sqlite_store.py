@@ -1172,6 +1172,31 @@ class SqliteStore(StorePort):
         self._conn.commit()
         return recovered
 
+    def logs_for_step(self, step_id):
+        rows = self._conn.execute(
+            "SELECT log_file FROM usage_backfill_log WHERE step = ?", (step_id,)
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def overwrite_usage_and_attribution(self, step_id, usage_totals, turn_count, tool_usage_totals):
+        self._conn.execute(
+            "UPDATE steps SET "
+            "usage_input_tokens = ?, usage_output_tokens = ?, usage_cache_read_tokens = ?, "
+            "usage_cache_creation_tokens = ?, usage_cost_usd = ?, usage_cost_basis = ?, "
+            "usage_thinking_tokens = ?, turn_count = ? WHERE id = ?",
+            (usage_totals.input_tokens, usage_totals.output_tokens,
+             usage_totals.cache_read_tokens, usage_totals.cache_creation_tokens,
+             usage_totals.cost_usd, usage_totals.cost_basis, usage_totals.thinking_tokens,
+             turn_count, step_id),
+        )
+        self._conn.execute("DELETE FROM step_tool_usage WHERE step = ?", (step_id,))
+        for tool, usage in tool_usage_totals.items():
+            self._conn.execute(
+                "INSERT INTO step_tool_usage (step, tool, calls, bytes) VALUES (?, ?, ?, ?)",
+                (step_id, tool, usage.calls, usage.bytes),
+            )
+        self._conn.commit()
+
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
                               id=None):
         if parent is None:

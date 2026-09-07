@@ -671,6 +671,51 @@ class StoreContractBase:
         self.assertEqual(t.usage_input_tokens, 5)
         self.assertEqual(s.unclassified_backfill_logs(), [])
 
+    def test_logs_for_step_returns_exactly_the_ledgered_logs_for_that_step_and_nothing_else(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        other = self._step(s, "other")
+        s.record_backfilled_usage("/l/a.log", tid, UsageEvent(), AttributionEvent())
+        s.record_backfilled_usage("/l/b.log", tid, UsageEvent(), AttributionEvent())
+        s.record_backfilled_usage("/l/c.log", other, UsageEvent(), AttributionEvent())
+        self.assertEqual(set(s.logs_for_step(tid)), {"/l/a.log", "/l/b.log"})
+        self.assertEqual(set(s.logs_for_step(other)), {"/l/c.log"})
+
+    def test_logs_for_step_returns_empty_for_a_step_with_no_ledger_rows(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        self.assertEqual(s.logs_for_step(tid), [])
+
+    def test_overwrite_usage_and_attribution_replaces_rather_than_adds(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_usage(tid, 100, 100, 100, 100, 10.0, "list", 5)
+        s.record_attribution(tid, 9, {"Read": ToolUsage(calls=9, bytes=90)})
+        usage_totals = UsageEvent(
+            input_tokens=1, output_tokens=2, cache_read_tokens=3, cache_creation_tokens=4,
+            cost_usd=0.5, cost_basis="derived", thinking_tokens=6,
+        )
+        s.overwrite_usage_and_attribution(tid, usage_totals, 1, {"Bash": ToolUsage(calls=1, bytes=10)})
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 1)
+        self.assertEqual(t.usage_output_tokens, 2)
+        self.assertEqual(t.usage_cache_read_tokens, 3)
+        self.assertEqual(t.usage_cache_creation_tokens, 4)
+        self.assertEqual(t.usage_cost_usd, 0.5)
+        self.assertEqual(t.usage_cost_basis, "derived")
+        self.assertEqual(t.usage_thinking_tokens, 6)
+        self.assertEqual(t.turn_count, 1)
+        self.assertEqual(s.tool_usage_for(tid), {"Bash": ToolUsage(calls=1, bytes=10)})
+
+    def test_overwrite_usage_and_attribution_drops_a_tool_absent_from_the_new_totals(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_attribution(tid, 1, {"Read": ToolUsage(calls=1, bytes=10)})
+        s.overwrite_usage_and_attribution(tid, UsageEvent(), 1, {"Bash": ToolUsage(calls=1, bytes=5)})
+        usage = s.tool_usage_for(tid)
+        self.assertNotIn("Read", usage)
+        self.assertEqual(usage, {"Bash": ToolUsage(calls=1, bytes=5)})
+
     def test_reclassify_leaves_attribution_already_recorded_at_original_ingest_untouched(self):
         s = self.make_store()
         tid = self._step(s, "t")
