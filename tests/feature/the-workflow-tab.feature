@@ -143,11 +143,11 @@ Feature: The workflow tab
       | 1     | just narrow enough to force stacking  |
       | 1     | just wide enough to clear the floor   |
 
-  Scenario: A node blocked on a dependency shows a dependency indicator alongside the queued state, not needs-attention
+  Scenario: A node blocked on a dependency shows a dependency indicator alongside the queued state, not gate or escalation
     Given a step blocked on another item's completion
     When it renders in the hierarchy
     Then a dependency indicator is shown alongside its state
-    And that state is the queued glyph, not the needs-attention glyph
+    And that state is the queued glyph, not the gate or escalation glyph
 
   Scenario: Down moves the selection to the next node
     Given the hierarchy has more rows than fit on one screen

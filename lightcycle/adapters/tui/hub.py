@@ -20,6 +20,7 @@ from lightcycle.adapters.tui.design_system import (
     COLUMN_GRIDS,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     DONE_GLYPH,
+    Glyph,
     HUB_SHORTCUTS,
     LIST_ARTIFACT_SHORTCUTS,
     STATE_GLYPHS,
@@ -180,11 +181,10 @@ class HeaderData:
     id: str
     title: str
     project: Optional[str]
-    workflow_line: Optional[str]
     step_field: Optional[str]
-    role_field: Optional[str]
     elapsed_field: Optional[str]
-    state_field: Optional[str]
+    glyph: Glyph
+    dependency_blocked: bool
     escalation_text: Optional[str]
     escalation_target: Optional[str]
 
@@ -193,7 +193,7 @@ def build_header(store, node, now, flow_service):
     project = project_label(store, node) or None
     if node.type == "item":
         return _item_header(store, node, now, project, flow_service)
-    return _step_header(store, node, now, project)
+    return _step_header(store, node, now, project, flow_service)
 
 
 def _park_escalation_text(node):
@@ -202,19 +202,25 @@ def _park_escalation_text(node):
     return node.park.needs
 
 
+def _flow_for_bucket(node, flow_service):
+    if flow_service is None or getattr(node, "type", None) != "step":
+        return None
+    return flow_service.flow_for(node)
+
+
 def _item_header(store, node, now, project, flow_service):
-    workflow_line = node.workflow or None
-    step_field = role_field = elapsed_field = None
+    step_field = None
+    elapsed_field = None
     escalation_text = escalation_target = None
+    glyph_node, glyph_flow = node, None
 
     if node.blocked_by:
         escalation_target = sorted(node.blocked_by)[0]
         escalation_text = "Blocked · depends on %s" % escalation_target
-    elif node.state == State.DONE:
-        step_field = "done"
-    else:
+    elif node.state != State.DONE:
         cur = current_step(store, node.id)
         if cur is not None:
+            glyph_node, glyph_flow = cur, flow_service.flow_for(cur)
             if cur.blocked_by:
                 escalation_target = sorted(cur.blocked_by)[0]
                 escalation_text = "Blocked · depends on %s" % escalation_target
@@ -223,20 +229,19 @@ def _item_header(store, node, now, project, flow_service):
                 if getattr(cur, "role", None) == "human":
                     if cur.needs:
                         escalation_text = _park_escalation_text(cur)
-                else:
-                    role_field = getattr(cur, "role", None)
-                    if cur.state == State.IN_PROGRESS:
-                        elapsed_field = _elapsed(store, cur, now)
+                elif cur.state == State.IN_PROGRESS:
+                    elapsed_field = _elapsed(store, cur, now)
 
     return HeaderData(
         id=node.id, title=node.title, project=project,
-        workflow_line=workflow_line,
-        step_field=step_field, role_field=role_field, elapsed_field=elapsed_field,
-        state_field=None, escalation_text=escalation_text, escalation_target=escalation_target,
+        step_field=step_field, elapsed_field=elapsed_field,
+        glyph=_state_glyph(glyph_node, glyph_flow),
+        dependency_blocked=bool(glyph_node.blocked_by),
+        escalation_text=escalation_text, escalation_target=escalation_target,
     )
 
 
-def _step_header(store, node, now, project):
+def _step_header(store, node, now, project, flow_service):
     escalation_text = escalation_target = None
     if node.blocked_by:
         escalation_target = sorted(node.blocked_by)[0]
@@ -245,36 +250,34 @@ def _step_header(store, node, now, project):
         escalation_text = _park_escalation_text(node)
 
     elapsed_field = _elapsed(store, node, now) if node.state == State.IN_PROGRESS else None
+    flow = flow_service.flow_for(node)
+    title = display_stage(flow_service.display_for(node), node.step) or node.title
     return HeaderData(
-        id=node.id, title=node.title, project=project,
-        workflow_line=None,
-        step_field=None, role_field=display_role(getattr(node, "role", None)), elapsed_field=elapsed_field,
-        state_field=row_bucket(node), escalation_text=escalation_text,
-        escalation_target=escalation_target,
+        id=node.id, title=title, project=project,
+        step_field=None, elapsed_field=elapsed_field,
+        glyph=_state_glyph(node, flow),
+        dependency_blocked=bool(node.blocked_by),
+        escalation_text=escalation_text, escalation_target=escalation_target,
     )
 
 
-def _state_glyph(node):
-    bucket = row_bucket(node)
-    if bucket == "needs-attention":
-        return STATE_GLYPHS["needs-attention"]
-    if bucket == "active":
-        return STATE_GLYPHS["active"]
+def _state_glyph(node, flow):
+    bucket = row_bucket(node, flow)
     if bucket == "done":
         return DONE_GLYPH
-    return STATE_GLYPHS["queued"]
+    return STATE_GLYPHS[bucket]
 
 
-def _display_glyph(node, active_frame):
-    glyph = _state_glyph(node)
-    if active_frame is not None and row_bucket(node) == "active":
+def _display_glyph(node, active_frame, flow):
+    glyph = _state_glyph(node, flow)
+    if active_frame is not None and row_bucket(node, flow) == "active":
         return glyph._replace(glyph=active_frame)
     return glyph
 
 
-def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None):
+def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None, flow_service=None):
     node = row.node
-    glyph = _display_glyph(node, active_frame)
+    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service))
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
         icon_cell = icon_cell + Text(
@@ -310,11 +313,11 @@ def _row_node(rows, row_id):
 def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None, flow_service=None):
     node = row.node
     if layout is not None and layout.stacked:
-        first_line = _hierarchy_stacked_first_line(row, layout, row_budget, active_frame)
+        first_line = _hierarchy_stacked_first_line(row, layout, row_budget, active_frame, flow_service)
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
         label = _hierarchy_label(node, flow_service)
         return (stacked_cell(first_line, indent, label, row_budget),)
-    glyph = _display_glyph(node, active_frame)
+    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service))
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
         icon_cell = icon_cell + Text(
@@ -434,33 +437,39 @@ class EscalationPanel(Static):
             header._paint_escalation(header._last_header)
 
 
+def _identity_text(header):
+    text = Text(header.glyph.glyph, style=COLOURS[header.glyph.colour])
+    if header.dependency_blocked:
+        text.append(
+            DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
+        )
+    text.append("  ")
+    text.append(header.id, style=COLOURS["cyan"])
+    if header.project:
+        text.append("  %s" % header.project, style=COLOURS["dim"])
+    text.append("  ")
+    text.append(header.title or "", style=COLOURS["text"])
+    return text
+
+
+def _context_text(header):
+    parts = [part for part in (header.step_field, header.elapsed_field) if part]
+    return " · ".join(parts) if parts else None
+
+
 class HubHeader(Vertical):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._last_header = None
 
     def compose(self) -> ComposeResult:
-        yield Static(id="hub-id")
-        yield Static(id="hub-title")
-        yield Static(id="hub-project")
-        yield Static(id="hub-workflow")
-        yield Static(id="hub-step")
-        yield Static(id="hub-role")
-        yield Static(id="hub-elapsed")
-        yield Static(id="hub-state")
+        yield Static(id="hub-identity")
+        yield Static(id="hub-context")
         yield EscalationPanel(id="hub-escalation")
 
     def update(self, header) -> None:
-        self.query_one("#hub-id", Static).update(Text(header.id, style=COLOURS["cyan"]))
-        self.query_one("#hub-title", Static).update(header.title or "")
-        self._line("#hub-project", "project: %s" % header.project if header.project else None)
-        self._line(
-            "#hub-workflow", "workflow: %s" % header.workflow_line if header.workflow_line else None
-        )
-        self._field_line("#hub-step", "STEP", header.step_field)
-        self._field_line("#hub-role", "ROLE", header.role_field)
-        self._field_line("#hub-elapsed", "ELAPSED", header.elapsed_field)
-        self._field_line("#hub-state", "STATE", header.state_field)
+        self.query_one("#hub-identity", Static).update(_identity_text(header))
+        self._line("#hub-context", _context_text(header))
 
         self._last_header = header
         self._paint_escalation(header)
@@ -481,17 +490,6 @@ class HubHeader(Vertical):
         widget = self.query_one(selector, Static)
         if text:
             widget.update(Text(text, style=COLOURS["dim"]))
-            widget.display = True
-        else:
-            widget.update("")
-            widget.display = False
-
-    def _field_line(self, selector, key, value) -> None:
-        widget = self.query_one(selector, Static)
-        if value:
-            text = Text("%s: " % key, style=COLOURS["dim"])
-            text.append(str(value), style=COLOURS["text"])
-            widget.update(text)
             widget.display = True
         else:
             widget.update("")
@@ -1301,7 +1299,10 @@ class NodeHubScreen(Screen):
         return ACTIVE_GLYPH_FRAMES[self._active_glyph_frame]
 
     def _active_glyph_ids(self):
-        return tuple(r.node.id for r in self._last_rows if row_bucket(r.node) == "active")
+        return tuple(
+            r.node.id for r in self._last_rows
+            if row_bucket(r.node, _flow_for_bucket(r.node, self._flow_service)) == "active"
+        )
 
     def _sync_active_glyph_animation(self) -> None:
         should_run = (
@@ -1516,7 +1517,9 @@ class NodeHubScreen(Screen):
         if ancestor is None:
             banner.display = False
             return
-        glyph = _display_glyph(ancestor.node, self._active_glyph_char())
+        glyph = _display_glyph(
+            ancestor.node, self._active_glyph_char(), _flow_for_bucket(ancestor.node, self._flow_service)
+        )
         text = Text(glyph.glyph + "  ", style=COLOURS[glyph.colour])
         text.append("%s  %s" % (ancestor.node.id, ancestor.node.title), style=COLOURS["dim"])
         banner.update(text)

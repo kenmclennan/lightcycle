@@ -4,6 +4,7 @@ from lightcycle.adapters.tui.design_system import DEPENDENCY_BLOCKED_EXTRA_GLYPH
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
+from lightcycle.domain.work import row_bucket
 
 
 @dataclass(frozen=True)
@@ -39,8 +40,7 @@ def _resolved_step(node, flow):
 
 
 def _attention_row(store, node, flow):
-    kind, _ = node.classify_for_human(flow)
-    escalation = kind == "blocked"
+    escalation = row_bucket(node, flow) == "escalation"
     glyph = STATE_GLYPHS["escalation"] if escalation else STATE_GLYPHS["gate"]
     step = _resolved_step(node, flow)
     return PriorityRow(
@@ -114,7 +114,7 @@ def build_priority_rows(store, lanes, now, flow_service):
     held = [n for n in lanes["queue"] if n.blocked_by]
     inbox = sorted(
         ((n, flow_service.flow_for(n)) for n in lanes["inbox"]),
-        key=lambda pair: pair[0].classify_for_human(pair[1])[0] != "blocked",
+        key=lambda pair: row_bucket(pair[0], pair[1]) != "escalation",
     )
     for group_rows, nodes_and_row in (
         (attention, [(n, _attention_row(store, n, flow)) for n, flow in inbox]),

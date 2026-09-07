@@ -5,7 +5,7 @@ from textual.widgets import Static
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
 from lightcycle.adapters.tui.design_system import COLOURS, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import (
-    DescriptionPane, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
+    DescriptionPane, EscalationPanel, HierarchyPagingTable, HubHeader, HubTabStrip, NodeHubScreen,
 )
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -211,16 +211,6 @@ def _item_full_identity(ctx):
     _push_hub(ctx, session, item)
 
 
-@given("an item with no workflow, its hub open")
-def _item_no_workflow(ctx):
-    store = FakeStore()
-    item = store.create_item("No workflow item", "a description")
-    store.create_step("write code", step="write-code", role="agent", parent=item)
-    ctx["item_id"] = item
-    session = _launch(ctx, store)
-    _push_hub(ctx, session, item)
-
-
 @given(parsers.re(r'an item at step "(?P<step>[^"]+)", its hub open'))
 def _item_at_step(ctx, step):
     store = FakeStore()
@@ -237,7 +227,7 @@ def _item_at_step(ctx, step):
 ))
 def _item_at_step_with_display(ctx, step, phrase):
     ctx["fs"] = FakeFs(metas={
-        "write-code": {"model": "sonnet", "step": step, "display": phrase},
+        step: {"model": "sonnet", "step": step, "display": phrase},
     })
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -247,16 +237,24 @@ def _item_at_step_with_display(ctx, step, phrase):
     _push_hub(ctx, session, item)
 
 
-@given(parsers.re(
-    r'an item at step "(?P<step>[^"]+)" performed by the role "(?P<role>[^"]+)", its hub open'
-))
-def _item_at_step_with_role(ctx, step, role):
+@given(
+    "a step whose stored title is its stage concatenated onto its item's title, "
+    'whose workflow declares the display phrase "Review the PR" for that stage'
+)
+def _step_composite_title_with_display(ctx):
+    ctx["fs"] = FakeFs(metas={
+        "code-await-merge": {"model": "sonnet", "step": "code-await-merge", "display": "Review the PR"},
+    })
     store = FakeStore()
-    item = store.create_item("Item", "a description")
-    store.create_step("s", step=step, role=role, parent=item)
+    item = store.create_item("Per-step cost attribution and historical backfill", "a description")
+    step = store.create_step(
+        "code-await-merge: Per-step cost attribution and historical backfill",
+        step="code-await-merge", role="agent", parent=item,
+    )
     ctx["item_id"] = item
+    ctx["step_id"] = step
     session = _launch(ctx, store)
-    _push_hub(ctx, session, item)
+    session.press("enter")
 
 
 @given(parsers.parse('an active item at step "{step}" claimed {minutes:d} minutes ago, its hub open'))
@@ -653,88 +651,46 @@ def _step_hub_opens_landing_on_tab(ctx, tab):
     _assert_tab_strip_rendered(ctx["session"], tab_id)
 
 
-@then("the header shows its id, its title, its project, and its workflow")
+@then("the header's identity line shows its id, its project, and its title")
 def _header_shows_identity(ctx):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-id") == ctx["item_id"]
-    assert _text(screen, "#hub-title") == "Full item"
-    assert _text(screen, "#hub-project") is not None
-    assert "repo" in _text(screen, "#hub-project")
-    assert _text(screen, "#hub-workflow") is not None
+    identity = _text(screen, "#hub-identity")
+    assert ctx["item_id"] in identity
+    assert "Full item" in identity
+    assert "repo" in identity
 
 
-@then("no workflow line is shown in the header")
-def _no_workflow_line(ctx):
+@then(parsers.parse('the header\'s context line names "{step}" as the current step'))
+def _header_context_names_step(ctx, step):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-workflow") is None
+    assert _text(screen, "#hub-context") == step
 
 
-@then(parsers.parse('the header names "{step}" as the current step'))
-def _header_names_step(ctx, step):
+@then(parsers.parse('the header names "{phrase}" as the step'))
+def _header_names_step(ctx, phrase):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-step") == "STEP: %s" % step
-
-
-@then(parsers.parse('the header shows "{role}" as the role'))
-def _header_shows_role(ctx, role):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-role") == "ROLE: %s" % role
+    assert phrase in _text(screen, "#hub-identity")
 
 
 @then(parsers.parse('the header\'s elapsed time reads "{elapsed}"'))
 def _header_elapsed_reads(ctx, elapsed):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-elapsed") == "ELAPSED: %s" % elapsed
-
-
-@then("no role is shown in the header")
-def _no_role_shown(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-role") is None
+    assert screen.query_one(HubHeader)._last_header.elapsed_field == elapsed
 
 
 @then("no elapsed time is shown in the header")
 def _no_elapsed_shown(ctx):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-elapsed") is None
+    assert screen.query_one(HubHeader)._last_header.elapsed_field is None
 
 
-@then("the header shows its role and its state")
-def _header_shows_role_and_state(ctx):
+@then("the header's context line is shown in the dim colour")
+def _header_context_dim_colour(ctx):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-role") == "ROLE: agent"
-    assert _text(screen, "#hub-state") is not None
-
-
-_HEADER_FIELD_SELECTORS = {
-    "STEP": "#hub-step", "ROLE": "#hub-role", "ELAPSED": "#hub-elapsed", "STATE": "#hub-state",
-}
-
-
-@then(parsers.parse("the header's \"{key}\" key is shown in the dim colour"))
-def _header_key_dim_colour(ctx, key):
-    screen = ctx["session"].app.screen
-    widget = screen.query_one(_HEADER_FIELD_SELECTORS[key], Static)
-    style = _segment_style_for_substring(widget, 0, "%s:" % key)
+    widget = screen.query_one("#hub-context", Static)
+    style = _segment_style_for_substring(widget, 0, "14m")
     assert style is not None
     assert style.color.get_truecolor().hex.lower() == COLOURS["dim"].lower()
-
-
-@then(parsers.parse("the header's \"{key}\" value is shown in the text colour"))
-def _header_value_text_colour(ctx, key):
-    screen = ctx["session"].app.screen
-    widget = screen.query_one(_HEADER_FIELD_SELECTORS[key], Static)
-    full_text = _rendered_text(widget)
-    value = full_text.split(": ", 1)[1] if ": " in full_text else full_text
-    style = _segment_style_for_substring(widget, 0, value)
-    assert style is not None
-    assert style.color.get_truecolor().hex.lower() == COLOURS["text"].lower()
-
-
-@then("no workflow field is shown")
-def _no_workflow_field(ctx):
-    screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-workflow") is None
 
 
 @then(parsers.parse('it lands on the "{tab}" tab'))
@@ -919,17 +875,23 @@ def _backlog_reappears_same_position(ctx):
 @then("the header and the hierarchy show the step as queued, not active")
 def _reclaimed_shows_queued(ctx):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-role") is not None
-    assert "agent" in _text(screen, "#hub-role")
-    assert _text(screen, "#hub-elapsed") is None
+    assert screen.query_one(HubHeader)._last_header.elapsed_field is None
+
+    queued_glyph = STATE_GLYPHS["queued"]
+    active_glyph = STATE_GLYPHS["active"]
+    identity = screen.query_one("#hub-identity", Static)
+    identity_text = _rendered_text(identity)
+    assert queued_glyph.glyph in identity_text
+    assert active_glyph.glyph not in identity_text
+    identity_style = _segment_style_for_substring(identity, 0, queued_glyph.glyph)
+    assert identity_style is not None
+    assert identity_style.color.get_truecolor().hex.lower() == COLOURS[queued_glyph.colour].lower()
 
     if screen._active_tab != "workflow":
         ctx["session"].press("]")
 
     table = screen.query_one(HierarchyPagingTable)
     step_id = ctx["step_id"]
-    queued_glyph = STATE_GLYPHS["queued"]
-    active_glyph = STATE_GLYPHS["active"]
     icon_text = _rendered_cell_text(table, step_id, "icon")
     assert queued_glyph.glyph in icon_text
     assert active_glyph.glyph not in icon_text

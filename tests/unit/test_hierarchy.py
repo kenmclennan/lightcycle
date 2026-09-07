@@ -5,7 +5,12 @@ from lightcycle.domain.runs import Pass, pass_number
 from lightcycle.domain.work import (
     PassHeader, display_role, landing_tab, row_bucket, viewable_artifacts,
 )
+from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
+
+FLOW = flow_from_metas(
+    {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
+)
 
 
 class TestHierarchyUseCase(unittest.TestCase):
@@ -105,11 +110,11 @@ class TestHierarchyUseCase(unittest.TestCase):
 class TestPassHeader(unittest.TestCase):
     def test_open_pass_bucket_is_active(self):
         header = PassHeader(Pass("LC-1.p1", "LC-1", 1, "open"))
-        self.assertEqual(row_bucket(header), "active")
+        self.assertEqual(row_bucket(header, None), "active")
 
     def test_closed_pass_bucket_is_done(self):
         header = PassHeader(Pass("LC-1.p1", "LC-1", 1, "closed"))
-        self.assertEqual(row_bucket(header), "done")
+        self.assertEqual(row_bucket(header, None), "done")
 
     def test_blocked_by_is_always_empty(self):
         header = PassHeader(Pass("LC-1.p1", "LC-1", 1, "open"))
@@ -170,36 +175,41 @@ class TestRowBucket(unittest.TestCase):
         s = FakeStore()
         blocker = s.create_step("b", step="build", role="agent")
         step = s.create_step("s", step="build", role="agent", deps=[blocker])
-        self.assertEqual(row_bucket(s.get_node(step)), "queued")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
 
-    def test_human_ready_step_is_needs_attention(self):
+    def test_human_ready_step_unknown_to_the_flow_is_a_gate(self):
         s = FakeStore()
         step = s.create_step("s", step="await-merge", role="human")
-        self.assertEqual(row_bucket(s.get_node(step)), "needs-attention")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "gate")
+
+    def test_a_parked_step_the_flow_still_owns_by_an_agent_is_an_escalation(self):
+        s = FakeStore()
+        step = s.create_step("s", step="build", role="human")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "escalation")
 
     def test_queued_agent_step_is_queued(self):
         s = FakeStore()
         step = s.create_step("s", step="build", role="agent")
-        self.assertEqual(row_bucket(s.get_node(step)), "queued")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
 
     def test_in_progress_step_is_active(self):
         s = FakeStore()
         step = s.create_step("s", step="build", role="agent")
         s.claim_ready("agent")
-        self.assertEqual(row_bucket(s.get_node(step)), "active")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "active")
 
     def test_done_step_is_done(self):
         s = FakeStore()
         step = s.create_step("s", step="build", role="agent")
         s.close(step, "done")
-        self.assertEqual(row_bucket(s.get_node(step)), "done")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "done")
 
     def test_dependency_blocked_item_is_queued(self):
         s = FakeStore()
         blocker = s.create_item("blocker", "a description")
         item = s.create_item("blocked", "a description")
         s.dep_add(item, blocker)
-        self.assertEqual(row_bucket(s.get_node(item)), "queued")
+        self.assertEqual(row_bucket(s.get_node(item), FLOW), "queued")
 
 
 class TestDisplayRole(unittest.TestCase):

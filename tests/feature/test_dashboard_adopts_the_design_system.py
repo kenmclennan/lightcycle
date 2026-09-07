@@ -240,9 +240,9 @@ def _lookup_footer_glyph(ctx, token):
     ctx["glyph_result"] = FOOTER_GLYPHS[token]
 
 
-@when("the glyph and colour for the dependency-blocked needs-attention state are looked up")
+@when("the glyph and colour for the dependency-blocked gate state are looked up")
 def _lookup_dependency_blocked_glyph(ctx):
-    ctx["primary_glyph"] = STATE_GLYPHS["needs-attention"]
+    ctx["primary_glyph"] = STATE_GLYPHS["gate"]
     ctx["extra_glyph"] = DEPENDENCY_BLOCKED_EXTRA_GLYPH
 
 
@@ -495,11 +495,11 @@ def _glyph_colour(ctx, colour):
     assert ctx["glyph_result"].colour == colour
 
 
-@then("its first glyph and colour are the same red dot as the plain needs-attention state")
+@then("its first glyph and colour are the same amber dot as the plain gate state")
 def _dependency_blocked_primary(ctx):
-    assert ctx["primary_glyph"] == STATE_GLYPHS["needs-attention"]
+    assert ctx["primary_glyph"] == STATE_GLYPHS["gate"]
     assert ctx["primary_glyph"].glyph == "●"
-    assert ctx["primary_glyph"].colour == "red"
+    assert ctx["primary_glyph"].colour == "amber"
 
 
 @then("it additionally carries the dim dependency-held glyph")
