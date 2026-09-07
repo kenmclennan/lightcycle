@@ -994,11 +994,13 @@ def cmd_backfill_usage(argv):
     resp = BackfillUsageUseCase(
         _container.store, _container.fs, _container.workers, _container.config
     ).execute()
+    ledger_total = len(_container.store.usage_backfilled_logs())
     print(
         "backfilled %d/%d logs (%d matched, %d orphaned (step no longer exists), "
-        "%d unmatched, %d left for live capture)"
+        "%d unmatched, %d left for live capture); %d/%d ledger rows reclassified, "
+        "%d recovered usage"
         % (resp.stored, resp.total, resp.matched, resp.orphaned, resp.unmatched,
-           resp.skipped_pending)
+           resp.skipped_pending, resp.reclassified, ledger_total, resp.recovered)
     )
     return 0
 

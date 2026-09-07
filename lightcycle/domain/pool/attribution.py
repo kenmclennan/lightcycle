@@ -13,6 +13,10 @@ class ToolUsage:
 class AttributionEvent:
     turn_count: int = 0
     tool_usage: Dict[str, ToolUsage] = field(default_factory=dict)
+    recovered_input_tokens: int = 0
+    recovered_output_tokens: int = 0
+    recovered_cache_read_tokens: int = 0
+    recovered_cache_creation_tokens: int = 0
 
 
 def _content_bytes(content):
@@ -30,6 +34,7 @@ def _content_bytes(content):
 
 def parse_attribution_event(lines) -> AttributionEvent:
     message_ids = set()
+    usage_by_id = {}
     tool_names = {}
     tool_usage = {}
     for line in lines:
@@ -47,6 +52,8 @@ def parse_attribution_event(lines) -> AttributionEvent:
             message_id = (data.get("message") or {}).get("id")
             if message_id:
                 message_ids.add(message_id)
+                if message_id not in usage_by_id:
+                    usage_by_id[message_id] = (data.get("message") or {}).get("usage") or {}
             for block in content_blocks:
                 if isinstance(block, dict) and block.get("type") == "tool_use":
                     tool_names[block.get("id")] = block.get("name")
@@ -60,4 +67,20 @@ def parse_attribution_event(lines) -> AttributionEvent:
                     calls=usage.calls + 1,
                     bytes=usage.bytes + _content_bytes(block.get("content")),
                 )
-    return AttributionEvent(turn_count=len(message_ids), tool_usage=tool_usage)
+    recovered_input_tokens = 0
+    recovered_output_tokens = 0
+    recovered_cache_read_tokens = 0
+    recovered_cache_creation_tokens = 0
+    for message_usage in usage_by_id.values():
+        recovered_input_tokens += message_usage.get("input_tokens") or 0
+        recovered_output_tokens += message_usage.get("output_tokens") or 0
+        recovered_cache_read_tokens += message_usage.get("cache_read_input_tokens") or 0
+        recovered_cache_creation_tokens += message_usage.get("cache_creation_input_tokens") or 0
+    return AttributionEvent(
+        turn_count=len(message_ids),
+        tool_usage=tool_usage,
+        recovered_input_tokens=recovered_input_tokens,
+        recovered_output_tokens=recovered_output_tokens,
+        recovered_cache_read_tokens=recovered_cache_read_tokens,
+        recovered_cache_creation_tokens=recovered_cache_creation_tokens,
+    )

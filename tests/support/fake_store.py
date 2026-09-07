@@ -525,8 +525,30 @@ class FakeStore(StorePort):
                 usage.thinking_tokens,
             )
             self.record_attribution(step_id, attribution.turn_count, attribution.tool_usage)
-        self._backfill_log[log_file] = step_id
+        self._backfill_log[log_file] = (step_id, usage.has_result_line)
         return stored
+
+    def _seed_unclassified_backfill_row(self, log_file, step_id):
+        self._backfill_log[log_file] = (step_id, None)
+
+    def unclassified_backfill_logs(self):
+        return [
+            (log_file, step_id)
+            for log_file, (step_id, had_result_line) in self._backfill_log.items()
+            if had_result_line is None
+        ]
+
+    def reclassify_backfilled_log(self, log_file, step_id, usage, attribution):
+        recovered = False
+        if not usage.has_result_line and step_id is not None and step_id in self._records:
+            self.record_usage(
+                step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                usage.thinking_tokens,
+            )
+            recovered = True
+        self._backfill_log[log_file] = (step_id, usage.has_result_line)
+        return recovered
 
     def history(self, tid):
         return list(self._history.get(tid, []))
