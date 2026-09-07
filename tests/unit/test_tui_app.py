@@ -494,7 +494,8 @@ class TestQueuedGroup(unittest.TestCase):
         icon = table.get_cell(row_key(session, blocked), "icon")
         self.assertIn(STATE_GLYPHS["queued"].glyph, icon.plain)
         self.assertIn("⊣", icon.plain)
-        self.assertNotIn(STATE_GLYPHS["needs-attention"].glyph, icon.plain)
+        self.assertNotIn(STATE_GLYPHS["gate"].glyph, icon.plain)
+        self.assertNotIn(STATE_GLYPHS["escalation"].glyph, icon.plain)
         step_cell = table.get_cell(row_key(session, blocked), "step")
         self.assertEqual(step_cell.style, COLOURS["dim"])
 

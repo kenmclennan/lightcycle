@@ -42,67 +42,44 @@ Feature: The node hub
     And Enter is pressed
     Then the step's own hub opens, landing on the "Detail" tab
 
-  Scenario: The header shows the item's identity
+  Scenario: The header's identity line shows the item's id, project, and title
     Given an item with a project and a workflow, its hub open
-    Then the header shows its id, its title, its project, and its workflow
+    Then the header's identity line shows its id, its project, and its title
 
-  Scenario: An item with no workflow shows no workflow line
-    Given an item with no workflow, its hub open
-    Then no workflow line is shown in the header
-
-  Scenario: The header names the current step
+  Scenario: The header's context line names the item's current step
     Given an item at step "write-code", its hub open
-    Then the header names "write-code" as the current step
+    Then the header's context line names "write-code" as the current step
 
-  Scenario: The header shows the current step's declared display phrase alongside its stage name
+  Scenario: The header's context line shows the current step's declared display phrase alongside its stage name
     Given an item at step "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage, its hub open
-    Then the header names "Review the PR · code-await-merge" as the current step
-
-  Scenario: The header shows the role performing the current step
-    Given an item at step "write-code" performed by the role "write-code", its hub open
-    Then the header shows "write-code" as the role
+    Then the header's context line names "Review the PR · code-await-merge" as the current step
 
   Scenario: An active item's header shows its elapsed time, matching the list's own format
     Given an active item at step "build" claimed 14 minutes ago, its hub open
     Then the header's elapsed time reads "14m"
 
-  Scenario: A human step with no worker shows no role and no elapsed time
+  Scenario: A human step with no worker shows no elapsed time, but still names the current step
     Given an item at a human step, with no worker, its hub open
-    Then no role is shown in the header
-    And no elapsed time is shown in the header
+    Then no elapsed time is shown in the header
+    And the header's context line names "await-merge" as the current step
 
-  Scenario Outline: A selected step's header shows its role and state, not its workflow
-    Given a step is selected, rather than an item
+  Scenario Outline: A selected step's identity line names its display phrase and stage, not its stored composite title
+    Given a step whose stored title is its stage concatenated onto its item's title, whose workflow declares the display phrase "Review the PR" for that stage
     When <key> is pressed
-    Then the header shows its role and its state
-    And no workflow field is shown
+    Then the header names "Review the PR · code-await-merge" as the step
 
     Examples:
       | key   |
       | Enter |
       | →     |
 
-  Scenario Outline: An item fieldset field's key stays dim while its value renders at full text brightness
+  Scenario Outline: The header's context line renders in the dim colour
     Given <given>
-    Then the header's "<key>" key is shown in the dim colour
-    And the header's "<key>" value is shown in the text colour
+    Then the header's context line is shown in the dim colour
 
     Examples:
-      | given                                                                             | key     |
-      | an item at step "write-code", its hub open                                        | STEP    |
-      | an item at step "write-code" performed by the role "write-code", its hub open      | ROLE    |
-      | an active item at step "build" claimed 14 minutes ago, its hub open                | ELAPSED |
-
-  Scenario Outline: A fieldset field's key stays dim while its value renders at full text brightness
-    Given <given>
-    When <trigger> is pressed
-    Then the header's "<key>" key is shown in the dim colour
-    And the header's "<key>" value is shown in the text colour
-
-    Examples:
-      | given                                     | key   | trigger |
-      | a step is selected, rather than an item   | STATE | Enter   |
-      | a step is selected, rather than an item   | STATE | →       |
+      | given                                                                |
+      | an active item at step "build" claimed 14 minutes ago, its hub open |
 
   Scenario: An item's tab strip is Description, Workflow, and Artifacts, never Detail or Log
     Given an item, its hub open

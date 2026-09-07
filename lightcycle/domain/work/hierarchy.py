@@ -55,13 +55,14 @@ def landing_tab(node):
     return "log" if node.state == State.IN_PROGRESS else "detail"
 
 
-def row_bucket(node):
+def row_bucket(node, flow):
     if node.state == State.DONE:
         return "done"
     if node.state == State.IN_PROGRESS:
         return "active"
     if node.state == State.READY and getattr(node, "role", None) == "human":
-        return "needs-attention"
+        kind, _outs = node.classify_for_human(flow)
+        return "escalation" if kind == "blocked" else "gate"
     return "queued"
 
 

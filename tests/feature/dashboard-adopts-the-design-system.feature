@@ -125,15 +125,16 @@ Feature: The dashboard adopts the design system's visual vocabulary
     And the colour is the <colour> colour
 
     Examples:
-      | state           | glyph | colour |
-      | needs-attention | ●     | red    |
-      | active          | ◆     | cyan   |
-      | queued          | ○     | dim    |
+      | state      | glyph | colour |
+      | gate       | ●     | amber  |
+      | escalation | ▲     | red    |
+      | active     | ◆     | cyan   |
+      | queued     | ○     | dim    |
 
-  Scenario: The dependency-blocked needs-attention state adds the dim dependency-held glyph without losing the red dot
+  Scenario: The dependency-blocked gate state adds the dim dependency-held glyph without losing the amber dot
     Given the shared state vocabulary
-    When the glyph and colour for the dependency-blocked needs-attention state are looked up
-    Then its first glyph and colour are the same red dot as the plain needs-attention state
+    When the glyph and colour for the dependency-blocked gate state are looked up
+    Then its first glyph and colour are the same amber dot as the plain gate state
     And it additionally carries the dim dependency-held glyph
 
   Scenario: The shared vocabulary defines the priority list's column order

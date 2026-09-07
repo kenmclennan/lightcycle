@@ -17,7 +17,6 @@ COLOURS = {
 MODAL_OVERLAY_ALPHA = 0.72
 
 STATE_GLYPHS = {
-    "needs-attention": Glyph("●", "red"),
     "gate": Glyph("●", "amber"),
     "escalation": Glyph("▲", "red"),
     "active": Glyph("◆", "cyan"),

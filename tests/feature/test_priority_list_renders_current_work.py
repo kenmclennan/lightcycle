@@ -761,7 +761,7 @@ def _t_blocked_step_in_queued_group(ctx):
 def _t_blocked_step_queued_glyph(ctx):
     icon = _icon(ctx["session"], ctx["blocked_id"]).plain
     assert STATE_GLYPHS["queued"].glyph in icon
-    assert STATE_GLYPHS["needs-attention"].glyph not in icon
+    assert STATE_GLYPHS["gate"].glyph not in icon
 
 
 @then(parsers.parse('the needs-attention row for that step shows "{step_name}" as its step'))
@@ -897,7 +897,7 @@ def _t_item_row_height_includes_spacer(ctx):
 def _t_item_once_in_attention(ctx):
     order = _row_order(ctx["session"])
     assert order.count(ctx["item_id"]) == 1
-    assert _icon(ctx["session"], ctx["item_id"]).plain == STATE_GLYPHS["needs-attention"].glyph
+    assert _icon(ctx["session"], ctx["item_id"]).plain == STATE_GLYPHS["gate"].glyph
 
 
 @then("that item's row does not also appear in the active group")

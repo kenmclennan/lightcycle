@@ -107,6 +107,25 @@ def _human_step_store():
     return store, item
 
 
+def _escalated_step_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step("LC-143.3.4", "write the code", step="write-code", role="agent",
+                      parent=item)
+    store.update_metadata(
+        step,
+        {
+            "needs": "Which registry key wins on a naming collision",
+            "reason": "Two agents wrote to the same project slug",
+        },
+    )
+    store.route_to_human(step, "BLOCKED: Which registry key wins on a naming collision")
+    fs = FakeFs(metas={
+        "write-code": {"step": "write-code", "model": "sonnet", "routes": {"done": "code-open-pr"}},
+    })
+    return store, item, fs
+
+
 LONG_ESCALATION_REASON = (
     "CI still pending on PR #424 head 7d4d840 (integration and unit-feature jobs in-progress) - "
     "scenario review itself is clean (see feedback), just waiting on CI to conclude before "
@@ -430,9 +449,14 @@ def _hub_blocked_dependency(size):
     return _open_hub(_launch(store, size=size), waiting)
 
 
-def _hub_needs_attention_human(size):
+def _hub_gate(size):
     store, item = _human_step_store()
     return _open_hub(_launch(store, size=size), item)
+
+
+def _hub_escalation(size):
+    store, item, fs = _escalated_step_store()
+    return _open_hub(_launch(store, size=size, fs=fs), item)
 
 
 def _hub_escalated_long_reason(size):
@@ -443,6 +467,25 @@ def _hub_escalated_long_reason(size):
 def _hub_step_node(size):
     store, _scan, coding = _populated_store()
     return _open_hub(_launch(store, size=size), coding)
+
+
+def _composite_title_store():
+    store = DemoStore(now=lambda: _at(9))
+    item = store.item(
+        "LC-472.1", "Per-step cost attribution and historical backfill", workflow=WORKFLOW,
+    )
+    step = store.step(
+        "LC-472.1.6",
+        "code-await-merge: Per-step cost attribution and historical backfill",
+        step="code-await-merge", role="human", parent=item,
+    )
+    fs = FakeFs(metas={"code-await-merge": {"step": "code-await-merge", "display": "Review the PR"}})
+    return store, step, fs
+
+
+def _hub_step_composite_title(size):
+    store, step, fs = _composite_title_store()
+    return _open_hub(_launch(store, size=size, fs=fs), step)
 
 
 def _detail_store():
@@ -505,9 +548,11 @@ SCREENS = {
     "artifact-viewer#filepath-toast": _artifact_viewer_filepath_toast,
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
-    "hub#needs-attention-human": _hub_needs_attention_human,
+    "hub#gate": _hub_gate,
+    "hub#escalation": _hub_escalation,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
+    "hub#step-composite-title": _hub_step_composite_title,
     "hub#detail": _hub_detail,
     "hub#workflow-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
