@@ -32,7 +32,7 @@ def test_a_state_the_codebase_cannot_render_names_the_ones_it_can():
     with pytest.raises(KeyError) as excinfo:
         render("hub#not-a-state")
 
-    assert "hub#hierarchy" in str(excinfo.value)
+    assert "hub#workflow" in str(excinfo.value)
 
 
 def test_a_state_the_design_names_but_the_code_cannot_render_says_why():
@@ -113,7 +113,7 @@ def test_header_height_reflects_the_fields_a_node_shows():
         finally:
             session.close()
 
-    assert header_height("hub#done-item") < header_height("hub#hierarchy")
+    assert header_height("hub#done-item") < header_height("hub#workflow")
 
 
 def test_the_log_excerpt_fixture_is_real_captured_stream_json_past_the_bound():

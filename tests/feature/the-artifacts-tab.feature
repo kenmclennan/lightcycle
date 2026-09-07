@@ -1,9 +1,9 @@
 Feature: The Artifacts tab
   A node's Artifacts tab lists its non-internal artifacts, each labeled by its
   own type - internal bookkeeping artifacts are filtered out entirely, the
-  same content-indicator rule the Hierarchy tab already uses. The tab is
+  same content-indicator rule the Workflow tab already uses. The tab is
   always present on an item, even one with nothing viewable, alongside
-  Description and Hierarchy - Artifacts belongs to items only, never to a
+  Description and Workflow - Artifacts belongs to items only, never to a
   step; an item with nothing to show gets a calm message in place of the
   list rather than a blank area. Arrow keys move the selection; confirming a selected artifact
   with Enter or → opens it in the viewer appropriate for its kind - which
@@ -47,7 +47,7 @@ Feature: The Artifacts tab
   Scenario: The Artifacts tab is present even on an item with no viewable artifacts
     Given an item has no non-internal artifacts
     When its hub is open
-    Then the Artifacts tab is present, alongside Description and Hierarchy
+    Then the Artifacts tab is present, alongside Description and Workflow
 
   Scenario: Down moves the artifact selection to the next entry
     Given the artifact list has more than one entry

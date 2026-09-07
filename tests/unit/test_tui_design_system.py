@@ -35,9 +35,9 @@ class TestColumnGridOrder(unittest.TestCase):
     def test_backlog_grid_order(self):
         self.assertEqual(COLUMN_GRIDS["backlog"], ("cursor", "id", "project", "title"))
 
-    def test_hierarchy_grid_order(self):
+    def test_workflow_grid_order(self):
         self.assertEqual(
-            COLUMN_GRIDS["hierarchy"], ("icon", "content", "id", "title", "role")
+            COLUMN_GRIDS["workflow"], ("icon", "id", "title", "role")
         )
 
     def test_artifacts_grid_order(self):

@@ -292,11 +292,11 @@ def _calm_message_shown(ctx):
     assert _widget_text(empty) != ""
 
 
-@then("the Artifacts tab is present, alongside Description and Hierarchy")
+@then("the Artifacts tab is present, alongside Description and Workflow")
 def _artifacts_tab_present(ctx):
     screen = ctx["session"].app.screen
     assert _widget_text(screen.query_one("#hub-tab-description", Static)) == "Description"
-    assert _widget_text(screen.query_one("#hub-tab-hierarchy", Static)) == "Hierarchy"
+    assert _widget_text(screen.query_one("#hub-tab-workflow", Static)) == "Workflow"
     assert _widget_text(screen.query_one("#hub-tab-artifacts", Static)) == "Artifacts"
 
 

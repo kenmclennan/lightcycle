@@ -108,14 +108,14 @@ def _open_backlog(ctx):
 def _open_hierarchy_tab(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    long_id = "H" * 50
+    long_id = "H" * 52
     store.create_step("s", step="build", role="agent", parent=item, id=long_id)
     ctx["store"] = store
     session = launch(make_test_container(store=store))
     ctx["session"] = session
     session.run(
         lambda: session.app.push_screen(
-            NodeHubScreen(session.app.container, item, session.app._now, initial_tab="hierarchy")
+            NodeHubScreen(session.app.container, item, session.app._now, initial_tab="workflow")
         )
     )
     session.pause()
@@ -143,7 +143,7 @@ def _open_artifacts_tab(ctx):
 _FLOOR_SCREEN_SETUP = {
     "Priority List": _open_priority_list,
     "Backlog": _open_backlog,
-    "Hierarchy tab": _open_hierarchy_tab,
+    "Workflow tab": _open_hierarchy_tab,
     "Artifacts tab": _open_artifacts_tab,
 }
 

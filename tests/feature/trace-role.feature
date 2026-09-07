@@ -1,5 +1,5 @@
 Feature: The trace read path exposes each step's stage and role
-  The Hierarchy tab and Node Hub render a step's stage (write-code, review-code, ...)
+  The Workflow tab and Node Hub render a step's stage (write-code, review-code, ...)
   and its role (agent or human) from the same read path that already returns its
   id, state, and log. This is the
   behavioural spec for that read path, independent of any implementation language.

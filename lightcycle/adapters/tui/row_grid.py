@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from rich.text import Text
 from textual.geometry import Size
 
-GLYPH_WIDTHS = {"cursor": 2, "icon": 4, "content": 2}
+GLYPH_WIDTHS = {"cursor": 2, "icon": 4}
 ATOMIC_COLUMNS = frozenset({"id", "project", "step", "role", "type", "time"})
 FLEXIBLE_COLUMNS = frozenset({"title", "value"})
 FLEXIBLE_MINIMUM = 24

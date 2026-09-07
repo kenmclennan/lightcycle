@@ -1,5 +1,5 @@
-Feature: The hierarchy tab
-  The Hierarchy tab renders a node's whole tree, from its item down, always
+Feature: The workflow tab
+  The Workflow tab renders a node's whole tree, from its item down, always
   fully expanded, never collapsed. Every row shows its own real id, its
   current state in the same icon/colour vocabulary as the priority list,
   and, for a step, the role that performed or is performing it. A step's
@@ -14,26 +14,6 @@ Feature: The hierarchy tab
   is never lost. Arrow keys move the selection; Enter or → opens
   whatever is highlighted into its own hub; a and l jump straight to a
   highlighted node's Artifacts or Log, skipping its own contextual default.
-
-  Scenario: A node with a non-internal artifact shows a content indicator
-    Given a node with an artifact whose internal flag is false
-    When it appears in the hierarchy
-    Then it shows a content indicator
-
-  Scenario: A node with only internal-flagged artifacts shows no content indicator
-    Given a node with only internal-flagged artifacts
-    When it appears in the hierarchy
-    Then no content indicator is shown
-
-  Scenario: A node with no artifacts shows no content indicator
-    Given a node with no artifacts
-    When it appears in the hierarchy
-    Then no content indicator is shown
-
-  Scenario: Opening a node with a content indicator reveals a viewable artifact
-    Given a node showing a content indicator
-    When I open that node
-    Then at least one artifact I can actually view is there
 
   Scenario: An item's hierarchy shows the item itself as the root
     Given an item
@@ -152,8 +132,8 @@ Feature: The hierarchy tab
   Scenario Outline: When a hierarchy row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width plus the row's own depth, spanning the row without wrapping mid-word
     Given a hierarchy row at depth <depth> whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When it renders in the hierarchy
-    Then the icon, content indicator, id and role remain on the row's first line, each padded to its atomic width, with the role right-aligned
-    And the title appears on a continuation line indented 6 characters plus the row's own depth indent of <depth>
+    Then the icon, id and role remain on the row's first line, each padded to its atomic width, with the role right-aligned
+    And the title appears on a continuation line indented 4 characters plus the row's own depth indent of <depth>
     And no fragment of the title's prose is split mid-word
 
     Examples:
@@ -213,15 +193,21 @@ Feature: The hierarchy tab
       | step  | Enter |
       | step  | →     |
 
-  Scenario Outline: Closing a node opened from the hierarchy returns to the hierarchy tab, same node, same position
-    Given I opened a node from the Hierarchy tab
+  Scenario Outline: Leaving a hub reached by selecting a node from the Workflow tab does not restore the tab's prior state
+    Given I opened a node from the Workflow tab
     When <key> is pressed
-    Then the Hierarchy tab reappears with that node still selected, scrolled to the same position
+    Then the hub is no longer showing, since selecting a node replaced it rather than adding to it
 
     Examples:
       | key |
       | Esc |
       | ←   |
+
+  Scenario: A step's own hub shows the same tree as its owning item's, rooted at the item
+    Given a step's hub is open directly, not its owning item's
+    When I view the Workflow tab
+    Then the owning item is the root row
+    And the step's own row is present and highlighted
 
   Scenario: An ancestor scrolled out of view is pinned to the top
     Given the hierarchy is scrolled past a node's parent item
@@ -297,33 +283,33 @@ Feature: The hierarchy tab
 
   Scenario: A root node with no parent is highlighted at the top row
     Given the current node is a root item
-    When I view the Hierarchy tab
+    When I view the Workflow tab
     Then it is highlighted at the top row
 
   Scenario: A nested node is highlighted at its actual depth
     Given the current node is a step nested under an item
-    When I view the Hierarchy tab
+    When I view the Workflow tab
     Then it is highlighted at its actual depth, not the top row
 
-  Scenario: The Hierarchy tab lands on the current step, not the item, when the item has one already started
+  Scenario: The Workflow tab lands on the current step, not the item, when the item has one already started
     Given an item with one completed step and one queued step after it
-    When I view the Hierarchy tab
+    When I view the Workflow tab
     Then the queued step's row is highlighted, not the item's own row
 
-  Scenario: The Hierarchy tab lands on the current step, not the item, and it is scrolled into view even when it is far below the fold
+  Scenario: The Workflow tab lands on the current step, not the item, and it is scrolled into view even when it is far below the fold
     Given an item with 40 completed steps and one queued step after them
-    When I view the Hierarchy tab
+    When I view the Workflow tab
     Then the queued step's row is highlighted, not the item's own row
     And it is scrolled into view
 
-  Scenario: The Hierarchy tab still lands on the item's own row when every step is done
+  Scenario: The Workflow tab still lands on the item's own row when every step is done
     Given an item whose every step is done
-    When I view the Hierarchy tab
+    When I view the Workflow tab
     Then it is highlighted at the top row
 
-  Scenario Outline: Confirming the Hierarchy tab's default selection on an in-progress item opens its current step, not the item itself
+  Scenario Outline: Confirming the Workflow tab's default selection on an in-progress item opens its current step, not the item itself
     Given an item with one completed step and one queued step after it
-    When I view the Hierarchy tab
+    When I view the Workflow tab
     And <key> is pressed
     Then that step's own hub opens
 

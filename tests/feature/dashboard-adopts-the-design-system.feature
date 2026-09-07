@@ -155,7 +155,6 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | column  | kind     |
       | cursor  | glyph    |
       | icon    | glyph    |
-      | content | glyph    |
       | id      | atomic   |
       | project | atomic   |
       | step    | atomic   |
@@ -169,7 +168,6 @@ Feature: The dashboard adopts the design system's visual vocabulary
     Given the shared row-grid sizing rule
     Then the cursor column's width is fixed at 2 characters
     And the icon column's width is fixed at 4 characters
-    And the content column's width is fixed at 2 characters
 
   Scenario: An atomic column's width is the longest value across the whole list, not just the rows currently on screen
     Given the shared row-grid sizing rule
@@ -193,7 +191,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | screen        |
       | Priority List |
       | Backlog       |
-      | Hierarchy tab |
+      | Workflow tab  |
       | Artifacts tab |
 
   Scenario Outline: The footer's shared vocabulary pairs a colour with its own glyph for each status token

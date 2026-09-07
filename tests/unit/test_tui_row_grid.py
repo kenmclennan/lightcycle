@@ -13,7 +13,7 @@ from lightcycle.adapters.tui.row_grid import (
 
 class TestColumnKind(unittest.TestCase):
     def test_glyph_columns(self):
-        for name in ("cursor", "icon", "content"):
+        for name in ("cursor", "icon"):
             self.assertEqual(column_kind(name), "glyph")
 
     def test_atomic_columns(self):
@@ -68,14 +68,14 @@ class TestComputeLayout(unittest.TestCase):
         self.assertGreaterEqual(layout.atomic_widths["id"], len(long_id))
 
     def test_stacks_when_the_flexible_minimum_no_longer_fits(self):
-        glyph_total = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+        glyph_total = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
         id_width = 10
         role_width = 5
         indent = glyph_total + id_width
         first_line_width = indent + role_width
         row_budget = first_line_width + FLEXIBLE_MINIMUM - 1
         layout = compute_layout(
-            row_budget, ["icon", "content"],
+            row_budget, ["cursor", "icon"],
             {"id": ["x" * id_width], "role": ["y" * role_width]}, indent=indent,
         )
         self.assertTrue(layout.stacked)
@@ -83,14 +83,14 @@ class TestComputeLayout(unittest.TestCase):
         self.assertEqual(layout.flexible_width, row_budget - indent)
 
     def test_stacked_flexible_width_spans_the_row_past_trailing_atomic_columns(self):
-        glyph_total = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+        glyph_total = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
         id_width = 10
         role_width = 19
         indent = glyph_total + id_width
         first_line_width = glyph_total + id_width + role_width
         row_budget = first_line_width + FLEXIBLE_MINIMUM - 1
         layout = compute_layout(
-            row_budget, ["icon", "content"],
+            row_budget, ["cursor", "icon"],
             {"id": ["x" * id_width], "role": ["y" * role_width]}, indent=indent,
         )
         self.assertTrue(layout.stacked)
@@ -112,7 +112,7 @@ class TestComputeLayout(unittest.TestCase):
         self.assertEqual(layout.floor_width, max(first_line_width, indent + FLEXIBLE_MINIMUM))
 
     def test_hits_the_floor_when_the_continuation_line_cannot_reach_the_flexible_minimum(self):
-        glyph_total = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+        glyph_total = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
         id_width = 10
         role_width = 19
         indent = glyph_total + id_width
@@ -120,7 +120,7 @@ class TestComputeLayout(unittest.TestCase):
         row_budget = indent + FLEXIBLE_MINIMUM - 1
         self.assertGreaterEqual(row_budget, first_line_width)
         layout = compute_layout(
-            row_budget, ["icon", "content"],
+            row_budget, ["cursor", "icon"],
             {"id": ["x" * id_width], "role": ["y" * role_width]}, indent=indent,
         )
         self.assertTrue(layout.floor)
@@ -128,13 +128,13 @@ class TestComputeLayout(unittest.TestCase):
         self.assertEqual(layout.floor_width, indent + FLEXIBLE_MINIMUM)
 
     def test_floor_message_reports_the_terminal_width_not_the_internal_budget(self):
-        glyph_total = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+        glyph_total = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
         id_width = 10
         role_width = 19
         indent = glyph_total + id_width
         row_budget = indent + FLEXIBLE_MINIMUM - 1
         layout = compute_layout(
-            row_budget, ["icon", "content"],
+            row_budget, ["cursor", "icon"],
             {"id": ["x" * id_width], "role": ["y" * role_width]}, indent=indent,
         )
         self.assertEqual(layout.floor_width, indent + FLEXIBLE_MINIMUM)
