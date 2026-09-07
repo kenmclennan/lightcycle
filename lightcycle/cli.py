@@ -12,7 +12,6 @@ import urllib.error
 
 from lightcycle import __version__
 from lightcycle.adapters.simulate import NullWorkers, RecordingGit, SimulateConfig
-from lightcycle.banner import show_banner
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
@@ -1637,7 +1636,6 @@ def cmd_start(argv):
             return 0
         interval = _container.config.poll_seconds()
         max_agents = _container.config.max_agents()
-        show_banner()
         notice = _upgrade_notice()
         if notice:
             print(notice)
