@@ -53,7 +53,7 @@ lc start                             # the agent loop: claims ready steps, spawn
 lc status                            # inbox / active / queue / blocked, all at once
 ```
 
-`lc start` runs in the foreground and shows the neon banner as it comes online; Ctrl-C stops it (workers are ephemeral and exit on their own). The pool runs the agent steps; you drive from the **`driver` skill** (in the lightcycle plugin - invoke it in your Claude Code session) and clear the human gates (the spec PR, `await-merge`) that surface in `lc inbox`.
+`lc start` runs in the foreground; Ctrl-C stops it (workers are ephemeral and exit on their own). The pool runs the agent steps; you drive from the **`driver` skill** (in the lightcycle plugin - invoke it in your Claude Code session) and clear the human gates (the spec PR, `await-merge`) that surface in `lc inbox`.
 
 **Developing the engine itself?** Work in a checkout and run it directly (`python -m lightcycle.cli …`, or the `bin/lc` shim) so you dogfood your changes; use `bin/setup` for the dev environment (`uv` + tests). See [DEVELOPING.md](DEVELOPING.md).
 
