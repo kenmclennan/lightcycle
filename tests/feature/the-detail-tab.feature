@@ -1,6 +1,6 @@
 Feature: The Detail tab
   A step's Detail tab shows its full record - everything the step carries
-  beyond what the header or a hierarchy row already shows. Its PR and branch
+  beyond what the header or a workflow-tab row already shows. Its PR and branch
   lead, since that is what a human opening a step for review came for; both
   live on the step's phase run in storage, but the view shows them as
   unambiguously the step's own, never naming "phase run" or "pass". After

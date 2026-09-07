@@ -18,7 +18,6 @@ from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_TICKS_PER_SECOND,
     COLOURS,
     COLUMN_GRIDS,
-    CONTENT_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     DONE_GLYPH,
     HUB_SHORTCUTS,
@@ -61,7 +60,7 @@ from lightcycle.application.work.project_of import project_of, short_project_lab
 from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
-    LogKind, State, display_role, display_stage, has_content, landing_tab,
+    LogKind, State, display_role, display_stage, landing_tab,
     row_bucket, type_label, viewable_artifacts,
 )
 
@@ -85,10 +84,10 @@ TOAST_SUB_CAPTION_BY_TAB = {
 TOAST_URL_SUB_SUFFIX = "nothing more to show here"
 TOAST_FILEPATH_DESTINATION = "in its default application"
 
-_ITEM_TAB_ORDER = ("description", "hierarchy", "artifacts")
-_STEP_TAB_ORDER = ("detail", "log")
+_ITEM_TAB_ORDER = ("description", "workflow", "artifacts")
+_STEP_TAB_ORDER = ("detail", "workflow", "log")
 _TAB_LABELS = {
-    "description": "Description", "hierarchy": "Hierarchy", "artifacts": "Artifacts",
+    "description": "Description", "workflow": "Workflow", "artifacts": "Artifacts",
     "detail": "Detail", "log": "Log",
 }
 
@@ -98,7 +97,7 @@ def _tab_order(node):
 
 
 STACKED_COLUMN_KEY = "row"
-HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"]
 ARTIFACTS_CONTINUATION_INDENT = 2
 DETAIL_CONTINUATION_INDENT = 2
 DETAIL_FIELD_LABELS = {
@@ -282,12 +281,8 @@ def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None):
             DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
         )
     icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
-    content_cell = (
-        Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else Text("")
-    )
-    content_field = pad_field(content_cell, GLYPH_WIDTHS["content"])
     id_field = pad_field(node.id, layout.atomic_widths["id"])
-    content_so_far = icon_field + content_field + id_field
+    content_so_far = icon_field + id_field
     role_cell = (
         Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
         if node.type == "step" else Text("")
@@ -325,15 +320,12 @@ def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None, fl
         icon_cell = icon_cell + Text(
             DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
         )
-    content_cell = (
-        Text(CONTENT_GLYPH.glyph, style=COLOURS[CONTENT_GLYPH.colour]) if has_content(node) else ""
-    )
     title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service)
     role_cell = (
         Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
         if node.type == "step" else ""
     )
-    return (icon_cell, content_cell, node.id, title_cell, role_cell)
+    return (icon_cell, node.id, title_cell, role_cell)
 
 
 def artifact_row_cells(artifact, layout=None, row_budget=None):
@@ -436,10 +428,6 @@ def escalation_panel_text():
 
 
 class EscalationPanel(Static):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.target_id = None
-
     def on_resize(self, event: events.Resize) -> None:
         header = self.parent
         if isinstance(header, HubHeader) and header._last_header is not None:
@@ -484,11 +472,9 @@ class HubHeader(Vertical):
             width = max(1, panel.size.width)
             painted = escalation_panel_text() if is_demand else escalation_reason_text(header, width)
             panel.update(painted)
-            panel.target_id = header.escalation_target
             panel.display = True
         else:
             panel.update("")
-            panel.target_id = None
             panel.display = False
 
     def _line(self, selector, text) -> None:
@@ -606,7 +592,7 @@ class HierarchyPagingTable(DataTable):
         node = _row_node(self.screen._last_rows, row_id)
         if node is None or node.type != "item":
             return
-        self.screen.open_at(row_id, initial_tab="artifacts")
+        self.screen.switch_at(row_id, initial_tab="artifacts")
 
     def action_jump_log(self) -> None:
         row_id = self._highlighted_id()
@@ -615,7 +601,7 @@ class HierarchyPagingTable(DataTable):
         node = _row_node(self.screen._last_rows, row_id)
         if node is None or node.type != "step" or log_tab_mode(node) == "no-log":
             return
-        self.screen.open_at(row_id, initial_tab="log")
+        self.screen.switch_at(row_id, initial_tab="log")
 
     def on_resize(self, event: events.Resize) -> None:
         screen = self.screen
@@ -866,9 +852,7 @@ class NodeHubScreen(Screen):
         Binding("[", "prev_tab", "Prev tab", show=False),
         Binding("]", "next_tab", "Next tab", show=False),
         Binding("t", "toggle_thinking", "Thinking", show=False),
-        Binding("b", "open_blocker", "Open blocker", show=False),
         Binding("r", "resume", "Resume", show=False),
-        Binding("i", "open_item", "Open item", show=False),
     ]
 
     CSS = f"""
@@ -1144,9 +1128,9 @@ class NodeHubScreen(Screen):
         self._flow_service = self._container.flow_service()
         header = build_header(store, node, self._now().isoformat(), self._flow_service)
         self.query_one(HubHeader).update(header)
+        rows = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id)).rows
+        self._render_hierarchy(rows, initial)
         if node.type == "item":
-            rows = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id)).rows
-            self._render_hierarchy(rows, initial)
             self._render_artifacts(viewable_artifacts(node), initial)
             self._render_description(node.description)
         else:
@@ -1172,10 +1156,10 @@ class NodeHubScreen(Screen):
             "id": [r.node.id for r in rows],
             "role": [display_role(getattr(r.node, "role", None)) for r in rows if r.node.type == "step"],
         }
-        row_budget = row_budget_for(table, len(COLUMN_GRIDS["hierarchy"]))
+        row_budget = row_budget_for(table, len(COLUMN_GRIDS["workflow"]))
         max_depth = max((r.depth for r in rows), default=0)
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + max_depth
-        return compute_layout(row_budget, ["icon", "content"], atomic_values, indent)
+        return compute_layout(row_budget, ["icon"], atomic_values, indent)
 
     def refresh_hierarchy_width(self) -> None:
         table = self.query_one(HierarchyPagingTable)
@@ -1188,12 +1172,11 @@ class NodeHubScreen(Screen):
             return
         if layout.floor:
             self.query_one("#hierarchy-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["hierarchy"])), style=COLOURS["dim"])
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["workflow"])), style=COLOURS["dim"])
             )
             return
         widths = {
             "icon": GLYPH_WIDTHS["icon"],
-            "content": GLYPH_WIDTHS["content"],
             "id": layout.atomic_widths["id"],
             "title": layout.flexible_width,
             "role": layout.atomic_widths["role"],
@@ -1257,14 +1240,14 @@ class NodeHubScreen(Screen):
         self._hierarchy_stacked = layout.stacked
         if self._hierarchy_floor:
             self.query_one("#hierarchy-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["hierarchy"])), style=COLOURS["dim"])
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["workflow"])), style=COLOURS["dim"])
             )
             self._last_hierarchy_shape = shape
             return
 
         selected_id = self._selected_id(table) or self._hierarchy_target_id
         table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["hierarchy"]))
+        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["workflow"]))
         self._hierarchy_layout_cache = layout
         self._hierarchy_row_budget_cache = row_budget
         if layout.stacked:
@@ -1272,12 +1255,11 @@ class NodeHubScreen(Screen):
         else:
             widths = {
                 "icon": GLYPH_WIDTHS["icon"],
-                "content": GLYPH_WIDTHS["content"],
                 "id": layout.atomic_widths["id"],
                 "title": layout.flexible_width,
                 "role": layout.atomic_widths["role"],
             }
-            for key in COLUMN_GRIDS["hierarchy"]:
+            for key in COLUMN_GRIDS["workflow"]:
                 table.add_column(key, width=widths[key], key=key)
 
         ids = [r.node.id for r in rows]
@@ -1300,7 +1282,7 @@ class NodeHubScreen(Screen):
     def _update_hierarchy_cells(self, table, rows) -> None:
         table_ = self.query_one(HierarchyPagingTable)
         layout = self._hierarchy_layout(table_, rows)
-        row_budget = render_row_budget(table_, layout, len(COLUMN_GRIDS["hierarchy"]))
+        row_budget = render_row_budget(table_, layout, len(COLUMN_GRIDS["workflow"]))
         self._hierarchy_layout_cache = layout
         self._hierarchy_row_budget_cache = row_budget
         active_frame = self._active_glyph_char()
@@ -1312,7 +1294,7 @@ class NodeHubScreen(Screen):
             if layout.stacked:
                 table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
                 continue
-            for key, value in zip(COLUMN_GRIDS["hierarchy"], cells):
+            for key, value in zip(COLUMN_GRIDS["workflow"], cells):
                 table.update_cell(row.node.id, key, value)
 
     def _active_glyph_char(self) -> str:
@@ -1323,7 +1305,7 @@ class NodeHubScreen(Screen):
 
     def _sync_active_glyph_animation(self) -> None:
         should_run = (
-            self._active_tab == "hierarchy"
+            self._active_tab == "workflow"
             and self.is_current
             and bool(self._active_glyph_ids())
             and not self._hierarchy_floor
@@ -1514,7 +1496,7 @@ class NodeHubScreen(Screen):
 
     def update_pinned_ancestor(self) -> None:
         banner = self.query_one("#pinned-ancestor", Static)
-        if self._active_tab != "hierarchy" or not self._last_rows or self._hierarchy_floor:
+        if self._active_tab != "workflow" or not self._last_rows or self._hierarchy_floor:
             banner.display = False
             return
         table = self.query_one(HierarchyPagingTable)
@@ -1541,7 +1523,7 @@ class NodeHubScreen(Screen):
         banner.display = True
 
     def _apply_tab_visibility(self) -> None:
-        hierarchy_active = self._active_tab == "hierarchy"
+        hierarchy_active = self._active_tab == "workflow"
         showing_hierarchy_floor = hierarchy_active and self._hierarchy_floor
         self.query_one(HierarchyPagingTable).display = hierarchy_active and not showing_hierarchy_floor
         self.query_one("#hierarchy-floor", Static).display = showing_hierarchy_floor
@@ -1579,7 +1561,7 @@ class NodeHubScreen(Screen):
         self._sync_active_glyph_animation()
 
     def _focus_active_tab(self) -> None:
-        if self._active_tab == "hierarchy" and not self._hierarchy_floor:
+        if self._active_tab == "workflow" and not self._hierarchy_floor:
             self.set_focus(self.query_one(HierarchyPagingTable))
         elif self._active_tab == "log" and self._log_mode != "no-log":
             self.set_focus(self.query_one(LogPane))
@@ -1625,17 +1607,6 @@ class NodeHubScreen(Screen):
     def close_hub(self) -> None:
         self.app.pop_screen()
 
-    def action_open_blocker(self) -> None:
-        target_id = self.query_one(EscalationPanel).target_id
-        if target_id:
-            self.open_at(target_id)
-
-    def action_open_item(self) -> None:
-        node = self._container.store.get_node(self._node_id)
-        if node.type != "step":
-            return
-        self.open_at(node.parent)
-
     def action_resume(self) -> None:
         store = self._container.store
         node = store.get_node(self._node_id)
@@ -1651,8 +1622,8 @@ class NodeHubScreen(Screen):
         self._show_resume_toast(True, "Resumed - reassigned to %s" % response.role)
         self._refresh(initial=False)
 
-    def open_at(self, node_id, initial_tab=None) -> None:
-        self.app.push_screen(NodeHubScreen(self._container, node_id, self._now, initial_tab=initial_tab))
+    def switch_at(self, node_id, initial_tab=None) -> None:
+        self.app.switch_screen(NodeHubScreen(self._container, node_id, self._now, initial_tab=initial_tab))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         event.stop()
@@ -1668,7 +1639,7 @@ class NodeHubScreen(Screen):
         node = _row_node(self._last_rows, row_id)
         if node is not None and node.type == "pass":
             return
-        self.open_at(row_id)
+        self.switch_at(row_id)
 
     def _open_selected_artifact(self, key_value) -> None:
         if key_value is None:

@@ -23,7 +23,7 @@ def _open_hub_on_active_step():
     )
     session.pause()
     screen = session.app.screen
-    screen._active_tab = "hierarchy"
+    screen._active_tab = "workflow"
     session.run(screen._apply_tab_visibility)
     session.pause()
     return session, screen
@@ -78,7 +78,7 @@ def test_pinned_ancestor_banner_pulses_when_its_own_row_is_active():
         )
         session.pause()
         screen = session.app.screen
-        screen._active_tab = "hierarchy"
+        screen._active_tab = "workflow"
         session.run(screen._apply_tab_visibility)
         if screen._active_glyph_timer is not None:
             screen._active_glyph_timer.stop()

@@ -43,7 +43,7 @@ class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
         )
         session.pause()
         screen = session.app.screen
-        screen._active_tab = "hierarchy"
+        screen._active_tab = "workflow"
         session.run(screen._apply_tab_visibility)
         session.pause()
 

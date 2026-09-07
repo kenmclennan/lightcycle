@@ -129,7 +129,7 @@ class TestHierarchyTableScrollbarDoesNotClipRole(unittest.TestCase):
         store, item = _hierarchy_step_store(count, self._ROLE)
         session = launch(make_test_container(store=store), size=_SIZE)
         self.addCleanup(session.close)
-        return _open_hub(session, item, "hierarchy")
+        return _open_hub(session, item, "workflow")
 
     def test_short_list_shows_full_role_value_with_no_scrollbars(self):
         session = self._launch(_SHORT_COUNT)

@@ -77,7 +77,7 @@ def test_hierarchy_cursor_survives_a_layout_forced_rerender():
         )
         session.pause()
         screen = session.app.screen
-        screen._active_tab = "hierarchy"
+        screen._active_tab = "workflow"
         session.run(screen._apply_tab_visibility)
         session.pause()
 

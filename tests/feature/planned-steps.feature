@@ -1,6 +1,6 @@
 Feature: Planned-step projection from the workflow graph
   An item's remaining steps are not filed until the engine reaches them, so the
-  Hierarchy view needs a read-only preview of what comes next. Reading an item's
+  Workflow view needs a read-only preview of what comes next. Reading an item's
   planned steps walks its pinned workflow graph forward from its current step,
   along the outcome that represents normal completion, without ever filing a
   real step.

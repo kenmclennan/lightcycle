@@ -305,12 +305,12 @@ def _backlog_claude_unavailable(size):
 
 def _hub_hierarchy(size):
     store, scan, _coding = _populated_store()
-    return _open_hub(_launch(store, size=size), scan, tab="hierarchy")
+    return _open_hub(_launch(store, size=size), scan, tab="workflow")
 
 
 def _hub_hierarchy_stacked(size):
     store, item, _step = _stacked_hierarchy_store()
-    return _open_hub(_launch(store, size=size), item, tab="hierarchy")
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
 
 
 _LOG_PATH = "/fake/logs/worker-write-code.log"
@@ -469,7 +469,7 @@ def _hub_detail(size):
 
 def _hub_hierarchy_scrolled(size):
     store, item = _long_hierarchy_store()
-    return _open_hub(_launch(store, size=size), item, tab="hierarchy")
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
 
 
 def _hub_claude_unavailable(size):
@@ -493,8 +493,8 @@ SCREENS = {
     "backlog#picker-open": _backlog_picker_open,
     "backlog#claude-unavailable": _backlog_claude_unavailable,
     "backlog#stacked": _backlog_stacked,
-    "hub#hierarchy": _hub_hierarchy,
-    "hub#hierarchy-stacked": _hub_hierarchy_stacked,
+    "hub#workflow": _hub_hierarchy,
+    "hub#workflow-stacked": _hub_hierarchy_stacked,
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
     "hub#artifacts": _hub_artifacts,
@@ -509,7 +509,7 @@ SCREENS = {
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
     "hub#detail": _hub_detail,
-    "hub#hierarchy-scrolled": _hub_hierarchy_scrolled,
+    "hub#workflow-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
     "hub#long-description": _hub_long_description,
 }

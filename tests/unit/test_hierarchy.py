@@ -3,7 +3,7 @@ import unittest
 from lightcycle.application.work.hierarchy import HierarchyInput, HierarchyUseCase
 from lightcycle.domain.runs import Pass, pass_number
 from lightcycle.domain.work import (
-    PassHeader, display_role, has_content, landing_tab, row_bucket, viewable_artifacts,
+    PassHeader, display_role, landing_tab, row_bucket, viewable_artifacts,
 )
 from tests.support.fake_store import FakeStore
 
@@ -115,10 +115,6 @@ class TestPassHeader(unittest.TestCase):
         header = PassHeader(Pass("LC-1.p1", "LC-1", 1, "open"))
         self.assertEqual(header.blocked_by, [])
 
-    def test_has_no_content(self):
-        header = PassHeader(Pass("LC-1.p1", "LC-1", 1, "open"))
-        self.assertFalse(has_content(header))
-
     def test_title_names_its_pass_number(self):
         header = PassHeader(Pass("LC-1.p2", "LC-1", 2, "open"))
         self.assertEqual(header.title, "Pass 2")
@@ -215,25 +211,6 @@ class TestDisplayRole(unittest.TestCase):
 
     def test_agent_role_shown_as_is(self):
         self.assertEqual(display_role("write-code"), "write-code")
-
-
-class TestHasContent(unittest.TestCase):
-    def test_non_internal_artifact_is_content(self):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        s.add_artifact(item, "spec", "specs/x.md")
-        self.assertTrue(has_content(s.get_node(item)))
-
-    def test_only_internal_artifacts_is_no_content(self):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        s.add_artifact(item, "reflection", "text", internal=True)
-        self.assertFalse(has_content(s.get_node(item)))
-
-    def test_no_artifacts_is_no_content(self):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        self.assertFalse(has_content(s.get_node(item)))
 
 
 class TestViewableArtifacts(unittest.TestCase):

@@ -37,8 +37,6 @@ DEPENDENCY_BLOCKED_EXTRA_GLYPH = Glyph("⊣", "dim")
 
 DONE_GLYPH = Glyph("○", "dim")
 
-CONTENT_GLYPH = Glyph("•", "cyan")
-
 FOOTER_GLYPHS = {
     "pool-running": Glyph("●", "cyan"),
     "pool-stopped": Glyph("○", "dim"),
@@ -53,7 +51,7 @@ CURSOR_GLYPH = Glyph("❯", "cyan")
 COLUMN_GRIDS = {
     "priority-list": ("cursor", "icon", "id", "project", "title", "step", "time"),
     "backlog": ("cursor", "id", "project", "title"),
-    "hierarchy": ("icon", "content", "id", "title", "role"),
+    "workflow": ("icon", "id", "title", "role"),
     "artifacts": ("type", "value"),
     "detail": ("key", "value"),
 }
@@ -90,7 +88,6 @@ HUB_SHORTCUTS = (
     ("[/]", "switch tab"),
     ("↑↓", "scroll"),
     ("enter/→", "open"),
-    ("b", "open blocker"),
     ("esc/←", "back"),
     ("tab", "backlog"),
     ("q", "quit"),

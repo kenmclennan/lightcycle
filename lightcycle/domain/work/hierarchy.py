@@ -77,9 +77,5 @@ def park_resume_command(node_id):
     return "lc set %s --state ready" % node_id
 
 
-def has_content(node):
-    return any(not a.internal for a in getattr(node, "artifacts", ()))
-
-
 def viewable_artifacts(node):
     return [a for a in getattr(node, "artifacts", ()) if not a.internal]

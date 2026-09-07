@@ -17,7 +17,7 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
-scenarios("the-hierarchy-tab.feature")
+scenarios("the-workflow-tab.feature")
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def _launch(ctx, store, node_id, size=None):
     )
     session.pause()
     screen = session.app.screen
-    screen._active_tab = "hierarchy"
+    screen._active_tab = "workflow"
     session.run(screen._apply_tab_visibility)
     if screen._active_glyph_timer is not None:
         screen._active_glyph_timer.stop()
@@ -128,41 +128,6 @@ def _row_lines(ctx, row_id):
         y += r.height
     assert target is not None
     return [table.render_line(target + i) for i in range(height)]
-
-
-@given("a node with an artifact whose internal flag is false")
-def _node_with_visible_artifact(ctx):
-    store = FakeStore()
-    item = store.create_item("Item", "a description")
-    store.add_artifact(item, "spec", "specs/x.md")
-    ctx["node_id"] = item
-    _launch(ctx, store, item)
-
-
-@given("a node with only internal-flagged artifacts")
-def _node_with_only_internal_artifacts(ctx):
-    store = FakeStore()
-    item = store.create_item("Item", "a description")
-    store.add_artifact(item, "reflection", "text", internal=True)
-    ctx["node_id"] = item
-    _launch(ctx, store, item)
-
-
-@given("a node with no artifacts")
-def _node_with_no_artifacts(ctx):
-    store = FakeStore()
-    item = store.create_item("Item", "a description")
-    ctx["node_id"] = item
-    _launch(ctx, store, item)
-
-
-@given("a node showing a content indicator")
-def _node_showing_content_indicator(ctx):
-    store = FakeStore()
-    item = store.create_item("Item", "a description")
-    store.add_artifact(item, "spec", "specs/x.md")
-    ctx["node_id"] = item
-    _launch(ctx, store, item)
 
 
 @given("an item")
@@ -442,11 +407,11 @@ def _colliding_ids(ctx):
 
 
 _HSTACK_TITLE = "A title long enough to need a continuation line for real"
-_HIERARCHY_NUM_COLUMNS = 5
+_HIERARCHY_NUM_COLUMNS = 4
 
 
 def _hierarchy_stack_terminal_width(mode, ids, roles, max_depth):
-    glyph_total = GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]
+    glyph_total = GLYPH_WIDTHS["icon"]
     atomic_values = {"id": ids, "role": roles}
     atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
     first_line_width = glyph_total + atomic_total
@@ -552,7 +517,7 @@ def _node_type_highlighted(ctx, node_type):
     table.move_cursor(row=row_ids.index(ids[node_type]))
 
 
-@given("I opened a node from the Hierarchy tab")
+@given("I opened a node from the Workflow tab")
 def _opened_node_from_hierarchy(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
@@ -707,14 +672,20 @@ def _item_every_step_done(ctx):
     _launch(ctx, store, item)
 
 
+@given("a step's hub is open directly, not its owning item's")
+def _step_hub_open_directly(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    ctx["node_id"] = step
+    _launch(ctx, store, step)
+
+
 @when("it appears in the hierarchy")
 def _it_appears(ctx):
     pass
-
-
-@when("I open that node")
-def _open_that_node(ctx):
-    ctx["session"].press("enter")
 
 
 @when(parsers.parse('I open the hierarchy from it or one of its steps'))
@@ -820,7 +791,7 @@ def _l_pressed(ctx):
     ctx["session"].press("l")
 
 
-@when("I view the Hierarchy tab")
+@when("I view the Workflow tab")
 def _view_hierarchy_tab(ctx):
     pass
 
@@ -828,25 +799,6 @@ def _view_hierarchy_tab(ctx):
 @when("I look at the pinned-ancestor banner")
 def _look_at_pinned_ancestor_banner(ctx):
     pass
-
-
-@then("it shows a content indicator")
-def _shows_content_indicator(ctx):
-    text = _rendered_cell_text(ctx, ctx["node_id"], "content")
-    assert text.strip() != ""
-
-
-@then("no content indicator is shown")
-def _no_content_indicator(ctx):
-    text = _rendered_cell_text(ctx, ctx["node_id"], "content")
-    assert text.strip() == ""
-
-
-@then("at least one artifact I can actually view is there")
-def _artifact_viewable(ctx):
-    store = ctx["store"]
-    artifacts = store.item_artifacts(ctx["node_id"])
-    assert any(not a.internal for a in artifacts)
 
 
 @then("that item is shown as the root, with its steps below, and no row above it")
@@ -1074,7 +1026,7 @@ def _hierarchy_stacked_cell_text(table, strip):
 
 
 @then(
-    "the icon, content indicator, id and role remain on the row's first line, each padded to "
+    "the icon, id and role remain on the row's first line, each padded to "
     "its atomic width, with the role right-aligned"
 )
 def _first_line_role_right_aligned(ctx):
@@ -1082,7 +1034,7 @@ def _first_line_role_right_aligned(ctx):
     lines = _row_lines(ctx, ctx["target_id"])
     assert len(lines) > 1
     content = _hierarchy_stacked_cell_text(table, lines[0])
-    rest = content[GLYPH_WIDTHS["icon"] + GLYPH_WIDTHS["content"]:]
+    rest = content[GLYPH_WIDTHS["icon"]:]
     assert rest.startswith(ctx["target_id"])
     if ctx["target_depth"] != 0:
         assert content.rstrip().endswith("agent")
@@ -1170,14 +1122,9 @@ def _opens_into_own_hub(ctx):
     assert screen._active_tab in _tab_order(ctx["store"].get_node(ctx["target_id"]))
 
 
-@then("the Hierarchy tab reappears with that node still selected, scrolled to the same position")
-def _hierarchy_reappears_same_position(ctx):
-    screen = ctx["session"].app.screen
-    assert isinstance(screen, NodeHubScreen)
-    assert screen._active_tab == "hierarchy"
-    table = _table(ctx)
-    ids = [row.key.value for row in table.ordered_rows]
-    assert ids[table.cursor_row] == ctx["other_id"]
+@then("the hub is no longer showing, since selecting a node replaced it rather than adding to it")
+def _hub_replaced_not_pushed(ctx):
+    assert not isinstance(ctx["session"].app.screen, NodeHubScreen)
 
 
 @then("its row stays pinned to the top instead of scrolling away")
@@ -1257,6 +1204,20 @@ def _highlighted_at_actual_depth(ctx):
     ids = [row.key.value for row in table.ordered_rows]
     assert ids[table.cursor_row] == ctx["step_id"]
     assert table.cursor_row > 0
+
+
+@then("the owning item is the root row")
+def _owning_item_is_root_row(ctx):
+    ids = _row_ids(ctx)
+    assert ids[0] == ctx["item_id"]
+
+
+@then("the step's own row is present and highlighted")
+def _steps_own_row_present_and_highlighted(ctx):
+    table = _table(ctx)
+    ids = _row_ids(ctx)
+    assert ctx["step_id"] in ids
+    assert ids[table.cursor_row] == ctx["step_id"]
 
 
 @then("the queued step's row is highlighted, not the item's own row")

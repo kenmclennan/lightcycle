@@ -3,8 +3,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
-from lightcycle.adapters.tui.design_system import COLOURS, HUB_SHORTCUTS, STATE_GLYPHS
-from lightcycle.adapters.tui.footer import ShortcutBar
+from lightcycle.adapters.tui.design_system import COLOURS, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import (
     DescriptionPane, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
 )
@@ -105,8 +104,8 @@ def _painted_spans(strip):
 
 
 _HUB_TABS_BY_TYPE = {
-    "item": (("description", "Description"), ("hierarchy", "Hierarchy"), ("artifacts", "Artifacts")),
-    "step": (("detail", "Detail"), ("log", "Log")),
+    "item": (("description", "Description"), ("workflow", "Workflow"), ("artifacts", "Artifacts")),
+    "step": (("detail", "Detail"), ("workflow", "Workflow"), ("log", "Log")),
 }
 
 
@@ -168,7 +167,6 @@ def _step_hub_open(ctx):
     ctx["node_id"] = step
     session = _launch(ctx, store)
     _push_hub(ctx, session, step)
-    ctx["original_screen"] = session.app.screen
 
 
 @given("the priority list is showing with an item")
@@ -519,39 +517,6 @@ def _item_that_is(ctx, status):
     _push_hub(ctx, session, item)
 
 
-@given("an item's hub is open, showing an escalation reason that names a blocking item")
-def _hub_open_with_escalation(ctx):
-    store = FakeStore()
-    blocker = store.create_item("Blocker item", "a description")
-    item = store.create_item("Blocked item", "a description")
-    store.dep_add(item, blocker)
-    ctx["blocker_id"] = blocker
-    session = _launch(ctx, store)
-    session.run(
-        lambda: session.app.push_screen(NodeHubScreen(session.app.container, item, session.app._now))
-    )
-    session.pause()
-
-
-@given(
-    "an item's hub is open, showing an escalation reason that names a blocking item "
-    "whose own current step is active"
-)
-def _hub_open_with_escalation_active_blocker(ctx):
-    store = FakeStore()
-    blocker = store.create_item("Blocker item", "a description")
-    store.create_step("s", step="build", role="agent", parent=blocker)
-    store.claim_ready("agent")
-    item = store.create_item("Blocked item", "a description")
-    store.dep_add(item, blocker)
-    ctx["blocker_id"] = blocker
-    session = _launch(ctx, store)
-    session.run(
-        lambda: session.app.push_screen(NodeHubScreen(session.app.container, item, session.app._now))
-    )
-    session.pause()
-
-
 @given(parsers.parse('I cycle to the "{tab}" tab with ]'))
 @when(parsers.parse('I cycle to the "{tab}" tab with ]'))
 def _cycle_to_tab(ctx, tab):
@@ -563,29 +528,6 @@ def _cycle_to_tab(ctx, tab):
     for _ in range((target - current) % len(order)):
         ctx["session"].press("]")
     ctx["target_tab"] = tab_id
-
-
-@given("a blocked item's hub is open, with content on every tab")
-def _blocked_items_hub_open_with_content(ctx):
-    store = FakeStore()
-    blocker = store.create_item("Blocker item", "a description")
-    store.create_step("s", step="build", role="agent", parent=blocker)
-    item = store.create_item("Blocked item", "a description")
-    store.dep_add(item, blocker)
-    store.create_step("own step", step="write-code", role="agent", parent=item)
-    store.claim_ready("agent")
-    store.add_artifact(item, "repo", "org/repo")
-    store.edit_node(item, description="A description")
-    ctx["item_id"] = item
-    ctx["blocker_id"] = blocker
-    session = _launch(ctx, store)
-    _push_hub(ctx, session, item)
-    ctx["original_screen"] = session.app.screen
-
-
-@given("I jump to its blocking item's hub")
-def _jump_to_blocking_item(ctx):
-    ctx["session"].press("b")
 
 
 @given("I opened an item's hub from a specific row in the priority list, with content on every tab")
@@ -822,23 +764,10 @@ def _tab_strip_shows_three(ctx, a, b, c):
     assert [label for _, label in tabs] == [a, b, c]
 
 
-@then(parsers.parse('its tab strip shows exactly "{a}" and "{b}", in that order'))
-def _tab_strip_shows_two(ctx, a, b):
-    tabs = _hub_tabs(ctx["session"])
-    assert [label for _, label in tabs] == [a, b]
-
-
 @then(parsers.parse('no "{a}" tab and no "{b}" tab is shown'))
 def _no_two_tabs_shown(ctx, a, b):
     screen = ctx["session"].app.screen
     for label in (a, b):
-        assert len(screen.query("#hub-tab-%s" % label.lower())) == 0
-
-
-@then(parsers.parse('no "{a}" tab, no "{b}" tab, and no "{c}" tab is shown'))
-def _no_three_tabs_shown(ctx, a, b, c):
-    screen = ctx["session"].app.screen
-    for label in (a, b, c):
         assert len(screen.query("#hub-tab-%s" % label.lower())) == 0
 
 
@@ -918,35 +847,6 @@ def _escalation_shows_no_ellipsis(ctx):
     assert "…" not in _rendered_panel_text(panel)
 
 
-@then("the blocking item's own hub opens")
-def _blocking_item_hub_opens(ctx):
-    screen = ctx["session"].app.screen
-    assert isinstance(screen, NodeHubScreen)
-    assert screen._node_id == ctx["blocker_id"]
-
-
-@then("the blocking item's own hub opens, landing on the Description tab")
-def _blocking_item_hub_opens_landing_description(ctx):
-    screen = ctx["session"].app.screen
-    assert isinstance(screen, NodeHubScreen)
-    assert screen._node_id == ctx["blocker_id"]
-    assert screen._active_tab == "description"
-    _assert_tab_strip_rendered(ctx["session"], "description")
-
-
-@then("it is not redirected into its running step")
-def _not_redirected_into_running_step(ctx):
-    screen = ctx["session"].app.screen
-    assert screen._node_id == ctx["blocker_id"]
-
-
-@then("nothing happens, since there is no blocker to jump to")
-def _b_no_op(ctx):
-    session = ctx["session"]
-    assert len(session.app.screen_stack) == 2
-    assert session.app.screen._node_id == ctx["item_id"]
-
-
 @then("the hierarchy table has focus, not the escalation panel")
 def _hierarchy_table_focused(ctx):
     screen = ctx["session"].app.screen
@@ -977,36 +877,6 @@ def _steps_own_hub_opens(ctx):
 @then("the screen stack still has depth 2, unchanged by the confirm")
 def _stack_depth_still_2(ctx):
     assert len(ctx["session"].app.screen_stack) == 2
-
-
-@then("the screen stack still has depth 2, unchanged by the keypress")
-def _stack_depth_still_2_keypress(ctx):
-    assert len(ctx["session"].app.screen_stack) == 2
-
-
-@then("the item's own hub opens, on top of the step's, landing on the Description tab")
-def _item_hub_opens_on_top_of_step(ctx):
-    screen = ctx["session"].app.screen
-    assert isinstance(screen, NodeHubScreen)
-    assert screen._node_id == ctx["item_id"]
-    assert screen._active_tab == "description"
-    assert len(ctx["session"].app.screen_stack) == 3
-    _assert_tab_strip_rendered(ctx["session"], "description")
-
-
-@then("the step's own hub reappears")
-def _step_hub_reappears(ctx):
-    screen = ctx["session"].app.screen
-    assert screen is ctx["original_screen"]
-    assert screen._node_id == ctx["step_id"]
-
-
-@then("the original blocked item's hub reappears, at the tab I was on")
-def _original_hub_reappears(ctx):
-    screen = ctx["session"].app.screen
-    assert screen is ctx["original_screen"]
-    assert screen._active_tab == ctx["target_tab"]
-    _assert_tab_strip_rendered(ctx["session"], ctx["target_tab"])
 
 
 @then("the priority list reappears with that row still selected, at the same scroll position")
@@ -1053,7 +923,7 @@ def _reclaimed_shows_queued(ctx):
     assert "agent" in _text(screen, "#hub-role")
     assert _text(screen, "#hub-elapsed") is None
 
-    if screen._active_tab != "hierarchy":
+    if screen._active_tab != "workflow":
         ctx["session"].press("]")
 
     table = screen.query_one(HierarchyPagingTable)
@@ -1082,22 +952,3 @@ def _empty_state_placeholder(ctx):
 @when("I look at it")
 def _look_at_it(ctx):
     pass
-
-
-def test_hub_footer_shortcuts_include_open_blocker():
-    store = FakeStore()
-    item = store.create_item("an item", "a description")
-    store.create_step("write code", step="write-code", role="agent", parent=item)
-    store.claim_ready("agent")
-    session = launch(make_test_container(store=store))
-    try:
-        session.run(
-            lambda: session.app.push_screen(
-                NodeHubScreen(session.app.container, item, session.app._now)
-            )
-        )
-        session.pause()
-        assert session.app.screen.query_one(ShortcutBar).shortcuts == HUB_SHORTCUTS
-        assert ("b", "open blocker") in HUB_SHORTCUTS
-    finally:
-        session.close()
