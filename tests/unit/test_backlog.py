@@ -53,6 +53,61 @@ class TestBacklogProjectFilter(unittest.TestCase):
         self.assertEqual(resp.rows, [])
 
 
+class TestBacklogTextFilter(unittest.TestCase):
+    def test_matches_by_id_substring_case_insensitive(self):
+        s = FakeStore()
+        keep = s.create_item("keep", "a description", id="LC-479")
+        s.create_item("drop", "a description", id="LC-999")
+        resp = BacklogUseCase(s, None).execute(BacklogInput(text="lc-479"))
+        self.assertEqual([r.step.id for r in resp.rows], [keep])
+
+    def test_matches_by_title_substring_case_insensitive(self):
+        s = FakeStore()
+        keep = s.create_item("Filter the backlog", "a description")
+        s.create_item("unrelated title", "a description")
+        resp = BacklogUseCase(s, None).execute(BacklogInput(text="BACKLOG"))
+        self.assertEqual([r.step.id for r in resp.rows], [keep])
+
+    def test_matches_by_project_substring_case_insensitive(self):
+        s = FakeStore()
+        keep = s.create_item("keep", "a description")
+        s.add_artifact(keep, "repo", "kenmclennan/lightcycle")
+        s.create_item("drop", "a description")
+        resp = BacklogUseCase(s, None).execute(BacklogInput(text="LIGHTCYCLE"))
+        self.assertEqual([r.step.id for r in resp.rows], [keep])
+
+    def test_mixed_matches_and_non_matches_returns_only_the_matches(self):
+        s = FakeStore()
+        keep_a = s.create_item("alpha widget", "a description")
+        keep_b = s.create_item("beta thing", "a description")
+        s.add_artifact(keep_b, "repo", "widget-co")
+        s.create_item("gamma unrelated", "a description")
+        resp = BacklogUseCase(s, None).execute(BacklogInput(text="widget"))
+        self.assertEqual(sorted(r.step.id for r in resp.rows), sorted([keep_a, keep_b]))
+
+    def test_project_and_text_compose_to_the_intersection(self):
+        s = FakeStore()
+        keep = s.create_item("target item", "a description")
+        s.add_artifact(keep, "repo", "proj-a")
+        wrong_project = s.create_item("target item", "a description")
+        s.add_artifact(wrong_project, "repo", "proj-b")
+        wrong_text = s.create_item("other item", "a description")
+        s.add_artifact(wrong_text, "repo", "proj-a")
+        resp = BacklogUseCase(s, None).execute(BacklogInput(project="proj-a", text="target"))
+        self.assertEqual([r.step.id for r in resp.rows], [keep])
+
+    def test_counts_are_unaffected_by_text(self):
+        s = FakeStore()
+        s.add_project("org-a/proj-a")
+        matching = s.create_item("target item", "a description")
+        s.add_artifact(matching, "repo", "proj-a")
+        other = s.create_item("other item", "a description")
+        s.add_artifact(other, "repo", "proj-a")
+        resp = BacklogUseCase(s, None).counts()
+        by_project = {p.project: p.count for p in resp.projects}
+        self.assertEqual(by_project, {"proj-a": 2})
+
+
 class TestBacklogN(unittest.TestCase):
     def test_n_limits_project_filtered_items_before_grouping(self):
         s = FakeStore()

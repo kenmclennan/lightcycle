@@ -150,13 +150,16 @@ Feature: The backlog screen
     And the filter bar's composited frame shows the right label's own text
 
     Examples:
-      | state                       |
-      | backlog#normal              |
-      | backlog#empty               |
-      | backlog#empty-filtered      |
-      | backlog#claude-unavailable  |
-      | backlog#stacked             |
-      | backlog#picker-open         |
+      | state                              |
+      | backlog#normal                     |
+      | backlog#empty                      |
+      | backlog#empty-filtered             |
+      | backlog#claude-unavailable         |
+      | backlog#stacked                    |
+      | backlog#picker-open                |
+      | backlog#picker-long-label          |
+      | backlog#text-filter                |
+      | backlog#text-and-project-filter    |
 
   Scenario: An overall-empty backlog shows a calm message instead of a blank area
     Given the store has no todo items anywhere
@@ -186,9 +189,10 @@ Feature: The backlog screen
       | 1        | ↑↓            | move            |
       | 2        | enter/→       | explore in tree |
       | 3        | f             | filter          |
-      | 4        | tab           | current work    |
-      | 5        | ctrl-u/ctrl-d | scroll          |
-      | 6        | q             | quit            |
+      | 4        | /             | search          |
+      | 5        | tab           | current work    |
+      | 6        | ctrl-u/ctrl-d | scroll          |
+      | 7        | q             | quit            |
 
   Scenario Outline: Each shortcut for the overall-empty backlog appears in the footer, in order
     Given the store has no todo items anywhere
@@ -211,10 +215,52 @@ Feature: The backlog screen
     Examples:
       | position | key | action       |
       | 1        | f   | filter       |
-      | 2        | tab | current work |
-      | 3        | q   | quit         |
+      | 2        | /   | search       |
+      | 3        | tab | current work |
+      | 4        | q   | quit         |
 
   Scenario: The picker's own footer shows its own key hints while it is open
     Given the backlog is shown with the registered project "org-a/proj-a"
     When f is pressed
     Then the picker's footer reads "↑↓ move · enter apply · esc cancel"
+
+  Scenario: Pressing / focuses the search box
+    Given the backlog is shown with a todo item
+    When / is pressed
+    Then the search box has focus
+
+  Scenario: Pressing / while on the priority list does not focus the search box
+    Given the dashboard has launched
+    When / is pressed
+    Then the search box does not have focus
+
+  Scenario: Typing in the search box narrows the backlog on every keystroke
+    Given the backlog is shown with the todo items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the search box
+    Then only the row matching "widget" is shown
+
+  Scenario: A typed search term composes with an already-picked project to their intersection
+    Given the backlog is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with an item titled "shared name"
+    When f is pressed
+    And Down is pressed
+    And Enter is pressed
+    And / is pressed
+    And "shared" is typed into the search box
+    Then only the row under "proj-a" is shown
+
+  Scenario: Esc from the search box returns focus to the table, leaving the typed term and the filtered results unchanged
+    Given the backlog is shown with the todo items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the search box
+    And Esc is pressed
+    Then the table has focus
+    And only the row matching "widget" is still shown
+
+  Scenario: The search term survives switching to Current work and back
+    Given the backlog is shown with the todo items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the search box
+    And Tab is pressed
+    And Tab is pressed
+    Then only the row matching "widget" is shown

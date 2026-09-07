@@ -7,7 +7,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Input, Static
 from textual.widgets.data_table import CellDoesNotExist
 
 from lightcycle import __version__
@@ -32,6 +32,7 @@ from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
     apply_widths,
+    atomic_column_width,
     compute_layout,
     floor_message,
     pad_field,
@@ -190,6 +191,15 @@ def _backlog_stacked_cell_builder(row, layout, row_budget, cursor, icon_override
     return _backlog_row_cells(row, layout, row_budget, cursor=cursor)
 
 
+class BacklogFilterInput(Input):
+    BINDINGS = [
+        Binding("escape", "leave_filter", "Back", show=False),
+    ]
+
+    def action_leave_filter(self) -> None:
+        self.app.set_focus(self.app.query_one(BacklogTable))
+
+
 class BacklogView(Vertical):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -197,10 +207,15 @@ class BacklogView(Vertical):
         self._floor = False
         self._total = 0
         self._project_filter = None
+        self._text_filter = None
         self._last_shape = None
         self._backlog_needs_rebuild = False
 
     def compose(self) -> ComposeResult:
+        yield Horizontal(
+            BacklogFilterInput(id="backlog-filter-text", placeholder="filter"),
+            id="backlog-search-bar",
+        )
         yield Horizontal(
             Static(id="backlog-filter-left"),
             Static(id="backlog-filter-right"),
@@ -217,8 +232,8 @@ class BacklogView(Vertical):
         table.cursor_type = "row"
         table.show_header = False
 
-    def apply_rows(self, rows, total, project_filter) -> None:
-        shape = (tuple(r.id for r in rows), total, project_filter)
+    def apply_rows(self, rows, total, project_filter, text_filter) -> None:
+        shape = (tuple(r.id for r in rows), total, project_filter, text_filter)
         self._render_filter_bar(project_filter, len(rows))
         if shape == self._last_shape and not self._backlog_needs_rebuild:
             self._update_cells(rows)
@@ -228,11 +243,12 @@ class BacklogView(Vertical):
         self._rows = rows
         self._total = total
         self._project_filter = project_filter
-        self._toggle_state(total, len(rows), project_filter)
+        self._text_filter = text_filter
+        self._toggle_state(total, len(rows), project_filter, text_filter)
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
-        self._toggle_state(self._total, len(self._rows), self._project_filter)
+        self._toggle_state(self._total, len(self._rows), self._project_filter, self._text_filter)
 
     def _render_filter_bar(self, project_filter, count) -> None:
         left = self.query_one("#backlog-filter-left", Static)
@@ -321,7 +337,7 @@ class BacklogView(Vertical):
                     continue
                 table.update_cell(row.id, key, value)
 
-    def _toggle_state(self, total, filtered_count, project_filter) -> None:
+    def _toggle_state(self, total, filtered_count, project_filter, text_filter) -> None:
         overall_empty = total == 0
         filtered_empty = not overall_empty and filtered_count == 0
         table = self.query_one(BacklogTable)
@@ -337,11 +353,27 @@ class BacklogView(Vertical):
         if overall_empty:
             overall_widget.update(Text("Nothing in the backlog.", style=COLOURS["dim"]))
         elif filtered_empty:
-            message = Text("No backlog items for ", style=COLOURS["dim"])
-            message.append(project_filter, style=COLOURS["text"])
+            message = Text("No backlog items", style=COLOURS["dim"])
+            hints = []
+            if project_filter:
+                message.append(" for ", style=COLOURS["dim"])
+                message.append(project_filter, style=COLOURS["text"])
+                hints.append("f to check All")
+            if text_filter:
+                message.append(' matching "', style=COLOURS["dim"])
+                message.append(text_filter, style=COLOURS["text"])
+                message.append('"', style=COLOURS["dim"])
+                hints.append("backspace to clear the search")
             message.append(".", style=COLOURS["dim"])
             message_widget.update(message)
-            hint_widget.update(Text("Press f to check All.", style=COLOURS["dim"]))
+            hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
+
+
+PICKER_MIN_WIDTH = 40
+PICKER_BORDER_WIDTH = 2
+PICKER_PADDING_WIDTH = 2
+PICKER_CURSOR_PREFIX_WIDTH = 2
+PICKER_COLUMN_GAP = 1
 
 
 class ProjectFilterPicker(ModalScreen):
@@ -352,7 +384,7 @@ class ProjectFilterPicker(ModalScreen):
         border: none;
     }}
     #picker {{
-        width: 40;
+        width: {PICKER_MIN_WIDTH};
         height: auto;
         margin-top: 4;
         background: {COLOURS["panel"]};
@@ -372,7 +404,6 @@ class ProjectFilterPicker(ModalScreen):
         width: 1fr;
     }}
     .picker-option-count {{
-        width: 1fr;
         content-align: right middle;
         color: {COLOURS["dim"]};
     }}
@@ -398,15 +429,29 @@ class ProjectFilterPicker(ModalScreen):
         super().__init__()
         self._options = options
         self._index = 0
+        self._count_width = max(
+            1, atomic_column_width([str(count) for _, _, count in options])
+        )
+        label_width = atomic_column_width([label for _, label, _ in options])
+        computed_width = (
+            PICKER_BORDER_WIDTH
+            + PICKER_PADDING_WIDTH
+            + PICKER_CURSOR_PREFIX_WIDTH
+            + label_width
+            + PICKER_COLUMN_GAP
+            + self._count_width
+        )
+        self._picker_width = max(computed_width, PICKER_MIN_WIDTH)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="picker"):
             yield Static("Filter by project", id="picker-head")
             for index, (_, label, count) in enumerate(self._options):
-                yield PickerOption(label, count, id="picker-option-%d" % index)
+                yield PickerOption(label, count, self._count_width, id="picker-option-%d" % index)
             yield Static("↑↓ move · enter apply · esc cancel", id="picker-foot")
 
     def on_mount(self) -> None:
+        self.query_one("#picker").styles.width = self._picker_width
         self._paint_highlight()
 
     def _paint_highlight(self) -> None:
@@ -429,14 +474,18 @@ class ProjectFilterPicker(ModalScreen):
 
 
 class PickerOption(Horizontal):
-    def __init__(self, label, count, *, id=None):
+    def __init__(self, label, count, count_width, *, id=None):
         super().__init__(id=id, classes="picker-option")
         self.label_text = label
         self.count = count
+        self.count_width = count_width
 
     def compose(self) -> ComposeResult:
         yield Static(id="picker-option-label")
         yield Static(str(self.count), classes="picker-option-count")
+
+    def on_mount(self) -> None:
+        self.query_one(".picker-option-count", Static).styles.width = self.count_width
 
     def set_highlighted(self, highlighted) -> None:
         cursor = Text(
@@ -537,6 +586,29 @@ class LightcycleApp(App):
         height: 1fr;
         display: none;
     }}
+    #backlog-search-bar {{
+        height: 1;
+    }}
+    BacklogFilterInput {{
+        border: none;
+        padding: 0 1;
+        height: 1;
+        background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
+    }}
+    BacklogFilterInput:focus {{
+        background: {COLOURS["bg"]};
+    }}
+    BacklogFilterInput > .input--placeholder {{
+        color: {COLOURS["dim"]};
+    }}
+    BacklogFilterInput > .input--cursor {{
+        background: {COLOURS["cyan"]};
+        color: {COLOURS["bg"]};
+    }}
+    BacklogFilterInput > .input--selection {{
+        background: {COLOURS["selected-bg"]};
+    }}
     #backlog-filter-bar {{
         height: 2;
         border-bottom: solid {COLOURS["border"]};
@@ -610,6 +682,7 @@ class LightcycleApp(App):
         Binding("ctrl+c", "quit", "Quit", show=False, priority=True),
         Binding("tab", "toggle_view", "Toggle view", show=False, priority=True),
         Binding("f", "open_picker", "Filter", show=False),
+        Binding("/", "focus_search", "Search", show=False),
     ]
 
     def __init__(self, container, now=None, upgrade_check=None):
@@ -633,6 +706,7 @@ class LightcycleApp(App):
         self._priority_layout_cache = None
         self._priority_row_budget_cache = None
         self._backlog_project_filter = None
+        self._backlog_text_filter = None
         self._backlog_total = 0
         self._backlog_filtered_count = 0
         self._picker_open = False
@@ -702,13 +776,15 @@ class LightcycleApp(App):
         self._sync_active_glyph_animation()
 
         backlog_uc = BacklogUseCase(self._container.store, None)
-        backlog_resp = backlog_uc.execute(BacklogInput(project=self._backlog_project_filter))
+        backlog_resp = backlog_uc.execute(
+            BacklogInput(project=self._backlog_project_filter, text=self._backlog_text_filter)
+        )
         backlog_counts = backlog_uc.counts()
         backlog_rows = build_backlog_rows(backlog_resp.rows)
         self._backlog_total = backlog_counts.total
         self._backlog_filtered_count = len(backlog_rows)
         self.query_one(BacklogView).apply_rows(
-            backlog_rows, self._backlog_total, self._backlog_project_filter
+            backlog_rows, self._backlog_total, self._backlog_project_filter, self._backlog_text_filter
         )
 
         self._apply_view_visibility()
@@ -799,6 +875,17 @@ class LightcycleApp(App):
         self._backlog_project_filter = result
         self._refresh()
         self.set_focus(self.query_one(BacklogTable))
+
+    def action_focus_search(self) -> None:
+        if self._view != "backlog":
+            return
+        self.set_focus(self.query_one(BacklogFilterInput))
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "backlog-filter-text":
+            return
+        self._backlog_text_filter = event.value or None
+        self._refresh()
 
     def _priority_layout(self, table, rows):
         atomic_values = {
