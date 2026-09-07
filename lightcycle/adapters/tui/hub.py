@@ -294,7 +294,7 @@ def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None, fl
     return content_so_far + pad_field_right(role_cell, role_area)
 
 
-def _hierarchy_label(node, flow_service):
+def _hierarchy_label(node, flow_service, multi_pass):
     if node.type != "step":
         return node.title
     if flow_service is None:
@@ -302,7 +302,7 @@ def _hierarchy_label(node, flow_service):
     else:
         base, phase = flow_service.display_for(node) or node.step, flow_service.phase_for(node)
     n = pass_number(node.pass_id)
-    parts = (["pass %d" % n] if n > 1 else []) + ([phase] if phase else [])
+    parts = (["pass %d" % n] if multi_pass else []) + ([phase] if phase else [])
     return " · ".join(parts + [base]) if parts else base
 
 
@@ -310,12 +310,14 @@ def _row_node(rows, row_id):
     return next((r.node for r in rows if r.node.id == row_id), None)
 
 
-def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None, flow_service=None):
+def hierarchy_row_cells(
+    row, layout=None, row_budget=None, active_frame=None, flow_service=None, multi_pass=False,
+):
     node = row.node
     if layout is not None and layout.stacked:
         first_line = _hierarchy_stacked_first_line(row, layout, row_budget, active_frame, flow_service)
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
-        label = _hierarchy_label(node, flow_service)
+        label = _hierarchy_label(node, flow_service, multi_pass)
         return (stacked_cell(first_line, indent, label, row_budget),)
     glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service))
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
@@ -323,7 +325,7 @@ def hierarchy_row_cells(row, layout=None, row_budget=None, active_frame=None, fl
         icon_cell = icon_cell + Text(
             DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
         )
-    title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service)
+    title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service, multi_pass)
     role_cell = (
         Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
         if node.type == "step" else ""
@@ -921,6 +923,7 @@ class NodeHubScreen(Screen):
         self._active_tab = None
         self._last_hierarchy_shape = None
         self._last_rows = []
+        self._last_multi_pass = False
         self._hierarchy_floor = False
         self._hierarchy_stacked = False
         self._hierarchy_layout_cache = None
@@ -1126,8 +1129,8 @@ class NodeHubScreen(Screen):
         self._flow_service = self._container.flow_service()
         header = build_header(store, node, self._now().isoformat(), self._flow_service)
         self.query_one(HubHeader).update(header)
-        rows = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id)).rows
-        self._render_hierarchy(rows, initial)
+        hierarchy = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id))
+        self._render_hierarchy(hierarchy.rows, hierarchy.multi_pass, initial)
         if node.type == "item":
             self._render_artifacts(viewable_artifacts(node), initial)
             self._render_description(node.description)
@@ -1165,7 +1168,7 @@ class NodeHubScreen(Screen):
             return
         layout = self._hierarchy_layout(table, self._last_rows)
         if layout.floor != self._hierarchy_floor or layout.stacked != self._hierarchy_stacked or layout.stacked:
-            self._render_hierarchy(self._last_rows, initial=True)
+            self._render_hierarchy(self._last_rows, self._last_multi_pass, initial=True)
             self._apply_tab_visibility()
             return
         if layout.floor:
@@ -1222,13 +1225,14 @@ class NodeHubScreen(Screen):
             return None
         return cell_key.row_key.value
 
-    def _render_hierarchy(self, rows, initial) -> None:
+    def _render_hierarchy(self, rows, multi_pass, initial) -> None:
         self._last_rows = rows
+        self._last_multi_pass = multi_pass
         self._sync_active_glyph_animation()
         table = self.query_one(HierarchyPagingTable)
         shape = tuple(r.node.id for r in rows)
         if shape == self._last_hierarchy_shape and not initial:
-            self._update_hierarchy_cells(table, rows)
+            self._update_hierarchy_cells(table, rows, multi_pass)
             return
         if table.size.width == 0:
             return
@@ -1267,7 +1271,7 @@ class NodeHubScreen(Screen):
             table.add_row(
                 *hierarchy_row_cells(
                     row, layout, row_budget, active_frame=active_frame,
-                    flow_service=self._flow_service,
+                    flow_service=self._flow_service, multi_pass=multi_pass,
                 ),
                 height=None, key=row.node.id
             )
@@ -1277,7 +1281,7 @@ class NodeHubScreen(Screen):
             table.move_cursor(row=index)
         self.update_pinned_ancestor()
 
-    def _update_hierarchy_cells(self, table, rows) -> None:
+    def _update_hierarchy_cells(self, table, rows, multi_pass) -> None:
         table_ = self.query_one(HierarchyPagingTable)
         layout = self._hierarchy_layout(table_, rows)
         row_budget = render_row_budget(table_, layout, len(COLUMN_GRIDS["workflow"]))
@@ -1287,7 +1291,7 @@ class NodeHubScreen(Screen):
         for row in rows:
             cells = hierarchy_row_cells(
                 row, layout, row_budget, active_frame=active_frame,
-                flow_service=self._flow_service,
+                flow_service=self._flow_service, multi_pass=multi_pass,
             )
             if layout.stacked:
                 table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
@@ -1336,6 +1340,7 @@ class NodeHubScreen(Screen):
                 continue
             cells = hierarchy_row_cells(
                 row, layout, row_budget, active_frame=frame, flow_service=self._flow_service,
+                multi_pass=self._last_multi_pass,
             )
             try:
                 if layout.stacked:
@@ -1638,9 +1643,6 @@ class NodeHubScreen(Screen):
             return
         row_id = event.row_key.value
         if row_id is None or row_id == self._node_id:
-            return
-        node = _row_node(self._last_rows, row_id)
-        if node is not None and node.type == "pass":
             return
         self.switch_at(row_id)
 

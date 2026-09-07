@@ -89,7 +89,9 @@ def test_hierarchy_cursor_survives_a_layout_forced_rerender():
         table.move_cursor(row=done_row)
         session.pause()
 
-        session.run(lambda: screen._render_hierarchy(screen._last_rows, initial=True))
+        session.run(
+            lambda: screen._render_hierarchy(screen._last_rows, screen._last_multi_pass, initial=True)
+        )
         session.pause()
 
         assert table.cursor_row == done_row

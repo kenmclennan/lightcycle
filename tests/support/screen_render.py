@@ -220,16 +220,20 @@ def _long_hierarchy_store(passes=4):
         "LC-290.1", LONG_ITEM_TITLE, workflow="flynns-workflows/blueprint-delivery@0333918"
     )
     n = 0
-    for _ in range(passes):
+    for p in range(passes):
+        pid = store.open_pass(item)
         for step, role in _LOOP:
             n += 1
-            store.step(
+            step_id = store.step(
                 "LC-290.1.%d" % n,
                 "%s: %s" % (step, LONG_ITEM_TITLE),
                 step=step,
                 role=role,
                 parent=item,
             )
+            store.set_step_pass(step_id, pid)
+        if p < passes - 1:
+            store.close_pass(pid)
     return store, item
 
 
