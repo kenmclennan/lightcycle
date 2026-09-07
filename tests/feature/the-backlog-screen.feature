@@ -73,11 +73,11 @@ Feature: The backlog screen
     When Tab is pressed
     Then the backlog is shown in place of the priority list
 
-  Scenario: Pressing Tab again from the backlog returns to the priority list in its place
+  Scenario: Pressing Tab again from the backlog moves to the Done tab in its place
     Given the dashboard has launched
     When Tab is pressed
     And Tab is pressed
-    Then the priority list is shown in place of the backlog
+    Then the done tab is shown in place of the backlog
 
   Scenario: Pressing f opens the project filter picker listing All and every registered project with its own count
     Given the backlog is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with backlogged items
@@ -190,7 +190,7 @@ Feature: The backlog screen
       | 2        | enter/→       | explore in tree |
       | 3        | f             | filter          |
       | 4        | /             | search          |
-      | 5        | tab           | current work    |
+      | 5        | tab           | done            |
       | 6        | ctrl-u/ctrl-d | scroll          |
       | 7        | q             | quit            |
 
@@ -202,9 +202,9 @@ Feature: The backlog screen
     And its action is "<action>"
 
     Examples:
-      | position | key | action       |
-      | 1        | tab | current work |
-      | 2        | q   | quit         |
+      | position | key | action |
+      | 1        | tab | done   |
+      | 2        | q   | quit   |
 
   Scenario Outline: Each shortcut for the filtered-empty backlog appears in the footer, in order
     Given the backlog is shown, filtered to "lightcycle", with no items matching that filter
@@ -213,11 +213,11 @@ Feature: The backlog screen
     And its action is "<action>"
 
     Examples:
-      | position | key | action       |
-      | 1        | f   | filter       |
-      | 2        | /   | search       |
-      | 3        | tab | current work |
-      | 4        | q   | quit         |
+      | position | key | action |
+      | 1        | f   | filter |
+      | 2        | /   | search |
+      | 3        | tab | done   |
+      | 4        | q   | quit   |
 
   Scenario: The picker's own footer shows its own key hints while it is open
     Given the backlog is shown with the registered project "org-a/proj-a"
@@ -261,6 +261,7 @@ Feature: The backlog screen
     Given the backlog is shown with the todo items "widget one" and "gadget two"
     When / is pressed
     And "widget" is typed into the search box
+    And Tab is pressed
     And Tab is pressed
     And Tab is pressed
     Then only the row matching "widget" is shown

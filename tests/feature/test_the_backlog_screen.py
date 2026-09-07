@@ -515,6 +515,15 @@ def _priority_shown_in_place(ctx):
     assert priority_visible
 
 
+@then("the done tab is shown in place of the backlog")
+def _done_shown_in_place(ctx):
+    from lightcycle.adapters.tui.app import DoneView
+
+    session = ctx["session"]
+    assert not session.app.query_one(BacklogView).display
+    assert session.app.query_one(DoneView).display
+
+
 @then(parsers.parse('the picker\'s header reads "{text}"'))
 def _picker_header(ctx, text):
     widget = ctx["session"].app.screen.query_one("#picker-head")

@@ -22,6 +22,9 @@ from lightcycle.adapters.tui.design_system import (
     COLOURS,
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
+    DONE_EMPTY_SHORTCUTS,
+    DONE_FILTERED_EMPTY_SHORTCUTS,
+    DONE_SHORTCUTS,
     GLOBAL_SHORTCUTS,
     MODAL_OVERLAY_ALPHA,
     next_active_glyph_frame,
@@ -43,7 +46,13 @@ from lightcycle.adapters.tui.row_grid import (
 )
 from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
 from lightcycle.application.setup import upgrade
-from lightcycle.application.work import BacklogInput, BacklogUseCase, StatusUseCase
+from lightcycle.application.work import (
+    BacklogInput,
+    BacklogUseCase,
+    DoneInput,
+    DoneUseCase,
+    StatusUseCase,
+)
 
 POLL_INTERVAL_SECONDS = 10
 
@@ -53,6 +62,8 @@ BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
 PICKER_CANCELLED = object()
+
+_VIEW_CYCLE = ("priority", "backlog", "done")
 
 STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
@@ -64,15 +75,18 @@ class TabStrip(Horizontal):
         yield Static("Current work", id="tab-current-work", classes="tab-active")
         yield Static(" · ", classes="tab-separator")
         yield Static("Backlog", id="tab-backlog", classes="tab-dim")
+        yield Static(" · ", classes="tab-separator")
+        yield Static("Done", id="tab-done", classes="tab-dim")
 
     def set_active(self, view) -> None:
-        current_work = self.query_one("#tab-current-work", Static)
-        backlog = self.query_one("#tab-backlog", Static)
-        on_priority = view == "priority"
-        current_work.set_class(on_priority, "tab-active")
-        current_work.set_class(not on_priority, "tab-dim")
-        backlog.set_class(not on_priority, "tab-active")
-        backlog.set_class(on_priority, "tab-dim")
+        widgets = {
+            "priority": self.query_one("#tab-current-work", Static),
+            "backlog": self.query_one("#tab-backlog", Static),
+            "done": self.query_one("#tab-done", Static),
+        }
+        for key, widget in widgets.items():
+            widget.set_class(key == view, "tab-active")
+            widget.set_class(key != view, "tab-dim")
 
 
 class PagingTable(DataTable):
@@ -131,6 +145,37 @@ class BacklogTable(PagingTable):
     def on_show(self, event: events.Show) -> None:
         view = self.parent
         if isinstance(view, BacklogView):
+            view.refresh_column_width()
+
+    def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
+        super().watch_cursor_coordinate(old_coordinate, new_coordinate)
+        if old_coordinate.row != new_coordinate.row:
+            self._paint_cursor_glyph(old_coordinate.row, False)
+            self._paint_cursor_glyph(new_coordinate.row, True)
+
+    def _paint_cursor_glyph(self, row_index, show) -> None:
+        if row_index < 0 or row_index >= len(self.ordered_rows):
+            return
+        row_key = self.ordered_rows[row_index].key
+        if getattr(self, "_stacked_mode", False):
+            _repaint_stacked_cursor(self, row_key, show)
+            return
+        value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
+        try:
+            self.update_cell(row_key, "cursor", value)
+        except CellDoesNotExist:
+            pass
+
+
+class DoneTable(PagingTable):
+    def on_resize(self, event: events.Resize) -> None:
+        view = self.parent
+        if isinstance(view, DoneView):
+            view.refresh_column_width()
+
+    def on_show(self, event: events.Show) -> None:
+        view = self.parent
+        if isinstance(view, DoneView):
             view.refresh_column_width()
 
     def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
@@ -354,6 +399,184 @@ class BacklogView(Vertical):
             overall_widget.update(Text("Nothing in the backlog.", style=COLOURS["dim"]))
         elif filtered_empty:
             message = Text("No backlog items", style=COLOURS["dim"])
+            hints = []
+            if project_filter:
+                message.append(" for ", style=COLOURS["dim"])
+                message.append(project_filter, style=COLOURS["text"])
+                hints.append("f to check All")
+            if text_filter:
+                message.append(' matching "', style=COLOURS["dim"])
+                message.append(text_filter, style=COLOURS["text"])
+                message.append('"', style=COLOURS["dim"])
+                hints.append("backspace to clear the search")
+            message.append(".", style=COLOURS["dim"])
+            message_widget.update(message)
+            hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
+
+
+class DoneFilterInput(Input):
+    BINDINGS = [
+        Binding("escape", "leave_filter", "Back", show=False),
+    ]
+
+    def action_leave_filter(self) -> None:
+        self.app.set_focus(self.app.query_one(DoneTable))
+
+
+class DoneView(Vertical):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._rows = ()
+        self._floor = False
+        self._total = 0
+        self._project_filter = None
+        self._text_filter = None
+        self._last_shape = None
+        self._backlog_needs_rebuild = False
+
+    def compose(self) -> ComposeResult:
+        yield Horizontal(
+            DoneFilterInput(id="done-filter-text", placeholder="filter"),
+            id="done-search-bar",
+        )
+        yield Horizontal(
+            Static(id="done-filter-left"),
+            Static(id="done-filter-right"),
+            id="done-filter-bar",
+        )
+        yield DoneTable(id="done-table")
+        yield Static(id="done-floor")
+        yield Static(id="done-empty-overall")
+        yield Static(id="done-empty-filtered-message")
+        yield Static(id="done-empty-filtered-hint")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DoneTable)
+        table.cursor_type = "row"
+        table.show_header = False
+
+    def apply_rows(self, rows, total, project_filter, text_filter) -> None:
+        shape = (tuple(r.id for r in rows), total, project_filter, text_filter)
+        self._render_filter_bar(project_filter, len(rows))
+        if shape == self._last_shape and not self._backlog_needs_rebuild:
+            self._update_cells(rows)
+        else:
+            self._rebuild_table(rows)
+            self._last_shape = shape
+        self._rows = rows
+        self._total = total
+        self._project_filter = project_filter
+        self._text_filter = text_filter
+        self._toggle_state(total, len(rows), project_filter, text_filter)
+
+    def refresh_column_width(self) -> None:
+        self._rebuild_table(self._rows)
+        self._toggle_state(self._total, len(self._rows), self._project_filter, self._text_filter)
+
+    def _render_filter_bar(self, project_filter, count) -> None:
+        left = self.query_one("#done-filter-left", Static)
+        right = self.query_one("#done-filter-right", Static)
+        left.update(Text("PROJECT: %s" % (project_filter or "All"), style=COLOURS["text"]))
+        right.update(Text("%d items" % count, style=COLOURS["text"]))
+
+    def _selected_row_id(self, table):
+        if table.row_count == 0:
+            return None
+        try:
+            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
+        except CellDoesNotExist:
+            return None
+        return cell_key.row_key.value
+
+    def _layout(self, table):
+        atomic_values = {
+            "id": [row.id for row in self._rows],
+            "project": [row.project for row in self._rows],
+        }
+        row_budget = row_budget_for(table, len(BACKLOG_COLUMNS))
+        indent = BACKLOG_CONTINUATION_INDENT
+        return compute_layout(row_budget, ["cursor"], atomic_values, indent)
+
+    def _rebuild_table(self, rows) -> None:
+        table = self.query_one(DoneTable)
+        if table.size.width == 0:
+            self._backlog_needs_rebuild = True
+            return
+        layout = self._layout(table)
+        self._floor = bool(rows) and layout.floor
+        floor_widget = self.query_one("#done-floor", Static)
+        if self._floor:
+            self._backlog_needs_rebuild = True
+            floor_widget.update(
+                Text(floor_message(layout, table, len(BACKLOG_COLUMNS)), style=COLOURS["dim"])
+            )
+            return
+        self._backlog_needs_rebuild = False
+        selected_id = self._selected_row_id(table)
+
+        table.clear(columns=True)
+        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+        else:
+            widths = {
+                "cursor": GLYPH_WIDTHS["cursor"],
+                "id": layout.atomic_widths["id"],
+                "project": layout.atomic_widths["project"],
+                "title": layout.flexible_width,
+            }
+            for key in BACKLOG_COLUMNS:
+                table.add_column(key, width=widths[key], key=key)
+
+        ids = [row.id for row in rows]
+        new_index = ids.index(selected_id) if selected_id in ids else 0
+        table._stacked_mode = layout.stacked
+        table._stacked_layout = layout
+        table._stacked_row_budget = row_budget
+        table._stacked_cell_builder = _backlog_stacked_cell_builder
+        stacked_rows = {}
+        for index, row in enumerate(rows):
+            is_cursor = index == new_index
+            cells = _backlog_row_cells(row, layout, row_budget, cursor=is_cursor)
+            if layout.stacked:
+                stacked_rows[row.id] = (row, None)
+            table.add_row(*cells, height=None, key=row.id)
+        table._stacked_rows = stacked_rows
+        if rows:
+            table.move_cursor(row=new_index)
+
+    def _update_cells(self, rows) -> None:
+        table = self.query_one(DoneTable)
+        layout = self._layout(table)
+        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        selected_id = self._selected_row_id(table)
+        for row in rows:
+            cells = _backlog_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
+            if layout.stacked:
+                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                continue
+            for key, value in zip(BACKLOG_COLUMNS, cells):
+                if key == "cursor":
+                    continue
+                table.update_cell(row.id, key, value)
+
+    def _toggle_state(self, total, filtered_count, project_filter, text_filter) -> None:
+        overall_empty = total == 0
+        filtered_empty = not overall_empty and filtered_count == 0
+        table = self.query_one(DoneTable)
+        showing_floor = self._floor and filtered_count > 0
+        table.display = filtered_count > 0 and not showing_floor
+        self.query_one("#done-floor", Static).display = showing_floor
+        overall_widget = self.query_one("#done-empty-overall", Static)
+        message_widget = self.query_one("#done-empty-filtered-message", Static)
+        hint_widget = self.query_one("#done-empty-filtered-hint", Static)
+        overall_widget.display = overall_empty
+        message_widget.display = filtered_empty
+        hint_widget.display = filtered_empty
+        if overall_empty:
+            overall_widget.update(Text("Nothing is done yet.", style=COLOURS["dim"]))
+        elif filtered_empty:
+            message = Text("No done items", style=COLOURS["dim"])
             hints = []
             if project_filter:
                 message.append(" for ", style=COLOURS["dim"])
@@ -641,6 +864,70 @@ class LightcycleApp(App):
         display: none;
     }}
 
+    DoneView {{
+        display: none;
+    }}
+    #done-floor {{
+        color: {COLOURS["dim"]};
+        content-align: center middle;
+        height: 1fr;
+        display: none;
+    }}
+    #done-search-bar {{
+        height: 1;
+    }}
+    DoneFilterInput {{
+        border: none;
+        padding: 0 1;
+        height: 1;
+        background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
+    }}
+    DoneFilterInput:focus {{
+        background: {COLOURS["bg"]};
+    }}
+    DoneFilterInput > .input--placeholder {{
+        color: {COLOURS["dim"]};
+    }}
+    DoneFilterInput > .input--cursor {{
+        background: {COLOURS["cyan"]};
+        color: {COLOURS["bg"]};
+    }}
+    DoneFilterInput > .input--selection {{
+        background: {COLOURS["selected-bg"]};
+    }}
+    #done-filter-bar {{
+        height: 2;
+        border-bottom: solid {COLOURS["border"]};
+    }}
+    #done-filter-left {{
+        width: auto;
+    }}
+    #done-filter-right {{
+        width: 1fr;
+        content-align: right middle;
+    }}
+    DoneTable {{
+        height: 1fr;
+    }}
+    #done-empty-overall {{
+        content-align: center top;
+        height: auto;
+        margin-top: 4;
+        display: none;
+    }}
+    #done-empty-filtered-message {{
+        content-align: center top;
+        height: auto;
+        margin-top: 4;
+        display: none;
+    }}
+    #done-empty-filtered-hint {{
+        content-align: center top;
+        height: auto;
+        display: none;
+    }}
+
     DashboardFooter {{
         dock: bottom;
         height: 3;
@@ -709,6 +996,10 @@ class LightcycleApp(App):
         self._backlog_text_filter = None
         self._backlog_total = 0
         self._backlog_filtered_count = 0
+        self._done_project_filter = None
+        self._done_text_filter = None
+        self._done_total = 0
+        self._done_filtered_count = 0
         self._picker_open = False
 
     @property
@@ -725,6 +1016,7 @@ class LightcycleApp(App):
         yield Static(EMPTY_STATE_MESSAGE, id="empty-state")
         yield Static(id="priority-list-floor")
         yield BacklogView(id="backlog-view")
+        yield DoneView(id="done-view")
         yield DashboardFooter(id="footer")
 
     def on_mount(self) -> None:
@@ -787,6 +1079,18 @@ class LightcycleApp(App):
             backlog_rows, self._backlog_total, self._backlog_project_filter, self._backlog_text_filter
         )
 
+        done_uc = DoneUseCase(self._container.store)
+        done_resp = done_uc.execute(
+            DoneInput(project=self._done_project_filter, text=self._done_text_filter)
+        )
+        done_counts = done_uc.counts()
+        done_rows = build_backlog_rows(done_resp.rows)
+        self._done_total = done_counts.total
+        self._done_filtered_count = len(done_rows)
+        self.query_one(DoneView).apply_rows(
+            done_rows, self._done_total, self._done_project_filter, self._done_text_filter
+        )
+
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
 
@@ -809,12 +1113,19 @@ class LightcycleApp(App):
         )
         self.query_one("#empty-state", Static).display = on_priority and self._priority_empty
         self.query_one("#priority-list-floor", Static).display = showing_floor
-        self.query_one(BacklogView).display = not on_priority
+        self.query_one(BacklogView).display = self._view == "backlog"
+        self.query_one(DoneView).display = self._view == "done"
         self._sync_active_glyph_animation()
 
     def _desired_shortcuts(self):
         if self._view == "priority":
             return GLOBAL_SHORTCUTS
+        if self._view == "done":
+            if self._done_total == 0:
+                return DONE_EMPTY_SHORTCUTS
+            if self._done_filtered_count == 0:
+                return DONE_FILTERED_EMPTY_SHORTCUTS
+            return DONE_SHORTCUTS
         if self._backlog_total == 0:
             return BACKLOG_EMPTY_SHORTCUTS
         if self._backlog_filtered_count == 0:
@@ -830,15 +1141,18 @@ class LightcycleApp(App):
     def action_toggle_view(self) -> None:
         while len(self.screen_stack) > 1:
             self.pop_screen()
-        self._view = "backlog" if self._view == "priority" else "priority"
+        index = _VIEW_CYCLE.index(self._view)
+        self._view = _VIEW_CYCLE[(index + 1) % len(_VIEW_CYCLE)]
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()
         self._sync_active_glyph_animation()
         if self._view == "priority":
             self.set_focus(self.query_one(PriorityTable))
-        else:
+        elif self._view == "backlog":
             self.set_focus(self.query_one(BacklogTable))
+        else:
+            self.set_focus(self.query_one(DoneTable))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if self.screen is not self.screen_stack[0]:
@@ -854,14 +1168,17 @@ class LightcycleApp(App):
             if row is None:
                 return
             self.push_screen(NodeHubScreen(self._container, row.step_id, self._now))
-        elif table.id == "backlog-table":
+        elif table.id in ("backlog-table", "done-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))
 
     def action_open_picker(self) -> None:
-        if self._view != "backlog" or self._picker_open:
+        if self._view not in ("backlog", "done") or self._picker_open:
             return
-        counts = BacklogUseCase(self._container.store, None).counts()
+        if self._view == "backlog":
+            counts = BacklogUseCase(self._container.store, None).counts()
+        else:
+            counts = DoneUseCase(self._container.store).counts()
         options = [(None, "All", counts.total)] + [
             (pc.project, pc.project, pc.count) for pc in counts.projects
         ]
@@ -872,20 +1189,28 @@ class LightcycleApp(App):
         self._picker_open = False
         if result is PICKER_CANCELLED:
             return
-        self._backlog_project_filter = result
-        self._refresh()
-        self.set_focus(self.query_one(BacklogTable))
+        if self._view == "backlog":
+            self._backlog_project_filter = result
+            self._refresh()
+            self.set_focus(self.query_one(BacklogTable))
+        else:
+            self._done_project_filter = result
+            self._refresh()
+            self.set_focus(self.query_one(DoneTable))
 
     def action_focus_search(self) -> None:
-        if self._view != "backlog":
-            return
-        self.set_focus(self.query_one(BacklogFilterInput))
+        if self._view == "backlog":
+            self.set_focus(self.query_one(BacklogFilterInput))
+        elif self._view == "done":
+            self.set_focus(self.query_one(DoneFilterInput))
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id != "backlog-filter-text":
-            return
-        self._backlog_text_filter = event.value or None
-        self._refresh()
+        if event.input.id == "backlog-filter-text":
+            self._backlog_text_filter = event.value or None
+            self._refresh()
+        elif event.input.id == "done-filter-text":
+            self._done_text_filter = event.value or None
+            self._refresh()
 
     def _priority_layout(self, table, rows):
         atomic_values = {
