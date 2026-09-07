@@ -74,6 +74,32 @@ def price_tokens(model, input_tokens, output_tokens, cache_read_tokens, cache_cr
     return cost, "derived"
 
 
+def sum_usage_events(events) -> UsageEvent:
+    input_tokens = output_tokens = cache_read_tokens = cache_creation_tokens = 0
+    cost_usd = 0.0
+    cost_basis = None
+    thinking_tokens = None
+    for event in events:
+        input_tokens += event.input_tokens
+        output_tokens += event.output_tokens
+        cache_read_tokens += event.cache_read_tokens
+        cache_creation_tokens += event.cache_creation_tokens
+        cost_usd += event.cost_usd
+        if cost_basis is None and event.cost_basis is not None:
+            cost_basis = event.cost_basis
+        if event.thinking_tokens is not None:
+            thinking_tokens = (thinking_tokens or 0) + event.thinking_tokens
+    return UsageEvent(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_creation_tokens=cache_creation_tokens,
+        cost_usd=cost_usd,
+        cost_basis=cost_basis,
+        thinking_tokens=thinking_tokens,
+    )
+
+
 def resolve_usage(usage, attribution, model, rates) -> UsageEvent:
     if usage.has_result_line:
         return usage

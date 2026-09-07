@@ -19,6 +19,19 @@ class AttributionEvent:
     recovered_cache_creation_tokens: int = 0
 
 
+def sum_attribution_events(events):
+    turn_count = 0
+    tool_usage = {}
+    for event in events:
+        turn_count += event.turn_count
+        for tool, usage in event.tool_usage.items():
+            existing = tool_usage.get(tool, ToolUsage())
+            tool_usage[tool] = ToolUsage(
+                calls=existing.calls + usage.calls, bytes=existing.bytes + usage.bytes
+            )
+    return turn_count, tool_usage
+
+
 def _content_bytes(content):
     if content is None:
         return 0

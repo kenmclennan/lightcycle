@@ -550,6 +550,28 @@ class FakeStore(StorePort):
         self._backfill_log[log_file] = (step_id, usage.has_result_line)
         return recovered
 
+    def logs_for_step(self, step_id):
+        return [
+            log_file for log_file, (sid, _) in self._backfill_log.items() if sid == step_id
+        ]
+
+    def overwrite_usage_and_attribution(self, step_id, usage_totals, turn_count, tool_usage_totals):
+        b = self._get(step_id)
+        meta = dict(b.get("metadata") or {})
+        meta["usage_input_tokens"] = usage_totals.input_tokens
+        meta["usage_output_tokens"] = usage_totals.output_tokens
+        meta["usage_cache_read_tokens"] = usage_totals.cache_read_tokens
+        meta["usage_cache_creation_tokens"] = usage_totals.cache_creation_tokens
+        meta["usage_cost_usd"] = usage_totals.cost_usd
+        meta["usage_cost_basis"] = usage_totals.cost_basis
+        meta["usage_thinking_tokens"] = usage_totals.thinking_tokens
+        meta["turn_count"] = turn_count
+        b["metadata"] = meta
+        for key in [k for k in self._tool_usage if k[0] == step_id]:
+            del self._tool_usage[key]
+        for tool, usage in tool_usage_totals.items():
+            self._tool_usage[(step_id, tool)] = usage
+
     def history(self, tid):
         return list(self._history.get(tid, []))
 

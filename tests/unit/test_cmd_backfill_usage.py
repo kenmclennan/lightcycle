@@ -85,6 +85,21 @@ class TestCmdBackfillUsageSummary(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("122/2 ledger rows reclassified", out)
         self.assertIn("118 recovered usage", out)
+        self.assertNotIn("repair:", out)
+
+    def test_repair_flag_is_passed_through_and_prints_a_repair_summary(self):
+        fake_resp = mock.Mock(
+            stored=0, total=0, matched=0, orphaned=0, unmatched=0, skipped_pending=0,
+            reclassified=0, recovered=0, repair_examined=5, repair_corrected=2,
+            repair_missing_logs=1,
+        )
+        with mock.patch.object(cli, "Container", lambda: FakeContainer()), \
+                mock.patch.object(cli, "BackfillUsageUseCase") as UseCase:
+            UseCase.return_value.execute.return_value = fake_resp
+            rc, out, err = call(cli.main, "backfill-usage", "--repair")
+        self.assertEqual(rc, 0)
+        UseCase.return_value.execute.assert_called_once_with(repair=True)
+        self.assertIn("repair: 2/5 steps corrected, 1 ledgered logs missing on disk", out)
 
 
 if __name__ == "__main__":

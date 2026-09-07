@@ -990,10 +990,11 @@ def cmd_doctor(argv):
 
 def cmd_backfill_usage(argv):
     ap = argparse.ArgumentParser(prog="lc backfill-usage")
-    ap.parse_args(argv)
+    ap.add_argument("--repair", action="store_true")
+    a = ap.parse_args(argv)
     resp = BackfillUsageUseCase(
         _container.store, _container.fs, _container.workers, _container.config
-    ).execute()
+    ).execute(repair=a.repair)
     ledger_total = len(_container.store.usage_backfilled_logs())
     print(
         "backfilled %d/%d logs (%d matched, %d orphaned (step no longer exists), "
@@ -1002,6 +1003,11 @@ def cmd_backfill_usage(argv):
         % (resp.stored, resp.total, resp.matched, resp.orphaned, resp.unmatched,
            resp.skipped_pending, resp.reclassified, ledger_total, resp.recovered)
     )
+    if a.repair:
+        print(
+            "repair: %d/%d steps corrected, %d ledgered logs missing on disk"
+            % (resp.repair_corrected, resp.repair_examined, resp.repair_missing_logs)
+        )
     return 0
 
 

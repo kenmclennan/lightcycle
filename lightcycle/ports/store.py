@@ -190,6 +190,14 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def logs_for_step(self, step_id):
+        pass
+
+    @abstractmethod
+    def overwrite_usage_and_attribution(self, step_id, usage_totals, turn_count, tool_usage_totals):
+        pass
+
+    @abstractmethod
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     project=None, goal=None, description=None, attention=False):
         pass
