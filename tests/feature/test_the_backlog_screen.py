@@ -2,6 +2,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.adapters.tui.app import (
+    BacklogFilterInput,
     BacklogTable,
     BacklogView,
     PickerOption,
@@ -716,3 +717,77 @@ def _shortcut_action(ctx, action):
 def _picker_footer_reads(ctx, text):
     widget = ctx["session"].app.screen.query_one("#picker-foot")
     assert _rendered_text(widget).strip() == text
+
+
+@given(parsers.parse('the backlog is shown with the todo items "{title_a}" and "{title_b}"'))
+def _backlog_shown_two_titled_items(ctx, title_a, title_b):
+    store = FakeStore()
+    store.create_item(title_a, "a description")
+    store.create_item(title_b, "a description")
+    _launch_and_switch(ctx, store)
+
+
+@given(parsers.parse(
+    'the backlog is shown with the registered projects "{project_a}" and "{project_b}", '
+    'each with an item titled "{title}"'
+))
+def _backlog_shown_two_projects_shared_title(ctx, project_a, project_b, title):
+    store = FakeStore()
+    store.add_project(project_a)
+    store.add_project(project_b)
+    item_a = store.create_item(title, "a description")
+    store.add_artifact(item_a, "repo", project_a)
+    item_b = store.create_item(title, "a description")
+    store.add_artifact(item_b, "repo", project_b)
+    _launch_and_switch(ctx, store)
+
+
+@when("/ is pressed")
+def _press_slash(ctx):
+    ctx["session"].press("/")
+
+
+@when(parsers.parse('"{text}" is typed into the search box'))
+def _type_into_search_box(ctx, text):
+    session = ctx["session"]
+    for char in text:
+        session.press(char)
+
+
+@then("the search box has focus")
+def _search_box_has_focus(ctx):
+    session = ctx["session"]
+    assert session.app.focused is session.app.query_one(BacklogFilterInput)
+
+
+@then("the search box does not have focus")
+def _search_box_not_focused(ctx):
+    session = ctx["session"]
+    assert session.app.focused is not session.app.query_one(BacklogFilterInput)
+
+
+@then("the table has focus")
+def _table_has_focus(ctx):
+    session = ctx["session"]
+    assert session.app.focused is session.app.query_one(BacklogTable)
+
+
+@then(parsers.parse('only the row matching "{needle}" is shown'))
+@then(parsers.parse('only the row matching "{needle}" is still shown'))
+def _only_row_matching_shown(ctx, needle):
+    table = ctx["session"].app.query_one(BacklogTable)
+    assert table.row_count == 1
+    row_id = table.ordered_rows[0].key.value
+    cell = table.get_cell(row_id, "title")
+    text = cell.plain if hasattr(cell, "plain") else cell
+    assert needle.lower() in text.lower()
+
+
+@then(parsers.parse('only the row under "{project}" is shown'))
+def _only_row_under_project_shown(ctx, project):
+    table = ctx["session"].app.query_one(BacklogTable)
+    assert table.row_count == 1
+    row_id = table.ordered_rows[0].key.value
+    cell = table.get_cell(row_id, "project")
+    text = cell.plain if hasattr(cell, "plain") else cell
+    assert text == project

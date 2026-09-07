@@ -297,6 +297,39 @@ def _backlog_picker_open(size):
     return session
 
 
+LONG_PROJECT_NAME = "kenmclennan/a-registered-project-name-longer-than-lightcycle-workflows"
+
+
+def _backlog_picker_long_label(size):
+    store = _backlog_store()
+    store.add_project(LONG_PROJECT_NAME)
+    session = _launch(store, size=size)
+    session.press("tab")
+    session.press("f")
+    return session
+
+
+def _backlog_text_filter(size):
+    from lightcycle.adapters.tui.app import BacklogFilterInput
+
+    session = _launch(_backlog_store(), size=size)
+    session.press("tab")
+    session.app.query_one(BacklogFilterInput).value = "row"
+    session.pause()
+    return session
+
+
+def _backlog_text_and_project_filter(size):
+    from lightcycle.adapters.tui.app import BacklogFilterInput
+
+    session = _launch(_backlog_store(), size=size)
+    session.press("tab")
+    session.app._backlog_project_filter = "lightcycle"
+    session.app.query_one(BacklogFilterInput).value = "row"
+    session.pause()
+    return session
+
+
 def _backlog_claude_unavailable(size):
     session = _launch(_backlog_store(), breaker_open=True, size=size)
     session.press("tab")
@@ -491,6 +524,9 @@ SCREENS = {
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,
     "backlog#picker-open": _backlog_picker_open,
+    "backlog#picker-long-label": _backlog_picker_long_label,
+    "backlog#text-filter": _backlog_text_filter,
+    "backlog#text-and-project-filter": _backlog_text_and_project_filter,
     "backlog#claude-unavailable": _backlog_claude_unavailable,
     "backlog#stacked": _backlog_stacked,
     "hub#workflow": _hub_hierarchy,

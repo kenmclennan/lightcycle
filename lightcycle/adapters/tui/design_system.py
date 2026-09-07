@@ -68,6 +68,7 @@ BACKLOG_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter/→", "explore in tree"),
     ("f", "filter"),
+    ("/", "search"),
     ("tab", "current work"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
@@ -80,6 +81,7 @@ BACKLOG_EMPTY_SHORTCUTS = (
 
 BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
+    ("/", "search"),
     ("tab", "current work"),
     ("q", "quit"),
 )

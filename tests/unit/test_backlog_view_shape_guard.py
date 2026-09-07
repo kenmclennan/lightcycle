@@ -23,8 +23,8 @@ class TestBacklogViewCheapPathOnUnchangedShape(unittest.TestCase):
         session.press("tab")
         return session
 
-    def _apply(self, session, view, rows, total, project_filter):
-        session.run(lambda: view.apply_rows(rows, total, project_filter))
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
         session.pause()
 
     def test_identical_shape_takes_update_cells_not_rebuild(self):
@@ -74,6 +74,18 @@ class TestBacklogViewCheapPathOnUnchangedShape(unittest.TestCase):
             rebuild.assert_called_once()
             update.assert_not_called()
 
+    def test_changed_text_filter_rebuilds(self):
+        session = self._launch()
+        view = session.app.query_one(BacklogView)
+        rows = [_row("a")]
+        self._apply(session, view, rows, 1, None)
+
+        with patch.object(BacklogView, "_rebuild_table") as rebuild, \
+                patch.object(BacklogView, "_update_cells") as update:
+            self._apply(session, view, rows, 1, None, text_filter="term")
+            rebuild.assert_called_once()
+            update.assert_not_called()
+
     def test_cheap_path_still_reflects_a_title_change_on_the_cursor_row(self):
         session = self._launch()
         view = session.app.query_one(BacklogView)
@@ -92,8 +104,8 @@ class TestBacklogViewRebuildGapAtZeroWidth(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def _apply(self, session, view, rows, total, project_filter):
-        session.run(lambda: view.apply_rows(rows, total, project_filter))
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
         session.pause()
 
     def test_zero_width_then_real_width_with_same_shape_still_rebuilds(self):
@@ -147,8 +159,8 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def _apply(self, session, view, rows, total, project_filter):
-        session.run(lambda: view.apply_rows(rows, total, project_filter))
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
         session.pause()
 
     def test_two_consecutive_polls_at_floor_width_do_not_raise(self):

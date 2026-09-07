@@ -11,6 +11,7 @@ from lightcycle.adapters.tui.app import (
     DATA_COLUMNS,
     POLL_INTERVAL_SECONDS,
     PRIORITY_CONTINUATION_INDENT,
+    BacklogFilterInput,
     BacklogTable,
     BacklogView,
     LightcycleApp,
@@ -1387,6 +1388,67 @@ class TestBacklogFooter(unittest.TestCase):
         session.press("tab")
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
+
+
+class TestBacklogSearchInput(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_backlog(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_typing_f_while_focused_types_a_character_instead_of_opening_the_picker(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        session.press("f")
+
+        self.assertNotIsInstance(app.screen, ProjectFilterPicker)
+        self.assertEqual(app.query_one(BacklogFilterInput).value, "f")
+
+    def test_typing_q_while_focused_types_a_character_instead_of_quitting(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        session.press("q")
+
+        self.assertEqual(app.query_one(BacklogFilterInput).value, "q")
+
+    def test_on_input_changed_ignores_events_from_other_widgets(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        class _OtherInput:
+            id = "some-other-widget"
+
+        class _OtherChanged:
+            input = _OtherInput()
+            value = "term"
+
+        app.on_input_changed(_OtherChanged())
+
+        self.assertIsNone(app._backlog_text_filter)
+
+    def test_escape_returns_focus_to_the_table_without_clearing_the_term(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(BacklogFilterInput)
+        search.value = "term"
+        session.pause()
+        self.assertEqual(app._backlog_text_filter, "term")
+
+        session.press("escape")
+
+        self.assertIs(app.focused, app.query_one(BacklogTable))
+        self.assertEqual(app._backlog_text_filter, "term")
+        self.assertEqual(search.value, "term")
 
 
 class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):

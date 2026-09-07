@@ -2,21 +2,16 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
+from lightcycle.application.work.item_filter import project_matches, text_matches
 from lightcycle.application.work.project_of import project_of
 from lightcycle.domain.work import State, node_id_key
-
-
-def _project_matches(store, item, short_ref):
-    if short_ref is None:
-        return True
-    raw = project_of(store, item)
-    return raw is not None and raw.rsplit("/", 1)[-1] == short_ref
 
 
 @dataclass(frozen=True)
 class BacklogInput:
     n: Optional[int] = None
     project: Optional[str] = None
+    text: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -45,7 +40,8 @@ class BacklogUseCase:
 
     def execute(self, input: BacklogInput) -> BacklogResponse:
         items = self._backlogged_items()
-        items = [t for t in items if _project_matches(self._store, t, input.project)]
+        items = [t for t in items if project_matches(self._store, t, input.project)]
+        items = [t for t in items if text_matches(self._store, t, input.text)]
         items.sort(key=lambda t: node_id_key(t.id))
         if input.n is not None:
             items = items[:input.n]
@@ -66,7 +62,7 @@ class BacklogUseCase:
                 project=p.identity.rsplit("/", 1)[-1],
                 count=sum(
                     1 for t in items
-                    if _project_matches(self._store, t, p.identity.rsplit("/", 1)[-1])
+                    if project_matches(self._store, t, p.identity.rsplit("/", 1)[-1])
                 ),
             )
             for p in self._store.list_projects()
