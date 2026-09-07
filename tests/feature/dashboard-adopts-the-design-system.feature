@@ -19,7 +19,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
   shortcuts list, in order, exactly as the wireframe's own footer shows it.
   No behaviour changes: only how the dashboard is framed, and what shared
   token values are available to render into. The tab strip's own emphasis
-  is chrome too: which of its two tabs is bold-and-cyan versus dim follows
+  is chrome too: which of its three tabs is bold-and-cyan versus dim follows
   whichever top-level screen Tab last switched to, a behaviour the backlog
   screen (see the-backlog-screen.feature) introduces once a second top-level
   screen exists for Tab to switch to.
@@ -29,12 +29,13 @@ Feature: The dashboard adopts the design system's visual vocabulary
     When I launch the dashboard
     Then the screen is framed on all four edges by a solid border in the border colour
 
-  Scenario: The tab strip shows the current-work tab emphasised and the backlog tab dim
+  Scenario: The tab strip shows the current-work tab emphasised and the other tabs dim
     Given the lightcycle store is reachable
     When I launch the dashboard
-    Then the tab strip reads "Current work · Backlog"
+    Then the tab strip reads "Current work · Backlog · Done"
     And the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
+    And the "Done" tab is in the dim colour
 
   Scenario: Pressing Tab moves the emphasis from the Current work tab to the Backlog tab
     Given the dashboard has launched
@@ -42,12 +43,21 @@ Feature: The dashboard adopts the design system's visual vocabulary
     Then the "Backlog" tab is bold and in the cyan colour
     And the "Current work" tab is in the dim colour
 
-  Scenario: Pressing Tab again moves the emphasis back to the Current work tab
+  Scenario: Pressing Tab again moves the emphasis from the Backlog tab to the Done tab
     Given the dashboard has launched
     When Tab is pressed
     And Tab is pressed
+    Then the "Done" tab is bold and in the cyan colour
+    And the "Backlog" tab is in the dim colour
+
+  Scenario: Pressing Tab a third time moves the emphasis back to the Current work tab
+    Given the dashboard has launched
+    When Tab is pressed
+    And Tab is pressed
+    And Tab is pressed
     Then the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
+    And the "Done" tab is in the dim colour
 
   Scenario: A table's selection cursor uses the design system's selected-row styling
     Given the lightcycle store is reachable

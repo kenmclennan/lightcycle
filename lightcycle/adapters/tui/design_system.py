@@ -50,6 +50,7 @@ CURSOR_GLYPH = Glyph("❯", "cyan")
 COLUMN_GRIDS = {
     "priority-list": ("cursor", "icon", "id", "project", "title", "step", "time"),
     "backlog": ("cursor", "id", "project", "title"),
+    "done": ("cursor", "id", "project", "title"),
     "workflow": ("icon", "id", "title", "role"),
     "artifacts": ("type", "value"),
     "detail": ("key", "value"),
@@ -68,17 +69,39 @@ BACKLOG_SHORTCUTS = (
     ("enter/→", "explore in tree"),
     ("f", "filter"),
     ("/", "search"),
-    ("tab", "current work"),
+    ("tab", "done"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 BACKLOG_EMPTY_SHORTCUTS = (
-    ("tab", "current work"),
+    ("tab", "done"),
     ("q", "quit"),
 )
 
 BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
+    ("f", "filter"),
+    ("/", "search"),
+    ("tab", "done"),
+    ("q", "quit"),
+)
+
+DONE_SHORTCUTS = (
+    ("↑↓", "move"),
+    ("enter/→", "open"),
+    ("f", "filter"),
+    ("/", "search"),
+    ("tab", "current work"),
+    ("ctrl-u/ctrl-d", "scroll"),
+    ("q", "quit"),
+)
+
+DONE_EMPTY_SHORTCUTS = (
+    ("tab", "current work"),
+    ("q", "quit"),
+)
+
+DONE_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("/", "search"),
     ("tab", "current work"),

@@ -183,12 +183,12 @@ Feature: The node hub
       | Log      |
       | Workflow |
 
-  Scenario Outline: Tab jumps straight back to current work from any tab in an open item's hub, without cycling tabs
+  Scenario Outline: Tab jumps straight to Done from any tab in an item's hub opened from the backlog, without cycling tabs
     Given the backlog is showing with a todo item
     When <key> is pressed
     And the "<tab>" tab is active
     And Tab is pressed
-    Then the priority list is shown in place of the hub
+    Then the done tab is shown in place of the hub
 
     Examples:
       | tab         | key   |

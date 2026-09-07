@@ -14,6 +14,9 @@ from lightcycle.adapters.tui.app import (
     BacklogFilterInput,
     BacklogTable,
     BacklogView,
+    DoneFilterInput,
+    DoneTable,
+    DoneView,
     LightcycleApp,
     PickerOption,
     PriorityTable,
@@ -28,6 +31,9 @@ from lightcycle.adapters.tui.design_system import (
     COLOURS,
     ACTIVE_GLYPH_FRAMES,
     CURSOR_GLYPH,
+    DONE_EMPTY_SHORTCUTS,
+    DONE_FILTERED_EMPTY_SHORTCUTS,
+    DONE_SHORTCUTS,
     FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
     STATE_GLYPHS,
@@ -318,6 +324,9 @@ class TestActiveGroup(unittest.TestCase):
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.press("tab")
+        self.assertIsNone(session.app._active_glyph_timer)
 
         session.press("tab")
         self.assertIsNone(session.app._active_glyph_timer)
@@ -1153,15 +1162,30 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_tab_again_returns_to_priority_list(self):
+    def test_tab_again_moves_to_done(self):
         session = self._launch()
 
         session.press("tab")
         session.press("tab")
 
+        self.assertTrue(session.app.query_one(DoneView).display)
         self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-backlog").classes)
+
+    def test_tab_a_third_time_returns_to_priority_list(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+
+        self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(DoneView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-backlog").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-done").classes)
 
 
 class TestBacklogPicker(unittest.TestCase):
@@ -1387,6 +1411,7 @@ class TestBacklogFooter(unittest.TestCase):
         session = self._launch(store)
 
         session.press("tab")
+        session.press("tab")
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
 
@@ -1527,3 +1552,171 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
             "".join(seg.text for seg in strips[y]) for y in range(region.y, region.y + region.height)
         )
         self.assertIn("Widen the terminal", painted)
+
+
+def _launch_done(store, **kwargs):
+    session = launch(make_test_container(store=store, **kwargs))
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
+def _done_cell(session, row_id, column):
+    table = session.app.query_one(DoneTable)
+    return _cell_text(table.get_cell(row_key(session, row_id), column))
+
+
+class TestDoneTabSwitch(unittest.TestCase):
+    def _launch(self, store=None):
+        session = launch(make_test_container(store=store or FakeStore()))
+        self.addCleanup(session.close)
+        return session
+
+    def test_two_presses_shows_done_in_place_of_priority_and_backlog(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+
+        self.assertTrue(session.app.query_one(DoneView).display)
+        self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
+
+    def test_three_presses_returns_to_priority(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+
+        self.assertFalse(session.app.query_one(DoneView).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
+
+
+class TestDoneRows(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_done(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_closed_items_render_as_rows_once_done_is_current(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.close(item, "merged")
+
+        session = self._launch(store)
+
+        table = session.app.query_one(DoneTable)
+        self.assertIn(item, table.rows)
+        self.assertEqual(_done_cell(session, item, "id"), item)
+        self.assertEqual(_done_cell(session, item, "title"), "done item")
+
+    def test_open_items_are_not_listed(self):
+        store = FakeStore()
+        store.create_item("still open", "a description")
+
+        session = self._launch(store)
+
+        self.assertEqual(session.app.query_one(DoneTable).row_count, 0)
+
+
+class TestDoneEmptyStates(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_done(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_overall_empty_shows_a_calm_message(self):
+        session = self._launch(FakeStore())
+
+        widget = session.app.query_one("#done-empty-overall", Static)
+        self.assertTrue(widget.display)
+        self.assertEqual(_rendered_text(widget).strip(), "Nothing is done yet.")
+
+
+class TestDoneFooter(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_done(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_rows_present_shows_the_done_shortcuts(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.close(item, "merged")
+
+        session = self._launch(store)
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, DONE_SHORTCUTS)
+
+    def test_overall_empty_shows_the_trimmed_shortcuts(self):
+        session = self._launch(FakeStore())
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, DONE_EMPTY_SHORTCUTS)
+
+    def test_filtered_empty_shows_the_filter_reachable_shortcuts(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.add_artifact(item, "repo", "other")
+        store.close(item, "merged")
+        session = self._launch(store)
+
+        session.app._done_project_filter = "lightcycle"
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(
+            session.app.query_one(ShortcutBar).shortcuts, DONE_FILTERED_EMPTY_SHORTCUTS
+        )
+
+
+class TestDoneSearchInput(unittest.TestCase):
+    def _launch(self, store):
+        session = _launch_done(store)
+        self.addCleanup(session.close)
+        return session
+
+    def test_on_input_changed_sets_the_done_text_filter_and_refreshes(self):
+        store = FakeStore()
+        keep = store.create_item("keep this", "a description")
+        store.close(keep, "merged")
+        drop = store.create_item("drop this", "a description")
+        store.close(drop, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(DoneFilterInput)
+        search.value = "keep"
+        session.pause()
+
+        self.assertEqual(app._done_text_filter, "keep")
+        self.assertEqual(app.query_one(DoneTable).row_count, 1)
+
+    def test_escape_returns_focus_to_the_table_without_clearing_the_term(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.close(item, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(DoneFilterInput)
+        search.value = "term"
+        session.pause()
+        self.assertEqual(app._done_text_filter, "term")
+
+        session.press("escape")
+
+        self.assertIs(app.focused, app.query_one(DoneTable))
+        self.assertEqual(app._done_text_filter, "term")
+        self.assertEqual(search.value, "term")
+
+    def test_on_priority_slash_does_not_focus_the_done_search_box(self):
+        session = launch(make_test_container(store=FakeStore()))
+        self.addCleanup(session.close)
+
+        session.press("/")
+
+        self.assertNotIsInstance(session.app.focused, DoneFilterInput)

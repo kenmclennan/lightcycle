@@ -736,11 +736,13 @@ def _backlog_shown_in_place_of_hub(ctx):
     assert session.app.query_one(BacklogView).display
 
 
-@then("the priority list is shown in place of the hub")
-def _priority_shown_in_place_of_hub(ctx):
+@then("the done tab is shown in place of the hub")
+def _done_shown_in_place_of_hub(ctx):
+    from lightcycle.adapters.tui.app import DoneView
+
     session = ctx["session"]
     assert not isinstance(session.app.screen, NodeHubScreen)
-    assert session.app._view == "priority"
+    assert session.app.query_one(DoneView).display
 
 
 @then("the escalation reason names the specific blocking item")

@@ -355,6 +355,59 @@ def _backlog_claude_unavailable(size):
     return session
 
 
+def _done_store():
+    store = DemoStore()
+    lc273 = store.item("LC-273", "Row title repeats the step name", project="lightcycle")
+    store.add_artifact(lc273, "repo", "kenmclennan/lightcycle")
+    store.close(lc273, "merged")
+    lc275 = store.item("LC-275", "Active glyph unreadable at terminal size", project="lightcycle")
+    store.add_artifact(lc275, "repo", "kenmclennan/lightcycle")
+    store.close(lc275, "merged")
+    lc277 = store.item("LC-277", "Human-facing step display names", project="saga")
+    store.close(lc277, "merged")
+    store.add_project("kenmclennan/lightcycle")
+    return store
+
+
+def _done_normal(size):
+    session = _launch(_done_store(), size=size)
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
+def _done_empty(size):
+    session = _launch(FakeStore(), size=size)
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
+def _done_empty_filtered(size):
+    store = _done_store()
+    session = _launch(store, size=size)
+    session.press("tab")
+    session.press("tab")
+    session.app._done_project_filter = "horde"
+    session.run(session.app._refresh)
+    session.pause()
+    return session
+
+
+def _stacked_done_store():
+    store = DemoStore()
+    item = store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
+    store.close(item, "merged")
+    return store
+
+
+def _done_stacked(size):
+    session = _launch(_stacked_done_store(), size=size)
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
 def _hub_hierarchy(size):
     store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="workflow")
@@ -572,6 +625,10 @@ SCREENS = {
     "backlog#text-and-project-filter": _backlog_text_and_project_filter,
     "backlog#claude-unavailable": _backlog_claude_unavailable,
     "backlog#stacked": _backlog_stacked,
+    "done#normal": _done_normal,
+    "done#empty": _done_empty,
+    "done#empty-filtered": _done_empty_filtered,
+    "done#stacked": _done_stacked,
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
     "hub#active-log": _hub_active_log,

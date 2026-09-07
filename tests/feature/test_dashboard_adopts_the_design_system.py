@@ -277,18 +277,23 @@ def _tab_strip_reads(ctx, text):
     assert rendered == text
 
 
+_TAB_WIDGET_IDS = {
+    "Current work": "#tab-current-work",
+    "Backlog": "#tab-backlog",
+    "Done": "#tab-done",
+}
+
+
 @then(parsers.parse('the "{label}" tab is bold and in the cyan colour'))
 def _tab_bold_cyan(ctx, label):
-    widget_id = "#tab-current-work" if label == "Current work" else "#tab-backlog"
-    tab = ctx["session"].app.query_one(widget_id)
+    tab = ctx["session"].app.query_one(_TAB_WIDGET_IDS[label])
     assert tab.styles.color.hex.lower() == COLOURS["cyan"].lower()
     assert "bold" in str(tab.styles.text_style)
 
 
 @then(parsers.parse('the "{label}" tab is in the dim colour'))
 def _tab_dim(ctx, label):
-    widget_id = "#tab-current-work" if label == "Current work" else "#tab-backlog"
-    tab = ctx["session"].app.query_one(widget_id)
+    tab = ctx["session"].app.query_one(_TAB_WIDGET_IDS[label])
     assert tab.styles.color.hex.lower() == COLOURS["dim"].lower()
 
 
