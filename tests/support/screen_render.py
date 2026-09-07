@@ -2,6 +2,7 @@ import argparse
 import datetime
 import sys
 
+from lightcycle.domain.pool import ToolUsage
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -615,6 +616,90 @@ def _hub_long_description(size):
     return _open_hub(_launch(store, size=size), item, tab="description")
 
 
+def _cost_human_step_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item,
+    )
+    return store, step
+
+
+def _hub_cost_human(size):
+    store, step = _cost_human_step_store()
+    return _open_hub(_launch(store, size=size), step, tab="cost")
+
+
+def _cost_step_recorded_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-143.3.4", "write the code", step="write-code", role="agent", parent=item,
+    )
+    store.record_usage(step, 204_321, 2, 21_685_338, 555, 5.70, "list", None)
+    store.record_attribution(
+        step, 42, {"Read": ToolUsage(calls=12, bytes=4300), "Bash": ToolUsage(calls=3, bytes=512)},
+    )
+    return store, step
+
+
+def _hub_cost_step_recorded(size):
+    store, step = _cost_step_recorded_store()
+    return _open_hub(_launch(store, size=size), step, tab="cost")
+
+
+def _cost_step_not_recorded_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-447", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-447.4", "handle feedback", step="handle-feedback", role="agent", parent=item,
+    )
+    store.record_attribution(step, 246, {})
+    return store, step
+
+
+def _hub_cost_step_not_recorded(size):
+    store, step = _cost_step_not_recorded_store()
+    return _open_hub(_launch(store, size=size), step, tab="cost")
+
+
+def _cost_item_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+
+    pass_1 = store.open_pass(item)
+    spec = store.step("LC-143.3.1", "write the spec", step="spec-writer", role="agent", parent=item)
+    store.set_step_pass(spec, pass_1)
+    store.record_usage(spec, 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution(spec, 20, {})
+    cleanup = store.step("LC-143.3.7", "cleanup", step="cleanup", role="agent", parent=item)
+    store.set_step_pass(cleanup, pass_1)
+    store.record_usage(cleanup, 100, 20, 0, 0, 0.17, "derived", None)
+    store.record_attribution(cleanup, 3, {})
+    review = store.step("LC-143.3.8", "review", step="review-code", role="agent", parent=item)
+    store.set_step_pass(review, pass_1)
+    store.record_attribution(review, 60, {})
+    gate = store.step(
+        "LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item,
+    )
+    store.set_step_pass(gate, pass_1)
+    store.close(gate, "merged")
+    store.close_pass(pass_1)
+
+    pass_2 = store.open_pass(item)
+    rework = store.step("LC-143.3.9", "rework the code", step="write-code", role="agent", parent=item)
+    store.set_step_pass(rework, pass_2)
+    store.record_usage(rework, 500, 100, 0, 0, 0.5, "list", None)
+    store.record_attribution(rework, 5, {})
+
+    return store, item
+
+
+def _hub_cost_item(size):
+    store, item = _cost_item_store()
+    return _open_hub(_launch(store, size=size), item, tab="cost")
+
+
 SCREENS = {
     "priority-list#normal": _priority_normal,
     "priority-list#empty": _priority_empty,
@@ -654,6 +739,10 @@ SCREENS = {
     "hub#workflow-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,
     "hub#long-description": _hub_long_description,
+    "hub#cost-human": _hub_cost_human,
+    "hub#cost-step-recorded": _hub_cost_step_recorded,
+    "hub#cost-step-not-recorded": _hub_cost_step_not_recorded,
+    "hub#cost-item": _hub_cost_item,
 }
 
 

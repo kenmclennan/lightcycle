@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
@@ -104,8 +106,13 @@ def _painted_spans(strip):
 
 
 _HUB_TABS_BY_TYPE = {
-    "item": (("description", "Description"), ("workflow", "Workflow"), ("artifacts", "Artifacts")),
-    "step": (("detail", "Detail"), ("workflow", "Workflow"), ("log", "Log")),
+    "item": (
+        ("description", "Description"), ("workflow", "Workflow"), ("artifacts", "Artifacts"),
+        ("cost", "Cost"),
+    ),
+    "step": (
+        ("detail", "Detail"), ("workflow", "Workflow"), ("log", "Log"), ("cost", "Cost"),
+    ),
 }
 
 
@@ -714,10 +721,11 @@ def _tab_becomes_active(ctx, tab):
     _assert_tab_strip_rendered(session, tab_id)
 
 
-@then(parsers.parse('its tab strip shows exactly "{a}", "{b}", and "{c}", in that order'))
-def _tab_strip_shows_three(ctx, a, b, c):
-    tabs = _hub_tabs(ctx["session"])
-    assert [label for _, label in tabs] == [a, b, c]
+@then(parsers.re(r'its tab strip shows exactly (?P<tabs>.+), in that order'))
+def _tab_strip_shows_exactly(ctx, tabs):
+    expected = re.findall(r'"([^"]+)"', tabs)
+    actual = _hub_tabs(ctx["session"])
+    assert [label for _, label in actual] == expected
 
 
 @then(parsers.parse('no "{a}" tab and no "{b}" tab is shown'))
