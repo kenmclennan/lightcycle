@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.adapters.tui.hub import _stat_line_item, _stat_line_step
+from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 
 NOW = "2026-01-01T12:00:00"
@@ -34,6 +35,22 @@ class TestStatLineItem(unittest.TestCase):
         node = store.get_node(item)
 
         self.assertIsNone(_stat_line_item(store, node, store.children(item), _StubFlow(), NOW))
+
+    def test_current_step_running_with_an_unresolved_dependency_shows_the_normal_stat_line(self):
+        clock = {"now": "2026-01-01T10:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        blocker = store.create_item("Blocker", "a description")
+        item = store.create_item("Item", "a description")
+        step = store.create_step("s", step="build", role="agent", parent=item, deps=[blocker])
+        store.assign(step, "worker-1")
+        store.update_state(step, State.RUNNING)
+        node = store.get_node(item)
+
+        now = "2026-01-01T10:05:00"
+        self.assertEqual(
+            _stat_line_item(store, node, store.children(item), _StubFlow(), now),
+            "build · 1 step · 5m (0s active)",
+        )
 
     def test_active_item_never_claimed_shows_phrase_and_step_count_only(self):
         store = FakeStore()
