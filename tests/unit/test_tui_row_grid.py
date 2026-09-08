@@ -54,12 +54,13 @@ class TestAtomicColumnWidth(unittest.TestCase):
 
 class TestComputeLayout(unittest.TestCase):
     def test_unstacked_when_plenty_of_room(self):
+        glyph_total = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
         layout = compute_layout(
-            80, ["cursor", "icon"], {"id": ["LC-1"], "project": ["lc"]}, indent=2 + 4 + 4 + 2
+            80, ["cursor", "icon"], {"id": ["LC-1"], "project": ["lc"]}, indent=glyph_total + 4 + 2
         )
         self.assertFalse(layout.stacked)
         self.assertFalse(layout.floor)
-        self.assertEqual(layout.flexible_width, 80 - (2 + 4) - (4 + 2))
+        self.assertEqual(layout.flexible_width, 80 - glyph_total - (4 + 2))
 
     def test_atomic_width_is_never_capped_however_long_the_value(self):
         long_id = "LIGHTCYCLE-3.1.1"

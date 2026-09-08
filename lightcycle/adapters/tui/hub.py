@@ -64,7 +64,7 @@ from lightcycle.domain.feedback import Duration, format_elapsed
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, display_role, display_stage, format_rate, format_tokens, format_usd,
-    landing_tab, row_bucket, type_label, viewable_artifacts,
+    landing_tab, row_bucket, step_cost, type_label, viewable_artifacts,
 )
 
 POLL_INTERVAL_SECONDS = 10
@@ -408,6 +408,17 @@ def _display_glyph(node, active_frame, flow):
     return glyph
 
 
+def hierarchy_usage_text(node):
+    if node.type != "step":
+        return "", ""
+    cost = step_cost(node, {})
+    if not cost.applicable or not cost.has_run:
+        return "", ""
+    turns_text = format_tokens(cost.turn_count)
+    cost_text = format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
+    return turns_text, cost_text
+
+
 def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None, flow_service=None):
     node = row.node
     glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service))
@@ -418,13 +429,17 @@ def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None, fl
         )
     icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
     id_field = pad_field(node.id, layout.atomic_widths["id"])
-    content_so_far = icon_field + id_field
     role_cell = (
         Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
         if node.type == "step" else Text("")
     )
-    role_area = max(0, row_budget - len(content_so_far.plain))
-    return content_so_far + pad_field_right(role_cell, role_area)
+    role_field = pad_field(role_cell, layout.atomic_widths["role"])
+    turns_text, cost_text = hierarchy_usage_text(node)
+    turns_field = pad_field(Text(turns_text, style=COLOURS["dim"]), layout.atomic_widths["turns"])
+    content_so_far = icon_field + id_field + Text("  ") + role_field + Text("  ") + turns_field
+    cost_cell = Text(cost_text, style=COLOURS["dim"]) if cost_text else Text("")
+    cost_area = max(0, row_budget - len(content_so_far.plain))
+    return content_so_far + pad_field_right(cost_cell, cost_area)
 
 
 def _hierarchy_label(node, flow_service, multi_pass):
@@ -463,7 +478,10 @@ def hierarchy_row_cells(
         Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
         if node.type == "step" else ""
     )
-    return (icon_cell, node.id, title_cell, role_cell)
+    turns_text, cost_text = hierarchy_usage_text(node)
+    turns_cell = Text(turns_text, style=COLOURS["dim"]) if turns_text else ""
+    cost_cell = Text(cost_text, style=COLOURS["dim"]) if cost_text else ""
+    return (icon_cell, node.id, title_cell, role_cell, turns_cell, cost_cell)
 
 
 def artifact_row_cells(artifact, layout=None, row_budget=None):
@@ -1097,7 +1115,7 @@ class NodeHubScreen(Screen):
     }}
     #pinned-ancestor {{
         height: 1;
-        background: {COLOURS["border"]};
+        background: {COLOURS["panel"]};
         display: none;
     }}
     """
@@ -1369,9 +1387,13 @@ class NodeHubScreen(Screen):
         )
 
     def _hierarchy_layout(self, table, rows):
+        step_rows = [r for r in rows if r.node.type == "step"]
+        usage = [hierarchy_usage_text(r.node) for r in step_rows]
         atomic_values = {
             "id": [r.node.id for r in rows],
-            "role": [display_role(getattr(r.node, "role", None)) for r in rows if r.node.type == "step"],
+            "role": [display_role(getattr(r.node, "role", None)) for r in step_rows],
+            "turns": [turns_text for turns_text, _cost_text in usage],
+            "cost": [cost_text for _turns_text, cost_text in usage],
         }
         row_budget = row_budget_for(table, len(COLUMN_GRIDS["workflow"]))
         max_depth = max((r.depth for r in rows), default=0)
@@ -1397,6 +1419,8 @@ class NodeHubScreen(Screen):
             "id": layout.atomic_widths["id"],
             "title": layout.flexible_width,
             "role": layout.atomic_widths["role"],
+            "turns": layout.atomic_widths["turns"],
+            "cost": layout.atomic_widths["cost"],
         }
         apply_widths(table, widths)
 
@@ -1476,6 +1500,8 @@ class NodeHubScreen(Screen):
                 "id": layout.atomic_widths["id"],
                 "title": layout.flexible_width,
                 "role": layout.atomic_widths["role"],
+                "turns": layout.atomic_widths["turns"],
+                "cost": layout.atomic_widths["cost"],
             }
             for key in COLUMN_GRIDS["workflow"]:
                 table.add_column(key, width=widths[key], key=key)

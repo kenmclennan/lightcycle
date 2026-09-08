@@ -24,6 +24,7 @@ from lightcycle.ports.git import GitPort
 from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
+from lightcycle.adapters.tui.hub import NodeHubScreen
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -175,6 +176,19 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
     )
     assert_hermetic(container)
     return container
+
+
+def _start_glyph_timers_paused(set_interval):
+    def _set_interval(self, interval, callback=None, **kwargs):
+        if getattr(callback, "__name__", None) == "_tick_active_glyph":
+            kwargs.setdefault("pause", True)
+        return set_interval(self, interval, callback, **kwargs)
+
+    return _set_interval
+
+
+LightcycleApp.set_interval = _start_glyph_timers_paused(LightcycleApp.set_interval)
+NodeHubScreen.set_interval = _start_glyph_timers_paused(NodeHubScreen.set_interval)
 
 
 class TuiSession:

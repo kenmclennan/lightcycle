@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from rich.text import Text
 from textual.geometry import Size
 
-GLYPH_WIDTHS = {"cursor": 2, "icon": 4}
-ATOMIC_COLUMNS = frozenset({"id", "project", "step", "role", "type", "time"})
+GLYPH_WIDTHS = {"cursor": 2, "icon": 3}
+ATOMIC_COLUMNS = frozenset({"id", "project", "step", "role", "type", "time", "turns", "cost"})
 FLEXIBLE_COLUMNS = frozenset({"title", "value"})
 FLEXIBLE_MINIMUM = 24
-STEP_PHRASE_BUDGET = 19
+STEP_PHRASE_BUDGET = 18
 
 
 def column_kind(name):

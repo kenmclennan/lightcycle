@@ -48,10 +48,10 @@ FOOTER_GLYPHS = {
 CURSOR_GLYPH = Glyph("❯", "cyan")
 
 COLUMN_GRIDS = {
-    "priority-list": ("cursor", "icon", "id", "project", "title", "step", "time"),
+    "priority-list": ("cursor", "icon", "id", "project", "title", "step", "cost", "time"),
     "backlog": ("cursor", "id", "project", "title"),
     "done": ("cursor", "id", "project", "title"),
-    "workflow": ("icon", "id", "title", "role"),
+    "workflow": ("icon", "id", "title", "role", "turns", "cost"),
     "artifacts": ("type", "value"),
     "detail": ("key", "value"),
     "cost": ("key", "value"),

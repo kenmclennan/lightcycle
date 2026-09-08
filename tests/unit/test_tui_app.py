@@ -259,6 +259,29 @@ class TestActiveGroup(unittest.TestCase):
         rendered = "".join(segment.text for segment in table.render_line(0))
         self.assertIn("11m", rendered)
 
+    def test_poll_widens_cost_column_when_rollup_outgrows_built_width(self):
+        claimed_at = datetime.datetime(2026, 1, 1, 12, 0, 0)
+        clock = {"now": claimed_at + datetime.timedelta(minutes=9)}
+        store = FakeStore(now=lambda: claimed_at.isoformat())
+        tid = store.create_step("active item", step="build", role="agent")
+        store.assign(tid, "worker-1")
+        store.update_state(tid, State.IN_PROGRESS)
+        store.record_usage(tid, 0, 0, 0, 0, 1.0, "list", None)
+
+        session = self._launch(store, now=lambda: clock["now"])
+        table = session.app.query_one(DataTable)
+        self.assertEqual(_cell(session, tid, "cost"), "$1.00")
+        self.assertEqual(table.columns.get("cost").width, 5)
+
+        store.record_usage(tid, 0, 0, 0, 0, 11.0, "list", None)
+        clock["now"] = claimed_at + datetime.timedelta(minutes=11)
+        session.poll_tick()
+
+        self.assertEqual(_cell(session, tid, "cost"), "$12.00")
+        self.assertEqual(table.columns.get("cost").width, 6)
+        rendered = "".join(segment.text for segment in table.render_line(0))
+        self.assertIn("$12.00", rendered)
+
     def test_resize_after_poll_measures_the_widened_time_column(self):
         claimed_at = datetime.datetime(2026, 1, 1, 12, 0, 0)
         clock = {"now": claimed_at + datetime.timedelta(minutes=9)}

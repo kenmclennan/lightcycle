@@ -117,8 +117,8 @@ Feature: The workflow tab
   Scenario Outline: When a hierarchy row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width plus the row's own depth, spanning the row without wrapping mid-word
     Given a hierarchy row at depth <depth> whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When it renders in the hierarchy
-    Then the icon, id and role remain on the row's first line, each padded to its atomic width, with the role right-aligned
-    And the title appears on a continuation line indented 4 characters plus the row's own depth indent of <depth>
+    Then the icon, id and role remain on the row's first line, each padded to its atomic width, with cost right-aligned
+    And the title appears on a continuation line indented 3 characters plus the row's own depth indent of <depth>
     And no fragment of the title's prose is split mid-word
 
     Examples:
