@@ -456,6 +456,70 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
         self.assertIsNone(s.runs_of(item)[0].comments_handled_through)
 
 
+class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):
+    def _step(self, s, title="t", **kw):
+        if kw.get("parent") is None:
+            kw["parent"] = s.create_item("owner", "an owning item")
+        return s.create_step(title, **kw)
+
+    def _find_history_index(self, conn):
+        for row in conn.execute("PRAGMA index_list(history)").fetchall():
+            name = row[1]
+            cols = [r[2] for r in conn.execute("PRAGMA index_info(%s)" % name).fetchall()]
+            if cols == ["node_id", "seq"]:
+                return name
+        return None
+
+    def _store_without_the_history_index(self):
+        s = make_sqlite_store()
+        s._conn.execute("DROP TABLE history")
+        s._conn.execute(
+            "CREATE TABLE history (node_id TEXT NOT NULL, seq INTEGER NOT NULL, "
+            "state TEXT NOT NULL, ts TEXT)"
+        )
+        s._conn.commit()
+        s.disconnect()
+        return SqliteStore(s._config)
+
+    def test_an_existing_store_missing_the_index_gains_it_on_reopen(self):
+        s = self._store_without_the_history_index()
+        self.assertIsNotNone(self._find_history_index(s._conn))
+
+    def test_reopening_the_migrated_store_a_second_time_is_idempotent(self):
+        s = self._store_without_the_history_index()
+        s.disconnect()
+        s = SqliteStore(s._config)
+        name = self._find_history_index(s._conn)
+        self.assertIsNotNone(name)
+        count = s._conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?", (name,)
+        ).fetchone()[0]
+        self.assertEqual(count, 1)
+
+    def test_history_returns_the_same_rows_in_the_same_order(self):
+        s = make_sqlite_store()
+        self.assertIsNotNone(self._find_history_index(s._conn))
+        tid = self._step(s, "t", role="agent")
+        s.claim_ready("agent")
+        s.close(tid, "done")
+        states = [state for state, _ in s.history(tid)]
+        self.assertEqual(states, ["running", "done"])
+
+    def test_the_read_query_uses_the_index_not_a_scan(self):
+        s = make_sqlite_store()
+        tid = self._step(s, "t", role="agent")
+        s.claim_ready("agent")
+        s.close(tid, "done")
+
+        plan = s._conn.execute(
+            "EXPLAIN QUERY PLAN SELECT state, ts FROM history WHERE node_id = ? ORDER BY seq ASC",
+            (tid,),
+        ).fetchall()
+        plan_text = " ".join(row[-1] for row in plan)
+        self.assertIn("USING INDEX", plan_text)
+        self.assertNotIn("SCAN history", plan_text)
+
+
 class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
     def _store_without_disposition(self):
         s = make_sqlite_store()
