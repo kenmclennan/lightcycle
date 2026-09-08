@@ -270,6 +270,7 @@ def _g_claimed_minutes_ago(ctx, step_name, minutes):
     tid = store.create_step("active item", step=step_name, role="agent")
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)
+    store.accrue_active_seconds([tid], minutes * 60)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
@@ -320,6 +321,7 @@ def _g_item_active_and_queued_own(ctx):
     active = store.create_step("write the code", step="write-code", role="agent", parent=item)
     store.assign(active, "worker-1")
     store.update_state(active, State.RUNNING)
+    store.accrue_active_seconds([active], 14 * 60)
     store.create_step("open the pr", step="code-open-pr", role="agent", parent=item)
     clock.set(BASE_TIME)
     ctx["store"] = store
@@ -534,6 +536,7 @@ def _g_row_forces_stacked(ctx, mode):
     store.add_artifact(item, "repo", _STACK_PROJECT)
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)
+    store.accrue_active_seconds([tid], _STACK_TIME_MINUTES * 60)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
@@ -637,6 +640,11 @@ def _w_claim_and_activate(ctx):
     tid = ctx["target_id"]
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)
+
+
+@when("that step accrues additional active time")
+def _w_step_accrues_active_time(ctx):
+    ctx["store"].accrue_active_seconds([ctx["target_id"]], POLL_INTERVAL_SECONDS)
 
 
 @when("one poll interval elapses")

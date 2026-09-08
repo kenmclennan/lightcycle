@@ -7,8 +7,8 @@ from lightcycle.adapters.tui.hub import COST_NOT_RECORDED
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.feedback import Duration, format_elapsed
-from lightcycle.domain.work import format_usd, is_human_step, row_bucket
+from lightcycle.domain.feedback import format_elapsed
+from lightcycle.domain.work import format_usd, is_human_step, item_active_seconds, row_bucket
 
 
 @dataclass(frozen=True)
@@ -30,11 +30,6 @@ class PriorityRow:
 def _project(store, node):
     owning_id = node.parent or node.id
     return short_project_label(project_of(store, owning_id))
-
-
-def _elapsed_text(store, node, now):
-    delta = Duration(store.history(node.id)).elapsed_since_last_claim(now)
-    return format_elapsed(delta.total_seconds()) if delta is not None else ""
 
 
 def _resolved_step(node, flow):
@@ -64,7 +59,7 @@ def _attention_row(store, node, flow):
     )
 
 
-def _active_row(store, node, now, flow):
+def _active_row(store, node, flow):
     glyph = STATE_GLYPHS["active"]
     return PriorityRow(
         id=node.id,
@@ -78,7 +73,7 @@ def _active_row(store, node, now, flow):
         step=_resolved_step(node, flow),
         step_colour="dim",
         cost="",
-        time=_elapsed_text(store, node, now),
+        time="",
     )
 
 
@@ -123,7 +118,12 @@ def _rolled_up_cost_text(store, item_id):
     return format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
 
 
-def build_priority_rows(store, lanes, now, flow_service):
+def _rolled_up_time_text(store, item_id):
+    total = item_active_seconds(store.children(item_id))
+    return format_elapsed(total) if total > 0 else ""
+
+
+def build_priority_rows(store, lanes, flow_service):
     claimed = set()
     attention, active, queued = [], [], []
     runnable = [n for n in lanes["queue"] if not n.blocked_by]
@@ -134,7 +134,7 @@ def build_priority_rows(store, lanes, now, flow_service):
     )
     for group_rows, nodes_and_row in (
         (attention, [(n, _attention_row(store, n, flow)) for n, flow in inbox]),
-        (active, [(n, _active_row(store, n, now, flow_service.flow_for(n))) for n in lanes["active"]]),
+        (active, [(n, _active_row(store, n, flow_service.flow_for(n))) for n in lanes["active"]]),
         (queued, [(n, _queued_row(store, n, flow_service.flow_for(n))) for n in runnable]
          + [(n, _queued_row(store, n, flow_service.flow_for(n))) for n in held]),
     ):
@@ -147,6 +147,7 @@ def build_priority_rows(store, lanes, now, flow_service):
             group_rows.append(replace(
                 row, id=owning_node.id, title=owning_node.title,
                 cost=_rolled_up_cost_text(store, owning_id),
+                time=_rolled_up_time_text(store, owning_id),
             ))
     return attention, active, queued
 

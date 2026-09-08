@@ -218,6 +218,7 @@ class TestActiveGroup(unittest.TestCase):
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
+        store.accrue_active_seconds([tid], 840)
 
         session = self._launch(store, now=lambda: rendered_at)
 
@@ -243,6 +244,7 @@ class TestActiveGroup(unittest.TestCase):
         time_before = _cell(session, tid, "time")
 
         clock["now"] = datetime.datetime(2026, 1, 1, 12, 2, 0)
+        store.accrue_active_seconds([tid], 60)
         session.poll_tick()
 
         self.assertEqual(table.row_count, row_count_before)
@@ -256,12 +258,14 @@ class TestActiveGroup(unittest.TestCase):
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
+        store.accrue_active_seconds([tid], 9 * 60)
 
         session = self._launch(store, now=lambda: clock["now"])
         table = session.app.query_one(DataTable)
         self.assertEqual(_cell(session, tid, "time"), "9m")
         self.assertEqual(table.columns.get("time").width, 2)
 
+        store.accrue_active_seconds([tid], 2 * 60)
         clock["now"] = claimed_at + datetime.timedelta(minutes=11)
         session.poll_tick()
 
@@ -300,10 +304,12 @@ class TestActiveGroup(unittest.TestCase):
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
+        store.accrue_active_seconds([tid], 9 * 60)
 
         session = self._launch(store, now=lambda: clock["now"])
         table = session.app.query_one(DataTable)
 
+        store.accrue_active_seconds([tid], 2 * 60)
         clock["now"] = claimed_at + datetime.timedelta(minutes=11)
         session.poll_tick()
         session.resize(100, 24)
