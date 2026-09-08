@@ -36,7 +36,7 @@ def _filed(ctx, spec, step):
         "new", "item", title, "--workflow", "lightcycle/spec-driven", "--description", "a description")
     assert rc == 0, err
     item = item.strip()
-    ctx["h"].run("attach", item, "spec", spec)
+    ctx["h"].run("attach", item, "spec", spec, "--label", "filed-spec")
     rc, _out, err = ctx["h"].run("set", item, "--state", "active", "--step", step)
     assert rc == 0, err
     ctx["item"] = item

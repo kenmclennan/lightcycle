@@ -47,9 +47,23 @@ class LinkArtifactUseCase:
                 internal=input.internal, kind=input.kind,
             )
         else:
+            self._refuse_if_duplicate(input)
             self._store.add_artifact(
                 input.item, input.atype, input.value, input.label,
                 internal=input.internal, kind=input.kind,
+            )
+
+    def _refuse_if_duplicate(self, input):
+        exists = any(
+            a.type == input.atype and a.label == input.label
+            for a in self._store.item_artifacts(input.item)
+        )
+        if exists:
+            labeled = " labeled '%s'" % input.label if input.label else ""
+            raise UseCaseError(
+                "'%s' already has a '%s' artifact%s - pass --replace to overwrite it, "
+                "or a different --label to attach another"
+                % (input.item, input.atype, labeled)
             )
 
     def _route_to_run(self, input):
