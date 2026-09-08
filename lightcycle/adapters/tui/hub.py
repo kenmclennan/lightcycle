@@ -298,6 +298,13 @@ def _park_escalation_text(node):
     return node.park.needs
 
 
+def _dependency_escalation(node):
+    if node.state != State.BLOCKED or not node.blocked_by:
+        return None, None
+    target = sorted(node.blocked_by)[0]
+    return "Blocked · depends on %s" % target, target
+
+
 def _flow_for_bucket(node, flow_service):
     if flow_service is None or getattr(node, "type", None) != "step":
         return None
@@ -340,7 +347,7 @@ def _stat_line_item(store, item, children, flow_service, now, pool_halted=False)
         lead = "Done"
     else:
         cur = current_step(store, item.id)
-        if cur is None or cur.blocked_by:
+        if cur is None or cur.state == State.BLOCKED:
             return None
         lead = display_stage(flow_service.display_for(cur), cur.step)
     segments = [lead, _step_count_text(children)]
@@ -396,21 +403,16 @@ def _stat_line_step(store, node, flow_service, now, pool_halted=False):
 
 
 def _item_header(store, node, now, project, flow_service, pool_halted=False):
-    escalation_text = escalation_target = None
     glyph_node, glyph_flow = node, None
     children = store.children(node.id)
 
-    if node.blocked_by:
-        escalation_target = sorted(node.blocked_by)[0]
-        escalation_text = "Blocked · depends on %s" % escalation_target
-    elif node.state != State.DONE:
+    escalation_text, escalation_target = _dependency_escalation(node)
+    if escalation_text is None and node.state != State.DONE:
         cur = current_step(store, node.id)
         if cur is not None:
             glyph_node, glyph_flow = cur, flow_service.flow_for(cur)
-            if cur.blocked_by:
-                escalation_target = sorted(cur.blocked_by)[0]
-                escalation_text = "Blocked · depends on %s" % escalation_target
-            elif getattr(cur, "role", None) == "human" and cur.needs:
+            escalation_text, escalation_target = _dependency_escalation(cur)
+            if escalation_text is None and getattr(cur, "role", None) == "human" and cur.needs:
                 escalation_text = _park_escalation_text(cur)
 
     stat_line = _stat_line_item(store, node, children, flow_service, now, pool_halted)
@@ -425,11 +427,8 @@ def _item_header(store, node, now, project, flow_service, pool_halted=False):
 
 
 def _step_header(store, node, now, project, flow_service, pool_halted=False):
-    escalation_text = escalation_target = None
-    if node.blocked_by:
-        escalation_target = sorted(node.blocked_by)[0]
-        escalation_text = "Blocked · depends on %s" % escalation_target
-    elif getattr(node, "role", None) == "human" and getattr(node, "needs", None):
+    escalation_text, escalation_target = _dependency_escalation(node)
+    if escalation_text is None and getattr(node, "role", None) == "human" and getattr(node, "needs", None):
         escalation_text = _park_escalation_text(node)
 
     item = store.get_node(node.parent)

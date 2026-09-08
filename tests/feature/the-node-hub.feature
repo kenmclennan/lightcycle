@@ -186,6 +186,11 @@ Feature: The node hub
       | active |
       | queued |
 
+  Scenario: A running step's escalation panel shows nothing, even though it carries an unresolved dependency
+    Given a step that is running while carrying an unresolved dependency, its hub open
+    Then no escalation reason is shown
+    And the header and the hierarchy show the step as active, not blocked
+
   Scenario: The description pane is focused on landing, even when the escalation panel is shown
     Given an item blocked on another item's completion, its hub open
     Then the description pane has focus, not the escalation panel

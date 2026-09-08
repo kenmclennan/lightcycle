@@ -3,6 +3,7 @@ import datetime
 import sys
 
 from lightcycle.domain.pool import ToolUsage
+from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -728,6 +729,19 @@ def _artifact_viewer_filepath_toast(size):
     return _open_artifact_at(_launch(store, size=size, fs=fs, launcher=launcher), item, 3)
 
 
+def _running_with_dependency_store():
+    store = DemoStore(now=lambda: _at(3))
+    blocker = store.item("LC-143.1", REGISTRY_TITLE, workflow=WORKFLOW)
+    blocking_step = store.step("LC-143.1.4", "write the code", step="write-code",
+                               role="agent", parent=blocker)
+    running = store.item("LC-143.2", CLONE_TITLE, workflow=WORKFLOW)
+    dependent_step = store.step("LC-143.2.4", "write the code", step="write-code", role="agent",
+                                parent=running, deps=[blocking_step])
+    store.assign(dependent_step, "worker-1")
+    store.update_state(dependent_step, State.RUNNING)
+    return store, running
+
+
 def _hub_done_item(size):
     store, scan, coding = _populated_store()
     store.record_usage("LC-143.3.1", 1000, 200, 0, 0, 2.91, "list", None)
@@ -741,6 +755,11 @@ def _hub_done_item(size):
 def _hub_blocked_dependency(size):
     store, waiting = _blocked_store()
     return _open_hub(_launch(store, size=size), waiting)
+
+
+def _hub_running_with_dependency(size):
+    store, running = _running_with_dependency_store()
+    return _open_hub(_launch(store, size=size), running)
 
 
 def _hub_gate(size):
@@ -1023,6 +1042,7 @@ SCREENS = {
     "artifact-viewer#filepath-toast": _artifact_viewer_filepath_toast,
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
+    "hub#running-with-dependency": _hub_running_with_dependency,
     "hub#gate": _hub_gate,
     "hub#escalation": _hub_escalation,
     "hub#escalated-long-reason": _hub_escalated_long_reason,

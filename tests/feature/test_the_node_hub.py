@@ -9,6 +9,7 @@ from lightcycle.adapters.tui.design_system import COLOURS, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import (
     DescriptionPane, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
 )
+from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -458,6 +459,21 @@ def _item_blocked_with_step(ctx):
     ctx["item_id"] = item
     ctx["node_id"] = item
     ctx["blocker_id"] = blocker
+    ctx["step_id"] = step
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, item)
+
+
+@given("a step that is running while carrying an unresolved dependency, its hub open")
+def _step_running_with_unresolved_dependency(ctx):
+    store = FakeStore()
+    blocker = store.create_item("Blocker item", "a description")
+    item = store.create_item("Item", "a description")
+    step = store.create_step("write code", step="write-code", role="agent", parent=item, deps=[blocker])
+    store.assign(step, "worker-1")
+    store.update_state(step, State.RUNNING)
+    ctx["item_id"] = item
+    ctx["node_id"] = item
     ctx["step_id"] = step
     session = _launch(ctx, store)
     _push_hub(ctx, session, item)
@@ -916,6 +932,32 @@ def _reclaimed_shows_queued(ctx):
     assert active_glyph.glyph not in icon_text
     style = _rendered_icon_style(table, step_id, queued_glyph.glyph)
     assert style.color.get_truecolor().hex.lower() == COLOURS[queued_glyph.colour].lower()
+
+
+@then("the header and the hierarchy show the step as active, not blocked")
+def _running_with_dependency_shows_active(ctx):
+    screen = ctx["session"].app.screen
+
+    active_glyph = STATE_GLYPHS["active"]
+    queued_glyph = STATE_GLYPHS["queued"]
+    identity = screen.query_one("#hub-identity", Static)
+    identity_text = _rendered_text(identity)
+    assert active_glyph.glyph in identity_text
+    assert queued_glyph.glyph not in identity_text
+    identity_style = _segment_style_for_substring(identity, 0, active_glyph.glyph)
+    assert identity_style is not None
+    assert identity_style.color.get_truecolor().hex.lower() == COLOURS[active_glyph.colour].lower()
+
+    if screen._active_tab != "workflow":
+        ctx["session"].press("tab")
+
+    table = screen.query_one(HierarchyPagingTable)
+    step_id = ctx["step_id"]
+    icon_text = _rendered_cell_text(table, step_id, "icon")
+    assert active_glyph.glyph in icon_text
+    assert queued_glyph.glyph not in icon_text
+    style = _rendered_icon_style(table, step_id, active_glyph.glyph)
+    assert style.color.get_truecolor().hex.lower() == COLOURS[active_glyph.colour].lower()
 
 
 @then("it shows an empty state placeholder")
