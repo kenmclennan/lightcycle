@@ -61,6 +61,7 @@ COLUMN_GRIDS = {
 GLOBAL_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter/→", "open"),
+    ("[/]", "switch tab"),
     ("tab", "backlog"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
@@ -71,12 +72,14 @@ BACKLOG_SHORTCUTS = (
     ("enter/→", "explore in tree"),
     ("f", "filter"),
     ("/", "search"),
+    ("[/]", "switch tab"),
     ("tab", "done"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 BACKLOG_EMPTY_SHORTCUTS = (
+    ("[/]", "switch tab"),
     ("tab", "done"),
     ("q", "quit"),
 )
@@ -84,6 +87,7 @@ BACKLOG_EMPTY_SHORTCUTS = (
 BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("/", "search"),
+    ("[/]", "switch tab"),
     ("tab", "done"),
     ("q", "quit"),
 )
@@ -93,12 +97,14 @@ DONE_SHORTCUTS = (
     ("enter/→", "open"),
     ("f", "filter"),
     ("/", "search"),
+    ("[/]", "switch tab"),
     ("tab", "current work"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 DONE_EMPTY_SHORTCUTS = (
+    ("[/]", "switch tab"),
     ("tab", "current work"),
     ("q", "quit"),
 )
@@ -106,6 +112,7 @@ DONE_EMPTY_SHORTCUTS = (
 DONE_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("/", "search"),
+    ("[/]", "switch tab"),
     ("tab", "current work"),
     ("q", "quit"),
 )
@@ -114,12 +121,14 @@ BACKLOG_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "explore in tree"),
     ("esc", "back"),
+    ("[/]", "switch tab"),
     ("tab", "done"),
     ("q", "quit"),
 )
 
 BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
     ("esc", "back"),
+    ("[/]", "switch tab"),
     ("tab", "done"),
     ("q", "quit"),
 )
@@ -128,21 +137,24 @@ DONE_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "open"),
     ("esc", "back"),
+    ("[/]", "switch tab"),
     ("tab", "current work"),
     ("q", "quit"),
 )
 
 DONE_SEARCH_EMPTY_SHORTCUTS = (
     ("esc", "back"),
+    ("[/]", "switch tab"),
     ("tab", "current work"),
     ("q", "quit"),
 )
 
 HUB_SHORTCUTS = (
+    ("[/]", "switch tab"),
     ("↑↓", "scroll"),
     ("enter/→", "open"),
     ("esc/←", "back"),
-    ("tab", "switch tab"),
+    ("tab", "backlog"),
     ("q", "quit"),
 )
 

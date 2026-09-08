@@ -117,8 +117,9 @@ Feature: The done screen
       | 1        | ↑↓    | move         |
       | 2        | enter | open         |
       | 3        | esc   | back         |
-      | 4        | tab   | current work |
-      | 5        | q     | quit         |
+      | 4        | [/]   | switch tab   |
+      | 5        | tab   | current work |
+      | 6        | q     | quit         |
 
   Scenario Outline: Each shortcut for the done tab with the search box focused and zero filtered rows appears in the footer, in order
     Given the done tab is shown with a closed item
@@ -131,8 +132,9 @@ Feature: The done screen
     Examples:
       | position | key | action       |
       | 1        | esc | back         |
-      | 2        | tab | current work |
-      | 3        | q   | quit         |
+      | 2        | [/] | switch tab   |
+      | 3        | tab | current work |
+      | 4        | q   | quit         |
 
   Scenario: The focused-search shortcut strip is actually painted in the footer
     Given the done tab is shown with a closed item

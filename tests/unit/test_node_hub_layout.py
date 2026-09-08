@@ -27,10 +27,10 @@ def test_tab_strip_sits_immediately_below_the_header_on_every_tab():
         tab_strip = session.app.screen.query_one(HubTabStrip)
         assert tab_strip.region.y == header_bottom
 
-        session.press("tab")
+        session.press("]")
         assert tab_strip.region.y == header_bottom
 
-        session.press("tab")
+        session.press("]")
         assert tab_strip.region.y == header_bottom
     finally:
         session.close()
@@ -52,7 +52,7 @@ def test_hub_footer_status_and_shortcut_lines_are_painted():
 def test_priority_list_footer_status_and_shortcut_lines_are_painted():
     store = FakeStore()
     store.create_step("a", step="build", role="agent")
-    session = launch(make_test_container(store=store))
+    session = launch(make_test_container(store=store), size=(100, 24))
     try:
         footer = session.app.screen.query_one(DashboardFooter)
         status_bar, shortcut_bar = footer.children

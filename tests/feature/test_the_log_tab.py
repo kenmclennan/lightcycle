@@ -143,7 +143,7 @@ def _open(ctx):
     screen = session.app.screen
     tabs_tried = 0
     while screen._active_tab != "log" and tabs_tried < 3:
-        session.press("tab")
+        session.press("]")
         tabs_tried += 1
     ctx["hub_screen"] = screen
     return session

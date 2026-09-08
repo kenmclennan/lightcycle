@@ -1984,6 +1984,14 @@ class NodeHubScreen(Screen):
         self._focus_active_tab()
         self._sync_active_glyph_animation()
 
+    def action_prev_tab(self) -> None:
+        index = self._tab_order.index(self._active_tab)
+        self._active_tab = self._tab_order[(index - 1) % len(self._tab_order)]
+        self.query_one(HubTabStrip).set_active(self._active_tab)
+        self._apply_tab_visibility()
+        self._focus_active_tab()
+        self._sync_active_glyph_animation()
+
     def action_close_hub(self) -> None:
         if self._toast_active:
             return
