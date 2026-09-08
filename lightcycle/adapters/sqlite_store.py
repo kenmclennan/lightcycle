@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS history (
     state TEXT NOT NULL,
     ts TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_history_node_id_seq ON history(node_id, seq);
 
 CREATE TABLE IF NOT EXISTS passes (
     id        TEXT PRIMARY KEY,
