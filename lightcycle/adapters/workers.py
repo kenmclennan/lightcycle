@@ -156,6 +156,25 @@ def mark_checked(root, spawnid):
         write_workers(root, workers)
 
 
+def usage_resume(root, spawnid):
+    for w in workers_state(root):
+        if w.get("spawnid") == spawnid:
+            return w.get("usage_resume")
+    return None
+
+
+def set_usage_resume(root, spawnid, state):
+    with registry_lock(root):
+        workers = workers_state(root)
+        for w in workers:
+            if w.get("spawnid") == spawnid:
+                if state is None:
+                    w.pop("usage_resume", None)
+                else:
+                    w["usage_resume"] = state
+        write_workers(root, workers)
+
+
 class WorkersAdapter(WorkersPort):
     def __init__(self, config):
         self._config = config
@@ -190,3 +209,9 @@ class WorkersAdapter(WorkersPort):
 
     def log_mtime(self, path):
         return log_mtime(path)
+
+    def usage_resume(self, spawnid):
+        return usage_resume(self._config.data_root(), spawnid)
+
+    def set_usage_resume(self, spawnid, state):
+        return set_usage_resume(self._config.data_root(), spawnid, state)

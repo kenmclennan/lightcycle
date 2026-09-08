@@ -3,11 +3,51 @@ from typing import List
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import (
-    Breaker, WorkerPool, parse_attribution_event, parse_rate_limit_event, parse_usage_event,
-    resolve_usage,
+    AttributionEvent, Breaker, ToolUsage, UsageEvent, WorkerPool, parse_attribution_event,
+    parse_rate_limit_event, parse_usage_event, resolve_usage,
 )
 from lightcycle.domain.pool.worker_session import saw_session_activity
 from lightcycle.ports.store import NodeNotFoundError
+
+
+def _corrected_usage(usage, resume):
+    posted_thinking = resume.get("posted_thinking_tokens")
+    thinking_tokens = None
+    if usage.thinking_tokens is not None:
+        thinking_tokens = usage.thinking_tokens - (posted_thinking or 0)
+    return UsageEvent(
+        input_tokens=usage.input_tokens - (resume.get("posted_input_tokens", 0) or 0),
+        output_tokens=usage.output_tokens - (resume.get("posted_output_tokens", 0) or 0),
+        cache_read_tokens=(
+            usage.cache_read_tokens - (resume.get("posted_cache_read_tokens", 0) or 0)
+        ),
+        cache_creation_tokens=(
+            usage.cache_creation_tokens - (resume.get("posted_cache_creation_tokens", 0) or 0)
+        ),
+        cost_usd=usage.cost_usd - (resume.get("posted_cost_usd", 0.0) or 0.0),
+        cost_basis=usage.cost_basis,
+        thinking_tokens=thinking_tokens,
+        has_result_line=usage.has_result_line,
+    )
+
+
+def _corrected_attribution(attribution, resume):
+    posted_tool_usage = resume.get("posted_tool_usage") or {}
+    tool_usage = {}
+    for tool, usage in attribution.tool_usage.items():
+        posted = posted_tool_usage.get(tool) or {}
+        tool_usage[tool] = ToolUsage(
+            calls=usage.calls - (posted.get("calls", 0) or 0),
+            bytes=usage.bytes - (posted.get("bytes", 0) or 0),
+        )
+    return AttributionEvent(
+        turn_count=attribution.turn_count - (resume.get("posted_turn_count", 0) or 0),
+        tool_usage=tool_usage,
+        recovered_input_tokens=attribution.recovered_input_tokens,
+        recovered_output_tokens=attribution.recovered_output_tokens,
+        recovered_cache_read_tokens=attribution.recovered_cache_read_tokens,
+        recovered_cache_creation_tokens=attribution.recovered_cache_creation_tokens,
+    )
 
 
 @dataclass(frozen=True)
@@ -109,7 +149,12 @@ class BreakerGateUseCase:
                     except NodeNotFoundError:
                         model = None
                     usage = resolve_usage(usage, attribution, model, rates)
+                resume = self._workers.usage_resume(w.spawnid)
+                if resume is not None:
+                    usage = _corrected_usage(usage, resume)
+                    attribution = _corrected_attribution(attribution, resume)
                 self._store.record_backfilled_usage(w.log, w.step, usage, attribution)
+                self._workers.set_usage_resume(w.spawnid, None)
             self._workers.mark_checked(w.spawnid)
             if event and event.is_rejected:
                 rejected_reset_ats.append(event.reset_at)

@@ -1,5 +1,6 @@
 from lightcycle.domain.pool.attribution import (
-    AttributionEvent, ToolUsage, parse_attribution_event, sum_attribution_events,
+    AttributionEvent, ToolUsage, parse_attribution_chunk, parse_attribution_event,
+    sum_attribution_events,
 )
 from lightcycle.domain.pool.backfill import extract_claimed_step
 from lightcycle.domain.pool.breaker import Breaker
@@ -23,6 +24,7 @@ __all__ = [
     "Worker",
     "WorkerPool",
     "extract_claimed_step",
+    "parse_attribution_chunk",
     "parse_attribution_event",
     "parse_rate_limit_event",
     "parse_usage_event",

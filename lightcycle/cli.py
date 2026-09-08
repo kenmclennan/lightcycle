@@ -95,6 +95,7 @@ from lightcycle.application.pool import (
     BreakerGateUseCase,
     HookCompletionsUseCase,
     ListWorkersUseCase,
+    LiveUsageAccrualUseCase,
     MonitorPrsUseCase,
     ReleaseRunLockUseCase,
     ResolveLogInput,
@@ -1619,6 +1620,9 @@ def cmd_start(argv):
         )
         hook_completions = HookCompletionsUseCase(_container.store, flow_service)
         backup_gate = BackupUseCase(_container.backup, _container.config)
+        usage_gate = LiveUsageAccrualUseCase(
+            _container.store, _container.fs, _container.workers, _container.config,
+        )
         tick = TickUseCase(
             _container.store,
             _container.workers,
@@ -1634,6 +1638,7 @@ def cmd_start(argv):
             fs=_container.fs,
             flow_service=flow_service,
             spin_port=_container.spin,
+            usage_gate=usage_gate,
         )
         if a.once:
             now = time.time()

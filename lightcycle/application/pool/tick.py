@@ -45,7 +45,7 @@ class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
         hook_completions=None, worktrees=None, git=None, backup_gate=None, fs=None,
-        flow_service=None, spin_port=None,
+        flow_service=None, spin_port=None, usage_gate=None,
     ):
         self._store = store
         self._workers = workers
@@ -61,6 +61,7 @@ class TickUseCase:
         self._hook_completions = hook_completions
         self._backup_gate = backup_gate
         self._flow_service = flow_service
+        self._usage_gate = usage_gate
 
     def execute(self, input: TickInput) -> TickResponse:
         if self._flow_service:
@@ -79,6 +80,8 @@ class TickUseCase:
         breaker_result = self._breaker_gate.execute(input.now) if self._breaker_gate else None
         breaker = breaker_result.breaker if breaker_result else Breaker()
         backup_result = self._backup_gate.execute(input.now) if self._backup_gate else None
+        if self._usage_gate:
+            self._usage_gate.execute(input.now)
         swept = self._sweep.execute(
             input.now, self._config.max_boot_seconds(), self._config.stall_seconds()
         )

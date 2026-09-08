@@ -78,6 +78,20 @@ class FakeWorkers:
     def log_mtime(self, path):
         return self._log_mtimes.get(path)
 
+    def usage_resume(self, spawnid):
+        for w in self._workers:
+            if w.get("spawnid") == spawnid:
+                return w.get("usage_resume")
+        return None
+
+    def set_usage_resume(self, spawnid, state):
+        for w in self._workers:
+            if w.get("spawnid") == spawnid:
+                if state is None:
+                    w.pop("usage_resume", None)
+                else:
+                    w["usage_resume"] = state
+
 
 class FakeBreakerPort:
     def __init__(self, state=None):
@@ -791,6 +805,126 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
                 self.assertFalse(result.spin_open, "tripped too early on check %d" % i)
             else:
                 self.assertTrue(result.spin_open)
+
+    def test_a_dead_worker_with_resume_state_gets_a_corrected_delta_recorded(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "message": {"id": "msg-1", "content": [
+                    {"type": "tool_use", "id": "tu-1", "name": "Read"},
+                ]},
+            }),
+            json.dumps({
+                "type": "user",
+                "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "tu-1", "content": "hello"},
+                ]},
+            }),
+            json.dumps({
+                "type": "assistant",
+                "message": {"id": "msg-2", "content": [
+                    {"type": "tool_use", "id": "tu-2", "name": "Read"},
+                ]},
+            }),
+            json.dumps({
+                "type": "user",
+                "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "tu-2", "content": "worldworld"},
+                ]},
+            }),
+            json.dumps({
+                "type": "result",
+                "modelUsage": {
+                    "claude-sonnet-5": {
+                        "inputTokens": 100, "outputTokens": 50,
+                        "cacheReadInputTokens": 10, "cacheCreationInputTokens": 5,
+                        "costUSD": 1.0, "costBasis": "list",
+                    }
+                },
+            }),
+        ]
+        workers = FakeWorkers(
+            workers=[{
+                "spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0,
+                "usage_resume": {
+                    "offset": 0, "message_ids": ["msg-1"], "pending_tool_use": {},
+                    "posted_turn_count": 1,
+                    "posted_tool_usage": {"Read": {"calls": 1, "bytes": len(b"hello")}},
+                    "posted_input_tokens": 40, "posted_output_tokens": 20,
+                    "posted_cache_read_tokens": 4, "posted_cache_creation_tokens": 2,
+                    "posted_cost_usd": 0.4, "posted_thinking_tokens": None,
+                },
+            }]
+        )
+        fs = FakeFs(files={"/l/1.log": "\n".join(lines).encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+
+        self.assertEqual(
+            store.record_usage_calls, [(tid, 60, 30, 6, 3, 0.6, "list", None)],
+        )
+        self.assertEqual(len(store.record_attribution_calls), 1)
+        recorded_tid, turn_count, tool_usage = store.record_attribution_calls[0]
+        self.assertEqual(recorded_tid, tid)
+        self.assertEqual(turn_count, 1)
+        self.assertEqual(tool_usage["Read"].calls, 1)
+        self.assertEqual(tool_usage["Read"].bytes, 10)
+        self.assertIsNone(workers.usage_resume("sp-1"))
+
+    def test_a_negative_token_or_cost_correction_is_written_as_computed_not_clamped(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        line = json.dumps({
+            "type": "result",
+            "modelUsage": {
+                "claude-sonnet-5": {
+                    "inputTokens": 100, "outputTokens": 0, "cacheReadInputTokens": 0,
+                    "cacheCreationInputTokens": 0, "costUSD": 0.5, "costBasis": "list",
+                }
+            },
+        })
+        workers = FakeWorkers(
+            workers=[{
+                "spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0,
+                "usage_resume": {
+                    "offset": 0, "message_ids": [], "pending_tool_use": {},
+                    "posted_turn_count": 0, "posted_tool_usage": {},
+                    "posted_input_tokens": 150, "posted_output_tokens": 0,
+                    "posted_cache_read_tokens": 0, "posted_cache_creation_tokens": 0,
+                    "posted_cost_usd": 0.9, "posted_thinking_tokens": None,
+                },
+            }]
+        )
+        fs = FakeFs(files={"/l/1.log": line.encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        recorded = store.record_usage_calls[0]
+        self.assertEqual(recorded[1], -50)
+        self.assertAlmostEqual(recorded[5], -0.4)
+        self.assertIsNone(workers.usage_resume("sp-1"))
+
+    def test_a_dead_worker_with_no_resume_state_behaves_exactly_as_today(self):
+        store = RecordingFakeStore()
+        tid = store.create_step("build: t", step="build", role="agent")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        line = json.dumps({
+            "type": "result",
+            "modelUsage": {
+                "claude-sonnet-5": {"inputTokens": 68, "outputTokens": 10, "costUSD": 0.1,
+                                    "costBasis": "list"}
+            },
+        })
+        fs = FakeFs(files={"/l/1.log": line.encode()})
+        breaker_port = FakeBreakerPort()
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store).execute(now=100)
+        self.assertEqual(
+            store.record_usage_calls, [(tid, 68, 10, 0, 0, 0.1, "list", None)],
+        )
+        self.assertIsNone(workers.usage_resume("sp-1"))
 
 
 if __name__ == "__main__":

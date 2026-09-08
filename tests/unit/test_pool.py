@@ -58,6 +58,20 @@ class FakeWorkers:
     def log_mtime(self, path):
         return self._log_mtimes.get(path)
 
+    def usage_resume(self, spawnid):
+        for w in self._workers:
+            if w.get("spawnid") == spawnid:
+                return w.get("usage_resume")
+        return None
+
+    def set_usage_resume(self, spawnid, state):
+        for w in self._workers:
+            if w.get("spawnid") == spawnid:
+                if state is None:
+                    w.pop("usage_resume", None)
+                else:
+                    w["usage_resume"] = state
+
 
 class FakeBreakerGate:
     def __init__(self, breaker, spin_open=False):
@@ -74,6 +88,14 @@ class FakeBackupGate:
 
     def execute(self, now):
         return self._response
+
+
+class FakeUsageGate:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, now):
+        self.calls.append(now)
 
 
 class FakeWorktrees:
@@ -924,6 +946,21 @@ class TestTick(unittest.TestCase):
         ).execute(TickInput(now=1000.0))
         self.assertIsNone(result.backed_up)
         self.assertEqual(result.backup_pruned, [])
+
+    def test_usage_gate_wired_in_is_called_with_now(self):
+        s = FakeStore()
+        usage_gate = FakeUsageGate()
+        TickUseCase(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4), usage_gate=usage_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(usage_gate.calls, [1000.0])
+
+    def test_no_usage_gate_is_a_noop(self):
+        s = FakeStore()
+        result = TickUseCase(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4)
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.alive, 0)
 
     def test_active_seconds_credited_for_covered_step_under_the_cap(self):
         s = FakeStore()

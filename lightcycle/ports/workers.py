@@ -41,3 +41,11 @@ class WorkersPort(ABC):
     @abstractmethod
     def log_mtime(self, path):
         pass
+
+    @abstractmethod
+    def usage_resume(self, spawnid):
+        pass
+
+    @abstractmethod
+    def set_usage_resume(self, spawnid, state):
+        pass

@@ -76,3 +76,17 @@ class WorkersContractBase:
         state = {entry["spawnid"]: entry["checked"] for entry in w.workers_state()}
         self.assertTrue(state["w1"])
         self.assertFalse(state["w2"])
+
+    def test_usage_resume_round_trips_and_clears(self):
+        w = self.make_workers()
+        w.write_workers([
+            {"spawnid": "w1", "role": "coder", "pid": 1, "step": None},
+            {"spawnid": "w2", "role": "coder", "pid": 2, "step": None},
+        ])
+        self.assertIsNone(w.usage_resume("w1"))
+        state = {"offset": 123, "message_ids": ["msg_1"], "pending_tool_use": {"tu_1": "Bash"}}
+        w.set_usage_resume("w1", state)
+        self.assertEqual(w.usage_resume("w1"), state)
+        self.assertIsNone(w.usage_resume("w2"))
+        w.set_usage_resume("w1", None)
+        self.assertIsNone(w.usage_resume("w1"))
