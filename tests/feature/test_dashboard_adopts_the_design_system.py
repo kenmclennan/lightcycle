@@ -513,9 +513,9 @@ def _dependency_blocked_extra(ctx):
     assert ctx["extra_glyph"].colour == "dim"
 
 
-@then("it is cursor, icon, id, project, title, step, time")
+@then("it is cursor, icon, id, project, title, step, cost, time")
 def _priority_list_column_order(ctx):
-    assert ctx["columns"] == ("cursor", "icon", "id", "project", "title", "step", "time")
+    assert ctx["columns"] == ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
 
 
 @then("it is cursor, id, project, title")

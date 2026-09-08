@@ -502,7 +502,7 @@ _STACK_STEP = "code-review-rounds"
 _STACK_TIME_MINUTES = 14
 _STACK_TIME_TEXT = "14m"
 _STACK_TITLE = "A title needing one continuation line"
-_PRIORITY_NUM_COLUMNS = 7
+_PRIORITY_NUM_COLUMNS = 8
 
 
 def _priority_stack_terminal_width(mode):
@@ -511,6 +511,7 @@ def _priority_stack_terminal_width(mode):
         "id": [_STACK_ID],
         "project": [_STACK_PROJECT],
         "step": [_STACK_STEP],
+        "cost": [],
         "time": [_STACK_TIME_TEXT],
     }
     atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())

@@ -336,12 +336,12 @@ def _colliding_ids(ctx):
 
 
 _HSTACK_TITLE = "A title long enough to need a continuation line for real"
-_HIERARCHY_NUM_COLUMNS = 4
+_HIERARCHY_NUM_COLUMNS = 6
 
 
 def _hierarchy_stack_terminal_width(mode, ids, roles, max_depth):
     glyph_total = GLYPH_WIDTHS["icon"]
-    atomic_values = {"id": ids, "role": roles}
+    atomic_values = {"id": ids, "role": roles, "turns": [], "cost": []}
     atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
     first_line_width = glyph_total + atomic_total
     indent = glyph_total + max_depth
@@ -893,7 +893,7 @@ def _hierarchy_stacked_cell_text(table, strip):
 
 @then(
     "the icon, id and role remain on the row's first line, each padded to "
-    "its atomic width, with the role right-aligned"
+    "its atomic width, with cost right-aligned"
 )
 def _first_line_role_right_aligned(ctx):
     table = _table(ctx)
@@ -903,6 +903,7 @@ def _first_line_role_right_aligned(ctx):
     rest = content[GLYPH_WIDTHS["icon"]:]
     assert rest.startswith(ctx["target_id"])
     if ctx["target_depth"] != 0:
+        assert "agent" in content
         assert content.rstrip().endswith("agent")
 
 

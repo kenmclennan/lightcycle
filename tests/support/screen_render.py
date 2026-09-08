@@ -286,6 +286,39 @@ def _priority_stacked(size):
     return _launch(_stacked_priority_store(), size=size)
 
 
+def _priority_cost_store():
+    store = DemoStore(now=lambda: _at(14))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    spec = store.step("LC-143.3.1", "write the spec", step="spec-writer", role="agent", parent=item)
+    store.close(spec, "done")
+    store.record_usage(spec, 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution(spec, 20, {})
+    store.step("LC-143.3.4", "write the code", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
+    return store
+
+
+def _priority_cost(size):
+    return _launch(_priority_cost_store(), size=size)
+
+
+def _priority_cost_not_recorded_store():
+    store = DemoStore(now=lambda: _at(14))
+    item = store.item("LC-447", SCAN_TITLE, workflow=WORKFLOW)
+    feedback = store.step(
+        "LC-447.4", "handle feedback", step="handle-feedback", role="agent", parent=item,
+    )
+    store.close(feedback, "done")
+    store.record_attribution(feedback, 246, {})
+    store.step("LC-447.5", "write the code", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
+    return store
+
+
+def _priority_cost_not_recorded(size):
+    return _launch(_priority_cost_not_recorded_store(), size=size)
+
+
 def _backlog_normal(size):
     session = _launch(_backlog_store(), size=size)
     session.press("tab")
@@ -420,6 +453,29 @@ def _hub_hierarchy(size):
 
 def _hub_hierarchy_stacked(size):
     store, item, _step = _stacked_hierarchy_store()
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
+
+
+def _hierarchy_cost_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    recorded = store.step(
+        "LC-143.3.1", "write the spec", step="spec-writer", role="agent", parent=item,
+    )
+    store.close(recorded, "done")
+    store.record_usage(recorded, 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution(recorded, 20, {})
+    not_recorded = store.step(
+        "LC-143.3.4", "handle feedback", step="handle-feedback", role="agent", parent=item,
+    )
+    store.close(not_recorded, "done")
+    store.record_attribution(not_recorded, 246, {})
+    store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item)
+    return store, item
+
+
+def _hub_hierarchy_cost(size):
+    store, item = _hierarchy_cost_store()
     return _open_hub(_launch(store, size=size), item, tab="workflow")
 
 
@@ -603,7 +659,11 @@ def _hub_detail(size):
 
 def _hub_hierarchy_scrolled(size):
     store, item = _long_hierarchy_store()
-    return _open_hub(_launch(store, size=size), item, tab="workflow")
+    session = _open_hub(_launch(store, size=size), item, tab="workflow")
+    for _ in range(30):
+        session.press("down")
+    session.pause()
+    return session
 
 
 def _hub_claude_unavailable(size):
@@ -705,6 +765,8 @@ SCREENS = {
     "priority-list#empty": _priority_empty,
     "priority-list#claude-unavailable": _priority_claude_unavailable,
     "priority-list#stacked": _priority_stacked,
+    "priority-list#cost": _priority_cost,
+    "priority-list#cost-not-recorded": _priority_cost_not_recorded,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,
@@ -720,6 +782,7 @@ SCREENS = {
     "done#stacked": _done_stacked,
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
+    "hub#workflow-cost": _hub_hierarchy_cost,
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
     "hub#artifacts": _hub_artifacts,

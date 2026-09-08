@@ -1,5 +1,6 @@
 import unittest
 
+from lightcycle.adapters.tui.hub import COST_NOT_RECORDED
 from lightcycle.adapters.tui.priority_list import (
     _active_row,
     _attention_row,
@@ -181,7 +182,7 @@ class TestEngineStepDisplayPhrase(unittest.TestCase):
 
         row = _attention_row(store, node, _FLOW)
 
-        self.assertEqual(row.step, "Review the findings")
+        self.assertEqual(row.step, truncate_field("Review the findings", STEP_PHRASE_BUDGET))
 
     def test_an_active_audit_shows_the_engine_phrase(self):
         store = FakeStore()
@@ -293,6 +294,43 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
 
         self.assertEqual(queued[0].id, item)
         self.assertEqual(queued[0].step_id, step)
+
+
+class TestBuildPriorityRowsCost(unittest.TestCase):
+    def test_active_row_shows_the_items_rolled_up_cost_across_all_its_steps(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
+        store.record_usage(done, 100, 10, 0, 0, 2.50, "list", None)
+        store.close(done, "done")
+        step = store.create_step("building", step="build", role="agent", parent=item)
+        store.record_usage(step, 100, 10, 0, 0, 1.25, "list", None)
+        lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
+
+        _, active, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual(active[0].cost, "$3.75")
+
+    def test_a_row_with_turns_but_no_recorded_cost_shows_the_not_recorded_placeholder(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step("building", step="build", role="agent", parent=item)
+        store.record_attribution(step, 50, {})
+        lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
+
+        _, active, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual(active[0].cost, COST_NOT_RECORDED)
+
+    def test_a_row_that_has_never_run_anything_is_blank_not_zero_dollars(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step("building", step="build", role="agent", parent=item)
+        lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
+
+        _, active, _ = build_priority_rows(store, lanes, "now", FixedFlowService(_FLOW))
+
+        self.assertEqual(active[0].cost, "")
 
 
 class TestAssembleRows(unittest.TestCase):

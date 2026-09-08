@@ -56,7 +56,7 @@ from lightcycle.application.work import (
 
 POLL_INTERVAL_SECONDS = 10
 
-DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "time")
+DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
 BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
 
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
@@ -1217,6 +1217,7 @@ class LightcycleApp(App):
             "id": [row.id for row in rows],
             "project": [row.project for row in rows],
             "step": [row.step for row in rows],
+            "cost": [row.cost for row in rows],
             "time": [row.time for row in rows],
         }
         row_budget = row_budget_for(table, len(DATA_COLUMNS)) if table.size.width else None
@@ -1232,6 +1233,7 @@ class LightcycleApp(App):
             "id": layout.atomic_widths["id"],
             "project": layout.atomic_widths["project"],
             "step": layout.atomic_widths["step"],
+            "cost": layout.atomic_widths["cost"],
             "time": layout.atomic_widths["time"],
             "title": layout.flexible_width,
         }
@@ -1255,7 +1257,12 @@ class LightcycleApp(App):
         step_field = pad_field(
             Text(row.step, style=COLOURS[row.step_colour]), layout.atomic_widths["step"]
         )
-        content_so_far = cursor_field + icon_field + id_field + project_field + step_field
+        cost_field = pad_field(
+            Text(row.cost, style=COLOURS["dim"]) if row.cost else Text(""), layout.atomic_widths["cost"]
+        )
+        content_so_far = (
+            cursor_field + icon_field + id_field + project_field + step_field + Text("  ") + cost_field
+        )
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else Text("")
         time_area = max(0, row_budget - len(content_so_far.plain))
         return content_so_far + pad_field_right(time_cell, time_area)
@@ -1274,8 +1281,11 @@ class LightcycleApp(App):
             )
         step_cell = Text(row.step, style=COLOURS[row.step_colour])
         project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
+        cost_cell = Text(row.cost, style=COLOURS["dim"]) if row.cost else ""
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
-        return (cursor_cell, icon_cell, row.id, project_cell, row.title + "\n ", step_cell, time_cell)
+        return (
+            cursor_cell, icon_cell, row.id, project_cell, row.title + "\n ", step_cell, cost_cell, time_cell,
+        )
 
     def _stacked_row_cell_builder(self, row, layout, row_budget, cursor, icon_override):
         return self._row_cells(row, layout, row_budget, cursor=cursor, icon_override=icon_override)
@@ -1291,6 +1301,7 @@ class LightcycleApp(App):
                     "id": layout.atomic_widths["id"],
                     "project": layout.atomic_widths["project"],
                     "step": layout.atomic_widths["step"],
+                    "cost": layout.atomic_widths["cost"],
                     "time": layout.atomic_widths["time"],
                     "title": layout.flexible_width,
                 },
@@ -1451,6 +1462,7 @@ class LightcycleApp(App):
             "id": layout.atomic_widths["id"],
             "project": layout.atomic_widths["project"],
             "step": layout.atomic_widths["step"],
+            "cost": layout.atomic_widths["cost"],
             "time": layout.atomic_widths["time"],
             "title": layout.flexible_width,
         }

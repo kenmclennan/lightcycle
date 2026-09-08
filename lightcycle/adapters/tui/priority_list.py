@@ -1,10 +1,12 @@
 from dataclasses import dataclass, replace
 
 from lightcycle.adapters.tui.design_system import DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
+from lightcycle.adapters.tui.hub import COST_NOT_RECORDED
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
+from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
-from lightcycle.domain.work import row_bucket
+from lightcycle.domain.work import format_usd, row_bucket
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,7 @@ class PriorityRow:
     title: str
     step: str
     step_colour: str
+    cost: str
     time: str
 
 
@@ -54,6 +57,7 @@ def _attention_row(store, node, flow):
         title=node.title,
         step="stuck · %s" % step if escalation else step,
         step_colour="amber",
+        cost="",
         time="",
     )
 
@@ -71,6 +75,7 @@ def _active_row(store, node, now, flow):
         title=node.title,
         step=_resolved_step(node, flow),
         step_colour="dim",
+        cost="",
         time=_elapsed_text(store, node, now),
     )
 
@@ -90,6 +95,7 @@ def _queued_row(store, node, flow):
             title=node.title,
             step="blocked · %s" % blocker_id,
             step_colour="dim",
+            cost="",
             time="",
         )
     return PriorityRow(
@@ -103,8 +109,16 @@ def _queued_row(store, node, flow):
         title=node.title,
         step=_resolved_step(node, flow),
         step_colour="dim",
+        cost="",
         time="",
     )
+
+
+def _rolled_up_cost_text(store, item_id):
+    cost = CostUseCase(store).execute(CostInput(node=item_id))
+    if cost.turn_count == 0 and cost.cost_usd == 0:
+        return ""
+    return format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
 
 
 def build_priority_rows(store, lanes, now, flow_service):
@@ -128,7 +142,10 @@ def build_priority_rows(store, lanes, now, flow_service):
                 continue
             claimed.add(owning_id)
             owning_node = store.get_node(owning_id)
-            group_rows.append(replace(row, id=owning_node.id, title=owning_node.title))
+            group_rows.append(replace(
+                row, id=owning_node.id, title=owning_node.title,
+                cost=_rolled_up_cost_text(store, owning_id),
+            ))
     return attention, active, queued
 
 

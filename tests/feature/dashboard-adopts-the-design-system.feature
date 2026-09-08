@@ -150,7 +150,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
   Scenario: The shared vocabulary defines the priority list's column order
     Given the shared column grids
     When the priority list's column order is read
-    Then it is cursor, icon, id, project, title, step, time
+    Then it is cursor, icon, id, project, title, step, cost, time
 
   Scenario: The shared vocabulary defines the backlog's column order
     Given the shared column grids
@@ -172,13 +172,15 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | role    | atomic   |
       | type    | atomic   |
       | time    | atomic   |
+      | turns   | atomic   |
+      | cost    | atomic   |
       | title   | flexible |
       | value   | flexible |
 
   Scenario: A glyph column's width is fixed and can never overflow
     Given the shared row-grid sizing rule
     Then the cursor column's width is fixed at 2 characters
-    And the icon column's width is fixed at 4 characters
+    And the icon column's width is fixed at 3 characters
 
   Scenario: An atomic column's width is the longest value across the whole list, not just the rows currently on screen
     Given the shared row-grid sizing rule
