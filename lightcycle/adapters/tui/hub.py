@@ -1092,8 +1092,6 @@ class NodeHubScreen(Screen):
     BINDINGS = [
         Binding("escape", "close_hub", "Back", show=False),
         Binding("left", "close_hub", "Back", show=False),
-        Binding("[", "prev_tab", "Prev tab", show=False),
-        Binding("]", "next_tab", "Next tab", show=False),
         Binding("t", "toggle_thinking", "Thinking", show=False),
         Binding("r", "resume", "Resume", show=False),
     ]
@@ -1982,14 +1980,6 @@ class NodeHubScreen(Screen):
     def action_next_tab(self) -> None:
         index = self._tab_order.index(self._active_tab)
         self._active_tab = self._tab_order[(index + 1) % len(self._tab_order)]
-        self.query_one(HubTabStrip).set_active(self._active_tab)
-        self._apply_tab_visibility()
-        self._focus_active_tab()
-        self._sync_active_glyph_animation()
-
-    def action_prev_tab(self) -> None:
-        index = self._tab_order.index(self._active_tab)
-        self._active_tab = self._tab_order[(index - 1) % len(self._tab_order)]
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
         self._focus_active_tab()

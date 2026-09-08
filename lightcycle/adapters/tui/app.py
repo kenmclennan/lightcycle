@@ -1333,6 +1333,9 @@ class LightcycleApp(App):
             shortcut_bar.set_shortcuts(desired)
 
     def action_toggle_view(self) -> None:
+        if isinstance(self.screen, NodeHubScreen):
+            self.screen.action_next_tab()
+            return
         while len(self.screen_stack) > 1:
             self.pop_screen()
         index = _VIEW_CYCLE.index(self._view)

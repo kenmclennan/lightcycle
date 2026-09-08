@@ -542,8 +542,8 @@ def _item_that_is(ctx, status):
     _push_hub(ctx, session, item)
 
 
-@given(parsers.parse('I cycle to the "{tab}" tab with ]'))
-@when(parsers.parse('I cycle to the "{tab}" tab with ]'))
+@given(parsers.parse('I cycle to the "{tab}" tab'))
+@when(parsers.parse('I cycle to the "{tab}" tab'))
 def _cycle_to_tab(ctx, tab):
     screen = ctx["session"].app.screen
     tab_id = tab.lower()
@@ -551,7 +551,7 @@ def _cycle_to_tab(ctx, tab):
     current = order.index(screen._active_tab)
     target = order.index(tab_id)
     for _ in range((target - current) % len(order)):
-        ctx["session"].press("]")
+        ctx["session"].press("tab")
     ctx["target_tab"] = tab_id
 
 
@@ -762,24 +762,6 @@ def _no_two_tabs_shown(ctx, a, b):
         assert len(screen.query("#hub-tab-%s" % label.lower())) == 0
 
 
-@then("the backlog is shown in place of the hub")
-def _backlog_shown_in_place_of_hub(ctx):
-    from lightcycle.adapters.tui.app import BacklogView
-
-    session = ctx["session"]
-    assert not isinstance(session.app.screen, NodeHubScreen)
-    assert session.app.query_one(BacklogView).display
-
-
-@then("the done tab is shown in place of the hub")
-def _done_shown_in_place_of_hub(ctx):
-    from lightcycle.adapters.tui.app import DoneView
-
-    session = ctx["session"]
-    assert not isinstance(session.app.screen, NodeHubScreen)
-    assert session.app.query_one(DoneView).display
-
-
 @then("the escalation reason names the specific blocking item")
 def _escalation_names_blocking_item(ctx):
     screen = ctx["session"].app.screen
@@ -925,7 +907,7 @@ def _reclaimed_shows_queued(ctx):
     assert identity_style.color.get_truecolor().hex.lower() == COLOURS[queued_glyph.colour].lower()
 
     if screen._active_tab != "workflow":
-        ctx["session"].press("]")
+        ctx["session"].press("tab")
 
     table = screen.query_one(HierarchyPagingTable)
     step_id = ctx["step_id"]
