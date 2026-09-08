@@ -2,7 +2,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
-from lightcycle.adapters.tui.hub import _TAB_LABELS, CostBreakdownTable, CostStatsTable, NodeHubScreen
+from lightcycle.adapters.tui.hub import COST_NO_TOOLS_MESSAGE, _TAB_LABELS, CostPane, NodeHubScreen
 from lightcycle.domain.pool import ToolUsage
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
@@ -26,31 +26,21 @@ def _widget_text(widget):
     return "\n".join(lines).strip()
 
 
-def _rendered_cell_text(table, row_key, column_key):
-    strip = table.render_line(table.get_row_index(row_key))
-    pad = table.cell_padding
-    offset = 0
-    for column in table.ordered_columns:
-        start = offset + pad
-        end = start + column.width
-        if column.key.value == column_key:
-            return "".join(segment.text for segment in strip.crop(start, end)).strip()
-        offset = end + pad
-    raise AssertionError("column %r not found" % column_key)
-
-
 def _field_value(ctx, key):
-    table = ctx["session"].app.screen.query_one(CostStatsTable)
-    return _rendered_cell_text(table, key, "value")
+    rows = ctx["session"].app.screen._last_cost_rows
+    for row_key, _label, value in rows:
+        if row_key == key:
+            return value
+    raise AssertionError("field %r not found" % key)
 
 
 def _field_keys(ctx):
-    return [key for key, _value in ctx["session"].app.screen._last_cost_stats_fields]
+    rows = ctx["session"].app.screen._last_cost_rows
+    return [row_key for row_key, label, _value in rows if label]
 
 
-def _breakdown_row_value(ctx, row_key, column):
-    table = ctx["session"].app.screen.query_one(CostBreakdownTable)
-    return _rendered_cell_text(table, row_key, column)
+def _breakdown_value(ctx, row_key):
+    return _field_value(ctx, row_key)
 
 
 def _push_hub(ctx, node_id):
@@ -216,24 +206,6 @@ def _item_with_no_cost_stage(ctx):
     _push_hub(ctx, item)
 
 
-@given("an item with a mix of list, derived, and not-recorded agent steps, its hub open")
-def _item_with_basis_mix(ctx):
-    store = FakeStore()
-    item = store.create_item("Item", "a description")
-    listed = store.create_step("listed", step="write-code", role="agent", parent=item)
-    store.record_usage(listed, 100, 20, 0, 0, 1.0, "list", None)
-    store.record_attribution(listed, 10, {})
-    derived = store.create_step("derived", step="write-code", role="agent", parent=item)
-    store.record_usage(derived, 100, 20, 0, 0, 2.0, "derived", None)
-    store.record_attribution(derived, 20, {})
-    not_recorded = store.create_step("notrecorded", step="write-code", role="agent", parent=item)
-    store.record_attribution(not_recorded, 30, {})
-    ctx["store"] = store
-    ctx["item_id"] = item
-    ctx["session"] = launch(make_test_container(store=store), size=WIDE_SIZE)
-    _push_hub(ctx, item)
-
-
 @given("an item with a human gate step and an agent step with a recorded cost, its hub open")
 def _item_with_human_gate_and_agent_step(ctx):
     store = FakeStore()
@@ -265,8 +237,7 @@ def _open_its_cost_tab(ctx):
 
 @then("no cost stats table is shown")
 def _no_cost_stats_table_shown(ctx):
-    table = ctx["session"].app.screen.query_one(CostStatsTable)
-    assert not table.display
+    assert not ctx["session"].app.screen.query_one(CostPane).display
 
 
 @then("a message says this step has no cost to show")
@@ -285,11 +256,10 @@ def _step_not_run_message_shown(ctx):
 
 @then("a message says no tool calls were recorded for this step")
 def _no_tools_message_shown(ctx):
-    widget = ctx["session"].app.screen.query_one("#hub-cost-tools-empty", Static)
-    assert widget.display
-    assert "no tool calls" in _widget_text(widget).lower()
-    stats = ctx["session"].app.screen.query_one(CostStatsTable)
-    assert stats.display
+    pane = ctx["session"].app.screen.query_one(CostPane)
+    assert pane.display
+    assert COST_NO_TOOLS_MESSAGE in _widget_text(pane)
+    assert "turns" in _field_keys(ctx)
 
 
 @then("its turns are shown")
@@ -323,17 +293,12 @@ def _cost_basis_shown(ctx):
     assert _field_value(ctx, "cost_basis") == "list"
 
 
-@then("its cost per turn is shown")
-def _cost_per_turn_shown(ctx):
-    assert "/ turn" in _field_value(ctx, "cost_per_turn")
-
-
 @then("each tool's calls and bytes are shown")
 def _tool_rows_shown(ctx):
-    assert "12 calls" in _breakdown_row_value(ctx, "Read", "calls")
-    assert "4,300 bytes" in _breakdown_row_value(ctx, "Read", "bytes")
-    assert "3 calls" in _breakdown_row_value(ctx, "Bash", "calls")
-    assert "512 bytes" in _breakdown_row_value(ctx, "Bash", "bytes")
+    read_value = _breakdown_value(ctx, "tool:Read")
+    assert "12 calls" in read_value and "4,300 bytes" in read_value
+    bash_value = _breakdown_value(ctx, "tool:Bash")
+    assert "3 calls" in bash_value and "512 bytes" in bash_value
 
 
 @then(parsers.parse('its cost reads "{text}"'))
@@ -343,12 +308,8 @@ def _cost_reads(ctx, text):
 
 @then('no "$0.00" is shown anywhere on the tab')
 def _no_zero_dollar_shown(ctx):
-    screen = ctx["session"].app.screen
-    stats = screen.query_one(CostStatsTable)
-    assert "$0.00" not in _widget_text(stats)
-    if screen._has_cost_breakdown:
-        breakdown = screen.query_one(CostBreakdownTable)
-        assert "$0.00" not in _widget_text(breakdown)
+    pane = ctx["session"].app.screen.query_one(CostPane)
+    assert "$0.00" not in _widget_text(pane)
 
 
 @then("its total turns and cost sum every step across both passes")
@@ -359,29 +320,15 @@ def _total_sums_across_passes(ctx):
 
 @then("the per-stage subtotals are ordered with the highest-spend stage first")
 def _per_stage_ordered_by_spend(ctx):
-    screen = ctx["session"].app.screen
-    rows = screen._last_cost_breakdown_rows
-    stages = [row.stage for row in rows]
+    rows = ctx["session"].app.screen._last_cost_rows
+    stages = [row_key[len("stage:"):] for row_key, _label, _value in rows if row_key.startswith("stage:")]
     assert stages[0] == "spec-writer"
-    assert _breakdown_row_value(ctx, "spec-writer", "cost") == "$3.50"
+    assert "$3.50" in _breakdown_value(ctx, "stage:spec-writer")
 
 
 @then("that stage's row reads \"not recorded\"")
 def _stage_row_not_recorded(ctx):
-    assert _breakdown_row_value(ctx, "review-code", "cost") == "not recorded"
-
-
-@then("its cost per turn divides recorded cost by recorded turns only")
-def _cost_per_turn_divides_by_recorded_turns(ctx):
-    assert _field_value(ctx, "cost_per_turn") == "$0.10 / turn"
-
-
-@then(parsers.parse("its basis counts show {list_count:d} list, {derived_count:d} derived, and {not_recorded_count:d} not recorded"))
-def _basis_counts_shown(ctx, list_count, derived_count, not_recorded_count):
-    value = _field_value(ctx, "basis_counts")
-    assert "list %d" % list_count in value
-    assert "derived %d" % derived_count in value
-    assert "not recorded %d" % not_recorded_count in value
+    assert "not recorded" in _breakdown_value(ctx, "stage:review-code")
 
 
 @then("its total turns equal the agent step's turns alone")

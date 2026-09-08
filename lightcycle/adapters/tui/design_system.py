@@ -54,9 +54,6 @@ COLUMN_GRIDS = {
     "workflow": ("icon", "id", "title", "role", "turns", "cost"),
     "artifacts": ("type", "value"),
     "detail": ("key", "value"),
-    "cost": ("key", "value"),
-    "cost-tools": ("tool", "calls", "bytes"),
-    "cost-stages": ("stage", "steps", "cost"),
 }
 
 GLOBAL_SHORTCUTS = (
