@@ -15,8 +15,7 @@ Feature: The Cost tab
   included, excluding human steps entirely, plus a per-stage subtotal
   ordered by spend so an item's spend is legible at a glance; its
   cost-per-turn divides only by the turns belonging to steps with a known
-  cost basis, and a visible count distinguishes list-priced, derived-priced,
-  and not-recorded steps.
+  cost basis.
 
   Scenario: A human step's Cost tab shows no cost fields at all
     Given a human step, its hub open
@@ -30,15 +29,14 @@ Feature: The Cost tab
     Then no cost stats table is shown
     And a message says this step hasn't run yet
 
-  Scenario: An agent step with a recorded cost shows turns, tokens, cache hit rate, cost, cost basis, and cost per turn
+  Scenario: An agent step with a recorded cost shows cost, cost basis, turns, tokens, and cache hit rate
     Given an agent step with a recorded cost, its hub open
     When I open its Cost tab
-    Then its turns are shown
+    Then its cost is shown
+    And its cost basis is shown
+    And its turns are shown
     And its input, output, cache-read, and cache-creation tokens are all shown
     And its cache hit rate is shown, stated as cache-read over cache-read plus cache-creation plus input
-    And its cost is shown
-    And its cost basis is shown
-    And its cost per turn is shown
 
   Scenario: An agent step's Cost tab includes its per-tool table of calls and bytes
     Given an agent step with a recorded cost and tool usage, its hub open
@@ -69,12 +67,6 @@ Feature: The Cost tab
     When I open its Cost tab
     Then that stage's row reads "not recorded"
     And no "$0.00" is shown anywhere on the tab
-
-  Scenario: An item's cost-per-turn divides by recorded turns only, and its basis counts are visible
-    Given an item with a mix of list, derived, and not-recorded agent steps, its hub open
-    When I open its Cost tab
-    Then its cost per turn divides recorded cost by recorded turns only
-    And its basis counts show 1 list, 1 derived, and 1 not recorded
 
   Scenario: An item's Cost tab excludes human steps from the rollup entirely
     Given an item with a human gate step and an agent step with a recorded cost, its hub open

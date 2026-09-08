@@ -111,7 +111,7 @@ DETAIL_FIELD_LABELS = {
 }
 
 COST_CONTINUATION_INDENT = 2
-COST_BREAKDOWN_CONTINUATION_INDENT = 2
+COST_COLUMN_GAP = 2
 COST_NOT_RECORDED = "not recorded"
 COST_CACHE_HIT_RATE_DEFINITION = "cache-read ÷ (cache-read + cache-creation + input)"
 COST_EMPTY_MESSAGE = "This step has no cost to show."
@@ -122,7 +122,7 @@ COST_FIELD_LABELS = {
     "turns": "TURNS", "input_tokens": "INPUT TOKENS", "output_tokens": "OUTPUT TOKENS",
     "cache_read_tokens": "CACHE READ TOKENS", "cache_creation_tokens": "CACHE CREATION TOKENS",
     "thinking_tokens": "THINKING TOKENS", "cache_hit_rate": "CACHE HIT RATE", "cost": "COST",
-    "cost_basis": "COST BASIS", "cost_per_turn": "COST PER TURN", "basis_counts": "BASIS COUNTS",
+    "cost_basis": "COST BASIS",
 }
 
 
@@ -135,48 +135,29 @@ def _cost_hit_rate_field(rate):
 
 
 def step_cost_fields(cost):
-    fields = [
-        ("turns", format_tokens(cost.turn_count)),
-        ("input_tokens", format_tokens(cost.input_tokens)),
-        ("output_tokens", format_tokens(cost.output_tokens)),
-        ("cache_read_tokens", format_tokens(cost.cache_read_tokens)),
-        ("cache_creation_tokens", format_tokens(cost.cache_creation_tokens)),
-    ]
+    fields = [("cost", format_usd(cost.cost_usd) if cost.recorded else COST_NOT_RECORDED)]
+    fields.append(("cost_basis", cost.cost_basis if cost.recorded else COST_NOT_RECORDED))
+    fields.append(("turns", format_tokens(cost.turn_count)))
+    fields.append(("input_tokens", format_tokens(cost.input_tokens)))
+    fields.append(("output_tokens", format_tokens(cost.output_tokens)))
+    fields.append(("cache_read_tokens", format_tokens(cost.cache_read_tokens)))
+    fields.append(("cache_creation_tokens", format_tokens(cost.cache_creation_tokens)))
     if cost.thinking_tokens is not None:
         fields.append(("thinking_tokens", format_tokens(cost.thinking_tokens)))
     fields.append(("cache_hit_rate", _cost_hit_rate_field(cost.cache_hit_rate)))
-    if cost.recorded:
-        fields.append(("cost", format_usd(cost.cost_usd)))
-        fields.append(("cost_basis", cost.cost_basis))
-        fields.append(("cost_per_turn", "%s / turn" % format_usd(cost.cost_per_turn)))
-    else:
-        fields.append(("cost", COST_NOT_RECORDED))
-        fields.append(("cost_basis", COST_NOT_RECORDED))
     return fields
 
 
 def item_cost_fields(cost):
-    fields = [
-        ("turns", format_tokens(cost.turn_count)),
-        ("input_tokens", format_tokens(cost.input_tokens)),
-        ("output_tokens", format_tokens(cost.output_tokens)),
-        ("cache_read_tokens", format_tokens(cost.cache_read_tokens)),
-        ("cache_creation_tokens", format_tokens(cost.cache_creation_tokens)),
-    ]
+    fields = [("cost", format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED)]
+    fields.append(("turns", format_tokens(cost.turn_count)))
+    fields.append(("input_tokens", format_tokens(cost.input_tokens)))
+    fields.append(("output_tokens", format_tokens(cost.output_tokens)))
+    fields.append(("cache_read_tokens", format_tokens(cost.cache_read_tokens)))
+    fields.append(("cache_creation_tokens", format_tokens(cost.cache_creation_tokens)))
     if cost.thinking_tokens is not None:
         fields.append(("thinking_tokens", format_tokens(cost.thinking_tokens)))
     fields.append(("cache_hit_rate", _cost_hit_rate_field(cost.cache_hit_rate)))
-    fields.append(("cost", format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED))
-    fields.append((
-        "basis_counts",
-        "list %d · derived %d · not recorded %d" % (
-            cost.list_count, cost.derived_count, cost.not_recorded_count,
-        ),
-    ))
-    fields.append((
-        "cost_per_turn",
-        "%s / turn" % format_usd(cost.cost_per_turn) if cost.cost_per_turn is not None else COST_NOT_RECORDED,
-    ))
     return fields
 
 
@@ -200,46 +181,31 @@ def _cost_stage_atomic_text(row):
     return steps_text, _stage_cost_text(row)
 
 
-def cost_tool_row_cells(row, layout=None, row_budget=None):
-    calls_text, bytes_text = _cost_tool_atomic_text(row)
-    if layout is not None and layout.stacked:
-        atomic_field = (
-            pad_field(Text(calls_text, style=COLOURS["dim"]), layout.atomic_widths["calls"])
-            + Text("  ")
-            + pad_field(Text(bytes_text, style=COLOURS["dim"]), layout.atomic_widths["bytes"])
-        )
-        return (
-            stacked_cell(
-                atomic_field, COST_BREAKDOWN_CONTINUATION_INDENT, row.tool, row_budget,
-                prose_style=COLOURS["text"],
-            ),
-        )
-    return (
-        Text(row.tool, style=COLOURS["text"]),
-        Text(calls_text, style=COLOURS["dim"]),
-        Text(bytes_text, style=COLOURS["dim"]),
-    )
-
-
-def cost_stage_row_cells(row, layout=None, row_budget=None):
+def _cost_breakdown_value(kind, row):
+    if kind == "step":
+        calls_text, bytes_text = _cost_tool_atomic_text(row)
+        return "%s · %s" % (calls_text, bytes_text)
     steps_text, cost_text = _cost_stage_atomic_text(row)
-    if layout is not None and layout.stacked:
-        atomic_field = (
-            pad_field(Text(steps_text, style=COLOURS["dim"]), layout.atomic_widths["steps"])
-            + Text("  ")
-            + pad_field(Text(cost_text, style=COLOURS["dim"]), layout.atomic_widths["cost"])
-        )
-        return (
-            stacked_cell(
-                atomic_field, COST_BREAKDOWN_CONTINUATION_INDENT, row.stage, row_budget,
-                prose_style=COLOURS["text"],
-            ),
-        )
-    return (
-        Text(row.stage, style=COLOURS["text"]),
-        Text(steps_text, style=COLOURS["dim"]),
-        Text(cost_text, style=COLOURS["dim"]),
-    )
+    return "%s · %s" % (steps_text, cost_text)
+
+
+def _cost_rows_for_step(cost):
+    rows = [(key, _cost_field_label(key), value) for key, value in step_cost_fields(cost)]
+    rows.append(("__divider__", None, ""))
+    if cost.tools:
+        for row in cost.tools:
+            rows.append(("tool:%s" % row.tool, row.tool, _cost_breakdown_value("step", row)))
+    else:
+        rows.append(("__no_tools__", None, COST_NO_TOOLS_MESSAGE))
+    return rows
+
+
+def _cost_rows_for_item(cost):
+    rows = [(key, _cost_field_label(key), value) for key, value in item_cost_fields(cost)]
+    rows.append(("__divider__", None, ""))
+    for row in cost.stages:
+        rows.append(("stage:%s" % row.stage, row.stage, _cost_breakdown_value("item", row)))
+    return rows
 
 
 def _owning_id(node):
@@ -514,18 +480,17 @@ def detail_row_cells(field, layout=None, row_budget=None):
     )
 
 
-def cost_row_cells(field, layout=None, row_budget=None):
-    key, value = field
-    label = _cost_field_label(key)
-    if layout is not None and layout.stacked:
-        key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
-        return (
-            stacked_cell(key_field, COST_CONTINUATION_INDENT, value, row_budget, prose_style=COLOURS["text"]),
-        )
-    return (
-        Text(label, style=COLOURS["dim"]),
-        Text(value, style=COLOURS["text"]),
-    )
+def _cost_pane_row_budget(pane, columns):
+    return pane.size.width - pane.scrollbar_gutter.width - COST_COLUMN_GAP * (columns - 1)
+
+
+def _cost_row_text(label, value, layout, row_budget):
+    if not label:
+        return Text(value, style=COLOURS["dim"])
+    key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
+    if layout.stacked:
+        return stacked_cell(key_field, COST_CONTINUATION_INDENT, value, row_budget, prose_style=COLOURS["text"])
+    return key_field + Text("  ") + Text(value, style=COLOURS["text"])
 
 
 def toast_text(success, message, kind, value, tab="artifacts"):
@@ -858,41 +823,18 @@ class DetailTable(DataTable):
             screen.refresh_detail_width()
 
 
-class CostStatsTable(DataTable):
-    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
-
-    BINDINGS = _BASE + [
+class CostPane(RichLog):
+    BINDINGS = [
+        Binding("up", "scroll_up", "Scroll up", show=False),
+        Binding("down", "scroll_down", "Scroll down", show=False),
         Binding("ctrl+u", "page_up", "Page up", show=False),
         Binding("ctrl+d", "page_down", "Page down", show=False),
     ]
 
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
-
     def on_resize(self, event: events.Resize) -> None:
         screen = self.screen
         if isinstance(screen, NodeHubScreen):
-            screen.refresh_cost_stats_width()
-
-
-class CostBreakdownTable(DataTable):
-    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
-
-    BINDINGS = _BASE + [
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-        Binding("right", "select_cursor", "Open", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
-
-    def on_resize(self, event: events.Resize) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.refresh_cost_breakdown_width()
+            screen.refresh_cost_width()
 
 
 class ArtifactTextBody(RichLog):
@@ -1070,11 +1012,7 @@ class NodeHubScreen(Screen):
     DetailTable {{
         height: 1fr;
     }}
-    CostStatsTable {{
-        height: auto;
-        max-height: 12;
-    }}
-    CostBreakdownTable {{
+    CostPane {{
         height: 1fr;
     }}
     HubTabStrip {{
@@ -1091,12 +1029,12 @@ class NodeHubScreen(Screen):
         height: auto;
         display: none;
     }}
-    #hub-log-empty, #hub-artifacts-empty, #hub-description-empty, #hub-cost-empty, #hub-cost-tools-empty {{
+    #hub-log-empty, #hub-artifacts-empty, #hub-description-empty, #hub-cost-empty {{
         content-align: center middle;
         height: 1fr;
         color: {COLOURS["dim"]};
     }}
-    #hierarchy-floor, #artifacts-floor, #detail-floor, #cost-stats-floor, #cost-breakdown-floor {{
+    #hierarchy-floor, #artifacts-floor, #detail-floor, #cost-floor {{
         content-align: center middle;
         height: 1fr;
         color: {COLOURS["dim"]};
@@ -1162,18 +1100,11 @@ class NodeHubScreen(Screen):
         self._last_detail_fields = []
         self._detail_floor = False
         self._detail_stacked = False
-        self._cost_kind = None
         self._cost_whole_empty_message = None
-        self._last_cost_stats_shape = None
-        self._last_cost_stats_fields = []
-        self._cost_stats_floor = False
-        self._cost_stats_stacked = False
-        self._has_cost_stats = False
-        self._last_cost_breakdown_shape = None
-        self._last_cost_breakdown_rows = []
-        self._cost_breakdown_floor = False
-        self._cost_breakdown_stacked = False
-        self._has_cost_breakdown = False
+        self._last_cost_shape = None
+        self._last_cost_rows = []
+        self._cost_floor = False
+        self._cost_stacked = False
         self._toast_active = False
         self._toast_tab = None
         self._toast_timer = None
@@ -1201,11 +1132,8 @@ class NodeHubScreen(Screen):
         yield Static(id="hub-detail-toast")
         yield DescriptionPane(id="hub-description-view", highlight=False, markup=False, wrap=True, auto_scroll=False)
         yield Static(DESCRIPTION_EMPTY_MESSAGE, id="hub-description-empty")
-        yield CostStatsTable(id="hub-cost-stats-table")
-        yield Static(id="cost-stats-floor")
-        yield CostBreakdownTable(id="hub-cost-breakdown-table")
-        yield Static(id="cost-breakdown-floor")
-        yield Static(COST_NO_TOOLS_MESSAGE, id="hub-cost-tools-empty")
+        yield CostPane(id="hub-cost-view", highlight=False, markup=False, wrap=False, auto_scroll=False, min_width=0)
+        yield Static(id="cost-floor")
         yield Static(id="hub-cost-empty")
         yield DashboardFooter(id="hub-footer", shortcuts=HUB_SHORTCUTS)
 
@@ -1219,12 +1147,6 @@ class NodeHubScreen(Screen):
         detail_table = self.query_one(DetailTable)
         detail_table.cursor_type = "row"
         detail_table.show_header = False
-        cost_stats_table = self.query_one(CostStatsTable)
-        cost_stats_table.cursor_type = "row"
-        cost_stats_table.show_header = False
-        cost_breakdown_table = self.query_one(CostBreakdownTable)
-        cost_breakdown_table.cursor_type = "row"
-        cost_breakdown_table.show_header = False
         store = self._container.store
         node = store.get_node(self._node_id)
         self._active_tab = self._forced_initial_tab or landing_tab(node)
@@ -1732,41 +1654,18 @@ class NodeHubScreen(Screen):
             for key, value in zip(COLUMN_GRIDS["detail"], cells):
                 table.update_cell(field[0], key, value)
 
-    def _cost_stats_layout(self, table, fields):
-        atomic_values = {"key": [_cost_field_label(key) for key, _value in fields]}
-        row_budget = row_budget_for(table, len(COLUMN_GRIDS["cost"]))
+    def _cost_layout(self, pane, rows):
+        atomic_values = {"key": [label for _key, label, _value in rows if label]}
+        row_budget = _cost_pane_row_budget(pane, 2)
         return compute_layout(row_budget, [], atomic_values, indent=COST_CONTINUATION_INDENT)
 
-    def _cost_breakdown_columns(self):
-        return COLUMN_GRIDS["cost-tools"] if self._cost_kind == "step" else COLUMN_GRIDS["cost-stages"]
-
-    def _cost_breakdown_row_key(self, row):
-        return row.tool if self._cost_kind == "step" else row.stage
-
-    def _cost_breakdown_row_cells(self, row, layout, row_budget):
-        if self._cost_kind == "step":
-            return cost_tool_row_cells(row, layout, row_budget)
-        return cost_stage_row_cells(row, layout, row_budget)
-
-    def _cost_breakdown_layout(self, table, rows):
-        if self._cost_kind == "step":
-            atomic_values = {"calls": [], "bytes": []}
-            for row in rows:
-                calls_text, bytes_text = _cost_tool_atomic_text(row)
-                atomic_values["calls"].append(calls_text)
-                atomic_values["bytes"].append(bytes_text)
-        else:
-            atomic_values = {"steps": [], "cost": []}
-            for row in rows:
-                steps_text, cost_text = _cost_stage_atomic_text(row)
-                atomic_values["steps"].append(steps_text)
-                atomic_values["cost"].append(cost_text)
-        row_budget = row_budget_for(table, len(self._cost_breakdown_columns()))
-        return compute_layout(row_budget, [], atomic_values, indent=COST_BREAKDOWN_CONTINUATION_INDENT)
+    def _cost_floor_message(self, layout, pane):
+        chrome = pane.screen.outer_size.width - pane.screen.size.width
+        needed = layout.floor_width + COST_COLUMN_GAP + chrome + pane.scrollbar_gutter.width
+        return "Widen the terminal to at least %d columns to show this list." % needed
 
     def _render_cost(self, store, node, initial) -> None:
         cost = CostUseCase(store).execute(CostInput(node=node.id))
-        self._cost_kind = "step" if node.type == "step" else "item"
         if node.type == "step":
             self._render_step_cost(cost, initial)
         else:
@@ -1775,8 +1674,7 @@ class NodeHubScreen(Screen):
     def _set_cost_whole_empty(self, message, initial) -> None:
         self._cost_whole_empty_message = message
         self.query_one("#hub-cost-empty", Static).update(message)
-        self._render_cost_stats([], initial)
-        self._render_cost_breakdown([], initial)
+        self._render_cost_pane([], initial)
 
     def _render_step_cost(self, cost, initial) -> None:
         if not cost.applicable:
@@ -1786,201 +1684,50 @@ class NodeHubScreen(Screen):
             self._set_cost_whole_empty(COST_NOT_RUN_MESSAGE, initial)
             return
         self._cost_whole_empty_message = None
-        self._render_cost_stats(step_cost_fields(cost), initial)
-        self._render_cost_breakdown(list(cost.tools), initial)
+        self._render_cost_pane(_cost_rows_for_step(cost), initial)
 
     def _render_item_cost(self, cost, initial) -> None:
         if cost.turn_count == 0:
             self._set_cost_whole_empty(ITEM_COST_EMPTY_MESSAGE, initial)
             return
         self._cost_whole_empty_message = None
-        self._render_cost_stats(item_cost_fields(cost), initial)
-        self._render_cost_breakdown(list(cost.stages), initial)
+        self._render_cost_pane(_cost_rows_for_item(cost), initial)
 
-    def _selected_cost_stats_key(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def _render_cost_stats(self, fields, initial) -> None:
-        self._last_cost_stats_fields = fields
-        self._has_cost_stats = bool(fields)
-        if not fields:
-            self._last_cost_stats_shape = None
-            self._cost_stats_floor = False
-            return
-        table = self.query_one(CostStatsTable)
-        shape = tuple(fields)
-        if shape == self._last_cost_stats_shape and not initial:
-            self._last_cost_stats_shape = shape
-            self._update_cost_stats_cells(table, fields)
-            return
-        if table.size.width == 0:
-            return
-
-        layout = self._cost_stats_layout(table, fields)
-        self._cost_stats_floor = bool(fields) and layout.floor
-        self._cost_stats_stacked = layout.stacked
-        if self._cost_stats_floor:
-            self.query_one("#cost-stats-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["cost"])), style=COLOURS["dim"])
-            )
-            self._last_cost_stats_shape = shape
-            return
-
-        selected_key = self._selected_cost_stats_key(table)
-        table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["cost"]))
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {"key": layout.atomic_widths["key"], "value": layout.flexible_width}
-            for key in COLUMN_GRIDS["cost"]:
-                table.add_column(key, width=widths[key], key=key)
-
-        for field in fields:
-            table.add_row(*cost_row_cells(field, layout, row_budget), height=None, key=field[0])
-
-        self._last_cost_stats_shape = shape
-        if fields:
-            keys = [key for key, _value in fields]
-            index = keys.index(selected_key) if selected_key in keys else 0
-            table.move_cursor(row=index)
-
-    def _update_cost_stats_cells(self, table, fields) -> None:
-        layout = self._cost_stats_layout(table, fields)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["cost"]))
-        for field in fields:
-            cells = cost_row_cells(field, layout, row_budget)
-            if layout.stacked:
-                table.update_cell(field[0], STACKED_COLUMN_KEY, cells[0])
-                continue
-            for key, value in zip(COLUMN_GRIDS["cost"], cells):
-                table.update_cell(field[0], key, value)
-
-    def _selected_cost_breakdown_key(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def _render_cost_breakdown(self, rows, initial) -> None:
-        self._last_cost_breakdown_rows = rows
-        self._has_cost_breakdown = bool(rows)
+    def _render_cost_pane(self, rows, initial) -> None:
+        self._last_cost_rows = rows
         if not rows:
-            self._last_cost_breakdown_shape = None
-            self._cost_breakdown_floor = False
+            self._last_cost_shape = None
+            self._cost_floor = False
             return
-        table = self.query_one(CostBreakdownTable)
+        pane = self.query_one(CostPane)
         shape = tuple(rows)
-        if shape == self._last_cost_breakdown_shape and not initial:
-            self._last_cost_breakdown_shape = shape
-            self._update_cost_breakdown_cells(table, rows)
+        if shape == self._last_cost_shape and not initial:
             return
-        if table.size.width == 0:
+        if pane.size.width == 0:
             return
 
-        columns = self._cost_breakdown_columns()
-        layout = self._cost_breakdown_layout(table, rows)
-        self._cost_breakdown_floor = bool(rows) and layout.floor
-        self._cost_breakdown_stacked = layout.stacked
-        if self._cost_breakdown_floor:
-            self.query_one("#cost-breakdown-floor", Static).update(
-                Text(floor_message(layout, table, len(columns)), style=COLOURS["dim"])
+        layout = self._cost_layout(pane, rows)
+        self._cost_floor = layout.floor
+        self._cost_stacked = layout.stacked
+        pane.clear()
+        if self._cost_floor:
+            self.query_one("#cost-floor", Static).update(
+                Text(self._cost_floor_message(layout, pane), style=COLOURS["dim"])
             )
-            self._last_cost_breakdown_shape = shape
+            self._last_cost_shape = shape
             return
 
-        selected_key = self._selected_cost_breakdown_key(table)
-        table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(columns))
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            flexible_key = columns[0]
-            widths = {flexible_key: layout.flexible_width}
-            for key in columns[1:]:
-                widths[key] = layout.atomic_widths[key]
-            for key in columns:
-                table.add_column(key, width=widths[key], key=key)
+        row_budget = _cost_pane_row_budget(pane, 1) if layout.stacked else _cost_pane_row_budget(pane, 2)
+        for _key, label, value in rows:
+            pane.write(_cost_row_text(label, value, layout, row_budget))
+        self._last_cost_shape = shape
 
-        keys = []
-        for row in rows:
-            key = self._cost_breakdown_row_key(row)
-            keys.append(key)
-            table.add_row(
-                *self._cost_breakdown_row_cells(row, layout, row_budget), height=None, key=key
-            )
-
-        self._last_cost_breakdown_shape = shape
-        if rows:
-            index = keys.index(selected_key) if selected_key in keys else 0
-            table.move_cursor(row=index)
-
-    def _update_cost_breakdown_cells(self, table, rows) -> None:
-        columns = self._cost_breakdown_columns()
-        layout = self._cost_breakdown_layout(table, rows)
-        row_budget = render_row_budget(table, layout, len(columns))
-        for row in rows:
-            key = self._cost_breakdown_row_key(row)
-            cells = self._cost_breakdown_row_cells(row, layout, row_budget)
-            if layout.stacked:
-                table.update_cell(key, STACKED_COLUMN_KEY, cells[0])
-                continue
-            for col_key, value in zip(columns, cells):
-                table.update_cell(key, col_key, value)
-
-    def refresh_cost_stats_width(self) -> None:
-        table = self.query_one(CostStatsTable)
-        fields = self._last_cost_stats_fields
-        if not fields:
-            return
-        layout = self._cost_stats_layout(table, fields)
-        if (
-            layout.floor != self._cost_stats_floor or layout.stacked != self._cost_stats_stacked
-            or layout.stacked
-        ):
-            self._render_cost_stats(fields, initial=True)
-            self._apply_tab_visibility()
-            return
-        if layout.floor:
-            self.query_one("#cost-stats-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["cost"])), style=COLOURS["dim"])
-            )
-            return
-        apply_widths(table, {"key": layout.atomic_widths["key"], "value": layout.flexible_width})
-
-    def refresh_cost_breakdown_width(self) -> None:
-        table = self.query_one(CostBreakdownTable)
-        rows = self._last_cost_breakdown_rows
+    def refresh_cost_width(self) -> None:
+        rows = self._last_cost_rows
         if not rows:
             return
-        columns = self._cost_breakdown_columns()
-        layout = self._cost_breakdown_layout(table, rows)
-        if (
-            layout.floor != self._cost_breakdown_floor or layout.stacked != self._cost_breakdown_stacked
-            or layout.stacked
-        ):
-            self._render_cost_breakdown(rows, initial=True)
-            self._apply_tab_visibility()
-            return
-        if layout.floor:
-            self.query_one("#cost-breakdown-floor", Static).update(
-                Text(floor_message(layout, table, len(columns)), style=COLOURS["dim"])
-            )
-            return
-        flexible_key = columns[0]
-        widths = {flexible_key: layout.flexible_width}
-        for key in columns[1:]:
-            widths[key] = layout.atomic_widths[key]
-        apply_widths(table, widths)
+        self._render_cost_pane(rows, initial=True)
+        self._apply_tab_visibility()
 
     def _render_description(self, description) -> None:
         if description == self._last_description:
@@ -2059,21 +1806,9 @@ class NodeHubScreen(Screen):
         )
         cost_active = self._active_tab == "cost"
         cost_whole_empty = cost_active and self._cost_whole_empty_message is not None
-        showing_cost_stats_floor = cost_active and not cost_whole_empty and self._cost_stats_floor
-        showing_cost_breakdown_floor = cost_active and not cost_whole_empty and self._cost_breakdown_floor
-        self.query_one(CostStatsTable).display = (
-            cost_active and not cost_whole_empty and self._has_cost_stats and not showing_cost_stats_floor
-        )
-        self.query_one("#cost-stats-floor", Static).display = showing_cost_stats_floor
-        self.query_one(CostBreakdownTable).display = (
-            cost_active and not cost_whole_empty and self._has_cost_breakdown
-            and not showing_cost_breakdown_floor
-        )
-        self.query_one("#cost-breakdown-floor", Static).display = showing_cost_breakdown_floor
-        self.query_one("#hub-cost-tools-empty", Static).display = (
-            cost_active and not cost_whole_empty and self._cost_kind == "step"
-            and not self._has_cost_breakdown and not showing_cost_breakdown_floor
-        )
+        showing_cost_floor = cost_active and not cost_whole_empty and self._cost_floor
+        self.query_one(CostPane).display = cost_active and not cost_whole_empty and not showing_cost_floor
+        self.query_one("#cost-floor", Static).display = showing_cost_floor
         self.query_one("#hub-cost-empty", Static).display = cost_whole_empty
         self.update_pinned_ancestor()
         self._sync_active_glyph_animation()
@@ -2098,13 +1833,8 @@ class NodeHubScreen(Screen):
             self.set_focus(self.query_one(DetailTable))
         elif self._active_tab == "description" and self._has_description:
             self.set_focus(self.query_one(DescriptionPane))
-        elif (
-            self._active_tab == "cost"
-            and self._cost_whole_empty_message is None
-            and self._has_cost_breakdown
-            and not self._cost_breakdown_floor
-        ):
-            self.set_focus(self.query_one(CostBreakdownTable))
+        elif self._active_tab == "cost" and self._cost_whole_empty_message is None and not self._cost_floor:
+            self.set_focus(self.query_one(CostPane))
         else:
             self.set_focus(None)
 
@@ -2157,8 +1887,6 @@ class NodeHubScreen(Screen):
             return
         if event.data_table.id == "hub-detail-table":
             self._open_selected_detail_field(event.row_key.value)
-            return
-        if event.data_table.id in ("hub-cost-stats-table", "hub-cost-breakdown-table"):
             return
         row_id = event.row_key.value
         if row_id is None or row_id == self._node_id:
