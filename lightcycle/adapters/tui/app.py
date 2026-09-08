@@ -44,7 +44,13 @@ from lightcycle.adapters.tui.row_grid import (
     row_budget_for,
     stacked_cell,
 )
-from lightcycle.application.pool import BreakerStatusUseCase, PoolRunningUseCase
+from lightcycle.application.pool import (
+    BreakerStatusUseCase,
+    LiveWorkerCountUseCase,
+    PoolRunningUseCase,
+    StartPoolUseCase,
+    StopPoolSignalUseCase,
+)
 from lightcycle.application.setup import upgrade
 from lightcycle.application.work import (
     BacklogInput,
@@ -62,6 +68,12 @@ BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
 PICKER_CANCELLED = object()
+
+POOL_PROMPT_CANCELLED = object()
+POOL_PROMPT_STOP = "stop"
+POOL_PROMPT_QUIT_LEAVE = "quit-leave"
+POOL_PROMPT_QUIT_STOP = "quit-stop"
+POOL_PROMPT_MIN_WIDTH = 52
 
 _VIEW_CYCLE = ("priority", "backlog", "done")
 
@@ -696,6 +708,100 @@ class ProjectFilterPicker(ModalScreen):
         self.dismiss(PICKER_CANCELLED)
 
 
+class PoolPromptScreen(ModalScreen):
+    CSS = f"""
+    PoolPromptScreen {{
+        align: center top;
+        background: {COLOURS["bg"]} {int(MODAL_OVERLAY_ALPHA * 100)}%;
+        border: none;
+    }}
+    #pool-prompt {{
+        width: {POOL_PROMPT_MIN_WIDTH};
+        height: auto;
+        margin-top: 4;
+        background: {COLOURS["panel"]};
+        border: solid {COLOURS["cyan"]};
+    }}
+    #pool-prompt-head {{
+        height: 1;
+        padding: 0 1;
+        color: {COLOURS["cyan"]};
+    }}
+    #pool-prompt-body {{
+        height: auto;
+        padding: 0 1;
+        color: {COLOURS["text"]};
+        border-bottom: solid {COLOURS["border"]};
+    }}
+    .pool-prompt-option {{
+        height: 1;
+        padding: 0 1;
+    }}
+    .pool-prompt-option-selected {{
+        background: {COLOURS["selected-bg"]};
+    }}
+    #pool-prompt-foot {{
+        height: 2;
+        padding: 0 1;
+        color: {COLOURS["dim"]};
+        border-top: solid {COLOURS["border"]};
+    }}
+    """
+
+    BINDINGS = [
+        Binding("up", "move_up", "Up", show=False),
+        Binding("down", "move_down", "Down", show=False),
+        Binding("enter", "apply", "Apply", show=False),
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(self, heading, body, options):
+        super().__init__()
+        self._heading = heading
+        self._body = body
+        self._options = options
+        self._index = 0
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="pool-prompt"):
+            yield Static(self._heading, id="pool-prompt-head")
+            yield Static(self._body, id="pool-prompt-body")
+            for index, (_, label) in enumerate(self._options):
+                yield Static(label, classes="pool-prompt-option", id="pool-prompt-option-%d" % index)
+            yield Static("↑↓ move · enter apply · esc cancel", id="pool-prompt-foot")
+
+    def on_mount(self) -> None:
+        self._paint_highlight()
+
+    def _paint_highlight(self) -> None:
+        for index, option in enumerate(self.query(".pool-prompt-option")):
+            option.set_class(index == self._index, "pool-prompt-option-selected")
+            option.update("%s %s" % (
+                CURSOR_GLYPH.glyph if index == self._index else " ", self._options[index][1]))
+
+    def action_move_down(self) -> None:
+        self._index = min(self._index + 1, len(self._options) - 1)
+        self._paint_highlight()
+
+    def action_move_up(self) -> None:
+        self._index = max(self._index - 1, 0)
+        self._paint_highlight()
+
+    def action_apply(self) -> None:
+        self.dismiss(self._options[self._index][0])
+
+    def action_cancel(self) -> None:
+        self.dismiss(POOL_PROMPT_CANCELLED)
+
+
+def pool_prompt_body(worker_count):
+    if worker_count == 0:
+        return "No workers are running."
+    return "%d worker%s running; %s steps will be reclaimed and re-run." % (
+        worker_count, "" if worker_count == 1 else "s",
+        "its" if worker_count == 1 else "their")
+
+
 class PickerOption(Horizontal):
     def __init__(self, label, count, count_width, *, id=None):
         super().__init__(id=id, classes="picker-option")
@@ -970,6 +1076,7 @@ class LightcycleApp(App):
         Binding("tab", "toggle_view", "Toggle view", show=False, priority=True),
         Binding("f", "open_picker", "Filter", show=False),
         Binding("/", "focus_search", "Search", show=False),
+        Binding("p", "toggle_pool", "Pool", show=False),
     ]
 
     def __init__(self, container, now=None, upgrade_check=None):
@@ -1027,6 +1134,8 @@ class LightcycleApp(App):
         self.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self._refresh)
+        if self._container.config.tui_autostart_pool():
+            self._start_pool()
 
     def _check_upgrade(self):
         try:
@@ -1171,6 +1280,56 @@ class LightcycleApp(App):
         elif table.id in ("backlog-table", "done-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))
+
+    def _start_pool(self):
+        return StartPoolUseCase(self._container.lock, self._container.spawner).execute()
+
+    def _live_worker_count(self):
+        return LiveWorkerCountUseCase(self._container.workers).execute()
+
+    def action_toggle_pool(self) -> None:
+        if not PoolRunningUseCase(self._container.lock).execute().running:
+            self._start_pool()
+            self._refresh()
+            return
+        self.push_screen(
+            PoolPromptScreen(
+                "Stop the pool?",
+                pool_prompt_body(self._live_worker_count()),
+                [(POOL_PROMPT_STOP, "Stop the pool"), (POOL_PROMPT_CANCELLED, "Cancel")],
+            ),
+            self._on_stop_prompt_dismiss,
+        )
+
+    def _on_stop_prompt_dismiss(self, result) -> None:
+        if result != POOL_PROMPT_STOP:
+            return
+        StopPoolSignalUseCase(self._container.lock, self._container.workers).execute()
+        self._refresh()
+
+    def action_quit(self) -> None:
+        if not PoolRunningUseCase(self._container.lock).execute().running:
+            self.exit()
+            return
+        self.push_screen(
+            PoolPromptScreen(
+                "Quit lightcycle?",
+                pool_prompt_body(self._live_worker_count()),
+                [
+                    (POOL_PROMPT_QUIT_LEAVE, "Quit and leave the pool running"),
+                    (POOL_PROMPT_QUIT_STOP, "Quit and stop the pool"),
+                    (POOL_PROMPT_CANCELLED, "Cancel"),
+                ],
+            ),
+            self._on_quit_prompt_dismiss,
+        )
+
+    def _on_quit_prompt_dismiss(self, result) -> None:
+        if result == POOL_PROMPT_CANCELLED:
+            return
+        if result == POOL_PROMPT_QUIT_STOP:
+            StopPoolSignalUseCase(self._container.lock, self._container.workers).execute()
+        self.exit()
 
     def action_open_picker(self) -> None:
         if self._view not in ("backlog", "done") or self._picker_open:

@@ -55,9 +55,28 @@ def spawn_worker(config, role):
     return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
 
 
+def spawn_pool(config):
+    root = config.data_root()
+    log = os.path.join(root, "logs", "run.log")
+    os.makedirs(os.path.dirname(log), exist_ok=True)
+    logf = open(log, "a")
+    env = dict(config.base_env(), LC_HOME=root)
+    pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "lightcycle", "start"],
+        stdout=logf, stderr=logf, stdin=subprocess.DEVNULL,
+        cwd=root, env=env, start_new_session=True,
+    )
+    return proc.pid
+
+
 class SpawnerAdapter(SpawnerPort):
     def __init__(self, config):
         self._config = config
 
     def spawn_worker(self, role):
         return spawn_worker(self._config, role)
+
+    def spawn_pool(self):
+        return spawn_pool(self._config)

@@ -21,7 +21,8 @@ _ALL_KEYS = dict(
     stall_seconds="1800", probe_cooldown_seconds="1800", spin_cap="3",
     poll_seconds="5", worker_history="20", editor="vi", retro_interval_reflections="20",
     backups_dir="/b", backup_interval_minutes="15", backup_retention="96",
-    workflow_retention="5", max_title_length="72", personal_origin="",
+    workflow_retention="5", max_title_length="72", tui_autostart_pool="false",
+    personal_origin="",
     price_sonnet_input_per_mtok="2.00", price_sonnet_output_per_mtok="10.00",
     price_sonnet_cache_write_per_mtok="2.50", price_sonnet_cache_read_per_mtok="0.20",
 )

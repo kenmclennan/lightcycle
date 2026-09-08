@@ -188,10 +188,10 @@ def _contains_all(ctx):
 def _reports_pool(ctx, state):
     _, text, style = _rendered_segment(ctx["session"], "#status-pool")
     if state == "running":
-        assert text == "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph
+        assert text == "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph
         assert _colour_of(style) == COLOURS["cyan"].lower()
     else:
-        assert text == "%s pool not running" % FOOTER_GLYPHS["pool-stopped"].glyph
+        assert text == "%s pool not running (p)" % FOOTER_GLYPHS["pool-stopped"].glyph
         assert _colour_of(style) == COLOURS["dim"].lower()
 
 
@@ -246,5 +246,5 @@ def _reflects_changed_queue(ctx):
 def _reflects_changed_state(ctx):
     _, pool_text, _ = _rendered_segment(ctx["session"], "#status-pool")
     _, claude_text, _ = _rendered_segment(ctx["session"], "#status-claude")
-    assert pool_text == "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph
+    assert pool_text == "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph
     assert "claude unavailable" in claude_text

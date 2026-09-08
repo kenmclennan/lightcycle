@@ -77,6 +77,23 @@ class TestRunLockAdapter(unittest.TestCase):
         with open(path) as f:
             self.assertEqual(f.read().strip(), str(dead_pid))
 
+    def test_holder_pid_is_none_when_no_lock_file(self):
+        self.assertIsNone(self.lock.holder_pid())
+        self.assertFalse(os.path.exists(os.path.join(self.root, ".lc-run.pid")))
+
+    def test_holder_pid_reads_a_live_holder_without_acquiring(self):
+        path = os.path.join(self.root, ".lc-run.pid")
+        with open(path, "w") as f:
+            f.write(str(os.getpid()))
+        self.assertEqual(self.lock.holder_pid(), os.getpid())
+        with open(path) as f:
+            self.assertEqual(f.read().strip(), str(os.getpid()))
+
+    def test_holder_pid_is_none_when_the_recorded_pid_is_dead(self):
+        with open(os.path.join(self.root, ".lc-run.pid"), "w") as f:
+            f.write("999999")
+        self.assertIsNone(self.lock.holder_pid())
+
     def test_repeated_is_running_never_blocks_a_later_real_acquire(self):
         for _ in range(3):
             self.lock.is_running()

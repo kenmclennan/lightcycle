@@ -26,8 +26,10 @@ class StatusBar(Horizontal):
         upgrade_version,
     ):
         pool_glyph, pool_colour = FOOTER_GLYPHS["pool-running" if pool_running else "pool-stopped"]
-        pool_text = "%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running")
-        self.query_one("#status-pool", Static).update(Text(pool_text, style=COLOURS[pool_colour]))
+        pool = Text("%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running"),
+                    style=COLOURS[pool_colour])
+        pool.append(" (p)", style=COLOURS["dim"])
+        self.query_one("#status-pool", Static).update(pool)
 
         if breaker_is_open and breaker_is_probing:
             since_ts = time.strftime("%H:%M:%S", time.localtime(breaker_reset_at))

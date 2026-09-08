@@ -406,5 +406,5 @@ def _status_bar_reflects_changed_state(ctx):
     session = ctx["session"]
     _, pool_text, _ = _rendered_segment(session, "#status-pool")
     _, claude_text, _ = _rendered_segment(session, "#status-claude")
-    assert pool_text == "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph
+    assert pool_text == "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph
     assert "claude unavailable" in claude_text

@@ -24,7 +24,11 @@ _ENV_OVERRIDE_VARS = {
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
     "retro-interval-reflections": "LC_RETRO_INTERVAL_REFLECTIONS",
+    "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
 }
+
+_TRUE = ("true", "yes", "1", "on")
+_FALSE = ("false", "no", "0", "off")
 
 _BLANK = (None, "", {})
 
@@ -63,6 +67,7 @@ _SEED_KEYS = [
     ("backup-retention", "96"),
     ("workflow-retention", "5"),
     ("max-title-length", "72"),
+    ("tui-autostart-pool", "false"),
     ("personal-origin", ""),
     ("price-sonnet-input-per-mtok", "2.00"),
     ("price-sonnet-output-per-mtok", "10.00"),
@@ -92,6 +97,12 @@ class Config:
             return int(raw)
         except ValueError:
             raise ConfigError("%s must be an integer (got %r)" % (key, raw))
+
+    def _env_bool(self, key, default):
+        raw = self._env(key)
+        if raw is None:
+            return default
+        return self._parse_bool(key, raw)
 
     def _env_float(self, key, default):
         raw = self._env(key)
@@ -247,6 +258,26 @@ class Config:
         except (TypeError, ValueError):
             raise ConfigError("config value %r must be a number (got %r)" % (key, v))
 
+    @staticmethod
+    def _parse_bool(key, raw):
+        text = str(raw).strip().lower()
+        if text in _TRUE:
+            return True
+        if text in _FALSE:
+            return False
+        raise ConfigError(
+            "config value %r must be one of %s or %s (got %r)"
+            % (key, "/".join(_TRUE), "/".join(_FALSE), raw))
+
+    def _required_bool(self, key):
+        v = self.load_config().get(key)
+        if v in _BLANK:
+            raise ConfigError(
+                "required config value %r is not set. Add `%s: true` or `%s: false` to %s "
+                "(or run `lc init`)."
+                % (key, key, key, self.config_path()))
+        return self._parse_bool(key, v)
+
     def _required_str(self, key):
         v = self.load_config().get(key)
         if not v:
@@ -330,6 +361,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("poll-seconds")
+
+    def tui_autostart_pool(self):
+        env = self._env_bool("LC_TUI_AUTOSTART_POOL", None)
+        if env is not None:
+            return env
+        return self._required_bool("tui-autostart-pool")
 
     def worker_history(self):
         env = self._env_int("LC_WORKER_HISTORY", None)
