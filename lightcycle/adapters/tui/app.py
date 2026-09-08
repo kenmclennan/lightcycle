@@ -69,6 +69,9 @@ STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
 BACKLOG_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
 
+FILTER_ROW_LABEL_WIDTH = 10
+FILTER_ROW_COUNT_GAP = 2
+
 
 class TabStrip(Horizontal):
     def compose(self) -> ComposeResult:
@@ -243,6 +246,7 @@ class BacklogFilterInput(Input):
 
     def action_leave_filter(self) -> None:
         self.app.set_focus(self.app.query_one(BacklogTable))
+        self.app.stylesheet.update(self.app.screen, animate=False)
 
 
 class BacklogView(Vertical):
@@ -258,10 +262,12 @@ class BacklogView(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
-            BacklogFilterInput(id="backlog-filter-text", placeholder="filter"),
+            Static("SEARCH", id="backlog-search-label", classes="filter-row-label"),
+            BacklogFilterInput(id="backlog-filter-text"),
             id="backlog-search-bar",
         )
         yield Horizontal(
+            Static("PROJECT", id="backlog-filter-label", classes="filter-row-label"),
             Static(id="backlog-filter-left"),
             Static(id="backlog-filter-right"),
             id="backlog-filter-bar",
@@ -293,13 +299,22 @@ class BacklogView(Vertical):
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
+        self._render_filter_bar(self._project_filter, len(self._rows))
         self._toggle_state(self._total, len(self._rows), self._project_filter, self._text_filter)
 
     def _render_filter_bar(self, project_filter, count) -> None:
+        value = project_filter or "All"
+        count_text = "%d items" % count
         left = self.query_one("#backlog-filter-left", Static)
         right = self.query_one("#backlog-filter-right", Static)
-        left.update(Text("PROJECT: %s" % (project_filter or "All"), style=COLOURS["text"]))
-        right.update(Text("%d items" % count, style=COLOURS["text"]))
+        left.update(Text(value, style=COLOURS["text"]))
+        available = self.size.width
+        fits = available == 0 or (
+            FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
+        )
+        right.display = fits
+        if fits:
+            right.update(Text(count_text, style=COLOURS["text"]))
 
     def _selected_row_id(self, table):
         if table.row_count == 0:
@@ -421,6 +436,7 @@ class DoneFilterInput(Input):
 
     def action_leave_filter(self) -> None:
         self.app.set_focus(self.app.query_one(DoneTable))
+        self.app.stylesheet.update(self.app.screen, animate=False)
 
 
 class DoneView(Vertical):
@@ -436,10 +452,12 @@ class DoneView(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
-            DoneFilterInput(id="done-filter-text", placeholder="filter"),
+            Static("SEARCH", id="done-search-label", classes="filter-row-label"),
+            DoneFilterInput(id="done-filter-text"),
             id="done-search-bar",
         )
         yield Horizontal(
+            Static("PROJECT", id="done-filter-label", classes="filter-row-label"),
             Static(id="done-filter-left"),
             Static(id="done-filter-right"),
             id="done-filter-bar",
@@ -471,13 +489,22 @@ class DoneView(Vertical):
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
+        self._render_filter_bar(self._project_filter, len(self._rows))
         self._toggle_state(self._total, len(self._rows), self._project_filter, self._text_filter)
 
     def _render_filter_bar(self, project_filter, count) -> None:
+        value = project_filter or "All"
+        count_text = "%d items" % count
         left = self.query_one("#done-filter-left", Static)
         right = self.query_one("#done-filter-right", Static)
-        left.update(Text("PROJECT: %s" % (project_filter or "All"), style=COLOURS["text"]))
-        right.update(Text("%d items" % count, style=COLOURS["text"]))
+        left.update(Text(value, style=COLOURS["text"]))
+        available = self.size.width
+        fits = available == 0 or (
+            FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
+        )
+        right.display = fits
+        if fits:
+            right.update(Text(count_text, style=COLOURS["text"]))
 
     def _selected_row_id(self, table):
         if table.row_count == 0:
@@ -809,12 +836,20 @@ class LightcycleApp(App):
         height: 1fr;
         display: none;
     }}
+    .filter-row-label {{
+        width: {FILTER_ROW_LABEL_WIDTH};
+        color: {COLOURS["text"]};
+    }}
     #backlog-search-bar {{
         height: 1;
+        margin-top: 1;
+    }}
+    #backlog-search-bar:focus-within .filter-row-label {{
+        color: {COLOURS["cyan"]};
     }}
     BacklogFilterInput {{
         border: none;
-        padding: 0 1;
+        padding: 0;
         height: 1;
         background: {COLOURS["bg"]};
         color: {COLOURS["text"]};
@@ -875,10 +910,14 @@ class LightcycleApp(App):
     }}
     #done-search-bar {{
         height: 1;
+        margin-top: 1;
+    }}
+    #done-search-bar:focus-within .filter-row-label {{
+        color: {COLOURS["cyan"]};
     }}
     DoneFilterInput {{
         border: none;
-        padding: 0 1;
+        padding: 0;
         height: 1;
         background: {COLOURS["bg"]};
         color: {COLOURS["text"]};
@@ -1203,6 +1242,9 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(BacklogFilterInput))
         elif self._view == "done":
             self.set_focus(self.query_one(DoneFilterInput))
+        else:
+            return
+        self.stylesheet.update(self.screen, animate=False)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "backlog-filter-text":
