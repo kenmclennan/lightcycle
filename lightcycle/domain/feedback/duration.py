@@ -20,6 +20,18 @@ class Duration:
             return None
         return self._parse(now) - self._parse(claimed)
 
+    def elapsed_since_last_claim(self, now):
+        claimed = self._last(State.IN_PROGRESS)
+        if claimed is None:
+            return None
+        finished = self._last(State.DONE)
+        if finished is not None and self._parse(finished) >= self._parse(claimed):
+            return self._parse(finished) - self._parse(claimed)
+        return self._parse(now) - self._parse(claimed)
+
+    def last_release(self):
+        return self._last(State.READY)
+
     def _first(self, status):
         for s, ts in self._transitions:
             if s == status:

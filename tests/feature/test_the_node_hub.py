@@ -7,7 +7,7 @@ from textual.widgets import Static
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
 from lightcycle.adapters.tui.design_system import COLOURS, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import (
-    DescriptionPane, EscalationPanel, HierarchyPagingTable, HubHeader, HubTabStrip, NodeHubScreen,
+    DescriptionPane, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
 )
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -218,6 +218,18 @@ def _item_full_identity(ctx):
     _push_hub(ctx, session, item)
 
 
+@given("a step of an item with a project and a workflow, its hub open")
+def _step_of_item_full_identity(ctx):
+    store = FakeStore()
+    item = store.create_item("Full item", "a description", workflow="lightcycle/spec-driven@abc123")
+    store.add_artifact(item, "repo", "org/repo")
+    step = store.create_step("write code", step="write-code", role="agent", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    session = _launch(ctx, store)
+    _push_hub(ctx, session, step)
+
+
 @given(parsers.re(r'an item at step "(?P<step>[^"]+)", its hub open'))
 def _item_at_step(ctx, step):
     store = FakeStore()
@@ -282,14 +294,22 @@ def _active_item_claimed_minutes_ago(ctx, step, minutes):
     _push_hub(ctx, ctx["session"], item)
 
 
-@given("an item at a human step, with no worker, its hub open")
-def _item_human_step_no_worker(ctx):
-    store = FakeStore()
+@given(parsers.parse('a human step with no worker, created {minutes:d} minutes ago, its hub open'))
+def _human_step_created_minutes_ago(ctx, minutes):
+    import datetime
+
+    now = datetime.datetime(2026, 1, 1, 12, 0, 0)
+    created_at = now - datetime.timedelta(minutes=minutes)
+
+    store = FakeStore(now=lambda: created_at.isoformat())
     item = store.create_item("Item", "a description")
-    store.create_step("await-merge", step="await-merge", role="human", parent=item)
+    step = store.create_step("await-merge", step="await-merge", role="human", parent=item)
+
     ctx["item_id"] = item
-    session = _launch(ctx, store)
-    _push_hub(ctx, session, item)
+    ctx["step_id"] = step
+    ctx["store"] = store
+    ctx["session"] = launch(make_test_container(store=store), now=lambda: now)
+    _push_hub(ctx, ctx["session"], step)
 
 
 @given("a step is selected, rather than an item")
@@ -597,15 +617,22 @@ def _opened_backlog_hub(ctx):
     "and was reclaimed to ready, its hub open"
 )
 def _step_reclaimed(ctx):
-    store = FakeStore()
+    import datetime
+
+    now = datetime.datetime(2026, 1, 1, 12, 0, 0)
+    claimed_at = now - datetime.timedelta(minutes=5)
+
+    store = FakeStore(now=lambda: claimed_at.isoformat())
     item = store.create_item("Item", "a description")
     step = store.create_step("s", step="write-code", role="agent", parent=item)
     store.claim_ready("agent")
     store.reclaim(step)
+
     ctx["item_id"] = item
     ctx["step_id"] = step
-    session = _launch(ctx, store)
-    _push_hub(ctx, session, item)
+    ctx["store"] = store
+    ctx["session"] = launch(make_test_container(store=store), now=lambda: now)
+    _push_hub(ctx, ctx["session"], item)
 
 
 @given(parsers.parse("{key} is pressed"))
@@ -667,28 +694,28 @@ def _header_shows_identity(ctx):
     assert "repo" in identity
 
 
-@then(parsers.parse('the header\'s context line names "{step}" as the current step'))
-def _header_context_names_step(ctx, step):
+@then("the header's identity line shows the step's id, the item's project, and the item's title")
+def _header_shows_step_identity(ctx):
     screen = ctx["session"].app.screen
-    assert _text(screen, "#hub-context") == step
+    identity = _text(screen, "#hub-identity")
+    assert ctx["step_id"] in identity
+    assert ctx["item_id"] not in identity
+    assert "Full item" in identity
+    assert "repo" in identity
 
 
-@then(parsers.parse('the header names "{phrase}" as the step'))
-def _header_names_step(ctx, phrase):
+@then(parsers.parse('the header\'s stat line reads "{text}"'))
+def _header_stat_line_reads(ctx, text):
     screen = ctx["session"].app.screen
-    assert phrase in _text(screen, "#hub-identity")
+    assert _text(screen, "#hub-context") == text
 
 
-@then(parsers.parse('the header\'s elapsed time reads "{elapsed}"'))
-def _header_elapsed_reads(ctx, elapsed):
+@then("the header's identity line shows the item's title, not the step's stored composite title")
+def _header_shows_item_title_not_composite(ctx):
     screen = ctx["session"].app.screen
-    assert screen.query_one(HubHeader)._last_header.elapsed_field == elapsed
-
-
-@then("no elapsed time is shown in the header")
-def _no_elapsed_shown(ctx):
-    screen = ctx["session"].app.screen
-    assert screen.query_one(HubHeader)._last_header.elapsed_field is None
+    identity = _text(screen, "#hub-identity")
+    assert "Per-step cost attribution and historical backfill" in identity
+    assert "code-await-merge: Per-step cost attribution and historical backfill" not in identity
 
 
 @then("the header's context line is shown in the dim colour")
@@ -885,7 +912,7 @@ def _backlog_reappears_same_position(ctx):
 @then("the header and the hierarchy show the step as queued, not active")
 def _reclaimed_shows_queued(ctx):
     screen = ctx["session"].app.screen
-    assert screen.query_one(HubHeader)._last_header.elapsed_field is None
+    assert _text(screen, "#hub-context") == "write-code · 1 step · 5m (0s active)"
 
     queued_glyph = STATE_GLYPHS["queued"]
     active_glyph = STATE_GLYPHS["active"]

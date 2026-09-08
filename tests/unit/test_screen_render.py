@@ -113,7 +113,7 @@ def test_header_height_reflects_the_fields_a_node_shows():
         finally:
             session.close()
 
-    assert header_height("hub#done-item") < header_height("hub#workflow")
+    assert header_height("hub#workflow") < header_height("hub#gate")
 
 
 def test_the_log_excerpt_fixture_is_real_captured_stream_json_past_the_bound():

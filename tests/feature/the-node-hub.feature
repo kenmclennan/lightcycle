@@ -47,27 +47,30 @@ Feature: The node hub
     Given an item with a project and a workflow, its hub open
     Then the header's identity line shows its id, its project, and its title
 
-  Scenario: The header's context line names the item's current step
+  Scenario: A step's own hub identity line shows its item's title, with the step's own id
+    Given a step of an item with a project and a workflow, its hub open
+    Then the header's identity line shows the step's id, the item's project, and the item's title
+
+  Scenario: The header's stat line names the item's current step and its step count
     Given an item at step "write-code", its hub open
-    Then the header's context line names "write-code" as the current step
+    Then the header's stat line reads "write-code · 1 step"
 
-  Scenario: The header's context line shows the current step's declared display phrase alongside its stage name
+  Scenario: The header's stat line shows the current step's declared display phrase alongside its stage name
     Given an item at step "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage, its hub open
-    Then the header's context line names "Review the PR · code-await-merge" as the current step
+    Then the header's stat line reads "Review the PR · code-await-merge · 1 step"
 
-  Scenario: An active item's header shows its elapsed time, matching the list's own format
+  Scenario: An active item's header shows its wall time with its active time alongside it
     Given an active item at step "build" claimed 14 minutes ago, its hub open
-    Then the header's elapsed time reads "14m"
+    Then the header's stat line reads "build · 1 step · 14m (0s active)"
 
-  Scenario: A human step with no worker shows no elapsed time, but still names the current step
-    Given an item at a human step, with no worker, its hub open
-    Then no elapsed time is shown in the header
-    And the header's context line names "await-merge" as the current step
+  Scenario: A human gate with no worker shows a waiting time, not an elapsed time
+    Given a human step with no worker, created 12 minutes ago, its hub open
+    Then the header's stat line reads "await-merge · waiting 12m"
 
-  Scenario Outline: A selected step's identity line names its display phrase and stage, not its stored composite title
+  Scenario Outline: A selected step's identity line names its item's title, not its own stored composite title
     Given a step whose stored title is its stage concatenated onto its item's title, whose workflow declares the display phrase "Review the PR" for that stage
     When <key> is pressed
-    Then the header names "Review the PR · code-await-merge" as the step
+    Then the header's identity line shows the item's title, not the step's stored composite title
 
     Examples:
       | key   |
