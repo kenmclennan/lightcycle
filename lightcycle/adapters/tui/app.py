@@ -66,6 +66,7 @@ from lightcycle.application.work import (
 )
 
 POLL_INTERVAL_SECONDS = 10
+FILTER_DEBOUNCE_SECONDS = 0.15
 
 DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
 BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
@@ -265,6 +266,9 @@ class BacklogFilterInput(Input):
     ]
 
     def action_leave_filter(self) -> None:
+        if self.app._backlog_filter_timer is not None:
+            self.app._backlog_filter_timer.stop()
+            self.app._backlog_filter_timer = None
         self.app.set_focus(self.app.query_one(BacklogTable))
         self.app.stylesheet.update(self.app.screen, animate=False)
         self.app._sync_footer_shortcuts()
@@ -470,6 +474,9 @@ class DoneFilterInput(Input):
     ]
 
     def action_leave_filter(self) -> None:
+        if self.app._done_filter_timer is not None:
+            self.app._done_filter_timer.stop()
+            self.app._done_filter_timer = None
         self.app.set_focus(self.app.query_one(DoneTable))
         self.app.stylesheet.update(self.app.screen, animate=False)
         self.app._sync_footer_shortcuts()
@@ -1181,10 +1188,12 @@ class LightcycleApp(App):
         self._backlog_text_filter = None
         self._backlog_total = 0
         self._backlog_filtered_count = 0
+        self._backlog_filter_timer = None
         self._done_project_filter = None
         self._done_text_filter = None
         self._done_total = 0
         self._done_filtered_count = 0
+        self._done_filter_timer = None
         self._picker_open = False
 
     @property
@@ -1259,29 +1268,8 @@ class LightcycleApp(App):
         self._active_row_ids = tuple(r.id for r in active_rows)
         self._sync_active_glyph_animation()
 
-        backlog_uc = BacklogUseCase(self._container.store, None)
-        backlog_resp = backlog_uc.execute(
-            BacklogInput(project=self._backlog_project_filter, text=self._backlog_text_filter)
-        )
-        backlog_counts = backlog_uc.counts()
-        backlog_rows = build_backlog_rows(backlog_resp.rows)
-        self._backlog_total = backlog_counts.total
-        self._backlog_filtered_count = len(backlog_rows)
-        self.query_one(BacklogView).apply_rows(
-            backlog_rows, self._backlog_total, self._backlog_project_filter, self._backlog_text_filter
-        )
-
-        done_uc = DoneUseCase(self._container.store)
-        done_resp = done_uc.execute(
-            DoneInput(project=self._done_project_filter, text=self._done_text_filter)
-        )
-        done_counts = done_uc.counts()
-        done_rows = build_backlog_rows(done_resp.rows)
-        self._done_total = done_counts.total
-        self._done_filtered_count = len(done_rows)
-        self.query_one(DoneView).apply_rows(
-            done_rows, self._done_total, self._done_project_filter, self._done_text_filter
-        )
+        self._refresh_backlog_view()
+        self._refresh_done_view()
 
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
@@ -1295,6 +1283,32 @@ class LightcycleApp(App):
             breaker_reset_at=breaker.reset_at,
             version=__version__,
             upgrade_version=self._upgrade_version,
+        )
+
+    def _refresh_backlog_view(self) -> None:
+        backlog_uc = BacklogUseCase(self._container.store, None)
+        backlog_resp = backlog_uc.execute(
+            BacklogInput(project=self._backlog_project_filter, text=self._backlog_text_filter)
+        )
+        backlog_counts = backlog_uc.counts()
+        backlog_rows = build_backlog_rows(backlog_resp.rows)
+        self._backlog_total = backlog_counts.total
+        self._backlog_filtered_count = len(backlog_rows)
+        self.query_one(BacklogView).apply_rows(
+            backlog_rows, self._backlog_total, self._backlog_project_filter, self._backlog_text_filter
+        )
+
+    def _refresh_done_view(self) -> None:
+        done_uc = DoneUseCase(self._container.store)
+        done_resp = done_uc.execute(
+            DoneInput(project=self._done_project_filter, text=self._done_text_filter)
+        )
+        done_counts = done_uc.counts()
+        done_rows = build_backlog_rows(done_resp.rows)
+        self._done_total = done_counts.total
+        self._done_filtered_count = len(done_rows)
+        self.query_one(DoneView).apply_rows(
+            done_rows, self._done_total, self._done_project_filter, self._done_text_filter
         )
 
     def _apply_view_visibility(self) -> None:
@@ -1350,6 +1364,12 @@ class LightcycleApp(App):
         self._cycle_view(1)
 
     def _cycle_view(self, direction: int) -> None:
+        if self._backlog_filter_timer is not None:
+            self._backlog_filter_timer.stop()
+            self._backlog_filter_timer = None
+        if self._done_filter_timer is not None:
+            self._done_filter_timer.stop()
+            self._done_filter_timer = None
         while len(self.screen_stack) > 1:
             self.pop_screen()
         index = _VIEW_CYCLE.index(self._view)
@@ -1472,10 +1492,24 @@ class LightcycleApp(App):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "backlog-filter-text":
             self._backlog_text_filter = event.value or None
-            self._refresh()
+            if self._backlog_filter_timer is not None:
+                self._backlog_filter_timer.stop()
+            self._backlog_filter_timer = self.set_timer(FILTER_DEBOUNCE_SECONDS, self._on_backlog_filter_settled)
         elif event.input.id == "done-filter-text":
             self._done_text_filter = event.value or None
-            self._refresh()
+            if self._done_filter_timer is not None:
+                self._done_filter_timer.stop()
+            self._done_filter_timer = self.set_timer(FILTER_DEBOUNCE_SECONDS, self._on_done_filter_settled)
+
+    def _on_backlog_filter_settled(self) -> None:
+        self._backlog_filter_timer = None
+        self._refresh_backlog_view()
+        self._sync_footer_shortcuts()
+
+    def _on_done_filter_settled(self) -> None:
+        self._done_filter_timer = None
+        self._refresh_done_view()
+        self._sync_footer_shortcuts()
 
     def _priority_layout(self, table, rows):
         atomic_values = {

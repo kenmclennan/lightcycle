@@ -433,7 +433,7 @@ def _backlog_text_filter(size):
     session = _launch(_backlog_store(), size=size)
     session.press("tab")
     session.app.query_one(BacklogFilterInput).value = "row"
-    session.pause()
+    session.settle_backlog_filter()
     return session
 
 
@@ -444,7 +444,7 @@ def _backlog_text_and_project_filter(size):
     session.press("tab")
     session.app._backlog_project_filter = "lightcycle"
     session.app.query_one(BacklogFilterInput).value = "row"
-    session.pause()
+    session.settle_backlog_filter()
     return session
 
 

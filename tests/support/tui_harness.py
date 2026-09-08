@@ -250,6 +250,24 @@ class TuiSession:
         self.run(self.app._refresh)
         self.pause()
 
+    def pause_for(self, seconds):
+        self._run(self.pilot.pause(seconds))
+        self.pause()
+
+    def settle_backlog_filter(self):
+        self.pause()
+        if self.app._backlog_filter_timer is not None:
+            self.app._backlog_filter_timer.stop()
+        self.run(self.app._on_backlog_filter_settled)
+        self.pause()
+
+    def settle_done_filter(self):
+        self.pause()
+        if self.app._done_filter_timer is not None:
+            self.app._done_filter_timer.stop()
+        self.run(self.app._on_done_filter_settled)
+        self.pause()
+
     def resize(self, width, height):
         self._run(self.pilot.resize_terminal(width, height))
         self.pause()

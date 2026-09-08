@@ -4,11 +4,12 @@ import unittest
 from unittest.mock import patch
 
 from textual.css.query import NoMatches
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Input, Static
 
 from lightcycle import __version__
 from lightcycle.adapters.tui.app import (
     DATA_COLUMNS,
+    FILTER_DEBOUNCE_SECONDS,
     FILTER_ROW_COUNT_GAP,
     FILTER_ROW_LABEL_WIDTH,
     POLL_INTERVAL_SECONDS,
@@ -1615,7 +1616,7 @@ class TestBacklogFooter(unittest.TestCase):
 
         session.press("/")
         app.query_one(BacklogFilterInput).value = "nonexistent"
-        session.pause()
+        session.settle_backlog_filter()
 
         self.assertEqual(app.query_one(ShortcutBar).shortcuts, BACKLOG_SEARCH_EMPTY_SHORTCUTS)
 
@@ -1713,7 +1714,7 @@ class TestBacklogSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(BacklogFilterInput)
         search.value = "widget"
-        session.pause()
+        session.settle_backlog_filter()
 
         session.press("down")
 
@@ -1731,7 +1732,7 @@ class TestBacklogSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(BacklogFilterInput)
         search.value = "widget"
-        session.pause()
+        session.settle_backlog_filter()
 
         session.press("up")
 
@@ -1751,7 +1752,7 @@ class TestBacklogSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(BacklogFilterInput)
         search.value = "widget"
-        session.pause()
+        session.settle_backlog_filter()
 
         session.press("enter")
 
@@ -1774,7 +1775,7 @@ class TestBacklogSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(BacklogFilterInput)
         search.value = "nonexistent"
-        session.pause()
+        session.settle_backlog_filter()
 
         session.press("enter")
 
@@ -1796,6 +1797,86 @@ class TestBacklogSearchInput(unittest.TestCase):
         self.assertEqual(app._view, "done")
         self.assertEqual(search.value, "widget")
         self.assertIs(app.focused, app.query_one(DoneTable))
+
+    def test_typing_rapidly_produces_exactly_one_scoped_refresh_after_settling(self):
+        session = self._launch(FakeStore())
+
+        session.press("/")
+        search = session.app.query_one(BacklogFilterInput)
+        with patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh:
+            def _type_without_yielding_to_the_debounce_timer():
+                for char in "widget":
+                    search.value += char
+                    session.app.on_input_changed(Input.Changed(search, search.value))
+
+            session.run(_type_without_yielding_to_the_debounce_timer)
+            backlog_refresh.assert_not_called()
+
+            session.pause_for(FILTER_DEBOUNCE_SECONDS + 0.05)
+
+            backlog_refresh.assert_called_once()
+
+    def test_typing_rapidly_cancels_the_previous_pending_timer(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        session.press("/")
+        session.press("w")
+        first_timer = app._backlog_filter_timer
+        with patch.object(first_timer, "stop", wraps=first_timer.stop) as stop:
+            session.press("i")
+            stop.assert_called_once()
+            self.assertIsNot(app._backlog_filter_timer, first_timer)
+        if app._backlog_filter_timer is not None:
+            app._backlog_filter_timer.stop()
+
+    def test_a_settled_backlog_filter_refreshes_the_backlog_view_only(self):
+        session = self._launch(FakeStore())
+
+        session.press("/")
+        session.press("w")
+        with patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh, \
+                patch.object(LightcycleApp, "_refresh_done_view") as done_refresh, \
+                patch.object(LightcycleApp, "_apply_view_visibility") as apply_visibility, \
+                patch("lightcycle.adapters.tui.app.StatusUseCase") as status_uc, \
+                patch("lightcycle.adapters.tui.app.PoolRunningUseCase") as pool_uc, \
+                patch("lightcycle.adapters.tui.app.BreakerStatusUseCase") as breaker_uc:
+            session.settle_backlog_filter()
+
+            backlog_refresh.assert_called_once()
+            done_refresh.assert_not_called()
+            apply_visibility.assert_not_called()
+            status_uc.assert_not_called()
+            pool_uc.assert_not_called()
+            breaker_uc.assert_not_called()
+
+    def test_escape_cancels_a_pending_debounced_refresh(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        session.press("/")
+        session.press("w")
+        timer = app._backlog_filter_timer
+        with patch.object(timer, "stop") as stop:
+            session.press("escape")
+
+            stop.assert_called_once()
+        self.assertIsNone(app._backlog_filter_timer)
+        timer.stop()
+
+    def test_switching_tabs_cancels_a_pending_debounced_backlog_refresh(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        session.press("/")
+        session.press("w")
+        timer = app._backlog_filter_timer
+        with patch.object(timer, "stop") as stop:
+            session.press("tab")
+
+            stop.assert_called_once()
+        self.assertIsNone(app._backlog_filter_timer)
+        timer.stop()
 
 
 class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
@@ -2096,7 +2177,7 @@ class TestDoneFooter(unittest.TestCase):
 
         session.press("/")
         app.query_one(DoneFilterInput).value = "nonexistent"
-        session.pause()
+        session.settle_done_filter()
 
         self.assertEqual(app.query_one(ShortcutBar).shortcuts, DONE_SEARCH_EMPTY_SHORTCUTS)
 
@@ -2131,7 +2212,7 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(DoneFilterInput)
         search.value = "keep"
-        session.pause()
+        session.settle_done_filter()
 
         self.assertEqual(app._done_text_filter, "keep")
         self.assertEqual(app.query_one(DoneTable).row_count, 1)
@@ -2167,7 +2248,7 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(DoneFilterInput)
         search.value = "widget"
-        session.pause()
+        session.settle_done_filter()
 
         session.press("down")
 
@@ -2187,7 +2268,7 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(DoneFilterInput)
         search.value = "widget"
-        session.pause()
+        session.settle_done_filter()
 
         session.press("up")
 
@@ -2209,7 +2290,7 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(DoneFilterInput)
         search.value = "widget"
-        session.pause()
+        session.settle_done_filter()
 
         session.press("enter")
 
@@ -2233,7 +2314,7 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("/")
         search = app.query_one(DoneFilterInput)
         search.value = "nonexistent"
-        session.pause()
+        session.settle_done_filter()
 
         session.press("enter")
 
@@ -2246,6 +2327,86 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("/")
 
         self.assertNotIsInstance(session.app.focused, DoneFilterInput)
+
+    def test_typing_rapidly_produces_exactly_one_scoped_refresh_after_settling(self):
+        session = self._launch(FakeStore())
+
+        session.press("/")
+        search = session.app.query_one(DoneFilterInput)
+        with patch.object(LightcycleApp, "_refresh_done_view") as done_refresh:
+            def _type_without_yielding_to_the_debounce_timer():
+                for char in "widget":
+                    search.value += char
+                    session.app.on_input_changed(Input.Changed(search, search.value))
+
+            session.run(_type_without_yielding_to_the_debounce_timer)
+            done_refresh.assert_not_called()
+
+            session.pause_for(FILTER_DEBOUNCE_SECONDS + 0.05)
+
+            done_refresh.assert_called_once()
+
+    def test_typing_rapidly_cancels_the_previous_pending_timer(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        session.press("/")
+        session.press("w")
+        first_timer = app._done_filter_timer
+        with patch.object(first_timer, "stop", wraps=first_timer.stop) as stop:
+            session.press("i")
+            stop.assert_called_once()
+            self.assertIsNot(app._done_filter_timer, first_timer)
+        if app._done_filter_timer is not None:
+            app._done_filter_timer.stop()
+
+    def test_a_settled_done_filter_refreshes_the_done_view_only(self):
+        session = self._launch(FakeStore())
+
+        session.press("/")
+        session.press("w")
+        with patch.object(LightcycleApp, "_refresh_done_view") as done_refresh, \
+                patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh, \
+                patch.object(LightcycleApp, "_apply_view_visibility") as apply_visibility, \
+                patch("lightcycle.adapters.tui.app.StatusUseCase") as status_uc, \
+                patch("lightcycle.adapters.tui.app.PoolRunningUseCase") as pool_uc, \
+                patch("lightcycle.adapters.tui.app.BreakerStatusUseCase") as breaker_uc:
+            session.settle_done_filter()
+
+            done_refresh.assert_called_once()
+            backlog_refresh.assert_not_called()
+            apply_visibility.assert_not_called()
+            status_uc.assert_not_called()
+            pool_uc.assert_not_called()
+            breaker_uc.assert_not_called()
+
+    def test_escape_cancels_a_pending_debounced_refresh(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        session.press("/")
+        session.press("w")
+        timer = app._done_filter_timer
+        with patch.object(timer, "stop") as stop:
+            session.press("escape")
+
+            stop.assert_called_once()
+        self.assertIsNone(app._done_filter_timer)
+        timer.stop()
+
+    def test_switching_tabs_cancels_a_pending_debounced_done_refresh(self):
+        session = self._launch(FakeStore())
+        app = session.app
+
+        session.press("/")
+        session.press("w")
+        timer = app._done_filter_timer
+        with patch.object(timer, "stop") as stop:
+            session.press("tab")
+
+            stop.assert_called_once()
+        self.assertIsNone(app._done_filter_timer)
+        timer.stop()
 
 
 class TestPoolControl(unittest.TestCase):
