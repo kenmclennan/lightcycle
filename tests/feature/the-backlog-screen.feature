@@ -55,7 +55,7 @@ Feature: The backlog screen
 
   Scenario Outline: When a backlog row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width and spanning the row without wrapping mid-word
     Given a backlog row whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
-    Then the cursor, id and project remain on the row's first line, each padded to its atomic width
+    Then the cursor, id and project remain on the row's first line, each separated from the next by a gap
     And the title appears on a continuation line indented 2 characters - the row's glyph width, not where the title column starts in the unstacked grid
     And no fragment of the title's prose is split mid-word
 

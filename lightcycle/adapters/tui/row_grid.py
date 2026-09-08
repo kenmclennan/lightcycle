@@ -106,6 +106,13 @@ def pad_field_right(value, width):
     return Text(" " * pad_len) + text if pad_len else text
 
 
+ATOMIC_FIELD_GAP = 2
+
+
+def pad_atomic_field(value, width):
+    return pad_field(value, width + ATOMIC_FIELD_GAP)
+
+
 def wrap_continuation(prose, available_width):
     width = max(1, available_width)
     lines = textwrap.wrap(prose, width=width, break_long_words=False, break_on_hyphens=False)

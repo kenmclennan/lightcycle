@@ -10,7 +10,7 @@ from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_FRAMES, COLOURS, DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS,
 )
 from lightcycle.adapters.tui.row_grid import (
-    FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
+    ATOMIC_FIELD_GAP, FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
 )
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
@@ -997,8 +997,8 @@ def _stacked_cell_text(table, strip):
 
 
 @then(
-    "the cursor, icon, id, project and step remain on the row's first line, each padded to "
-    "its atomic width, with time right-aligned alongside them"
+    "the cursor, icon, id, project and step remain on the row's first line, each separated "
+    "from the next by a gap, with time right-aligned alongside them"
 )
 def _t_stacked_first_line(ctx):
     session = ctx["session"]
@@ -1009,8 +1009,12 @@ def _t_stacked_first_line(ctx):
     rest = content[GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]:]
     assert rest.startswith(_STACK_ID)
     rest = rest[len(_STACK_ID):]
+    assert rest[:ATOMIC_FIELD_GAP] == " " * ATOMIC_FIELD_GAP
+    rest = rest[ATOMIC_FIELD_GAP:]
     assert rest.startswith(_STACK_PROJECT)
     rest = rest[len(_STACK_PROJECT):]
+    assert rest[:ATOMIC_FIELD_GAP] == " " * ATOMIC_FIELD_GAP
+    rest = rest[ATOMIC_FIELD_GAP:]
     assert rest.startswith(_STACK_STEP)
     assert content.endswith(_STACK_TIME_TEXT)
 

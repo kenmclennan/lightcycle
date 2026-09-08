@@ -35,6 +35,7 @@ from lightcycle.adapters.tui.row_grid import (
     apply_widths,
     compute_layout,
     floor_message,
+    pad_atomic_field,
     pad_field,
     pad_field_right,
     render_row_budget,
@@ -488,13 +489,13 @@ def _hierarchy_stacked_first_line(
             DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
         )
     icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
-    id_field = pad_field(node.id, layout.atomic_widths["id"])
+    id_field = pad_atomic_field(node.id, layout.atomic_widths["id"])
     turns_text, cost_text = hierarchy_usage_text(node)
-    turns_field = pad_field(Text(turns_text, style=COLOURS["dim"]), layout.atomic_widths["turns"])
-    time_field = pad_field(
+    turns_field = pad_atomic_field(Text(turns_text, style=COLOURS["dim"]), layout.atomic_widths["turns"])
+    time_field = pad_atomic_field(
         Text(hierarchy_time_text(store, node, now), style=COLOURS["dim"]), layout.atomic_widths["time"]
     )
-    content_so_far = icon_field + id_field + Text("  ") + turns_field + Text("  ") + time_field
+    content_so_far = icon_field + id_field + turns_field + time_field
     cost_cell = Text(cost_text, style=COLOURS["dim"]) if cost_text else Text("")
     cost_area = max(0, row_budget - len(content_so_far.plain))
     return content_so_far + pad_field_right(cost_cell, cost_area)
