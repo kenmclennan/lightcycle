@@ -31,6 +31,7 @@ def _priority_active_store(count):
         )
         store.assign(step, "worker-%d" % i)
         store.update_state(step, State.RUNNING)
+        store.accrue_active_seconds([step], 840)
     return store
 
 

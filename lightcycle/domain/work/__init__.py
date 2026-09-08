@@ -1,3 +1,4 @@
+from lightcycle.domain.work.active_time import item_active_seconds
 from lightcycle.domain.work.artifact import Artifact, default_kind_for, type_label
 from lightcycle.domain.work.cost import (
     ItemCost,
@@ -36,6 +37,7 @@ from lightcycle.domain.work.projected_step import ProjectedStep
 from lightcycle.domain.work.worker_log import worker_log_filename
 
 __all__ = [
+    "item_active_seconds",
     "Artifact", "default_kind_for", "type_label", "Lane", "State", "lane_for", "roll_up",
     "ItemCost", "StageSubtotal", "StepCost", "ToolUsageRow", "cache_hit_rate",
     "format_rate", "format_tokens", "format_usd", "item_cost", "step_cost",

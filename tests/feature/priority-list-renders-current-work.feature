@@ -80,9 +80,10 @@ Feature: Priority list renders current work
     When I launch the dashboard
     Then the active row for that step shows "Coding" as its step
 
-  Scenario: An active item's elapsed time updates as time passes, without disturbing the rest of the list
+  Scenario: An active item's elapsed time updates as active time accrues, without disturbing the rest of the list
     Given the dashboard has launched with a step that was claimed some time ago and is still in progress
-    When one poll interval elapses
+    When that step accrues additional active time
+    And one poll interval elapses
     Then the active row's elapsed time reflects the additional time that passed
     And the priority list's rows stay in the same order
 
