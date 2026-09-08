@@ -200,9 +200,10 @@ Feature: The backlog screen
       | 2        | enter/→       | explore in tree |
       | 3        | f             | filter          |
       | 4        | /             | search          |
-      | 5        | tab           | done            |
-      | 6        | ctrl-u/ctrl-d | scroll          |
-      | 7        | q             | quit            |
+      | 5        | [/]           | switch tab      |
+      | 6        | tab           | done            |
+      | 7        | ctrl-u/ctrl-d | scroll          |
+      | 8        | q             | quit            |
 
   Scenario Outline: Each shortcut for the overall-empty backlog appears in the footer, in order
     Given the store has no todo items anywhere
@@ -212,9 +213,10 @@ Feature: The backlog screen
     And its action is "<action>"
 
     Examples:
-      | position | key | action |
-      | 1        | tab | done   |
-      | 2        | q   | quit   |
+      | position | key | action     |
+      | 1        | [/] | switch tab |
+      | 2        | tab | done       |
+      | 3        | q   | quit       |
 
   Scenario Outline: Each shortcut for the filtered-empty backlog appears in the footer, in order
     Given the backlog is shown, filtered to "lightcycle", with no items matching that filter
@@ -223,11 +225,12 @@ Feature: The backlog screen
     And its action is "<action>"
 
     Examples:
-      | position | key | action |
-      | 1        | f   | filter |
-      | 2        | /   | search |
-      | 3        | tab | done   |
-      | 4        | q   | quit   |
+      | position | key | action     |
+      | 1        | f   | filter     |
+      | 2        | /   | search     |
+      | 3        | [/] | switch tab |
+      | 4        | tab | done       |
+      | 5        | q   | quit       |
 
   Scenario Outline: Each shortcut for the backlog with the search box focused and rows present appears in the footer, in order
     Given the backlog is shown with a todo item
@@ -241,8 +244,9 @@ Feature: The backlog screen
       | 1        | ↑↓    | move            |
       | 2        | enter | explore in tree |
       | 3        | esc   | back            |
-      | 4        | tab   | done            |
-      | 5        | q     | quit            |
+      | 4        | [/]   | switch tab      |
+      | 5        | tab   | done            |
+      | 6        | q     | quit            |
 
   Scenario Outline: Each shortcut for the backlog with the search box focused and zero filtered rows appears in the footer, in order
     Given the backlog is shown with a todo item
@@ -253,10 +257,11 @@ Feature: The backlog screen
     And its action is "<action>"
 
     Examples:
-      | position | key | action |
-      | 1        | esc | back   |
-      | 2        | tab | done   |
-      | 3        | q   | quit   |
+      | position | key | action     |
+      | 1        | esc | back       |
+      | 2        | [/] | switch tab |
+      | 3        | tab | done       |
+      | 4        | q   | quit       |
 
   Scenario: The focused-search shortcut strip is actually painted in the footer
     Given the backlog is shown with a todo item

@@ -1150,6 +1150,8 @@ class LightcycleApp(App):
         Binding("q", "quit", "Quit", show=False, priority=True),
         Binding("ctrl+c", "quit", "Quit", show=False, priority=True),
         Binding("tab", "toggle_view", "Toggle view", show=False, priority=True),
+        Binding("[", "prev_strip", "Prev tab", show=False),
+        Binding("]", "next_strip", "Next tab", show=False),
         Binding("f", "open_picker", "Filter", show=False),
         Binding("/", "focus_search", "Search", show=False),
         Binding("p", "toggle_pool", "Pool", show=False),
@@ -1333,13 +1335,25 @@ class LightcycleApp(App):
             shortcut_bar.set_shortcuts(desired)
 
     def action_toggle_view(self) -> None:
+        self._cycle_view(1)
+
+    def action_prev_strip(self) -> None:
+        if isinstance(self.screen, NodeHubScreen):
+            self.screen.action_prev_tab()
+            return
+        self._cycle_view(-1)
+
+    def action_next_strip(self) -> None:
         if isinstance(self.screen, NodeHubScreen):
             self.screen.action_next_tab()
             return
+        self._cycle_view(1)
+
+    def _cycle_view(self, direction: int) -> None:
         while len(self.screen_stack) > 1:
             self.pop_screen()
         index = _VIEW_CYCLE.index(self._view)
-        self._view = _VIEW_CYCLE[(index + 1) % len(_VIEW_CYCLE)]
+        self._view = _VIEW_CYCLE[(index + direction) % len(_VIEW_CYCLE)]
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()

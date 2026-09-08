@@ -48,8 +48,7 @@ class TestHierarchyShapeGuard(unittest.TestCase):
             session.pause()
             update.assert_not_called()
 
-        for _ in range(len(screen._tab_order) - 1):
-            session.run(screen.action_next_tab)
+        session.run(screen.action_prev_tab)
         session.pause()
         session.run(screen.poll_refresh)
         session.pause()
@@ -116,8 +115,7 @@ class TestArtifactsShapeGuard(unittest.TestCase):
             session.pause()
             update.assert_not_called()
 
-        for _ in range(len(screen._tab_order) - 1):
-            session.run(screen.action_next_tab)
+        session.run(screen.action_prev_tab)
         session.pause()
         session.run(screen.poll_refresh)
         session.pause()
@@ -185,8 +183,7 @@ class TestDetailShapeGuard(unittest.TestCase):
             session.pause()
             update.assert_not_called()
 
-        for _ in range(len(screen._tab_order) - 1):
-            session.run(screen.action_next_tab)
+        session.run(screen.action_prev_tab)
         session.pause()
         session.run(screen.poll_refresh)
         session.pause()

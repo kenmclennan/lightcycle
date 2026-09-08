@@ -487,7 +487,7 @@ class TestActiveGroup(unittest.TestCase):
 
         self.assertIsNotNone(session.app._active_glyph_timer)
 
-    def test_tab_cycles_the_hub_tab_instead_of_leaving_the_screen(self):
+    def test_bracket_forward_cycles_the_hub_tab_instead_of_leaving_the_screen(self):
         from lightcycle.adapters.tui.hub import NodeHubScreen
 
         store = FakeStore()
@@ -505,10 +505,37 @@ class TestActiveGroup(unittest.TestCase):
         self.assertIsInstance(hub, NodeHubScreen)
         self.assertEqual(hub._active_tab, "description")
 
-        session.press("tab")
+        session.press("]")
 
         self.assertIs(session.app.screen, hub)
         self.assertEqual(hub._active_tab, "workflow")
+
+        session.press("[")
+
+        self.assertIs(session.app.screen, hub)
+        self.assertEqual(hub._active_tab, "description")
+
+    def test_tab_leaves_the_hub_and_advances_the_view(self):
+        from lightcycle.adapters.tui.hub import NodeHubScreen
+
+        store = FakeStore()
+        item = store.create_item("an item", "a description")
+
+        session = self._launch(store)
+        session.run(
+            lambda: session.app.push_screen(
+                NodeHubScreen(session.app.container, item, session.app._now)
+            )
+        )
+        session.pause()
+
+        hub = session.app.screen
+        self.assertIsInstance(hub, NodeHubScreen)
+
+        session.press("tab")
+
+        self.assertIsNot(session.app.screen, hub)
+        self.assertEqual(session.app._view, "backlog")
 
 
 class TestQueuedGroup(unittest.TestCase):
@@ -1218,6 +1245,36 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
+    def test_bracket_forward_shows_backlog_in_place_of_priority_list(self):
+        session = self._launch()
+
+        session.press("]")
+
+        self.assertTrue(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
+
+    def test_bracket_backward_wraps_to_done(self):
+        session = self._launch()
+
+        session.press("[")
+
+        self.assertTrue(session.app.query_one(DoneView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
+
+    def test_bracket_forward_then_backward_returns_to_priority_list(self):
+        session = self._launch()
+
+        session.press("]")
+        session.press("[")
+
+        self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(DoneView).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
+
     def test_tab_again_moves_to_done(self):
         session = self._launch()
 
@@ -1602,6 +1659,18 @@ class TestBacklogSearchInput(unittest.TestCase):
         session.press("q")
 
         self.assertEqual(app.query_one(BacklogFilterInput).value, "q")
+
+    def test_typing_bracket_while_focused_types_a_character_instead_of_switching_view(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        session.press("[")
+
+        self.assertEqual(app.query_one(BacklogFilterInput).value, "[")
+        self.assertEqual(app._view, "backlog")
 
     def test_on_input_changed_ignores_events_from_other_widgets(self):
         session = self._launch(FakeStore())
