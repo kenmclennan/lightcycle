@@ -1,6 +1,6 @@
 FIELDS_BY_TYPE = {
     "item": frozenset(
-        {"title", "description", "project", "workflow", "label", "backlog", "step"}
+        {"title", "description", "project", "workflow", "label", "backlog", "step", "depends"}
     ),
     "step": frozenset({"title", "notes", "needs", "reason", "tried", "label"}),
 }

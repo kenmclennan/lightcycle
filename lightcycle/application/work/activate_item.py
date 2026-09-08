@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.project_clone import ensure_project_cloned
@@ -12,6 +12,7 @@ class ActivateItemInput:
     item: str
     workflow: Optional[str] = None
     step: Optional[str] = None
+    deps: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -47,5 +48,5 @@ class ActivateItemUseCase:
         self._store.edit_node(item_id, workflow=pin)
         repo = self._store.get_item(item_id).repo
         ensure_project_cloned(self._store, self._git, self._config, repo)
-        step = file_step(self._store, self._flow, item_id, node, pin, input.step)
+        step = file_step(self._store, self._flow, item_id, node, pin, input.step, deps=input.deps)
         return ActivateItemResponse(step=step)

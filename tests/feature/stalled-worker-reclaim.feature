@@ -52,3 +52,15 @@ Feature: Pool detects and reclaims a stalled worker
     And the step's worktree has uncommitted changes
     When the pool sweeps
     Then the uncommitted changes are committed before the step is reclaimed to ready
+
+  Scenario: A step reclaimed from a stalled worker remains unclaimable while its dependency is still open
+    Given a worker has claimed a step
+    And the step is blocked by an open dependency
+    And the worker's log last grew more than the stall threshold ago
+    And the worker's log contains no terminal marker
+    And the worker is past its boot window
+    When the pool sweeps
+    Then the step is reclaimed
+    And the step is not claimable while its dependency is open
+    When the dependency closes
+    Then the step becomes claimable

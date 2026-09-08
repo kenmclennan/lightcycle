@@ -81,6 +81,43 @@ class TestCmdDep(unittest.TestCase):
         self.assertIn("unknown node 'does-not-exist'", err)
         self.assertEqual(self.store._deps.get(blocked), set())
 
+    def test_add_refuses_a_claimed_target(self):
+        blocker = self.store.create_step("blocker", role=None)
+        claimed = self.store.create_step("claimed", role="agent")
+        got = self.store.claim_ready("agent")
+        self.assertEqual(got.id, claimed)
+        rc, out, err = call(cli.cmd_dep, claimed, "--needs", blocker)
+        self.assertNotEqual(rc, 0)
+        self.assertIn(claimed, err)
+        self.assertIn(got.claimed_by, err)
+        self.assertEqual(self.store._deps.get(claimed), set())
+
+    def test_remove_still_succeeds_on_a_claimed_target(self):
+        blocker = self.store.create_step("blocker", role=None)
+        claimed = self.store.create_step("claimed", role="agent")
+        self.store.dep_add(claimed, blocker)
+        self.store.claim_ready("agent")
+        rc, out, err = call(cli.cmd_dep, claimed, "--remove", blocker)
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.store._deps.get(claimed), set())
+
+    def test_add_succeeds_when_target_is_an_item_not_a_step(self):
+        a = self.store.create_item("a", "a description")
+        b = self.store.create_item("b", "a description")
+        rc, out, err = call(cli.cmd_dep, a, "--needs", b)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store._deps.get(a), {b})
+
+    def test_add_succeeds_on_a_target_claimed_in_the_past_but_now_closed(self):
+        blocker = self.store.create_step("blocker", role=None)
+        closed = self.store.create_step("closed", role="agent")
+        got = self.store.claim_ready("agent")
+        self.assertEqual(got.id, closed)
+        self.store.close(closed, "done")
+        rc, out, err = call(cli.cmd_dep, closed, "--needs", blocker)
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.store._deps.get(closed), {blocker})
+
 
 if __name__ == "__main__":
     unittest.main()

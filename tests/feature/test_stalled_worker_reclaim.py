@@ -221,6 +221,13 @@ def _dirty_worktree(ctx):
     ctx["git"].dirty.add(path)
 
 
+@given("the step is blocked by an open dependency")
+def _blocked_by_open_dependency(ctx):
+    blocker = ctx["store"].create_step("blocker", role=None)
+    ctx["store"].dep_add(ctx["step"], blocker)
+    ctx["blocker"] = blocker
+
+
 @when("the pool sweeps")
 def _sweep(ctx):
     _run_sweep(ctx)
@@ -269,3 +276,26 @@ def _committed_before_reclaim(ctx):
     kinds = [e[0] for e in ctx["events"]]
     assert kinds.index("commit") < kinds.index("reclaim")
     assert ctx["store"].get_node(ctx["step"]).state == "ready"
+
+
+@then("the step is reclaimed")
+def _reclaimed_with_open_dep(ctx):
+    assert ctx["step"] in ctx["result"].swept
+
+
+@then("the step is not claimable while its dependency is open")
+def _not_claimable_while_open(ctx):
+    ready_ids = {n.id for n in ctx["store"].ready_steps()}
+    assert ctx["step"] not in ready_ids
+    assert ctx["store"].claim_ready("agent") is None
+
+
+@when("the dependency closes")
+def _dependency_closes(ctx):
+    ctx["store"].close(ctx["blocker"], "done")
+
+
+@then("the step becomes claimable")
+def _becomes_claimable(ctx):
+    ready_ids = {n.id for n in ctx["store"].ready_steps()}
+    assert ctx["step"] in ready_ids

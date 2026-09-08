@@ -269,6 +269,13 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertNotIn("nothing to set", err)
 
+    def test_depends_outside_active_is_refused(self):
+        blocker = self.store.create_step("blocker", role="agent")
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--depends", blocker)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--depends", err)
+
 
 class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
     def test_active_with_valid_flags_succeeds(self):
@@ -279,6 +286,32 @@ class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
         )
         self.assertEqual(rc, 0)
         self.assertTrue(step_id.strip())
+
+    def test_active_with_depends_blocks_the_entry_step_until_the_dependency_closes(self):
+        h = Harness(["coder", "reviewer"])
+        blocker = h.store.create_step("blocker", role="agent")
+        item = h.store.create_item("st", "a description")
+        rc, step_id, err = h.run(
+            "set", item, "--state", "active", "--workflow", DEFAULT_WORKFLOW,
+            "--step", "build", "--depends", blocker,
+        )
+        self.assertEqual(rc, 0, err)
+        step_id = step_id.strip()
+        self.assertTrue(step_id)
+        self.assertNotIn(step_id, [t.id for t in h.store.ready_steps()])
+        h.store.close(blocker, "done")
+        self.assertIn(step_id, [t.id for t in h.store.ready_steps()])
+
+    def test_active_with_unknown_depends_id_is_refused_before_activation(self):
+        h = Harness(["coder", "reviewer"])
+        item = h.store.create_item("st", "a description")
+        rc, out, err = h.run(
+            "set", item, "--state", "active", "--workflow", DEFAULT_WORKFLOW,
+            "--step", "build", "--depends", "does-not-exist",
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn("unknown node", err)
+        self.assertEqual(h.store.get_node(item).state, "backlogged")
 
 
 if __name__ == "__main__":
