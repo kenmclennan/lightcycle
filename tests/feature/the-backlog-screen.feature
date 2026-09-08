@@ -290,7 +290,7 @@ Feature: The backlog screen
     When / is pressed
     Then the search box does not have focus
 
-  Scenario: Typing in the search box narrows the backlog on every keystroke
+  Scenario: Typing in the search box narrows the backlog once typing settles
     Given the backlog is shown with the todo items "widget one" and "gadget two"
     When / is pressed
     And "widget" is typed into the search box

@@ -229,6 +229,7 @@ def _type_into_done_search_box(ctx, text):
     session = ctx["session"]
     for char in text:
         session.press(char)
+    session.settle_done_filter()
 
 
 @when("→ is pressed")
