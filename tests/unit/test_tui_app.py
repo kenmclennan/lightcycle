@@ -487,6 +487,29 @@ class TestActiveGroup(unittest.TestCase):
 
         self.assertIsNotNone(session.app._active_glyph_timer)
 
+    def test_tab_cycles_the_hub_tab_instead_of_leaving_the_screen(self):
+        from lightcycle.adapters.tui.hub import NodeHubScreen
+
+        store = FakeStore()
+        item = store.create_item("an item", "a description")
+
+        session = self._launch(store)
+        session.run(
+            lambda: session.app.push_screen(
+                NodeHubScreen(session.app.container, item, session.app._now)
+            )
+        )
+        session.pause()
+
+        hub = session.app.screen
+        self.assertIsInstance(hub, NodeHubScreen)
+        self.assertEqual(hub._active_tab, "description")
+
+        session.press("tab")
+
+        self.assertIs(session.app.screen, hub)
+        self.assertEqual(hub._active_tab, "workflow")
+
 
 class TestQueuedGroup(unittest.TestCase):
     def _launch(self, store):
@@ -1687,6 +1710,23 @@ class TestBacklogSearchInput(unittest.TestCase):
         session.press("enter")
 
         self.assertIs(app.screen, default_screen)
+
+    def test_tab_advances_the_view_without_disturbing_the_focused_search_input(self):
+        store = FakeStore()
+        store.create_item("widget one", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(BacklogFilterInput)
+        search.value = "widget"
+        session.pause()
+
+        session.press("tab")
+
+        self.assertEqual(app._view, "done")
+        self.assertEqual(search.value, "widget")
+        self.assertIs(app.focused, app.query_one(DoneTable))
 
 
 class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):

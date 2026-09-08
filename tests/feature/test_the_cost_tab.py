@@ -60,7 +60,7 @@ def _open_cost_tab(ctx):
     current = order.index(screen._active_tab)
     target = order.index("cost")
     for _ in range((target - current) % len(order)):
-        session.press("]")
+        session.press("tab")
 
 
 @given("a human step, its hub open")

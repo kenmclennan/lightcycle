@@ -139,11 +139,10 @@ DONE_SEARCH_EMPTY_SHORTCUTS = (
 )
 
 HUB_SHORTCUTS = (
-    ("[/]", "switch tab"),
     ("↑↓", "scroll"),
     ("enter/→", "open"),
     ("esc/←", "back"),
-    ("tab", "backlog"),
+    ("tab", "switch tab"),
     ("q", "quit"),
 )
 

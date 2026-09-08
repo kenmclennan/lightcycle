@@ -6,10 +6,14 @@ Feature: The node hub
   always lands on Description, whatever its status; a step lands on Log while
   its worker is running, and on Detail otherwise - the Workflow tab is never a
   landing tab for either type, and neither is Cost. The header stays fixed
-  while ] and [ cycle the tabs within whichever strip the type has; Tab keeps
-  its own global meaning, jumping straight to the backlog (or back to current
-  work) from any tab, at any depth, without first backing out through Esc.
-  Selecting a row inside the Workflow tab replaces the current hub screen in
+  while Tab cycles forward through whichever tab strip is on screen, wrapping
+  from the last tab back to the first - the hub's own tabs while a hub is
+  open, the same gesture the app already uses outside any hub to step between
+  Current work, Backlog, and Done. Esc/← is the only way to leave an open hub
+  now, always returning to wherever it was opened from; Tab no longer doubles
+  as an exit, so leaving a hub and moving to the next top-level view costs two
+  keypresses (Esc, then Tab) instead of the single Tab press that used to do
+  both. Selecting a row inside the Workflow tab replaces the current hub screen in
   place, rather than pushing a new one on top of it - moving between an item's
   own row and its step rows is lateral movement inside one item's tree, not
   descent. Closing the hub (however many rows were visited via the tree)
@@ -119,9 +123,9 @@ Feature: The node hub
       | queued, not yet run                   | Detail |
       | done                                  | Detail |
 
-  Scenario Outline: ] cycles forward through an item's four tabs, wrapping back to Description
+  Scenario Outline: Tab cycles forward through an item's four tabs, wrapping back to Description
     Given an item's hub is open, on the "<from>" tab
-    When ] is pressed
+    When Tab is pressed
     Then the "<to>" tab becomes active
 
     Examples:
@@ -131,21 +135,9 @@ Feature: The node hub
       | Artifacts   | Cost        |
       | Cost        | Description |
 
-  Scenario Outline: [ cycles backward through an item's four tabs, in reverse
-    Given an item's hub is open, on the "<from>" tab
-    When [ is pressed
-    Then the "<to>" tab becomes active
-
-    Examples:
-      | from        | to          |
-      | Description | Cost        |
-      | Cost        | Artifacts   |
-      | Artifacts   | Workflow    |
-      | Workflow    | Description |
-
-  Scenario Outline: ] cycles forward through a step's four tabs, wrapping back to Detail
+  Scenario Outline: Tab cycles forward through a step's four tabs, wrapping back to Detail
     Given a step's hub is open, on the "<from>" tab
-    When ] is pressed
+    When Tab is pressed
     Then the "<to>" tab becomes active
 
     Examples:
@@ -154,62 +146,6 @@ Feature: The node hub
       | Workflow | Log      |
       | Log      | Cost     |
       | Cost     | Detail   |
-
-  Scenario Outline: [ cycles backward through a step's four tabs, in reverse
-    Given a step's hub is open, on the "<from>" tab
-    When [ is pressed
-    Then the "<to>" tab becomes active
-
-    Examples:
-      | from     | to       |
-      | Detail   | Cost     |
-      | Cost     | Log      |
-      | Log      | Workflow |
-      | Workflow | Detail   |
-
-  Scenario Outline: Tab jumps straight to the backlog from any tab in an open item's hub, without cycling tabs
-    Given an item, its hub open
-    When the "<tab>" tab is active
-    And Tab is pressed
-    Then the backlog is shown in place of the hub
-
-    Examples:
-      | tab         |
-      | Workflow    |
-      | Artifacts   |
-      | Description |
-      | Cost        |
-
-  Scenario Outline: Tab jumps straight to the backlog from any tab in an open step's hub, without cycling tabs
-    Given a step is selected, rather than an item
-    When the "<tab>" tab is active
-    And Tab is pressed
-    Then the backlog is shown in place of the hub
-
-    Examples:
-      | tab      |
-      | Detail   |
-      | Log      |
-      | Workflow |
-      | Cost     |
-
-  Scenario Outline: Tab jumps straight to Done from any tab in an item's hub opened from the backlog, without cycling tabs
-    Given the backlog is showing with a todo item
-    When <key> is pressed
-    And the "<tab>" tab is active
-    And Tab is pressed
-    Then the done tab is shown in place of the hub
-
-    Examples:
-      | tab         | key   |
-      | Workflow    | Enter |
-      | Workflow    | →     |
-      | Artifacts   | Enter |
-      | Artifacts   | →     |
-      | Description | Enter |
-      | Description | →     |
-      | Cost        | Enter |
-      | Cost        | →     |
 
   Scenario: A dependency-blocked item's escalation reason names the blocking item
     Given an item blocked on another item's completion, its hub open
@@ -256,32 +192,32 @@ Feature: The node hub
 
   Scenario: Cycling into the Workflow tab still focuses the table, not the escalation panel
     Given an item whose current step is escalated, needing rework, its hub open
-    When ] is pressed
+    When Tab is pressed
     Then the hierarchy table has focus, not the escalation panel
 
   Scenario: Down moves the hierarchy selection when the escalation panel is shown
     Given an item blocked on another item's completion, with a step of its own, its hub open
-    And I cycle to the "Workflow" tab with ]
+    And I cycle to the "Workflow" tab
     When Down is pressed
     Then the selection has moved to the next node
 
   Scenario: Enter opens the highlighted row, not the escalation's blocker, when the escalation panel is shown
     Given an item blocked on another item's completion, with a step of its own, its hub open
-    And I cycle to the "Workflow" tab with ]
+    And I cycle to the "Workflow" tab
     When Down is pressed
     And Enter is pressed
     Then that step's own hub opens, not the blocking item's
 
   Scenario: Confirming the hub's own row in the Workflow tab does nothing, even when the hierarchy has other rows
     Given an item blocked on another item's completion, with a step of its own, its hub open
-    And I cycle to the "Workflow" tab with ]
+    And I cycle to the "Workflow" tab
     When Enter is pressed
     Then the screen stack still has depth 2, unchanged by the confirm
 
   Scenario Outline: Confirming the hub's own row in the Workflow tab does nothing
     Given the backlog is showing with a todo item
     When <key> is pressed
-    And I cycle to the "Workflow" tab with ]
+    And I cycle to the "Workflow" tab
     And Enter is pressed
     Then the screen stack still has depth 2, unchanged by the confirm
 
@@ -292,7 +228,7 @@ Feature: The node hub
 
   Scenario Outline: Closing the hub returns to the list with the same row selected and the same scroll position
     Given I opened an item's hub from a specific row in the priority list, with content on every tab
-    And I cycle to the "<tab>" tab with ]
+    And I cycle to the "<tab>" tab
     When <key> is pressed
     Then the priority list reappears with that row still selected, at the same scroll position
 
@@ -328,7 +264,7 @@ Feature: The node hub
   Scenario Outline: A backlog item's Workflow tab shows only that item, with no step children
     Given the backlog is showing with a todo item
     When <key> is pressed
-    And I cycle to the "Workflow" tab with ]
+    And I cycle to the "Workflow" tab
     Then the hierarchy shows only that item, with no step children
 
     Examples:
@@ -338,7 +274,7 @@ Feature: The node hub
 
   Scenario Outline: Closing a hub opened from the backlog returns to the backlog at the same position
     Given I opened a backlog item's hub from a specific row in the backlog, with content on every tab
-    And I cycle to the "<tab>" tab with ]
+    And I cycle to the "<tab>" tab
     When <key> is pressed
     Then the backlog reappears at the same scroll/selection position
 

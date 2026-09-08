@@ -27,10 +27,10 @@ def test_tab_strip_sits_immediately_below_the_header_on_every_tab():
         tab_strip = session.app.screen.query_one(HubTabStrip)
         assert tab_strip.region.y == header_bottom
 
-        session.press("]")
+        session.press("tab")
         assert tab_strip.region.y == header_bottom
 
-        session.press("]")
+        session.press("tab")
         assert tab_strip.region.y == header_bottom
     finally:
         session.close()
