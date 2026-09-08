@@ -18,12 +18,16 @@ from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_TICKS_PER_SECOND,
     BACKLOG_EMPTY_SHORTCUTS,
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
+    BACKLOG_SEARCH_EMPTY_SHORTCUTS,
+    BACKLOG_SEARCH_SHORTCUTS,
     BACKLOG_SHORTCUTS,
     COLOURS,
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     DONE_EMPTY_SHORTCUTS,
     DONE_FILTERED_EMPTY_SHORTCUTS,
+    DONE_SEARCH_EMPTY_SHORTCUTS,
+    DONE_SEARCH_SHORTCUTS,
     DONE_SHORTCUTS,
     GLOBAL_SHORTCUTS,
     MODAL_OVERLAY_ALPHA,
@@ -254,11 +258,18 @@ def _backlog_stacked_cell_builder(row, layout, row_budget, cursor, icon_override
 class BacklogFilterInput(Input):
     BINDINGS = [
         Binding("escape", "leave_filter", "Back", show=False),
+        Binding("down", "leave_filter", "Results", show=False),
+        Binding("up", "leave_filter", "Results", show=False),
+        Binding("enter", "open_result", "Open", show=False),
     ]
 
     def action_leave_filter(self) -> None:
         self.app.set_focus(self.app.query_one(BacklogTable))
         self.app.stylesheet.update(self.app.screen, animate=False)
+        self.app._sync_footer_shortcuts()
+
+    def action_open_result(self) -> None:
+        self.app.query_one(BacklogTable).action_select_cursor()
 
 
 class BacklogView(Vertical):
@@ -444,11 +455,18 @@ class BacklogView(Vertical):
 class DoneFilterInput(Input):
     BINDINGS = [
         Binding("escape", "leave_filter", "Back", show=False),
+        Binding("down", "leave_filter", "Results", show=False),
+        Binding("up", "leave_filter", "Results", show=False),
+        Binding("enter", "open_result", "Open", show=False),
     ]
 
     def action_leave_filter(self) -> None:
         self.app.set_focus(self.app.query_one(DoneTable))
         self.app.stylesheet.update(self.app.screen, animate=False)
+        self.app._sync_footer_shortcuts()
+
+    def action_open_result(self) -> None:
+        self.app.query_one(DoneTable).action_select_cursor()
 
 
 class DoneView(Vertical):
@@ -962,6 +980,7 @@ class LightcycleApp(App):
     }}
     BacklogFilterInput:focus {{
         background: {COLOURS["bg"]};
+        background-tint: 0%;
     }}
     BacklogFilterInput > .input--placeholder {{
         color: {COLOURS["dim"]};
@@ -1030,6 +1049,7 @@ class LightcycleApp(App):
     }}
     DoneFilterInput:focus {{
         background: {COLOURS["bg"]};
+        background-tint: 0%;
     }}
     DoneFilterInput > .input--placeholder {{
         color: {COLOURS["dim"]};
@@ -1269,11 +1289,15 @@ class LightcycleApp(App):
         if self._view == "priority":
             return GLOBAL_SHORTCUTS
         if self._view == "done":
+            if self.focused is self.query_one(DoneFilterInput):
+                return DONE_SEARCH_SHORTCUTS if self._done_filtered_count > 0 else DONE_SEARCH_EMPTY_SHORTCUTS
             if self._done_total == 0:
                 return DONE_EMPTY_SHORTCUTS
             if self._done_filtered_count == 0:
                 return DONE_FILTERED_EMPTY_SHORTCUTS
             return DONE_SHORTCUTS
+        if self.focused is self.query_one(BacklogFilterInput):
+            return BACKLOG_SEARCH_SHORTCUTS if self._backlog_filtered_count > 0 else BACKLOG_SEARCH_EMPTY_SHORTCUTS
         if self._backlog_total == 0:
             return BACKLOG_EMPTY_SHORTCUTS
         if self._backlog_filtered_count == 0:
@@ -1404,6 +1428,7 @@ class LightcycleApp(App):
         else:
             return
         self.stylesheet.update(self.screen, animate=False)
+        self._sync_footer_shortcuts()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "backlog-filter-text":

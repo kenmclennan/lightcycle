@@ -82,6 +82,63 @@ Feature: The done screen
     Then the done table has focus
     And only the done row matching "widget" is still shown
 
+  Scenario: Down from the done search box moves focus to the table, leaving the typed term and the filtered results unchanged
+    Given the done tab is shown with the closed items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the done search box
+    And Down is pressed
+    Then the done table has focus
+    And only the done row matching "widget" is still shown
+
+  Scenario: Up from the done search box moves focus to the table, leaving the typed term and the filtered results unchanged
+    Given the done tab is shown with the closed items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the done search box
+    And Up is pressed
+    Then the done table has focus
+    And only the done row matching "widget" is still shown
+
+  Scenario: Enter from the done search box opens the narrowed result's own hub
+    Given the done tab is shown with the closed items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the done search box
+    And Enter is pressed
+    Then its hub opens for the done item matching "widget"
+
+  Scenario Outline: Each shortcut for the done tab with the search box focused and rows present appears in the footer, in order
+    Given the done tab is shown with a closed item
+    When / is pressed
+    And the shortcut at position <position> in the footer's shortcut line is read
+    Then its key is "<key>"
+    And its action is "<action>"
+
+    Examples:
+      | position | key   | action       |
+      | 1        | ↑↓    | move         |
+      | 2        | enter | open         |
+      | 3        | esc   | back         |
+      | 4        | tab   | current work |
+      | 5        | q     | quit         |
+
+  Scenario Outline: Each shortcut for the done tab with the search box focused and zero filtered rows appears in the footer, in order
+    Given the done tab is shown with a closed item
+    When / is pressed
+    And "nonexistent" is typed into the done search box
+    And the shortcut at position <position> in the footer's shortcut line is read
+    Then its key is "<key>"
+    And its action is "<action>"
+
+    Examples:
+      | position | key | action       |
+      | 1        | esc | back         |
+      | 2        | tab | current work |
+      | 3        | q   | quit         |
+
+  Scenario: The focused-search shortcut strip is actually painted in the footer
+    Given the done tab is shown with a closed item
+    When / is pressed
+    Then the footer's composited frame shows each search-focused shortcut, in order
+
   Scenario Outline: Opening a done item lands on that item's own hub
     Given the done tab is shown with a closed item
     When <key> is pressed

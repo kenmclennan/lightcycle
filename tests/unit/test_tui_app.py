@@ -30,12 +30,16 @@ from lightcycle.adapters.tui.app import (
 from lightcycle.adapters.tui.design_system import (
     BACKLOG_EMPTY_SHORTCUTS,
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
+    BACKLOG_SEARCH_EMPTY_SHORTCUTS,
+    BACKLOG_SEARCH_SHORTCUTS,
     BACKLOG_SHORTCUTS,
     COLOURS,
     ACTIVE_GLYPH_FRAMES,
     CURSOR_GLYPH,
     DONE_EMPTY_SHORTCUTS,
     DONE_FILTERED_EMPTY_SHORTCUTS,
+    DONE_SEARCH_EMPTY_SHORTCUTS,
+    DONE_SEARCH_SHORTCUTS,
     DONE_SHORTCUTS,
     FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
@@ -1514,6 +1518,38 @@ class TestBacklogFooter(unittest.TestCase):
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
 
+    def test_focusing_the_search_box_with_rows_present_shows_the_search_shortcuts(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = self._launch(store)
+
+        session.press("/")
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, BACKLOG_SEARCH_SHORTCUTS)
+
+    def test_focusing_the_search_box_with_zero_filtered_rows_shows_the_search_empty_shortcuts(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        app.query_one(BacklogFilterInput).value = "nonexistent"
+        session.pause()
+
+        self.assertEqual(app.query_one(ShortcutBar).shortcuts, BACKLOG_SEARCH_EMPTY_SHORTCUTS)
+
+    def test_leaving_the_search_box_restores_the_shortcuts_the_row_state_calls_for(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        session.press("escape")
+
+        self.assertEqual(app.query_one(ShortcutBar).shortcuts, BACKLOG_SHORTCUTS)
+
 
 class TestBacklogSearchInput(unittest.TestCase):
     def _launch(self, store):
@@ -1574,6 +1610,83 @@ class TestBacklogSearchInput(unittest.TestCase):
         self.assertIs(app.focused, app.query_one(BacklogTable))
         self.assertEqual(app._backlog_text_filter, "term")
         self.assertEqual(search.value, "term")
+
+    def test_down_moves_focus_to_the_table_leaving_the_term_and_rows_unchanged(self):
+        store = FakeStore()
+        store.create_item("widget one", "a description")
+        store.create_item("gadget two", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(BacklogFilterInput)
+        search.value = "widget"
+        session.pause()
+
+        session.press("down")
+
+        self.assertIs(app.focused, app.query_one(BacklogTable))
+        self.assertEqual(search.value, "widget")
+        self.assertEqual(app.query_one(BacklogTable).row_count, 1)
+
+    def test_up_moves_focus_to_the_table_leaving_the_term_and_rows_unchanged(self):
+        store = FakeStore()
+        store.create_item("widget one", "a description")
+        store.create_item("gadget two", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(BacklogFilterInput)
+        search.value = "widget"
+        session.pause()
+
+        session.press("up")
+
+        self.assertIs(app.focused, app.query_one(BacklogTable))
+        self.assertEqual(search.value, "widget")
+        self.assertEqual(app.query_one(BacklogTable).row_count, 1)
+
+    def test_enter_opens_the_narrowed_result_and_restores_focus_to_the_search_box_after_closing(self):
+        from lightcycle.adapters.tui.hub import NodeHubScreen
+
+        store = FakeStore()
+        item = store.create_item("widget one", "a description")
+        store.create_item("gadget two", "a description")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(BacklogFilterInput)
+        search.value = "widget"
+        session.pause()
+
+        session.press("enter")
+
+        self.assertIsInstance(app.screen, NodeHubScreen)
+        self.assertEqual(app.screen._node_id, item)
+
+        session.run(app.pop_screen)
+        session.pause()
+
+        self.assertIs(app.focused, search)
+        self.assertEqual(search.value, "widget")
+
+    def test_enter_with_zero_filtered_rows_does_nothing(self):
+        store = FakeStore()
+        store.create_item("widget one", "a description")
+        session = self._launch(store)
+        app = session.app
+        default_screen = app.screen
+
+        session.press("/")
+        search = app.query_one(BacklogFilterInput)
+        search.value = "nonexistent"
+        session.pause()
+
+        session.press("enter")
+
+        self.assertIs(app.screen, default_screen)
 
 
 class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
@@ -1841,6 +1954,41 @@ class TestDoneFooter(unittest.TestCase):
             session.app.query_one(ShortcutBar).shortcuts, DONE_FILTERED_EMPTY_SHORTCUTS
         )
 
+    def test_focusing_the_search_box_with_rows_present_shows_the_search_shortcuts(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.close(item, "merged")
+        session = self._launch(store)
+
+        session.press("/")
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, DONE_SEARCH_SHORTCUTS)
+
+    def test_focusing_the_search_box_with_zero_filtered_rows_shows_the_search_empty_shortcuts(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.close(item, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        app.query_one(DoneFilterInput).value = "nonexistent"
+        session.pause()
+
+        self.assertEqual(app.query_one(ShortcutBar).shortcuts, DONE_SEARCH_EMPTY_SHORTCUTS)
+
+    def test_leaving_the_search_box_restores_the_shortcuts_the_row_state_calls_for(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.close(item, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        session.press("escape")
+
+        self.assertEqual(app.query_one(ShortcutBar).shortcuts, DONE_SHORTCUTS)
+
 
 class TestDoneSearchInput(unittest.TestCase):
     def _launch(self, store):
@@ -1883,6 +2031,90 @@ class TestDoneSearchInput(unittest.TestCase):
         self.assertIs(app.focused, app.query_one(DoneTable))
         self.assertEqual(app._done_text_filter, "term")
         self.assertEqual(search.value, "term")
+
+    def test_down_moves_focus_to_the_table_leaving_the_term_and_rows_unchanged(self):
+        store = FakeStore()
+        widget_item = store.create_item("widget one", "a description")
+        store.close(widget_item, "merged")
+        gadget_item = store.create_item("gadget two", "a description")
+        store.close(gadget_item, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(DoneFilterInput)
+        search.value = "widget"
+        session.pause()
+
+        session.press("down")
+
+        self.assertIs(app.focused, app.query_one(DoneTable))
+        self.assertEqual(search.value, "widget")
+        self.assertEqual(app.query_one(DoneTable).row_count, 1)
+
+    def test_up_moves_focus_to_the_table_leaving_the_term_and_rows_unchanged(self):
+        store = FakeStore()
+        widget_item = store.create_item("widget one", "a description")
+        store.close(widget_item, "merged")
+        gadget_item = store.create_item("gadget two", "a description")
+        store.close(gadget_item, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(DoneFilterInput)
+        search.value = "widget"
+        session.pause()
+
+        session.press("up")
+
+        self.assertIs(app.focused, app.query_one(DoneTable))
+        self.assertEqual(search.value, "widget")
+        self.assertEqual(app.query_one(DoneTable).row_count, 1)
+
+    def test_enter_opens_the_narrowed_result_and_restores_focus_to_the_search_box_after_closing(self):
+        from lightcycle.adapters.tui.hub import NodeHubScreen
+
+        store = FakeStore()
+        widget_item = store.create_item("widget one", "a description")
+        store.close(widget_item, "merged")
+        gadget_item = store.create_item("gadget two", "a description")
+        store.close(gadget_item, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(DoneFilterInput)
+        search.value = "widget"
+        session.pause()
+
+        session.press("enter")
+
+        self.assertIsInstance(app.screen, NodeHubScreen)
+        self.assertEqual(app.screen._node_id, widget_item)
+
+        session.run(app.pop_screen)
+        session.pause()
+
+        self.assertIs(app.focused, search)
+        self.assertEqual(search.value, "widget")
+
+    def test_enter_with_zero_filtered_rows_does_nothing(self):
+        store = FakeStore()
+        item = store.create_item("widget one", "a description")
+        store.close(item, "merged")
+        session = self._launch(store)
+        app = session.app
+        default_screen = app.screen
+
+        session.press("/")
+        search = app.query_one(DoneFilterInput)
+        search.value = "nonexistent"
+        session.pause()
+
+        session.press("enter")
+
+        self.assertIs(app.screen, default_screen)
 
     def test_on_priority_slash_does_not_focus_the_done_search_box(self):
         session = launch(make_test_container(store=FakeStore()))

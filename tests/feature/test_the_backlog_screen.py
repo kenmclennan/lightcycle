@@ -678,6 +678,18 @@ def _filter_bar_no_breakdown(ctx):
     assert "proj-b" not in _rendered_text(widget)
 
 
+@then("the footer's composited frame shows each search-focused shortcut, in order")
+def _footer_composited_search_shortcuts(ctx):
+    from lightcycle.adapters.tui.design_system import BACKLOG_SEARCH_SHORTCUTS
+
+    bar = ctx["session"].app.query_one("#shortcut-bar")
+    row = _composited_text_at(ctx, bar)
+    last_index = -1
+    for key, action in BACKLOG_SEARCH_SHORTCUTS:
+        key_index = row.index(key, last_index + 1)
+        last_index = row.index(action, key_index + len(key))
+
+
 @then(parsers.parse('the message "{text}" is shown in place of the list'))
 def _message_shown_in_place(ctx, text):
     session = ctx["session"]
@@ -741,8 +753,9 @@ def _picker_footer_reads(ctx, text):
 @given(parsers.parse('the backlog is shown with the todo items "{title_a}" and "{title_b}"'))
 def _backlog_shown_two_titled_items(ctx, title_a, title_b):
     store = FakeStore()
-    store.create_item(title_a, "a description")
-    store.create_item(title_b, "a description")
+    item_a = store.create_item(title_a, "a description")
+    item_b = store.create_item(title_b, "a description")
+    ctx["item_ids"] = {title_a: item_a, title_b: item_b}
     _launch_and_switch(ctx, store)
 
 
@@ -830,3 +843,15 @@ def _only_row_under_project_shown(ctx, project):
     cell = table.get_cell(row_id, "project")
     text = cell.plain if hasattr(cell, "plain") else cell
     assert text == project
+
+
+@then(parsers.parse('its hub opens for the item matching "{needle}"'))
+def _hub_opens_for_item_matching(ctx, needle):
+    from lightcycle.adapters.tui.hub import NodeHubScreen
+
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    expected_id = next(
+        item_id for title, item_id in ctx["item_ids"].items() if needle.lower() in title.lower()
+    )
+    assert screen._node_id == expected_id

@@ -229,6 +229,40 @@ Feature: The backlog screen
       | 3        | tab | done   |
       | 4        | q   | quit   |
 
+  Scenario Outline: Each shortcut for the backlog with the search box focused and rows present appears in the footer, in order
+    Given the backlog is shown with a todo item
+    When / is pressed
+    And the shortcut at position <position> in the footer's shortcut line is read
+    Then its key is "<key>"
+    And its action is "<action>"
+
+    Examples:
+      | position | key   | action          |
+      | 1        | ↑↓    | move            |
+      | 2        | enter | explore in tree |
+      | 3        | esc   | back            |
+      | 4        | tab   | done            |
+      | 5        | q     | quit            |
+
+  Scenario Outline: Each shortcut for the backlog with the search box focused and zero filtered rows appears in the footer, in order
+    Given the backlog is shown with a todo item
+    When / is pressed
+    And "nonexistent" is typed into the search box
+    And the shortcut at position <position> in the footer's shortcut line is read
+    Then its key is "<key>"
+    And its action is "<action>"
+
+    Examples:
+      | position | key | action |
+      | 1        | esc | back   |
+      | 2        | tab | done   |
+      | 3        | q   | quit   |
+
+  Scenario: The focused-search shortcut strip is actually painted in the footer
+    Given the backlog is shown with a todo item
+    When / is pressed
+    Then the footer's composited frame shows each search-focused shortcut, in order
+
   Scenario: The picker's own footer shows its own key hints while it is open
     Given the backlog is shown with the registered project "org-a/proj-a"
     When f is pressed
@@ -273,6 +307,29 @@ Feature: The backlog screen
     And Esc is pressed
     Then the table has focus
     And only the row matching "widget" is still shown
+
+  Scenario: Down from the search box moves focus to the table, leaving the typed term and the filtered results unchanged
+    Given the backlog is shown with the todo items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the search box
+    And Down is pressed
+    Then the table has focus
+    And only the row matching "widget" is still shown
+
+  Scenario: Up from the search box moves focus to the table, leaving the typed term and the filtered results unchanged
+    Given the backlog is shown with the todo items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the search box
+    And Up is pressed
+    Then the table has focus
+    And only the row matching "widget" is still shown
+
+  Scenario: Enter from the search box opens the narrowed result's own hub
+    Given the backlog is shown with the todo items "widget one" and "gadget two"
+    When / is pressed
+    And "widget" is typed into the search box
+    And Enter is pressed
+    Then its hub opens for the item matching "widget"
 
   Scenario: The search term survives switching to Current work and back
     Given the backlog is shown with the todo items "widget one" and "gadget two"

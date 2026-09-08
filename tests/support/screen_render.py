@@ -354,6 +354,12 @@ def _backlog_picker_open(size):
     return session
 
 
+def _backlog_search_focused(size):
+    session = _backlog_normal(size)
+    session.press("/")
+    return session
+
+
 def _pool_workers(n):
     from tests.support.fake_workers import FakeWorkers
 
@@ -456,6 +462,12 @@ def _done_normal(size):
     session = _launch(_done_store(), size=size)
     session.press("tab")
     session.press("tab")
+    return session
+
+
+def _done_search_focused(size):
+    session = _done_normal(size)
+    session.press("/")
     return session
 
 
@@ -896,6 +908,7 @@ SCREENS = {
     "pool#quit-prompt": _pool_quit_prompt,
     "pool#stop-prompt-no-workers": _pool_stop_prompt_no_workers,
     "backlog#picker-open": _backlog_picker_open,
+    "backlog#search-focused": _backlog_search_focused,
     "backlog#picker-long-label": _backlog_picker_long_label,
     "backlog#long-project-filter": _backlog_long_project_filter,
     "backlog#text-filter": _backlog_text_filter,
@@ -903,6 +916,7 @@ SCREENS = {
     "backlog#claude-unavailable": _backlog_claude_unavailable,
     "backlog#stacked": _backlog_stacked,
     "done#normal": _done_normal,
+    "done#search-focused": _done_search_focused,
     "done#empty": _done_empty,
     "done#empty-filtered": _done_empty_filtered,
     "done#stacked": _done_stacked,

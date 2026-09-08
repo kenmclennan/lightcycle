@@ -108,6 +108,34 @@ DONE_FILTERED_EMPTY_SHORTCUTS = (
     ("q", "quit"),
 )
 
+BACKLOG_SEARCH_SHORTCUTS = (
+    ("↑↓", "move"),
+    ("enter", "explore in tree"),
+    ("esc", "back"),
+    ("tab", "done"),
+    ("q", "quit"),
+)
+
+BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
+    ("esc", "back"),
+    ("tab", "done"),
+    ("q", "quit"),
+)
+
+DONE_SEARCH_SHORTCUTS = (
+    ("↑↓", "move"),
+    ("enter", "open"),
+    ("esc", "back"),
+    ("tab", "current work"),
+    ("q", "quit"),
+)
+
+DONE_SEARCH_EMPTY_SHORTCUTS = (
+    ("esc", "back"),
+    ("tab", "current work"),
+    ("q", "quit"),
+)
+
 HUB_SHORTCUTS = (
     ("[/]", "switch tab"),
     ("↑↓", "scroll"),

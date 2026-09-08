@@ -42,6 +42,7 @@ _TOKEN_BACKGROUNDS = {
     COLOURS["bg"].lower(),
     COLOURS["panel"].lower(),
     COLOURS["selected-bg"].lower(),
+    COLOURS["cyan"].lower(),
 }
 _TOKEN_BACKGROUNDS |= {
     _blend_over(token, COLOURS["bg"], _WIREFRAME_MODAL_OVERLAY_ALPHA) for token in _TOKEN_BACKGROUNDS
@@ -54,6 +55,7 @@ _TOKEN_FOREGROUNDS = {
     COLOURS["amber"].lower(),
     COLOURS["red"].lower(),
     COLOURS["border"].lower(),
+    COLOURS["bg"].lower(),
 }
 _TOKEN_FOREGROUNDS |= {
     _blend_over(token, COLOURS["bg"], _WIREFRAME_MODAL_OVERLAY_ALPHA) for token in _TOKEN_FOREGROUNDS
