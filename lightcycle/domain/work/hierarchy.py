@@ -28,7 +28,7 @@ def row_bucket(node, flow):
         return "done"
     if node.state == State.IN_PROGRESS:
         return "active"
-    if node.state == State.READY and getattr(node, "role", None) == "human":
+    if node.state == State.READY and is_human_step(node):
         kind, _outs = node.classify_for_human(flow)
         return "escalation" if kind == "blocked" else "gate"
     return "queued"
@@ -36,6 +36,10 @@ def row_bucket(node, flow):
 
 def display_role(role):
     return role or "human"
+
+
+def is_human_step(node):
+    return node.type == "step" and display_role(node.role) == "human"
 
 
 def display_stage(phrase, stage):

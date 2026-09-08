@@ -23,6 +23,7 @@ from lightcycle.adapters.tui.design_system import (
     DONE_GLYPH,
     Glyph,
     HUB_SHORTCUTS,
+    HUMAN_STEP_GLYPH,
     LIST_ARTIFACT_SHORTCUTS,
     STATE_GLYPHS,
     TEXT_ARTIFACT_SHORTCUTS,
@@ -65,7 +66,7 @@ from lightcycle.domain.feedback import Duration, format_elapsed, format_wall_and
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, display_role, display_stage, format_rate, format_tokens, format_usd,
-    item_cost, landing_tab, row_bucket, step_cost, type_label, viewable_artifacts,
+    is_human_step, item_cost, landing_tab, row_bucket, step_cost, type_label, viewable_artifacts,
 )
 
 POLL_INTERVAL_SECONDS = 10
@@ -441,7 +442,9 @@ def _step_header(store, node, now, project, flow_service):
 def _state_glyph(node, flow):
     bucket = row_bucket(node, flow)
     if bucket == "done":
-        return DONE_GLYPH
+        return HUMAN_STEP_GLYPH if is_human_step(node) else DONE_GLYPH
+    if bucket == "queued":
+        return HUMAN_STEP_GLYPH if is_human_step(node) else STATE_GLYPHS["queued"]
     return STATE_GLYPHS[bucket]
 
 
@@ -458,12 +461,25 @@ def hierarchy_usage_text(node):
     cost = step_cost(node, {})
     if not cost.applicable or not cost.has_run:
         return "", ""
-    turns_text = format_tokens(cost.turn_count)
+    n = cost.turn_count
+    turns_text = "%s turn%s" % (format_tokens(n), "" if n == 1 else "s")
     cost_text = format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
     return turns_text, cost_text
 
 
-def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None, flow_service=None):
+def hierarchy_time_text(store, node, now):
+    if node.type != "step":
+        return ""
+    if is_human_step(node):
+        wait = _gate_wait_seconds(store, node, now)
+        return format_elapsed(wait) if wait is not None else ""
+    wall_active = _step_wall_active(store, node, now)
+    return format_wall_and_active(*wall_active) if wall_active is not None else ""
+
+
+def _hierarchy_stacked_first_line(
+    row, layout, row_budget, active_frame=None, flow_service=None, store=None, now=None,
+):
     node = row.node
     glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service))
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
@@ -473,14 +489,12 @@ def _hierarchy_stacked_first_line(row, layout, row_budget, active_frame=None, fl
         )
     icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
     id_field = pad_field(node.id, layout.atomic_widths["id"])
-    role_cell = (
-        Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
-        if node.type == "step" else Text("")
-    )
-    role_field = pad_field(role_cell, layout.atomic_widths["role"])
     turns_text, cost_text = hierarchy_usage_text(node)
     turns_field = pad_field(Text(turns_text, style=COLOURS["dim"]), layout.atomic_widths["turns"])
-    content_so_far = icon_field + id_field + Text("  ") + role_field + Text("  ") + turns_field
+    time_field = pad_field(
+        Text(hierarchy_time_text(store, node, now), style=COLOURS["dim"]), layout.atomic_widths["time"]
+    )
+    content_so_far = icon_field + id_field + Text("  ") + turns_field + Text("  ") + time_field
     cost_cell = Text(cost_text, style=COLOURS["dim"]) if cost_text else Text("")
     cost_area = max(0, row_budget - len(content_so_far.plain))
     return content_so_far + pad_field_right(cost_cell, cost_area)
@@ -504,10 +518,13 @@ def _row_node(rows, row_id):
 
 def hierarchy_row_cells(
     row, layout=None, row_budget=None, active_frame=None, flow_service=None, multi_pass=False,
+    store=None, now=None,
 ):
     node = row.node
     if layout is not None and layout.stacked:
-        first_line = _hierarchy_stacked_first_line(row, layout, row_budget, active_frame, flow_service)
+        first_line = _hierarchy_stacked_first_line(
+            row, layout, row_budget, active_frame, flow_service, store, now
+        )
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
         label = _hierarchy_label(node, flow_service, multi_pass)
         return (stacked_cell(first_line, indent, label, row_budget),)
@@ -518,14 +535,12 @@ def hierarchy_row_cells(
             DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
         )
     title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service, multi_pass)
-    role_cell = (
-        Text(display_role(getattr(node, "role", None)), style=COLOURS["dim"])
-        if node.type == "step" else ""
-    )
     turns_text, cost_text = hierarchy_usage_text(node)
     turns_cell = Text(turns_text, style=COLOURS["dim"]) if turns_text else ""
+    time_text = hierarchy_time_text(store, node, now)
+    time_cell = Text(time_text, style=COLOURS["dim"]) if time_text else ""
     cost_cell = Text(cost_text, style=COLOURS["dim"]) if cost_text else ""
-    return (icon_cell, node.id, title_cell, role_cell, turns_cell, cost_cell)
+    return (icon_cell, node.id, title_cell, turns_cell, time_cell, cost_cell)
 
 
 def artifact_row_cells(artifact, layout=None, row_budget=None):
@@ -1386,12 +1401,14 @@ class NodeHubScreen(Screen):
         )
 
     def _hierarchy_layout(self, table, rows):
+        store = self._container.store
+        now = self._now().isoformat()
         step_rows = [r for r in rows if r.node.type == "step"]
         usage = [hierarchy_usage_text(r.node) for r in step_rows]
         atomic_values = {
             "id": [r.node.id for r in rows],
-            "role": [display_role(getattr(r.node, "role", None)) for r in step_rows],
             "turns": [turns_text for turns_text, _cost_text in usage],
+            "time": [hierarchy_time_text(store, r.node, now) for r in step_rows],
             "cost": [cost_text for _turns_text, cost_text in usage],
         }
         row_budget = row_budget_for(table, len(COLUMN_GRIDS["workflow"]))
@@ -1417,8 +1434,8 @@ class NodeHubScreen(Screen):
             "icon": GLYPH_WIDTHS["icon"],
             "id": layout.atomic_widths["id"],
             "title": layout.flexible_width,
-            "role": layout.atomic_widths["role"],
             "turns": layout.atomic_widths["turns"],
+            "time": layout.atomic_widths["time"],
             "cost": layout.atomic_widths["cost"],
         }
         apply_widths(table, widths)
@@ -1491,6 +1508,8 @@ class NodeHubScreen(Screen):
         row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["workflow"]))
         self._hierarchy_layout_cache = layout
         self._hierarchy_row_budget_cache = row_budget
+        store = self._container.store
+        now = self._now().isoformat()
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -1498,8 +1517,8 @@ class NodeHubScreen(Screen):
                 "icon": GLYPH_WIDTHS["icon"],
                 "id": layout.atomic_widths["id"],
                 "title": layout.flexible_width,
-                "role": layout.atomic_widths["role"],
                 "turns": layout.atomic_widths["turns"],
+                "time": layout.atomic_widths["time"],
                 "cost": layout.atomic_widths["cost"],
             }
             for key in COLUMN_GRIDS["workflow"]:
@@ -1513,6 +1532,7 @@ class NodeHubScreen(Screen):
                 *hierarchy_row_cells(
                     row, layout, row_budget, active_frame=active_frame,
                     flow_service=self._flow_service, multi_pass=multi_pass,
+                    store=store, now=now,
                 ),
                 height=None, key=row.node.id
             )
@@ -1528,11 +1548,14 @@ class NodeHubScreen(Screen):
         row_budget = render_row_budget(table_, layout, len(COLUMN_GRIDS["workflow"]))
         self._hierarchy_layout_cache = layout
         self._hierarchy_row_budget_cache = row_budget
+        store = self._container.store
+        now = self._now().isoformat()
         active_frame = self._active_glyph_char()
         for row in rows:
             cells = hierarchy_row_cells(
                 row, layout, row_budget, active_frame=active_frame,
                 flow_service=self._flow_service, multi_pass=multi_pass,
+                store=store, now=now,
             )
             if layout.stacked:
                 table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
@@ -1574,6 +1597,8 @@ class NodeHubScreen(Screen):
         frame = self._active_glyph_char()
         layout = self._hierarchy_layout_cache
         row_budget = self._hierarchy_row_budget_cache
+        store = self._container.store
+        now = self._now().isoformat()
         rows_by_id = {r.node.id: r for r in self._last_rows}
         for node_id in active_ids:
             row = rows_by_id.get(node_id)
@@ -1581,7 +1606,7 @@ class NodeHubScreen(Screen):
                 continue
             cells = hierarchy_row_cells(
                 row, layout, row_budget, active_frame=frame, flow_service=self._flow_service,
-                multi_pass=self._last_multi_pass,
+                multi_pass=self._last_multi_pass, store=store, now=now,
             )
             try:
                 if layout.stacked:

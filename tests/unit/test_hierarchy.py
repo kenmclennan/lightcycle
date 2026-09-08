@@ -183,6 +183,11 @@ class TestRowBucket(unittest.TestCase):
         s.dep_add(item, blocker)
         self.assertEqual(row_bucket(s.get_node(item), FLOW), "queued")
 
+    def test_a_ready_step_with_no_recorded_role_is_treated_as_human(self):
+        s = FakeStore()
+        step = s.create_step("s", step="await-merge")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "gate")
+
 
 class TestDisplayRole(unittest.TestCase):
     def test_human_role_shown_as_human(self):

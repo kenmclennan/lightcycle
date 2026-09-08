@@ -536,6 +536,83 @@ def _hub_hierarchy_cost(size):
     return _open_hub(_launch(store, size=size), item, tab="workflow")
 
 
+def _hierarchy_human_square_store():
+    store = DemoStore(now=lambda: _at(30))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+
+    done_human = store.step(
+        "LC-143.3.1", "review the spec", step="ready-merge", role="human", parent=item,
+    )
+    store.close(done_human, "merged")
+    store._records[done_human]["closed_at"] = _at(10)
+
+    blocker = store.step("LC-143.3.4", "write the code", step="write-code", role="agent", parent=item)
+    queued_human = store.step(
+        "LC-143.3.5", "review the pr", step="ready-merge", role="human", parent=item,
+        deps=[blocker],
+    )
+
+    done_agent = store.step(
+        "LC-143.3.6", "write the spec", step="spec-writer", role="agent", parent=item,
+    )
+    store.close(done_agent, "done")
+    store._records[done_agent]["closed_at"] = _at(8)
+
+    store.step("LC-143.3.7", "await merge", step="code-await-merge", role="human", parent=item)
+
+    return store, item, queued_human
+
+
+def _hub_hierarchy_human_square(size):
+    store, item, _queued_human = _hierarchy_human_square_store()
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
+
+
+def _hierarchy_time_store():
+    clock = {"now": _at(40)}
+    store = DemoStore(now=lambda: clock["now"])
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+
+    done = store.step("LC-143.3.1", "write the spec", step="spec-writer", role="agent", parent=item)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([done], 60 * 20)
+    clock["now"] = _at(16)
+    store.close(done, "done")
+    store._records[done]["closed_at"] = _at(16)
+
+    clock["now"] = _at(12)
+    active = store.step("LC-143.3.4", "write the code", step="write-code", role="agent", parent=item)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([active], 60 * 9)
+
+    clock["now"] = _at(6)
+    store.step("LC-143.3.5", "open the pr", step="code-open-pr", role="agent", parent=item)
+    store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item)
+    return store, item
+
+
+def _hub_hierarchy_time(size):
+    store, item = _hierarchy_time_store()
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
+
+
+def _stacked_hierarchy_time_store():
+    store = DemoStore(now=lambda: _at(12))
+    item = store.item("LC-290.1", LONG_ITEM_TITLE, project="lightcycle")
+    step = store.step(
+        "LC-290.1.86", STACKED_TITLE, step="implement-features", role="agent",
+        parent=item,
+    )
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step], 60 * 9)
+    return store, item, step
+
+
+def _hub_hierarchy_stacked_time(size):
+    store, item, _step = _stacked_hierarchy_time_store()
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
+
+
 _LOG_PATH = "/fake/logs/worker-write-code.log"
 
 _LOG_EXCERPT = (
@@ -923,6 +1000,9 @@ SCREENS = {
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
     "hub#workflow-cost": _hub_hierarchy_cost,
+    "hub#workflow-human-square": _hub_hierarchy_human_square,
+    "hub#workflow-time": _hub_hierarchy_time,
+    "hub#workflow-stacked-time": _hub_hierarchy_stacked_time,
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
     "hub#artifacts": _hub_artifacts,

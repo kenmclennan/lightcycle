@@ -5,7 +5,7 @@ from rich.text import Text
 from textual.geometry import Size
 
 GLYPH_WIDTHS = {"cursor": 2, "icon": 3}
-ATOMIC_COLUMNS = frozenset({"id", "project", "step", "role", "type", "time", "turns", "cost"})
+ATOMIC_COLUMNS = frozenset({"id", "project", "step", "type", "time", "turns", "cost"})
 FLEXIBLE_COLUMNS = frozenset({"title", "value"})
 FLEXIBLE_MINIMUM = 24
 STEP_PHRASE_BUDGET = 18

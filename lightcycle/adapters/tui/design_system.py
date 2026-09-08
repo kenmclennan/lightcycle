@@ -36,6 +36,8 @@ DEPENDENCY_BLOCKED_EXTRA_GLYPH = Glyph("⊣", "dim")
 
 DONE_GLYPH = Glyph("○", "dim")
 
+HUMAN_STEP_GLYPH = Glyph("□", "dim")
+
 FOOTER_GLYPHS = {
     "pool-running": Glyph("●", "cyan"),
     "pool-stopped": Glyph("○", "dim"),
@@ -51,7 +53,7 @@ COLUMN_GRIDS = {
     "priority-list": ("cursor", "icon", "id", "project", "title", "step", "cost", "time"),
     "backlog": ("cursor", "id", "project", "title"),
     "done": ("cursor", "id", "project", "title"),
-    "workflow": ("icon", "id", "title", "role", "turns", "cost"),
+    "workflow": ("icon", "id", "title", "turns", "time", "cost"),
     "artifacts": ("type", "value"),
     "detail": ("key", "value"),
 }

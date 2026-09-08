@@ -1,16 +1,19 @@
 Feature: The workflow tab
   The Workflow tab renders a node's whole tree, from its item down, always
   fully expanded, never collapsed. Every row shows its own real id, its
-  current state in the same icon/colour vocabulary as the priority list,
-  and, for a step, the role that performed or is performing it. A step's
-  label also carries its phase, and, whenever its item has run more than
-  one pass, its pass number. A step always renders one level below its
-  item - never a pass row, never a second level of nesting. The node the
-  hub is open for is highlighted wherever it falls; as the operator scrolls
-  past its parent item, that item's row stays pinned to the top so context
-  is never lost. Arrow keys move the selection; Enter or → opens
-  whatever is highlighted into its own hub; a and l jump straight to a
-  highlighted node's Artifacts or Log, skipping its own contextual default.
+  current state in the same icon/colour vocabulary as the priority list. A
+  done or queued step whose role is human draws a hollow square in place of
+  the ordinary hollow-circle state glyph; a live gate or escalation is
+  already distinguishable by its own amber/red glyph, so the square never
+  applies there. A step's label also carries its phase, and, whenever its
+  item has run more than one pass, its pass number. A step always renders
+  one level below its item - never a pass row, never a second level of
+  nesting. The node the hub is open for is highlighted wherever it falls;
+  as the operator scrolls past its parent item, that item's row stays
+  pinned to the top so context is never lost. Arrow keys move the
+  selection; Enter or → opens whatever is highlighted into its own hub;
+  a and l jump straight to a highlighted node's Artifacts or Log, skipping
+  its own contextual default.
 
   Scenario: An item's hierarchy shows the item itself as the root
     Given an item
@@ -45,20 +48,25 @@ Feature: The workflow tab
     And one poll interval elapses
     Then the step's row shows the active state, without a manual refresh
 
-  Scenario: A step performed by a worker shows its role alongside its state
-    Given a step performed by the role "write-code"
+  Scenario: A done human step shows the hollow square in place of the done glyph
+    Given a human step that is done
     When it renders in the hierarchy
-    Then its role "write-code" is shown alongside its state
+    Then its icon is the hollow square, not the ordinary done glyph
 
-  Scenario: A human step shows "human" as its role, not a blank
-    Given a step whose role is "human"
+  Scenario: A queued human step blocked on a dependency shows the hollow square in place of the queued glyph
+    Given a human step made queued by an unresolved dependency
     When it renders in the hierarchy
-    Then "human" is shown as its role
+    Then its icon is the hollow square, not the ordinary queued glyph
 
-  Scenario: A step row is labelled by its step name, not its stored title, and does not repeat its role
+  Scenario: A done agent step and a queued agent step both keep the plain round glyph
+    Given a done agent step and a queued agent step, blocked on a dependency
+    When they render
+    Then both keep the ordinary round glyph, not the hollow square
+
+  Scenario: A step row is labelled by its step name, not its stored title
     Given a step whose stored title is the step name followed by a body
     When it renders in the hierarchy
-    Then the step's row label is exactly its step name, with no title body and no repetition of the role
+    Then the step's row label is exactly its step name, with no title body
 
   Scenario: A step row shows its declared display phrase in place of its raw stage name
     Given a step at stage "code-await-merge" whose workflow declares the display phrase "Review the PR" for that stage
@@ -101,23 +109,10 @@ Feature: The workflow tab
     Then both ids are shown in full
     And the item's row and the step's row are distinguishable from each other
 
-  Scenario Outline: The role column widens to fit a role name longer than its historical fixed width, without clipping it
-    Given a step performed by the role "<role>"
-    When it renders in the hierarchy
-    Then its role "<role>" is shown in full, on one line
-
-    Examples:
-      | role               |
-      | implement-features |
-      | handle-feedback    |
-      | resolve-conflict   |
-      | review-conflict    |
-      | feature-writer     |
-
   Scenario Outline: When a hierarchy row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width plus the row's own depth, spanning the row without wrapping mid-word
     Given a hierarchy row at depth <depth> whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When it renders in the hierarchy
-    Then the icon, id and role remain on the row's first line, each padded to its atomic width, with cost right-aligned
+    Then the icon and id remain on the row's first line, each padded to its atomic width, with cost right-aligned
     And the title appears on a continuation line indented 3 characters plus the row's own depth indent of <depth>
     And no fragment of the title's prose is split mid-word
 

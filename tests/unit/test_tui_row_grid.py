@@ -17,7 +17,7 @@ class TestColumnKind(unittest.TestCase):
             self.assertEqual(column_kind(name), "glyph")
 
     def test_atomic_columns(self):
-        for name in ("id", "project", "step", "role", "type", "time"):
+        for name in ("id", "project", "step", "type", "time"):
             self.assertEqual(column_kind(name), "atomic")
 
     def test_flexible_columns(self):
