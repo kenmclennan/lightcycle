@@ -586,8 +586,11 @@ def _artifact_viewer_filepath_toast(size):
 
 def _hub_done_item(size):
     store, scan, coding = _populated_store()
+    store.record_usage("LC-143.3.1", 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution("LC-143.3.1", 20, {})
     store.close(coding, "done")
     store.close(scan, "done")
+    store._records[scan]["closed_at"] = _at(2)
     return _open_hub(_launch(store, size=size), scan)
 
 
@@ -633,6 +636,80 @@ def _composite_title_store():
 def _hub_step_composite_title(size):
     store, step, fs = _composite_title_store()
     return _open_hub(_launch(store, size=size, fs=fs), step)
+
+
+def _hub_step_active_with_cost_store():
+    store = DemoStore(now=lambda: _at(17))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-143.3.4", "write the code", step="write-code", role="agent", parent=item,
+    )
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step], 300)
+    store.record_usage(step, 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution(step, 20, {})
+    return store, step
+
+
+def _hub_step_active_with_cost(size):
+    store, step = _hub_step_active_with_cost_store()
+    return _open_hub(_launch(store, size=size), step)
+
+
+def _hub_step_done_with_cost_store():
+    clock = {"now": _at(30)}
+    store = DemoStore(now=lambda: clock["now"])
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-143.3.4", "write the code", step="write-code", role="agent", parent=item,
+    )
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step], 600)
+    store.record_usage(step, 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution(step, 20, {})
+    clock["now"] = _at(2)
+    store.close(step, "done")
+    store._records[step]["closed_at"] = _at(2)
+    return store, step
+
+
+def _hub_step_done_with_cost(size):
+    store, step = _hub_step_done_with_cost_store()
+    return _open_hub(_launch(store, size=size), step)
+
+
+def _hub_step_waiting_store():
+    store = DemoStore(now=lambda: _at(12))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item,
+    )
+    return store, step
+
+
+def _hub_step_waiting(size):
+    store, step = _hub_step_waiting_store()
+    return _open_hub(_launch(store, size=size), step)
+
+
+def _hub_step_reclaimed_active_store():
+    clock = {"now": _at(90)}
+    store = DemoStore(now=lambda: clock["now"])
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-143.3.4", "write the code", step="write-code", role="agent", parent=item,
+    )
+    store.claim_ready("agent")
+    clock["now"] = _at(70)
+    store.reclaim(step)
+    clock["now"] = _at(6)
+    store.claim_ready("agent")
+    return store, step
+
+
+def _hub_step_reclaimed_active(size):
+    store, step = _hub_step_reclaimed_active_store()
+    return _open_hub(_launch(store, size=size), step)
 
 
 def _detail_store():
@@ -798,6 +875,10 @@ SCREENS = {
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
     "hub#step-composite-title": _hub_step_composite_title,
+    "hub#step-active-with-cost": _hub_step_active_with_cost,
+    "hub#step-done-with-cost": _hub_step_done_with_cost,
+    "hub#step-waiting": _hub_step_waiting,
+    "hub#step-reclaimed-active": _hub_step_reclaimed_active,
     "hub#detail": _hub_detail,
     "hub#workflow-scrolled": _hub_hierarchy_scrolled,
     "hub#claude-unavailable": _hub_claude_unavailable,

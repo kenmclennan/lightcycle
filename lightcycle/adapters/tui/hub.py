@@ -1,3 +1,4 @@
+import datetime
 from dataclasses import dataclass
 from typing import Optional
 
@@ -60,11 +61,11 @@ from lightcycle.application.work import (
     StepRunUseCase,
 )
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.feedback import Duration, format_elapsed
+from lightcycle.domain.feedback import Duration, format_elapsed, format_wall_and_active
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, display_role, display_stage, format_rate, format_tokens, format_usd,
-    landing_tab, row_bucket, step_cost, type_label, viewable_artifacts,
+    item_cost, landing_tab, row_bucket, step_cost, type_label, viewable_artifacts,
 )
 
 POLL_INTERVAL_SECONDS = 10
@@ -270,18 +271,12 @@ def log_tab_mode(node):
     return "no-log"
 
 
-def _elapsed(store, node, now):
-    delta = Duration(store.history(node.id)).elapsed_since_claim(now)
-    return format_elapsed(delta.total_seconds()) if delta is not None else None
-
-
 @dataclass(frozen=True)
 class HeaderData:
     id: str
     title: str
     project: Optional[str]
-    step_field: Optional[str]
-    elapsed_field: Optional[str]
+    stat_line: Optional[str]
     glyph: Glyph
     dependency_blocked: bool
     escalation_text: Optional[str]
@@ -307,11 +302,97 @@ def _flow_for_bucket(node, flow_service):
     return flow_service.flow_for(node)
 
 
+def _step_count_text(children):
+    n = len(children)
+    return "%d step%s" % (n, "" if n == 1 else "s")
+
+
+def _item_cost_text(children):
+    cost = item_cost(children)
+    if cost.turn_count == 0 and cost.cost_usd == 0:
+        return ""
+    return format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
+
+
+def _item_wall_active(store, item, children, now):
+    claims = [
+        ts for child in children
+        for state, ts in store.history(child.id)
+        if state == State.IN_PROGRESS and ts
+    ]
+    if not claims:
+        return None
+    start = min(claims)
+    end = item.closed_at if item.state == State.DONE else now
+    wall = (
+        datetime.datetime.fromisoformat(end) - datetime.datetime.fromisoformat(start)
+    ).total_seconds()
+    active = sum(child.active_seconds or 0 for child in children)
+    return wall, active
+
+
+def _stat_line_item(store, item, children, flow_service, now):
+    if item.blocked_by:
+        return None
+    if item.state == State.DONE:
+        lead = "Done"
+    else:
+        cur = current_step(store, item.id)
+        if cur is None or cur.blocked_by:
+            return None
+        lead = display_stage(flow_service.display_for(cur), cur.step)
+    segments = [lead, _step_count_text(children)]
+    wall_active = _item_wall_active(store, item, children, now)
+    if wall_active is not None:
+        segments.append(format_wall_and_active(*wall_active))
+    cost_text = _item_cost_text(children)
+    if cost_text:
+        segments.append(cost_text)
+    return " · ".join(segments)
+
+
+def _gate_wait_seconds(store, node, now):
+    parked = Duration(store.history(node.id)).last_release()
+    start = parked or node.created_at
+    if not start:
+        return None
+    end = node.closed_at if node.state == State.DONE else now
+    return (
+        datetime.datetime.fromisoformat(end) - datetime.datetime.fromisoformat(start)
+    ).total_seconds()
+
+
+def _step_wall_active(store, node, now):
+    delta = Duration(store.history(node.id)).elapsed_since_last_claim(now)
+    if delta is None:
+        return None
+    return delta.total_seconds(), node.active_seconds or 0
+
+
+def _stat_line_step(store, node, flow_service, now):
+    phrase = display_stage(flow_service.display_for(node), node.step)
+    if display_role(getattr(node, "role", None)) == "human":
+        wait = _gate_wait_seconds(store, node, now)
+        if wait is None:
+            return phrase
+        label = "done" if node.state == State.DONE else "waiting"
+        return "%s · %s %s" % (phrase, label, format_elapsed(wait))
+    segments = [phrase]
+    if node.state == State.DONE:
+        segments.append("done")
+    wall_active = _step_wall_active(store, node, now)
+    if wall_active is not None:
+        segments.append(format_wall_and_active(*wall_active))
+    cost_text = hierarchy_usage_text(node)[1]
+    if cost_text:
+        segments.append(cost_text)
+    return " · ".join(segments)
+
+
 def _item_header(store, node, now, project, flow_service):
-    step_field = None
-    elapsed_field = None
     escalation_text = escalation_target = None
     glyph_node, glyph_flow = node, None
+    children = store.children(node.id)
 
     if node.blocked_by:
         escalation_target = sorted(node.blocked_by)[0]
@@ -323,17 +404,14 @@ def _item_header(store, node, now, project, flow_service):
             if cur.blocked_by:
                 escalation_target = sorted(cur.blocked_by)[0]
                 escalation_text = "Blocked · depends on %s" % escalation_target
-            else:
-                step_field = display_stage(flow_service.display_for(cur), cur.step)
-                if getattr(cur, "role", None) == "human":
-                    if cur.needs:
-                        escalation_text = _park_escalation_text(cur)
-                elif cur.state == State.IN_PROGRESS:
-                    elapsed_field = _elapsed(store, cur, now)
+            elif getattr(cur, "role", None) == "human" and cur.needs:
+                escalation_text = _park_escalation_text(cur)
+
+    stat_line = _stat_line_item(store, node, children, flow_service, now)
 
     return HeaderData(
         id=node.id, title=node.title, project=project,
-        step_field=step_field, elapsed_field=elapsed_field,
+        stat_line=stat_line,
         glyph=_state_glyph(glyph_node, glyph_flow),
         dependency_blocked=bool(glyph_node.blocked_by),
         escalation_text=escalation_text, escalation_target=escalation_target,
@@ -348,12 +426,12 @@ def _step_header(store, node, now, project, flow_service):
     elif getattr(node, "role", None) == "human" and getattr(node, "needs", None):
         escalation_text = _park_escalation_text(node)
 
-    elapsed_field = _elapsed(store, node, now) if node.state == State.IN_PROGRESS else None
+    item = store.get_node(node.parent)
     flow = flow_service.flow_for(node)
-    title = display_stage(flow_service.display_for(node), node.step) or node.title
+    stat_line = _stat_line_step(store, node, flow_service, now)
     return HeaderData(
-        id=node.id, title=title, project=project,
-        step_field=None, elapsed_field=elapsed_field,
+        id=node.id, title=item.title, project=project,
+        stat_line=stat_line,
         glyph=_state_glyph(node, flow),
         dependency_blocked=bool(node.blocked_by),
         escalation_text=escalation_text, escalation_target=escalation_target,
@@ -585,8 +663,7 @@ def _identity_text(header):
 
 
 def _context_text(header):
-    parts = [part for part in (header.step_field, header.elapsed_field) if part]
-    return " · ".join(parts) if parts else None
+    return header.stat_line
 
 
 class HubHeader(Vertical):
