@@ -1157,6 +1157,34 @@ class TestLink(unittest.TestCase):
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].value, "specs/new.md")
 
+    def test_attach_plain_second_spec_fails_naming_item_and_type(self):
+        sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        call(_cli_mod.cmd_attach, sid, "spec", "specs/old.md")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "spec", "specs/new.md")
+        self.assertEqual(rc, 1)
+        self.assertIn(sid, err)
+        self.assertIn("spec", err)
+        arts = self.store.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "specs/old.md")
+
+    def test_attach_plain_second_brief_fails(self):
+        sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        call(_cli_mod.cmd_attach, sid, "brief", "first text")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "brief", "second text")
+        self.assertEqual(rc, 1)
+        arts = self.store.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "first text")
+
+    def test_attach_second_artifact_with_different_label_succeeds(self):
+        sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        call(_cli_mod.cmd_attach, sid, "design", "http://x/1", "--label", "PR 1")
+        rc, out, err = call(_cli_mod.cmd_attach, sid, "design", "http://x/2", "--label", "PR 2")
+        self.assertEqual(rc, 0, err)
+        arts = self.store.item_artifacts(sid)
+        self.assertEqual(len(arts), 2)
+
     def test_attach_file_reads_file_content_into_artifact_value(self):
         sid = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
         f = Path(self.root) / "brief-draft.md"

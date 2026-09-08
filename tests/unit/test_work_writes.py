@@ -476,6 +476,64 @@ class TestLinkArtifact(unittest.TestCase):
                 LinkArtifactInput(item="LC-999", atype="pr", value="http://x/1")
             )
 
+    def test_plain_second_attach_of_same_type_raises_and_leaves_original(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="design", value="v1")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="design", value="v2")
+            )
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "v1")
+
+    def test_plain_second_attach_of_same_spec_raises_after_validation_runs(self):
+        s = FakeStore()
+        s.add_project("acme/widget", local_path="/tmp/widget")
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="widget")
+        )
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="spec", value="widget/LC-1.md")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="spec", value="widget/LC-2.md")
+            )
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "widget/LC-1.md")
+
+    def test_plain_second_attach_with_different_label_succeeds(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="design", value="v1", label="PR 1")
+        )
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="design", value="v2", label="PR 2")
+        )
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 2)
+
+    def test_plain_second_attach_with_same_label_raises_and_leaves_original(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="design", value="v1", label="PR 1")
+        )
+        with self.assertRaises(UseCaseError):
+            LinkArtifactUseCase(s).execute(
+                LinkArtifactInput(item=sid, atype="design", value="v2", label="PR 1")
+            )
+        arts = s.item_artifacts(sid)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual(arts[0].value, "v1")
+
 
 class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):
