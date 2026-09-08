@@ -41,11 +41,18 @@ def _backlog_item_store(count, title):
     return store
 
 
-def _hierarchy_step_store(count, role):
-    store = FakeStore()
+def _hierarchy_step_store(count):
+    store = FakeStore(now=lambda: _at(14))
     item = store.create_item("Item", "a description", id="LC-3000")
+    steps = []
     for i in range(count):
-        store.create_step("step %d" % i, step="build", role=role, parent=item, id="LC-3000.%d" % (i + 1))
+        step = store.create_step(
+            "step %d" % i, step="build", role="agent", parent=item, id="LC-3000.%d" % (i + 1),
+        )
+        store.assign(step, "worker-%d" % i)
+        store.update_state(step, State.IN_PROGRESS)
+        steps.append(step)
+    store.accrue_active_seconds(steps, 840)
     return store, item
 
 
@@ -122,28 +129,28 @@ class TestBacklogTableScrollbarDoesNotClipTitle(unittest.TestCase):
         self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(BacklogTable))
 
 
-class TestHierarchyTableScrollbarDoesNotClipRole(unittest.TestCase):
-    _ROLE = "coder"
+class TestHierarchyTableScrollbarDoesNotClipTime(unittest.TestCase):
+    _TIME = "14m (14m active)"
 
     def _launch(self, count):
-        store, item = _hierarchy_step_store(count, self._ROLE)
-        session = launch(make_test_container(store=store), size=_SIZE)
+        store, item = _hierarchy_step_store(count)
+        session = launch(make_test_container(store=store), now=lambda: _NOW, size=_SIZE)
         self.addCleanup(session.close)
         return _open_hub(session, item, "workflow")
 
-    def test_short_list_shows_full_role_value_with_no_scrollbars(self):
+    def test_short_list_shows_full_time_value_with_no_scrollbars(self):
         session = self._launch(_SHORT_COUNT)
         table = session.app.screen.query_one(HierarchyPagingTable)
         self.assertFalse(table.show_vertical_scrollbar)
         self.assertFalse(table.show_horizontal_scrollbar)
-        self.assertIn(self._ROLE, _frame_text(session))
+        self.assertIn(self._TIME, _frame_text(session))
 
-    def test_long_list_still_shows_full_role_value_and_no_horizontal_scrollbar(self):
+    def test_long_list_still_shows_full_time_value_and_no_horizontal_scrollbar(self):
         session = self._launch(_LONG_COUNT)
         table = session.app.screen.query_one(HierarchyPagingTable)
         self.assertTrue(table.show_vertical_scrollbar)
         self.assertFalse(table.show_horizontal_scrollbar)
-        self.assertIn(self._ROLE, _frame_text(session))
+        self.assertIn(self._TIME, _frame_text(session))
 
     def test_scrollbar_reservation_width_matches_mounted_gutter(self):
         session = self._launch(_SHORT_COUNT)

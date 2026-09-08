@@ -34,7 +34,7 @@ class TestHierarchyUsageText(unittest.TestCase):
         store.record_attribution(step, 246, {})
         node = store.get_node(step)
 
-        self.assertEqual(hierarchy_usage_text(node), ("246", COST_NOT_RECORDED))
+        self.assertEqual(hierarchy_usage_text(node), ("246 turns", COST_NOT_RECORDED))
 
     def test_an_agent_step_with_recorded_cost_shows_both_turns_and_cost(self):
         store = FakeStore()
@@ -43,7 +43,7 @@ class TestHierarchyUsageText(unittest.TestCase):
         store.record_attribution(step, 50, {})
         node = store.get_node(step)
 
-        self.assertEqual(hierarchy_usage_text(node), ("50", "$2.91"))
+        self.assertEqual(hierarchy_usage_text(node), ("50 turns", "$2.91"))
 
     def test_an_agent_step_with_a_recorded_basis_but_zero_cost_shows_the_not_recorded_placeholder(
         self,
@@ -54,7 +54,15 @@ class TestHierarchyUsageText(unittest.TestCase):
         store.record_attribution(step, 50, {})
         node = store.get_node(step)
 
-        self.assertEqual(hierarchy_usage_text(node), ("50", COST_NOT_RECORDED))
+        self.assertEqual(hierarchy_usage_text(node), ("50 turns", COST_NOT_RECORDED))
+
+    def test_a_single_turn_is_singular(self):
+        store = FakeStore()
+        step = store.create_step("building", step="build", role="agent")
+        store.record_attribution(step, 1, {})
+        node = store.get_node(step)
+
+        self.assertEqual(hierarchy_usage_text(node), ("1 turn", COST_NOT_RECORDED))
 
 
 if __name__ == "__main__":

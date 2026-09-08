@@ -1,12 +1,14 @@
 from dataclasses import dataclass, replace
 
-from lightcycle.adapters.tui.design_system import DEPENDENCY_BLOCKED_EXTRA_GLYPH, STATE_GLYPHS
+from lightcycle.adapters.tui.design_system import (
+    DEPENDENCY_BLOCKED_EXTRA_GLYPH, HUMAN_STEP_GLYPH, STATE_GLYPHS,
+)
 from lightcycle.adapters.tui.hub import COST_NOT_RECORDED
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, format_elapsed
-from lightcycle.domain.work import format_usd, row_bucket
+from lightcycle.domain.work import format_usd, is_human_step, row_bucket
 
 
 @dataclass(frozen=True)
@@ -31,7 +33,7 @@ def _project(store, node):
 
 
 def _elapsed_text(store, node, now):
-    delta = Duration(store.history(node.id)).elapsed_since_claim(now)
+    delta = Duration(store.history(node.id)).elapsed_since_last_claim(now)
     return format_elapsed(delta.total_seconds()) if delta is not None else ""
 
 
@@ -81,7 +83,7 @@ def _active_row(store, node, now, flow):
 
 
 def _queued_row(store, node, flow):
-    glyph = STATE_GLYPHS["queued"]
+    glyph = HUMAN_STEP_GLYPH if is_human_step(node) else STATE_GLYPHS["queued"]
     if node.blocked_by:
         blocker_id = sorted(node.blocked_by)[0]
         return PriorityRow(

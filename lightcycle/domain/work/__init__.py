@@ -17,7 +17,7 @@ from lightcycle.domain.work.rollup import roll_up
 from lightcycle.domain.work.derive import derive_state
 from lightcycle.domain.work.hierarchy import (
     HierarchyRow, compose_hierarchy, display_role, display_stage,
-    landing_tab, park_resume_command, row_bucket, viewable_artifacts,
+    is_human_step, landing_tab, park_resume_command, row_bucket, viewable_artifacts,
 )
 from lightcycle.domain.work.field_owner import (
     FIELDS_BY_TYPE, REQUIRED_WITH_STATE, STATES_BY_TYPE, all_states,
@@ -41,7 +41,7 @@ __all__ = [
     "format_rate", "format_tokens", "format_usd", "item_cost", "step_cost",
     "derive_state",
     "HierarchyRow", "compose_hierarchy", "display_role", "display_stage",
-    "landing_tab", "park_resume_command", "row_bucket", "viewable_artifacts",
+    "is_human_step", "landing_tab", "park_resume_command", "row_bucket", "viewable_artifacts",
     "FIELDS_BY_TYPE", "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "all_states",
     "missing_for_state", "refuse_fields", "refuse_state",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",

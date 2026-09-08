@@ -6,6 +6,8 @@ from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_REST_INDEX,
     COLOURS,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
+    DONE_GLYPH,
+    HUMAN_STEP_GLYPH,
     STATE_GLYPHS,
 )
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen, _tab_order
@@ -218,13 +220,40 @@ def _hierarchy_open_active_step(ctx):
     _launch(ctx, store, item)
 
 
-@given(parsers.parse('a step performed by the role "{role}"'))
-def _step_performed_by_role(ctx, role):
+@given("a human step that is done")
+def _human_step_that_is_done(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step=role, role=role, parent=item)
-    store.claim_ready(role)
+    step = store.create_step("s", step="await-merge", role="human", parent=item)
+    store.close(step, "done")
     ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given("a human step made queued by an unresolved dependency")
+def _human_step_made_queued_by_dependency(ctx):
+    store = FakeStore()
+    blocker = store.create_step("blocker", step="build", role="agent")
+    item = store.create_item("Item", "a description")
+    step = store.create_step(
+        "s", step="await-merge", role="human", parent=item, deps=[blocker],
+    )
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
+@given("a done agent step and a queued agent step, blocked on a dependency")
+def _done_and_queued_agent_steps(ctx):
+    store = FakeStore()
+    blocker = store.create_step("blocker", step="build", role="agent")
+    item = store.create_item("Item", "a description")
+    done_step = store.create_step("done", step="build", role="agent", parent=item)
+    store.close(done_step, "done")
+    queued_step = store.create_step(
+        "queued", step="build", role="agent", parent=item, deps=[blocker],
+    )
+    ctx["done_step_id"] = done_step
+    ctx["queued_step_id"] = queued_step
     _launch(ctx, store, item)
 
 
@@ -308,15 +337,6 @@ def _step_in_first_pass_item_has_since_run_second_pass(ctx):
     _launch(ctx, store, item)
 
 
-@given(parsers.parse('a step whose role is "{role}"'))
-def _step_whose_role_is(ctx, role):
-    store = FakeStore()
-    item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="await-merge", role=role, parent=item)
-    ctx["step_id"] = step
-    _launch(ctx, store, item)
-
-
 @given(parsers.parse('a node in the hierarchy with id "{node_id}" ({id_source})'))
 def _node_with_explicit_id(ctx, node_id, id_source):
     store = FakeStore()
@@ -339,9 +359,9 @@ _HSTACK_TITLE = "A title long enough to need a continuation line for real"
 _HIERARCHY_NUM_COLUMNS = 6
 
 
-def _hierarchy_stack_terminal_width(mode, ids, roles, max_depth):
+def _hierarchy_stack_terminal_width(mode, ids, max_depth):
     glyph_total = GLYPH_WIDTHS["icon"]
-    atomic_values = {"id": ids, "role": roles, "turns": [], "cost": []}
+    atomic_values = {"id": ids, "turns": [], "time": [], "cost": []}
     atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
     first_line_width = glyph_total + atomic_total
     indent = glyph_total + max_depth
@@ -361,7 +381,7 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
         item = store.create_item(_HSTACK_TITLE, "a description", id="LC-30.100")
         ctx["item_id"] = item
         ctx["target_id"] = item
-        width = _hierarchy_stack_terminal_width(mode, ["LC-30.100"], [], 0)
+        width = _hierarchy_stack_terminal_width(mode, ["LC-30.100"], 0)
     else:
         item = store.create_item("Item", "a description", id="LC-30.100")
         step = store.create_step(
@@ -370,7 +390,7 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
         ctx["item_id"] = item
         ctx["target_id"] = step
         width = _hierarchy_stack_terminal_width(
-            mode, ["LC-30.100", "LC-30.100.100"], ["agent"], depth
+            mode, ["LC-30.100", "LC-30.100.100"], depth
         )
     ctx["target_depth"] = depth
     _launch(ctx, store, item, size=(width, 24))
@@ -797,24 +817,33 @@ def _icon_cycles_through_pulse_frames(ctx):
     assert ctx["frames"] == ["◈", "◇", "◈", "◆"]
 
 
-@then(parsers.parse('its role "{role}" is shown alongside its state'))
-def _role_shown_alongside_state(ctx, role):
-    role_text = _rendered_cell_text(ctx, ctx["step_id"], "role")
-    assert role_text.strip() == role
+@then("its icon is the hollow square, not the ordinary done glyph")
+def _icon_is_hollow_square_not_done(ctx):
+    icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
+    assert HUMAN_STEP_GLYPH.glyph in icon_text
+    assert DONE_GLYPH.glyph not in icon_text
 
 
-@then(parsers.parse('"{role}" is shown as its role'))
-def _role_shown_as(ctx, role):
-    role_text = _rendered_cell_text(ctx, ctx["step_id"], "role")
-    assert role_text.strip() == role
+@then("its icon is the hollow square, not the ordinary queued glyph")
+def _icon_is_hollow_square_not_queued(ctx):
+    icon_text = _rendered_cell_text(ctx, ctx["step_id"], "icon")
+    assert HUMAN_STEP_GLYPH.glyph in icon_text
 
 
-@then("the step's row label is exactly its step name, with no title body and no repetition of the role")
+@then("both keep the ordinary round glyph, not the hollow square")
+def _both_keep_ordinary_round_glyph(ctx):
+    done_icon = _rendered_cell_text(ctx, ctx["done_step_id"], "icon")
+    queued_icon = _rendered_cell_text(ctx, ctx["queued_step_id"], "icon")
+    assert DONE_GLYPH.glyph in done_icon
+    assert STATE_GLYPHS["queued"].glyph in queued_icon
+    assert HUMAN_STEP_GLYPH.glyph not in done_icon
+    assert HUMAN_STEP_GLYPH.glyph not in queued_icon
+
+
+@then("the step's row label is exactly its step name, with no title body")
 def _step_row_label_is_step_name(ctx):
     title_text = _rendered_cell_text(ctx, ctx["step_id"], "title").strip()
-    role_text = _rendered_cell_text(ctx, ctx["step_id"], "role").strip()
     assert title_text == "implement-features"
-    assert role_text == "agent"
     assert "Deliver the operator-monitoring feature" not in title_text
 
 
@@ -874,15 +903,6 @@ def _rows_distinguishable(ctx):
     assert item_text != step_text
 
 
-@then(parsers.parse('its role "{role}" is shown in full, on one line'))
-def _role_shown_in_full_one_line(ctx, role):
-    step_id = ctx["step_id"]
-    lines = _row_lines(ctx, step_id)
-    assert len(lines) == 1
-    text = _rendered_cell_text(ctx, step_id, "role")
-    assert text.strip() == role
-
-
 def _hierarchy_stacked_cell_text(table, strip):
     pad = table.cell_padding
     column = table.ordered_columns[0]
@@ -892,19 +912,16 @@ def _hierarchy_stacked_cell_text(table, strip):
 
 
 @then(
-    "the icon, id and role remain on the row's first line, each padded to "
+    "the icon and id remain on the row's first line, each padded to "
     "its atomic width, with cost right-aligned"
 )
-def _first_line_role_right_aligned(ctx):
+def _first_line_content_right_aligned(ctx):
     table = _table(ctx)
     lines = _row_lines(ctx, ctx["target_id"])
     assert len(lines) > 1
     content = _hierarchy_stacked_cell_text(table, lines[0])
     rest = content[GLYPH_WIDTHS["icon"]:]
     assert rest.startswith(ctx["target_id"])
-    if ctx["target_depth"] != 0:
-        assert "agent" in content
-        assert content.rstrip().endswith("agent")
 
 
 @then(parsers.parse(

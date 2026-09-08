@@ -1,9 +1,11 @@
 import unittest
 
+from lightcycle.adapters.tui.design_system import HUMAN_STEP_GLYPH, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import COST_NOT_RECORDED
 from lightcycle.adapters.tui.priority_list import (
     _active_row,
     _attention_row,
+    _elapsed_text,
     _project,
     _queued_row,
     build_priority_rows,
@@ -62,6 +64,48 @@ class TestQueuedRowDependencyTieBreak(unittest.TestCase):
 
         self.assertIn(expected, row.step)
         self.assertNotIn(other, row.step)
+
+
+class TestQueuedRowHumanGlyph(unittest.TestCase):
+    def test_a_dependency_blocked_human_step_shows_the_human_square(self):
+        store = FakeStore()
+        blocker = store.create_step("blocker", step="build", role="agent")
+        blocked = store.create_step(
+            "blocked", step="await-merge", role="human", deps=[blocker]
+        )
+        node = store.get_node(blocked)
+
+        row = _queued_row(store, node, _FLOW)
+
+        self.assertEqual(row.icon, HUMAN_STEP_GLYPH.glyph)
+
+    def test_a_dependency_blocked_agent_step_still_shows_the_plain_queued_glyph(self):
+        store = FakeStore()
+        blocker = store.create_step("blocker", step="build", role="agent")
+        blocked = store.create_step(
+            "blocked", step="build", role="agent", deps=[blocker]
+        )
+        node = store.get_node(blocked)
+
+        row = _queued_row(store, node, _FLOW)
+
+        self.assertEqual(row.icon, STATE_GLYPHS["queued"].glyph)
+
+
+class TestActiveRowElapsedText(unittest.TestCase):
+    def test_released_and_reclaimed_shows_elapsed_since_the_reclaim_only(self):
+        clock = {"now": "2026-01-01T10:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        step = store.create_step("s", step="write-code", role="agent")
+        store.claim_ready("agent")
+        clock["now"] = "2026-01-01T10:20:00"
+        store.reclaim(step)
+        clock["now"] = "2026-01-01T11:00:00"
+        store.claim_ready("agent")
+        node = store.get_node(step)
+
+        now = "2026-01-01T11:24:00"
+        self.assertEqual(_elapsed_text(store, node, now), "24m")
 
 
 _FLOW = flow_from_metas(

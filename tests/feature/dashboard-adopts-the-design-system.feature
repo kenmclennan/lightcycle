@@ -169,7 +169,6 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | id      | atomic   |
       | project | atomic   |
       | step    | atomic   |
-      | role    | atomic   |
       | type    | atomic   |
       | time    | atomic   |
       | turns   | atomic   |
