@@ -266,7 +266,7 @@ def detail_fields(step, run):
 def log_tab_mode(node):
     if node is None or getattr(node, "role", None) == "human":
         return "no-log"
-    if node.state == State.IN_PROGRESS:
+    if node.state == State.RUNNING:
         return "live"
     if node.state == State.DONE:
         return "historical"
@@ -285,11 +285,11 @@ class HeaderData:
     escalation_target: Optional[str]
 
 
-def build_header(store, node, now, flow_service):
+def build_header(store, node, now, flow_service, pool_halted=False):
     project = project_label(store, node) or None
     if node.type == "item":
-        return _item_header(store, node, now, project, flow_service)
-    return _step_header(store, node, now, project, flow_service)
+        return _item_header(store, node, now, project, flow_service, pool_halted)
+    return _step_header(store, node, now, project, flow_service, pool_halted)
 
 
 def _park_escalation_text(node):
@@ -320,7 +320,7 @@ def _item_wall_active(store, item, children, now):
     claims = [
         ts for child in children
         for state, ts in store.history(child.id)
-        if state == State.IN_PROGRESS and ts
+        if state in (State.RUNNING, "in_progress") and ts
     ]
     if not claims:
         return None
@@ -333,7 +333,7 @@ def _item_wall_active(store, item, children, now):
     return wall, active
 
 
-def _stat_line_item(store, item, children, flow_service, now):
+def _stat_line_item(store, item, children, flow_service, now, pool_halted=False):
     if item.blocked_by:
         return None
     if item.state == State.DONE:
@@ -350,6 +350,8 @@ def _stat_line_item(store, item, children, flow_service, now):
     cost_text = _item_cost_text(children)
     if cost_text:
         segments.append(cost_text)
+    if item.state == State.QUEUED and pool_halted:
+        segments.append("pool halted")
     return " · ".join(segments)
 
 
@@ -371,7 +373,7 @@ def _step_wall_active(store, node, now):
     return delta.total_seconds(), node.active_seconds or 0
 
 
-def _stat_line_step(store, node, flow_service, now):
+def _stat_line_step(store, node, flow_service, now, pool_halted=False):
     phrase = display_stage(flow_service.display_for(node), node.step)
     if display_role(getattr(node, "role", None)) == "human":
         wait = _gate_wait_seconds(store, node, now)
@@ -388,10 +390,12 @@ def _stat_line_step(store, node, flow_service, now):
     cost_text = hierarchy_usage_text(node)[1]
     if cost_text:
         segments.append(cost_text)
+    if node.state == State.QUEUED and pool_halted:
+        segments.append("pool halted")
     return " · ".join(segments)
 
 
-def _item_header(store, node, now, project, flow_service):
+def _item_header(store, node, now, project, flow_service, pool_halted=False):
     escalation_text = escalation_target = None
     glyph_node, glyph_flow = node, None
     children = store.children(node.id)
@@ -409,7 +413,7 @@ def _item_header(store, node, now, project, flow_service):
             elif getattr(cur, "role", None) == "human" and cur.needs:
                 escalation_text = _park_escalation_text(cur)
 
-    stat_line = _stat_line_item(store, node, children, flow_service, now)
+    stat_line = _stat_line_item(store, node, children, flow_service, now, pool_halted)
 
     return HeaderData(
         id=node.id, title=node.title, project=project,
@@ -420,7 +424,7 @@ def _item_header(store, node, now, project, flow_service):
     )
 
 
-def _step_header(store, node, now, project, flow_service):
+def _step_header(store, node, now, project, flow_service, pool_halted=False):
     escalation_text = escalation_target = None
     if node.blocked_by:
         escalation_target = sorted(node.blocked_by)[0]
@@ -430,7 +434,7 @@ def _step_header(store, node, now, project, flow_service):
 
     item = store.get_node(node.parent)
     flow = flow_service.flow_for(node)
-    stat_line = _stat_line_step(store, node, flow_service, now)
+    stat_line = _stat_line_step(store, node, flow_service, now, pool_halted)
     return HeaderData(
         id=node.id, title=item.title, project=project,
         stat_line=stat_line,
@@ -1011,7 +1015,9 @@ class ArtifactViewerScreen(Screen):
     def _refresh_footer(self) -> None:
         container = self.app.container
         running = PoolRunningUseCase(container.lock).execute().running
-        breaker = BreakerStatusUseCase(container.breaker).execute(self.app._now().timestamp())
+        breaker = BreakerStatusUseCase(container.breaker, container.spin).execute(
+            self.app._now().timestamp()
+        )
         self.query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
@@ -1375,7 +1381,13 @@ class NodeHubScreen(Screen):
         store = self._container.store
         node = store.get_node(self._node_id)
         self._flow_service = self._container.flow_service()
-        header = build_header(store, node, self._now().isoformat(), self._flow_service)
+        breaker = BreakerStatusUseCase(self._container.breaker, self._container.spin).execute(
+            self._now().timestamp()
+        )
+        pool_halted = breaker.is_open or breaker.pool_spin_open
+        header = build_header(
+            store, node, self._now().isoformat(), self._flow_service, pool_halted
+        )
         self.query_one(HubHeader).update(header)
         hierarchy = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id))
         self._render_hierarchy(hierarchy.rows, hierarchy.multi_pass, initial)
@@ -1391,7 +1403,9 @@ class NodeHubScreen(Screen):
 
     def _refresh_footer(self) -> None:
         running = PoolRunningUseCase(self._container.lock).execute().running
-        breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
+        breaker = BreakerStatusUseCase(self._container.breaker, self._container.spin).execute(
+            self._now().timestamp()
+        )
         self.query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,

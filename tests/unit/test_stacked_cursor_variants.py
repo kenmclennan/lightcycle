@@ -149,7 +149,7 @@ class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
         store.add_artifact(_PRIORITY_ID_B + "-i", "repo", _PRIORITY_PROJECT)
         for tid in active_ids:
             store.assign(tid, "worker-1")
-            store.update_state(tid, State.IN_PROGRESS)
+            store.update_state(tid, State.RUNNING)
         width = _priority_stack_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)

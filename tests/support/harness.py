@@ -6,6 +6,7 @@ from pathlib import Path
 
 import lightcycle.cli as cli
 from lightcycle.config import _SEED_KEYS
+from lightcycle.domain.work import State
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from tests.support.isolation import inject_container, make_syncable_git_repo
@@ -102,10 +103,10 @@ class Harness:
         return rc, out.getvalue(), err.getvalue()
 
     def ready_steps(self, role):
-        return [t for t in self.store.all_steps() if t.state == "ready" and t.role == role]
+        return [t for t in self.store.all_steps() if t.state == State.QUEUED and t.role == role]
 
     def ready_agent_steps(self, stage=None):
         return [
             t for t in self.store.all_steps()
-            if t.state == "ready" and t.role == "agent" and (stage is None or t.step == stage)
+            if t.state == State.QUEUED and t.role == "agent" and (stage is None or t.step == stage)
         ]

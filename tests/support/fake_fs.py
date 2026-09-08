@@ -1,11 +1,13 @@
 import os
 
 
-def flow_from_metas(metas):
+def flow_from_metas(metas, disposition=None):
     from lightcycle.domain.flow import Flow
     from lightcycle.domain.flow.graph import parse_graph
 
-    return Flow.from_graph(parse_graph(graph_text_from_metas(metas)), metas)
+    return Flow.from_graph(
+        parse_graph(graph_text_from_metas(metas, disposition=disposition)), metas
+    )
 
 
 def signals_from_metas(metas):
@@ -15,7 +17,7 @@ def signals_from_metas(metas):
     return Signals.from_graph(parse_graph(graph_text_from_metas(metas)))
 
 
-def graph_text_from_metas(metas, entry=None, requires=None):
+def graph_text_from_metas(metas, entry=None, requires=None, disposition=None):
     nodes, edges, hooks, signals, phases, display = [], [], [], [], [], []
     for role in sorted(metas):
         meta = metas[role] or {}
@@ -61,6 +63,11 @@ def graph_text_from_metas(metas, entry=None, requires=None):
         out.append("phase:\n" + "\n".join(phases))
     if display:
         out.append("display:\n" + "\n".join(display))
+    if disposition:
+        out.append(
+            "disposition:\n"
+            + "\n".join("  %s  %s" % (outcome, value) for outcome, value in disposition.items())
+        )
     return "\n\n".join(out) + "\n"
 
 

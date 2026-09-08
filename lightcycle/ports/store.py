@@ -101,7 +101,7 @@ class StorePort(ABC):
     def reopen(self, tid):
         pass
 
-    def close(self, tid, reason):
+    def close(self, tid, reason, disposition=None):
         pass
 
     @abstractmethod

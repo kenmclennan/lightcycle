@@ -69,7 +69,7 @@ def test_pinned_ancestor_banner_pulses_when_its_own_row_is_active():
         store.create_step("s%d" % i, step="build", role="agent", parent=item)
     active_step = store.create_step("active", step="build", role="agent", parent=item)
     store.assign(active_step, "worker-1")
-    store.update_state(active_step, State.IN_PROGRESS)
+    store.update_state(active_step, State.RUNNING)
 
     session = launch(make_test_container(store=store))
     try:

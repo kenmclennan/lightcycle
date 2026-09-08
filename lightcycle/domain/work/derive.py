@@ -2,13 +2,15 @@ from lightcycle.domain.work.rollup import roll_up
 from lightcycle.domain.work.state import State
 
 
-def derive_state(node_type, closed, assignee, has_unresolved_deps, child_states):
+def derive_state(node_type, closed, assignee, has_unresolved_deps, role, child_states):
     if closed:
         return State.DONE
     if node_type != "step":
+        if has_unresolved_deps:
+            return State.BLOCKED
         return roll_up(child_states)
     if assignee:
-        return State.IN_PROGRESS
+        return State.RUNNING
     if has_unresolved_deps:
-        return State.BACKLOGGED
-    return State.READY
+        return State.BLOCKED
+    return State.WAITING if role is None or role == "human" else State.QUEUED

@@ -45,9 +45,9 @@ class TestByLaneAndByState(unittest.TestCase):
         q = NodeQueue(
             [
                 tk(id="d", state=State.DONE),
-                tk(id="a", state=State.IN_PROGRESS),
-                tk(id="h", state=State.READY, role="human"),
-                tk(id="r", state=State.READY, role="agent"),
+                tk(id="a", state=State.RUNNING),
+                tk(id="h", state=State.WAITING, role="human"),
+                tk(id="r", state=State.QUEUED, role="agent"),
                 tk(id="b", state=State.BACKLOGGED, role="agent"),
             ]
         )
@@ -59,24 +59,24 @@ class TestByLaneAndByState(unittest.TestCase):
         self.assertNotIn("blocked", lanes)
 
     def test_by_state(self):
-        q = NodeQueue([tk(state=State.READY), tk(state=State.DONE)])
-        self.assertEqual(len(q.by_state(State.READY)), 1)
+        q = NodeQueue([tk(state=State.QUEUED), tk(state=State.DONE)])
+        self.assertEqual(len(q.by_state(State.QUEUED)), 1)
 
 
 class TestForHuman(unittest.TestCase):
     def _queue(self, steps=None):
         steps = steps or [
-            tk(id="a-1", state=State.READY, role="human", step=None),
-            tk(id="a-2", state=State.READY, role="human", step="ready-merge"),
-            tk(id="a-3", state=State.READY, role="human", step="build"),
+            tk(id="a-1", state=State.WAITING, role="human", step=None),
+            tk(id="a-2", state=State.WAITING, role="human", step="ready-merge"),
+            tk(id="a-3", state=State.WAITING, role="human", step="build"),
         ]
         return NodeQueue(steps)
 
-    def test_only_ready_human_tasks_are_considered(self):
+    def test_only_waiting_tasks_are_considered(self):
         q = NodeQueue(
             [
-                tk(id="r", state=State.READY, role="agent", step=None),
-                tk(id="h", state=State.READY, role="human", step=None),
+                tk(id="r", state=State.QUEUED, role="agent", step=None),
+                tk(id="h", state=State.WAITING, role="human", step=None),
             ]
         )
         rows = q.for_human(fixed(FLOW), {"action"})
@@ -94,9 +94,9 @@ class TestForHuman(unittest.TestCase):
     def test_sorted_by_id(self):
         q = self._queue(
             [
-                tk(id="b-3", state=State.READY, role="human", step=None),
-                tk(id="b-1", state=State.READY, role="human", step=None),
-                tk(id="b-2", state=State.READY, role="human", step=None),
+                tk(id="b-3", state=State.WAITING, role="human", step=None),
+                tk(id="b-1", state=State.WAITING, role="human", step=None),
+                tk(id="b-2", state=State.WAITING, role="human", step=None),
             ]
         )
         self.assertEqual(
@@ -106,11 +106,11 @@ class TestForHuman(unittest.TestCase):
     def test_sorted_numerically_within_a_project_not_by_string(self):
         q = self._queue(
             [
-                tk(id="b-1", state=State.READY, role="human", step=None),
-                tk(id="b-2", state=State.READY, role="human", step=None),
-                tk(id="b-3", state=State.READY, role="human", step=None),
-                tk(id="b-10", state=State.READY, role="human", step=None),
-                tk(id="b-9", state=State.READY, role="human", step=None),
+                tk(id="b-1", state=State.WAITING, role="human", step=None),
+                tk(id="b-2", state=State.WAITING, role="human", step=None),
+                tk(id="b-3", state=State.WAITING, role="human", step=None),
+                tk(id="b-10", state=State.WAITING, role="human", step=None),
+                tk(id="b-9", state=State.WAITING, role="human", step=None),
             ]
         )
         self.assertEqual(
@@ -120,7 +120,7 @@ class TestForHuman(unittest.TestCase):
 
     def test_limit_n(self):
         q = self._queue(
-            [tk(id="c-%d" % i, state=State.READY, role="human", step=None) for i in range(5)]
+            [tk(id="c-%d" % i, state=State.WAITING, role="human", step=None) for i in range(5)]
         )
         self.assertEqual(len(q.for_human(fixed(FLOW), {"action"}, n=2)), 2)
 

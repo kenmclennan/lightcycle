@@ -189,6 +189,29 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         )
         self.assertEqual(graph.display_for("code-await-merge"), "Review the PR")
 
+    def test_disposition_block_resolves_an_outcome_to_its_declared_value(self):
+        graph = parse_graph(
+            "entry: build\n\n"
+            "disposition:\n"
+            "  merged     completed\n"
+            "  abandoned  aborted\n"
+        )
+        self.assertEqual(graph.disposition_for("merged"), "completed")
+        self.assertEqual(graph.disposition_for("abandoned"), "aborted")
+
+    def test_disposition_for_an_undeclared_outcome_returns_none(self):
+        graph = parse_graph(
+            "entry: build\n\n"
+            "disposition:\n"
+            "  merged  completed\n"
+        )
+        self.assertIsNone(graph.disposition_for("abandoned"))
+
+    def test_disposition_returns_none_for_every_outcome_when_the_bundle_declares_none(self):
+        graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
+        self.assertEqual(graph.disposition, {})
+        self.assertIsNone(graph.disposition_for("done"))
+
     def test_ignores_prose_and_blank_lines(self):
         graph = parse_graph(
             "# Standard - spec to merge\n"

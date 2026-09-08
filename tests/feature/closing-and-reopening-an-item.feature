@@ -65,7 +65,7 @@ Feature: Closing and reopening an item
     Then the item's outcome and close time are cleared
     And the item is done
 
-  Scenario: Filing a new step under a reopened item reports it as in progress immediately, before anyone claims the new step
+  Scenario: Filing a new step under a reopened item reports it as ready immediately, before anyone claims the new step
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item
     And the coder has completed the build step with outcome "done"
@@ -73,7 +73,7 @@ Feature: Closing and reopening an item
     And I have reopened the item
     When a step is filed directly against the item
     Then the item's outcome and close time are cleared
-    And the item is in progress
+    And the item is ready
 
   Scenario: Re-activating a reopened item through the normal activation path is refused
     Given an item with workflow "lightcycle/spec-driven", with a spec attached

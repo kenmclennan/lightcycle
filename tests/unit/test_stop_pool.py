@@ -37,7 +37,7 @@ class TestStopPool(unittest.TestCase):
         item = store.create_item("an item", "a description")
         step = store.create_step("build: x", step="build", role="agent", parent=item)
         store.assign(step, "spawn-1")
-        store.update_state(step, State.IN_PROGRESS)
+        store.update_state(step, State.RUNNING)
         workers = FakeWorkers(alive_pids=(4242,))
         workers.write_workers([
             {"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}
@@ -57,7 +57,7 @@ class TestStopPool(unittest.TestCase):
         resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800)
         self.assertEqual(resp.reclaimed, [step])
         after = store.get_step(step)
-        self.assertEqual(after.state, State.READY)
+        self.assertEqual(after.state, State.QUEUED)
         self.assertFalse(after.claimed_by)
 
     def test_uncommitted_work_is_preserved_before_the_step_is_reclaimed(self):

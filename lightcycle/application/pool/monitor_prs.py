@@ -166,7 +166,7 @@ class MonitorPrsUseCase:
                     % (pin, head, ", ".join(sorted(reported)), thread_note)
                 )
                 step = self._active_step_any(item.id)
-                if step is not None and step.state != State.IN_PROGRESS:
+                if step is not None and step.state != State.RUNNING:
                     decision = (
                         "confirm whether the drop of %s was ordered by review, or should be "
                         "restored" % ", ".join(sorted(reported))
@@ -232,6 +232,27 @@ class MonitorPrsUseCase:
         )
         return steps[-1] if steps else None
 
+    def _disposition_for_close(self, item, flow, outcome):
+        disposition = flow.disposition_for(outcome)
+        if disposition is not None:
+            return disposition
+        step = self._active_step_any(item.id) or self._latest_step(item.id)
+        if step is not None:
+            ParkStepUseCase(self._store).execute(
+                ParkInput(
+                    step=step.id,
+                    observation=(
+                        "PR resolved with outcome '%s', but the workflow does not declare "
+                        "a disposition for it" % outcome
+                    ),
+                    decision=(
+                        "declare 'disposition: %s completed' or 'disposition: %s aborted' "
+                        "in the workflow bundle" % (outcome, outcome)
+                    ),
+                )
+            )
+        return None
+
     def _close_run(self, run, state):
         self._store.close_run(run.id, state)
         if self._worktrees is not None:
@@ -264,10 +285,18 @@ class MonitorPrsUseCase:
                             continue
                         self._close_run(run, RunState.MERGED)
                         self._complete.execute(CompleteInput(step=step.id, outcome=merge_outcome))
+                        merged.append(item.id)
                     else:
-                        close.execute(CloseItemInput(item=item.id, reason=merge_outcome))
+                        disposition = self._disposition_for_close(item, flow, merge_outcome)
+                        if disposition is None:
+                            continue
+                        close.execute(
+                            CloseItemInput(
+                                item=item.id, reason=merge_outcome, disposition=disposition
+                            )
+                        )
                         resolved = True
-                    merged.append(item.id)
+                        merged.append(item.id)
                 elif close_outcome and self._github.is_closed_unmerged(pr_value):
                     nxt = flow.next(stage, close_outcome)
                     if nxt and nxt.to_step and not nxt.to_terminal:
@@ -276,10 +305,18 @@ class MonitorPrsUseCase:
                             continue
                         self._close_run(run, RunState.ABANDONED)
                         self._complete.execute(CompleteInput(step=step.id, outcome=close_outcome))
+                        abandoned.append(item.id)
                     else:
-                        close.execute(CloseItemInput(item=item.id, reason=close_outcome))
+                        disposition = self._disposition_for_close(item, flow, close_outcome)
+                        if disposition is None:
+                            continue
+                        close.execute(
+                            CloseItemInput(
+                                item=item.id, reason=close_outcome, disposition=disposition
+                            )
+                        )
                         resolved = True
-                    abandoned.append(item.id)
+                        abandoned.append(item.id)
                 if resolved:
                     break
         for step in self._store.all_nodes():

@@ -38,7 +38,7 @@ You are an ephemeral review-code agent in lightcycle. You claim ONE step, comple
      `lc done STEP rejected --note "<what to change>"` as today (the note forwards, stamped with
      its source step, onto the new write-code step so the next write-code agent reads it on their
      own step) - the internal handoff is unchanged, the PR comment is additional.
-   - Cannot review -> `lc set STEP --state blocked --needs "<...>"`, no PR comment - there is no
+   - Cannot review -> `lc set STEP --state waiting --needs "<...>"`, no PR comment - there is no
      verdict yet to report.
 6. One-line summary. EXIT.
 

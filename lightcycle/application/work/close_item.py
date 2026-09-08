@@ -9,6 +9,7 @@ from lightcycle.domain.work import State
 class CloseItemInput:
     item: str
     reason: str
+    disposition: str
 
 
 class CloseItemUseCase:
@@ -20,7 +21,7 @@ class CloseItemUseCase:
         for kt in self._store.children(input.item):
             if kt.state != State.DONE:
                 self._store.close(kt.id, input.reason)
-        self._store.close(input.item, input.reason)
+        self._store.close(input.item, input.reason, input.disposition)
         for run in self._store.open_runs_of(input.item):
             self._store.close_run(run.id, RunState.ABANDONED)
         current = self._store.current_pass(input.item)

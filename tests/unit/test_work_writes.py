@@ -541,10 +541,29 @@ class TestCloseItem(unittest.TestCase):
         sid = s.create_item("st", "a description")
         k = s.create_step("build: x", step="build", role="agent", parent=sid)
         wt = FakeWorktrees()
-        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged", disposition="completed"))
         self.assertEqual(s.get_node(sid).state, "done")
+        self.assertEqual(s.get_node(sid).disposition, "completed")
         self.assertEqual(s.get_node(k).state, "done")
+        self.assertFalse(hasattr(s.get_node(k), "disposition"))
         self.assertEqual(wt.removed, [sid])
+
+    def test_disposition_is_passed_explicitly_only_for_the_item_being_closed(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        k = s.create_step("build: x", step="build", role="agent", parent=sid)
+        calls = []
+        original_close = s.close
+
+        def spy_close(tid, reason, disposition=None):
+            calls.append((tid, disposition))
+            return original_close(tid, reason, disposition)
+
+        s.close = spy_close
+        wt = FakeWorktrees()
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged", disposition="completed"))
+        self.assertIn((sid, "completed"), calls)
+        self.assertIn((k, None), calls)
 
     def test_closes_linked_backlog_item_on_item_close(self):
         s = FakeStore()
@@ -552,7 +571,7 @@ class TestCloseItem(unittest.TestCase):
         sid = s.create_item("st", "a description")
         s.add_artifact(sid, "resolves", backlog)
         wt = FakeWorktrees()
-        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged", disposition="completed"))
         self.assertEqual(s.get_node(backlog).state, "done")
         self.assertEqual(
             [(a.type, a.value) for a in s.item_artifacts(backlog)], [("resolved-by", sid)]
@@ -562,15 +581,16 @@ class TestCloseItem(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         wt = FakeWorktrees()
-        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged"))
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged", disposition="completed"))
         self.assertEqual(s.get_node(sid).state, "done")
 
     def test_closes_a_never_activated_backlogged_item_without_crashing(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         wt = WorktreeService(s, FakeGit(), FakeFs(), FakeConfig(), flow=_RaisingFlow())
-        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="wontfix"))
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="wontfix", disposition="aborted"))
         self.assertEqual(s.get_node(sid).state, "done")
+        self.assertEqual(s.get_node(sid).disposition, "aborted")
 
 
 class TestCloseItemBacklogResolution(unittest.TestCase):
@@ -608,7 +628,7 @@ class TestCloseItemBacklogResolution(unittest.TestCase):
 def _close_item(store, item):
     CloseItemUseCase(
         store, WorktreeService(store, FakeGit(), FakeFs(), FakeConfig())
-    ).execute(CloseItemInput(item=item, reason="done"))
+    ).execute(CloseItemInput(item=item, reason="done", disposition="completed"))
 
 
 class TestWorktreeServiceItemBranch(unittest.TestCase):

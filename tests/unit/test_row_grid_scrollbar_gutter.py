@@ -30,7 +30,7 @@ def _priority_active_store(count):
             "row %d" % i, step="write-code", role="agent", id="LC-%d.1" % (1000 + i),
         )
         store.assign(step, "worker-%d" % i)
-        store.update_state(step, State.IN_PROGRESS)
+        store.update_state(step, State.RUNNING)
     return store
 
 
@@ -50,7 +50,7 @@ def _hierarchy_step_store(count):
             "step %d" % i, step="build", role="agent", parent=item, id="LC-3000.%d" % (i + 1),
         )
         store.assign(step, "worker-%d" % i)
-        store.update_state(step, State.IN_PROGRESS)
+        store.update_state(step, State.RUNNING)
         steps.append(step)
     store.accrue_active_seconds(steps, 840)
     return store, item

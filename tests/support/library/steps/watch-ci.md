@@ -31,7 +31,7 @@ You are an ephemeral watch-ci agent in lightcycle. You claim ONE step, complete 
       SHA using the bounded poll in (d).
    d. If the latest run for the current head SHA is `pending`/`in_progress`, or no run exists yet
       for that SHA, poll up to CI_WAIT (GitHub's own CI timeout - do not escalate before it elapses),
-      then `lc set <step> --state blocked` for the human. **Never conclude `ci-failed` on pending or
+      then `lc set <step> --state waiting` for the human. **Never conclude `ci-failed` on pending or
       absent checks.**
    e. Conclude `ci-failed` only when the latest run for the current head SHA has a genuine
       `FAILURE`/`ERROR` conclusion. Fetch the actual failing job/logs before concluding; never
@@ -43,7 +43,7 @@ You are an ephemeral watch-ci agent in lightcycle. You claim ONE step, complete 
    needs changing) -> `lc done STEP ci-failed --note "<failing job> / <failing test id(s)> / <short
    log excerpt>"` (-> write-code; reworks on the same branch/PR). The note must name the actual job,
    test, and error line - never just "CI failed" - so the next write-code agent reads the failure
-   instead of re-deriving it. Human decision needed -> `lc set STEP --state blocked --pr <url> --needs
+   instead of re-deriving it. Human decision needed -> `lc set STEP --state waiting --pr <url> --needs
    "<...>"`.
 7. One-line summary. EXIT.
 

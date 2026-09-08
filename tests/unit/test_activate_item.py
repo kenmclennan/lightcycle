@@ -34,7 +34,7 @@ class TestActivateItem(unittest.TestCase):
         resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
-        self.assertEqual(s.get_node(item).state, "ready")
+        self.assertEqual(s.get_node(item).state, "queued")
         step = s.get_node(resp.step)
         self.assertEqual(step.type, "step")
         self.assertEqual(step.step, "build")
@@ -75,7 +75,7 @@ class TestActivateItem(unittest.TestCase):
         resp = ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
-        self.assertEqual(s.get_node(item).state, "ready")
+        self.assertEqual(s.get_node(item).state, "queued")
         self.assertEqual(s.get_node(resp.step).step, "build")
 
     def test_an_unresolvable_workflow_raises_a_use_case_error_not_the_bare_value_error(self):
@@ -101,7 +101,7 @@ class TestActivateItem(unittest.TestCase):
         resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
-        self.assertEqual(s.get_node(item).state, "ready")
+        self.assertEqual(s.get_node(item).state, "queued")
         self.assertEqual(s.get_node(resp.step).step, "build")
 
     def test_deps_are_recorded_on_the_entry_step_and_block_it_from_ready(self):

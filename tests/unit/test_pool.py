@@ -305,8 +305,8 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(result.swept, [orphan])
         self.assertEqual(result.pruned, 2)
-        self.assertEqual(s.get_node(orphan).state, "ready")
-        self.assertEqual(s.get_node(held).state, "in_progress")
+        self.assertEqual(s.get_node(orphan).state, "queued")
+        self.assertEqual(s.get_node(held).state, "running")
 
     def test_kills_and_prunes_a_live_past_boot_worker_owning_no_task(self):
         s = FakeStore()
@@ -366,7 +366,7 @@ class TestSweep(unittest.TestCase):
             workers=[{"spawnid": "live-sp", "pid": 888, "step": step, "started": 100}],
             alive_pids={888},
         )
-        CloseItemUseCase(s, FakeWorktrees()).execute(CloseItemInput(item=item, reason="merged"))
+        CloseItemUseCase(s, FakeWorktrees()).execute(CloseItemInput(item=item, reason="merged", disposition="completed"))
 
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
 
@@ -401,7 +401,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [step])
         self.assertEqual(git.commits, [("/worktrees/%s" % item, "wip: preserved %s on reclaim" % step)])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_reclaiming_a_clean_worktree_does_not_commit(self):
         s = FakeStore()
@@ -419,7 +419,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
         self.assertEqual(git.commits, [])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_reclaiming_a_non_git_worktree_does_not_commit(self):
         s = FakeStore()
@@ -437,7 +437,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
         self.assertEqual(git.commits, [])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_reclaiming_with_no_worktrees_or_git_ports_wired_is_a_noop(self):
         s = FakeStore()
@@ -449,7 +449,7 @@ class TestSweep(unittest.TestCase):
 
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_reclaiming_a_repo_less_step_does_not_consult_git(self):
         s = FakeStore()
@@ -466,7 +466,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
         self.assertEqual(git.commits, [])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_a_failed_commit_still_reclaims_and_is_reported(self):
         s = FakeStore()
@@ -484,7 +484,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
         self.assertEqual(result.capture_failed, [step])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_an_unreadable_worktree_is_reported_as_a_capture_failure_not_a_silent_skip(self):
         s = FakeStore()
@@ -502,7 +502,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [step])
         self.assertEqual(result.preserved, [])
         self.assertEqual(result.capture_failed, [step])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_capture_happens_before_reclaim(self):
         events = []
@@ -547,7 +547,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(workers.killed, [999])
         self.assertEqual(workers.checked, ["stalled-sp"])
         self.assertIn(step, result.swept)
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def test_leaves_a_worker_alone_whose_log_grew_within_the_stall_threshold(self):
         s = FakeStore()
@@ -564,7 +564,7 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(step).state, "in_progress")
+        self.assertEqual(s.get_node(step).state, "running")
 
     def test_a_worker_still_in_its_boot_window_is_never_evaluated_for_staleness(self):
         s = FakeStore()
@@ -601,7 +601,7 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(step).state, "in_progress")
+        self.assertEqual(s.get_node(step).state, "running")
 
     def test_a_stalled_worker_with_no_mtime_available_is_left_alone_this_tick(self):
         s = FakeStore()
@@ -623,7 +623,7 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(step).state, "in_progress")
+        self.assertEqual(s.get_node(step).state, "running")
 
     def test_a_stalled_worker_is_killed_even_when_fs_is_not_wired(self):
         s = FakeStore()
@@ -640,7 +640,7 @@ class TestSweep(unittest.TestCase):
         result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [999])
         self.assertIn(step, result.swept)
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
 
     def _dead_no_work_setup(self, spin_port, spawnid="dead-sp", pid=1):
         s = FakeStore()
@@ -660,7 +660,7 @@ class TestSweep(unittest.TestCase):
         )
         self.assertIn(step, result.swept)
         self.assertEqual(result.parked, [])
-        self.assertEqual(s.get_node(step).state, "ready")
+        self.assertEqual(s.get_node(step).state, "queued")
         self.assertEqual(s.get_node(step).role, "agent")
 
     def test_the_spin_cap_th_consecutive_no_work_death_parks_instead_of_reclaiming(self):

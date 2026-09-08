@@ -17,6 +17,17 @@ class FakeBreakerPort:
         self._state = dict(state)
 
 
+class FakeSpinPort:
+    def __init__(self, state=None):
+        self._state = state or {}
+
+    def load(self):
+        return dict(self._state)
+
+    def save(self, state):
+        self._state = dict(state)
+
+
 class TestBreakerStatusUseCase(unittest.TestCase):
     def test_closed_state(self):
         breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
@@ -49,6 +60,29 @@ class TestBreakerStatusUseCase(unittest.TestCase):
         breaker_port.save = lambda state: saved.append(state)
         BreakerStatusUseCase(breaker_port).execute(0)
         self.assertEqual(saved, [])
+
+    def test_no_spin_port_reads_pool_spin_open_as_false(self):
+        breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
+        result = BreakerStatusUseCase(breaker_port).execute(0)
+        self.assertFalse(result.pool_spin_open)
+
+    def test_pool_wide_spin_tripped_is_reported(self):
+        breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
+        spin_port = FakeSpinPort(state={"pool": {"streak": 2, "tripped": True}})
+        result = BreakerStatusUseCase(breaker_port, spin_port).execute(0)
+        self.assertTrue(result.pool_spin_open)
+
+    def test_pool_wide_spin_untripped_is_not_reported(self):
+        breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
+        spin_port = FakeSpinPort(state={"pool": {"streak": 1, "tripped": False}})
+        result = BreakerStatusUseCase(breaker_port, spin_port).execute(0)
+        self.assertFalse(result.pool_spin_open)
+
+    def test_missing_pool_key_in_spin_state_reads_as_not_tripped(self):
+        breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
+        spin_port = FakeSpinPort(state={})
+        result = BreakerStatusUseCase(breaker_port, spin_port).execute(0)
+        self.assertFalse(result.pool_spin_open)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from lightcycle.domain.work import Lane, lane_for
+from lightcycle.domain.work import Lane, State, lane_for
 from tests.support.fake_store import FakeStore
 
 scenarios("blocking-dependency-ids.feature")
@@ -118,7 +118,7 @@ def _is_the_step_claimed(ctx, name):
 @then(parsers.parse('"{name}" belongs to the queue lane, not the inbox lane'))
 def _queue_lane(ctx, name):
     node = ctx["store"].get_node(ctx["ids"][name])
-    assert lane_for(node.state, node.role) == Lane.QUEUE
+    assert lane_for(node.state) == Lane.QUEUE
 
 
 @given(parsers.parse('an item whose only step "{blocked}" needs a step "{dep}"'))
@@ -129,7 +129,7 @@ def _item_with_dependency_held_step(ctx, blocked, dep):
     _create_step(ctx, blocked, deps=[dep], parent=item)
 
 
-@then(parsers.parse('the item containing "{name}" is ready'))
-def _item_containing_is_ready(ctx, name):
+@then(parsers.parse('the item containing "{name}" is blocked'))
+def _item_containing_is_blocked(ctx, name):
     item = ctx["store"].get_node(ctx["ids"]["item:" + name])
-    assert item.state == "ready"
+    assert item.state == State.BLOCKED

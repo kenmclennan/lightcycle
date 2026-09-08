@@ -15,12 +15,12 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         s.label_add(tid, "for:coder")
         self.assertEqual(s._records[tid]["labels"].count("for:coder"), 1)
 
-    def test_assign_clear_returns_to_ready(self):
+    def test_assign_clear_returns_to_queued(self):
         s = self.make_store()
         tid = s.create_step("t", role="agent")
         s.assign(tid, "worker-1")
         s.assign(tid, "")
-        self.assertEqual(s.get_node(tid).state, "ready")
+        self.assertEqual(s.get_node(tid).state, "queued")
 
     def test_two_deps_require_both_closed(self):
         s = self.make_store()

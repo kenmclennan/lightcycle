@@ -7,9 +7,10 @@ PROJECT_WORKSPACE = "project"
 
 
 class Flow:
-    def __init__(self, steps, workspace_default="project"):
+    def __init__(self, steps, workspace_default="project", disposition=None):
         self._steps = steps
         self._workspace_default = workspace_default
+        self._disposition = disposition or {}
 
     @classmethod
     def from_graph(cls, graph, step_metas) -> "Flow":
@@ -103,7 +104,7 @@ class Flow:
                 primary=primary.get(stage),
                 display=display.get(stage),
             )
-        return cls(steps, graph.workspace)
+        return cls(steps, graph.workspace, dict(graph.disposition))
 
     def owner_of(self, step):
         sd = self._steps.get(step)
@@ -226,6 +227,9 @@ class Flow:
             for hook in sd.hooks:
                 out.setdefault(hook, []).append(s)
         return {hook: sorted(steps) for hook, steps in sorted(out.items())}
+
+    def disposition_for(self, outcome):
+        return self._disposition.get(outcome)
 
     def next(self, step, outcome):
         sd = self._steps.get(step)

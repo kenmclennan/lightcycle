@@ -28,28 +28,24 @@ A **planned step**'s id (see "The model (nouns)" in [ontology.md](ontology.md)) 
 
 ## The one lifecycle field: `state`
 
-An item and a step each have a single `state` (see [state-lifecycle.md](state-lifecycle.md)):
+An item and a step each have a single `state` (see [state-lifecycle.md](state-lifecycle.md)), one label per what the node is waiting on: `backlogged`, `blocked`, `queued`, `running`, `waiting`, `done`.
 
-```
-backlogged  ->  ready  ->  in_progress  ->  done
-```
-
-A **step** stores its own state. An **item** does not store a state - it is **derived** as a roll-up of its steps on every read, so an item can never disagree with its steps.
+A **step** stores its own state. An **item** does not store a state - it is **derived**: its own unresolved dependency outranks everything else (`blocked`), otherwise it is a precedence roll-up of its steps' states (`waiting` > `running` > `queued` > `blocked`), so an item can never disagree with its steps.
 
 Two things are kept **orthogonal** to the state (baking them in would multiply the states):
 
-- **role** - who processes the node: `agent` or `human`. A ready step with `role=human` is a human gate (it shows in the inbox); the state is still just `ready`. The stage a step performs is its `stage` field.
-- **outcome** - how a `done` node ended: `done`, `merged`, `abandoned`, `rejected`, ... `done` is the single terminal state; the outcome records the flavour.
+- **role** - who processes the node: `agent` or `human`. An unassigned, unblocked step with `role=human` is `waiting` (it shows in the inbox); role stays a separate field rather than folding into the state name. The stage a step performs is its `stage` field.
+- **outcome** - how a `done` node ended: `done`, `merged`, `abandoned`, `rejected`, ... `done` is the single terminal state; the outcome records the flavour. An **item** additionally carries a **disposition** (`completed` or `aborted`) once closed - an engine-owned classification of whether its outcome was a delivery or an abandonment, declared per outcome name by the workflow bundle rather than interpreted from the outcome string itself.
 
 ## Attachments
 
 - **artifacts** - typed values attached to an **item**: `repo`, `spec`, `brief`, `blueprint`, `spec-amendment`. Steps declare `accepts` / `produces` in their frontmatter, and the engine checks the item's artifacts against that contract before a step may close. `branch`, `pr` and `comments-handled` are NOT artifacts: `lc attach` routes them onto the item's current phase run, which is where every reader looks for them.
-- **deps** - a node can be blocked by another. A step with an unmet dependency stays `backlogged` and becomes claimable (`ready`) only once every blocker is closed.
+- **deps** - a node can be blocked by another. A step with an unmet dependency is `blocked` and becomes claimable (`queued`, or `waiting` for a human role) only once every blocker is closed.
 
 ```mermaid
 graph LR
   item[item] -->|has| art[artifacts repo spec brief]
   step1[step write-code] -->|blocks| step2[step review-code]
   step1 -->|role| r[agent]
-  step1 -->|state| s[in_progress]
+  step1 -->|state| s[running]
 ```

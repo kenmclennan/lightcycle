@@ -108,7 +108,7 @@ class SmokeTest(unittest.TestCase):
         r = _tg("claim", "agent", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         step = json.loads(r.stdout)
-        self.assertEqual(step["state"], "in_progress")
+        self.assertEqual(step["state"], "running")
         build_id = step["id"]
 
         r = _tg("done", build_id, "done", root=self.root)
@@ -121,7 +121,7 @@ class SmokeTest(unittest.TestCase):
         shown = json.loads(r.stdout)
         self.assertEqual(shown["role"], "agent")
         self.assertEqual(shown["stage"], "review-code")
-        self.assertEqual(shown["state"], "ready")
+        self.assertEqual(shown["state"], "queued")
 
 
 if __name__ == "__main__":

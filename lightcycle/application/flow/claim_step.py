@@ -57,7 +57,7 @@ class ClaimStepUseCase:
             node = self._store.get_node(sid)
         except KeyError:
             return None
-        if node.state != State.IN_PROGRESS or node.claimed_by != spawnid:
+        if node.state != State.RUNNING or node.claimed_by != spawnid:
             return None
         return node
 

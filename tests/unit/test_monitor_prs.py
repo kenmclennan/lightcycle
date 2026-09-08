@@ -91,7 +91,8 @@ _FLOW = flow_from_metas(
             "on_pr_merge": "merged",
             "on_pr_close": "abandoned",
         }
-    }
+    },
+    disposition={"merged": "completed", "abandoned": "aborted"},
 )
 
 _MERGE_ONLY_FLOW = flow_from_metas(
@@ -101,7 +102,8 @@ _MERGE_ONLY_FLOW = flow_from_metas(
             "routes": {"merged": "cleanup", "changes": "build"},
             "on_pr_merge": "merged",
         }
-    }
+    },
+    disposition={"merged": "completed"},
 )
 
 _FEEDBACK_FLOW = flow_from_metas(
@@ -239,7 +241,10 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
                     "  await-merge  changes write-code\n\n"
                     "hooks:\n"
                     "  pr_merge   await-merge  merged\n"
-                    "  pr_close   await-merge  abandoned\n"
+                    "  pr_close   await-merge  abandoned\n\n"
+                    "disposition:\n"
+                    "  merged     completed\n"
+                    "  abandoned  aborted\n"
                 ),
                 "spec": (
                     "entry: spec-writer\n\n"
@@ -249,7 +254,10 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
                     "  await-merge  changes spec-writer\n\n"
                     "hooks:\n"
                     "  pr_merge   await-merge  spec-merged\n"
-                    "  pr_close   await-merge  abandoned\n"
+                    "  pr_close   await-merge  abandoned\n\n"
+                    "disposition:\n"
+                    "  spec-merged  completed\n"
+                    "  abandoned    aborted\n"
                 ),
             },
         )
@@ -369,7 +377,7 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
 
         self.assertEqual(store.get_node(step).state, "done")
         self.assertEqual(store.get_node(step).outcome, "merged")
-        self.assertEqual(store.get_node(item).state, "in_progress")
+        self.assertEqual(store.get_node(item).state, State.WAITING)
         created = [n for n in store.all_steps() if n.step == "cleanup" and n.parent == item]
         self.assertEqual(len(created), 1)
         self.assertEqual(created[0].role, "human")
@@ -410,7 +418,7 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         node = store.get_node(spec_item)
         self.assertEqual(node.id, spec_item)
         self.assertEqual(node.workflow, "spec-driven")
-        self.assertEqual(node.state, "in_progress")
+        self.assertEqual(node.state, State.QUEUED)
         all_items = [n for n in store.all_nodes() if n.type == "item"]
         self.assertEqual([n.id for n in all_items], [spec_item])
         steps = [s for s in store.children(spec_item) if s.state != "done"]
@@ -445,7 +453,7 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.merged, [])
-        self.assertEqual(store.get_node(spec_item).state, "in_progress")
+        self.assertEqual(store.get_node(spec_item).state, State.QUEUED)
 
 
 _SAME_REPO_TWO_PHASE = (
@@ -522,6 +530,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
         self.assertEqual(result.merged, [item])
         self.assertEqual(store.get_node(item).state, "done")
+        self.assertEqual(store.get_node(item).disposition, "completed")
         self.assertEqual(store.get_node(step).state, "done")
         self.assertIn(item, worktrees.removed)
 
@@ -532,6 +541,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         uc.execute()
 
         self.assertEqual(store.get_node(item).outcome, "merged")
+        self.assertEqual(store.get_node(item).disposition, "completed")
 
     def test_open_pr_does_not_close_story(self):
         url = "https://github.com/x/y/pull/3"
@@ -541,7 +551,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
         self.assertEqual(result.merged, [])
         self.assertEqual(result.abandoned, [])
-        self.assertEqual(store.get_node(item).state, "ready")
+        self.assertEqual(store.get_node(item).state, State.WAITING)
         self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(worktrees.removed, [])
 
@@ -629,7 +639,8 @@ class TestMonitorPrsMerged(unittest.TestCase):
                     "routes": {"shipped": "done-step"},
                     "on_pr_merge": "shipped",
                 }
-            }
+            },
+            disposition={"shipped": "completed"},
         )
         url = "https://github.com/x/y/pull/99"
         store = FakeStore()
@@ -643,6 +654,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
         self.assertEqual(result.merged, [item])
         self.assertEqual(store.get_node(item).outcome, "shipped")
+        self.assertEqual(store.get_node(item).disposition, "completed")
         self.assertIn(item, worktrees.removed)
 
 
@@ -667,6 +679,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertEqual(result.abandoned, [item])
         self.assertEqual(result.merged, [])
         self.assertEqual(store.get_node(item).state, "done")
+        self.assertEqual(store.get_node(item).disposition, "aborted")
         self.assertEqual(store.get_node(step).state, "done")
         self.assertIn(item, worktrees.removed)
 
@@ -677,6 +690,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         uc.execute()
 
         self.assertEqual(store.get_node(item).outcome, "abandoned")
+        self.assertEqual(store.get_node(item).disposition, "aborted")
 
     def test_open_pr_does_not_take_abandon_path(self):
         url = "https://github.com/x/y/pull/12"
@@ -685,7 +699,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.abandoned, [])
-        self.assertEqual(store.get_node(item).state, "ready")
+        self.assertEqual(store.get_node(item).state, State.WAITING)
         self.assertEqual(worktrees.removed, [])
 
     def test_merged_pr_does_not_take_abandon_path(self):
@@ -706,7 +720,8 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
                     "on_pr_merge": "shipped",
                     "on_pr_close": "cancelled",
                 }
-            }
+            },
+            disposition={"shipped": "completed", "cancelled": "aborted"},
         )
         url = "https://github.com/x/y/pull/20"
         store = FakeStore()
@@ -722,6 +737,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
 
         self.assertEqual(result.abandoned, [item])
         self.assertEqual(store.get_node(item).outcome, "cancelled")
+        self.assertEqual(store.get_node(item).disposition, "aborted")
         self.assertIn(item, worktrees.removed)
 
     def test_step_without_on_pr_close_not_abandoned_on_close(self):
@@ -733,7 +749,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.abandoned, [])
-        self.assertEqual(store.get_node(item).state, "ready")
+        self.assertEqual(store.get_node(item).state, State.WAITING)
 
     def test_closed_unmerged_pr_advances_to_a_declared_gate_instead_of_closing(self):
         url = "https://github.com/x/y/pull/23"
@@ -753,7 +769,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.abandoned, [item])
-        self.assertEqual(store.get_node(item).state, "in_progress")
+        self.assertEqual(store.get_node(item).state, State.WAITING)
         self.assertEqual(store.get_node(step).state, "done")
         live_steps = [s for s in store.children(item) if s.state != "done"]
         self.assertEqual([s.step for s in live_steps], ["confirm-abandon"])
@@ -861,7 +877,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertEqual(len(spawned), 1)
         self.assertEqual(spawned[0].role, "agent")
         self.assertEqual(spawned[0].parent, item)
-        self.assertEqual(spawned[0].state, "ready")
+        self.assertEqual(spawned[0].state, State.QUEUED)
         self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(store.get_step(spawned[0].id).watched_step, step)
         run = store.current_run(item, None)
@@ -1287,7 +1303,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                     "on_pr_merge": "merged",
                     "on_pr_conflict": "conflicted",
                 },
-            })
+            }, disposition={"merged": "completed"})
         )
 
         result = uc.execute()
@@ -1644,7 +1660,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store, item, step, uc = self._setup(gh)
         uc.execute()
         store.assign(step, "worker1")
-        store.update_state(step, State.IN_PROGRESS)
+        store.update_state(step, State.RUNNING)
 
         gh._head_shas[self._URL] = "sha2"
         gh._files_by_sha[(self._URL, "sha2")] = frozenset()
@@ -1652,7 +1668,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         uc.execute()
 
         node = store.get_node(step)
-        self.assertEqual(node.state, "in_progress")
+        self.assertEqual(node.state, State.RUNNING)
         self.assertEqual(node.role, "agent")
         self.assertIn("a.py", store.get_node(step).notes)
 
@@ -1993,7 +2009,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
 
         node = store.get_node(step)
         self.assertEqual(node.role, "agent")
-        self.assertEqual(node.state, "ready")
+        self.assertEqual(node.state, State.QUEUED)
         self.assertEqual(result.ci_released, [item])
         self.assertIn("ci-released:1", store.labels_of(step))
 
