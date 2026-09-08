@@ -19,6 +19,7 @@ from lightcycle.adapters.tui.app import (
     DoneView,
     LightcycleApp,
     PickerOption,
+    PoolPromptScreen,
     PriorityTable,
     ProjectFilterPicker,
     ShortcutBar,
@@ -44,7 +45,10 @@ from lightcycle.adapters.tui.row_grid import (
 from lightcycle.application.setup import UpgradeResponse
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import row_key, FakeBreakerPort, FakeLock, launch, make_test_container
+from tests.support.fake_workers import FakeWorkers
+from tests.support.tui_harness import (
+    row_key, FakeBreakerPort, FakeLock, FakeSpawner, launch, make_test_container,
+)
 
 
 def _cell_text(value):
@@ -947,7 +951,7 @@ class TestFooterPoolSegment(unittest.TestCase):
 
         _, text, style = _rendered_segment(session, "#status-pool")
 
-        self.assertEqual(text, "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph)
+        self.assertEqual(text, "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
 
     def test_pool_not_running_renders_dim_circle_never_blank(self):
@@ -955,7 +959,7 @@ class TestFooterPoolSegment(unittest.TestCase):
 
         _, text, style = _rendered_segment(session, "#status-pool")
 
-        self.assertEqual(text, "%s pool not running" % FOOTER_GLYPHS["pool-stopped"].glyph)
+        self.assertEqual(text, "%s pool not running (p)" % FOOTER_GLYPHS["pool-stopped"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["dim"].lower())
 
     def test_pool_state_change_reflects_without_restart(self):
@@ -966,7 +970,7 @@ class TestFooterPoolSegment(unittest.TestCase):
         session.poll_tick()
 
         _, text, _ = _rendered_segment(session, "#status-pool")
-        self.assertEqual(text, "%s pool running" % FOOTER_GLYPHS["pool-running"].glyph)
+        self.assertEqual(text, "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph)
 
 
 class TestFooterClaudeSegment(unittest.TestCase):
@@ -1743,3 +1747,127 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("/")
 
         self.assertNotIsInstance(session.app.focused, DoneFilterInput)
+
+
+class TestPoolControl(unittest.TestCase):
+    def _launch(self, running=False, autostart=False, workers=None, spawner=None):
+        spawner = spawner or FakeSpawner()
+        container = make_test_container(
+            lock=FakeLock(running=running),
+            workers=workers or FakeWorkers(),
+            spawner=spawner,
+            autostart_pool=autostart,
+        )
+        session = launch(container)
+        self.addCleanup(session.close)
+        return session, spawner, container
+
+    def test_p_starts_the_pool_when_it_is_not_running(self):
+        session, spawner, _ = self._launch(running=False)
+
+        session.press("p")
+
+        self.assertEqual(spawner.pool_spawns, 1)
+        self.assertFalse(
+            any(isinstance(s, PoolPromptScreen) for s in session.app.screen_stack)
+        )
+
+    def test_p_does_not_start_a_second_pool_when_one_is_running(self):
+        session, spawner, _ = self._launch(running=True)
+
+        session.press("p")
+
+        self.assertEqual(spawner.pool_spawns, 0)
+
+    def test_p_on_a_running_pool_asks_before_stopping(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        session, _, container = self._launch(running=True, workers=workers)
+
+        session.press("p")
+
+        prompt = session.app.screen_stack[-1]
+        self.assertIsInstance(prompt, PoolPromptScreen)
+        self.assertIn("1 worker running", _rendered_text(prompt.query_one("#pool-prompt-body", Static)))
+        self.assertEqual(container.workers.killed, [])
+
+    def test_cancelling_the_stop_prompt_leaves_the_pool_alone(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        session, _, container = self._launch(running=True, workers=workers)
+
+        session.press("p")
+        session.press("escape")
+
+        self.assertEqual(container.workers.killed, [])
+
+    def test_confirming_the_stop_prompt_signals_the_lock_holder(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        session, _, container = self._launch(running=True, workers=workers)
+
+        session.press("p")
+        session.press("enter")
+
+        self.assertEqual(container.workers.killed, [container.lock.holder_pid()])
+
+    def test_quitting_with_no_pool_running_does_not_prompt(self):
+        session, _, _ = self._launch(running=False)
+
+        session.press("q")
+
+        self.assertFalse(
+            any(isinstance(s, PoolPromptScreen) for s in session.app.screen_stack)
+        )
+
+    def test_quitting_with_a_running_pool_offers_to_stop_it(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "a", "pid": 1, "started": 0},
+                {"spawnid": "b", "pid": 2, "started": 0},
+            ],
+            alive_pids=(1, 2),
+        )
+        session, _, _ = self._launch(running=True, workers=workers)
+
+        session.press("q")
+
+        prompt = session.app.screen_stack[-1]
+        self.assertIsInstance(prompt, PoolPromptScreen)
+        self.assertIn("2 workers running", _rendered_text(prompt.query_one("#pool-prompt-body", Static)))
+
+    def test_quitting_and_leaving_the_pool_running_signals_nothing(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        session, _, container = self._launch(running=True, workers=workers)
+
+        session.press("q")
+        session.press("enter")
+
+        self.assertEqual(container.workers.killed, [])
+
+    def test_quitting_and_stopping_signals_the_lock_holder(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        session, _, container = self._launch(running=True, workers=workers)
+
+        session.press("q")
+        session.press("down")
+        session.press("enter")
+
+        self.assertEqual(container.workers.killed, [container.lock.holder_pid()])
+
+    def test_autostart_off_does_not_start_the_pool_on_launch(self):
+        _, spawner, _ = self._launch(running=False, autostart=False)
+
+        self.assertEqual(spawner.pool_spawns, 0)
+
+    def test_autostart_on_starts_the_pool_on_launch(self):
+        _, spawner, _ = self._launch(running=False, autostart=True)
+
+        self.assertEqual(spawner.pool_spawns, 1)
+
+    def test_autostart_on_does_not_start_a_second_pool(self):
+        _, spawner, _ = self._launch(running=True, autostart=True)
+
+        self.assertEqual(spawner.pool_spawns, 0)

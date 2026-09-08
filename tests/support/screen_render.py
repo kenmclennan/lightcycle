@@ -354,6 +354,38 @@ def _backlog_picker_open(size):
     return session
 
 
+def _pool_workers(n):
+    from tests.support.fake_workers import FakeWorkers
+
+    return FakeWorkers(
+        workers=[{"spawnid": "w%d" % i, "pid": i + 1, "started": 0} for i in range(n)],
+        alive_pids=tuple(range(1, n + 1)),
+    )
+
+
+def _pool_prompt_session(size, worker_count):
+    store, _scan, _coding = _populated_store()
+    return _launch(store, size=size, workers=_pool_workers(worker_count))
+
+
+def _pool_stop_prompt(size):
+    session = _pool_prompt_session(size, 3)
+    session.press("p")
+    return session
+
+
+def _pool_quit_prompt(size):
+    session = _pool_prompt_session(size, 3)
+    session.press("q")
+    return session
+
+
+def _pool_stop_prompt_no_workers(size):
+    session = _pool_prompt_session(size, 0)
+    session.press("p")
+    return session
+
+
 LONG_PROJECT_NAME = "kenmclennan/a-registered-project-name-longer-than-lightcycle-workflows"
 
 
@@ -847,6 +879,9 @@ SCREENS = {
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,
+    "pool#stop-prompt": _pool_stop_prompt,
+    "pool#quit-prompt": _pool_quit_prompt,
+    "pool#stop-prompt-no-workers": _pool_stop_prompt_no_workers,
     "backlog#picker-open": _backlog_picker_open,
     "backlog#picker-long-label": _backlog_picker_long_label,
     "backlog#text-filter": _backlog_text_filter,

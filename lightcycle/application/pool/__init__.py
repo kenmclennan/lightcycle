@@ -12,6 +12,13 @@ from lightcycle.application.pool.hook_completions import (
 from lightcycle.application.pool.list_workers import ListWorkersUseCase
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 from lightcycle.application.pool.monitor_prs import LC_MARKER, MonitorPrsUseCase
+from lightcycle.application.pool.pool_control import (
+    LiveWorkerCountUseCase,
+    StartPoolResponse,
+    StartPoolUseCase,
+    StopPoolSignalResponse,
+    StopPoolSignalUseCase,
+)
 from lightcycle.application.pool.resolve_log import ResolveLogInput, ResolveLogUseCase
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse, RetroCadenceUseCase
 from lightcycle.application.pool.run_lock import (
@@ -50,7 +57,12 @@ __all__ = [
     "ResolveLogUseCase",
     "RetroCadenceResponse",
     "RetroCadenceUseCase",
+    "LiveWorkerCountUseCase",
+    "StartPoolResponse",
+    "StartPoolUseCase",
     "StopPoolResponse",
+    "StopPoolSignalResponse",
+    "StopPoolSignalUseCase",
     "StopPoolUseCase",
     "SweepUseCase",
     "TailLogInput",

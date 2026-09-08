@@ -848,6 +848,46 @@ class TestRun(unittest.TestCase):
         self.assertIn("RuntimeError: boom", run_log)
         self.assertFalse((Path(self.root) / ".lc-run.pid").exists())
 
+    def test_detach_spawns_the_pool_and_reports_the_pid(self):
+        spawned = []
+
+        class RecordingSpawner:
+            def spawn_worker(self, role):
+                raise AssertionError("--detach must not spawn a worker")
+
+            def spawn_pool(self):
+                spawned.append(True)
+                return 31337
+
+        _cli_mod._container.spawner = RecordingSpawner()
+        rc, out, err = call(_cli_mod.cmd_start, "--detach")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(spawned), 1)
+        self.assertIn("31337", out)
+        self.assertIn("run.log", out)
+        self.assertFalse((Path(self.root) / ".lc-run.pid").exists())
+
+    def test_detach_refuses_when_a_pool_is_already_running(self):
+        (Path(self.root) / ".lc-run.pid").write_text(str(os.getpid()))
+
+        class RefusingSpawner:
+            def spawn_worker(self, role):
+                raise AssertionError("no worker")
+
+            def spawn_pool(self):
+                raise AssertionError("--detach must not spawn a second pool")
+
+        _cli_mod._container.spawner = RefusingSpawner()
+        rc, _, err = call(_cli_mod.cmd_start, "--detach")
+        self.assertEqual(rc, 1)
+        self.assertIn("already running", err)
+        self.assertIn(str(os.getpid()), err)
+
+    def test_detach_refuses_to_combine_with_once(self):
+        rc, _, err = call(_cli_mod.cmd_start, "--detach", "--once")
+        self.assertEqual(rc, 1)
+        self.assertIn("--detach", err)
+
     def test_lc_logs_run_returns_content_after_a_tick(self):
         self.store.create_step("build: t", step="build", role="agent")
         rc, _, err = self._run_once()

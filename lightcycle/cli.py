@@ -98,6 +98,7 @@ from lightcycle.application.pool import (
     LiveUsageAccrualUseCase,
     MonitorPrsUseCase,
     ReleaseRunLockUseCase,
+    StartPoolUseCase,
     ResolveLogInput,
     ResolveLogUseCase,
     RetroCadenceUseCase,
@@ -1593,9 +1594,21 @@ def _stop_pool():
 def cmd_start(argv):
     ap = argparse.ArgumentParser(prog="lc start")
     ap.add_argument("--once", action="store_true")
+    ap.add_argument("--detach", action="store_true")
     a = ap.parse_args(argv)
     if not require_store():
         return 1
+    if a.detach:
+        if a.once:
+            sys.stderr.write("--detach cannot be combined with --once\n")
+            return 1
+        resp = StartPoolUseCase(_container.lock, _container.spawner).execute()
+        if not resp.started:
+            sys.stderr.write("lc start already running, pid %d\n" % resp.pid)
+            return 1
+        print("lc start detached, pid %d - output goes to %s"
+              % (resp.pid, os.path.join(_container.config.data_root(), "logs", "run.log")))
+        return 0
     lock_result = AcquireRunLockUseCase(_container.lock).execute()
     if not lock_result.acquired:
         sys.stderr.write("lc start already running, pid %d\n" % lock_result.holder_pid)

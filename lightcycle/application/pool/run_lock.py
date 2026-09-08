@@ -28,6 +28,7 @@ class ReleaseRunLockUseCase:
 @dataclass(frozen=True)
 class PoolRunningResponse:
     running: bool
+    holder_pid: Optional[int] = None
 
 
 class PoolRunningUseCase:
@@ -35,4 +36,5 @@ class PoolRunningUseCase:
         self._lock = lock
 
     def execute(self) -> PoolRunningResponse:
-        return PoolRunningResponse(running=self._lock.is_running())
+        pid = self._lock.holder_pid()
+        return PoolRunningResponse(running=pid is not None, holder_pid=pid)

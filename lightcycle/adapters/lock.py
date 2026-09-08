@@ -47,8 +47,13 @@ def release(root):
 
 
 def is_running(root):
+    pid = holder_pid(root)
+    return pid is not None
+
+
+def holder_pid(root):
     pid = _read_pid(lock_path(root))
-    return pid is not None and pid_alive(pid)
+    return pid if pid is not None and pid_alive(pid) else None
 
 
 class RunLockAdapter(RunLockPort):
@@ -63,3 +68,6 @@ class RunLockAdapter(RunLockPort):
 
     def is_running(self):
         return is_running(self._config.data_root())
+
+    def holder_pid(self):
+        return holder_pid(self._config.data_root())

@@ -21,7 +21,6 @@ from lightcycle.config import Config, _SEED_KEYS
 from lightcycle.container import Container
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.git import GitPort
-from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from lightcycle.adapters.tui.hub import NodeHubScreen
@@ -36,11 +35,15 @@ def _no_upgrade_available():
 
 
 class FakeLock:
-    def __init__(self, running=False):
+    def __init__(self, running=False, pid=4242):
         self._running = running
+        self._pid = pid
 
     def is_running(self):
         return self._running
+
+    def holder_pid(self):
+        return self._pid if self._running else None
 
     def set_running(self, running):
         self._running = running
@@ -99,12 +102,13 @@ def _sweep_temp_roots():
 
 
 class HermeticTuiConfig(Config):
-    def __init__(self):
+    def __init__(self, autostart_pool=False):
         root = _tracked_mkdtemp()
         home = os.path.join(root, "home")
         os.makedirs(home)
         cfg_path = os.path.join(home, "config")
         seeded = dict(_SEED_KEYS)
+        seeded["tui-autostart-pool"] = "true" if autostart_pool else "false"
         seeded["projects"] = os.path.join(root, "projects")
         seeded["specs"] = os.path.join(root, "specs")
         seeded["backups-dir"] = os.path.join(root, "backups-dir")
@@ -118,6 +122,21 @@ class HermeticTuiConfig(Config):
 
 class NonHermeticContainerError(Exception):
     pass
+
+
+class FakeSpawner:
+    def __init__(self, pid=4242):
+        self._pid = pid
+        self.pool_spawns = 0
+
+    def spawn_worker(self, role):
+        raise NonHermeticContainerError(
+            "container.spawner.spawn_worker() was called without a fake in this test container"
+        )
+
+    def spawn_pool(self):
+        self.pool_spawns += 1
+        return self._pid
 
 
 def _poisoned(port_cls, port_name):
@@ -159,18 +178,19 @@ def assert_hermetic(container):
 
 
 def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None,
-                         launcher=None, git=None, spawner=None, github=None, backup=None):
+                         launcher=None, git=None, spawner=None, github=None, backup=None,
+                         autostart_pool=False):
     container = Container(
         store=store or FakeStore(),
         lock=lock or FakeLock(running=False),
-        config=HermeticTuiConfig(),
+        config=HermeticTuiConfig(autostart_pool=autostart_pool),
         workflow_source=FakeWorkflowSource(),
         breaker=breaker or FakeBreakerPort(),
         fs=fs or FakeFs(),
         workers=workers or FakeWorkers(),
         launcher=launcher or FakeLauncher(),
         git=git or _poisoned(GitPort, "git"),
-        spawner=spawner or _poisoned(SpawnerPort, "spawner"),
+        spawner=spawner if spawner is not None else FakeSpawner(),
         github=github or FakeGitHub(),
         backup=backup or _poisoned(BackupPort, "backup"),
     )

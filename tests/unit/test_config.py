@@ -541,6 +541,35 @@ class TestUsagePricing(unittest.TestCase):
         with self.assertRaises(ConfigError):
             c.usage_pricing()
 
+class TestTuiAutostartPool(unittest.TestCase):
+    def test_reads_true_and_false_from_the_config_file(self):
+        self.assertTrue(_cfg(tui_autostart_pool="true").tui_autostart_pool())
+        self.assertFalse(_cfg(tui_autostart_pool="false").tui_autostart_pool())
+
+    def test_accepts_the_documented_spellings_case_insensitively(self):
+        for raw in ("TRUE", "Yes", "1", "on"):
+            self.assertTrue(_cfg(tui_autostart_pool=raw).tui_autostart_pool(), raw)
+        for raw in ("FALSE", "No", "0", "off"):
+            self.assertFalse(_cfg(tui_autostart_pool=raw).tui_autostart_pool(), raw)
+
+    def test_a_value_that_is_neither_is_refused_naming_the_key(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(tui_autostart_pool="maybe").tui_autostart_pool()
+        self.assertIn("tui-autostart-pool", str(e.exception))
+        self.assertIn("maybe", str(e.exception))
+
+    def test_an_unset_value_is_refused_rather_than_defaulted(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(max_agents="5").tui_autostart_pool()
+        self.assertIn("tui-autostart-pool", str(e.exception))
+
+    def test_the_env_var_overrides_the_file(self):
+        cfg = _cfg(environ={"LC_TUI_AUTOSTART_POOL": "true"}, tui_autostart_pool="false")
+        self.assertTrue(cfg.tui_autostart_pool())
+
+    def test_it_is_seeded_false_in_the_default_config(self):
+        self.assertEqual(dict(_SEED_KEYS)["tui-autostart-pool"], "false")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,9 @@ class FakeLock:
     def is_running(self):
         return self._running
 
+    def holder_pid(self):
+        return 123 if self._running else None
+
 
 class TestAcquireRunLockUseCase(unittest.TestCase):
     def test_reports_acquired_with_holder_pid(self):
