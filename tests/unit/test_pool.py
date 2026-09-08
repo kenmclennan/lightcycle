@@ -129,12 +129,12 @@ class FakeCaptureGit:
     def is_git_repo(self, root):
         return root not in self._non_git
 
-    def has_uncommitted(self, root):
+    def has_tracked_changes(self, root):
         if root in self._unreadable:
             raise GitReadError("git status failed in %s: fatal: not a git repository" % root)
         return root in self._dirty
 
-    def commit_all(self, root, message):
+    def commit_tracked(self, root, message):
         self.commits.append((root, message))
         return root not in self._fail
 
@@ -513,9 +513,9 @@ class TestSweep(unittest.TestCase):
                 return super().reclaim(tid)
 
         class OrderTrackingGit(FakeCaptureGit):
-            def commit_all(self, root, message):
+            def commit_tracked(self, root, message):
                 events.append(("commit", root))
-                return super().commit_all(root, message)
+                return super().commit_tracked(root, message)
 
         s = OrderTrackingStore()
         item = s.create_item("feature", "a description")

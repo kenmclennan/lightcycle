@@ -120,6 +120,18 @@ def commit_all(root, message):
     return git_ok(root, "commit", "-m", message)
 
 
+def has_tracked_changes(root):
+    proc = git(root, "status", "--porcelain", "--untracked-files=no")
+    if proc.returncode != 0:
+        raise GitReadError("git status failed in %s: %s" % (root, proc.stderr.strip()))
+    return proc.stdout.strip() != ""
+
+
+def commit_tracked(root, message):
+    git(root, "add", "-u")
+    return git_ok(root, "commit", "-m", message)
+
+
 def common_dir(root):
     proc = git(root, "rev-parse", "--git-common-dir")
     if proc.returncode != 0:
@@ -183,6 +195,12 @@ class GitAdapter(GitPort):
 
     def commit_all(self, root, message):
         return commit_all(root, message)
+
+    def has_tracked_changes(self, root):
+        return has_tracked_changes(root)
+
+    def commit_tracked(self, root, message):
+        return commit_tracked(root, message)
 
     def common_dir(self, root):
         return common_dir(root)

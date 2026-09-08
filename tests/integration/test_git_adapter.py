@@ -225,5 +225,54 @@ class TestGitAdapterCommitAll(unittest.TestCase):
         self.assertFalse(adapter.has_uncommitted(repo))
 
 
+class TestGitAdapterCommitTracked(unittest.TestCase):
+    def test_commits_a_modified_tracked_file(self):
+        repo = _make_repo()
+        (Path(repo) / "README").write_text("changed")
+        adapter = GitAdapter()
+
+        self.assertTrue(adapter.has_tracked_changes(repo))
+
+        before = _git(repo, "rev-parse", "HEAD").stdout.strip()
+        ok = adapter.commit_tracked(repo, "wip: preserved x1.1 on reclaim")
+        after = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+        self.assertTrue(ok)
+        self.assertNotEqual(before, after)
+        self.assertFalse(adapter.has_tracked_changes(repo))
+        self.assertEqual(_git(repo, "status", "--porcelain").stdout.strip(), "")
+
+    def test_ignores_a_purely_untracked_file(self):
+        repo = _make_repo()
+        (Path(repo) / "scratch.txt").write_text("new")
+        adapter = GitAdapter()
+
+        self.assertFalse(adapter.has_tracked_changes(repo))
+        self.assertNotEqual(_git(repo, "status", "--porcelain").stdout.strip(), "")
+
+        before = _git(repo, "rev-parse", "HEAD").stdout.strip()
+        adapter.commit_tracked(repo, "wip: preserved x1.1 on reclaim")
+        after = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+        self.assertEqual(before, after)
+        self.assertIn("??", _git(repo, "status", "--porcelain").stdout)
+
+    def test_commits_only_the_tracked_change_leaving_untracked_files_alone(self):
+        repo = _make_repo()
+        (Path(repo) / "README").write_text("changed")
+        (Path(repo) / "scratch.txt").write_text("new")
+        adapter = GitAdapter()
+
+        ok = adapter.commit_tracked(repo, "wip: preserved x1.1 on reclaim")
+
+        self.assertTrue(ok)
+        status = _git(repo, "status", "--porcelain").stdout
+        self.assertIn("?? scratch.txt", status)
+        self.assertNotIn("README", status)
+        stat = _git(repo, "show", "--stat", "HEAD").stdout
+        self.assertIn("README", stat)
+        self.assertNotIn("scratch.txt", stat)
+
+
 if __name__ == "__main__":
     unittest.main()

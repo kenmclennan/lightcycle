@@ -75,5 +75,13 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def has_tracked_changes(self, root):
+        pass
+
+    @abstractmethod
+    def commit_tracked(self, root, message):
+        pass
+
+    @abstractmethod
     def common_dir(self, root):
         pass

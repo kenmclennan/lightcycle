@@ -15,10 +15,10 @@ class _Git:
     def is_git_repo(self, path):
         return True
 
-    def has_uncommitted(self, path):
+    def has_tracked_changes(self, path):
         return self.dirty
 
-    def commit_all(self, path, message):
+    def commit_tracked(self, path, message):
         self.committed.append((path, message))
         return True
 

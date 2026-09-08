@@ -39,13 +39,13 @@ class SweepUseCase:
         if not self._git.is_git_repo(path):
             return None
         try:
-            dirty = self._git.has_uncommitted(path)
+            dirty = self._git.has_tracked_changes(path)
         except GitReadError:
             return False
         if not dirty:
             return None
         message = "wip: preserved %s on reclaim" % t.id
-        return self._git.commit_all(path, message)
+        return self._git.commit_tracked(path, message)
 
     def _saw_terminal_command(self, log):
         if self._fs is None:
