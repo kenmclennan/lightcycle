@@ -1707,6 +1707,20 @@ class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
             rebuild.assert_not_called()
             update.assert_called_once()
 
+    def test_stacked_mismatch_forces_rebuild_even_with_unchanged_shape(self):
+        store = FakeStore()
+        store.create_step("queued", step="build", role="agent")
+        session = self._launch(store)
+        self.assertFalse(session.app._priority_stacked)
+
+        session.app._priority_stacked = True
+        with patch.object(LightcycleApp, "_rebuild_table") as rebuild, \
+                patch.object(LightcycleApp, "_update_cells") as update:
+            session.run(session.app._refresh)
+            session.pause()
+            rebuild.assert_called_once()
+            update.assert_not_called()
+
 
 class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
     _ITEM = "LC-500"

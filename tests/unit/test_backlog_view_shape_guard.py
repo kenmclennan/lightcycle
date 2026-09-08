@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import patch
 
-from lightcycle.adapters.tui.app import BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, BacklogView
+from lightcycle.adapters.tui.app import (
+    BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, BacklogView, DoneTable, DoneView,
+)
 from lightcycle.adapters.tui.backlog_list import BacklogRow
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
@@ -181,6 +183,93 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
         self.assertTrue(view._backlog_needs_rebuild)
         table = session.app.query_one(BacklogTable)
         self.assertEqual(table.row_count, 0)
+
+
+class TestBacklogViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
+    _STACKED_WIDTH = 38
+
+    def _launch(self):
+        store = FakeStore()
+        store.create_item("seed", "a description")
+        session = launch(make_test_container(store=store), size=(self._STACKED_WIDTH, 24))
+        self.addCleanup(session.close)
+        return session
+
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
+        session.pause()
+
+    def test_hidden_after_stacked_build_then_polled_with_unchanged_rows_rebuilds(self):
+        session = self._launch()
+        view = session.app.query_one(BacklogView)
+        table = session.app.query_one(BacklogTable)
+        rows = [_row("a"), _row("b")]
+
+        session.press("tab")
+        self._apply(session, view, rows, 2, None)
+        self.assertTrue(table._stacked_mode)
+
+        with patch.object(BacklogView, "refresh_column_width"):
+            session.press("tab")
+        self.assertEqual(table.size.width, 0)
+
+        with patch.object(view, "_rebuild_table", wraps=view._rebuild_table) as rebuild, \
+                patch.object(view, "_update_cells") as update:
+            self._apply(session, view, rows, 2, None)
+            rebuild.assert_called_once()
+            update.assert_not_called()
+
+        with patch.object(BacklogView, "refresh_column_width"):
+            session.press("tab")
+            session.press("tab")
+        self._apply(session, view, rows, 2, None)
+
+        self.assertEqual(table.row_count, len(rows))
+        self.assertTrue(table._stacked_mode)
+
+
+class TestDoneViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
+    _STACKED_WIDTH = 38
+
+    def _launch(self):
+        store = FakeStore()
+        item = store.create_item("seed", "a description")
+        store.close(item, "done")
+        session = launch(make_test_container(store=store), size=(self._STACKED_WIDTH, 24))
+        self.addCleanup(session.close)
+        return session
+
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
+        session.pause()
+
+    def test_hidden_after_stacked_build_then_polled_with_unchanged_rows_rebuilds(self):
+        session = self._launch()
+        view = session.app.query_one(DoneView)
+        table = session.app.query_one(DoneTable)
+        rows = [_row("a"), _row("b")]
+
+        session.press("tab")
+        session.press("tab")
+        self._apply(session, view, rows, 2, None)
+        self.assertTrue(table._stacked_mode)
+
+        with patch.object(DoneView, "refresh_column_width"):
+            session.press("tab")
+        self.assertEqual(table.size.width, 0)
+
+        with patch.object(view, "_rebuild_table", wraps=view._rebuild_table) as rebuild, \
+                patch.object(view, "_update_cells") as update:
+            self._apply(session, view, rows, 2, None)
+            rebuild.assert_called_once()
+            update.assert_not_called()
+
+        with patch.object(DoneView, "refresh_column_width"):
+            session.press("tab")
+        self._apply(session, view, rows, 2, None)
+
+        self.assertEqual(table.row_count, len(rows))
+        self.assertTrue(table._stacked_mode)
 
 
 if __name__ == "__main__":

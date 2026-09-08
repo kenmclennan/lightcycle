@@ -1172,6 +1172,7 @@ class NodeHubScreen(Screen):
         self._last_multi_pass = False
         self._hierarchy_floor = False
         self._hierarchy_stacked = False
+        self._hierarchy_needs_rebuild = False
         self._hierarchy_layout_cache = None
         self._hierarchy_row_budget_cache = None
         self._hierarchy_target_id = None
@@ -1195,10 +1196,12 @@ class NodeHubScreen(Screen):
         self._has_artifacts = False
         self._artifacts_floor = False
         self._artifacts_stacked = False
+        self._artifacts_needs_rebuild = False
         self._last_detail_shape = None
         self._last_detail_fields = []
         self._detail_floor = False
         self._detail_stacked = False
+        self._detail_needs_rebuild = False
         self._cost_whole_empty_message = None
         self._last_cost_shape = None
         self._last_cost_rows = []
@@ -1502,21 +1505,28 @@ class NodeHubScreen(Screen):
         self._sync_active_glyph_animation()
         table = self.query_one(HierarchyPagingTable)
         shape = tuple(r.node.id for r in rows)
-        if shape == self._last_hierarchy_shape and not initial:
+        layout = self._hierarchy_layout(table, rows)
+        if (
+            shape == self._last_hierarchy_shape
+            and not initial
+            and not self._hierarchy_needs_rebuild
+            and layout.stacked == self._hierarchy_stacked
+        ):
             self._update_hierarchy_cells(table, rows, multi_pass)
             return
         if table.size.width == 0:
+            self._hierarchy_needs_rebuild = True
             return
 
-        layout = self._hierarchy_layout(table, rows)
         self._hierarchy_floor = bool(rows) and layout.floor
         self._hierarchy_stacked = layout.stacked
         if self._hierarchy_floor:
+            self._hierarchy_needs_rebuild = True
             self.query_one("#hierarchy-floor", Static).update(
                 Text(floor_message(layout, table, len(COLUMN_GRIDS["workflow"])), style=COLOURS["dim"])
             )
-            self._last_hierarchy_shape = shape
             return
+        self._hierarchy_needs_rebuild = False
 
         selected_id = self._selected_id(table) or self._hierarchy_target_id
         table.clear(columns=True)
@@ -1657,22 +1667,29 @@ class NodeHubScreen(Screen):
         self._has_artifacts = bool(artifacts)
         table = self.query_one(ArtifactsTable)
         shape = tuple((a.type, a.value, a.label, a.kind) for a in artifacts)
-        if shape == self._last_artifacts_shape and not initial:
+        layout = self._artifacts_layout(table, artifacts)
+        if (
+            shape == self._last_artifacts_shape
+            and not initial
+            and not self._artifacts_needs_rebuild
+            and layout.stacked == self._artifacts_stacked
+        ):
             self._last_artifacts_shape = shape
             self._update_artifact_cells(table, artifacts)
             return
         if table.size.width == 0:
+            self._artifacts_needs_rebuild = True
             return
 
-        layout = self._artifacts_layout(table, artifacts)
         self._artifacts_floor = bool(artifacts) and layout.floor
         self._artifacts_stacked = layout.stacked
         if self._artifacts_floor:
+            self._artifacts_needs_rebuild = True
             self.query_one("#artifacts-floor", Static).update(
                 Text(floor_message(layout, table, len(COLUMN_GRIDS["artifacts"])), style=COLOURS["dim"])
             )
-            self._last_artifacts_shape = shape
             return
+        self._artifacts_needs_rebuild = False
 
         selected_index = self._selected_artifact_index(table)
         table.clear(columns=True)
@@ -1713,22 +1730,29 @@ class NodeHubScreen(Screen):
         self._last_detail_fields = fields
         table = self.query_one(DetailTable)
         shape = tuple(fields)
-        if shape == self._last_detail_shape and not initial:
+        layout = self._detail_layout(table, fields)
+        if (
+            shape == self._last_detail_shape
+            and not initial
+            and not self._detail_needs_rebuild
+            and layout.stacked == self._detail_stacked
+        ):
             self._last_detail_shape = shape
             self._update_detail_cells(table, fields)
             return
         if table.size.width == 0:
+            self._detail_needs_rebuild = True
             return
 
-        layout = self._detail_layout(table, fields)
         self._detail_floor = bool(fields) and layout.floor
         self._detail_stacked = layout.stacked
         if self._detail_floor:
+            self._detail_needs_rebuild = True
             self.query_one("#detail-floor", Static).update(
                 Text(floor_message(layout, table, len(COLUMN_GRIDS["detail"])), style=COLOURS["dim"])
             )
-            self._last_detail_shape = shape
             return
+        self._detail_needs_rebuild = False
 
         selected_key = self._selected_detail_key(table)
         table.clear(columns=True)

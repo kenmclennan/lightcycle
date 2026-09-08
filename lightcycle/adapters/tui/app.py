@@ -283,6 +283,7 @@ class BacklogView(Vertical):
         self._text_filter = None
         self._last_shape = None
         self._backlog_needs_rebuild = False
+        self._backlog_stacked = False
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
@@ -310,7 +311,13 @@ class BacklogView(Vertical):
     def apply_rows(self, rows, total, project_filter, text_filter) -> None:
         shape = (tuple(r.id for r in rows), total, project_filter, text_filter)
         self._render_filter_bar(project_filter, len(rows))
-        if shape == self._last_shape and not self._backlog_needs_rebuild:
+        table = self.query_one(BacklogTable)
+        layout = self._layout(table)
+        if (
+            shape == self._last_shape
+            and not self._backlog_needs_rebuild
+            and layout.stacked == self._backlog_stacked
+        ):
             self._update_cells(rows)
         else:
             self._rebuild_table(rows)
@@ -364,6 +371,7 @@ class BacklogView(Vertical):
             self._backlog_needs_rebuild = True
             return
         layout = self._layout(table)
+        self._backlog_stacked = layout.stacked
         self._floor = bool(rows) and layout.floor
         floor_widget = self.query_one("#backlog-floor", Static)
         if self._floor:
@@ -480,6 +488,7 @@ class DoneView(Vertical):
         self._text_filter = None
         self._last_shape = None
         self._backlog_needs_rebuild = False
+        self._backlog_stacked = False
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
@@ -507,7 +516,13 @@ class DoneView(Vertical):
     def apply_rows(self, rows, total, project_filter, text_filter) -> None:
         shape = (tuple(r.id for r in rows), total, project_filter, text_filter)
         self._render_filter_bar(project_filter, len(rows))
-        if shape == self._last_shape and not self._backlog_needs_rebuild:
+        table = self.query_one(DoneTable)
+        layout = self._layout(table)
+        if (
+            shape == self._last_shape
+            and not self._backlog_needs_rebuild
+            and layout.stacked == self._backlog_stacked
+        ):
             self._update_cells(rows)
         else:
             self._rebuild_table(rows)
@@ -561,6 +576,7 @@ class DoneView(Vertical):
             self._backlog_needs_rebuild = True
             return
         layout = self._layout(table)
+        self._backlog_stacked = layout.stacked
         self._floor = bool(rows) and layout.floor
         floor_widget = self.query_one("#done-floor", Static)
         if self._floor:
@@ -1222,7 +1238,12 @@ class LightcycleApp(App):
         table = self.query_one(PriorityTable)
         self._priority_empty = not rows
 
-        if shape == self._last_shape and not self._priority_needs_rebuild:
+        layout = self._priority_layout(table, rows)
+        if (
+            shape == self._last_shape
+            and not self._priority_needs_rebuild
+            and layout.stacked == self._priority_stacked
+        ):
             self._update_cells(table, rows)
         else:
             self._rebuild_table(table, rows)
