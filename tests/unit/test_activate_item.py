@@ -104,6 +104,35 @@ class TestActivateItem(unittest.TestCase):
         self.assertEqual(s.get_node(item).state, "ready")
         self.assertEqual(s.get_node(resp.step).step, "build")
 
+    def test_deps_are_recorded_on_the_entry_step_and_block_it_from_ready(self):
+        s = FakeStore()
+        blocker = s.create_step("blocker", role="agent")
+        item = s.create_item("add refunds", "a description")
+        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=item, workflow="standard", deps=[blocker])
+        )
+        self.assertEqual(s.get_node(resp.step).blocked_by, [blocker])
+        self.assertNotIn(resp.step, [t.id for t in s.ready_steps()])
+
+    def test_closing_the_dep_makes_the_entry_step_ready(self):
+        s = FakeStore()
+        blocker = s.create_step("blocker", role="agent")
+        item = s.create_item("add refunds", "a description")
+        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=item, workflow="standard", deps=[blocker])
+        )
+        s.close(blocker, "done")
+        self.assertIn(resp.step, [t.id for t in s.ready_steps()])
+
+    def test_no_deps_behaves_exactly_as_before(self):
+        s = FakeStore()
+        item = s.create_item("add refunds", "a description")
+        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=item, workflow="standard")
+        )
+        self.assertEqual(s.get_node(resp.step).blocked_by, [])
+        self.assertIn(resp.step, [t.id for t in s.ready_steps()])
+
 
 if __name__ == "__main__":
     unittest.main()

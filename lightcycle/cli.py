@@ -28,7 +28,7 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.domain.feedback import format_elapsed
-from lightcycle.domain.work import display_stage, refuse_fields, refuse_state
+from lightcycle.domain.work import State, display_stage, refuse_fields, refuse_state
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_shortcode import resolve_shortcode
@@ -273,7 +273,7 @@ def cmd_upgrade(argv):
 _WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search", "peek")
 _SET_FIELDS = (
     "title", "description", "project", "workflow", "label", "backlog",
-    "notes", "needs", "reason", "tried", "step",
+    "notes", "needs", "reason", "tried", "step", "depends",
 )
 
 _SET_FORBIDDEN_FLAGS = (
@@ -1185,6 +1185,7 @@ _SET_FLAG_OWNERS = {
     "label": (None,), "backlog": (None,), "notes": (None,),
     "workflow": (None, "active"),
     "step": ("active",),
+    "depends": ("active",),
     "needs": ("blocked",), "reason": ("blocked",), "tried": ("blocked",),
     "unset": (None,),
 }
@@ -1260,6 +1261,7 @@ def cmd_set(argv):
                 "needs", "reason", "tried", "step", "notes"):
         ap.add_argument("--%s" % opt)
     ap.add_argument("--backlog", action="append")
+    ap.add_argument("--depends", action="append")
     ap.add_argument("--unset", action="append")
     ap.add_argument("id")
     a = ap.parse_args(argv)
@@ -1293,10 +1295,19 @@ def cmd_set(argv):
         if a.title:
             validate_title(_container.config, a.title)
         if a.state == "active":
+            depends_ids = a.depends or []
+            for node_id in depends_ids:
+                try:
+                    _container.store.get_node(node_id)
+                except KeyError:
+                    sys.stderr.write("unknown node '%s'\n" % node_id)
+                    return 1
             resp = ActivateItemUseCase(
                 _container.store, _flow(), _container.git, _container.config
             ).execute(
-                ActivateItemInput(item=a.id, workflow=a.workflow, step=a.step)
+                ActivateItemInput(
+                    item=a.id, workflow=a.workflow, step=a.step, deps=depends_ids
+                )
             )
             print(resp.step)
             return 0
@@ -1426,12 +1437,22 @@ def cmd_dep(argv):
         else:
             print("no-op: %s was not blocked by %s" % (a.id, a.remove))
         return 0
+    target = None
     for node_id in (a.id, a.needs):
         try:
-            _container.store.get_node(node_id)
+            node = _container.store.get_node(node_id)
         except KeyError:
             sys.stderr.write("unknown node '%s'\n" % node_id)
             return 1
+        if node_id == a.id:
+            target = node
+    if target.type == "step" and target.claimed_by is not None and target.state != State.DONE:
+        sys.stderr.write(
+            "'%s' is claimed by '%s' and already running; adding a dependency now will not "
+            "stop it - ask whoever runs the pool to stop the worker if it must not proceed\n"
+            % (a.id, target.claimed_by)
+        )
+        return 1
     _container.store.dep_add(a.id, a.needs)
     return 0
 
