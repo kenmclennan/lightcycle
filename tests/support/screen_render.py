@@ -160,21 +160,30 @@ def _backlog_store():
 STACKED_TITLE = "A title long enough to need a continuation line for real"
 
 
+STACKED_PROJECT_REPO = "kenmclennan/lightcycle-workflows"
+
+
 def _stacked_priority_store():
     from lightcycle.domain.work import State
 
     store = DemoStore(now=lambda: _at(14))
+    item = store.item("LC-3900.100.100", STACKED_TITLE, project="lightcycle-workflows")
+    store.add_artifact(item, "repo", STACKED_PROJECT_REPO)
     step = store.step(
-        "LC-3900.100.100", STACKED_TITLE, step="handle-feedback", role="agent",
+        "LC-3900.100.100.1", STACKED_TITLE, step="handle-feedback", role="agent", parent=item,
     )
     store.assign(step, "worker-1")
     store.update_state(step, State.IN_PROGRESS)
     return store
 
 
+STACKED_BACKLOG_PROJECT_REPO = "kenmclennan/an-extremely-long-project-name-for-testing"
+
+
 def _stacked_backlog_store():
     store = DemoStore()
-    store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
+    item = store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
+    store.add_artifact(item, "repo", STACKED_BACKLOG_PROJECT_REPO)
     return store
 
 
@@ -492,6 +501,7 @@ def _done_empty_filtered(size):
 def _stacked_done_store():
     store = DemoStore()
     item = store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
+    store.add_artifact(item, "repo", STACKED_BACKLOG_PROJECT_REPO)
     store.close(item, "merged")
     return store
 

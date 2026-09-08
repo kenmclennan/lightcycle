@@ -42,6 +42,7 @@ from lightcycle.adapters.tui.row_grid import (
     atomic_column_width,
     compute_layout,
     floor_message,
+    pad_atomic_field,
     pad_field,
     pad_field_right,
     render_row_budget,
@@ -236,9 +237,9 @@ def _backlog_stacked_first_line(row, cursor, layout):
         Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else Text(""),
         GLYPH_WIDTHS["cursor"],
     )
-    id_field = pad_field(row.id, layout.atomic_widths["id"])
+    id_field = pad_atomic_field(row.id, layout.atomic_widths["id"])
     project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else Text("")
-    project_field = pad_field(project_cell, layout.atomic_widths["project"])
+    project_field = pad_atomic_field(project_cell, layout.atomic_widths["project"])
     return cursor_field + id_field + project_field
 
 
@@ -1477,18 +1478,16 @@ class LightcycleApp(App):
                 row.dependency_icon, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
             )
         icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
-        id_field = pad_field(row.id, layout.atomic_widths["id"])
+        id_field = pad_atomic_field(row.id, layout.atomic_widths["id"])
         project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else Text("")
-        project_field = pad_field(project_cell, layout.atomic_widths["project"])
-        step_field = pad_field(
+        project_field = pad_atomic_field(project_cell, layout.atomic_widths["project"])
+        step_field = pad_atomic_field(
             Text(row.step, style=COLOURS[row.step_colour]), layout.atomic_widths["step"]
         )
-        cost_field = pad_field(
+        cost_field = pad_atomic_field(
             Text(row.cost, style=COLOURS["dim"]) if row.cost else Text(""), layout.atomic_widths["cost"]
         )
-        content_so_far = (
-            cursor_field + icon_field + id_field + project_field + step_field + Text("  ") + cost_field
-        )
+        content_so_far = cursor_field + icon_field + id_field + project_field + step_field + cost_field
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else Text("")
         time_area = max(0, row_budget - len(content_so_far.plain))
         return content_so_far + pad_field_right(time_cell, time_area)

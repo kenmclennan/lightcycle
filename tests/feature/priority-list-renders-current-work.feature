@@ -153,7 +153,7 @@ Feature: Priority list renders current work
   Scenario Outline: When a row cannot fit unstacked, the title moves to a continuation line indented by the grid's glyph width and spanning the row without wrapping mid-word
     Given a row whose atomic and glyph columns leave less than the flexible minimum for the title, on a terminal <at a width>
     When I launch the dashboard
-    Then the cursor, icon, id, project and step remain on the row's first line, each padded to its atomic width, with time right-aligned alongside them
+    Then the cursor, icon, id, project and step remain on the row's first line, each separated from the next by a gap, with time right-aligned alongside them
     And the title appears on a continuation line indented 5 characters - the row's glyph width, not where the title column starts in the unstacked grid
     And no fragment of the title's prose is split mid-word
     And that row renders at a height of 3, the row's first line plus one continuation line plus one spacer line

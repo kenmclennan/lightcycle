@@ -3,6 +3,7 @@ import json
 import pytest
 
 from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
+from lightcycle.adapters.tui.app import BacklogTable, DoneTable, PriorityTable
 from tests.support.screen_render import DEFAULT_SIZE, SCREENS, UNRENDERABLE, _LOG_EXCERPT, render
 
 
@@ -129,3 +130,29 @@ def test_the_log_excerpt_fixture_is_real_captured_stream_json_past_the_bound():
 def test_the_log_pane_wraps_a_long_entry_instead_of_clipping_it():
     frame = render("hub#active-log")
     assert "resumes 14:32:00" in frame
+
+
+@pytest.mark.parametrize("state, table_cls", [
+    ("priority-list#stacked", PriorityTable),
+    ("backlog#stacked", BacklogTable),
+    ("done#stacked", DoneTable),
+])
+def test_the_stacked_named_states_actually_reach_stacked_mode_at_default_size(state, table_cls):
+    session = SCREENS[state](DEFAULT_SIZE)
+    try:
+        table = session.app.query_one(table_cls)
+        assert table._stacked_mode is True
+    finally:
+        session.close()
+
+
+@pytest.mark.parametrize("state, project_text", [
+    ("priority-list#stacked", "lightcycle-workflows"),
+    ("backlog#stacked", "an-extremely-long-project-name-for-testing"),
+    ("done#stacked", "an-extremely-long-project-name-for-testing"),
+])
+def test_the_stacked_named_states_show_a_readable_gap_before_the_project(state, project_text):
+    frame = render(state, size=DEFAULT_SIZE)
+    row = next(line for line in frame.split("\n") if project_text in line)
+    before = row.split(project_text, 1)[0]
+    assert before.endswith("  ")

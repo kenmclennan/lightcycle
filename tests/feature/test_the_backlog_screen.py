@@ -10,7 +10,7 @@ from lightcycle.adapters.tui.app import (
     ShortcutBar,
 )
 from lightcycle.adapters.tui.row_grid import (
-    FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
+    ATOMIC_FIELD_GAP, FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
 )
 from tests.support.fake_store import FakeStore
 from tests.support.screen_render import DEFAULT_SIZE as RENDER_SIZE
@@ -460,7 +460,7 @@ def _stacked_cell_text(table, strip):
     return "".join(segment.text for segment in strip.crop(start, end))
 
 
-@then("the cursor, id and project remain on the row's first line, each padded to its atomic width")
+@then("the cursor, id and project remain on the row's first line, each separated from the next by a gap")
 def _backlog_stacked_first_line(ctx):
     table = ctx["session"].app.query_one(BacklogTable)
     lines = _row_lines(table, ctx["item_id"])
@@ -469,6 +469,8 @@ def _backlog_stacked_first_line(ctx):
     rest = content[GLYPH_WIDTHS["cursor"]:]
     assert rest.startswith(_STACK_ID)
     rest = rest[len(_STACK_ID):]
+    assert rest[:ATOMIC_FIELD_GAP] == " " * ATOMIC_FIELD_GAP
+    rest = rest[ATOMIC_FIELD_GAP:]
     assert rest.startswith(_STACK_PROJECT)
 
 
