@@ -6,6 +6,7 @@ from lightcycle.adapters.tui.app import (
     DoneTable,
     PickerOption,
     ProjectFilterPicker,
+    ShortcutBar,
 )
 from lightcycle.adapters.tui.hub import NodeHubScreen
 from tests.support.fake_store import FakeStore
@@ -33,6 +34,16 @@ def _launch_and_switch_to_done(ctx, store):
 def _rendered_text(widget):
     strip = widget.render_line(0)
     return "".join(segment.text for segment in strip)
+
+
+def _composited_text_at(ctx, widget):
+    region = widget.region
+    if region.height == 0:
+        return ""
+    compositor = ctx["session"].app.screen._compositor
+    strips = compositor.render_strips()
+    start, end = region.x, region.x + region.width
+    return "".join(segment.text for segment in strips[region.y].crop(start, end))
 
 
 def _colour_of(style):
@@ -161,6 +172,7 @@ def _done_shown_two_titled_items(ctx, title_a, title_b):
     store.close(item_a, "merged")
     item_b = store.create_item(title_b, "a description")
     store.close(item_b, "merged")
+    ctx["item_ids"] = {title_a: item_a, title_b: item_b}
     _launch_and_switch_to_done(ctx, store)
 
 
@@ -192,6 +204,11 @@ def _press_down(ctx):
     ctx["session"].press("down")
 
 
+@when("Up is pressed")
+def _press_up(ctx):
+    ctx["session"].press("up")
+
+
 @when("Enter is pressed")
 def _press_enter(ctx):
     ctx["session"].press("enter")
@@ -217,6 +234,12 @@ def _type_into_done_search_box(ctx, text):
 @when("→ is pressed")
 def _press_right(ctx):
     ctx["session"].press("right")
+
+
+@when(parsers.parse("the shortcut at position {position:d} in the footer's shortcut line is read"))
+def _read_shortcut(ctx, position):
+    shortcut_bar = ctx["session"].app.query_one(ShortcutBar)
+    ctx["shortcut"] = shortcut_bar.shortcuts[position - 1]
 
 
 @then("the closed item is listed as a row")
@@ -365,9 +388,41 @@ def _done_search_and_project_value_aligned(ctx):
     )
 
 
+@then(parsers.parse('its key is "{key}"'))
+def _shortcut_key(ctx, key):
+    assert ctx["shortcut"][0] == key
+
+
+@then(parsers.parse('its action is "{action}"'))
+def _shortcut_action(ctx, action):
+    assert ctx["shortcut"][1] == action
+
+
+@then("the footer's composited frame shows each search-focused shortcut, in order")
+def _footer_composited_search_shortcuts(ctx):
+    from lightcycle.adapters.tui.design_system import DONE_SEARCH_SHORTCUTS
+
+    bar = ctx["session"].app.query_one("#shortcut-bar")
+    row = _composited_text_at(ctx, bar)
+    last_index = -1
+    for key, action in DONE_SEARCH_SHORTCUTS:
+        key_index = row.index(key, last_index + 1)
+        last_index = row.index(action, key_index + len(key))
+
+
 @then("its hub opens for the closed item")
 def _hub_opens_for_closed_item(ctx):
     session = ctx["session"]
     screen = session.app.screen
     assert isinstance(screen, NodeHubScreen)
     assert screen._node_id == ctx["item_id"]
+
+
+@then(parsers.parse('its hub opens for the done item matching "{needle}"'))
+def _hub_opens_for_done_item_matching(ctx, needle):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    expected_id = next(
+        item_id for title, item_id in ctx["item_ids"].items() if needle.lower() in title.lower()
+    )
+    assert screen._node_id == expected_id
