@@ -398,6 +398,19 @@ def _backlog_picker_long_label(size):
     return session
 
 
+def _backlog_long_project_filter(size):
+    from lightcycle.application.work.project_of import short_project_label
+
+    store = _backlog_store()
+    store.add_project(LONG_PROJECT_NAME)
+    session = _launch(store, size=size)
+    session.press("tab")
+    session.app._backlog_project_filter = short_project_label(LONG_PROJECT_NAME)
+    session.run(session.app._refresh)
+    session.pause()
+    return session
+
+
 def _backlog_text_filter(size):
     from lightcycle.adapters.tui.app import BacklogFilterInput
 
@@ -884,6 +897,7 @@ SCREENS = {
     "pool#stop-prompt-no-workers": _pool_stop_prompt_no_workers,
     "backlog#picker-open": _backlog_picker_open,
     "backlog#picker-long-label": _backlog_picker_long_label,
+    "backlog#long-project-filter": _backlog_long_project_filter,
     "backlog#text-filter": _backlog_text_filter,
     "backlog#text-and-project-filter": _backlog_text_and_project_filter,
     "backlog#claude-unavailable": _backlog_claude_unavailable,

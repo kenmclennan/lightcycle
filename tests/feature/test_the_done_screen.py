@@ -300,7 +300,7 @@ def _picker_closed(ctx):
 @then(parsers.parse('the done tab is filtered to "{project}"'))
 def _done_filtered_to(ctx, project):
     widget = ctx["session"].app.query_one("#done-filter-left")
-    assert _rendered_text(widget).strip() == "PROJECT: %s" % project
+    assert _rendered_text(widget).strip() == project
 
 
 @then(parsers.parse('only the done row under "{project}" is shown'))
@@ -325,6 +325,26 @@ def _done_table_has_focus(ctx):
     assert session.app.focused is session.app.query_one(DoneTable)
 
 
+@then("the done search label is shown in the cyan colour")
+def _done_search_label_cyan(ctx):
+    from lightcycle.adapters.tui.design_system import COLOURS
+
+    widget = ctx["session"].app.query_one("#done-search-label")
+    strip = widget.render_line(0)
+    style = next(s.style for s in strip if s.text.strip())
+    assert _colour_of(style) == COLOURS["cyan"].lower()
+
+
+@then("the done search label is not shown in the cyan colour")
+def _done_search_label_not_cyan(ctx):
+    from lightcycle.adapters.tui.design_system import COLOURS
+
+    widget = ctx["session"].app.query_one("#done-search-label")
+    strip = widget.render_line(0)
+    style = next(s.style for s in strip if s.text.strip())
+    assert _colour_of(style) != COLOURS["cyan"].lower()
+
+
 @then(parsers.parse('only the done row matching "{needle}" is still shown'))
 def _only_done_row_matching_still_shown(ctx, needle):
     table = ctx["session"].app.query_one(DoneTable)
@@ -333,6 +353,16 @@ def _only_done_row_matching_still_shown(ctx, needle):
     cell = table.get_cell(row_id, "title")
     text = cell.plain if hasattr(cell, "plain") else cell
     assert needle.lower() in text.lower()
+
+
+@then("the done search value and the done project value start at the same column")
+def _done_search_and_project_value_aligned(ctx):
+    search_input = ctx["session"].app.query_one("#done-filter-text")
+    project_value = ctx["session"].app.query_one("#done-filter-left")
+    assert search_input.content_region.x == project_value.content_region.x, (
+        "done search value starts at column %d but done project value starts at column %d"
+        % (search_input.content_region.x, project_value.content_region.x)
+    )
 
 
 @then("its hub opens for the closed item")

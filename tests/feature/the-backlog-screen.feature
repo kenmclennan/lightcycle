@@ -134,9 +134,9 @@ Feature: The backlog screen
     Then the filter bar's right label reads "1 items"
     And the filter bar does not show proj-b's own count
 
-  Scenario: The filter bar shows "PROJECT: All" and the total item count while unfiltered
+  Scenario: The filter bar shows "All" and the total item count while unfiltered
     Given the backlog is shown with 3 todo items
-    Then the filter bar's left label reads "PROJECT: All"
+    Then the filter bar's left label reads "All"
     And the filter bar's right label reads "3 items"
 
   Scenario: The filter bar's item count is plural even when it is zero
@@ -158,8 +158,18 @@ Feature: The backlog screen
       | backlog#stacked                    |
       | backlog#picker-open                |
       | backlog#picker-long-label          |
+      | backlog#long-project-filter        |
       | backlog#text-filter                |
       | backlog#text-and-project-filter    |
+
+  Scenario Outline: The search value and the project value start in the same column
+    Given the "<state>" screen state is rendered
+    Then the search value and the project value start at the same column
+
+    Examples:
+      | state                |
+      | backlog#normal       |
+      | backlog#text-filter  |
 
   Scenario: An overall-empty backlog shows a calm message instead of a blank area
     Given the store has no todo items anywhere
@@ -228,6 +238,13 @@ Feature: The backlog screen
     Given the backlog is shown with a todo item
     When / is pressed
     Then the search box has focus
+
+  Scenario: Focusing the search box shifts its label to the cyan colour, and Esc reverts it
+    Given the backlog is shown with a todo item
+    When / is pressed
+    Then the search label is shown in the cyan colour
+    When Esc is pressed
+    Then the search label is not shown in the cyan colour
 
   Scenario: Pressing / while on the priority list does not focus the search box
     Given the dashboard has launched

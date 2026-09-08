@@ -612,13 +612,13 @@ def _picker_closed(ctx):
 @then(parsers.parse('the backlog is filtered to "{project}" without a poll interval elapsing'))
 def _backlog_filtered_immediately(ctx, project):
     widget = ctx["session"].app.query_one("#backlog-filter-left")
-    assert _rendered_text(widget).strip() == "PROJECT: %s" % project
+    assert _rendered_text(widget).strip() == project
 
 
 @then('the backlog is still filtered to "All"')
 def _backlog_still_all(ctx):
     widget = ctx["session"].app.query_one("#backlog-filter-left")
-    assert _rendered_text(widget).strip() == "PROJECT: All"
+    assert _rendered_text(widget).strip() == "All"
 
 
 @then(parsers.parse('the filter bar\'s left label reads "{text}"'))
@@ -636,12 +636,22 @@ def _filter_bar_right(ctx, text):
 @then("the filter bar's composited frame shows the left label's own text")
 def _filter_bar_composited_left(ctx):
     bar = ctx["session"].app.query_one("#backlog-filter-bar")
-    left = ctx["session"].app.query_one("#backlog-filter-left")
-    expected = _rendered_text(left).strip()
+    label = ctx["session"].app.query_one("#backlog-filter-label")
+    expected = _rendered_text(label).strip()
     assert expected
     row = _composited_text_at(ctx, bar)
     assert row.startswith(expected), (
         "composited filter bar row %r does not start with the left label %r" % (row, expected)
+    )
+
+
+@then("the search value and the project value start at the same column")
+def _search_and_project_value_aligned(ctx):
+    search_input = ctx["session"].app.query_one("#backlog-filter-text")
+    project_value = ctx["session"].app.query_one("#backlog-filter-left")
+    assert search_input.content_region.x == project_value.content_region.x, (
+        "search value starts at column %d but project value starts at column %d"
+        % (search_input.content_region.x, project_value.content_region.x)
     )
 
 
@@ -773,6 +783,26 @@ def _search_box_has_focus(ctx):
 def _search_box_not_focused(ctx):
     session = ctx["session"]
     assert session.app.focused is not session.app.query_one(BacklogFilterInput)
+
+
+@then("the search label is shown in the cyan colour")
+def _search_label_cyan(ctx):
+    from lightcycle.adapters.tui.design_system import COLOURS
+
+    widget = ctx["session"].app.query_one("#backlog-search-label")
+    strip = widget.render_line(0)
+    style = next(s.style for s in strip if s.text.strip())
+    assert _colour_of(style) == COLOURS["cyan"].lower()
+
+
+@then("the search label is not shown in the cyan colour")
+def _search_label_not_cyan(ctx):
+    from lightcycle.adapters.tui.design_system import COLOURS
+
+    widget = ctx["session"].app.query_one("#backlog-search-label")
+    strip = widget.render_line(0)
+    style = next(s.style for s in strip if s.text.strip())
+    assert _colour_of(style) != COLOURS["cyan"].lower()
 
 
 @then("the table has focus")
