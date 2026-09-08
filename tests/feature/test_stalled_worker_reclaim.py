@@ -100,10 +100,10 @@ class FakeGit:
     def is_git_repo(self, root):
         return True
 
-    def has_uncommitted(self, root):
+    def has_tracked_changes(self, root):
         return root in self.dirty
 
-    def commit_all(self, root, message):
+    def commit_tracked(self, root, message):
         self.commits.append((root, message))
         self._events.append(("commit", root))
         return True

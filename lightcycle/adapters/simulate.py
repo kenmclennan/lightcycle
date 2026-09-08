@@ -120,6 +120,13 @@ class RecordingGit(GitPort):
     def commit_all(self, root, message):
         self._record("commit_all", root, message)
 
+    def has_tracked_changes(self, root):
+        self._record("has_tracked_changes", root)
+        return False
+
+    def commit_tracked(self, root, message):
+        self._record("commit_tracked", root, message)
+
     def common_dir(self, root):
         self._record("common_dir", root)
         return os.path.join(root, ".git")
