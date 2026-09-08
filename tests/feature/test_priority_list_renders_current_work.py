@@ -269,7 +269,7 @@ def _g_claimed_minutes_ago(ctx, step_name, minutes):
     store = FakeStore(now=lambda: clock.now().isoformat())
     tid = store.create_step("active item", step=step_name, role="agent")
     store.assign(tid, "worker-1")
-    store.update_state(tid, State.IN_PROGRESS)
+    store.update_state(tid, State.RUNNING)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
@@ -293,7 +293,7 @@ def _g_launched_with_claimed_step(ctx):
     store = FakeStore(now=lambda: clock.now().isoformat())
     tid = store.create_step("active item", step="build", role="agent")
     store.assign(tid, "worker-1")
-    store.update_state(tid, State.IN_PROGRESS)
+    store.update_state(tid, State.RUNNING)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
@@ -319,7 +319,7 @@ def _g_item_active_and_queued_own(ctx):
     item = store.create_item("An item with two open steps", "a description")
     active = store.create_step("write the code", step="write-code", role="agent", parent=item)
     store.assign(active, "worker-1")
-    store.update_state(active, State.IN_PROGRESS)
+    store.update_state(active, State.RUNNING)
     store.create_step("open the pr", step="code-open-pr", role="agent", parent=item)
     clock.set(BASE_TIME)
     ctx["store"] = store
@@ -533,7 +533,7 @@ def _g_row_forces_stacked(ctx, mode):
     tid = store.create_step(_STACK_TITLE, step=_STACK_STEP, role="agent", parent=item)
     store.add_artifact(item, "repo", _STACK_PROJECT)
     store.assign(tid, "worker-1")
-    store.update_state(tid, State.IN_PROGRESS)
+    store.update_state(tid, State.RUNNING)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
@@ -636,7 +636,7 @@ def _w_claim_and_activate(ctx):
     store = ctx["store"]
     tid = ctx["target_id"]
     store.assign(tid, "worker-1")
-    store.update_state(tid, State.IN_PROGRESS)
+    store.update_state(tid, State.RUNNING)
 
 
 @when("one poll interval elapses")

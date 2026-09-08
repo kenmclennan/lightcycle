@@ -30,12 +30,12 @@ class TestWorkerPermitted(unittest.TestCase):
                   "workflow", "backfill-usage"):
             self.assertFalse(_worker_permitted(v, ["x"]), v)
 
-    def test_set_state_blocked_allowed(self):
+    def test_set_state_waiting_allowed(self):
         self.assertTrue(_worker_permitted(
-            "set", ["ITEM.1", "--state", "blocked", "--needs", "human", "--branch", "b"]))
+            "set", ["ITEM.1", "--state", "waiting", "--needs", "human", "--branch", "b"]))
 
-    def test_set_state_blocked_equals_form_allowed(self):
-        self.assertTrue(_worker_permitted("set", ["ITEM.1", "--state=blocked"]))
+    def test_set_state_waiting_equals_form_allowed(self):
+        self.assertTrue(_worker_permitted("set", ["ITEM.1", "--state=waiting"]))
 
     def test_set_parent_forbidden(self):
         self.assertFalse(_worker_permitted("set", ["STEP", "--parent", "ITEM"]))
@@ -46,9 +46,9 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_set_without_state_forbidden(self):
         self.assertFalse(_worker_permitted("set", ["ITEM", "--title", "x"]))
 
-    def test_an_edit_flag_alongside_blocked_is_still_forbidden(self):
+    def test_an_edit_flag_alongside_waiting_is_still_forbidden(self):
         self.assertFalse(
-            _worker_permitted("set", ["ITEM", "--state", "blocked", "--title", "renamed"])
+            _worker_permitted("set", ["ITEM", "--state", "waiting", "--title", "renamed"])
         )
 
     def test_unset_without_state_forbidden(self):
@@ -56,10 +56,10 @@ class TestWorkerPermitted(unittest.TestCase):
             _worker_permitted("set", ["ITEM", "--unset", "description"])
         )
 
-    def test_unset_alongside_blocked_is_still_forbidden(self):
+    def test_unset_alongside_waiting_is_still_forbidden(self):
         self.assertFalse(
             _worker_permitted(
-                "set", ["ITEM", "--state", "blocked", "--unset", "description"]
+                "set", ["ITEM", "--state", "waiting", "--unset", "description"]
             )
         )
 

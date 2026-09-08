@@ -6,12 +6,12 @@ FIELDS_BY_TYPE = {
 }
 
 REQUIRED_WITH_STATE = {
-    "blocked": ("needs", "reason"),
+    "waiting": ("needs", "reason"),
 }
 
 STATES_BY_TYPE = {
     "item": frozenset({"active", "in_progress"}),
-    "step": frozenset({"ready", "blocked"}),
+    "step": frozenset({"ready", "waiting"}),
 }
 
 

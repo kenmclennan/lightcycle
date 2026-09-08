@@ -173,7 +173,7 @@ def _stacked_priority_store():
         "LC-3900.100.100.1", STACKED_TITLE, step="handle-feedback", role="agent", parent=item,
     )
     store.assign(step, "worker-1")
-    store.update_state(step, State.IN_PROGRESS)
+    store.update_state(step, State.RUNNING)
     return store
 
 

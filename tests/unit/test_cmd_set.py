@@ -28,7 +28,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.store = FakeStore()
         cli.set_container(FakeContainer(self.store))
 
-    def test_needs_without_state_blocked_is_refused(self):
+    def test_needs_without_state_waiting_is_refused(self):
         bid = self.store.create_step("build: x", step="build", role="agent")
         BlockStepUseCase(self.store).execute(
             BlockInput(step=bid, needs="pick a colour", reason="needed a decision")
@@ -36,23 +36,23 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         rc, out, err = call(cli.cmd_set, bid, "--needs", "")
         self.assertNotEqual(rc, 0)
         self.assertIn("--needs", err)
-        self.assertIn("blocked", err)
+        self.assertIn("waiting", err)
         t = self.store.get_node(bid)
         self.assertEqual(t.park.needs, "pick a colour")
 
-    def test_blocked_without_reason_is_refused(self):
+    def test_waiting_without_reason_is_refused(self):
         bid = self.store.create_step("build: x", step="build", role="agent")
-        rc, out, err = call(cli.cmd_set, bid, "--state", "blocked", "--needs", "decide X")
+        rc, out, err = call(cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X")
         self.assertEqual(rc, 2)
         self.assertIn("--reason", err)
         t = self.store.get_node(bid)
         self.assertEqual(t.role, "agent")
         self.assertIsNone(t.needs)
 
-    def test_blocked_refuses_generic_edit_flags(self):
+    def test_waiting_refuses_generic_edit_flags(self):
         bid = self.store.create_step("build: x", step="build", role="agent")
         rc, out, err = call(
-            cli.cmd_set, bid, "--state", "blocked", "--needs", "decide X", "--title", "renamed"
+            cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X", "--title", "renamed"
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("--title", err)
@@ -119,7 +119,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
     def test_notes_combined_with_state_is_refused(self):
         bid = self.store.create_step("build: x", step="build", role="agent")
         rc, out, err = call(
-            cli.cmd_set, bid, "--state", "blocked", "--needs", "decide X", "--notes", "x"
+            cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X", "--notes", "x"
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("--notes", err)
@@ -164,10 +164,10 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         rc, out, err = call(cli.cmd_set, iid, "--label", "")
         self.assertNotEqual(rc, 0)
 
-    def test_tried_empty_combined_with_state_blocked_is_refused_before_parking(self):
+    def test_tried_empty_combined_with_state_waiting_is_refused_before_parking(self):
         bid = self.store.create_step("build: x", step="build", role="agent")
         rc, out, err = call(
-            cli.cmd_set, bid, "--state", "blocked", "--needs", "X", "--reason", "Y", "--tried", ""
+            cli.cmd_set, bid, "--state", "waiting", "--needs", "X", "--reason", "Y", "--tried", ""
         )
         self.assertNotEqual(rc, 0)
         t = self.store.get_node(bid)

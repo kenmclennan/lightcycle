@@ -7,6 +7,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
 import lightcycle.cli as cli
+from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.sqlite_store_factory import (
     make_legacy_sqlite_store, make_sqlite_store, plant_legacy_db,
@@ -35,13 +36,13 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         tid = s.create_step("build: x", step="build", role="agent", parent=item)
         t = s.get_step(tid)
         self.assertEqual((t.role, t.stage, t.item), ("agent", "build", item))
-        self.assertEqual(t.state, "ready")
+        self.assertEqual(t.state, State.QUEUED)
 
     def test_claim_and_close_map_status(self):
         s = self._store()
         s.create_step("build: x", step="build", role="agent")
         claimed = s.claim_ready("agent")
-        self.assertEqual(claimed.state, "in_progress")
+        self.assertEqual(claimed.state, State.RUNNING)
         s.close(claimed.id, "done")
         self.assertEqual(s.get_node(claimed.id).state, "done")
         self.assertEqual(s.get_node(claimed.id).outcome, "done")
@@ -89,7 +90,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         s.route_to_human(tid, "needs a human")
         t = s.get_node(tid)
         self.assertEqual(t.role, "human")
-        self.assertEqual(t.state, "ready")
+        self.assertEqual(t.state, State.WAITING)
         self.assertIn("needs a human", t.notes or "")
 
     def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
@@ -228,7 +229,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
             ActivateItemInput(item=item, workflow="standard")
         )
 
-        self.assertEqual(s.get_node(item).state, "ready")
+        self.assertEqual(s.get_node(item).state, State.QUEUED)
         self.assertEqual(s.get_node(resp.step).parent, item)
 
     def test_cmd_set_backlog_links_the_resolved_backlog_to_the_item(self):
@@ -453,6 +454,45 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
         pid = s.open_pass(item)
         s.open_run(item, pid, "code")
         self.assertIsNone(s.runs_of(item)[0].comments_handled_through)
+
+
+class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
+    def _store_without_disposition(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+        s.close(item, "done")
+        s._conn.execute("ALTER TABLE items RENAME TO items_old")
+        s._conn.execute(
+            "CREATE TABLE items ("
+            "  id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', description TEXT,"
+            "  state TEXT NOT NULL DEFAULT 'backlogged', repo TEXT, workflow TEXT,"
+            "  outcome TEXT, project TEXT, created_at TEXT, closed_at TEXT)"
+        )
+        s._conn.execute(
+            "INSERT INTO items (id, title, description, state, repo, workflow, outcome, "
+            "project, created_at, closed_at) "
+            "SELECT id, title, description, state, repo, workflow, outcome, project, "
+            "created_at, closed_at FROM items_old"
+        )
+        s._conn.execute("DROP TABLE items_old")
+        s._conn.commit()
+        s.disconnect()
+        return item, SqliteStore(s._config)
+
+    def test_a_pre_disposition_items_table_gains_the_column(self):
+        _, s = self._store_without_disposition()
+        cols = {r[1] for r in s._conn.execute("PRAGMA table_info(items)").fetchall()}
+        self.assertIn("disposition", cols)
+
+    def test_the_column_is_null_for_an_existing_closed_item_until_it_is_reclosed(self):
+        item, s = self._store_without_disposition()
+        self.assertIsNone(s.get_node(item).disposition)
+
+    def test_reopening_the_migrated_store_is_idempotent(self):
+        item, s = self._store_without_disposition()
+        s.disconnect()
+        s = SqliteStore(s._config)
+        self.assertIsNone(s.get_node(item).disposition)
 
 
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):

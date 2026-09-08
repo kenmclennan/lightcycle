@@ -198,7 +198,7 @@ class WorkflowSimulateUseCase:
 
     def _close_item(self, item_id, reason):
         CloseItemUseCase(self._store, self._worktrees).execute(
-            CloseItemInput(item=item_id, reason=reason)
+            CloseItemInput(item=item_id, reason=reason, disposition="completed")
         )
 
     def _complete_terminal(self, item_id, pin, node, trace, walk_index, phase_check=None):

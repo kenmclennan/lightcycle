@@ -154,5 +154,5 @@ class CompleteStepUseCase:
         if node.type != "item":
             return
         CloseItemUseCase(self._store, self._worktrees).execute(
-            CloseItemInput(item=node_id, reason=_AUTO_CLOSE_REASON)
+            CloseItemInput(item=node_id, reason=_AUTO_CLOSE_REASON, disposition="completed")
         )

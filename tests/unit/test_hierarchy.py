@@ -188,6 +188,15 @@ class TestRowBucket(unittest.TestCase):
         step = s.create_step("s", step="await-merge")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "gate")
 
+    def test_item_with_a_human_step_awaiting_it_alongside_done_steps_is_a_gate(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        for i in range(11):
+            done = s.create_step("done %d" % i, step="build", role="agent", parent=item)
+            s.close(done, "done")
+        s.create_step("await-merge: item", step="await-merge", role="human", parent=item)
+        self.assertEqual(row_bucket(s.get_node(item), FLOW), "gate")
+
 
 class TestDisplayRole(unittest.TestCase):
     def test_human_role_shown_as_human(self):

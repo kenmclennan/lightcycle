@@ -7,8 +7,7 @@ def roll_up(children_states):
         return State.BACKLOGGED
     if all(s == State.DONE for s in children_states):
         return State.DONE
-    if any(s == State.DONE for s in children_states):
-        return State.IN_PROGRESS
-    if any(s == State.IN_PROGRESS for s in children_states):
-        return State.IN_PROGRESS
-    return State.READY
+    for s in (State.WAITING, State.RUNNING, State.QUEUED, State.BLOCKED):
+        if s in children_states:
+            return s
+    return State.BACKLOGGED

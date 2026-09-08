@@ -5,16 +5,18 @@ from lightcycle.domain.work.lane import Lane
 
 class State(StrEnum):
     BACKLOGGED = "backlogged"
-    READY = "ready"
-    IN_PROGRESS = "in_progress"
+    BLOCKED = "blocked"
+    QUEUED = "queued"
+    RUNNING = "running"
+    WAITING = "waiting"
     DONE = "done"
 
 
-def lane_for(state, role):
+def lane_for(state):
     if state == State.DONE:
         return Lane.DONE
-    if state == State.IN_PROGRESS:
+    if state == State.RUNNING:
         return Lane.ACTIVE
-    if state == State.BACKLOGGED:
-        return Lane.QUEUE
-    return Lane.INBOX if role == "human" else Lane.QUEUE
+    if state == State.WAITING:
+        return Lane.INBOX
+    return Lane.QUEUE

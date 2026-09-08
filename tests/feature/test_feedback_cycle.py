@@ -5,6 +5,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 import lightcycle.cli as cli
+from lightcycle.domain.work import State
 from lightcycle.ports.github import Comment
 from tests.support.fake_github import FakeGitHub
 from tests.support.harness import Harness
@@ -158,7 +159,7 @@ def _fresh_await_merge_in_inbox(ctx):
     fresh = next(
         n for n in ctx["h"].store.all_nodes()
         if n.type == "step" and n.step == ctx["watched_step_name"]
-        and n.state == "ready" and n.id != ctx["watched_step"]
+        and n.state == State.WAITING and n.id != ctx["watched_step"]
     )
     rc, out, err = ctx["h"].run("inbox")
     assert rc == 0, err

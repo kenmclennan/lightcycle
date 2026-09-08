@@ -174,3 +174,30 @@ class TestFlowDisplayOf(unittest.TestCase):
     def test_returns_the_engine_phrase_for_engine_steps_even_when_undeclared(self):
         self.assertEqual(self.flow.display_of(AUDIT_STEP), "Auditing recent work")
         self.assertEqual(self.flow.display_of(FINDINGS_STEP), "Review the findings")
+
+
+DISPOSITION_GRAPH_TEXT = """
+entry: build
+
+edges:
+  build  done  review
+
+disposition:
+  merged     completed
+  abandoned  aborted
+"""
+
+
+class TestFlowDispositionFor(unittest.TestCase):
+    def test_threads_the_graphs_disposition_block_through(self):
+        flow = Flow.from_graph(parse_graph(DISPOSITION_GRAPH_TEXT), STEP_METAS)
+        self.assertEqual(flow.disposition_for("merged"), "completed")
+        self.assertEqual(flow.disposition_for("abandoned"), "aborted")
+
+    def test_returns_none_for_an_outcome_the_bundle_does_not_declare(self):
+        flow = Flow.from_graph(parse_graph(DISPOSITION_GRAPH_TEXT), STEP_METAS)
+        self.assertIsNone(flow.disposition_for("wontfix"))
+
+    def test_a_workflow_with_no_disposition_block_still_parses(self):
+        flow = Flow.from_graph(parse_graph("entry: build\n\nedges:\n  build  done  review\n"), STEP_METAS)
+        self.assertIsNone(flow.disposition_for("done"))

@@ -4,6 +4,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.application.pool.sweep import SweepUseCase
+from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 
 scenarios("stalled-worker-reclaim.feature")
@@ -147,7 +148,7 @@ def _run_sweep(ctx):
 def _claimed(ctx):
     item = ctx["store"].create_item("feature", "a description")
     step = ctx["store"].create_step("build: feature", step="build", role="agent", parent=item)
-    ctx["store"].update_state(step, "in_progress")
+    ctx["store"].update_state(step, State.RUNNING)
     ctx["store"].assign(step, ctx["spawnid"])
     ctx["item"] = item
     ctx["step"] = step
@@ -260,7 +261,7 @@ def _marked_checked(ctx):
 @then("the step is reclaimed to ready")
 def _reclaimed(ctx):
     assert ctx["step"] in ctx["result"].swept
-    assert ctx["store"].get_node(ctx["step"]).state == "ready"
+    assert ctx["store"].get_node(ctx["step"]).state == State.QUEUED
 
 
 @then("the worker is not treated as though it just started")
@@ -275,7 +276,7 @@ def _committed_before_reclaim(ctx):
     assert ctx["worktrees"].worktree_path(ctx["item"]) in committed_roots
     kinds = [e[0] for e in ctx["events"]]
     assert kinds.index("commit") < kinds.index("reclaim")
-    assert ctx["store"].get_node(ctx["step"]).state == "ready"
+    assert ctx["store"].get_node(ctx["step"]).state == State.QUEUED
 
 
 @then("the step is reclaimed")

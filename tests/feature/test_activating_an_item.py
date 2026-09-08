@@ -6,6 +6,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 import lightcycle.cli as cli
+from lightcycle.domain.work import State
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.harness import Harness
 
@@ -172,12 +173,12 @@ def _entry_stage_not_other(ctx, stage, other_stage):
 @then("it is ready")
 def _it_is_ready(ctx):
     node = ctx["h"].store.get_node(ctx["filed_step"])
-    assert node.state == "ready"
+    assert node.state == State.QUEUED
 
 
 @then("the claimed step is in progress")
 def _claimed_in_progress(ctx):
-    assert ctx["claimed"]["state"] == "in_progress"
+    assert ctx["claimed"]["state"] == "running"
 
 
 @then("the command is rejected")

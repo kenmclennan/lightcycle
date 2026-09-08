@@ -46,7 +46,7 @@ class TestCreateSnapshot(unittest.TestCase):
         store.disconnect()
         backup.restore(name)
         reopened = SqliteStore(store._config)
-        self.assertEqual(reopened.get_node(tid).state, "ready")
+        self.assertEqual(reopened.get_node(tid).state, "queued")
 
     def test_snapshot_directory_created_if_absent(self):
         store = make_sqlite_store()

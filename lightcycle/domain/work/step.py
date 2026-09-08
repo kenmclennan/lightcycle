@@ -13,7 +13,7 @@ class Step:
     stage: Optional[str] = None
     pass_id: Optional[str] = None
     role: Optional[str] = None
-    state: State = State.READY
+    state: State = State.QUEUED
     claimed_by: Optional[str] = None
     model: Optional[str] = None
     outcome: Optional[str] = None

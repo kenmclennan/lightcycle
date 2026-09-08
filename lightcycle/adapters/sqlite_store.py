@@ -19,6 +19,15 @@ from lightcycle.ports.store import (
 
 _DB_FILENAME = "store.db"
 
+_RAW_STORAGE_STATE = {
+    State.BACKLOGGED: "backlogged",
+    State.BLOCKED: "backlogged",
+    State.QUEUED: "ready",
+    State.WAITING: "ready",
+    State.RUNNING: "in_progress",
+    State.DONE: "done",
+}
+
 
 class LiveStoreRefused(Exception):
     pass
@@ -40,6 +49,7 @@ CREATE TABLE IF NOT EXISTS items (
     repo TEXT,
     workflow TEXT,
     outcome TEXT,
+    disposition TEXT,
     project TEXT,
     created_at TEXT,
     closed_at TEXT
@@ -169,8 +179,8 @@ CREATE TABLE IF NOT EXISTS projects (
 """
 
 _ITEM_COLUMNS = (
-    "id", "title", "description", "state", "repo", "workflow", "outcome", "project",
-    "created_at", "closed_at",
+    "id", "title", "description", "state", "repo", "workflow", "outcome", "disposition",
+    "project", "created_at", "closed_at",
 )
 
 _STEP_COLUMNS = (
@@ -338,6 +348,9 @@ class SqliteStore(StorePort):
     _RUN_FOLDED_ARTIFACTS = ("feedback-watermark", "feedback-spawned-through")
 
     _ADDED_COLUMNS = {
+        "items": (
+            ("disposition", "TEXT"),
+        ),
         "phase_runs": (
             ("comments_dispatched_through", "TEXT"),
             ("comments_handled_through", "TEXT"),
@@ -529,7 +542,7 @@ class SqliteStore(StorePort):
             stage=d["stage"],
             pass_id=d["pass_id"],
             role=d["role"],
-            state=derive_state("step", d["state"] == "done", d["assignee"], deps, []),
+            state=derive_state("step", d["state"] == "done", d["assignee"], deps, d["role"], []),
             claimed_by=d["assignee"],
             model=d["model"],
             outcome=d["outcome"],
@@ -560,11 +573,14 @@ class SqliteStore(StorePort):
             artifacts=tuple(artifacts),
             title=d["title"],
             description=d["description"],
-            state=derive_state("item", d["state"] == "done", None, False, child_states),
+            state=derive_state(
+                "item", d["state"] == "done", None, bool(blocked_by), None, child_states
+            ),
             repo=d["repo"],
             project=d["project"],
             workflow=d["workflow"],
             outcome=d["outcome"],
+            disposition=d["disposition"],
             deps=len(blocked_by),
             blocked_by=blocked_by,
             created_at=d["created_at"],
@@ -827,7 +843,7 @@ class SqliteStore(StorePort):
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
-        self.update_state(tid, State.READY)
+        self.update_state(tid, State.WAITING if role == "human" else State.QUEUED)
         self.assign(tid, "")
 
     def route_to_human(self, tid, note):
@@ -887,7 +903,7 @@ class SqliteStore(StorePort):
         pass
 
     def reclaim(self, tid):
-        self.update_state(tid, State.READY)
+        self.update_state(tid, State.QUEUED)
         self.assign(tid, "")
 
     def note(self, tid, text):
@@ -921,12 +937,20 @@ class SqliteStore(StorePort):
         )
         self._conn.commit()
 
-    def close(self, tid, reason):
-        self._conn.execute(
-            "UPDATE %s SET state = 'done', outcome = ?, closed_at = ? "
-            "WHERE id = ? AND state != 'done'" % self._table_of(tid),
-            (reason, datetime.datetime.now().isoformat(), tid),
-        )
+    def close(self, tid, reason, disposition=None):
+        table = self._table_of(tid)
+        if table == "items" and disposition is not None:
+            self._conn.execute(
+                "UPDATE items SET state = 'done', outcome = ?, disposition = ?, closed_at = ? "
+                "WHERE id = ? AND state != 'done'",
+                (reason, disposition, datetime.datetime.now().isoformat(), tid),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE %s SET state = 'done', outcome = ?, closed_at = ? "
+                "WHERE id = ? AND state != 'done'" % table,
+                (reason, datetime.datetime.now().isoformat(), tid),
+            )
         self._record_history(tid, State.DONE)
         self._conn.commit()
 
@@ -991,7 +1015,8 @@ class SqliteStore(StorePort):
 
     def update_state(self, tid, state):
         self._conn.execute(
-            "UPDATE %s SET state = ? WHERE id = ?" % self._table_of(tid), (str(state), tid)
+            "UPDATE %s SET state = ? WHERE id = ?" % self._table_of(tid),
+            (_RAW_STORAGE_STATE.get(state, state), tid),
         )
         self._record_history(tid, state)
         self._conn.commit()
@@ -1053,7 +1078,7 @@ class SqliteStore(StorePort):
         if cur.rowcount == 0:
             self._conn.commit()
             return None
-        self._record_history(tid, State.IN_PROGRESS)
+        self._record_history(tid, State.RUNNING)
         self._conn.commit()
         return self.get_node(tid)
 

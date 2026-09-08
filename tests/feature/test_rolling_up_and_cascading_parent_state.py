@@ -5,6 +5,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 import lightcycle.cli as cli
+from lightcycle.domain.work import State
 from tests.support.harness import DEFAULT_WORKFLOW, Harness
 
 scenarios("rolling-up-and-cascading-parent-state.feature")
@@ -129,7 +130,12 @@ def _item_done(ctx):
 
 @then("the item is in progress")
 def _item_in_progress(ctx):
-    assert ctx["h"].store.get_node(ctx["item"]).state == "in_progress"
+    assert ctx["h"].store.get_node(ctx["item"]).state == State.RUNNING
+
+
+@then("the item is ready")
+def _item_ready(ctx):
+    assert ctx["h"].store.get_node(ctx["item"]).state == State.QUEUED
 
 
 @then("the first item is done")
@@ -139,4 +145,4 @@ def _first_item_done(ctx):
 
 @then("the second item is ready")
 def _second_item_ready(ctx):
-    assert ctx["h"].store.get_node(ctx["item2"]).state == "ready"
+    assert ctx["h"].store.get_node(ctx["item2"]).state == State.QUEUED

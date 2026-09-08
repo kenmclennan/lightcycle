@@ -14,42 +14,42 @@ def _ctx():
 
 
 @given(parsers.parse(
-    'the history has an IN_PROGRESS transition at "{ts}" and no DONE transition'
+    'the history has a RUNNING transition at "{ts}" and no DONE transition'
 ))
-def _in_progress_only(ctx, ts):
-    ctx["transitions"] = [(State.IN_PROGRESS, ts)]
+def _running_only(ctx, ts):
+    ctx["transitions"] = [(State.RUNNING, ts)]
 
 
-@given("the history has only a READY transition and no IN_PROGRESS transition")
-def _ready_only(ctx):
-    ctx["transitions"] = [(State.READY, "2026-01-01T10:00:00")]
+@given("the history has only a WAITING transition and no RUNNING transition")
+def _waiting_only(ctx):
+    ctx["transitions"] = [(State.WAITING, "2026-01-01T10:00:00")]
 
 
 @given(parsers.parse(
-    'the history has an IN_PROGRESS transition at "{claimed_ts}" and a DONE transition at "{done_ts}"'
+    'the history has a RUNNING transition at "{claimed_ts}" and a DONE transition at "{done_ts}"'
 ))
-def _in_progress_and_done(ctx, claimed_ts, done_ts):
+def _running_and_done(ctx, claimed_ts, done_ts):
     ctx["transitions"] = [
-        (State.IN_PROGRESS, claimed_ts),
+        (State.RUNNING, claimed_ts),
         (State.DONE, done_ts),
     ]
 
 
 @given(parsers.parse(
-    'the history has an IN_PROGRESS transition at "{first_ts}", then a READY transition, '
-    'then a second IN_PROGRESS transition at "{second_ts}", and no DONE transition'
+    'the history has a RUNNING transition at "{first_ts}", then a WAITING transition, '
+    'then a second RUNNING transition at "{second_ts}", and no DONE transition'
 ))
 def _reworked_still_active(ctx, first_ts, second_ts):
     ctx["transitions"] = [
-        (State.IN_PROGRESS, first_ts),
-        (State.READY, first_ts),
-        (State.IN_PROGRESS, second_ts),
+        (State.RUNNING, first_ts),
+        (State.WAITING, first_ts),
+        (State.RUNNING, second_ts),
     ]
 
 
-@given("the history has an IN_PROGRESS transition with no timestamp and no DONE transition")
+@given("the history has a RUNNING transition with no timestamp and no DONE transition")
 def _missing_claim_timestamp(ctx):
-    ctx["transitions"] = [(State.IN_PROGRESS, None)]
+    ctx["transitions"] = [(State.RUNNING, None)]
 
 
 @when(parsers.parse('elapsed_since_claim is computed with now "{now}"'))

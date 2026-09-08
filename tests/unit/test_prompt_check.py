@@ -76,14 +76,14 @@ class TestCheckRefusals(unittest.TestCase):
         self.assertIn("is not a command", self._check("`lc frobnicate X`")[0])
 
     def test_a_state_missing_its_required_flag_is_refused(self):
-        msgs = self._check('`lc set X --state blocked --needs "a"`')
+        msgs = self._check('`lc set X --state waiting --needs "a"`')
         self.assertTrue(any("requires --reason" in m for m in msgs), msgs)
 
     def test_a_field_the_engine_does_not_emit_is_refused(self):
         self.assertIn("emits no `.parent`", self._check("take `.parent` as ITEM")[0])
 
     def test_a_correct_prompt_is_accepted(self):
-        text = 'take `.item` as ITEM, then `lc set X --state blocked --needs "a" --reason "b"`'
+        text = 'take `.item` as ITEM, then `lc set X --state waiting --needs "a" --reason "b"`'
         self.assertEqual(self._check(text), [])
 
 

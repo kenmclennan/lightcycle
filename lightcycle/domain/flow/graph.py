@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 
-_SECTIONS = ("nodes", "edges", "hooks", "signals", "display", "pass-end")
+_SECTIONS = ("nodes", "edges", "hooks", "signals", "display", "pass-end", "disposition")
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,7 @@ class WorkflowGraph:
     primary: dict = field(default_factory=dict)
     display: dict = field(default_factory=dict)
     pass_ends: frozenset = field(default_factory=frozenset)
+    disposition: dict = field(default_factory=dict)
 
     def file_for(self, stage):
         return self.nodes.get(stage, stage)
@@ -49,6 +50,9 @@ class WorkflowGraph:
     def hook_occurrences(self, name):
         return self.hooks.get(name, [])
 
+    def disposition_for(self, outcome):
+        return self.disposition.get(outcome)
+
 
 def parse_graph(text):
     entry = None
@@ -58,6 +62,7 @@ def parse_graph(text):
     primary = {}
     display = {}
     pass_ends = set()
+    disposition = {}
     section = None
     for line in text.splitlines():
         if not line.strip():
@@ -107,9 +112,12 @@ def parse_graph(text):
         elif section == "pass-end":
             stage, outcome = parts
             pass_ends.add((stage, outcome))
+        elif section == "disposition":
+            outcome, value = parts
+            disposition[outcome] = value
     return WorkflowGraph(
         entry=entry, requires=requires, workspace=workspace,
         nodes=nodes, edges=edges, hooks=hooks, signals=signals,
         workspaces=workspaces, phases=phases, primary=primary, display=display,
-        pass_ends=frozenset(pass_ends),
+        pass_ends=frozenset(pass_ends), disposition=disposition,
     )

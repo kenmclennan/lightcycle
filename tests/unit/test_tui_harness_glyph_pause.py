@@ -17,7 +17,7 @@ class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = launch(make_test_container(store=store))
         self.addCleanup(session.close)
@@ -34,7 +34,7 @@ class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
         item = store.create_item("Item", "a description")
         tid = store.create_step("active item", step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = launch(make_test_container(store=store), size=(120, 24))
         self.addCleanup(session.close)

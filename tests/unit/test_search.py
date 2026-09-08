@@ -29,7 +29,7 @@ class TestSearchUseCase(unittest.TestCase):
     def test_matches_an_in_progress_item(self):
         s = FakeStore()
         tid = s.create_item("pytest-bdd step precedence", "a description")
-        s.update_state(tid, State.IN_PROGRESS)
+        s.update_state(tid, State.RUNNING)
         resp = SearchUseCase(s).execute(SearchInput(text="pytest-bdd step"))
         self.assertEqual([m.node.id for m in resp.matches], [tid])
 

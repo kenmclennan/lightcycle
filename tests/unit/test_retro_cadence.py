@@ -138,13 +138,13 @@ class TestRetroCadenceFires(unittest.TestCase):
         _close_item(s, "thick", reflections=2)
         self.assertEqual(len(_gate(s, interval_reflections=3).execute(0.0).fired), 1)
 
-    def test_fired_audit_parent_item_reads_ready_not_backlogged(self):
+    def test_fired_audit_parent_item_reads_queued_not_backlogged(self):
         s = FakeStore()
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
         parent = s.get_node(step.parent)
-        self.assertEqual(parent.state, State.READY)
+        self.assertEqual(parent.state, State.QUEUED)
 
     def test_fired_audit_title_and_description_count_only_the_feedback_carrying_batch(self):
         s = FakeStore()
@@ -167,15 +167,15 @@ class TestRetroCadenceFires(unittest.TestCase):
         parent = s.get_node(step.parent)
         self.assertEqual(parent.description, "batch: proj-9, proj-10")
 
-    def test_parent_item_reads_in_progress_once_audit_is_claimed(self):
+    def test_parent_item_reads_running_once_audit_is_claimed(self):
         s = FakeStore()
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
         s.assign(step.id, "audit")
-        s.update_state(step.id, State.IN_PROGRESS)
+        s.update_state(step.id, State.RUNNING)
         parent = s.get_node(step.parent)
-        self.assertEqual(parent.state, State.IN_PROGRESS)
+        self.assertEqual(parent.state, State.RUNNING)
 
 
 class TestRetroCadenceNoRunaway(unittest.TestCase):
@@ -308,12 +308,12 @@ class TestCadenceAndPendingHeaderAgree(unittest.TestCase):
 
 
 class TestRetroLaneVisibility(unittest.TestCase):
-    def test_ready_audit_is_in_queue(self):
-        q = NodeQueue([make_step(id="a", state=State.READY, role="agent", step="audit")])
+    def test_queued_audit_is_in_queue(self):
+        q = NodeQueue([make_step(id="a", state=State.QUEUED, role="agent", step="audit")])
         self.assertEqual([t.id for t in q.by_lane()["queue"]], ["a"])
 
-    def test_in_progress_audit_is_active(self):
-        q = NodeQueue([make_step(id="a", state=State.IN_PROGRESS, role="agent", step="audit")])
+    def test_running_audit_is_active(self):
+        q = NodeQueue([make_step(id="a", state=State.RUNNING, role="agent", step="audit")])
         self.assertEqual([t.id for t in q.by_lane()["active"]], ["a"])
 
 

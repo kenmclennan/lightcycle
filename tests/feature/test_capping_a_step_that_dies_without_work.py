@@ -8,6 +8,7 @@ from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUs
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.pool.worker_session import saw_session_activity
+from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs as FlowFakeFs
 from tests.support.fake_store import FakeStore
 
@@ -280,7 +281,7 @@ def _activity_found(ctx, activity_found):
 def _verdict(ctx, verdict):
     node = ctx["store"].get_node(ctx["step"])
     if verdict == "reclaimed to ready":
-        assert node.state == "ready"
+        assert node.state == State.QUEUED
         assert node.role == "agent"
         assert ctx["step"] in ctx["result"].swept
         assert ctx["step"] not in ctx["result"].parked
@@ -349,4 +350,4 @@ def _blocked_note(ctx):
 def _reclaimed_not_parked(ctx):
     assert ctx["step"] in ctx["result"].swept
     assert ctx["step"] not in ctx["result"].parked
-    assert ctx["store"].get_node(ctx["step"]).state == "ready"
+    assert ctx["store"].get_node(ctx["step"]).state == State.QUEUED

@@ -202,7 +202,8 @@ COMMAND_GROUPS = [
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
-        ("done", "<id> <outcome> [--note \"<text>\"]", "close a node; a step done-with-outcome advances the flow"),
+        ("done", "<id> <outcome> [--note \"<text>\"] [--disposition completed|aborted]",
+         "close a node; a step done-with-outcome advances the flow"),
     ]),
     ("Feedback loop", [
         ("retro", "<item>", "gather child feedback + objective signals into a read digest"),
@@ -282,12 +283,12 @@ _SET_FORBIDDEN_FLAGS = (
 )
 
 
-def _sets_state_blocked(args):
+def _sets_state_waiting(args):
     for i, a in enumerate(args):
         if a == "--state":
-            return i + 1 < len(args) and args[i + 1] == "blocked"
+            return i + 1 < len(args) and args[i + 1] == "waiting"
         if a.startswith("--state="):
-            return a.split("=", 1)[1] == "blocked"
+            return a.split("=", 1)[1] == "waiting"
     return False
 
 
@@ -297,7 +298,7 @@ def _worker_permitted(cmd, args):
     if cmd == "set":
         if any(a.split("=", 1)[0] in _SET_FORBIDDEN_FLAGS for a in args):
             return False
-        return _sets_state_blocked(args)
+        return _sets_state_waiting(args)
     return False
 
 
@@ -330,7 +331,7 @@ def main(argv=None):
     ):
         sys.stderr.write(
             "lc: workers may not run '%s' - permitted: claim, done, show, attach, "
-            "backlog, search, peek, set --state blocked\n" % cmd
+            "backlog, search, peek, set --state waiting\n" % cmd
         )
         return 1
     fn = globals().get("cmd_" + cmd.replace("-", "_"))
@@ -842,6 +843,7 @@ def cmd_done(argv):
     ap.add_argument(
         "--note", nargs="+", help="a note to forward to the next step; unquoted multi-word is fine"
     )
+    ap.add_argument("--disposition", choices=("completed", "aborted"))
     a = ap.parse_args(argv)
     note = " ".join(a.note) if a.note else None
     node_type = _container.store.type_of(a.id)
@@ -850,6 +852,9 @@ def cmd_done(argv):
         return 1
     if node_type == "item" and note:
         sys.stderr.write("--note belongs to a step, not an item\n")
+        return 2
+    if node_type == "step" and a.disposition:
+        sys.stderr.write("--disposition belongs to an item, not a step\n")
         return 2
     try:
         if node_type == "step":
@@ -860,8 +865,18 @@ def cmd_done(argv):
             if resp.next_step:
                 print(resp.next_step)
         else:
+            disposition = a.disposition
+            if disposition is None:
+                item = _container.store.get_node(a.id)
+                disposition = _flow().flow_for(item).disposition_for(a.outcome)
+            if disposition is None:
+                sys.stderr.write(
+                    "outcome '%s' is not bundle-declared; pass --disposition "
+                    "{completed,aborted} explicitly\n" % a.outcome
+                )
+                return 2
             CloseItemUseCase(_container.store, _worktrees()).execute(
-                CloseItemInput(item=a.id, reason=a.outcome)
+                CloseItemInput(item=a.id, reason=a.outcome, disposition=disposition)
             )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
@@ -1186,10 +1201,10 @@ _SET_FLAG_OWNERS = {
     "workflow": (None, "active"),
     "step": ("active",),
     "depends": ("active",),
-    "needs": ("blocked",), "reason": ("blocked",), "tried": ("blocked",),
+    "needs": ("waiting",), "reason": ("waiting",), "tried": ("waiting",),
     "unset": (None,),
 }
-_SET_KNOWN_STATES = (None, "active", "blocked", "ready", "in_progress")
+_SET_KNOWN_STATES = (None, "active", "waiting", "ready", "in_progress")
 
 _SET_UNSETTABLE_FIELDS = ("description", "project", "workflow", "notes")
 
@@ -1311,13 +1326,13 @@ def cmd_set(argv):
             )
             print(resp.step)
             return 0
-        if a.state == "blocked":
+        if a.state == "waiting":
             if not a.needs:
-                sys.stderr.write("--state blocked requires --needs (what the human must decide)\n")
+                sys.stderr.write("--state waiting requires --needs (what the human must decide)\n")
                 return 2
             if not a.reason:
                 sys.stderr.write(
-                    "--state blocked requires --reason (what happened that led to this)\n"
+                    "--state waiting requires --reason (what happened that led to this)\n"
                 )
                 return 2
             BlockStepUseCase(_container.store).execute(

@@ -38,14 +38,14 @@ class TestAssignee(unittest.TestCase):
         self.s = FakeStore()
         self.tid = self.s.create_step("build: thing", role="agent")
 
-    def test_assign_sets_in_progress(self):
+    def test_assign_sets_running(self):
         self.s.assign(self.tid, "worker-1")
-        self.assertEqual(self.s.get_node(self.tid).state, "in_progress")
+        self.assertEqual(self.s.get_node(self.tid).state, "running")
 
     def test_assign_empty_string_clears(self):
         self.s.assign(self.tid, "worker-1")
         self.s.assign(self.tid, "")
-        self.assertEqual(self.s.get_node(self.tid).state, "ready")
+        self.assertEqual(self.s.get_node(self.tid).state, "queued")
 
     def test_assign_none_clears(self):
         self.s.assign(self.tid, "worker-1")
@@ -186,7 +186,7 @@ class TestReady(unittest.TestCase):
         tid = self.s.create_step("build: thing", role="agent")
         result = self.s.claim_ready("agent")
         self.assertEqual(result.id, tid)
-        self.assertEqual(result.state, "in_progress")
+        self.assertEqual(result.state, "running")
 
     def test_claim_ready_task_no_longer_in_ready(self):
         self.s.create_step("build: thing", role="agent")
@@ -260,7 +260,7 @@ class TestRouteToHuman(unittest.TestCase):
         self.s.route_to_human(self.tid, "needs review")
         step = self.s.get_node(self.tid)
         self.assertEqual(step.role, "human")
-        self.assertEqual(step.state, "ready")
+        self.assertEqual(step.state, "waiting")
         self.assertIsNone(self.s._records[self.tid]["assignee"])
 
     def test_route_adds_note(self):

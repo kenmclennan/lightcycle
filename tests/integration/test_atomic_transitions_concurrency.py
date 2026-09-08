@@ -5,7 +5,7 @@ import unittest
 
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.config import Config
-from lightcycle.domain.work import NodeSpec
+from lightcycle.domain.work import NodeSpec, State
 
 _CTX = multiprocessing.get_context("fork")
 
@@ -86,7 +86,7 @@ class TestAtomicClaim(unittest.TestCase):
 
         after = _store_for(root)
         node = after.get_node(step_id)
-        self.assertEqual(node.state, "in_progress")
+        self.assertEqual(node.state, State.RUNNING)
         self.assertEqual(node.claimed_by, winners[0])
 
 
@@ -124,7 +124,7 @@ class TestAtomicComplete(unittest.TestCase):
         won, new_id = store.complete_step_atomic(step_id, "done", "B", _successor_spec(step_id, store.get_step(step_id).item))
         self.assertFalse(won)
         self.assertIsNone(new_id)
-        self.assertEqual(store.get_node(step_id).state, "in_progress")
+        self.assertEqual(store.get_node(step_id).state, State.RUNNING)
         self.assertEqual(store.steps_at_step("review"), [])
 
     def test_empty_expected_assignee_completes_an_assigned_step(self):
@@ -151,7 +151,7 @@ class TestAtomicComplete(unittest.TestCase):
             step_id, "done", "A", _successor_spec(step_id, store_b.get_step(step_id).item))
         self.assertFalse(stale_won)
         self.assertIsNone(stale_new)
-        self.assertEqual(store_b.get_node(step_id).state, "in_progress")
+        self.assertEqual(store_b.get_node(step_id).state, State.RUNNING)
 
         fresh_won, fresh_new = store_b.complete_step_atomic(
             step_id, "done", "B", _successor_spec(step_id, store_b.get_step(step_id).item))

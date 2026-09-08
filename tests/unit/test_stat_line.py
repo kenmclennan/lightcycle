@@ -73,6 +73,42 @@ class TestStatLineItem(unittest.TestCase):
             "build · 1 step · 24m (5m active) · $2.91",
         )
 
+    def test_queued_item_shows_pool_halted_when_the_pool_is_halted(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        store.create_step("s", step="build", role="agent", parent=item)
+        node = store.get_node(item)
+
+        self.assertEqual(
+            _stat_line_item(
+                store, node, store.children(item), _StubFlow(), NOW, pool_halted=True
+            ),
+            "build · 1 step · pool halted",
+        )
+
+    def test_queued_item_omits_pool_halted_when_the_pool_is_not_halted(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        store.create_step("s", step="build", role="agent", parent=item)
+        node = store.get_node(item)
+
+        self.assertEqual(
+            _stat_line_item(store, node, store.children(item), _StubFlow(), NOW), "build · 1 step"
+        )
+
+    def test_running_item_never_shows_pool_halted(self):
+        clock = {"now": "2026-01-01T10:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        item = store.create_item("Item", "a description")
+        store.create_step("s", step="build", role="agent", parent=item)
+        store.claim_ready("agent")
+        node = store.get_node(item)
+
+        line = _stat_line_item(
+            store, node, store.children(item), _StubFlow(), "2026-01-01T10:05:00", pool_halted=True
+        )
+        self.assertNotIn("pool halted", line)
+
     def test_finished_item_leads_with_done(self):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
@@ -98,6 +134,28 @@ class TestStatLineStepAgent(unittest.TestCase):
         node = store.get_node(step)
 
         self.assertEqual(_stat_line_step(store, node, _StubFlow(), NOW), "build")
+
+    def test_queued_step_shows_pool_halted_when_the_pool_is_halted(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        step = store.create_step("s", step="build", role="agent", parent=item)
+        node = store.get_node(step)
+
+        self.assertEqual(
+            _stat_line_step(store, node, _StubFlow(), NOW, pool_halted=True),
+            "build · pool halted",
+        )
+
+    def test_running_step_never_shows_pool_halted(self):
+        clock = {"now": "2026-01-01T10:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        item = store.create_item("Item", "a description")
+        step = store.create_step("s", step="build", role="agent", parent=item)
+        store.claim_ready("agent")
+        node = store.get_node(step)
+
+        line = _stat_line_step(store, node, _StubFlow(), "2026-01-01T10:05:00", pool_halted=True)
+        self.assertNotIn("pool halted", line)
 
     def test_running_step_shows_wall_active_no_done_segment(self):
         clock = {"now": "2026-01-01T10:00:00"}

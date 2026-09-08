@@ -40,8 +40,8 @@ class TestRefuseFields(unittest.TestCase):
 class TestRefuseState(unittest.TestCase):
     def test_a_park_is_refused_on_an_item_and_names_what_it_takes(self):
         self.assertEqual(
-            refuse_state("item", "blocked"),
-            "--state blocked applies to a step, not an item; "
+            refuse_state("item", "waiting"),
+            "--state waiting applies to a step, not an item; "
             "an item takes --state active, --state in_progress",
         )
 
@@ -49,13 +49,13 @@ class TestRefuseState(unittest.TestCase):
         self.assertEqual(
             refuse_state("step", "active"),
             "--state active applies to an item, not a step; "
-            "a step takes --state blocked, --state ready",
+            "a step takes --state ready, --state waiting",
         )
 
     def test_an_unknown_state_lists_every_state(self):
         self.assertEqual(
             refuse_state("item", "bogus"),
-            "unknown --state 'bogus'; use active, blocked, in_progress, ready",
+            "unknown --state 'bogus'; use active, in_progress, ready, waiting",
         )
 
     def test_a_state_the_type_owns_is_accepted(self):

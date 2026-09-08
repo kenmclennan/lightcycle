@@ -29,7 +29,7 @@ Feature: Rolling up and cascading parent state
     And I have activated the item
     When the coder claims the next step
     And the coder completes the build step with outcome "done"
-    Then the item is in progress
+    Then the item is ready
 
   Scenario: A second, still-open item is untouched when the first item's terminal step closes it
     Given a flow whose entry step is also its terminal step

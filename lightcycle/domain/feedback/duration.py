@@ -2,26 +2,28 @@ import datetime
 
 from lightcycle.domain.work.state import State
 
+_LEGACY = {State.RUNNING: "in_progress", State.WAITING: "ready"}
+
 
 class Duration:
     def __init__(self, transitions):
         self._transitions = list(transitions)
 
     def elapsed(self):
-        claimed = self._first(State.IN_PROGRESS)
+        claimed = self._first(State.RUNNING)
         finished = self._last(State.DONE)
         if claimed is None or finished is None:
             return None
         return self._parse(finished) - self._parse(claimed)
 
     def elapsed_since_claim(self, now):
-        claimed = self._first(State.IN_PROGRESS)
+        claimed = self._first(State.RUNNING)
         if claimed is None or self._last(State.DONE) is not None:
             return None
         return self._parse(now) - self._parse(claimed)
 
     def elapsed_since_last_claim(self, now):
-        claimed = self._last(State.IN_PROGRESS)
+        claimed = self._last(State.RUNNING)
         if claimed is None:
             return None
         finished = self._last(State.DONE)
@@ -30,17 +32,19 @@ class Duration:
         return self._parse(now) - self._parse(claimed)
 
     def last_release(self):
-        return self._last(State.READY)
+        return self._last(State.WAITING)
 
     def _first(self, status):
+        legacy = _LEGACY.get(status)
         for s, ts in self._transitions:
-            if s == status:
+            if s == status or s == legacy:
                 return ts
         return None
 
     def _last(self, status):
+        legacy = _LEGACY.get(status)
         for s, ts in reversed(self._transitions):
-            if s == status:
+            if s == status or s == legacy:
                 return ts
         return None
 

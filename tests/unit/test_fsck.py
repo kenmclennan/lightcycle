@@ -5,7 +5,7 @@ from lightcycle.domain.work import Artifact, State
 from tests.support.factories import make_item, make_step
 
 
-def _node(id, type, parent=None, state=State.READY, artifacts=None, watched_step=None):
+def _node(id, type, parent=None, state=State.QUEUED, artifacts=None, watched_step=None):
     if type == "item":
         return make_item(id=id, title=id, state=state, artifacts=artifacts or ())
     return make_step(id=id, title=id, parent=parent, state=state,
@@ -31,7 +31,7 @@ class TestFsck(unittest.TestCase):
 
     def test_open_node_under_closed_parent_is_orphaned(self):
         item = _node("i-1", "item", state=State.DONE)
-        step = _node("i-1.1", "step", parent="i-1", state=State.READY)
+        step = _node("i-1.1", "step", parent="i-1", state=State.QUEUED)
         problems = fsck([item, step])
         self.assertEqual(len(problems), 1)
         self.assertEqual(problems[0].node_id, "i-1.1")
@@ -65,23 +65,23 @@ class TestFsck(unittest.TestCase):
         step = _node("s-1", "step", artifacts=[Artifact(type="spec", value="missing")])
         self.assertEqual(fsck([step]), [])
 
-    def test_item_in_progress_with_all_steps_done_is_stuck(self):
-        item = _node("i-1", "item", state=State.IN_PROGRESS)
+    def test_item_running_with_all_steps_done_is_stuck(self):
+        item = _node("i-1", "item", state=State.RUNNING)
         step = _node("i-1.1", "step", parent="i-1", state=State.DONE)
         problems = fsck([item, step])
         self.assertEqual(len(problems), 1)
         self.assertEqual(problems[0].node_id, "i-1")
         self.assertIn("done", problems[0].message)
 
-    def test_item_in_progress_with_one_open_step_is_not_stuck(self):
-        item = _node("i-1", "item", state=State.IN_PROGRESS)
+    def test_item_running_with_one_open_step_is_not_stuck(self):
+        item = _node("i-1", "item", state=State.RUNNING)
         done_step = _node("i-1.1", "step", parent="i-1", state=State.DONE)
-        open_step = _node("i-1.2", "step", parent="i-1", state=State.READY)
+        open_step = _node("i-1.2", "step", parent="i-1", state=State.QUEUED)
         self.assertEqual(fsck([item, done_step, open_step]), [])
 
     def test_backlogged_item_with_steps_is_stuck(self):
         item = _node("i-1", "item", state=State.BACKLOGGED)
-        step = _node("i-1.1", "step", parent="i-1", state=State.READY)
+        step = _node("i-1.1", "step", parent="i-1", state=State.QUEUED)
         problems = fsck([item, step])
         self.assertEqual(len(problems), 1)
         self.assertEqual(problems[0].node_id, "i-1")

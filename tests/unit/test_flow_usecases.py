@@ -180,7 +180,7 @@ class TestCompleteTask(unittest.TestCase):
             s, flow_for(METAS, s), config=FakeConfig("w2")
         ).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIsNone(resp.next_step)
-        self.assertEqual(s.get_node(bid).state, "in_progress")
+        self.assertEqual(s.get_node(bid).state, "running")
         self.assertIsNone(s.get_node(bid).notes)
 
     def test_worker_with_matching_spawn_id_completes(self):
@@ -341,7 +341,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         human = [c for c in s.children(batch) if c.role == "human"]
         self.assertEqual(len(human), 1)
         self.assertEqual(human[0].stage, FINDINGS_STEP)
-        self.assertEqual(human[0].state, "ready")
+        self.assertEqual(human[0].state, "waiting")
 
     def test_findings_step_title_derives_from_the_batch_items_actual_title(self):
         s = FakeStore()
@@ -425,7 +425,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
-        self.assertEqual(s.get_node(item).state, "in_progress")
+        self.assertEqual(s.get_node(item).state, "queued")
 
     def test_a_closing_item_leaves_a_sibling_item_untouched(self):
         s = FakeStore()
@@ -820,7 +820,7 @@ class TestClaimTask(unittest.TestCase):
         self.assertIsNone(self._uc(FakeStore()).execute(ClaimInput(role="agent")))
 
     def _inprogress(self, s, tid, owner):
-        s.update_state(tid, State.IN_PROGRESS)
+        s.update_state(tid, State.RUNNING)
         s.assign(tid, owner)
 
     def _idempotent_uc(self, s, workers):
@@ -836,7 +836,7 @@ class TestClaimTask(unittest.TestCase):
         resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": assigned})).execute(
             ClaimInput(role="agent"))
         self.assertEqual(resp.view.step.id, assigned)
-        self.assertEqual(s.get_node(later).state, "ready")
+        self.assertEqual(s.get_node(later).state, "queued")
 
     def test_idempotent_falls_through_when_assignment_is_done(self):
         s = FakeStore()
@@ -887,7 +887,7 @@ class TestClaimTask(unittest.TestCase):
         )
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
-        self.assertEqual(s.get_node(x).state, "in_progress")
+        self.assertEqual(s.get_node(x).state, "running")
         self.assertEqual(s.get_node(x).claimed_by, "sp1")
 
     def test_fresh_claim_reclaims_on_assembly_failure(self):
@@ -902,7 +902,7 @@ class TestClaimTask(unittest.TestCase):
         )
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
-        self.assertEqual(s.get_node(x).state, "ready")
+        self.assertEqual(s.get_node(x).state, "queued")
 
     def test_carries_the_resolved_pin(self):
         s = FakeStore()
@@ -1037,7 +1037,7 @@ class TestClaimTask(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
         t = s.get_node(bid)
-        self.assertEqual(str(t.state), "ready")
+        self.assertEqual(str(t.state), "queued")
         self.assertIsNone(t.claimed_by)
 
     def test_claim_syncs_specs_when_a_spec_artifact_is_present(self):
@@ -1078,7 +1078,7 @@ class TestClaimTask(unittest.TestCase):
             uc.execute(ClaimInput(role="agent"))
 
         t = s.get_node(bid)
-        self.assertEqual(str(t.state), "ready")
+        self.assertEqual(str(t.state), "queued")
         self.assertIsNone(t.claimed_by)
 
 

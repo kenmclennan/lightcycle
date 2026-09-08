@@ -216,7 +216,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore(now=lambda: claimed_at.isoformat())
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store, now=lambda: rendered_at)
 
@@ -232,7 +232,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore(now=lambda: clock["now"].isoformat())
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         clock["now"] = datetime.datetime(2026, 1, 1, 12, 1, 0)
         session = self._launch(store, now=lambda: clock["now"])
@@ -254,7 +254,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore(now=lambda: claimed_at.isoformat())
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store, now=lambda: clock["now"])
         table = session.app.query_one(DataTable)
@@ -275,7 +275,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore(now=lambda: claimed_at.isoformat())
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
         store.record_usage(tid, 0, 0, 0, 0, 1.0, "list", None)
 
         session = self._launch(store, now=lambda: clock["now"])
@@ -298,7 +298,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore(now=lambda: claimed_at.isoformat())
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store, now=lambda: clock["now"])
         table = session.app.query_one(DataTable)
@@ -315,7 +315,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
 
@@ -326,7 +326,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -353,7 +353,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -371,7 +371,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -388,7 +388,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -400,7 +400,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -414,7 +414,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -428,7 +428,7 @@ class TestActiveGroup(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -448,7 +448,7 @@ class TestActiveGroup(unittest.TestCase):
         item = store.create_item("active item", "a description")
         tid = store.create_step("build it", step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -469,7 +469,7 @@ class TestActiveGroup(unittest.TestCase):
         item = store.create_item("active item", "a description")
         tid = store.create_step("build it", step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -519,7 +519,7 @@ class TestQueuedGroup(unittest.TestCase):
         self.assertEqual(icon_before, STATE_GLYPHS["queued"].glyph)
 
         store.assign(queued, "worker-1")
-        store.update_state(queued, State.IN_PROGRESS)
+        store.update_state(queued, State.RUNNING)
         session.poll_tick()
 
         icon_after = table.get_cell(row_key(session, queued), "icon").plain
@@ -638,7 +638,7 @@ class TestCursorColumnSurvivesCheapPaths(unittest.TestCase):
         store = FakeStore()
         tid = store.create_step("active item", step="build", role="agent")
         store.assign(tid, "worker-1")
-        store.update_state(tid, State.IN_PROGRESS)
+        store.update_state(tid, State.RUNNING)
 
         session = self._launch(store)
         table = session.app.query_one(DataTable)
@@ -726,7 +726,7 @@ class TestSelectionFollow(unittest.TestCase):
         session.pause()
 
         store.assign(target, "worker-1")
-        store.update_state(target, State.IN_PROGRESS)
+        store.update_state(target, State.RUNNING)
         session.poll_tick()
 
         cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)

@@ -23,7 +23,7 @@ from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.workers import process_start_time
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
-from lightcycle.domain.work import Artifact
+from lightcycle.domain.work import Artifact, State
 
 from tests.support.isolation import inject_container, make_syncable_git_repo
 
@@ -180,10 +180,12 @@ _AGENT_SPECS = {
 _STEP_SIGNALS = {"review": {"review_rounds": "rejected"}, "open-pr": {"conflicts": "~conflict"}}
 
 
-def write_workflow(root, metas, name="spec-driven", entry=None):
+def write_workflow(root, metas, name="spec-driven", entry=None, disposition=None):
     wdir = _workflows_dir(root)
     wdir.mkdir(parents=True, exist_ok=True)
-    (wdir / ("%s.md" % name)).write_text(graph_text_from_metas(metas, entry=entry))
+    (wdir / ("%s.md" % name)).write_text(
+        graph_text_from_metas(metas, entry=entry, disposition=disposition)
+    )
     _write_origin(root)
 
 
@@ -383,7 +385,7 @@ class TestModel(unittest.TestCase):
         self.assertEqual(t["role"], "agent")
         self.assertEqual(t["stage"], "build")
         self.assertIn("item", t)
-        self.assertEqual(t["state"], "ready")
+        self.assertEqual(t["state"], "queued")
 
     def test_status_lanes_json(self):
         h = self.store.create_step("spec: x", step="spec", role="human")
@@ -405,7 +407,7 @@ class TestClaim(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
         self.assertEqual(t["id"], c)
-        self.assertEqual(t["state"], "in_progress")
+        self.assertEqual(t["state"], "running")
         rc2, out2, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(out2.strip(), "")
 
@@ -466,12 +468,12 @@ class TestDoneBlock(unittest.TestCase):
         b = self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_done, b, "banana")
         self.assertEqual(rc, 1)
-        self.assertEqual(self.store.get_node(b).state, "ready")
+        self.assertEqual(self.store.get_node(b).state, State.QUEUED)
 
     def test_block_writes_metadata_and_routes_human(self):
         b = self.store.create_step("build: t", step="build", role="agent")
         rc, out, err = call(
-            _cli_mod.cmd_set, b, "--state", "blocked",
+            _cli_mod.cmd_set, b, "--state", "waiting",
             "--needs", "confirm aud", "--reason", "audit was inconclusive",
         )
         self.assertEqual(rc, 0, err)
@@ -484,7 +486,7 @@ class TestDoneBlock(unittest.TestCase):
         b = self.store.create_step("build: t", step="build", role="agent")
         self.store.claim_ready("agent")
         rc, out, err = call(
-            _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
+            _cli_mod.cmd_set, b, "--state", "waiting", "--needs", "rebase first",
             "--reason", "conflicts on rebase",
         )
         self.assertEqual(rc, 0, err)
@@ -535,7 +537,7 @@ class TestSweep(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(b)
-        self.assertEqual(step.state, "ready")
+        self.assertEqual(step.state, State.QUEUED)
         self.assertIsNone(step.claimed_by)
 
 
@@ -1618,7 +1620,7 @@ class TestArtifactContracts(unittest.TestCase):
         self.assertEqual(out.strip(), "")
         step = self.store.get_node(b)
         self.assertEqual(step.role, "human")
-        self.assertEqual(step.state, "ready")
+        self.assertEqual(step.state, State.WAITING)
 
     def test_claim_proceeds_when_inputs_present(self):
         rc, out, err = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
@@ -1626,7 +1628,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc2, out2, err2 = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc2, 0, err2)
         t = json.loads(out2)
-        self.assertEqual(t["state"], "in_progress")
+        self.assertEqual(t["state"], "running")
         self.assertEqual(t["item"], sid)
 
     def test_done_refused_when_required_output_missing(self):
@@ -1636,7 +1638,7 @@ class TestArtifactContracts(unittest.TestCase):
         rc2, out2, err2 = call(_cli_mod.cmd_done, step, "done")
         self.assertEqual(rc2, 1)
         self.assertIn("branch", err2)
-        self.assertEqual(self.store.get_node(step).state, "ready")
+        self.assertEqual(self.store.get_node(step).state, State.QUEUED)
 
     def test_done_succeeds_when_output_present(self):
         rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
@@ -2004,7 +2006,7 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         self.store.create_step("build: t", step="build", role="agent")
         _, out, _ = call(_cli_mod.cmd_claim, "agent")
         t = json.loads(out)
-        self.assertEqual(t["state"], "in_progress")
+        self.assertEqual(t["state"], "running")
         self.assertNotIn("workspace", t)
 
 
@@ -2160,13 +2162,13 @@ class TestUnblock(unittest.TestCase):
         b = self.store.create_step("build: t", step="build", role="agent")
         self.store.claim_ready("agent")
         call(
-            _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
+            _cli_mod.cmd_set, b, "--state", "waiting", "--needs", "rebase first",
             "--reason", "conflicts on rebase",
         )
         rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 0, err)
         t = self.store.get_node(b)
-        self.assertEqual(t.state, "ready")
+        self.assertEqual(t.state, State.QUEUED)
         self.assertEqual(t.role, "agent")
         self.assertIsNone(t.claimed_by)
 
@@ -2174,7 +2176,7 @@ class TestUnblock(unittest.TestCase):
         b = self.store.create_step("build: t", step="build", role="agent")
         self.store.claim_ready("agent")
         call(
-            _cli_mod.cmd_set, b, "--state", "blocked", "--needs", "rebase first",
+            _cli_mod.cmd_set, b, "--state", "waiting", "--needs", "rebase first",
             "--reason", "conflicts on rebase",
         )
         rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
@@ -2232,7 +2234,7 @@ class TestCloseWorktree(unittest.TestCase):
         ws = json.loads(cout)["workspace"]
         self.assertTrue(os.path.isdir(ws))
         build = self.store.children(sid)[0].id
-        rc, _, err = call(_cli_mod.cmd_done, sid, "merged")
+        rc, _, err = call(_cli_mod.cmd_done, sid, "merged", "--disposition", "completed")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(sid).state, "done")
         self.assertEqual(self.store.get_node(build).state, "done")
@@ -2247,7 +2249,7 @@ class TestClose(unittest.TestCase):
     def test_close_item_closes_and_force_closes_its_open_steps(self):
         item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
         step = self.store.create_step("build: t", step="build", role="agent", parent=item)
-        rc, out, err = call(_cli_mod.cmd_done, item, "wontfix")
+        rc, out, err = call(_cli_mod.cmd_done, item, "wontfix", "--disposition", "aborted")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(item).state, "done")
         self.assertEqual(self.store.get_node(step).state, "done")
@@ -2258,9 +2260,32 @@ class TestClose(unittest.TestCase):
         self.store.create_step("build: t", step="build", role="agent", parent=item)
         claimed = self.store.claim_ready("agent")
         self.store.close(claimed.id, "done")
-        rc, out, err = call(_cli_mod.cmd_done, item, "done")
+        rc, out, err = call(_cli_mod.cmd_done, item, "done", "--disposition", "completed")
         self.assertEqual(rc, 0, err)
         self.assertEqual([a for a in self.store.item_artifacts(item) if a.type == "retro"], [])
+
+    def test_close_item_resolves_bundle_declared_disposition_with_no_flag(self):
+        write_workflow(self.root, {}, disposition={"wontfix": "aborted"})
+        item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        rc, out, err = call(_cli_mod.cmd_done, item, "wontfix")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store.get_node(item).state, "done")
+        self.assertEqual(self.store.get_node(item).disposition, "aborted")
+
+    def test_close_item_explicit_flag_overrides_bundle_declared_disposition(self):
+        write_workflow(self.root, {}, disposition={"wontfix": "aborted"})
+        item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        rc, out, err = call(_cli_mod.cmd_done, item, "wontfix", "--disposition", "completed")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store.get_node(item).disposition, "completed")
+
+    def test_close_item_undeclared_outcome_refuses_with_the_disposition_message(self):
+        write_workflow(self.root, {}, disposition={})
+        item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
+        rc, out, err = call(_cli_mod.cmd_done, item, "wontfix")
+        self.assertEqual(rc, 2)
+        self.assertIn("--disposition", err)
+        self.assertNotEqual(self.store.get_node(item).state, "done")
 
 
 class TestInitPullsWorkflows(unittest.TestCase):

@@ -17,6 +17,15 @@ from lightcycle.domain.work import (
     merge_condition_note,
 )
 
+_RAW_STORAGE_STATE = {
+    State.BACKLOGGED: "backlogged",
+    State.BLOCKED: "backlogged",
+    State.QUEUED: "ready",
+    State.WAITING: "ready",
+    State.RUNNING: "in_progress",
+    State.DONE: "done",
+}
+
 
 def _new_id():
     suffix = uuid.uuid4().hex[:8]
@@ -47,15 +56,16 @@ def record_to_step(record, blocked_by=None):
     labels = record.get("labels") or []
     meta = record.get("metadata") or {}
     deps = record.get("dep_count") or 0
+    role = _label_value(labels, "for:")
     return Step(
         id=record["id"],
         item=record.get("parent"),
         title=record.get("title", ""),
         stage=_label_value(labels, "step:"),
         pass_id=record.get("pass_id"),
-        role=_label_value(labels, "for:"),
+        role=role,
         state=derive_state(
-            "step", record.get("state") == "done", record.get("assignee"), deps, []
+            "step", record.get("state") == "done", record.get("assignee"), deps, role, []
         ),
         claimed_by=record.get("assignee"),
         model=meta.get("model"),
@@ -85,18 +95,21 @@ def record_to_step(record, blocked_by=None):
 
 def record_to_item(record, blocked_by=None, child_states=()):
     meta = record.get("metadata") or {}
+    blocked_by = list(blocked_by or [])
     return Item(
         id=record["id"],
         artifacts=tuple(Artifact.from_dict(a) for a in (meta.get("artifacts") or [])),
         title=record.get("title", ""),
         description=record.get("description"),
         state=derive_state(
-            "item", record.get("state") == "done", None, False, list(child_states)
+            "item", record.get("state") == "done", None, bool(blocked_by), None,
+            list(child_states),
         ),
         repo=record.get("repo"),
         project=_label_value(record.get("labels") or [], "project:"),
         workflow=record.get("workflow"),
         outcome=record.get("outcome"),
+        disposition=record.get("disposition"),
         deps=record.get("dep_count") or 0,
         blocked_by=list(blocked_by or []),
         created_at=record.get("created_at"),
@@ -292,7 +305,7 @@ class FakeStore(StorePort):
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
-        self.update_state(tid, State.READY)
+        self.update_state(tid, State.WAITING if role == "human" else State.QUEUED)
         self.assign(tid, "")
 
     def route_to_human(self, tid, note):
@@ -322,7 +335,7 @@ class FakeStore(StorePort):
         pass
 
     def reclaim(self, tid):
-        self.update_state(tid, State.READY)
+        self.update_state(tid, State.QUEUED)
         self.assign(tid, "")
 
     def note(self, tid, text):
@@ -341,16 +354,18 @@ class FakeStore(StorePort):
         b = self._get(tid)
         if b.get("state") != "done":
             return
-        b["state"] = str(State.IN_PROGRESS)
+        b["state"] = "in_progress"
         b["outcome"] = None
         b["closed_at"] = None
 
-    def close(self, tid, reason):
+    def close(self, tid, reason, disposition=None):
         b = self._get(tid)
         if b.get("state") == "done":
             return
         b["state"] = "done"
         b["outcome"] = reason
+        if b.get("type") == "item" and disposition is not None:
+            b["disposition"] = disposition
         b["closed_at"] = datetime.datetime.now().isoformat()
         self._record_history(tid, State.DONE)
         for other_id, blockers in self._deps.items():
@@ -412,7 +427,7 @@ class FakeStore(StorePort):
         return list(self._labels.get(tid, []))
 
     def update_state(self, tid, state):
-        self._get(tid)["state"] = str(state)
+        self._get(tid)["state"] = _RAW_STORAGE_STATE.get(state, state)
         self._record_history(tid, state)
 
     def _record_history(self, tid, state):
@@ -464,7 +479,7 @@ class FakeStore(StorePort):
         spawn_id = self._config.spawn_id() if self._config else None
         b["assignee"] = spawn_id or role
         b["state"] = "in_progress"
-        self._record_history(b["id"], State.IN_PROGRESS)
+        self._record_history(b["id"], State.RUNNING)
         return self._to_node(b)
 
     def accrue_active_seconds(self, step_ids, seconds):

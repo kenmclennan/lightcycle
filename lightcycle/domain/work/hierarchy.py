@@ -20,17 +20,19 @@ def compose_hierarchy(root, steps_by_item):
 def landing_tab(node):
     if node.type == "item":
         return "description"
-    return "log" if node.state == State.IN_PROGRESS else "detail"
+    return "log" if node.state == State.RUNNING else "detail"
 
 
 def row_bucket(node, flow):
     if node.state == State.DONE:
         return "done"
-    if node.state == State.IN_PROGRESS:
+    if node.state == State.RUNNING:
         return "active"
-    if node.state == State.READY and is_human_step(node):
+    if node.state == State.WAITING and is_human_step(node):
         kind, _outs = node.classify_for_human(flow)
         return "escalation" if kind == "blocked" else "gate"
+    if node.state == State.WAITING:
+        return "gate"
     return "queued"
 
 

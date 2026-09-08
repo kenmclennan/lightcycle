@@ -99,7 +99,7 @@ def _no_ready_at(ctx, stage):
 
 @then("the claimed step is in progress")
 def _in_progress(ctx):
-    assert ctx["claimed"]["state"] == "in_progress"
+    assert ctx["claimed"]["state"] == "running"
 
 
 @then("the command is rejected")

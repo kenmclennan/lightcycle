@@ -41,7 +41,7 @@ class StoreContractBase:
             tid, "done", "w2", NodeSpec(title="next", step="review"))
         self.assertFalse(won)
         self.assertIsNone(new)
-        self.assertEqual(s.get_node(tid).state, "in_progress")
+        self.assertEqual(s.get_node(tid).state, "running")
 
     def test_complete_step_atomic_empty_assignee_not_fenced(self):
         s = self.make_store()
@@ -83,11 +83,11 @@ class StoreContractBase:
         s.label_remove(tid, "ci-pending")
         self.assertEqual(set(s.labels_of(tid)), {"ci-released:1"})
 
-    def test_assign_shows_in_progress(self):
+    def test_assign_shows_running(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "worker-1")
-        self.assertEqual(s.get_node(tid).state, "in_progress")
+        self.assertEqual(s.get_node(tid).state, "running")
 
     def test_close_status_is_done(self):
         s = self.make_store()
@@ -309,6 +309,44 @@ class StoreContractBase:
         s = self.make_store()
         self._step(s, "t", role="human")
         self.assertIsNone(s.claim_ready("agent"))
+
+    def test_reassign_to_human_is_waiting(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.reassign(tid, "human")
+        self.assertEqual(s.get_node(tid).state, "waiting")
+
+    def test_reassign_to_an_agent_role_is_queued(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="human")
+        s.reassign(tid, "some-agent-role")
+        self.assertEqual(s.get_node(tid).state, "queued")
+
+    def test_reclaim_is_queued(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.claim_ready("agent")
+        s.reclaim(tid)
+        self.assertEqual(s.get_node(tid).state, "queued")
+
+    def test_reclaimed_step_is_claimable_again(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        claimed = s.claim_ready("agent")
+        self.assertEqual(claimed.id, tid)
+        s.reclaim(tid)
+        reclaimed = s.claim_ready("agent")
+        self.assertEqual(reclaimed.id, tid)
+
+    def test_reassigned_to_human_then_back_to_agent_is_claimable_again(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        claimed = s.claim_ready("agent")
+        self.assertEqual(claimed.id, tid)
+        s.reassign(tid, "human")
+        s.reassign(tid, "agent")
+        reclaimed = s.claim_ready("agent")
+        self.assertEqual(reclaimed.id, tid)
 
     def test_story_artifacts_roundtrip(self):
         s = self.make_store()
@@ -761,7 +799,7 @@ class StoreContractBase:
         s.claim_ready("agent")
         s.close(tid, "done")
         states = [state for state, _ in s.history(tid)]
-        self.assertEqual(states, ["in_progress", "done"])
+        self.assertEqual(states, ["running", "done"])
 
     def test_history_stamps_ts_from_injected_clock(self):
         ticks = iter("2026-01-01T%02d:00:00" % h for h in range(10, 20))
@@ -807,18 +845,18 @@ class StoreContractBase:
         self.assertEqual(ids, [step])
         self.assertNotIn(item, ids)
 
-    def test_step_state_backlogged_when_blocked(self):
+    def test_step_state_blocked_when_it_has_unresolved_deps(self):
         s = self.make_store()
         blocker = self._step(s, "blocker")
         blocked = self._step(s, "blocked", deps=[blocker])
-        self.assertEqual(s.get_node(blocked).state, "backlogged")
+        self.assertEqual(s.get_node(blocked).state, "blocked")
 
-    def test_step_state_in_progress_when_assigned_despite_deps(self):
+    def test_step_state_running_when_assigned_despite_deps(self):
         s = self.make_store()
         blocker = self._step(s, "blocker")
         blocked = self._step(s, "blocked", deps=[blocker])
         s.assign(blocked, "w1")
-        self.assertEqual(s.get_node(blocked).state, "in_progress")
+        self.assertEqual(s.get_node(blocked).state, "running")
 
     def test_step_state_done_when_closed(self):
         s = self.make_store()
@@ -828,27 +866,27 @@ class StoreContractBase:
         s.close(blocked, "done")
         self.assertEqual(s.get_node(blocked).state, "done")
 
-    def test_step_state_ready_when_unblocked(self):
+    def test_step_state_queued_when_unblocked(self):
         s = self.make_store()
-        blocker = self._step(s, "blocker")
-        blocked = self._step(s, "blocked", deps=[blocker])
+        blocker = self._step(s, "blocker", role="agent")
+        blocked = self._step(s, "blocked", role="agent", deps=[blocker])
         s.close(blocker, "done")
-        self.assertEqual(s.get_node(blocked).state, "ready")
+        self.assertEqual(s.get_node(blocked).state, "queued")
 
-    def test_step_state_ready_when_blocker_deleted(self):
+    def test_step_state_queued_when_blocker_deleted(self):
         s = self.make_store()
-        blocker = self._step(s, "blocker")
-        blocked = self._step(s, "blocked", deps=[blocker])
+        blocker = self._step(s, "blocker", role="agent")
+        blocked = self._step(s, "blocked", role="agent", deps=[blocker])
         s.delete(blocker)
-        self.assertEqual(s.get_node(blocked).state, "ready")
+        self.assertEqual(s.get_node(blocked).state, "queued")
 
     def test_item_state_rolls_up_mixed_children(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
-        done_step = self._step(s, "done step", parent=item)
-        self._step(s, "open step", parent=item)
+        done_step = self._step(s, "done step", role="agent", parent=item)
+        self._step(s, "open step", role="agent", parent=item)
         s.close(done_step, "done")
-        self.assertEqual(s.get_node(item).state, "in_progress")
+        self.assertEqual(s.get_node(item).state, "queued")
 
     def test_item_state_done_when_all_children_done(self):
         s = self.make_store()
@@ -859,23 +897,23 @@ class StoreContractBase:
         s.close(b, "done")
         self.assertEqual(s.get_node(item).state, "done")
 
-    def test_item_state_ready_when_all_children_ready(self):
+    def test_item_state_queued_when_all_children_queued(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
-        self._step(s, "a", parent=item)
-        self._step(s, "b", parent=item)
-        self.assertEqual(s.get_node(item).state, "ready")
+        self._step(s, "a", role="agent", parent=item)
+        self._step(s, "b", role="agent", parent=item)
+        self.assertEqual(s.get_node(item).state, "queued")
 
     def test_empty_item_state_backlogged(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
         self.assertEqual(s.get_node(item).state, "backlogged")
 
-    def test_step_state_ready_when_in_progress_column_but_unassigned(self):
+    def test_step_state_queued_when_in_progress_column_but_unassigned(self):
         s = self.make_store()
-        tid = self._step(s, "t")
+        tid = self._step(s, "t", role="agent")
         s.update_state(tid, "in_progress")
-        self.assertEqual(s.get_node(tid).state, "ready")
+        self.assertEqual(s.get_node(tid).state, "queued")
 
     def test_closed_empty_container_state_done(self):
         s = self.make_store()

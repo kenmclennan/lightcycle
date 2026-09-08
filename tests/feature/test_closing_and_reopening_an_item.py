@@ -5,6 +5,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 import lightcycle.cli as cli
+from lightcycle.domain.work import State
 from tests.support.harness import Harness
 
 scenarios("closing-and-reopening-an-item.feature")
@@ -79,7 +80,7 @@ def _reviewer_has_claimed(ctx):
 
 @given(parsers.parse('I have closed the item with outcome "{outcome}"'))
 def _have_closed(ctx, outcome):
-    rc, out, err = ctx["h"].run("done", ctx["item"], outcome)
+    rc, out, err = ctx["h"].run("done", ctx["item"], outcome, "--disposition", "completed")
     assert rc == 0, err
 
 
@@ -102,7 +103,9 @@ def _claim(ctx):
 
 @when(parsers.parse('I close the item with outcome "{outcome}"'))
 def _close(ctx, outcome):
-    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("done", ctx["item"], outcome)
+    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run(
+        "done", ctx["item"], outcome, "--disposition", "completed"
+    )
 
 
 @when("I reopen the item")
@@ -127,42 +130,42 @@ def _file_step(ctx):
 
 @then("the item is backlogged")
 def _item_backlogged(ctx):
-    assert _item_node(ctx).state == "backlogged"
+    assert _item_node(ctx).state == State.BACKLOGGED
 
 
 @then("the item is ready")
 def _item_ready(ctx):
-    assert _item_node(ctx).state == "ready"
+    assert _item_node(ctx).state == State.QUEUED
 
 
 @then("the item is in progress")
 def _item_in_progress(ctx):
-    assert _item_node(ctx).state == "in_progress"
+    assert _item_node(ctx).state == State.RUNNING
 
 
 @then("the item is done")
 def _item_done(ctx):
-    assert _item_node(ctx).state == "done"
+    assert _item_node(ctx).state == State.DONE
 
 
 @then(parsers.parse('the item is done with outcome "{outcome}"'))
 def _item_done_with_outcome(ctx, outcome):
     node = _item_node(ctx)
-    assert node.state == "done"
+    assert node.state == State.DONE
     assert node.outcome == outcome
 
 
 @then(parsers.parse('the build step is done with outcome "{outcome}"'))
 def _build_step_done_with_outcome(ctx, outcome):
     node = _step_node(ctx, "build")
-    assert node.state == "done"
+    assert node.state == State.DONE
     assert node.outcome == outcome
 
 
 @then(parsers.parse('the review step is done with outcome "{outcome}"'))
 def _review_step_done_with_outcome(ctx, outcome):
     node = _step_node(ctx, "review")
-    assert node.state == "done"
+    assert node.state == State.DONE
     assert node.outcome == outcome
 
 
