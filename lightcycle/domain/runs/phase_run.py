@@ -33,7 +33,8 @@ class PhaseRun:
 
     def as_dict(self) -> dict:
         return {
-            "id": self.id, "item": self.item, "pass_id": self.pass_id, "phase": self.phase,
+            "id": self.id, "item": self.item, "pass_id": self.pass_id, "pass": self.pass_id,
+            "phase": self.phase,
             "branch": self.branch, "pr": self.pr, "content_pin": self.content_pin,
             "comments_dispatched_through": self.comments_dispatched_through,
             "comments_handled_through": self.comments_handled_through,

@@ -39,5 +39,13 @@ class TestOpenness(unittest.TestCase):
         self.assertFalse(PhaseRun("r", "LC-1", "LC-1.p1", state=RunState.ABANDONED).is_open)
 
 
+class TestAsDict(unittest.TestCase):
+    def test_as_dict_aliases_pass_id_as_pass(self):
+        r = PhaseRun("r", "LC-1", "LC-1.p1", phase="spec")
+        d = r.as_dict()
+        self.assertEqual(d["pass"], "LC-1.p1")
+        self.assertEqual(d["pass_id"], "LC-1.p1")
+
+
 if __name__ == "__main__":
     unittest.main()
