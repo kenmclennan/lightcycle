@@ -4,6 +4,7 @@ import os
 import sqlite3
 from contextlib import contextmanager
 
+from lightcycle.adapters.fsio import DB_FILENAME
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
@@ -18,8 +19,6 @@ from lightcycle.ports.store import (
     ProjectResolutionError,
     StorePort,
 )
-
-_DB_FILENAME = "store.db"
 
 _RAW_STORAGE_STATE = {
     State.BACKLOGGED: "backlogged",
@@ -241,7 +240,7 @@ class SqliteStore(StorePort):
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._tx_depth = 0
         self._refuse_live_store_from_worktree(package_root, default_data_root)
-        self._db_path = os.path.join(config.data_root(), _DB_FILENAME)
+        self._db_path = os.path.join(config.data_root(), DB_FILENAME)
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         self._conn = sqlite3.connect(self._db_path)
         self._conn.execute("PRAGMA journal_mode=WAL")

@@ -35,7 +35,9 @@ def remote_url(root):
         raise GitReadError("cannot read remote: %s is not a readable git repo" % root)
     proc = git(root, "remote", "get-url", "origin")
     if proc.returncode != 0:
-        return None
+        if "No such remote" in proc.stderr:
+            return None
+        raise GitReadError("git remote get-url failed in %s: %s" % (root, proc.stderr.strip()))
     return proc.stdout.strip()
 
 
@@ -46,6 +48,8 @@ def branch_exists(root, branch):
 
 
 def worktree_base(root):
+    if not is_git_repo(root):
+        raise GitReadError("cannot read worktree base: %s is not a readable git repo" % root)
     for ref in ("origin/main", "origin/master"):
         if git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/" + ref):
             return ref

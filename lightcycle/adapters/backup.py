@@ -4,16 +4,16 @@ import os
 import re
 import sqlite3
 
+from lightcycle.adapters.fsio import DB_FILENAME
 from lightcycle.ports.backup import BackupPort
 
-_DB_FILENAME = "store.db"
 _PREFIX = "store-"
 _SUFFIX = ".db.gz"
 _SNAPSHOT_RE = re.compile(r"^store-\d{8}T\d{6}Z\.db\.gz$")
 
 
 def _snapshot_name(now):
-    ts = datetime.datetime.utcfromtimestamp(now).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return "%s%s%s" % (_PREFIX, ts, _SUFFIX)
 
 
@@ -25,7 +25,7 @@ class SqliteBackupAdapter(BackupPort):
         return self._config.backups_dir()
 
     def _store_path(self):
-        return os.path.join(self._config.data_root(), _DB_FILENAME)
+        return os.path.join(self._config.data_root(), DB_FILENAME)
 
     def list_snapshots(self):
         d = self._backups_dir()
