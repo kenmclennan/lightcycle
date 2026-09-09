@@ -58,9 +58,6 @@ ignore = ["E501", "E741", "E702", "E402"]
 "tests/**" = ["BLE001", "RUF013", "DTZ", "SIM115"]
 
 # Baseline (temporary, shrinks as findings get fixed - see the CLAUDE.md ratchet paragraph).
-"lightcycle/application/services/flow.py" = ["BLE001"]
-"lightcycle/application/work/inbox.py" = ["BLE001"]
-"lightcycle/application/work/project_of.py" = ["BLE001"]
 "lightcycle/adapters/spawner.py" = ["SIM115"]
 
 [tool.pytest.ini_options]

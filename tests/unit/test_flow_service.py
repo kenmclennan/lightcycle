@@ -86,6 +86,20 @@ class TestNodeHelpersTolerateWorkflowLessNodes(unittest.TestCase):
         svc.workspace_for_node(node)
 
 
+class _BrokenStore(FakeStore):
+    def get_item(self, tid):
+        raise RuntimeError("store is locked")
+
+
+class TestOwningItemPropagatesStoreErrors(unittest.TestCase):
+    def test_workflow_for_raises_rather_than_returning_none_on_a_read_failure(self):
+        store = _BrokenStore()
+        step = create_owned_step(store, "audit: x", step="audit", role="agent")
+        service = svc(store)
+        with self.assertRaises(RuntimeError):
+            service.workflow_for(store.get_node(step))
+
+
 class TestStepSkill(unittest.TestCase):
     def _svc_store(self):
         metas = {"reviewer": {"model": "opus", "step": "review"}, "gate": {"step": "gate"}}

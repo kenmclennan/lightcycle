@@ -1,3 +1,6 @@
+from lightcycle.ports.store import NodeNotFoundError
+
+
 def project_of(store, node):
     if isinstance(node, str):
         item_id = node
@@ -5,7 +8,7 @@ def project_of(store, node):
         item_id = getattr(node, "item", None) or node.id
     try:
         return store.get_item(item_id).repo
-    except Exception:
+    except NodeNotFoundError:
         return None
 
 
