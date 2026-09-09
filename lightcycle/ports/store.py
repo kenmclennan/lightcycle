@@ -109,6 +109,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def transaction(self):
+        pass
+
+    @abstractmethod
     def disconnect(self):
         pass
 

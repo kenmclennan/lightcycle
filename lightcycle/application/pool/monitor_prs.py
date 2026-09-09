@@ -216,13 +216,14 @@ class MonitorPrsUseCase:
                     "a human must resume this step." % CI_RELEASE_CAP,
                 )
                 continue
-            UnblockStepUseCase(self._store, self._flow_service).execute(
-                UnblockInput(step=step.id)
-            )
-            self._store.label_remove(step.id, CI_PENDING_LABEL)
-            self._store.label_add(
-                step.id, "%s%d" % (CI_RELEASED_PREFIX, released_so_far + 1)
-            )
+            with self._store.transaction():
+                UnblockStepUseCase(self._store, self._flow_service).execute(
+                    UnblockInput(step=step.id)
+                )
+                self._store.label_remove(step.id, CI_PENDING_LABEL)
+                self._store.label_add(
+                    step.id, "%s%d" % (CI_RELEASED_PREFIX, released_so_far + 1)
+                )
             released.append(step.parent)
         return released
 

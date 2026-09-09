@@ -1284,6 +1284,27 @@ class TestUnblockTask(unittest.TestCase):
         )
         self.assertEqual(spin_port.load(), {})
 
+    def test_a_failing_reassign_leaves_the_earlier_writes_unapplied(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="agent")
+        BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
+        before = s.get_node(bid)
+        before_metadata = (before.park.reason, before.park.needs, before.park.tried)
+        before_notes = before.notes
+
+        def raising_reassign(tid, role):
+            raise RuntimeError("boom")
+
+        s.reassign = raising_reassign
+        with self.assertRaises(RuntimeError):
+            UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        after = s.get_node(bid)
+        self.assertEqual(
+            (after.park.reason, after.park.needs, after.park.tried), before_metadata
+        )
+        self.assertEqual(after.notes, before_notes)
+        self.assertEqual(after.role, "human")
+
 
 if __name__ == "__main__":
     unittest.main()

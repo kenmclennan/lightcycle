@@ -1,6 +1,8 @@
+import copy
 import datetime
 import os
 import uuid
+from contextlib import contextmanager
 from dataclasses import replace
 
 from lightcycle.ports.store import (
@@ -117,6 +119,12 @@ def record_to_item(record, blocked_by=None, child_states=()):
     )
 
 
+_TX_ATTRS = (
+    "_records", "_labels", "_passes", "_runs", "_deps",
+    "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
+)
+
+
 class FakeStore(StorePort):
     def __init__(self, now=None, config=None):
         self._records = {}
@@ -131,9 +139,25 @@ class FakeStore(StorePort):
         self._usage_accrual_state = {}
         self._now = now or (lambda: datetime.datetime.now().isoformat())
         self._config = config
+        self._tx_depth = 0
 
     def bind_config(self, config):
         self._config = config
+
+    @contextmanager
+    def transaction(self):
+        snapshot = {a: copy.deepcopy(getattr(self, a)) for a in _TX_ATTRS}
+        self._tx_depth += 1
+        try:
+            yield
+        except Exception:
+            self._tx_depth -= 1
+            if self._tx_depth == 0:
+                for a, v in snapshot.items():
+                    setattr(self, a, v)
+            raise
+        else:
+            self._tx_depth -= 1
 
     def _new_record(self, **fields):
         b = {

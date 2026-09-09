@@ -195,6 +195,20 @@ class TestEditNode(unittest.TestCase):
         self.assertIn("some-label", s.labels_of(tid))
         self.assertEqual(s.get_node(tid).notes, "some notes")
 
+    def test_a_failing_third_write_leaves_the_earlier_writes_unapplied(self):
+        s = FakeStore()
+        tid = s.create_step("a step", role="human")
+
+        def raising_set_notes(tid, text):
+            raise RuntimeError("boom")
+
+        s.set_notes = raising_set_notes
+        with self.assertRaises(RuntimeError):
+            EditNodeUseCase(s).execute(EditNodeInput(step=tid, label="l", notes="n"))
+        self.assertNotIn("l", s.labels_of(tid))
+        self.assertEqual(s.get_node(tid).title, "a step")
+        self.assertFalse(hasattr(s.get_node(tid), "description"))
+
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
         s = FakeStore()
@@ -857,6 +871,29 @@ class TestRemoveNode(unittest.TestCase):
         self.assertTrue(resp.worktree_removed)
         with self.assertRaises(KeyError):
             s.get_node(item)
+
+    def test_a_failing_final_delete_leaves_the_children_and_worktree_unremoved(self):
+        s = FakeStore()
+        item = s.create_item("feature", "a description")
+        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        workers = FakeWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+
+        original_delete = s.delete
+
+        def raising_delete(tid):
+            if tid == item:
+                raise RuntimeError("boom")
+            return original_delete(tid)
+
+        s.delete = raising_delete
+        with self.assertRaises(RuntimeError):
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+
+        self.assertEqual(s.get_node(item).id, item)
+        self.assertEqual(s.get_node(step).id, step)
+        self.assertEqual(wt.removed, [])
 
 
 if __name__ == "__main__":

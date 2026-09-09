@@ -18,15 +18,16 @@ class CloseItemUseCase:
         self._worktrees = worktrees
 
     def execute(self, input: CloseItemInput) -> None:
-        for kt in self._store.children(input.item):
-            if kt.state != State.DONE:
-                self._store.close(kt.id, input.reason)
-        self._store.close(input.item, input.reason, input.disposition)
-        for run in self._store.open_runs_of(input.item):
-            self._store.close_run(run.id, RunState.ABANDONED)
-        current = self._store.current_pass(input.item)
-        if current is not None:
-            self._store.close_pass(current.id)
+        with self._store.transaction():
+            for kt in self._store.children(input.item):
+                if kt.state != State.DONE:
+                    self._store.close(kt.id, input.reason)
+            self._store.close(input.item, input.reason, input.disposition)
+            for run in self._store.open_runs_of(input.item):
+                self._store.close_run(run.id, RunState.ABANDONED)
+            current = self._store.current_pass(input.item)
+            if current is not None:
+                self._store.close_pass(current.id)
+            retire_resolved(self._store, input.item)
         if self._worktrees is not None:
             self._worktrees.remove(input.item)
-        retire_resolved(self._store, input.item)

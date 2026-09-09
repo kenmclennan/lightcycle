@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import sqlite3
+from contextlib import contextmanager
 
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
@@ -237,6 +238,7 @@ class SqliteStore(StorePort):
     def __init__(self, config, now=None, package_root=None, default_data_root=None):
         self._config = config
         self._now = now or (lambda: datetime.datetime.now().isoformat())
+        self._tx_depth = 0
         self._refuse_live_store_from_worktree(package_root, default_data_root)
         self._db_path = os.path.join(config.data_root(), _DB_FILENAME)
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
@@ -256,7 +258,26 @@ class SqliteStore(StorePort):
             self._migrate_phase_artifacts_into_runs()
             self._migrate_split_nodes()
         self._migrate_add_missing_columns()
-        self._conn.commit()
+        self._commit()
+
+    def _commit(self):
+        if self._tx_depth == 0:
+            self._conn.commit()
+
+    @contextmanager
+    def transaction(self):
+        self._tx_depth += 1
+        try:
+            yield
+        except Exception:
+            self._tx_depth -= 1
+            if self._tx_depth == 0:
+                self._conn.rollback()
+            raise
+        else:
+            self._tx_depth -= 1
+            if self._tx_depth == 0:
+                self._conn.commit()
 
     def _refuse_live_store_from_worktree(self, package_root, default_data_root):
         pkg = package_root if package_root is not None else self._config.package_root()
@@ -686,14 +707,12 @@ class SqliteStore(StorePort):
         prefix = shortcode or self.shortcode()
         namespace = parent if parent is not None else prefix
         row = self._conn.execute(
-            "SELECT next FROM counters WHERE namespace = ?", (namespace,)
+            "INSERT INTO counters (namespace, next) VALUES (?, 2) "
+            "ON CONFLICT(namespace) DO UPDATE SET next = next + 1 "
+            "RETURNING next - 1",
+            (namespace,),
         ).fetchone()
-        n = row[0] if row else 1
-        self._conn.execute(
-            "INSERT INTO counters (namespace, next) VALUES (?, ?) "
-            "ON CONFLICT(namespace) DO UPDATE SET next = excluded.next",
-            (namespace, n + 1),
-        )
+        n = row[0]
         if parent is None:
             return "%s-%d" % (prefix, n)
         return "%s.%d" % (parent, n)
@@ -749,7 +768,7 @@ class SqliteStore(StorePort):
 
     def _set_repo(self, item_id, value):
         self._conn.execute("UPDATE items SET repo = ? WHERE id = ?", (value, item_id))
-        self._conn.commit()
+        self._commit()
 
     def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         if atype == "repo":
@@ -760,7 +779,7 @@ class SqliteStore(StorePort):
             "VALUES (?, ?, ?, ?, ?, ?)",
             (item_id, atype, value, label, internal, resolved_kind),
         )
-        self._conn.commit()
+        self._commit()
 
     def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         if atype == "repo":
@@ -781,7 +800,7 @@ class SqliteStore(StorePort):
             "VALUES (?, ?, ?, ?, ?, ?)",
             (item_id, atype, value, label, internal, resolved_kind),
         )
-        self._conn.commit()
+        self._commit()
 
     def all_nodes(self):
         return self.all_steps() + self.all_items()
@@ -927,7 +946,7 @@ class SqliteStore(StorePort):
                 (_RAW_STORAGE_STATE.get(State.QUEUED, State.QUEUED), tid),
             )
             self._record_history(tid, State.QUEUED)
-            self._conn.commit()
+            self._commit()
         except Exception:
             self._conn.rollback()
             raise
@@ -938,7 +957,7 @@ class SqliteStore(StorePort):
             raise NodeNotFoundError("unknown node '%s'" % tid)
         combined = (row[0] + "\n" + text) if row[0] else text
         self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (combined, tid))
-        self._conn.commit()
+        self._commit()
 
     def note_condition(self, tid, text):
         row = self._conn.execute("SELECT notes FROM steps WHERE id = ?", (tid,)).fetchone()
@@ -946,14 +965,14 @@ class SqliteStore(StorePort):
             raise NodeNotFoundError("unknown node '%s'" % tid)
         combined = merge_condition_note(row[0] or "", text, self._now())
         self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (combined, tid))
-        self._conn.commit()
+        self._commit()
 
     def set_notes(self, tid, text):
         row = self._conn.execute("SELECT 1 FROM steps WHERE id = ?", (tid,)).fetchone()
         if row is None:
             raise NodeNotFoundError("unknown node '%s'" % tid)
         self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (text or None, tid))
-        self._conn.commit()
+        self._commit()
 
     def reopen(self, tid):
         self._conn.execute(
@@ -961,7 +980,7 @@ class SqliteStore(StorePort):
             "WHERE id = ? AND state = 'done'" % self._table_of(tid),
             (tid,),
         )
-        self._conn.commit()
+        self._commit()
 
     def close(self, tid, reason, disposition=None):
         table = self._table_of(tid)
@@ -978,7 +997,7 @@ class SqliteStore(StorePort):
                 (reason, datetime.datetime.now().isoformat(), tid),
             )
         self._record_history(tid, State.DONE)
-        self._conn.commit()
+        self._commit()
 
     def complete_step_atomic(self, step, outcome, expected_assignee, next_step_spec):
         expected = expected_assignee or ""
@@ -996,7 +1015,7 @@ class SqliteStore(StorePort):
             new_id = None
             if next_step_spec is not None:
                 new_id = self._insert_step_nocommit(**next_step_spec.as_kwargs())
-            self._conn.commit()
+            self._commit()
         except Exception:
             self._conn.rollback()
             raise
@@ -1015,11 +1034,11 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "UPDATE steps SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
         )
-        self._conn.commit()
+        self._commit()
 
     def set_model(self, tid, model):
         self._conn.execute("UPDATE steps SET model = ? WHERE id = ?", (model, tid))
-        self._conn.commit()
+        self._commit()
 
     def label_add(self, tid, label):
         if not self._apply_label(tid, label, True):
@@ -1030,14 +1049,14 @@ class SqliteStore(StorePort):
                 self._conn.execute(
                     "INSERT INTO labels (node_id, label) VALUES (?, ?)", (tid, label)
                 )
-        self._conn.commit()
+        self._commit()
 
     def label_remove(self, tid, label):
         if not self._apply_label(tid, label, False):
             self._conn.execute(
                 "DELETE FROM labels WHERE node_id = ? AND label = ?", (tid, label)
             )
-        self._conn.commit()
+        self._commit()
 
     def update_state(self, tid, state):
         self._conn.execute(
@@ -1045,13 +1064,13 @@ class SqliteStore(StorePort):
             (_RAW_STORAGE_STATE.get(state, state), tid),
         )
         self._record_history(tid, state)
-        self._conn.commit()
+        self._commit()
 
     def assign(self, tid, assignee):
         self._conn.execute(
             "UPDATE steps SET assignee = ? WHERE id = ?", (assignee or None, tid)
         )
-        self._conn.commit()
+        self._commit()
 
     def _dep_add_nocommit(self, node_id, blocked_by):
         exists = self._conn.execute(
@@ -1064,13 +1083,13 @@ class SqliteStore(StorePort):
 
     def dep_add(self, node_id, blocked_by):
         self._dep_add_nocommit(node_id, blocked_by)
-        self._conn.commit()
+        self._commit()
 
     def dep_remove(self, node_id, blocked_by):
         cur = self._conn.execute(
             "DELETE FROM deps WHERE node_id = ? AND blocked_by = ?", (node_id, blocked_by)
         )
-        self._conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def ready_steps(self):
@@ -1102,10 +1121,10 @@ class SqliteStore(StorePort):
             (assignee, tid),
         )
         if cur.rowcount == 0:
-            self._conn.commit()
+            self._commit()
             return None
         self._record_history(tid, State.RUNNING)
-        self._conn.commit()
+        self._commit()
         return self.get_node(tid)
 
     def accrue_active_seconds(self, step_ids, seconds):
@@ -1118,7 +1137,7 @@ class SqliteStore(StorePort):
             "WHERE id IN (%s)" % placeholders,
             (seconds, *ids),
         )
-        self._conn.commit()
+        self._commit()
 
     def _record_usage_nocommit(self, tid, input_tokens, output_tokens, cache_read_tokens,
                                 cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
@@ -1144,7 +1163,7 @@ class SqliteStore(StorePort):
             tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
             cost_usd, cost_basis, thinking_tokens,
         )
-        self._conn.commit()
+        self._commit()
 
     def _record_attribution_nocommit(self, tid, turn_count, tool_usage):
         self._conn.execute(
@@ -1160,7 +1179,7 @@ class SqliteStore(StorePort):
 
     def record_attribution(self, tid, turn_count, tool_usage):
         self._record_attribution_nocommit(tid, turn_count, tool_usage)
-        self._conn.commit()
+        self._commit()
 
     def tool_usage_for(self, step_id):
         rows = self._conn.execute(
@@ -1194,7 +1213,7 @@ class SqliteStore(StorePort):
                     self._record_attribution_nocommit(
                         step_id, attribution.turn_count, attribution.tool_usage
                     )
-            self._conn.commit()
+            self._commit()
             return stored
         except Exception:
             self._conn.rollback()
@@ -1240,7 +1259,7 @@ class SqliteStore(StorePort):
                 )
             if turn_count or tool_usage:
                 self._record_attribution_nocommit(tid, turn_count, tool_usage)
-            self._conn.commit()
+            self._commit()
         except Exception:
             self._conn.rollback()
             raise
@@ -1271,7 +1290,7 @@ class SqliteStore(StorePort):
 
     def clear_usage_accrual_state(self, spawnid):
         self._conn.execute("DELETE FROM usage_accrual_state WHERE spawnid = ?", (spawnid,))
-        self._conn.commit()
+        self._commit()
 
     def _seed_unclassified_backfill_row(self, log_file, step_id):
         self._conn.execute(
@@ -1279,7 +1298,7 @@ class SqliteStore(StorePort):
             "VALUES (?, ?, ?, NULL)",
             (log_file, step_id, self._now()),
         )
-        self._conn.commit()
+        self._commit()
 
     def unclassified_backfill_logs(self):
         rows = self._conn.execute(
@@ -1300,7 +1319,7 @@ class SqliteStore(StorePort):
             "UPDATE usage_backfill_log SET had_result_line = ? WHERE log_file = ?",
             (1 if usage.has_result_line else 0, log_file),
         )
-        self._conn.commit()
+        self._commit()
         return recovered
 
     def logs_for_step(self, step_id):
@@ -1326,7 +1345,7 @@ class SqliteStore(StorePort):
                 "INSERT INTO step_tool_usage (step, tool, calls, bytes) VALUES (?, ?, ?, ?)",
                 (step_id, tool, usage.calls, usage.bytes),
             )
-        self._conn.commit()
+        self._commit()
 
     def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
                               id=None):
@@ -1347,7 +1366,7 @@ class SqliteStore(StorePort):
                     id=None):
         tid = self._insert_step_nocommit(
             title, step=step, role=role, parent=parent, deps=deps, id=id)
-        self._conn.commit()
+        self._commit()
         return tid
 
     def edit_node(self, tid, *, title=None, description=None, project=None,
@@ -1367,7 +1386,7 @@ class SqliteStore(StorePort):
                 "UPDATE %s SET %s WHERE id = ?" % (table, set_clause),
                 (*updates.values(), tid),
             )
-        self._conn.commit()
+        self._commit()
         return tid
 
     def create_item(self, title, description, *, project=None, workflow=None, id=None,
@@ -1379,21 +1398,19 @@ class SqliteStore(StorePort):
             (tid, title, description, project, workflow,
              datetime.datetime.now().isoformat()),
         )
-        self._conn.commit()
+        self._commit()
         return tid
 
     def open_pass(self, item):
         row = self._conn.execute(
-            "SELECT MAX(n) FROM passes WHERE item = ?", (item,)
+            "INSERT INTO passes (id, item, n, state, opened_at) "
+            "SELECT ? || '.p' || (COALESCE(MAX(n), 0) + 1), ?, COALESCE(MAX(n), 0) + 1, "
+            "'open', ? FROM passes WHERE item = ? "
+            "RETURNING id",
+            (item, item, self._now(), item),
         ).fetchone()
-        n = (row[0] or 0) + 1
-        pid = pass_id(item, n)
-        self._conn.execute(
-            "INSERT INTO passes (id, item, n, state, opened_at) VALUES (?, ?, ?, 'open', ?)",
-            (pid, item, n, self._now()),
-        )
-        self._conn.commit()
-        return pid
+        self._commit()
+        return row[0]
 
     def current_pass(self, item):
         row = self._conn.execute(
@@ -1422,7 +1439,7 @@ class SqliteStore(StorePort):
             "UPDATE passes SET state = 'closed', closed_at = ? WHERE id = ? AND state = 'open'",
             (self._now(), pid),
         )
-        self._conn.commit()
+        self._commit()
 
     def open_run(self, item, pid, phase):
         rid = run_id(pid, phase)
@@ -1431,7 +1448,7 @@ class SqliteStore(StorePort):
             "VALUES (?, ?, ?, ?, 'open', ?)",
             (rid, item, pid, phase, self._now()),
         )
-        self._conn.commit()
+        self._commit()
         return rid
 
     def _run_row_to_record(self, row):
@@ -1481,22 +1498,22 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "UPDATE phase_runs SET %s WHERE id = ?" % clause, (*allowed.values(), rid)
         )
-        self._conn.commit()
+        self._commit()
 
     def close_run(self, rid, state=RunState.MERGED):
         self._conn.execute(
             "UPDATE phase_runs SET state = ?, closed_at = ? WHERE id = ? AND state = 'open'",
             (state, self._now(), rid),
         )
-        self._conn.commit()
+        self._commit()
 
     def set_watched_step(self, tid, watched):
         self._conn.execute("UPDATE steps SET watched_step = ? WHERE id = ?", (watched, tid))
-        self._conn.commit()
+        self._commit()
 
     def set_step_pass(self, tid, pid):
         self._conn.execute("UPDATE steps SET pass_id = ? WHERE id = ?", (pid, tid))
-        self._conn.commit()
+        self._commit()
 
     def children(self, item_id):
         return self._select_steps("item = ?", (item_id,))
@@ -1547,7 +1564,7 @@ class SqliteStore(StorePort):
         self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))
         self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))
         self._conn.execute("DELETE FROM history WHERE node_id = ?", (tid,))
-        self._conn.commit()
+        self._commit()
 
     def add_project(self, identity, *, shortcode=None, local_path=None, remote=None):
         row = self._conn.execute(
@@ -1569,7 +1586,7 @@ class SqliteStore(StorePort):
                 "UPDATE projects SET shortcode = ?, local_path = ?, remote = ? WHERE identity = ?",
                 (*merged, identity),
             )
-        self._conn.commit()
+        self._commit()
 
     def get_project(self, identity):
         row = self._conn.execute(
@@ -1586,7 +1603,7 @@ class SqliteStore(StorePort):
 
     def remove_project(self, identity):
         cur = self._conn.execute("DELETE FROM projects WHERE identity = ?", (identity,))
-        self._conn.commit()
+        self._commit()
         if cur.rowcount == 0:
             raise KeyError("project not registered: %s" % identity)
 

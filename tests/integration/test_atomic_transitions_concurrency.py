@@ -160,5 +160,75 @@ class TestAtomicComplete(unittest.TestCase):
         self.assertEqual(len(store_b.steps_at_step("review")), 1)
 
 
+def _create_item_worker(root, spawn_id, barrier, q):
+    try:
+        store = _store_for(root, spawn_id)
+        barrier.wait()
+        item_id = store.create_item("title %s" % spawn_id, "description")
+        q.put((spawn_id, item_id))
+        store.disconnect()
+    except Exception as exc:
+        q.put((spawn_id, "ERROR: %s" % exc))
+
+
+def _open_pass_worker(root, spawn_id, item_id, barrier, q):
+    try:
+        store = _store_for(root, spawn_id)
+        barrier.wait()
+        pid = store.open_pass(item_id)
+        q.put((spawn_id, pid))
+        store.disconnect()
+    except Exception as exc:
+        q.put((spawn_id, "ERROR: %s" % exc))
+
+
+class TestConcurrentMinting(unittest.TestCase):
+    def test_concurrent_create_item_yields_distinct_ids_no_errors(self):
+        root = _make_root()
+        n = 8
+        barrier = _CTX.Barrier(n)
+        q = _CTX.Queue()
+        procs = [
+            _CTX.Process(target=_create_item_worker, args=(root, "w%d" % i, barrier, q))
+            for i in range(n)
+        ]
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join(timeout=60)
+
+        results = [q.get(timeout=30) for _ in range(n)]
+        self.assertTrue(all(not str(r[1]).startswith("ERROR") for r in results), results)
+        ids = [r[1] for r in results]
+        self.assertEqual(len(ids), len(set(ids)), results)
+
+
+class TestConcurrentPassOpening(unittest.TestCase):
+    def test_concurrent_open_pass_yields_distinct_pass_numbers(self):
+        root = _make_root()
+        seed = _store_for(root)
+        item_id = seed.create_item("title", "description")
+        seed.disconnect()
+
+        n = 8
+        barrier = _CTX.Barrier(n)
+        q = _CTX.Queue()
+        procs = [
+            _CTX.Process(target=_open_pass_worker, args=(root, "w%d" % i, item_id, barrier, q))
+            for i in range(n)
+        ]
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join(timeout=60)
+
+        results = [q.get(timeout=30) for _ in range(n)]
+        self.assertTrue(all(not str(r[1]).startswith("ERROR") for r in results), results)
+        pass_ids = [r[1] for r in results]
+        self.assertEqual(len(pass_ids), len(set(pass_ids)), results)
+        expected = {"%s.p%d" % (item_id, i) for i in range(1, n + 1)}
+        self.assertEqual(set(pass_ids), expected)
+
+
 if __name__ == "__main__":
     unittest.main()
