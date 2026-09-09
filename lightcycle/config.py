@@ -45,11 +45,11 @@ class ResolvedSetting:
 _SEED_KEYS = [
     ("projects", "~/workspace/projects"),
     ("specs", "~/workspace/specs"),
-    ("specs-remote", "git@github.com:you/lightcycle-specs.git"),
+    ("specs-remote", ""),
     ("branch-prefix", "feat"),
     ("shortcode", "PROJ"),
     ("default-origin", "lightcycle"),
-    ("workflows-remote", "git@github.com:kenmclennan/lightcycle-workflows.git"),
+    ("workflows-remote", "https://github.com/kenmclennan/lightcycle-workflows.git"),
     ("max-agents", "5"),
     ("worktree-retries", "6"),
     ("worktree-retry-sleep", "0.25"),
