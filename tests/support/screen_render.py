@@ -100,6 +100,13 @@ def _blocked_store():
     return store, waiting
 
 
+def _no_workflow_store():
+    store = DemoStore(now=lambda: _at(4))
+    item = store.item("LC-561", "Engine-filed item with no workflow pin")
+    store.step("LC-561.1", "write the code", step="write-code", role="agent", parent=item)
+    return store, item
+
+
 def _human_step_store():
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
@@ -757,6 +764,11 @@ def _hub_blocked_dependency(size):
     return _open_hub(_launch(store, size=size), waiting)
 
 
+def _hub_no_workflow(size):
+    store, item = _no_workflow_store()
+    return _open_hub(_launch(store, size=size), item)
+
+
 def _hub_running_with_dependency(size):
     store, running = _running_with_dependency_store()
     return _open_hub(_launch(store, size=size), running)
@@ -1042,6 +1054,7 @@ SCREENS = {
     "artifact-viewer#filepath-toast": _artifact_viewer_filepath_toast,
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
+    "hub#no-workflow": _hub_no_workflow,
     "hub#running-with-dependency": _hub_running_with_dependency,
     "hub#gate": _hub_gate,
     "hub#escalation": _hub_escalation,

@@ -60,7 +60,7 @@ def test_colour_carries_the_state_tokens_the_plain_frame_drops():
     assert "\x1b[" not in plain
 
 
-HEADER_FIELDS = ("14m", "code-await-merge")
+HEADER_FIELDS = ("14m", "code-await-merge", "lightcycle/spec-driven (abfb01d)")
 
 
 def test_the_demo_fixtures_exercise_every_header_field_the_hub_can_render():
@@ -115,6 +115,89 @@ def test_header_height_reflects_the_fields_a_node_shows():
             session.close()
 
     assert header_height("hub#workflow") < header_height("hub#gate")
+
+
+DELIVERING_WORKFLOW = "lightcycle/spec-driven (abfb01d)"
+
+
+def test_an_item_header_shows_the_delivering_workflow():
+    assert DELIVERING_WORKFLOW in render("hub#done-item")
+
+
+def test_a_step_header_shows_the_delivering_workflow():
+    assert DELIVERING_WORKFLOW in render("hub#step-node")
+
+
+def test_a_human_gate_step_header_still_shows_the_delivering_workflow():
+    assert DELIVERING_WORKFLOW in render("hub#step-waiting")
+
+
+def test_a_blocked_item_header_still_shows_the_delivering_workflow():
+    assert DELIVERING_WORKFLOW in render("hub#blocked-dependency")
+
+
+def test_a_node_with_no_workflow_renders_nothing_for_it():
+    assert "lightcycle/" not in render("hub#no-workflow")
+
+
+def test_a_narrow_header_drops_the_workflow_rather_than_wrapping_to_a_third_line():
+    from lightcycle.adapters.tui.hub import HubHeader, HubTabStrip
+
+    narrow = (77, 30)
+    session = SCREENS["hub#done-item"](narrow)
+    try:
+        header = session.run(lambda: session.app.screen.query_one(HubHeader))
+        tab_strip = session.run(lambda: session.app.screen.query_one(HubTabStrip))
+        header_bottom = session.run(lambda: header.region.y + header.region.height)
+        assert session.run(lambda: tab_strip.region.y) == header_bottom
+        assert header.region.height == 2
+    finally:
+        session.close()
+
+    rows = render("hub#done-item", size=narrow).split("\n")
+    assert "recursive discovery by git remote" in rows[1]
+    assert "Done · 4 steps" in rows[2]
+    assert DELIVERING_WORKFLOW not in rows[1]
+    assert DELIVERING_WORKFLOW not in rows[2]
+
+
+def test_a_narrow_header_holds_the_guard_on_the_true_first_paint():
+    from textual.screen import Screen
+
+    from lightcycle.adapters.tui.hub import HubHeader, build_header
+    from tests.support.screen_render import _launch, _plain_row, _populated_store
+
+    class BareHubScreen(Screen):
+        def compose(self):
+            yield HubHeader(id="hub-header")
+
+    narrow = (77, 30)
+    store, scan, coding = _populated_store()
+    store.record_usage("LC-143.3.1", 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution("LC-143.3.1", 20, {})
+    store.close(coding, "done")
+    store.close(scan, "done")
+
+    session = _launch(store, size=narrow)
+    try:
+        session.run(lambda: session.app.push_screen(BareHubScreen()))
+        header = session.run(lambda: session.app.screen.query_one(HubHeader))
+        context = session.run(lambda: header.query_one("#hub-context"))
+        assert context.size.width == 0, "widget has not been laid out yet - this is the true first paint"
+
+        flow_service = session.app._container.flow_service()
+        node = store.get_node(scan)
+        data = build_header(store, node, session.app._now().isoformat(), flow_service, False)
+        session.run(lambda: header.update(data))
+        session.pause()
+
+        strips = session.run(lambda: session.app.screen._compositor.render_strips())
+        frame = "\n".join(_plain_row(strip) for strip in strips)
+    finally:
+        session.close()
+
+    assert "Done · 4 steps" in frame
+    assert "lightcycle/" not in frame
 
 
 def test_the_log_excerpt_fixture_is_real_captured_stream_json_past_the_bound():
