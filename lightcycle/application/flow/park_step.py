@@ -33,5 +33,6 @@ class ParkStepUseCase:
         ):
             if v:
                 resume[k] = v
-        self._store.update_metadata(input.step, resume)
-        self._store.route_to_human(input.step, "BLOCKED: %s" % input.decision)
+        with self._store.transaction():
+            self._store.update_metadata(input.step, resume)
+            self._store.route_to_human(input.step, "BLOCKED: %s" % input.decision)

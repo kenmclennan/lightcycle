@@ -23,15 +23,16 @@ class EditNodeUseCase:
         self._store = store
 
     def execute(self, input: EditNodeInput) -> EditNodeResponse:
-        tid = self._store.edit_node(
-            input.step,
-            title=input.title,
-            description=input.description,
-            project=input.project,
-            workflow=input.workflow,
-        )
-        if input.label:
-            self._store.label_add(tid, input.label)
-        if input.notes is not None:
-            self._store.set_notes(tid, input.notes)
+        with self._store.transaction():
+            tid = self._store.edit_node(
+                input.step,
+                title=input.title,
+                description=input.description,
+                project=input.project,
+                workflow=input.workflow,
+            )
+            if input.label:
+                self._store.label_add(tid, input.label)
+            if input.notes is not None:
+                self._store.set_notes(tid, input.notes)
         return EditNodeResponse(id=tid)

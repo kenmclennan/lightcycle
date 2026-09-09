@@ -30,11 +30,12 @@ class UnblockStepUseCase:
         history = t.park.as_history_note()
         if history:
             kept.append(history)
-        self._store.update_metadata(
-            input.step, {"reason": None, "needs": None, "tried": None}
-        )
-        self._store.set_notes(input.step, "\n".join(kept))
-        self._store.reassign(input.step, role)
+        with self._store.transaction():
+            self._store.update_metadata(
+                input.step, {"reason": None, "needs": None, "tried": None}
+            )
+            self._store.set_notes(input.step, "\n".join(kept))
+            self._store.reassign(input.step, role)
         if self._spin_port is not None:
             state = self._spin_port.load()
             steps = dict(state.get("steps") or {})

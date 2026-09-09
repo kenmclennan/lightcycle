@@ -307,6 +307,23 @@ class TestCadenceAndPendingHeaderAgree(unittest.TestCase):
         self.assertEqual(cadence_count, pending_resp.reflection_count)
 
 
+class TestRetroCadenceAtomicity(unittest.TestCase):
+    def test_a_failing_create_step_leaves_the_audit_item_and_label_unapplied(self):
+        s = FakeStore()
+        for i in range(3):
+            _close_item(s, "item %d" % i, reflections=1)
+        before_ids = {i.id for i in s.all_items()}
+
+        def raising_create_step(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        s.create_step = raising_create_step
+        gate = _gate(s, interval_reflections=3)
+        with self.assertRaises(RuntimeError):
+            gate.execute(0.0)
+        self.assertEqual({i.id for i in s.all_items()}, before_ids)
+
+
 class TestRetroLaneVisibility(unittest.TestCase):
     def test_queued_audit_is_in_queue(self):
         q = NodeQueue([make_step(id="a", state=State.QUEUED, role="agent", step="audit")])

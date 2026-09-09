@@ -2032,6 +2032,29 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         self.assertEqual(store.get_node(step).role, "human")
         self.assertEqual(result.ci_released, [])
 
+    def test_a_failing_final_label_add_leaves_the_unblock_and_label_remove_unapplied(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc = self._setup(gh)
+        self._label_and_park(store, step)
+
+        original_label_add = store.label_add
+
+        def raising_label_add(tid, label):
+            if label.startswith("ci-released:"):
+                raise RuntimeError("boom")
+            return original_label_add(tid, label)
+
+        store.label_add = raising_label_add
+        with self.assertRaises(RuntimeError):
+            uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("ci-pending", store.labels_of(step))
+        self.assertNotIn("ci-released:1", store.labels_of(step))
+
     def test_finding_survives_automatic_release(self):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}

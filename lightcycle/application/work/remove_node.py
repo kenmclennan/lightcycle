@@ -75,18 +75,19 @@ class RemoveNodeUseCase:
                     "- commit or discard, or use --force" % node.id
                 )
 
+        steps_removed = 0
+        with self._store.transaction():
+            for c in children:
+                if c.type == "step":
+                    self._store.delete(c.id)
+                    steps_removed += 1
+            self._store.delete(node.id)
+
         worktree_removed = False
         if node.type == "item":
             self._worktrees.remove(node.id)
             worktree_removed = True
 
-        steps_removed = 0
-        for c in children:
-            if c.type == "step":
-                self._store.delete(c.id)
-                steps_removed += 1
-
-        self._store.delete(node.id)
         return RemoveNodeResponse(
             id=node.id, steps_removed=steps_removed, worktree_removed=worktree_removed
         )
