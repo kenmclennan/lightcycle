@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.project_clone import ensure_project_cloned
-from lightcycle.application.work.step_filing import file_step
+from lightcycle.application.work.step_filing import check_step_filing, file_step
 from lightcycle.domain.work import State
 
 
@@ -45,8 +45,11 @@ class ActivateItemUseCase:
             self._flow.load_graph(pin)
         except ValueError as e:
             raise UseCaseError(str(e))
-        self._store.edit_node(item_id, workflow=pin)
+        step_name, role = check_step_filing(self._store, self._flow, item_id, node, pin, input.step)
         repo = self._store.get_item(item_id).repo
         ensure_project_cloned(self._store, self._git, self._config, repo)
-        step = file_step(self._store, self._flow, item_id, node, pin, input.step, deps=input.deps)
+        self._store.edit_node(item_id, workflow=pin)
+        step = file_step(
+            self._store, self._flow, item_id, node, pin, step_name, role, deps=input.deps
+        )
         return ActivateItemResponse(step=step)

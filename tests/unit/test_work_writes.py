@@ -186,6 +186,15 @@ class TestEditNode(unittest.TestCase):
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, description="nope"))
         self.assertFalse(hasattr(s.get_step(tid), "description"))
 
+    def test_writes_label_and_notes_itself(self):
+        s = FakeStore()
+        tid = s.create_step("a step", role="human")
+        EditNodeUseCase(s).execute(
+            EditNodeInput(step=tid, label="some-label", notes="some notes")
+        )
+        self.assertIn("some-label", s.labels_of(tid))
+        self.assertEqual(s.get_node(tid).notes, "some notes")
+
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
         s = FakeStore()

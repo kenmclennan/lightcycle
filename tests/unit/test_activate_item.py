@@ -66,6 +66,32 @@ class TestActivateItem(unittest.TestCase):
                 ActivateItemInput(item=item, workflow="standard")
             )
         self.assertEqual(s.get_node(item).state, "backlogged")
+        self.assertIsNone(s.get_node(item).workflow)
+
+    def test_a_step_not_owned_in_the_workflow_leaves_the_pin_unwritten(self):
+        s = FakeStore()
+        item = s.create_item("add refunds", "a description")
+        with self.assertRaises(UseCaseError):
+            ActivateItemUseCase(s, _flow(s), None, None).execute(
+                ActivateItemInput(item=item, workflow="standard", step="not-a-real-step")
+            )
+        self.assertIsNone(s.get_node(item).workflow)
+
+    def test_an_unmet_step_contract_leaves_the_pin_unwritten(self):
+        metas = {
+            "coder": {
+                "model": "sonnet", "step": "build", "routes": {"done": "review"},
+                "accepts": {"spec": "required"},
+            }
+        }
+        workflow = graph_text_from_metas(metas, entry="build")
+        s = FakeStore()
+        item = s.create_item("add refunds", "a description")
+        with self.assertRaises(UseCaseError):
+            ActivateItemUseCase(s, FlowService(FakeFs(metas, workflow=workflow), s), None, None).execute(
+                ActivateItemInput(item=item, workflow="standard")
+            )
+        self.assertIsNone(s.get_node(item).workflow)
 
     def test_activates_into_a_repo_requiring_workflow_with_repo_present(self):
         s = FakeStore()
@@ -123,6 +149,16 @@ class TestActivateItem(unittest.TestCase):
         )
         s.close(blocker, "done")
         self.assertIn(resp.step, [t.id for t in s.ready_steps()])
+
+    def test_a_clone_failure_leaves_the_pin_unwritten(self):
+        s = FakeStore()
+        item = s.create_item("add refunds", "a description")
+        s.add_artifact(item, "repo", "unregistered")
+        with self.assertRaises(UseCaseError):
+            ActivateItemUseCase(s, _flow(s), None, None).execute(
+                ActivateItemInput(item=item, workflow="standard")
+            )
+        self.assertIsNone(s.get_node(item).workflow)
 
     def test_no_deps_behaves_exactly_as_before(self):
         s = FakeStore()

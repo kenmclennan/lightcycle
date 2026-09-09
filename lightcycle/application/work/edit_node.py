@@ -9,6 +9,8 @@ class EditNodeInput:
     description: Optional[str] = None
     project: Optional[str] = None
     workflow: Optional[str] = None
+    label: Optional[str] = None
+    notes: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -28,4 +30,8 @@ class EditNodeUseCase:
             project=input.project,
             workflow=input.workflow,
         )
+        if input.label:
+            self._store.label_add(tid, input.label)
+        if input.notes is not None:
+            self._store.set_notes(tid, input.notes)
         return EditNodeResponse(id=tid)

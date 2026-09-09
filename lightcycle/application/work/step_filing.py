@@ -3,7 +3,7 @@ from lightcycle.application.flow.passes import PassBook
 from lightcycle.domain.contracts import StepContract
 
 
-def file_step(store, flow, item_id, node, workflow, step, deps=None):
+def check_step_filing(store, flow, item_id, node, workflow, step):
     graph = flow.load_graph(workflow)
     present = store.present_types(store.get_item(item_id))
     missing_inputs = graph.requires - present
@@ -28,6 +28,10 @@ def file_step(store, flow, item_id, node, workflow, step, deps=None):
             "step '%s' requires %s; attach them before activating"
             % (step_name, ", ".join(sorted(unmet)))
         )
+    return step_name, role
+
+
+def file_step(store, flow, item_id, node, workflow, step_name, role, deps=None):
     step_id = store.create_step(
         "%s: %s" % (step_name, node.title), step=step_name, role=role, parent=item_id, deps=deps
     )
