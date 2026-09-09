@@ -5,30 +5,33 @@ class WorkersContractBase:
     def make_workers(self):
         raise NotImplementedError
 
+    def _seed(self, w, workers):
+        raise NotImplementedError
+
     def _seeded_pid(self, w, spawnid):
         for entry in w.workers_state():
             if entry.get("spawnid") == spawnid:
                 return entry["pid"]
         raise AssertionError("no seeded worker tagged %r" % spawnid)
 
-    def test_write_workers_and_workers_state_round_trip(self):
+    def test_seeding_then_workers_state_round_trips(self):
         w = self.make_workers()
         workers = [
             {"spawnid": "w1", "role": "coder", "pid": 1, "step": None},
             {"spawnid": "w2", "role": "coder", "pid": 2, "step": None},
         ]
-        w.write_workers(workers)
+        self._seed(w, workers)
         self.assertEqual(w.workers_state(), workers)
 
     def test_set_step_then_step_for_returns_it(self):
         w = self.make_workers()
-        w.write_workers([{"spawnid": "w1", "role": "coder", "pid": 1, "step": None}])
+        self._seed(w, [{"spawnid": "w1", "role": "coder", "pid": 1, "step": None}])
         w.set_step("w1", "review")
         self.assertEqual(w.step_for("w1"), "review")
 
     def test_step_for_unknown_spawnid_returns_none(self):
         w = self.make_workers()
-        w.write_workers([{"spawnid": "w1", "role": "coder", "pid": 1, "step": None}])
+        self._seed(w, [{"spawnid": "w1", "role": "coder", "pid": 1, "step": None}])
         self.assertIsNone(w.step_for("unknown"))
 
     def test_pid_alive_true_for_the_seeded_alive_worker(self):
@@ -60,7 +63,7 @@ class WorkersContractBase:
             {"spawnid": "live", "pid": alive_pid, "step": None},
             {"spawnid": "dead2", "pid": dead_pid, "step": None},
         ]
-        w.write_workers(workers)
+        self._seed(w, workers)
         dropped = w.prune_workers(keep_dead=1)
         self.assertEqual(dropped, 2)
         remaining = {entry["spawnid"] for entry in w.workers_state()}
@@ -68,7 +71,7 @@ class WorkersContractBase:
 
     def test_mark_checked_only_affects_the_matching_worker(self):
         w = self.make_workers()
-        w.write_workers([
+        self._seed(w, [
             {"spawnid": "w1", "role": "coder", "pid": 1, "step": None, "checked": False},
             {"spawnid": "w2", "role": "coder", "pid": 2, "step": None, "checked": False},
         ])
@@ -79,7 +82,7 @@ class WorkersContractBase:
 
     def test_set_pid_started_only_affects_the_matching_worker(self):
         w = self.make_workers()
-        w.write_workers([
+        self._seed(w, [
             {"spawnid": "w1", "role": "coder", "pid": 1, "step": None, "pid_started": None},
             {"spawnid": "w2", "role": "coder", "pid": 2, "step": None, "pid_started": None},
         ])

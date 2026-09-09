@@ -9,7 +9,7 @@ class FakeWorkers:
     def workers_state(self):
         return list(self._workers)
 
-    def write_workers(self, workers):
+    def seed(self, workers):
         self._workers = list(workers)
 
     def pid_alive(self, pid, started=None):
