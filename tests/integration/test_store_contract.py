@@ -560,6 +560,61 @@ class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
         self.assertIsNone(s.get_node(item).disposition)
 
 
+class TestSqliteStoreAddsClaimEpochToSteps(unittest.TestCase):
+    def _store_without_claim_epoch(self):
+        s = make_sqlite_store()
+        tid = s.create_step("write-code: x", role="agent")
+        s.claim_ready("agent")
+        cols = [
+            r for r in s._conn.execute("PRAGMA table_info(steps)").fetchall()
+            if r[1] != "claim_epoch"
+        ]
+        names = ", ".join(c[1] for c in cols)
+        col_defs = ", ".join(
+            "%s %s%s%s"
+            % (
+                c[1],
+                c[2],
+                " NOT NULL" if c[3] else "",
+                (" DEFAULT %s" % c[4]) if c[4] is not None else "",
+            )
+            for c in cols
+        )
+        pk_cols = [c[1] for c in cols if c[5]]
+        if pk_cols:
+            col_defs += ", PRIMARY KEY (%s)" % ", ".join(pk_cols)
+        s._conn.execute("ALTER TABLE steps RENAME TO steps_old")
+        s._conn.execute("CREATE TABLE steps (%s)" % col_defs)
+        s._conn.execute(
+            "INSERT INTO steps (%s) SELECT %s FROM steps_old" % (names, names)
+        )
+        s._conn.execute("DROP TABLE steps_old")
+        s._conn.commit()
+        s.disconnect()
+        return tid, SqliteStore(s._config)
+
+    def test_a_pre_claim_epoch_steps_table_gains_the_column(self):
+        _, s = self._store_without_claim_epoch()
+        cols = {r[1] for r in s._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertIn("claim_epoch", cols)
+
+    def test_the_column_defaults_to_zero_for_an_existing_row(self):
+        tid, s = self._store_without_claim_epoch()
+        row = s._conn.execute(
+            "SELECT claim_epoch FROM steps WHERE id = ?", (tid,)
+        ).fetchone()
+        self.assertEqual(row[0], 0)
+
+    def test_reopening_the_migrated_store_a_second_time_is_idempotent(self):
+        tid, s = self._store_without_claim_epoch()
+        s.disconnect()
+        s = SqliteStore(s._config)
+        row = s._conn.execute(
+            "SELECT claim_epoch FROM steps WHERE id = ?", (tid,)
+        ).fetchone()
+        self.assertEqual(row[0], 0)
+
+
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")

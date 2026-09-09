@@ -109,6 +109,7 @@ class SweepUseCase:
         claimed = self._store.claimed_steps()
         claimed_ids = {t.id for t in claimed}
         covered = pool.covered_steps(probe)
+        live_spawnids = pool.live_spawnids(probe)
         booting = pool.any_booting(probe, now, max_boot)
         stalled = [
             w
@@ -124,7 +125,9 @@ class SweepUseCase:
         capture_failed = []
         parked = []
         for t in claimed:
-            if t.id not in stalled_ids and (t.id in covered or booting):
+            if t.id not in stalled_ids and (
+                t.id in covered or (t.claimed_by and t.claimed_by in live_spawnids) or booting
+            ):
                 continue
             captured = self._capture(t)
             if captured is True:

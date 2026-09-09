@@ -371,6 +371,19 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [])
         self.assertIn(t, [n.id for n in s.claimed_steps()])
 
+    def test_live_worker_mid_claim_past_the_boot_window_is_not_reclaimed(self):
+        s = FakeStore()
+        t = s.create_step("t", step="build", role="agent")
+        s.update_state(t, "in_progress")
+        s.assign(t, "worker-sp")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "worker-sp", "pid": 777, "step": None, "started": 100}],
+            alive_pids={777},
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(result.swept, [])
+        self.assertIn(t, [n.id for n in s.claimed_steps()])
+
     def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
