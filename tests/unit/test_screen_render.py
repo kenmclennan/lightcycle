@@ -165,7 +165,7 @@ def test_a_narrow_header_holds_the_guard_on_the_true_first_paint():
     from textual.screen import Screen
 
     from lightcycle.adapters.tui.hub import HubHeader, build_header
-    from tests.support.screen_render import _launch, _plain_row, _populated_store
+    from tests.support.screen_render import _at, _launch, _plain_row, _populated_store
 
     class BareHubScreen(Screen):
         def compose(self):
@@ -177,6 +177,7 @@ def test_a_narrow_header_holds_the_guard_on_the_true_first_paint():
     store.record_attribution("LC-143.3.1", 20, {})
     store.close(coding, "done")
     store.close(scan, "done")
+    store._records[scan]["closed_at"] = _at(-100000)
 
     session = _launch(store, size=narrow)
     try:

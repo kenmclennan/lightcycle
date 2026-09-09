@@ -238,7 +238,7 @@ _INTERNAL_ARTIFACT_TYPES = (
 class SqliteStore(StorePort):
     def __init__(self, config, now=None, package_root=None, default_data_root=None):
         self._config = config
-        self._now = now or (lambda: datetime.datetime.now().isoformat())
+        self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._tx_depth = 0
         self._refuse_live_store_from_worktree(package_root, default_data_root)
         self._db_path = os.path.join(config.data_root(), _DB_FILENAME)
@@ -990,13 +990,13 @@ class SqliteStore(StorePort):
             self._conn.execute(
                 "UPDATE items SET state = 'done', outcome = ?, disposition = ?, closed_at = ? "
                 "WHERE id = ? AND state != 'done'",
-                (reason, disposition, datetime.datetime.now().isoformat(), tid),
+                (reason, disposition, self._now(), tid),
             )
         else:
             self._conn.execute(
                 "UPDATE %s SET state = 'done', outcome = ?, closed_at = ? "
                 "WHERE id = ? AND state != 'done'" % table,
-                (reason, datetime.datetime.now().isoformat(), tid),
+                (reason, self._now(), tid),
             )
         self._record_history(tid, State.DONE)
         self._commit()
@@ -1007,7 +1007,7 @@ class SqliteStore(StorePort):
             "UPDATE steps SET state = 'done', outcome = ?, closed_at = ? "
             "WHERE id = ? AND state != 'done' "
             "AND (? = '' OR (COALESCE(assignee, '') = '' AND claim_epoch = 0) OR assignee = ?)",
-            (outcome, datetime.datetime.now().isoformat(), step, expected, expected),
+            (outcome, self._now(), step, expected, expected),
         )
         if cur.rowcount == 0:
             self._conn.rollback()
@@ -1357,7 +1357,7 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "INSERT INTO steps (id, item, title, stage, role, state, created_at) "
             "VALUES (?, ?, ?, ?, ?, 'ready', ?)",
-            (tid, parent, title, step, role, datetime.datetime.now().isoformat()),
+            (tid, parent, title, step, role, self._now()),
         )
         if deps:
             for dep in deps:
@@ -1397,8 +1397,7 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "INSERT INTO items (id, title, description, state, project, workflow, created_at) "
             "VALUES (?, ?, ?, 'backlogged', ?, ?, ?)",
-            (tid, title, description, project, workflow,
-             datetime.datetime.now().isoformat()),
+            (tid, title, description, project, workflow, self._now()),
         )
         self._commit()
         return tid

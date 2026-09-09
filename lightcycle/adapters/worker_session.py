@@ -108,7 +108,7 @@ def poll_decision(add_dir, spawnid, policy, counters, lock, processed):
     return policy.on_result(open_step), processed
 
 
-def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds):
+def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clock=time.monotonic):
     proc = subprocess.Popen(build_command(model, sysprompt, add_dir), cwd=cwd,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1)
@@ -143,10 +143,10 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds):
     reader_thread.start()
     send(KICKOFF % stage)
 
-    start = time.time()
+    start = clock()
     processed = 0
     while proc.poll() is None:
-        if time.time() - start > max_session_seconds:
+        if clock() - start > max_session_seconds:
             proc.terminate()
             break
         decision, processed = poll_decision(add_dir, spawnid, policy, counters, lock, processed)
@@ -160,8 +160,8 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds):
             send(NUDGE_TEXT)
         time.sleep(1)
 
-    deadline = time.time() + EXIT_GRACE_SECONDS
-    while proc.poll() is None and time.time() < deadline:
+    deadline = clock() + EXIT_GRACE_SECONDS
+    while proc.poll() is None and clock() < deadline:
         time.sleep(0.5)
     if proc.poll() is None:
         proc.terminate()

@@ -1,4 +1,4 @@
-import datetime
+from lightcycle.domain.work.timestamp import parse_timestamp
 
 
 class Worklog:
@@ -26,5 +26,4 @@ class Worklog:
 
     @staticmethod
     def _closed_date(closed_at, tz):
-        dt = datetime.datetime.fromisoformat(closed_at.replace("Z", "+00:00"))
-        return dt.astimezone(tz).date()
+        return parse_timestamp(closed_at).astimezone(tz).date()

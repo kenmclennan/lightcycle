@@ -1,6 +1,11 @@
+import datetime
+
 from lightcycle.domain.flow import consecutive_outcome_count
 from lightcycle.domain.work.node_id import node_id_key
 from lightcycle.domain.work.state import State
+from lightcycle.domain.work.timestamp import parse_timestamp
+
+_MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
 
 class NextStepResolver:
@@ -20,7 +25,7 @@ class NextStepResolver:
                     s for s in self._store.steps_at_step(t.step)
                     if s.parent == t.parent and s.state == State.DONE
                 ),
-                key=lambda s: (s.created_at or "", node_id_key(s.id)),
+                key=lambda s: (parse_timestamp(s.created_at) or _MIN_TIMESTAMP, node_id_key(s.id)),
             )
             prior = consecutive_outcome_count(history, outcome)
         return self._flow.effective_transition(transition, outcome, prior, name)

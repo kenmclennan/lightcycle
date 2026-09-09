@@ -2206,5 +2206,26 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         self.assertIn("ci-released:3", store.labels_of(step))
 
 
+class TestLatestStepOrdering(unittest.TestCase):
+    def test_mixed_utc_offsets_sort_chronologically_not_as_raw_strings(self):
+        store = FakeStore()
+        item = store.create_item("it", "a description")
+        earliest = store.create_step("earliest", step="build", role="agent", parent=item)
+        store._records[earliest]["created_at"] = "2026-01-01T10:00:00+00:00"
+        true_latest = store.create_step("true-latest", step="build", role="agent", parent=item)
+        store._records[true_latest]["created_at"] = "2026-01-01T05:00:00-12:00"
+        greatest_raw_string = store.create_step(
+            "greatest-raw-string", step="build", role="agent", parent=item
+        )
+        store._records[greatest_raw_string]["created_at"] = "2026-01-01T15:00:00+00:00"
+        uc = MonitorPrsUseCase(
+            store, github=None, worktrees=None, flow_service=None, spin_port=None
+        )
+
+        result = uc._latest_step(item)
+
+        self.assertEqual(result.id, true_latest)
+
+
 if __name__ == "__main__":
     unittest.main()

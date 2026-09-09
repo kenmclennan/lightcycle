@@ -150,6 +150,22 @@ class TestDoneOrdering(unittest.TestCase):
         resp = DoneUseCase(s).execute(DoneInput())
         self.assertEqual(resp.rows[-1].step.id, no_closed_at)
 
+    def test_mixed_utc_offsets_sort_chronologically_not_as_raw_strings(self):
+        s = FakeStore()
+        earliest = s.create_item("earliest", "a description")
+        s.close(earliest, "merged")
+        s._records[earliest]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        middle = s.create_item("middle", "a description")
+        s.close(middle, "merged")
+        s._records[middle]["closed_at"] = "2026-01-01T05:00:00-12:00"
+        latest = s.create_item("latest", "a description")
+        s.close(latest, "merged")
+        s._records[latest]["closed_at"] = "2026-01-01T20:00:00+00:00"
+
+        resp = DoneUseCase(s).execute(DoneInput())
+
+        self.assertEqual([r.step.id for r in resp.rows], [latest, middle, earliest])
+
     def test_two_items_sharing_a_closed_at_break_the_tie_deterministically(self):
         from lightcycle.domain.work import node_id_key
 

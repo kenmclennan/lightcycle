@@ -1,7 +1,7 @@
 import datetime
 import unittest
 
-from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
+from lightcycle.application.pool.hook_completions import HookCompletionsUseCase, _iso
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
@@ -145,6 +145,32 @@ class TestHookCompletionsSinceThreshold(unittest.TestCase):
         self.assertEqual(first.completed, [("audit", tid, "done")])
         second = use_case.execute(_ts("2026-01-01T12:00:00"))
         self.assertEqual(second.completed, [])
+
+
+class TestHookCompletionsNaiveClosedAtAgainstAwareSince(unittest.TestCase):
+    def test_a_naive_closed_at_before_an_aware_since_is_excluded(self):
+        s = FakeStore()
+        flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
+                                                     "on_deploy_green": True}}), s)
+        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        s.close(tid, "done")
+        _set_closed_at(s, tid, "2026-01-01T12:00:00")
+        since = _ts("2026-01-02T00:00:00")
+        self.assertIsNotNone(datetime.datetime.fromisoformat(_iso(since)).tzinfo)
+        result = HookCompletionsUseCase(s, flow_svc).execute(since)
+        self.assertEqual(result.completed, [])
+
+    def test_a_naive_closed_at_after_an_aware_since_is_included(self):
+        s = FakeStore()
+        flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
+                                                     "on_deploy_green": True}}), s)
+        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        s.close(tid, "done")
+        _set_closed_at(s, tid, "2026-01-03T00:00:00")
+        since = _ts("2026-01-02T00:00:00")
+        self.assertIsNotNone(datetime.datetime.fromisoformat(_iso(since)).tzinfo)
+        result = HookCompletionsUseCase(s, flow_svc).execute(since)
+        self.assertEqual(result.completed, [("audit", tid, "done")])
 
 
 if __name__ == "__main__":
