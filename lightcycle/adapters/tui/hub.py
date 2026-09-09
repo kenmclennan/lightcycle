@@ -69,6 +69,7 @@ from lightcycle.domain.work import (
     LogKind, State, display_role, display_stage, format_rate, format_tokens, format_usd,
     is_human_step, item_cost, landing_tab, row_bucket, step_cost, type_label, viewable_artifacts,
 )
+from lightcycle.domain.workflows.identity import parse_pin
 
 POLL_INTERVAL_SECONDS = 10
 LOG_TAIL_INTERVAL_SECONDS = 1
@@ -89,6 +90,7 @@ TOAST_SUB_CAPTION_BY_TAB = {
 }
 TOAST_URL_SUB_SUFFIX = "nothing more to show here"
 TOAST_FILEPATH_DESTINATION = "in its default application"
+WORKFLOW_UNRESOLVED = "workflow unresolved"
 
 _ITEM_TAB_ORDER = ("description", "workflow", "artifacts", "cost")
 _STEP_TAB_ORDER = ("detail", "workflow", "log", "cost")
@@ -279,6 +281,7 @@ class HeaderData:
     title: str
     project: Optional[str]
     stat_line: Optional[str]
+    workflow_text: Optional[str]
     glyph: Glyph
     dependency_blocked: bool
     escalation_text: Optional[str]
@@ -338,6 +341,29 @@ def _item_wall_active(store, item, children, now):
     ).total_seconds()
     active = sum(child.active_seconds or 0 for child in children)
     return wall, active
+
+
+def _workflow_selector_pin(flow_service, node):
+    selector, _source = flow_service.workflow_owner(node)
+    if selector is None:
+        return None, None
+    try:
+        return flow_service.resolve_selection(selector), None
+    except ValueError as error:
+        return None, str(error)
+
+
+def _workflow_text(flow_service, node):
+    pin, error = _workflow_selector_pin(flow_service, node)
+    if error is not None:
+        return WORKFLOW_UNRESOLVED
+    if pin is None:
+        return None
+    parsed = parse_pin(pin)
+    if parsed is None:
+        return pin
+    origin, name, sha = parsed
+    return "%s/%s (%s)" % (origin, name, sha[:8])
 
 
 def _stat_line_item(store, item, children, flow_service, now, pool_halted=False):
@@ -420,6 +446,7 @@ def _item_header(store, node, now, project, flow_service, pool_halted=False):
     return HeaderData(
         id=node.id, title=node.title, project=project,
         stat_line=stat_line,
+        workflow_text=_workflow_text(flow_service, node),
         glyph=_state_glyph(glyph_node, glyph_flow),
         dependency_blocked=bool(glyph_node.blocked_by),
         escalation_text=escalation_text, escalation_target=escalation_target,
@@ -437,6 +464,7 @@ def _step_header(store, node, now, project, flow_service, pool_halted=False):
     return HeaderData(
         id=node.id, title=item.title, project=project,
         stat_line=stat_line,
+        workflow_text=_workflow_text(flow_service, node),
         glyph=_state_glyph(node, flow),
         dependency_blocked=bool(node.blocked_by),
         escalation_text=escalation_text, escalation_target=escalation_target,
@@ -681,8 +709,19 @@ def _identity_text(header):
     return text
 
 
-def _context_text(header):
-    return header.stat_line
+CONTEXT_WORKFLOW_GAP = "    "
+
+
+def _context_text(header, width=None):
+    if not header.workflow_text:
+        return header.stat_line
+    if header.stat_line:
+        candidate = header.stat_line + CONTEXT_WORKFLOW_GAP + header.workflow_text
+    else:
+        candidate = header.workflow_text
+    if width is not None and len(candidate) > width:
+        return header.stat_line
+    return candidate
 
 
 class HubHeader(Vertical):
@@ -697,7 +736,8 @@ class HubHeader(Vertical):
 
     def update(self, header) -> None:
         self.query_one("#hub-identity", Static).update(_identity_text(header))
-        self._line("#hub-context", _context_text(header))
+        context = self.query_one("#hub-context", Static)
+        self._line("#hub-context", _context_text(header, context.screen.size.width))
 
         self._last_header = header
         self._paint_escalation(header)
