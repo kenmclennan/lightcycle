@@ -167,6 +167,7 @@ class FakeStore(StorePort):
             "labels": [],
             "state": "ready",
             "assignee": None,
+            "claim_epoch": 0,
             "metadata": {},
             "parent": None,
             "dep_count": 0,
@@ -405,7 +406,8 @@ class FakeStore(StorePort):
         if b.get("state") == "done":
             return (False, None)
         assignee = b.get("assignee") or ""
-        if expected and assignee and assignee != expected:
+        never_claimed = not assignee and not b.get("claim_epoch")
+        if expected and not never_claimed and assignee != expected:
             return (False, None)
         self.close(step, outcome)
         new_id = None
@@ -504,6 +506,7 @@ class FakeStore(StorePort):
         spawn_id = self._config.spawn_id() if self._config else None
         b["assignee"] = spawn_id or role
         b["state"] = "in_progress"
+        b["claim_epoch"] = (b.get("claim_epoch") or 0) + 1
         self._record_history(b["id"], State.RUNNING)
         return self._to_node(b)
 

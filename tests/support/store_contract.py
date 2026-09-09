@@ -62,6 +62,24 @@ class StoreContractBase:
         self.assertIsNotNone(new)
         self.assertEqual(s.get_node(tid).state, "done")
 
+    def test_stale_claimant_cannot_complete_after_reclaim(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        claimed = s.claim_ready("agent")
+        spawnid = claimed.claimed_by
+        s.reclaim(tid)
+        won, _ = s.complete_step_atomic(tid, "done", spawnid, None)
+        self.assertFalse(won)
+        self.assertNotEqual(s.get_node(tid).state, "done")
+
+    def test_human_can_close_a_reclaimed_step(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.claim_ready("agent")
+        s.reclaim(tid)
+        won, _ = s.complete_step_atomic(tid, "done", "", None)
+        self.assertTrue(won)
+
     def test_label_add_visible_as_role(self):
         s = self.make_store()
         tid = self._step(s, "t")

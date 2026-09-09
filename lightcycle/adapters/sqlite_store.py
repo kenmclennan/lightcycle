@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS steps (
     role TEXT,
     state TEXT NOT NULL DEFAULT 'ready',
     assignee TEXT,
+    claim_epoch INTEGER NOT NULL DEFAULT 0,
     model TEXT,
     outcome TEXT,
     notes TEXT,
@@ -403,6 +404,7 @@ class SqliteStore(StorePort):
             ("usage_cost_basis", "TEXT"),
             ("usage_thinking_tokens", "INTEGER"),
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("claim_epoch", "INTEGER NOT NULL DEFAULT 0"),
         ),
         "usage_backfill_log": (
             ("had_result_line", "INTEGER"),
@@ -1004,7 +1006,7 @@ class SqliteStore(StorePort):
         cur = self._conn.execute(
             "UPDATE steps SET state = 'done', outcome = ?, closed_at = ? "
             "WHERE id = ? AND state != 'done' "
-            "AND (? = '' OR COALESCE(assignee, '') = '' OR assignee = ?)",
+            "AND (? = '' OR (COALESCE(assignee, '') = '' AND claim_epoch = 0) OR assignee = ?)",
             (outcome, datetime.datetime.now().isoformat(), step, expected, expected),
         )
         if cur.rowcount == 0:
@@ -1116,7 +1118,7 @@ class SqliteStore(StorePort):
         tid = row[0]
         assignee = self._config.spawn_id() or role
         cur = self._conn.execute(
-            "UPDATE steps SET assignee = ?, state = 'in_progress' "
+            "UPDATE steps SET assignee = ?, state = 'in_progress', claim_epoch = claim_epoch + 1 "
             "WHERE id = ? AND state = 'ready'",
             (assignee, tid),
         )
