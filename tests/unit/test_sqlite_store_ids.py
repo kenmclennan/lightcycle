@@ -1,6 +1,7 @@
 import unittest
 
 from tests.support.sqlite_store_factory import make_sqlite_store
+from tests.support.step_factory import create_owned_step
 
 
 class TestSqliteStoreIds(unittest.TestCase):
@@ -32,9 +33,9 @@ class TestSqliteStoreIds(unittest.TestCase):
 
     def test_provided_id_rejected_when_taken(self):
         s = make_sqlite_store(shortcode="GRID")
-        s.create_step("first", id="GRID-57")
+        create_owned_step(s, "first", id="GRID-57")
         with self.assertRaises(ValueError):
-            s.create_step("dup", id="GRID-57")
+            create_owned_step(s, "dup", id="GRID-57")
 
 
 if __name__ == "__main__":

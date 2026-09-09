@@ -7,6 +7,7 @@ from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.application.pool.backup import BackupUseCase
 from tests.support.sqlite_store_factory import make_sqlite_store
+from tests.support.step_factory import create_owned_step
 
 
 class FakeConfig:
@@ -39,7 +40,7 @@ def _adapter():
 class TestCreateSnapshot(unittest.TestCase):
     def test_restored_contents_match_the_source_at_snapshot_time(self):
         backup, store, backups_dir = _adapter()
-        tid = store.create_step("t", role="agent")
+        tid = create_owned_step(store, "t", role="agent")
         name = backup.create_snapshot(1000.0)
         self.assertTrue(os.path.exists(os.path.join(backups_dir, name)))
         store.close(tid, "done")

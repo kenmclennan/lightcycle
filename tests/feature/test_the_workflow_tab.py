@@ -17,6 +17,7 @@ from lightcycle.adapters.tui.row_grid import (
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
+from tests.support.step_factory import create_owned_step
 
 scenarios("the-workflow-tab.feature")
 
@@ -233,7 +234,7 @@ def _human_step_that_is_done(ctx):
 @given("a human step made queued by an unresolved dependency")
 def _human_step_made_queued_by_dependency(ctx):
     store = FakeStore()
-    blocker = store.create_step("blocker", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", step="build", role="agent")
     item = store.create_item("Item", "a description")
     step = store.create_step(
         "s", step="await-merge", role="human", parent=item, deps=[blocker],
@@ -245,7 +246,7 @@ def _human_step_made_queued_by_dependency(ctx):
 @given("a done agent step and a queued agent step, blocked on a dependency")
 def _done_and_queued_agent_steps(ctx):
     store = FakeStore()
-    blocker = store.create_step("blocker", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", step="build", role="agent")
     item = store.create_item("Item", "a description")
     done_step = store.create_step("done", step="build", role="agent", parent=item)
     store.close(done_step, "done")
@@ -399,7 +400,7 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
 @given("a step blocked on another item's completion")
 def _step_blocked_on_dependency(ctx):
     store = FakeStore()
-    blocker = store.create_step("blocker", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", step="build", role="agent")
     item = store.create_item("Item", "a description")
     step = store.create_step("s", step="build", role="agent", parent=item, deps=[blocker])
     ctx["step_id"] = step

@@ -1,13 +1,12 @@
 from lightcycle.domain.pool import AttributionEvent, ToolUsage, UsageEvent
 from lightcycle.domain.work import NodeSpec
 from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
+from tests.support.step_factory import create_owned_step
 
 
 class StoreContractBase:
     def _step(self, s, title="t", **kw):
-        if kw.get("parent") is None:
-            kw["parent"] = s.create_item("owner", "an owning item")
-        return s.create_step(title, **kw)
+        return create_owned_step(s, title, **kw)
 
     def make_store(self, now=None):
         raise NotImplementedError

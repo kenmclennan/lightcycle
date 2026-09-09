@@ -23,6 +23,7 @@ from tests.support.fake_store import FakeStore
 from tests.support.screen_render import DEFAULT_SIZE as RENDER_SIZE
 from tests.support.screen_render import SCREENS as RENDER_SCREENS
 from tests.support.tui_harness import launch, make_test_container
+from tests.support.step_factory import create_owned_step
 
 scenarios("dashboard-adopts-the-design-system.feature")
 
@@ -153,10 +154,10 @@ _FLOOR_SCREEN_SETUP = {
 @given("the lightcycle store is reachable")
 def _reachable(ctx):
     store = FakeStore()
-    store.create_step("a", step="build", role="agent")
-    store.create_step("b", step="build", role="agent")
-    blocker = store.create_step("blocker", step="build", role="agent")
-    store.create_step("c", step="build", role="agent", deps=[blocker])
+    create_owned_step(store, "a", step="build", role="agent")
+    create_owned_step(store, "b", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    create_owned_step(store, "c", step="build", role="agent", deps=[blocker])
     ctx["store"] = store
 
 

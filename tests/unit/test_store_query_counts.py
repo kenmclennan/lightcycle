@@ -4,6 +4,7 @@ from lightcycle.application.work import SearchInput, SearchUseCase
 from lightcycle.application.work.watched_steps import watched_step_ids
 from tests.support.query_counter import QueryCounter
 from tests.support.sqlite_store_factory import make_sqlite_store
+from tests.support.step_factory import create_owned_step
 
 
 def _search_query_count(unrelated_count):
@@ -40,7 +41,7 @@ class TestWatchedStepIdsQueryCount(unittest.TestCase):
     def test_issues_no_more_queries_than_a_full_node_scan(self):
         s = make_sqlite_store()
         for i in range(20):
-            step = s.create_step("step %d" % i, role="human")
+            step = create_owned_step(s, "step %d" % i, role="human")
             s.set_watched_step(step, "some-other-id")
 
         counter = QueryCounter(s._conn)

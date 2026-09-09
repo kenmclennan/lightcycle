@@ -14,6 +14,7 @@ from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 class TestProject(unittest.TestCase):
@@ -50,9 +51,9 @@ class TestProject(unittest.TestCase):
 class TestQueuedRowDependencyTieBreak(unittest.TestCase):
     def test_shows_lexicographically_lowest_blocker(self):
         store = FakeStore()
-        blocker_a = store.create_step("blocker a", step="build", role="agent")
-        blocker_b = store.create_step("blocker b", step="build", role="agent")
-        blocked = store.create_step(
+        blocker_a = create_owned_step(store, "blocker a", step="build", role="agent")
+        blocker_b = create_owned_step(store, "blocker b", step="build", role="agent")
+        blocked = create_owned_step(store, 
             "blocked", step="build", role="agent", deps=[blocker_a, blocker_b]
         )
         node = store.get_node(blocked)
@@ -68,8 +69,8 @@ class TestQueuedRowDependencyTieBreak(unittest.TestCase):
 class TestQueuedRowHumanGlyph(unittest.TestCase):
     def test_a_dependency_blocked_human_step_shows_the_human_square(self):
         store = FakeStore()
-        blocker = store.create_step("blocker", step="build", role="agent")
-        blocked = store.create_step(
+        blocker = create_owned_step(store, "blocker", step="build", role="agent")
+        blocked = create_owned_step(store, 
             "blocked", step="await-merge", role="human", deps=[blocker]
         )
         node = store.get_node(blocked)
@@ -80,8 +81,8 @@ class TestQueuedRowHumanGlyph(unittest.TestCase):
 
     def test_a_dependency_blocked_agent_step_still_shows_the_plain_queued_glyph(self):
         store = FakeStore()
-        blocker = store.create_step("blocker", step="build", role="agent")
-        blocked = store.create_step(
+        blocker = create_owned_step(store, "blocker", step="build", role="agent")
+        blocked = create_owned_step(store, 
             "blocked", step="build", role="agent", deps=[blocker]
         )
         node = store.get_node(blocked)
@@ -102,7 +103,7 @@ _FLOW = flow_from_metas(
 class TestAttentionRow(unittest.TestCase):
     def test_a_human_owned_step_is_a_gate(self):
         store = FakeStore()
-        step = store.create_step("await merge", step="ready-merge", role="human")
+        step = create_owned_step(store, "await merge", step="ready-merge", role="human")
         node = store.get_node(step)
 
         row = _attention_row(store, node, _FLOW)
@@ -113,7 +114,7 @@ class TestAttentionRow(unittest.TestCase):
 
     def test_a_step_unknown_to_the_flow_is_a_gate(self):
         store = FakeStore()
-        step = store.create_step("triage", step="triage", role="human")
+        step = create_owned_step(store, "triage", step="triage", role="human")
         node = store.get_node(step)
 
         row = _attention_row(store, node, _FLOW)
@@ -124,7 +125,7 @@ class TestAttentionRow(unittest.TestCase):
 
     def test_an_agent_owned_step_is_an_escalation(self):
         store = FakeStore()
-        step = store.create_step("stuck build", step="build", role="human")
+        step = create_owned_step(store, "stuck build", step="build", role="human")
         node = store.get_node(step)
 
         row = _attention_row(store, node, _FLOW)
@@ -151,7 +152,7 @@ _FLOW_WITH_DISPLAY = flow_from_metas(
 class TestAttentionRowDisplayPhrase(unittest.TestCase):
     def test_a_gate_shows_its_declared_display_phrase(self):
         store = FakeStore()
-        step = store.create_step("await merge", step="ready-merge", role="human")
+        step = create_owned_step(store, "await merge", step="ready-merge", role="human")
         node = store.get_node(step)
 
         row = _attention_row(store, node, _FLOW_WITH_DISPLAY)
@@ -160,7 +161,7 @@ class TestAttentionRowDisplayPhrase(unittest.TestCase):
 
     def test_an_escalation_carries_its_declared_display_phrase_in_the_stuck_prefix(self):
         store = FakeStore()
-        step = store.create_step("stuck build", step="build", role="human")
+        step = create_owned_step(store, "stuck build", step="build", role="human")
         node = store.get_node(step)
 
         row = _attention_row(store, node, _FLOW_WITH_DISPLAY)
@@ -171,7 +172,7 @@ class TestAttentionRowDisplayPhrase(unittest.TestCase):
 class TestActiveRowDisplayPhrase(unittest.TestCase):
     def test_shows_its_declared_display_phrase(self):
         store = FakeStore()
-        step = store.create_step("building", step="build", role="agent")
+        step = create_owned_step(store, "building", step="build", role="agent")
         node = store.get_node(step)
 
         row = _active_row(store, node, _FLOW_WITH_DISPLAY)
@@ -182,7 +183,7 @@ class TestActiveRowDisplayPhrase(unittest.TestCase):
 class TestQueuedRowDisplayPhrase(unittest.TestCase):
     def test_shows_its_declared_display_phrase(self):
         store = FakeStore()
-        step = store.create_step("queued build", step="build", role="agent")
+        step = create_owned_step(store, "queued build", step="build", role="agent")
         node = store.get_node(step)
 
         row = _queued_row(store, node, _FLOW_WITH_DISPLAY)
@@ -191,8 +192,8 @@ class TestQueuedRowDisplayPhrase(unittest.TestCase):
 
     def test_a_blocked_row_shows_the_blockers_id_not_the_declared_phrase(self):
         store = FakeStore()
-        blocker = store.create_step("blocker", step="ready-merge", role="human")
-        blocked = store.create_step("blocked", step="build", role="agent", deps=[blocker])
+        blocker = create_owned_step(store, "blocker", step="ready-merge", role="human")
+        blocked = create_owned_step(store, "blocked", step="build", role="agent", deps=[blocker])
         node = store.get_node(blocked)
 
         row = _queued_row(store, node, _FLOW_WITH_DISPLAY)
@@ -204,7 +205,7 @@ class TestQueuedRowDisplayPhrase(unittest.TestCase):
 class TestEngineStepDisplayPhrase(unittest.TestCase):
     def test_a_findings_gate_shows_the_engine_phrase(self):
         store = FakeStore()
-        step = store.create_step("review findings", step=FINDINGS_STEP, role="human")
+        step = create_owned_step(store, "review findings", step=FINDINGS_STEP, role="human")
         node = store.get_node(step)
 
         row = _attention_row(store, node, _FLOW)
@@ -213,7 +214,7 @@ class TestEngineStepDisplayPhrase(unittest.TestCase):
 
     def test_an_active_audit_shows_the_engine_phrase(self):
         store = FakeStore()
-        step = store.create_step("auditing", step=AUDIT_STEP, role="agent")
+        step = create_owned_step(store, "auditing", step=AUDIT_STEP, role="agent")
         node = store.get_node(step)
 
         row = _active_row(store, node, _FLOW)
@@ -222,7 +223,7 @@ class TestEngineStepDisplayPhrase(unittest.TestCase):
 
     def test_a_queued_audit_shows_the_engine_phrase(self):
         store = FakeStore()
-        step = store.create_step("queued audit", step=AUDIT_STEP, role="agent")
+        step = create_owned_step(store, "queued audit", step=AUDIT_STEP, role="agent")
         node = store.get_node(step)
 
         row = _queued_row(store, node, _FLOW)
@@ -241,8 +242,8 @@ class FixedFlowService:
 class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
     def test_escalation_sorts_before_gate_when_gate_listed_first(self):
         store = FakeStore()
-        gate = store.create_step("await merge", step="ready-merge", role="human")
-        escalation = store.create_step("stuck build", step="build", role="human")
+        gate = create_owned_step(store, "await merge", step="ready-merge", role="human")
+        escalation = create_owned_step(store, "stuck build", step="build", role="human")
         lanes = {
             "inbox": [store.get_node(gate), store.get_node(escalation)],
             "queue": [],
@@ -258,8 +259,8 @@ class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
 
     def test_escalation_sorts_before_gate_when_escalation_listed_first(self):
         store = FakeStore()
-        escalation = store.create_step("stuck build", step="build", role="human")
-        gate = store.create_step("await merge", step="ready-merge", role="human")
+        escalation = create_owned_step(store, "stuck build", step="build", role="human")
+        gate = create_owned_step(store, "await merge", step="ready-merge", role="human")
         lanes = {
             "inbox": [store.get_node(escalation), store.get_node(gate)],
             "queue": [],
@@ -311,7 +312,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
     def test_queued_dependency_held_row_step_id_is_the_step_not_the_owning_item(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        blocker = store.create_step("blocker", step="ready-merge", role="human")
+        blocker = create_owned_step(store, "blocker", step="ready-merge", role="human")
         step = store.create_step(
             "blocked build", step="build", role="agent", parent=item, deps=[blocker]
         )

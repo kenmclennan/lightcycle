@@ -6,6 +6,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 scenarios("stalled-worker-reclaim.feature")
 
@@ -224,7 +225,7 @@ def _dirty_worktree(ctx):
 
 @given("the step is blocked by an open dependency")
 def _blocked_by_open_dependency(ctx):
-    blocker = ctx["store"].create_step("blocker", role=None)
+    blocker = create_owned_step(ctx["store"], "blocker", role=None)
     ctx["store"].dep_add(ctx["step"], blocker)
     ctx["blocker"] = blocker
 

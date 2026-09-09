@@ -6,6 +6,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 scenarios("pool-wide-spin-guard.feature")
 
@@ -138,8 +139,8 @@ def _register_dead_worker(ctx, name, step):
 
 
 def _create_two_steps_with_no_work_deaths(ctx):
-    step1 = ctx["store"].create_step("build: a", step="build", role="agent")
-    step2 = ctx["store"].create_step("build: b", step="build", role="agent")
+    step1 = create_owned_step(ctx["store"], "build: a", step="build", role="agent")
+    step2 = create_owned_step(ctx["store"], "build: b", step="build", role="agent")
     ctx["steps"] = [step1, step2]
     _register_dead_worker(ctx, "w1", step1)
     _register_dead_worker(ctx, "w2", step2)
@@ -199,7 +200,7 @@ def _two_dead_with_steps_this_check(ctx):
 
 @given("1 dead, unchecked worker, with an assigned step, having done no work")
 def _one_dead_with_step(ctx):
-    step1 = ctx["store"].create_step("build: a", step="build", role="agent")
+    step1 = create_owned_step(ctx["store"], "build: a", step="build", role="agent")
     ctx["steps"] = [step1]
     _register_dead_worker(ctx, "w1", step1)
 
@@ -249,9 +250,9 @@ def _guard_open(ctx):
 
 @given("the pool has more than one free slot")
 def _free_slots(ctx):
-    ctx["store"].create_step("build: r1", step="build", role="agent")
-    ctx["store"].create_step("build: r2", step="build", role="agent")
-    ctx["store"].create_step("build: r3", step="build", role="agent")
+    create_owned_step(ctx["store"], "build: r1", step="build", role="agent")
+    create_owned_step(ctx["store"], "build: r2", step="build", role="agent")
+    create_owned_step(ctx["store"], "build: r3", step="build", role="agent")
 
 
 @when("the pool's breaker gate runs")
@@ -261,7 +262,7 @@ def _gate_runs(ctx):
 
 @when("a later check observes real session activity among the dead-with-step workers")
 def _later_check_real_activity(ctx):
-    step1 = ctx["store"].create_step("build: later", step="build", role="agent")
+    step1 = create_owned_step(ctx["store"], "build: later", step="build", role="agent")
     _register_dead_worker(ctx, "later", step1)
     ctx["fs"].files[ctx["dead_logs"]["later"]] = _REAL_ACTIVITY_LOG
     _run_gate(ctx)

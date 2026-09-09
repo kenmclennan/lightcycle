@@ -13,6 +13,7 @@ from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.sqlite_store_factory import (
     make_legacy_sqlite_store, make_sqlite_store, plant_legacy_db,
 )
+from tests.support.step_factory import create_owned_step
 from tests.support.store_contract import StoreContractBase
 from lightcycle.adapters.sqlite_store import SchemaVersionRefused, SqliteStore, _SCHEMA_VERSION
 from lightcycle.application.services.flow import FlowService
@@ -41,7 +42,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_claim_and_close_map_status(self):
         s = self._store()
-        s.create_step("build: x", step="build", role="agent")
+        create_owned_step(s, "build: x", step="build", role="agent")
         claimed = s.claim_ready("agent")
         self.assertEqual(claimed.state, State.RUNNING)
         s.close(claimed.id, "done")
@@ -59,8 +60,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_ready_reflects_deps_and_closes(self):
         s = self._store()
-        blocker = s.create_step("blocker", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker = create_owned_step(s, "blocker", role="agent")
+        blocked = create_owned_step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker)
         ready = [t.id for t in s.ready_steps()]
         self.assertIn(blocker, ready)
@@ -70,8 +71,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_status_queue_lane_reflects_open_blocker(self):
         s = self._store()
-        blocker = s.create_step("blocker", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        blocker = create_owned_step(s, "blocker", role="agent")
+        blocked = create_owned_step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker)
         lanes = StatusUseCase(s).execute().lanes
         self.assertNotIn("blocked", lanes)
@@ -87,7 +88,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_route_to_human_relabels_and_notes(self):
         s = self._store()
-        tid = s.create_step("build: x", step="build", role="agent")
+        tid = create_owned_step(s, "build: x", step="build", role="agent")
         s.route_to_human(tid, "needs a human")
         t = s.get_node(tid)
         self.assertEqual(t.role, "human")
@@ -96,14 +97,14 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
         s = self._store()
-        tid = s.create_step("build: x", step="build", role="agent")
+        tid = create_owned_step(s, "build: x", step="build", role="agent")
         s.close(tid, "done")
         results = s.nodes_closed_since("2000-01-01")
         self.assertIn(tid, [t.id for t in results])
 
     def test_tasks_closed_since_excludes_open_tasks(self):
         s = self._store()
-        s.create_step("open step", role="agent")
+        create_owned_step(s, "open step", role="agent")
         results = s.nodes_closed_since("2000-01-01")
         self.assertEqual(results, [])
 
@@ -194,7 +195,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_all_tasks_returns_many(self):
         s = self._store()
-        created = [s.create_step("step %d" % i, role="agent") for i in range(51)]
+        created = [create_owned_step(s, "step %d" % i, role="agent") for i in range(51)]
         result_ids = {t.id for t in s.all_nodes()}
         for tid in created:
             self.assertIn(tid, result_ids)
@@ -459,9 +460,7 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
 
 class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):
     def _step(self, s, title="t", **kw):
-        if kw.get("parent") is None:
-            kw["parent"] = s.create_item("owner", "an owning item")
-        return s.create_step(title, **kw)
+        return create_owned_step(s, title, **kw)
 
     def _find_history_index(self, conn):
         for row in conn.execute("PRAGMA index_list(history)").fetchall():
@@ -563,7 +562,7 @@ class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
 class TestSqliteStoreAddsClaimEpochToSteps(unittest.TestCase):
     def _store_without_claim_epoch(self):
         s = make_sqlite_store()
-        tid = s.create_step("write-code: x", role="agent")
+        tid = create_owned_step(s, "write-code: x", role="agent")
         s.claim_ready("agent")
         cols = [
             r for r in s._conn.execute("PRAGMA table_info(steps)").fetchall()
@@ -629,13 +628,13 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         version = store._conn.execute("PRAGMA user_version").fetchone()[0]
         self.assertEqual(version, _SCHEMA_VERSION)
 
-        tid = store.create_step("write-code: x", role="agent")
+        tid = create_owned_step(store, "write-code: x", role="agent")
         self.assertEqual(store.get_node(tid).title, "write-code: x")
 
     def test_unstamped_current_store_is_retro_stamped_with_data_intact(self):
         root = tempfile.mkdtemp()
         store = SqliteStore(self._config(root))
-        tid = store.create_step("write-code: x", role="agent")
+        tid = create_owned_step(store, "write-code: x", role="agent")
         store._conn.execute("PRAGMA user_version = 0")
         store._conn.commit()
         store._conn.close()
@@ -1011,7 +1010,7 @@ class TestSqliteStoreAtomicity(unittest.TestCase):
 
     def test_reclaim_rolls_back_state_when_history_write_fails(self):
         s = self._store()
-        tid = s.create_step("t", role="agent")
+        tid = create_owned_step(s, "t", role="agent")
         s.claim_ready("agent")
         with patch.object(s, "_record_history", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
@@ -1020,7 +1019,7 @@ class TestSqliteStoreAtomicity(unittest.TestCase):
 
     def test_record_live_usage_rolls_back_checkpoint_when_attribution_write_fails(self):
         s = self._store()
-        tid = s.create_step("t", role="agent")
+        tid = create_owned_step(s, "t", role="agent")
         with patch.object(
             s, "_record_attribution_nocommit", side_effect=RuntimeError("boom")
         ):

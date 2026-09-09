@@ -9,6 +9,7 @@ from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.step import Step
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 FLOW = flow_from_metas(
     {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
@@ -116,63 +117,63 @@ class TestLandingTab(unittest.TestCase):
 
     def test_active_step_lands_on_log(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent")
         s.claim_ready("agent")
         self.assertEqual(landing_tab(s.get_node(step)), "log")
 
     def test_needs_attention_human_step_lands_on_detail(self):
         s = FakeStore()
-        step = s.create_step("s", step="await-merge", role="human")
+        step = create_owned_step(s, "s", step="await-merge", role="human")
         self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
     def test_dependency_blocked_step_lands_on_detail(self):
         s = FakeStore()
-        blocker = s.create_step("b", step="build", role="agent")
-        step = s.create_step("s", step="build", role="agent", deps=[blocker])
+        blocker = create_owned_step(s, "b", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent", deps=[blocker])
         self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
     def test_queued_step_lands_on_detail(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent")
         self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
     def test_done_step_lands_on_detail(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent")
         s.close(step, "done")
         self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
 class TestRowBucket(unittest.TestCase):
     def test_dependency_blocked_step_is_queued(self):
         s = FakeStore()
-        blocker = s.create_step("b", step="build", role="agent")
-        step = s.create_step("s", step="build", role="agent", deps=[blocker])
+        blocker = create_owned_step(s, "b", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent", deps=[blocker])
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
 
     def test_human_ready_step_unknown_to_the_flow_is_a_gate(self):
         s = FakeStore()
-        step = s.create_step("s", step="await-merge", role="human")
+        step = create_owned_step(s, "s", step="await-merge", role="human")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "gate")
 
     def test_a_parked_step_the_flow_still_owns_by_an_agent_is_an_escalation(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="human")
+        step = create_owned_step(s, "s", step="build", role="human")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "escalation")
 
     def test_queued_agent_step_is_queued(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
 
     def test_in_progress_step_is_active(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent")
         s.claim_ready("agent")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "active")
 
     def test_done_step_is_done(self):
         s = FakeStore()
-        step = s.create_step("s", step="build", role="agent")
+        step = create_owned_step(s, "s", step="build", role="agent")
         s.close(step, "done")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "done")
 
@@ -185,7 +186,7 @@ class TestRowBucket(unittest.TestCase):
 
     def test_a_ready_step_with_no_recorded_role_is_treated_as_human(self):
         s = FakeStore()
-        step = s.create_step("s", step="await-merge")
+        step = create_owned_step(s, "s", step="await-merge")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "gate")
 
     def test_item_with_a_human_step_awaiting_it_alongside_done_steps_is_a_gate(self):

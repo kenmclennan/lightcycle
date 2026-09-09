@@ -2,6 +2,7 @@ import unittest
 
 from tests.support.fake_store import FakeStore
 from tests.support.store_contract import StoreContractBase
+from tests.support.step_factory import create_owned_step
 
 
 class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
@@ -10,23 +11,23 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_label_add_idempotent(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = create_owned_step(s, "t", role="agent")
         s.label_add(tid, "for:coder")
         s.label_add(tid, "for:coder")
         self.assertEqual(s._records[tid]["labels"].count("for:coder"), 1)
 
     def test_assign_clear_returns_to_queued(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = create_owned_step(s, "t", role="agent")
         s.assign(tid, "worker-1")
         s.assign(tid, "")
         self.assertEqual(s.get_node(tid).state, "queued")
 
     def test_two_deps_require_both_closed(self):
         s = self.make_store()
-        dep1 = s.create_step("dep1", role="agent")
-        dep2 = s.create_step("dep2", role="agent")
-        blocked = s.create_step("blocked", role="agent")
+        dep1 = create_owned_step(s, "dep1", role="agent")
+        dep2 = create_owned_step(s, "dep2", role="agent")
+        blocked = create_owned_step(s, "blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
         s.close(dep1, "done")
@@ -38,13 +39,13 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_closed_task_not_in_ready(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = create_owned_step(s, "t", role="agent")
         s.close(tid, "done")
         self.assertEqual(s.ready_steps(), [])
 
     def test_claimed_task_not_in_ready(self):
         s = self.make_store()
-        tid = s.create_step("t", role="agent")
+        tid = create_owned_step(s, "t", role="agent")
         s.assign(tid, "worker-1")
         self.assertEqual(s.ready_steps(), [])
 
@@ -71,10 +72,10 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_claimed_tasks(self):
         s = self.make_store()
-        claimed = s.create_step("t", role="agent")
+        claimed = create_owned_step(s, "t", role="agent")
         s.update_state(claimed, "in_progress")
         s.assign(claimed, "sp-x")
-        ready = s.create_step("ready", role="agent")
+        ready = create_owned_step(s, "ready", role="agent")
         got = s.claimed_steps()
         self.assertEqual([t.id for t in got], [claimed])
         self.assertEqual(got[0].claimed_by, "sp-x")
@@ -93,7 +94,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_route_to_human(self):
         s = self.make_store()
-        tid = s.create_step("t", step="build", role="agent")
+        tid = create_owned_step(s, "t", step="build", role="agent")
         s.route_to_human(tid, "needs review")
         step = s.get_node(tid)
         self.assertEqual(step.role, "human")
@@ -102,7 +103,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
     def test_disconnect_is_a_noop(self):
         s = self.make_store()
         s.disconnect()
-        s.create_step("t")
+        create_owned_step(s, "t")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
+from tests.support.step_factory import create_owned_step
 
 
 class RecordingFakeFs(FakeFs):
@@ -65,7 +66,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_live_worker_with_a_step_gets_its_delta_posted(self):
         store = RecordingFakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         store.set_model(tid, "sonnet")
         lines = [
             _assistant("msg-1", tool_use=("tu-1", "Bash"),
@@ -100,7 +101,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_second_tick_against_a_longer_log_posts_only_the_new_delta(self):
         store = RecordingFakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         store.set_model(tid, "sonnet")
         first_lines = [
             _assistant("msg-1", tool_use=("tu-1", "Bash"),
@@ -132,7 +133,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_tick_against_an_unchanged_log_makes_no_store_calls(self):
         store = RecordingFakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         store.set_model(tid, "sonnet")
         lines = [
             _assistant("msg-1", tool_use=("tu-1", "Bash"),
@@ -153,7 +154,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_chunk_ending_mid_line_does_not_advance_offset_or_double_count(self):
         store = RecordingFakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         store.set_model(tid, "sonnet")
         partial = '{"type":"assistant","message":{"id":"msg-1"'
         fs = FakeFs(files={"/l/1.log": partial.encode()})

@@ -6,6 +6,7 @@ from lightcycle import cli
 from lightcycle.application.flow import BlockInput, BlockStepUseCase
 from tests.support.fake_store import FakeStore
 from tests.support.harness import DEFAULT_WORKFLOW, Harness
+from tests.support.step_factory import create_owned_step
 
 
 def call(fn, *args):
@@ -29,7 +30,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         cli.set_container(FakeContainer(self.store))
 
     def test_needs_without_state_waiting_is_refused(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         BlockStepUseCase(self.store).execute(
             BlockInput(step=bid, needs="pick a colour", reason="needed a decision")
         )
@@ -41,7 +42,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.park.needs, "pick a colour")
 
     def test_waiting_without_reason_is_refused(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X")
         self.assertEqual(rc, 2)
         self.assertIn("--reason", err)
@@ -50,7 +51,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIsNone(t.needs)
 
     def test_waiting_refuses_generic_edit_flags(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X", "--title", "renamed"
         )
@@ -61,13 +62,13 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertNotEqual(t.title, "renamed")
 
     def test_ready_refuses_any_other_flag(self):
-        bid = self.store.create_step("build: x", step="build", role="human")
+        bid = create_owned_step(self.store, "build: x", step="build", role="human")
         rc, out, err = call(cli.cmd_set, bid, "--state", "ready", "--title", "renamed")
         self.assertNotEqual(rc, 0)
         self.assertIn("--title", err)
 
     def test_in_progress_refuses_any_other_flag(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "in_progress", "--description", "d")
         self.assertNotEqual(rc, 0)
         self.assertIn("--description", err)
@@ -79,7 +80,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIn("--title", err)
 
     def test_unknown_state_is_still_refused_with_its_own_message(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "bogus")
         self.assertNotEqual(rc, 0)
         self.assertIn("unknown --state", err)
@@ -91,7 +92,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(self.store.get_item(iid).description, "d")
 
     def test_notes_replaces_existing_notes(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         self.store.note(bid, "old note")
         rc, out, err = call(cli.cmd_set, bid, "--notes", "replacement")
         self.assertEqual(rc, 0, err)
@@ -99,7 +100,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.notes, "replacement")
 
     def test_notes_empty_is_refused(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         self.store.note(bid, "old note")
         rc, out, err = call(cli.cmd_set, bid, "--notes", "")
         self.assertNotEqual(rc, 0)
@@ -109,7 +110,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.notes, "old note")
 
     def test_unset_notes_clears_notes(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         self.store.note(bid, "old note")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "notes")
         self.assertEqual(rc, 0, err)
@@ -117,7 +118,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertFalse(t.notes)
 
     def test_notes_combined_with_state_is_refused(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X", "--notes", "x"
         )
@@ -165,7 +166,7 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertNotEqual(rc, 0)
 
     def test_tried_empty_combined_with_state_waiting_is_refused_before_parking(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "X", "--reason", "Y", "--tried", ""
         )
@@ -217,25 +218,25 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertIn("there is no way to clear a label this way", err)
 
     def test_unset_needs_is_refused(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "needs")
         self.assertNotEqual(rc, 0)
         self.assertIn("--state ready", err)
 
     def test_unset_reason_is_refused(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "reason")
         self.assertNotEqual(rc, 0)
         self.assertIn("--state ready", err)
 
     def test_unset_tried_is_refused(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "tried")
         self.assertNotEqual(rc, 0)
         self.assertIn("--state ready", err)
 
     def test_unset_description_on_a_step_is_refused_by_field_ownership(self):
-        bid = self.store.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "description")
         self.assertNotEqual(rc, 0)
         self.assertIn("--description", err)
@@ -270,7 +271,7 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertNotIn("nothing to set", err)
 
     def test_depends_outside_active_is_refused(self):
-        blocker = self.store.create_step("blocker", role="agent")
+        blocker = create_owned_step(self.store, "blocker", role="agent")
         iid = self.store.create_item("an item", "a description")
         rc, out, err = call(cli.cmd_set, iid, "--depends", blocker)
         self.assertNotEqual(rc, 0)
@@ -289,7 +290,7 @@ class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
 
     def test_active_with_depends_blocks_the_entry_step_until_the_dependency_closes(self):
         h = Harness(["coder", "reviewer"])
-        blocker = h.store.create_step("blocker", role="agent")
+        blocker = create_owned_step(h.store, "blocker", role="agent")
         item = h.store.create_item("st", "a description")
         rc, step_id, err = h.run(
             "set", item, "--state", "active", "--workflow", DEFAULT_WORKFLOW,

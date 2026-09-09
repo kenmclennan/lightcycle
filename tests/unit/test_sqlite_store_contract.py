@@ -5,6 +5,7 @@ from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.store_contract import StoreContractBase
 from lightcycle.adapters import sqlite_store
 from lightcycle.adapters.sqlite_store import SqliteStore
+from tests.support.step_factory import create_owned_step
 
 
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
@@ -17,6 +18,13 @@ class TestSqliteStoreDisconnect(unittest.TestCase):
         s = make_sqlite_store()
         s.disconnect()
         with self.assertRaises(sqlite3.ProgrammingError):
+            create_owned_step(s, "t")
+
+
+class TestSqliteStoreRequiresParent(unittest.TestCase):
+    def test_create_step_without_parent_raises(self):
+        s = make_sqlite_store()
+        with self.assertRaises(ValueError):
             s.create_step("t")
 
 

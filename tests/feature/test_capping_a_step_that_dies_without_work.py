@@ -11,6 +11,7 @@ from lightcycle.domain.pool.worker_session import saw_session_activity
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs as FlowFakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 scenarios("capping-a-step-that-dies-without-work.feature")
 
@@ -129,7 +130,7 @@ def _spin_cap(ctx, cap):
 
 @given("a worker has claimed a step")
 def _claimed(ctx):
-    step = ctx["store"].create_step("build: t", step="build", role="agent")
+    step = create_owned_step(ctx["store"], "build: t", step="build", role="agent")
     ctx["store"].update_state(step, "in_progress")
     ctx["store"].assign(step, "sp-1")
     ctx["step"] = step
@@ -223,7 +224,7 @@ def _past_boot(ctx):
 
 @given("a step was parked after its worker died 3 times in a row with no work")
 def _step_parked(ctx):
-    step = ctx["store"].create_step("build: t", step="build", role="agent")
+    step = create_owned_step(ctx["store"], "build: t", step="build", role="agent")
     ctx["step"] = step
     state = ctx["spin_port"].load()
     steps = dict(state.get("steps") or {})

@@ -6,6 +6,7 @@ from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import ToolUsage
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 def _claim_result_log(step_id):
@@ -95,8 +96,8 @@ class FakeBreakerPort:
 class TestBackfillUsageUseCase(unittest.TestCase):
     def test_first_run_records_matched_and_unmatched_logs(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
-        tid2 = store.create_step("write-code: t", step="write-code", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid2 = create_owned_step(store, "write-code: t", step="write-code", role="agent")
         fs = FakeFs(files={
             "/home/logs/worker-a.log": _claim_result_log(tid),
             "/home/logs/worker-b.log": _claim_result_log(tid2),
@@ -133,8 +134,8 @@ class TestBackfillUsageUseCase(unittest.TestCase):
 
     def test_second_run_is_a_no_op(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
-        tid2 = store.create_step("write-code: t", step="write-code", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid2 = create_owned_step(store, "write-code: t", step="write-code", role="agent")
         fs = FakeFs(files={
             "/home/logs/worker-a.log": _claim_result_log(tid),
             "/home/logs/worker-b.log": _claim_result_log(tid2),
@@ -150,7 +151,7 @@ class TestBackfillUsageUseCase(unittest.TestCase):
 
     def test_log_still_pending_live_capture_is_skipped_not_matched_or_unmatched(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         fs = FakeFs(files={"/home/logs/worker-a.log": _claim_result_log(tid)})
         workers = FakeWorkers(workers=[
             {"spawnid": "sp-1", "log": "/home/logs/worker-a.log", "checked": False},
@@ -185,7 +186,7 @@ def _result_log():
 class TestBackfillUsageReclassification(unittest.TestCase):
     def test_an_unclassified_row_that_still_has_no_result_line_recovers_and_prices_usage(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         store.set_model(tid, "sonnet")
         log_file = "/home/logs/worker-a.log"
         fs = FakeFs(files={log_file: _assistant_usage_log(1_000_000)})
@@ -203,7 +204,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
 
     def test_an_unclassified_row_that_turns_out_to_have_a_result_line_only_flips_classification(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         log_file = "/home/logs/worker-a.log"
         fs = FakeFs(files={log_file: _result_log()})
         store._backfill_log[log_file] = (tid, None)
@@ -219,7 +220,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
 
     def test_an_empty_unclassified_set_leaves_the_main_loop_behavior_unchanged(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         fs = FakeFs(files={"/home/logs/worker-a.log": _claim_result_log(tid)})
         workers = FakeWorkers()
 
@@ -264,7 +265,7 @@ def _bash_tool_usage(step_id):
 class TestBackfillUsageDoesNotDoubleALiveCapturedLog(unittest.TestCase):
     def test_a_log_reaped_live_then_backfilled_is_ingested_once(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         log_file = "/home/logs/worker-a.log"
         fs = FakeFs(files={log_file: _claim_result_log_with_usage(tid, 68, 0.5)})
         workers_state = [{"spawnid": "sp-1", "pid": 1, "step": tid, "log": log_file, "started": 0}]
@@ -300,7 +301,7 @@ class RecordingFakeStore(FakeStore):
 class TestBackfillUsageRepair(unittest.TestCase):
     def test_repair_leaves_an_already_healthy_step_untouched(self):
         store = RecordingFakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         log_a, log_b = "/home/logs/worker-a.log", "/home/logs/worker-b.log"
         fs = FakeFs(files={
             log_a: _claim_result_log_with_usage(tid, 10, 0.1),
@@ -317,7 +318,7 @@ class TestBackfillUsageRepair(unittest.TestCase):
 
     def test_repair_corrects_a_step_whose_stored_totals_are_exactly_doubled(self):
         store = RecordingFakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         log_file = "/home/logs/worker-a.log"
         fs = FakeFs(files={log_file: _claim_result_log_with_usage(tid, 68, 0.5)})
         store.record_usage(tid, 68, 0, 0, 0, 0.5, "list", None)
@@ -339,7 +340,7 @@ class TestBackfillUsageRepair(unittest.TestCase):
 
     def test_repair_skips_a_missing_ledgered_log_and_reports_it_without_crashing(self):
         store = RecordingFakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         present_log = "/home/logs/worker-a.log"
         missing_log = "/home/logs/worker-b.log"
         fs = FakeFs(files={present_log: _claim_result_log_with_usage(tid, 68, 0.5)})
@@ -359,7 +360,7 @@ class TestBackfillUsageRepair(unittest.TestCase):
 class TestBackfillUsageTransitionWindowHazard(unittest.TestCase):
     def test_a_pre_fix_live_captured_log_with_no_ledger_row_still_doubles_but_repair_fixes_it(self):
         store = FakeStore()
-        tid = store.create_step("build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
         log_file = "/home/logs/worker-a.log"
         fs = FakeFs(files={log_file: _claim_result_log_with_usage(tid, 68, 0.5)})
         store.record_usage(tid, 68, 0, 0, 0, 0.5, "list", None)

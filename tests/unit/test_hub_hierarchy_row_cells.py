@@ -11,6 +11,7 @@ from lightcycle.adapters.tui.row_grid import GridLayout
 from lightcycle.domain.work import HierarchyRow
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 FLOW = flow_from_metas(
     {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
@@ -46,7 +47,7 @@ class FixedFlowService:
 class TestUnstackedShape(unittest.TestCase):
     def test_returns_a_six_tuple_keyed_by_node_id(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         cells = hierarchy_row_cells(row, store=store, now=_NOW)
@@ -65,39 +66,39 @@ class TestGlyphSelectionPerBucket(unittest.TestCase):
 
     def test_queued_agent_step(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, STATE_GLYPHS["queued"].glyph)
 
     def test_active_agent_step(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         store.claim_ready("agent")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, STATE_GLYPHS["active"].glyph)
 
     def test_done_agent_step(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         store.close(step, "done")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, DONE_GLYPH.glyph)
 
     def test_gate_human_step_unknown_to_the_flow(self):
         store = FakeStore()
-        step = store.create_step("s", step="await-merge", role="human")
+        step = create_owned_step(store, "s", step="await-merge", role="human")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, STATE_GLYPHS["gate"].glyph)
 
     def test_escalation_human_owned_step_the_flow_still_owns_by_an_agent(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="human")
+        step = create_owned_step(store, "s", step="build", role="human")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, STATE_GLYPHS["escalation"].glyph)
 
     def test_done_human_step_uses_the_human_glyph_not_the_done_glyph(self):
         store = FakeStore()
-        step = store.create_step("s", step="await-merge", role="human")
+        step = create_owned_step(store, "s", step="await-merge", role="human")
         store.close(step, "merged")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, HUMAN_STEP_GLYPH.glyph)
@@ -106,8 +107,8 @@ class TestGlyphSelectionPerBucket(unittest.TestCase):
 class TestDependencyBlockedExtraGlyph(unittest.TestCase):
     def test_a_blocked_step_gets_the_extra_glyph_appended(self):
         store = FakeStore()
-        blocker = store.create_step("b", step="build", role="agent")
-        step = store.create_step("s", step="build", role="agent", deps=[blocker])
+        blocker = create_owned_step(store, "b", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent", deps=[blocker])
         row = HierarchyRow(store.get_node(step), 0)
 
         icon_cell, *_ = hierarchy_row_cells(
@@ -118,7 +119,7 @@ class TestDependencyBlockedExtraGlyph(unittest.TestCase):
 
     def test_an_unblocked_step_has_no_extra_glyph(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         icon_cell, *_ = hierarchy_row_cells(
@@ -131,7 +132,7 @@ class TestDependencyBlockedExtraGlyph(unittest.TestCase):
 class TestActiveFrameOverride(unittest.TestCase):
     def test_overrides_the_glyph_for_an_active_node(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         store.claim_ready("agent")
         row = HierarchyRow(store.get_node(step), 0)
 
@@ -143,7 +144,7 @@ class TestActiveFrameOverride(unittest.TestCase):
 
     def test_leaves_a_queued_node_untouched(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         icon_cell, *_ = hierarchy_row_cells(
@@ -154,7 +155,7 @@ class TestActiveFrameOverride(unittest.TestCase):
 
     def test_leaves_a_done_node_untouched(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         store.close(step, "done")
         row = HierarchyRow(store.get_node(step), 0)
 
@@ -179,7 +180,7 @@ class TestLabelComposition(unittest.TestCase):
 
     def test_a_step_with_no_flow_service_falls_back_to_its_stage_verbatim(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         _, _, title_cell, *_ = hierarchy_row_cells(row, store=store, now=_NOW)
@@ -188,7 +189,7 @@ class TestLabelComposition(unittest.TestCase):
 
     def test_a_step_with_a_flow_service_phase_joins_phase_and_display(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         _, _, title_cell, *_ = hierarchy_row_cells(
@@ -200,7 +201,7 @@ class TestLabelComposition(unittest.TestCase):
 
     def test_multi_pass_prefixes_the_pass_number(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         _, _, title_cell, *_ = hierarchy_row_cells(
@@ -216,7 +217,7 @@ class TestLabelComposition(unittest.TestCase):
 class TestRowDepthIndentation(unittest.TestCase):
     def test_depth_zero_has_no_indent(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         _, _, title_cell, *_ = hierarchy_row_cells(row, store=store, now=_NOW)
@@ -225,7 +226,7 @@ class TestRowDepthIndentation(unittest.TestCase):
 
     def test_depth_one_is_indented_two_spaces(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 1)
 
         _, _, title_cell, *_ = hierarchy_row_cells(row, store=store, now=_NOW)
@@ -237,7 +238,7 @@ class TestTurnsCostTimeWiring(unittest.TestCase):
     def test_an_agent_step_with_recorded_usage_has_non_empty_turns_cost_and_time_cells(self):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 600)
         store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
@@ -253,7 +254,7 @@ class TestTurnsCostTimeWiring(unittest.TestCase):
 
     def test_an_agent_step_that_never_ran_has_empty_turns_cost_and_time_cells(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         _, _, _, turns_cell, time_cell, cost_cell = hierarchy_row_cells(
@@ -280,7 +281,7 @@ class TestTurnsCostTimeWiring(unittest.TestCase):
     def test_a_human_step_time_cell_resolves_from_wait_start_not_wall_and_active(self):
         clock = {"now": "2026-01-01T09:00:00"}
         store = FakeStore(now=lambda: clock["now"])
-        step = store.create_step("await-merge", step="await-merge", role="human")
+        step = create_owned_step(store, "await-merge", step="await-merge", role="human")
         row = HierarchyRow(store.get_node(step), 0)
 
         now = "2026-01-01T09:12:00"
@@ -293,7 +294,7 @@ class TestTurnsCostTimeWiring(unittest.TestCase):
     def test_a_non_human_step_time_cell_resolves_wall_and_active(self):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
-        step = store.create_step("building", step="build", role="agent")
+        step = create_owned_step(store, "building", step="build", role="agent")
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 600)
         row = HierarchyRow(store.get_node(step), 0)
@@ -307,7 +308,7 @@ class TestTurnsCostTimeWiring(unittest.TestCase):
 class TestStackedShape(unittest.TestCase):
     def test_returns_a_one_tuple_containing_the_stacked_cell(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         cells = hierarchy_row_cells(
@@ -318,7 +319,7 @@ class TestStackedShape(unittest.TestCase):
 
     def test_the_stacked_cells_content_includes_the_composed_label(self):
         store = FakeStore()
-        step = store.create_step("s", step="build", role="agent")
+        step = create_owned_step(store, "s", step="build", role="agent")
         row = HierarchyRow(store.get_node(step), 0)
 
         cells = hierarchy_row_cells(

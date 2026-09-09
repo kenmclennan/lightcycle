@@ -5,6 +5,7 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 METAS = {
     "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -71,7 +72,7 @@ class TestDefaultPin(unittest.TestCase):
 class TestNodeHelpersTolerateWorkflowLessNodes(unittest.TestCase):
     def _svc_node(self):
         store = FakeStore()
-        step = store.create_step("audit: x", step="audit", role="agent")
+        step = create_owned_step(store, "audit: x", step="audit", role="agent")
         svc = FlowService(FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
         return svc, store.get_node(step)
 
@@ -171,7 +172,7 @@ class TestFlowService(unittest.TestCase):
 
     def test_ready_roles_from_store(self):
         store = FakeStore()
-        store.create_step("b", step="build", role="agent")
+        create_owned_step(store, "b", step="build", role="agent")
         self.assertIn("agent", svc(store).ready_roles())
 
 
@@ -212,14 +213,14 @@ class TestDisplayFor(unittest.TestCase):
         store = FakeStore()
         service = FlowService(
             FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
-        step = store.get_node(store.create_step("audit: x", step=AUDIT_STEP, role="agent"))
+        step = store.get_node(create_owned_step(store, "audit: x", step=AUDIT_STEP, role="agent"))
         self.assertEqual(service.display_for(step), "Auditing recent work")
 
     def test_is_the_engine_phrase_for_a_workflow_less_findings_node_without_a_crash(self):
         store = FakeStore()
         service = FlowService(
             FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
-        step = store.get_node(store.create_step("findings: x", step=FINDINGS_STEP, role="human"))
+        step = store.get_node(create_owned_step(store, "findings: x", step=FINDINGS_STEP, role="human"))
         self.assertEqual(service.display_for(step), "Review the findings")
 
 
@@ -228,8 +229,8 @@ class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
         store = FakeStore()
         fs = FakeFs(METAS)
         service = FlowService(fs, store)
-        build_node = store.get_node(store.create_step("a", step="build", role="agent"))
-        review_node = store.get_node(store.create_step("b", step="review", role="agent"))
+        build_node = store.get_node(create_owned_step(store, "a", step="build", role="agent"))
+        review_node = store.get_node(create_owned_step(store, "b", step="review", role="agent"))
 
         service.flow_for(build_node)
         service.flow_for(review_node)
@@ -240,7 +241,7 @@ class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
     def test_a_fresh_flow_service_instance_re_resolves(self):
         store = FakeStore()
         fs = FakeFs(METAS)
-        node = store.get_node(store.create_step("a", step="build", role="agent"))
+        node = store.get_node(create_owned_step(store, "a", step="build", role="agent"))
 
         FlowService(fs, store).flow_for(node)
         FlowService(fs, store).flow_for(node)

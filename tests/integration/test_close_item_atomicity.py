@@ -3,12 +3,13 @@ import unittest
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.work import State
 from tests.support.sqlite_store_factory import make_sqlite_store
+from tests.support.step_factory import create_owned_step
 
 
 class TestCloseItemAtomicity(unittest.TestCase):
     def test_partial_failure_leaves_store_in_its_pre_call_state(self):
         store = make_sqlite_store()
-        backlog = store.create_step("a backlog item", role="human")
+        backlog = create_owned_step(store, "a backlog item", role="human")
         item = store.create_item("my item", "a description")
         child = store.create_step("build: x", step="build", role="agent", parent=item)
         store.add_artifact(item, "resolves", backlog, internal=True)

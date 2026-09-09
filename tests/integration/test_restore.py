@@ -10,6 +10,7 @@ import lightcycle.cli as cli
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.config import Config
 from lightcycle.container import Container
+from tests.support.step_factory import create_owned_step
 
 
 def call(fn, *args):
@@ -72,9 +73,9 @@ class TestRestoreCommand(unittest.TestCase):
         self.assertEqual(self._store_bytes(), before)
 
     def test_force_with_lock_free_restores_snapshot_contents(self):
-        tid = self.container.store.create_step("t", role="agent")
+        tid = create_owned_step(self.container.store, "t", role="agent")
         self.container.backup.create_snapshot(time.time())
-        later_tid = self.container.store.create_step("added-after-snapshot", role="agent")
+        later_tid = create_owned_step(self.container.store, "added-after-snapshot", role="agent")
         rc, out, err = call(cli.cmd_restore, "--force")
         self.assertEqual(rc, 0, err)
         self.assertFalse(Path(self.home, ".lc-run.pid").exists())

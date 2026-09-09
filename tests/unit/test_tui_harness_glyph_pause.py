@@ -8,6 +8,7 @@ from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import row_key, launch, make_test_container
+from tests.support.step_factory import create_owned_step
 
 _TICK_INTERVAL = 1 / ACTIVE_GLYPH_TICKS_PER_SECOND
 
@@ -15,7 +16,7 @@ _TICK_INTERVAL = 1 / ACTIVE_GLYPH_TICKS_PER_SECOND
 class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
     def test_app_level_timer_does_not_tick_between_pause_and_the_next_stimulus(self):
         store = FakeStore()
-        tid = store.create_step("active item", step="build", role="agent")
+        tid = create_owned_step(store, "active item", step="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
 

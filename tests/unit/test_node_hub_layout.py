@@ -2,6 +2,7 @@ from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 from lightcycle.adapters.tui.footer import DashboardFooter
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, HubHeader, HubTabStrip, NodeHubScreen
+from tests.support.step_factory import create_owned_step
 
 
 def _rendered_row_text(session, widget):
@@ -51,7 +52,7 @@ def test_hub_footer_status_and_shortcut_lines_are_painted():
 
 def test_priority_list_footer_status_and_shortcut_lines_are_painted():
     store = FakeStore()
-    store.create_step("a", step="build", role="agent")
+    create_owned_step(store, "a", step="build", role="agent")
     session = launch(make_test_container(store=store), size=(100, 24))
     try:
         footer = session.app.screen.query_one(DashboardFooter)

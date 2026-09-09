@@ -17,6 +17,7 @@ from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import NodeNotFoundError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 METAS = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
 
@@ -168,7 +169,7 @@ class TestEditNode(unittest.TestCase):
 
     def test_edits_a_steps_title(self):
         s = FakeStore()
-        tid = s.create_step("old title", role="human")
+        tid = create_owned_step(s, "old title", role="human")
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title"))
         self.assertEqual(s.get_step(tid).title, "new title")
 
@@ -182,13 +183,13 @@ class TestEditNode(unittest.TestCase):
 
     def test_a_description_does_not_land_on_a_step(self):
         s = FakeStore()
-        tid = s.create_step("a step", role="human")
+        tid = create_owned_step(s, "a step", role="human")
         EditNodeUseCase(s).execute(EditNodeInput(step=tid, description="nope"))
         self.assertFalse(hasattr(s.get_step(tid), "description"))
 
     def test_writes_label_and_notes_itself(self):
         s = FakeStore()
-        tid = s.create_step("a step", role="human")
+        tid = create_owned_step(s, "a step", role="human")
         EditNodeUseCase(s).execute(
             EditNodeInput(step=tid, label="some-label", notes="some notes")
         )
@@ -197,7 +198,7 @@ class TestEditNode(unittest.TestCase):
 
     def test_a_failing_third_write_leaves_the_earlier_writes_unapplied(self):
         s = FakeStore()
-        tid = s.create_step("a step", role="human")
+        tid = create_owned_step(s, "a step", role="human")
 
         def raising_set_notes(tid, text):
             raise RuntimeError("boom")
@@ -590,7 +591,7 @@ class TestCloseItem(unittest.TestCase):
 
     def test_closes_linked_backlog_item_on_item_close(self):
         s = FakeStore()
-        backlog = s.create_step("a backlog item", role="human")
+        backlog = create_owned_step(s, "a backlog item", role="human")
         sid = s.create_item("st", "a description")
         s.add_artifact(sid, "resolves", backlog)
         wt = FakeWorktrees()
@@ -619,8 +620,8 @@ class TestCloseItem(unittest.TestCase):
 class TestCloseItemBacklogResolution(unittest.TestCase):
     def test_closes_every_linked_backlog_item_on_item_close(self):
         s = FakeStore()
-        b1 = s.create_step("a backlog item", role="human")
-        b2 = s.create_step("another backlog item", role="human")
+        b1 = create_owned_step(s, "a backlog item", role="human")
+        b2 = create_owned_step(s, "another backlog item", role="human")
         item = s.create_item("my item", "a description")
         s.add_artifact(item, "resolves", b1)
         s.add_artifact(item, "resolves", b2)
@@ -633,7 +634,7 @@ class TestCloseItemBacklogResolution(unittest.TestCase):
 
     def test_already_done_backlog_item_is_left_alone(self):
         s = FakeStore()
-        backlog = s.create_step("a backlog item", role="human")
+        backlog = create_owned_step(s, "a backlog item", role="human")
         item = s.create_item("my item", "a description")
         s.add_artifact(item, "resolves", backlog)
         s.close(backlog, "already handled")

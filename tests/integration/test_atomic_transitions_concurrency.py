@@ -6,6 +6,7 @@ import unittest
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.config import Config
 from lightcycle.domain.work import NodeSpec, State
+from tests.support.step_factory import create_owned_step
 
 _CTX = multiprocessing.get_context("fork")
 
@@ -31,7 +32,7 @@ def _successor_spec(step_id, item=None):
 
 def _seed_claimed(root, spawn_id):
     store = _store_for(root, spawn_id)
-    store.create_step("build: x", step="build", role="agent")
+    create_owned_step(store, "build: x", step="build", role="agent")
     step_id = store.claim_ready("agent").id
     store.disconnect()
     return step_id
@@ -64,7 +65,7 @@ class TestAtomicClaim(unittest.TestCase):
     def test_concurrent_claim_yields_exactly_one_winner(self):
         root = _make_root()
         seed = _store_for(root)
-        step_id = seed.create_step("build: x", step="build", role="agent")
+        step_id = create_owned_step(seed, "build: x", step="build", role="agent")
         seed.disconnect()
 
         n = 8

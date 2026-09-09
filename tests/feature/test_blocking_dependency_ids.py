@@ -3,6 +3,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.domain.work import Lane, State, lane_for
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 scenarios("blocking-dependency-ids.feature")
 
@@ -13,8 +14,12 @@ def ctx():
 
 
 def _create_step(ctx, name, deps=None, role=None, parent=None):
-    tid = ctx["store"].create_step(
-        name, role=role, deps=[ctx["ids"][d] for d in (deps or [])], parent=parent
+    tid = create_owned_step(
+        ctx["store"],
+        name,
+        role=role,
+        deps=[ctx["ids"][d] for d in (deps or [])],
+        parent=parent,
     )
     ctx["ids"][name] = tid
     return tid

@@ -6,6 +6,7 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 def _flow(store, requires=None):
@@ -132,7 +133,7 @@ class TestActivateItem(unittest.TestCase):
 
     def test_deps_are_recorded_on_the_entry_step_and_block_it_from_ready(self):
         s = FakeStore()
-        blocker = s.create_step("blocker", role="agent")
+        blocker = create_owned_step(s, "blocker", role="agent")
         item = s.create_item("add refunds", "a description")
         resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard", deps=[blocker])
@@ -142,7 +143,7 @@ class TestActivateItem(unittest.TestCase):
 
     def test_closing_the_dep_makes_the_entry_step_ready(self):
         s = FakeStore()
-        blocker = s.create_step("blocker", role="agent")
+        blocker = create_owned_step(s, "blocker", role="agent")
         item = s.create_item("add refunds", "a description")
         resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard", deps=[blocker])
