@@ -68,8 +68,6 @@ class TestNullWorkers(unittest.TestCase):
         with self.assertRaises(AssertionError):
             workers.workers_state()
         with self.assertRaises(AssertionError):
-            workers.write_workers({})
-        with self.assertRaises(AssertionError):
             workers.pid_alive(1)
         with self.assertRaises(AssertionError):
             workers.reap()

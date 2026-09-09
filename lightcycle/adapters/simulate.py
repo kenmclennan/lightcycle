@@ -192,9 +192,6 @@ class NullWorkers(WorkersPort):
     def workers_state(self):
         self._refuse("workers_state")
 
-    def write_workers(self, workers):
-        self._refuse("write_workers")
-
     def pid_alive(self, pid, started=None):
         self._refuse("pid_alive")
 

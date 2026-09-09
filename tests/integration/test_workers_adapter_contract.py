@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 
+from lightcycle.adapters import workers as wk
 from lightcycle.adapters.workers import WorkersAdapter
 from lightcycle.config import Config
 from tests.support.workers_contract import WorkersContractBase
@@ -36,11 +37,14 @@ class TestWorkersAdapterContract(WorkersContractBase, unittest.TestCase):
     def make_workers(self):
         config = Config(environ={"LC_HOME": self._root})
         w = WorkersAdapter(config)
-        w.write_workers([
+        self._seed(w, [
             {"spawnid": "_alive_seed", "pid": self._alive_proc.pid, "step": None},
             {"spawnid": "_dead_seed", "pid": self._dead_pid, "step": None},
         ])
         return w
+
+    def _seed(self, w, workers):
+        wk.write_workers(self._root, workers)
 
 
 if __name__ == "__main__":

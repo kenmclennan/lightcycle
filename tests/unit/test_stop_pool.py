@@ -38,10 +38,10 @@ class TestStopPool(unittest.TestCase):
         step = store.create_step("build: x", step="build", role="agent", parent=item)
         store.assign(step, "spawn-1")
         store.update_state(step, State.RUNNING)
-        workers = FakeWorkers(alive_pids=(4242,))
-        workers.write_workers([
-            {"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}
-        ])
+        workers = FakeWorkers(
+            alive_pids=(4242,),
+            workers=[{"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}],
+        )
         git = _Git(dirty=dirty)
         sweep = SweepUseCase(store, workers, worktrees=_Worktrees(), git=git, fs=None)
         return store, workers, git, step, StopPoolUseCase(workers, sweep)
@@ -80,10 +80,11 @@ class TestStopPool(unittest.TestCase):
         step = store.create_step("build: x", step="build", role="agent", parent=item)
         store.assign(step, "spawn-1")
         store.update_state(step, State.RUNNING)
-        workers = FakeWorkers(alive_pids=(4242,), delayed_death=True)
-        workers.write_workers([
-            {"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}
-        ])
+        workers = FakeWorkers(
+            alive_pids=(4242,),
+            delayed_death=True,
+            workers=[{"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}],
+        )
         sweep = SweepUseCase(store, workers, worktrees=_Worktrees(), git=_Git(), fs=None)
         uc = StopPoolUseCase(workers, sweep, sleep=lambda s: None)
 

@@ -7,10 +7,6 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
-    def write_workers(self, workers):
-        pass
-
-    @abstractmethod
     def pid_alive(self, pid, started=None):
         pass
 

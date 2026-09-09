@@ -182,9 +182,6 @@ class WorkersAdapter(WorkersPort):
     def workers_state(self):
         return workers_state(self._config.data_root())
 
-    def write_workers(self, workers):
-        return write_workers(self._config.data_root(), workers)
-
     def pid_alive(self, pid, started=None):
         return worker_alive(pid, started)
 
