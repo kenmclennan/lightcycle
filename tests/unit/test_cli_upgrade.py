@@ -3,7 +3,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
-from lightcycle.application.setup import VenvBusyError
+from lightcycle.application.setup import ProcessListUnreadableError, VenvBusyError
 from lightcycle.cli import cmd_upgrade
 
 
@@ -54,6 +54,16 @@ class TestCmdUpgrade(unittest.TestCase):
                 rc = cmd_upgrade([]) or 0
         self.assertEqual(rc, 1)
         self.assertIn("/venv/bin/python -m lightcycle.pool", err.getvalue())
+
+    def test_refuses_distinctly_when_the_process_list_cannot_be_read(self):
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
+            fake_upgrade.side_effect = ProcessListUnreadableError("ps exited with status 1")
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = cmd_upgrade([]) or 0
+        self.assertEqual(rc, 1)
+        self.assertIn("could not check", err.getvalue())
+        self.assertNotIn("in use by other processes", err.getvalue())
 
 
 if __name__ == "__main__":

@@ -25,6 +25,10 @@ class VenvBusyError(Exception):
         super().__init__(format_holders_message(holders))
 
 
+class ProcessListUnreadableError(Exception):
+    pass
+
+
 def parse_process_list(text):
     processes = []
     for line in text.splitlines():
@@ -64,10 +68,10 @@ def list_processes():
         result = subprocess.run(
             ["ps", "-eo", "pid=,args="], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
         )
-    except OSError:
-        return ""
+    except OSError as e:
+        raise ProcessListUnreadableError(str(e)) from e
     if result.returncode != 0:
-        return ""
+        raise ProcessListUnreadableError("ps exited with status %d" % result.returncode)
     return result.stdout.decode()
 
 
