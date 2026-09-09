@@ -8,6 +8,7 @@ from lightcycle.domain.workflows.identity import (
     parse_selector,
     resolve_pin,
 )
+from lightcycle.ports.store import NodeNotFoundError
 
 
 class FlowService:
@@ -119,7 +120,7 @@ class FlowService:
         item_id = getattr(node, "item", None) or node.id
         try:
             return self._store.get_item(item_id)
-        except Exception:
+        except NodeNotFoundError:
             return None
 
     def workflow_for(self, step):

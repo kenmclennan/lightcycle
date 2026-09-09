@@ -5,6 +5,7 @@ from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.watched_steps import watched_step_ids
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.work import NodeQueue
+from lightcycle.ports.store import NodeNotFoundError
 
 _NO_FLOW = Flow({})
 
@@ -67,5 +68,5 @@ class InboxUseCase:
     def _item(self, item_id):
         try:
             return self._store.get_item(item_id)
-        except Exception:
+        except NodeNotFoundError:
             return None
