@@ -41,8 +41,31 @@ package = false
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F"]
+select = ["E", "F", "BLE001", "RUF013", "DTZ", "SIM115"]
 ignore = ["E501", "E741", "E702", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+# Layer policy (permanent, never part of the ratchet): BLE001 only applies to the
+# business-logic layers (application/, domain/) - see CLAUDE.md's architecture section.
+"lightcycle/adapters/**" = ["BLE001"]
+"lightcycle/cli.py" = ["BLE001", "SIM115"]
+"lightcycle/container.py" = ["BLE001"]
+"lightcycle/config.py" = ["BLE001"]
+"lightcycle/logrender.py" = ["BLE001"]
+"lightcycle/render.py" = ["BLE001"]
+"lightcycle/ports/**" = ["BLE001"]
+"lightcycle/__main__.py" = ["BLE001"]
+"tests/**" = ["BLE001", "RUF013", "DTZ", "SIM115"]
+
+# Baseline (temporary, shrinks as findings get fixed - see the CLAUDE.md ratchet paragraph).
+"lightcycle/application/services/flow.py" = ["BLE001"]
+"lightcycle/application/work/inbox.py" = ["BLE001"]
+"lightcycle/application/work/project_of.py" = ["BLE001"]
+"lightcycle/domain/workspace/branch.py" = ["RUF013"]
+"lightcycle/adapters/backup.py" = ["DTZ"]
+"lightcycle/adapters/sqlite_store.py" = ["DTZ"]
+"lightcycle/application/pool/hook_completions.py" = ["DTZ"]
+"lightcycle/adapters/spawner.py" = ["SIM115"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
