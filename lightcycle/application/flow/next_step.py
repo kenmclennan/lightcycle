@@ -1,3 +1,4 @@
+from lightcycle.domain.flow import consecutive_outcome_count
 from lightcycle.domain.work.node_id import node_id_key
 from lightcycle.domain.work.state import State
 
@@ -21,8 +22,7 @@ class NextStepResolver:
                 ),
                 key=lambda s: (s.created_at or "", node_id_key(s.id)),
             )
-            for s in history:
-                prior = prior + 1 if s.outcome == outcome else 0
+            prior = consecutive_outcome_count(history, outcome)
         return self._flow.effective_transition(transition, outcome, prior, name)
 
     def create(self, t, transition):

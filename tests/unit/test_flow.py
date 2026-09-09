@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.flow import Flow, Transition
+from lightcycle.domain.flow import Flow, Transition, consecutive_outcome_count, total_outcome_count
 from lightcycle.domain.flow.graph import parse_graph
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.factories import make_step
@@ -188,6 +188,20 @@ class TestHookSteps(unittest.TestCase):
             "alpha": {"model": "sonnet", "step": "aa-step", "on_deploy_green": True},
         }
         self.assertEqual(mkflow(metas).hook_steps(), ["aa-step", "zz-step"])
+
+
+class TestOutcomeCountRules(unittest.TestCase):
+    def _history(self):
+        return [
+            make_step(id="s-%d" % i, outcome=outcome)
+            for i, outcome in enumerate(["conflicted", "conflicted", "conflicted", "done", "conflicted"])
+        ]
+
+    def test_consecutive_outcome_count_resets_on_interruption(self):
+        self.assertEqual(consecutive_outcome_count(self._history(), "conflicted"), 1)
+
+    def test_total_outcome_count_ignores_interruption(self):
+        self.assertEqual(total_outcome_count(self._history(), "conflicted"), 4)
 
 
 class TestGraphTextFromMetasStepKey(unittest.TestCase):

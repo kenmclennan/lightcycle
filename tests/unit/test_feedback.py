@@ -117,6 +117,13 @@ class TestRetroItemScope(unittest.TestCase):
 
         self.assertEqual(resp.item_signals[0].signals, {})
 
+    def test_item_level_only_reflection_counts(self):
+        s = FakeStore()
+        item = s.create_item("item-level feedback only", "a description")
+        _add_reflection(s, item, "item-level feedback")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item))
+        self.assertEqual(resp.reflection_count, 1)
+
 
 class TestRetroSinceScope(unittest.TestCase):
     def test_since_aggregates_closed_tasks_across_stories(self):
@@ -270,6 +277,15 @@ class TestRetroPendingScope(unittest.TestCase):
         s.label_add(pid, "retroed")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
         self.assertEqual(resp.item_signals, [])
+
+    def test_pending_scope_includes_item_whose_only_reflection_is_item_level(self):
+        s = FakeStore()
+        item = s.create_item("item-level feedback only", "a description")
+        _add_reflection(s, item, "item-level feedback")
+        s.close(item, "done")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
+        self.assertEqual({row.item.id for row in resp.item_signals}, {item})
+        self.assertEqual(resp.reflection_count, 1)
 
     def test_pending_scope_never_resurfaces_a_retroed_pass_reflection_after_item_closes(self):
         s = FakeStore()

@@ -2555,18 +2555,16 @@ class TestReflect(unittest.TestCase):
         )
 
     def test_a_reflection_survives_all_the_way_to_what_the_retro_reads(self):
-        from lightcycle.application.feedback.retro import RetroUseCase
+        from lightcycle.application.feedback.retro import RetroInput, RetroUseCase
 
         sid, tid = self._file_story()
         call(_cli_mod.cmd_attach, tid, "reflection", "the spec was thin on errors")
         self.store.close(tid, "done")
         self.store.close(sid, "done")
 
-        reflections = RetroUseCase(self.store, _cli_mod._flow())._reflections_of(tid)
+        resp = RetroUseCase(self.store, _cli_mod._flow()).execute(RetroInput(subject=sid))
 
-        self.assertEqual(
-            [r.feedback for r in reflections], ["the spec was thin on errors"]
-        )
+        self.assertEqual([f.text for f in resp.feedback], ["the spec was thin on errors"])
 
     def test_reflect_multiple_calls_append(self):
         sid, tid = self._file_story()

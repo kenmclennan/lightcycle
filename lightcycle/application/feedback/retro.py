@@ -1,11 +1,11 @@
-import json
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from lightcycle.application.work.has_feedback import has_feedback
-from lightcycle.application.work.pending_reflections import pending_reflection_count
 from lightcycle.application.work.project_of import project_of
+from lightcycle.application.work.retroed_passes import retroed_pass_ids
 from lightcycle.domain import feedback as cfeedback
+from lightcycle.domain.feedback import parse_reflections, reflections_of
 from lightcycle.domain.work import Item
 
 
@@ -93,7 +93,7 @@ class RetroUseCase:
             ]
             refs = []
             for t in steps:
-                refs.extend(self._reflections_of(t.id))
+                refs.extend(parse_reflections(self._store.item_artifacts(t.id)))
             if not refs:
                 continue
             item = self._store.get_node(pass_record.item)
@@ -105,29 +105,18 @@ class RetroUseCase:
         return rows, all_refs
 
     def _collect_pending_item_row(self, item, signals_for):
-        retroed_passes = {
-            p.id for p in self._store.passes_of(item.id) if "retroed" in self._store.labels_of(p.id)
-        }
+        excluded = retroed_pass_ids(self._store, item.id)
         children = self._store.children(item.id)
-        steps = [c for c in children if c.type == "step" and c.pass_id not in retroed_passes]
-        refs = []
-        for t in steps:
-            refs.extend(self._reflections_of(t.id))
+        steps = [c for c in children if c.type == "step"]
+        step_pairs = [(s.pass_id, self._store.item_artifacts(s.id)) for s in steps]
+        artifacts = reflections_of(self._store.item_artifacts(item.id), step_pairs, excluded)
+        refs = parse_reflections(artifacts)
+        included_steps = [s for s in steps if s.pass_id not in excluded]
         row = ItemSignals(
-            item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
-            durations=self._durations_of(steps),
+            item=item, signals=signals_for(item).tally(included_steps), reflections=len(refs),
+            durations=self._durations_of(included_steps),
         )
         return row, refs
-
-    def _reflections_of(self, node_id):
-        out = []
-        for art in self._store.item_artifacts(node_id):
-            if art.type == "reflection":
-                try:
-                    out.append(cfeedback.Reflection.from_dict(json.loads(art.value)))
-                except (ValueError, KeyError):
-                    pass
-        return out
 
     def _durations_of(self, steps):
         result = {}
@@ -139,9 +128,9 @@ class RetroUseCase:
     def _collect_item_row(self, item, signals_for):
         children = self._store.children(item.id)
         steps = [c for c in children if c.type == "step"]
-        refs = []
-        for t in steps:
-            refs.extend(self._reflections_of(t.id))
+        step_pairs = [(s.pass_id, self._store.item_artifacts(s.id)) for s in steps]
+        artifacts = reflections_of(self._store.item_artifacts(item.id), step_pairs, set())
+        refs = parse_reflections(artifacts)
         row = ItemSignals(
             item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
             durations=self._durations_of(steps),
@@ -172,7 +161,7 @@ class RetroUseCase:
             for item_id, item_steps in item_groups.items():
                 refs = []
                 for t in item_steps:
-                    refs.extend(self._reflections_of(t.id))
+                    refs.extend(parse_reflections(self._store.item_artifacts(t.id)))
                 all_refs.extend(refs)
                 item = self._store.get_node(item_id)
                 rows.append(
@@ -182,7 +171,7 @@ class RetroUseCase:
                     )
                 )
             for step in orphan_steps:
-                all_refs.extend(self._reflections_of(step.id))
+                all_refs.extend(parse_reflections(self._store.item_artifacts(step.id)))
             label = "since:%s" % input.since
 
         elif input.project is not None:
@@ -202,9 +191,7 @@ class RetroUseCase:
                 all_refs.extend(refs)
             label = "last:%d" % input.last
 
-        reflection_count = (
-            pending_reflection_count(self._store) if input.pending else len(all_refs)
-        )
+        reflection_count = len(all_refs)
         feedback = [
             FeedbackItem(step=f["step"], text=f["feedback"])
             for f in cfeedback.Retro(all_refs).feedback()

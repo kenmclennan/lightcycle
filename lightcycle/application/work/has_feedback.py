@@ -1,8 +1,8 @@
+from lightcycle.application.work.retroed_passes import retroed_pass_ids
+from lightcycle.domain.feedback import reflections_of
+
+
 def has_feedback(store, item):
-    if any(a.type == "reflection" for a in store.item_artifacts(item.id)):
-        return True
-    return any(
-        a.type == "reflection"
-        for step in store.children(item.id) if step.type == "step"
-        for a in store.item_artifacts(step.id)
-    )
+    steps = [(s.pass_id, store.item_artifacts(s.id))
+             for s in store.children(item.id) if s.type == "step"]
+    return bool(reflections_of(store.item_artifacts(item.id), steps, retroed_pass_ids(store, item.id)))

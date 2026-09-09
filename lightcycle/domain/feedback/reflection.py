@@ -1,4 +1,5 @@
 import hashlib
+import json
 from dataclasses import dataclass
 
 
@@ -26,3 +27,24 @@ class Reflection:
 
     def as_dict(self) -> dict:
         return {"step": self.step, "feedback": self.feedback, "spec_hash": self.spec_hash}
+
+
+def parse_reflections(artifacts):
+    out = []
+    for a in artifacts:
+        if a.type != "reflection":
+            continue
+        try:
+            out.append(Reflection.from_dict(json.loads(a.value)))
+        except (ValueError, KeyError):
+            continue
+    return out
+
+
+def reflections_of(item_artifacts, steps, retroed_pass_ids):
+    out = [a for a in item_artifacts if a.type == "reflection"]
+    for pass_id, artifacts in steps:
+        if pass_id in retroed_pass_ids:
+            continue
+        out.extend(a for a in artifacts if a.type == "reflection")
+    return out
