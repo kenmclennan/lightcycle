@@ -6,6 +6,17 @@ SPECS_WORKSPACE = "specs"
 PROJECT_WORKSPACE = "project"
 
 
+def consecutive_outcome_count(history, outcome):
+    count = 0
+    for s in history:
+        count = count + 1 if s.outcome == outcome else 0
+    return count
+
+
+def total_outcome_count(history, outcome):
+    return sum(1 for s in history if s.outcome == outcome)
+
+
 class Flow:
     def __init__(self, steps, workspace_default="project", disposition=None):
         self._steps = steps

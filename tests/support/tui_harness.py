@@ -256,16 +256,20 @@ class TuiSession:
 
     def settle_backlog_filter(self):
         self.pause()
-        if self.app._backlog_filter_timer is not None:
-            self.app._backlog_filter_timer.stop()
-        self.run(self.app._on_backlog_filter_settled)
+        timer = self.app._backlog_filter_timer
+        if timer is not None:
+            timer.stop()
+            self.app._backlog_filter_timer = None
+            self.run(self.app._on_backlog_filter_settled)
         self.pause()
 
     def settle_done_filter(self):
         self.pause()
-        if self.app._done_filter_timer is not None:
-            self.app._done_filter_timer.stop()
-        self.run(self.app._on_done_filter_settled)
+        timer = self.app._done_filter_timer
+        if timer is not None:
+            timer.stop()
+            self.app._done_filter_timer = None
+            self.run(self.app._on_done_filter_settled)
         self.pause()
 
     def resize(self, width, height):

@@ -5,6 +5,7 @@ from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.domain.flow import total_outcome_count
 from lightcycle.domain.runs import RunState
 from lightcycle.domain.work import State, node_id_key
 from lightcycle.ports.github import ReadFailure
@@ -360,9 +361,9 @@ class MonitorPrsUseCase:
                             )
                         reworked.append(step.parent)
             if not advanced and conflict_outcome and self._github.is_conflicted(pr_value):
-                prior = sum(1 for t in self._store.steps_at_step(step.step)
-                            if t.parent == step.parent
-                            and t.state == State.DONE and t.outcome == conflict_outcome)
+                history = [t for t in self._store.steps_at_step(step.step)
+                           if t.parent == step.parent and t.state == State.DONE]
+                prior = total_outcome_count(history, conflict_outcome)
                 outcome = flow.pr_conflict_transition(step.step, conflict_outcome, prior)
                 self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
                 conflicted.append(step.parent)

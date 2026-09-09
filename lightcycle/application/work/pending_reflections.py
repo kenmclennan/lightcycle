@@ -1,18 +1,17 @@
+from lightcycle.application.work.retroed_passes import retroed_pass_ids
+from lightcycle.domain.feedback import reflections_of
+
+
 def item_reflection_count(store, item):
-    count = sum(1 for a in store.item_artifacts(item.id) if a.type == "reflection")
-    retroed_passes = {p.id for p in store.passes_of(item.id) if "retroed" in store.labels_of(p.id)}
-    for step in store.children(item.id):
-        if step.type != "step" or step.pass_id in retroed_passes:
-            continue
-        count += sum(1 for a in store.item_artifacts(step.id) if a.type == "reflection")
-    return count
+    steps = [(s.pass_id, store.item_artifacts(s.id))
+             for s in store.children(item.id) if s.type == "step"]
+    return len(reflections_of(store.item_artifacts(item.id), steps, retroed_pass_ids(store, item.id)))
 
 
 def pass_reflection_count(store, pass_record):
     steps = [s for s in store.children(pass_record.item) if s.pass_id == pass_record.id]
-    return sum(
-        1 for s in steps for a in store.item_artifacts(s.id) if a.type == "reflection"
-    )
+    step_pairs = [(s.pass_id, store.item_artifacts(s.id)) for s in steps]
+    return len(reflections_of([], step_pairs, set()))
 
 
 def pending_reflection_count(store):
