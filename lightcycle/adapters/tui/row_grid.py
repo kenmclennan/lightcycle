@@ -81,6 +81,17 @@ def render_row_budget(table, layout, num_columns):
     return row_budget_for(table, num_columns)
 
 
+def screen_row_budget_for(table, num_columns):
+    padding = 2 * table.cell_padding * num_columns
+    return table.screen.size.width - table.scrollbar_gutter.width - padding
+
+
+def render_screen_row_budget(table, layout, num_columns):
+    if layout.stacked:
+        return screen_row_budget_for(table, 1)
+    return screen_row_budget_for(table, num_columns)
+
+
 def floor_message(layout, table, num_columns):
     padding = 2 * table.cell_padding * num_columns
     chrome = table.screen.outer_size.width - table.screen.size.width

@@ -8,6 +8,7 @@ from textual.widgets import DataTable, Input, Static
 
 from lightcycle import __version__
 from lightcycle.adapters.tui.app import (
+    BACKLOG_COLUMNS,
     DATA_COLUMNS,
     FILTER_DEBOUNCE_SECONDS,
     FILTER_ROW_COUNT_GAP,
@@ -1198,15 +1199,18 @@ class TestBacklogTableColumnWidth(unittest.TestCase):
         rendered = "".join(segment.text for segment in table.render_line(0))
         self.assertIn("a reasonably long backlog title", rendered)
 
-    def test_title_width_defers_instead_of_clamping_to_one_while_hidden(self):
+    def test_title_width_builds_from_the_real_screen_width_immediately(self):
         store = FakeStore()
         session = launch(make_test_container(store=store))
         self.addCleanup(session.close)
 
+        view = session.app.query_one(BacklogView)
         table = session.app.query_one(BacklogTable)
 
         self.assertEqual(table.size.width, 0)
-        self.assertEqual(len(table.columns), 0)
+        self.assertEqual(len(table.columns), len(BACKLOG_COLUMNS))
+        layout = view._layout(table)
+        self.assertEqual(table.columns.get("title").width, layout.flexible_width)
 
 
 class TestBacklogProjectColumn(unittest.TestCase):
@@ -1974,6 +1978,18 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
             "".join(seg.text for seg in strips[y]) for y in range(region.y, region.y + region.height)
         )
         self.assertIn("Widen the terminal", painted)
+
+    def test_resize_wide_clears_the_floor_and_renders_the_table(self):
+        session = self._launch()
+        self.assertTrue(session.app._priority_floor)
+
+        session.resize(220, 24)
+
+        table = session.app.query_one(PriorityTable)
+        floor_static = session.app.query_one("#priority-list-floor")
+        self.assertTrue(table.display)
+        self.assertEqual(table.row_count, len(session.app._last_priority_rows))
+        self.assertFalse(floor_static.display)
 
 
 def _launch_done(store, **kwargs):
