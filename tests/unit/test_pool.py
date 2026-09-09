@@ -16,10 +16,12 @@ from lightcycle.application.pool import (
     TickInput,
     TickUseCase,
 )
+from lightcycle.application.pool.sweep import SweepResponse
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.pool import Breaker, SpinLedger
 from lightcycle.ports.git import GitReadError
+from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
@@ -27,7 +29,9 @@ from tests.support.step_factory import create_owned_step
 
 
 class FakeWorkers:
-    def __init__(self, workers=None, alive_pids=(), pruned=0, log_mtimes=None):
+    def __init__(self, workers=None, alive_pids=(), pruned=0, log_mtimes=None,
+                 raise_workers_state=False, raise_prune_workers=False,
+                 workers_state_raise_after=None):
         self._workers = workers or []
         self._alive = set(alive_pids)
         self._pruned = pruned
@@ -36,8 +40,20 @@ class FakeWorkers:
         self.reaped = 0
         self.calls = []
         self.checked = []
+        self._raise_workers_state = raise_workers_state
+        self._raise_prune_workers = raise_prune_workers
+        self._workers_state_raise_after = workers_state_raise_after
+        self._workers_state_calls = 0
 
     def workers_state(self):
+        self._workers_state_calls += 1
+        if self._raise_workers_state:
+            raise RegistryUnreadable("boom")
+        if (
+            self._workers_state_raise_after is not None
+            and self._workers_state_calls > self._workers_state_raise_after
+        ):
+            raise RegistryUnreadable("boom")
         return self._workers
 
     def pid_alive(self, pid, started=None):
@@ -52,6 +68,9 @@ class FakeWorkers:
         self.killed.append(pid)
 
     def prune_workers(self):
+        if self._raise_prune_workers:
+            raise RegistryUnreadable("boom")
+        self.workers_state()
         return self._pruned
 
     def mark_checked(self, spawnid):
@@ -284,6 +303,31 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.pruned, 2)
         self.assertEqual(s.get_node(orphan).state, "queued")
         self.assertEqual(s.get_node(held).state, "running")
+
+    def test_reclaims_no_step_when_the_registry_is_unreadable(self):
+        s = FakeStore()
+        held = create_owned_step(s, "h", step="build", role="agent")
+        s.update_state(held, "in_progress")
+        s.assign(held, "live-sp")
+        workers = FakeWorkers(raise_workers_state=True)
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(result, SweepResponse(swept=[], killed=[], pruned=0))
+        self.assertEqual(s.get_node(held).state, "running")
+
+    def test_second_registry_read_failing_during_prune_still_reports_the_rest(self):
+        s = FakeStore()
+        orphan = create_owned_step(s, "o", step="build", role="agent")
+        s.update_state(orphan, "in_progress")
+        s.assign(orphan, "dead-sp")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "zombie-sp", "pid": 222, "step": None, "started": 100}],
+            alive_pids={222},
+            workers_state_raise_after=1,
+        )
+        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(result.swept, [orphan])
+        self.assertEqual(result.killed, ["zombie-sp"])
+        self.assertEqual(result.pruned, 0)
 
     def test_kills_and_prunes_a_live_past_boot_worker_owning_no_task(self):
         s = FakeStore()
@@ -822,6 +866,23 @@ class TestTick(unittest.TestCase):
         ).execute(TickInput(now=1000.0))
         self.assertEqual(result.spawned, [])
         self.assertEqual(result.free_slots, 3)
+
+    def test_no_spawn_when_the_registry_is_unreadable(self):
+        s = FakeStore()
+        create_owned_step(s, "b1", step="build", role="agent")
+        spawner = FakeSpawner()
+        workers = FakeWorkers(raise_workers_state=True)
+        backup_gate = FakeBackupGate(
+            BackupResponse(created="store-1000.db.gz", pruned=["store-1.db.gz"])
+        )
+        result = TickUseCase(
+            s, workers, spawner, FakeConfig(max_agents=4), backup_gate=backup_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.spawned, [])
+        self.assertEqual(spawner.spawned, [])
+        self.assertEqual(result.free_slots, 0)
+        self.assertEqual(result.backed_up, "store-1000.db.gz")
+        self.assertEqual(result.backup_pruned, ["store-1.db.gz"])
 
     def test_breaker_half_open_spawns_exactly_one_probe(self):
         s = FakeStore()

@@ -431,6 +431,23 @@ class TestClaim(unittest.TestCase):
         call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(self.store.get_node(b).claimed_by, "spawn-xyz")
 
+    def test_corrupt_registry_exits_one_with_a_clean_message(self):
+        create_owned_step(self.store, "build: y", step="build", role="agent")
+        cfg = write_config(projects=self.root, specs=self.root)
+        inject_container(
+            self, store=self.store, home=self.root, config_path=cfg,
+            extra_env={"LC_SPAWNID": "spawn-xyz"},
+        )
+        os.environ["LC_SPAWNID"] = "spawn-xyz"
+        self.addCleanup(os.environ.pop, "LC_SPAWNID", None)
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        (Path(self.root) / "logs" / "workers.json").write_text("{not valid json")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("warning: could not read worker registry", err)
+        self.assertLessEqual(len(err.strip().splitlines()), 2)
+
 
 class TestFlow(unittest.TestCase):
     def setUp(self):
@@ -664,6 +681,14 @@ class TestPs(unittest.TestCase):
         rows = json.loads(r.stdout)
         self.assertEqual(len(rows), 2)
         self.assertEqual({w["role"] for w in rows}, {"coder", "reviewer"})
+
+    def test_corrupt_registry_exits_one_with_a_clean_message(self):
+        (Path(self.root) / "logs" / "workers.json").write_text("{not valid json")
+        r = self._run_ps()
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn("warning: could not read worker registry", r.stderr)
+        self.assertLessEqual(len(r.stderr.strip().splitlines()), 2)
 
 
 class TestRun(unittest.TestCase):
@@ -1564,6 +1589,17 @@ class TestTrace(unittest.TestCase):
         self.assertIn("artifact pr [spec]: https://github.com/x/y/pull/1", out2)
         self.assertIn("artifact pr [code]: https://github.com/x/y/pull/2", out2)
 
+    def test_corrupt_registry_exits_one_with_a_clean_message(self):
+        rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
+        sid = out.strip()
+        (Path(self.root) / "logs").mkdir(exist_ok=True)
+        (Path(self.root) / "logs" / "workers.json").write_text("{not valid json")
+        rc2, out2, err2 = call(_cli_mod.cmd_trace, sid)
+        self.assertEqual(rc2, 1)
+        self.assertNotIn("Traceback", err2)
+        self.assertIn("warning: could not read worker registry", err2)
+        self.assertLessEqual(len(err2.strip().splitlines()), 2)
+
 
 class TestAgentFrontmatter(unittest.TestCase):
     def setUp(self):
@@ -2459,6 +2495,14 @@ class TestLogRender(unittest.TestCase):
         self.assertIn("$ lc claim coder", out)
         self.assertIn("done; banner fixed", out)
         self.assertNotIn('"type"', out)
+
+    def test_corrupt_registry_exits_one_with_a_clean_message(self):
+        (Path(self.root) / "logs" / "workers.json").write_text("{not valid json")
+        rc, out, err = call(_cli_mod.cmd_logs, "coder")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("warning: could not read worker registry", err)
+        self.assertLessEqual(len(err.strip().splitlines()), 2)
 
 
 class TestInboxBacklog(unittest.TestCase):

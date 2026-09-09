@@ -15,6 +15,7 @@ from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
 from lightcycle.container import Container
 from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
+from lightcycle.ports.workers import RegistryUnreadable
 
 
 class SessionError(Exception):
@@ -80,7 +81,11 @@ def dispatch_event(d, line, policy, counters, lock):
 
 
 def has_open_step(root, spawnid):
-    for e in workers_state(root):
+    try:
+        entries = workers_state(root)
+    except RegistryUnreadable:
+        return True
+    for e in entries:
         if e.get("spawnid") == spawnid:
             return e.get("step") is not None
     return False

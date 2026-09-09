@@ -2,6 +2,7 @@ import json
 import unittest
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
@@ -51,14 +52,17 @@ class RecordingFakeFs(FakeFs):
 
 
 class FakeWorkers:
-    def __init__(self, workers=None, alive_pids=(), log_mtimes=None):
+    def __init__(self, workers=None, alive_pids=(), log_mtimes=None, raise_workers_state=False):
         self._workers = workers or []
         self._alive = set(alive_pids)
         self._log_mtimes = log_mtimes or {}
         self.killed = []
         self.checked = []
+        self._raise_workers_state = raise_workers_state
 
     def workers_state(self):
+        if self._raise_workers_state:
+            raise RegistryUnreadable("boom")
         return self._workers
 
     def pid_alive(self, pid, started=None):
@@ -128,6 +132,21 @@ class TestBreakerGateUseCase(unittest.TestCase):
         self.assertFalse(result.opened)
         self.assertEqual(workers.killed, [])
         self.assertEqual(workers.checked, ["sp-1"])
+
+    def test_registry_unreadable_no_ops_without_raising(self):
+        workers = FakeWorkers(raise_workers_state=True)
+        breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
+        result = BreakerGateUseCase(workers, FakeFs(files={}), breaker_port, FakeConfig()).execute(
+            now=100
+        )
+        self.assertEqual(result.breaker.reset_at, 500)
+        self.assertFalse(result.opened)
+        self.assertFalse(result.closed)
+        self.assertFalse(result.rearmed)
+        self.assertEqual(result.killed, [])
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(workers.checked, [])
+        self.assertEqual(breaker_port.load(), {"open": True, "reset_at": 500})
 
     def test_rejected_signal_opens_the_breaker_and_kills_live_workers(self):
         workers = FakeWorkers(

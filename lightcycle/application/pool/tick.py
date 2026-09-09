@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple
 
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.domain.pool import Breaker, PoolPlan, ReadyQueue, WorkerPool
+from lightcycle.ports.workers import RegistryUnreadable
 
 _ACTIVE_ACCRUAL_CAP_TICKS = 3
 
@@ -83,18 +84,24 @@ class TickUseCase:
         swept = self._sweep.execute(
             input.now, self._config.max_boot_seconds(), self._config.stall_seconds()
         )
-        pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
-        covered = pool.covered_steps(probe)
         max_agents = self._config.max_agents()
-        slots = pool.free_slots(max_agents, probe)
-        alive_count = max_agents - slots
+        try:
+            pool = WorkerPool.from_state(self._workers.workers_state())
+            covered = pool.covered_steps(probe)
+            slots = pool.free_slots(max_agents, probe)
+            alive_count = max_agents - slots
+            inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
+        except RegistryUnreadable:
+            covered = set()
+            slots = 0
+            alive_count = max_agents
+            inflight_dict = {}
         cap = breaker.spawn_cap(input.now, alive_count)
         if cap is not None:
             slots = min(slots, cap)
         if breaker_result and breaker_result.spin_open:
             slots = min(slots, 1)
-        inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
         inflight_total = sum(inflight_dict.values())
         ready_roles = ReadyQueue(self._store.ready_steps()).roles()
         ready_count = len(ready_roles)

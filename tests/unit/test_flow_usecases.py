@@ -23,6 +23,7 @@ from lightcycle.application.flow import (
 )
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State
+from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
@@ -107,15 +108,21 @@ class FakeWorktrees:
 
 
 class FakeWorkers:
-    def __init__(self, assigned=None):
+    def __init__(self, assigned=None, raise_on_step_for=False, raise_on_set_step=False):
         self.stamped = []
         self._assigned = dict(assigned or {})
+        self._raise_on_step_for = raise_on_step_for
+        self._raise_on_set_step = raise_on_set_step
 
     def set_step(self, spawnid, step):
+        if self._raise_on_set_step:
+            raise RegistryUnreadable("boom")
         self.stamped.append((spawnid, step))
         self._assigned[spawnid] = step
 
     def step_for(self, spawnid):
+        if self._raise_on_step_for:
+            raise RegistryUnreadable("boom")
         return self._assigned.get(spawnid)
 
 
@@ -940,6 +947,29 @@ class TestClaimTask(unittest.TestCase):
             s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
         ).execute(ClaimInput(role="agent"))
         self.assertEqual(len(workers.stamped), 1)
+
+    def test_unreadable_registry_on_step_for_propagates_without_claiming(self):
+        s = FakeStore(config=FakeConfig(spawn="sp1"))
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        workers = FakeWorkers(raise_on_step_for=True)
+        uc = ClaimStepUseCase(
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+        )
+        with self.assertRaises(RegistryUnreadable):
+            uc.execute(ClaimInput(role="agent"))
+        self.assertEqual(s.get_node(bid).state, "queued")
+
+    def test_unreadable_registry_on_set_step_reclaims_the_step(self):
+        s = FakeStore(config=FakeConfig(spawn="sp1"))
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        workers = FakeWorkers(raise_on_set_step=True)
+        uc = ClaimStepUseCase(
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+        )
+        with self.assertRaises(RegistryUnreadable):
+            uc.execute(ClaimInput(role="agent"))
+        self.assertEqual(s.get_node(bid).state, "queued")
+        self.assertFalse(s.get_node(bid).claimed_by)
 
     def test_missing_required_input_routes_to_human(self):
         s = FakeStore()

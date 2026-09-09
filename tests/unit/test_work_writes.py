@@ -15,6 +15,7 @@ from lightcycle.application.work import (
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import NodeNotFoundError
+from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -121,6 +122,11 @@ class FakeWorkersForRemove:
 
     def pid_alive(self, pid, started=None):
         return pid in self._alive
+
+
+class UnreadableWorkersForRemove:
+    def workers_state(self):
+        raise RegistryUnreadable("boom")
 
 
 class FakeGitForRemove:
@@ -731,6 +737,20 @@ class TestRemoveNode(unittest.TestCase):
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertIn(step, str(ctx.exception))
         self.assertEqual(s.get_node(item).id, item)
+
+    def test_refuses_when_worker_registry_is_unreadable(self):
+        s = FakeStore()
+        item = s.create_item("feature", "a description")
+        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        workers = UnreadableWorkersForRemove()
+        wt = FakeWorktreesForRemove()
+        git = FakeGitForRemove()
+        with self.assertRaises(UseCaseError) as ctx:
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertIn(item, str(ctx.exception))
+        self.assertEqual(wt.removed, [])
+        self.assertEqual(s.get_node(item).id, item)
+        self.assertEqual(s.get_node(step).id, step)
 
     def test_refuses_when_worktree_is_dirty(self):
         s = FakeStore()

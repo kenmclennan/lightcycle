@@ -8,6 +8,7 @@ import uuid
 from lightcycle.adapters.workers import process_start_time, register_worker, set_pid_started
 from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.ports.spawner import SpawnerPort
+from lightcycle.ports.workers import RegistryUnreadable
 
 
 def capture_pid_started(proc, get_start=process_start_time, sleep=time.sleep, attempts=5, interval=0.05):
@@ -39,18 +40,26 @@ def spawn_worker(config, role):
         proc = subprocess.Popen(
             cmd, stdout=logf, stderr=logf, cwd=root, env=env, start_new_session=True
         )
-    register_worker(
-        root,
-        {
-            "spawnid": spawnid,
-            "role": role,
-            "pid": proc.pid,
-            "pid_started": None,
-            "log": log,
-            "step": None,
-            "started": time.time(),
-        },
-    )
+    try:
+        register_worker(
+            root,
+            {
+                "spawnid": spawnid,
+                "role": role,
+                "pid": proc.pid,
+                "pid_started": None,
+                "log": log,
+                "step": None,
+                "started": time.time(),
+            },
+        )
+    except RegistryUnreadable:
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+        logf.close()
+        return None
     pid_started = capture_pid_started(proc)
     if pid_started is None and proc.poll() is not None:
         return None

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.ports.git import GitReadError
+from lightcycle.ports.workers import RegistryUnreadable
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,13 @@ class RemoveNodeUseCase:
         step_ids = {c.id for c in children if c.type == "step"}
         if node.type == "step":
             step_ids.add(node.id)
-        live = self._live_step(step_ids)
+        try:
+            live = self._live_step(step_ids)
+        except RegistryUnreadable as e:
+            raise UseCaseError(
+                "refusing to delete %s: could not verify no live worker holds a claimed step "
+                "- %s" % (node.id, e)
+            )
         if live is not None:
             raise UseCaseError(
                 "refusing to delete %s: step %s is claimed by a live worker "

@@ -1,5 +1,6 @@
 from lightcycle.domain.pool import WorkerPool, parse_attribution_chunk, price_tokens
 from lightcycle.ports.store import NodeNotFoundError
+from lightcycle.ports.workers import RegistryUnreadable
 
 MAX_ACCRUAL_READ_BYTES = 5_000_000
 
@@ -13,7 +14,10 @@ class LiveUsageAccrualUseCase:
 
     def execute(self, now):
         rates = self._config.usage_pricing()
-        pool = WorkerPool.from_state(self._workers.workers_state())
+        try:
+            pool = WorkerPool.from_state(self._workers.workers_state())
+        except RegistryUnreadable:
+            return
         for w in pool.alive(self._workers.pid_alive):
             if not w.step or not w.spawnid:
                 continue
