@@ -185,6 +185,17 @@ class TestDuration(unittest.TestCase):
             Duration(transitions).elapsed(), datetime.timedelta(minutes=30)
         )
 
+    def test_elapsed_reads_correctly_when_the_claim_is_naive_and_the_done_is_aware(self):
+        claimed_at = "2026-01-01T10:00:00"
+        finished_at = datetime.datetime.fromisoformat("2026-01-01T10:30:00").astimezone().isoformat()
+        transitions = [
+            (State.RUNNING, claimed_at),
+            (State.DONE, finished_at),
+        ]
+        self.assertEqual(
+            Duration(transitions).elapsed(), datetime.timedelta(minutes=30)
+        )
+
     def test_last_release_finds_a_pre_rename_history_row_written_under_the_legacy_spelling(self):
         transitions = [("ready", "2026-01-01T10:20:00")]
         self.assertEqual(Duration(transitions).last_release(), "2026-01-01T10:20:00")

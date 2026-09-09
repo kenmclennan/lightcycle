@@ -1,6 +1,5 @@
-import datetime
-
 from lightcycle.domain.work.state import State
+from lightcycle.domain.work.timestamp import parse_timestamp
 
 _LEGACY = {State.RUNNING: "in_progress", State.WAITING: "ready"}
 
@@ -50,4 +49,4 @@ class Duration:
 
     @staticmethod
     def _parse(ts):
-        return datetime.datetime.fromisoformat(ts)
+        return parse_timestamp(ts)

@@ -14,7 +14,7 @@ class StopPoolResponse:
 
 
 class StopPoolUseCase:
-    def __init__(self, workers, sweep, sleep=time.sleep, clock=time.time):
+    def __init__(self, workers, sweep, sleep=time.sleep, clock=time.monotonic):
         self._workers = workers
         self._sweep = sweep
         self._sleep = sleep

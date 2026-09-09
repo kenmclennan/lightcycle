@@ -74,6 +74,29 @@ class TestStopPool(unittest.TestCase):
         resp = StopPoolUseCase(workers, sweep).execute(100.0, 120, 1800)
         self.assertEqual((resp.stopped, resp.reclaimed), ([], []))
 
+    def test_wait_for_death_deadline_is_computed_from_the_injected_clock(self):
+        class _CountingClock:
+            def __init__(self):
+                self.calls = 0
+
+            def __call__(self):
+                self.calls += 1
+                return self.calls
+
+        class _NeverDies:
+            def reap(self):
+                pass
+
+            def pid_alive(self, pid, started=None):
+                return True
+
+        clock = _CountingClock()
+        uc = StopPoolUseCase(_NeverDies(), sweep=None, sleep=lambda s: None, clock=clock)
+
+        uc._wait_for_death({4242}, shutdown_grace_seconds=5)
+
+        self.assertGreaterEqual(clock.calls, 5)
+
     def test_a_worker_killed_but_not_yet_reaped_is_still_captured_and_reclaimed(self):
         store = FakeStore()
         item = store.create_item("an item", "a description")

@@ -34,6 +34,7 @@ from lightcycle.domain.work.node_spec import NodeSpec
 from lightcycle.domain.work.node_view import NodeView
 from lightcycle.domain.work.note_condition import merge_condition_note
 from lightcycle.domain.work.projected_step import ProjectedStep
+from lightcycle.domain.work.timestamp import parse_timestamp
 from lightcycle.domain.work.worker_log import worker_log_filename
 
 __all__ = [
@@ -49,5 +50,6 @@ __all__ = [
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
     "Step", "node_id_key",
     "merge_condition_note", "ProjectedStep",
+    "parse_timestamp",
     "worker_log_filename",
 ]

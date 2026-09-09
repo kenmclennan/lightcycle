@@ -596,6 +596,24 @@ class TestCiFailedCapRouting(unittest.TestCase):
         resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "build")
 
+    def test_cap_counting_orders_mixed_utc_offsets_chronologically_not_as_raw_strings(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        done_step = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        s.close(done_step, "done")
+        s._records[done_step]["created_at"] = "2026-01-01T10:00:00+00:00"
+        first_fail = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        s.close(first_fail, "ci-failed")
+        s._records[first_fail]["created_at"] = "2026-01-01T05:00:00-12:00"
+        second_fail = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        s.close(second_fail, "ci-failed")
+        s._records[second_fail]["created_at"] = "2026-01-01T20:00:00+00:00"
+
+        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
+
+        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+
     def test_reset_prevents_escalation_despite_total_rejections_exceeding_cap(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")

@@ -1,3 +1,4 @@
+import datetime
 from dataclasses import dataclass, field
 from typing import List
 
@@ -7,8 +8,10 @@ from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUs
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.flow import total_outcome_count
 from lightcycle.domain.runs import RunState
-from lightcycle.domain.work import State, node_id_key
+from lightcycle.domain.work import State, node_id_key, parse_timestamp
 from lightcycle.ports.github import ReadFailure
+
+_MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
 LC_MARKER = "<!-- lc -->"
 
@@ -231,7 +234,8 @@ class MonitorPrsUseCase:
 
     def _latest_step(self, item_id):
         steps = sorted(
-            self._store.children(item_id), key=lambda s: (s.created_at or "", node_id_key(s.id))
+            self._store.children(item_id),
+            key=lambda s: (parse_timestamp(s.created_at) or _MIN_TIMESTAMP, node_id_key(s.id)),
         )
         return steps[-1] if steps else None
 

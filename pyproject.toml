@@ -63,8 +63,6 @@ ignore = ["E501", "E741", "E702", "E402"]
 "lightcycle/application/work/project_of.py" = ["BLE001"]
 "lightcycle/domain/workspace/branch.py" = ["RUF013"]
 "lightcycle/adapters/backup.py" = ["DTZ"]
-"lightcycle/adapters/sqlite_store.py" = ["DTZ"]
-"lightcycle/application/pool/hook_completions.py" = ["DTZ"]
 "lightcycle/adapters/spawner.py" = ["SIM115"]
 
 [tool.pytest.ini_options]

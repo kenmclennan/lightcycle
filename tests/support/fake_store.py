@@ -137,7 +137,7 @@ class FakeStore(StorePort):
         self._tool_usage = {}
         self._backfill_log = {}
         self._usage_accrual_state = {}
-        self._now = now or (lambda: datetime.datetime.now().isoformat())
+        self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
         self._tx_depth = 0
 
@@ -392,7 +392,7 @@ class FakeStore(StorePort):
         b["outcome"] = reason
         if b.get("type") == "item" and disposition is not None:
             b["disposition"] = disposition
-        b["closed_at"] = datetime.datetime.now().isoformat()
+        b["closed_at"] = self._now()
         self._record_history(tid, State.DONE)
         for other_id, blockers in self._deps.items():
             if tid in blockers:

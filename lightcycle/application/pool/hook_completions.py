@@ -2,6 +2,8 @@ import datetime
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
+from lightcycle.domain.work import parse_timestamp
+
 
 @dataclass(frozen=True)
 class HookCompletionsResponse:
@@ -9,7 +11,7 @@ class HookCompletionsResponse:
 
 
 def _iso(ts: float) -> str:
-    return datetime.datetime.fromtimestamp(ts).isoformat()
+    return datetime.datetime.fromtimestamp(ts).astimezone().isoformat()
 
 
 class HookCompletionsUseCase:
@@ -26,7 +28,7 @@ class HookCompletionsUseCase:
         for node in self._store.nodes_closed_since(since_date):
             if not node.closed_at:
                 continue
-            if since_iso is not None and node.closed_at <= since_iso:
+            if since_iso is not None and parse_timestamp(node.closed_at) <= parse_timestamp(since_iso):
                 continue
             if node.step in self._hook_steps_for(node, cache):
                 completed.append((node.step, node.id, node.notes or node.outcome or ""))

@@ -1,4 +1,3 @@
-import datetime
 from dataclasses import dataclass
 from typing import Optional
 
@@ -67,7 +66,8 @@ from lightcycle.domain.feedback import Duration, format_elapsed, format_wall_and
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, display_role, display_stage, format_rate, format_tokens, format_usd,
-    is_human_step, item_cost, landing_tab, row_bucket, step_cost, type_label, viewable_artifacts,
+    is_human_step, item_cost, landing_tab, parse_timestamp, row_bucket, step_cost, type_label,
+    viewable_artifacts,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 
@@ -337,7 +337,7 @@ def _item_wall_active(store, item, children, now):
     start = min(claims)
     end = item.closed_at if item.state == State.DONE else now
     wall = (
-        datetime.datetime.fromisoformat(end) - datetime.datetime.fromisoformat(start)
+        parse_timestamp(end) - parse_timestamp(start)
     ).total_seconds()
     active = sum(child.active_seconds or 0 for child in children)
     return wall, active
@@ -395,7 +395,7 @@ def _gate_wait_seconds(store, node, now):
         return None
     end = node.closed_at if node.state == State.DONE else now
     return (
-        datetime.datetime.fromisoformat(end) - datetime.datetime.fromisoformat(start)
+        parse_timestamp(end) - parse_timestamp(start)
     ).total_seconds()
 
 

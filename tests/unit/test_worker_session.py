@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lightcycle.adapters.worker_session import (
+    EXIT_GRACE_SECONDS,
     MAX_LINE_BYTES,
     SessionError,
     dispatch_event,
@@ -297,6 +298,66 @@ class TestRun(unittest.TestCase):
                     self._fake_popen(captured, stdout_text=huge)):
             rc = run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
         self.assertEqual(rc, 0)
+
+    class _NeverExitsProc:
+        def __init__(self):
+            self.stdout = _FakeStdout("")
+            self.stdin = MagicMock()
+            self.terminate_calls = 0
+            self.kill_calls = 0
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminate_calls += 1
+
+        def kill(self):
+            self.kill_calls += 1
+
+        def wait(self):
+            return -9
+
+    class _CountingClock:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self):
+            self.calls += 1
+            return self.calls
+
+    def test_session_timeout_fires_from_the_injected_clock_alone(self):
+        proc = self._NeverExitsProc()
+
+        def popen(cmd, cwd, **kwargs):
+            return proc
+
+        clock = self._CountingClock()
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
+                patch("lightcycle.adapters.worker_session.time.sleep"):
+            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 0, clock=clock)
+        self.assertEqual(proc.terminate_calls, 2)
+        self.assertEqual(proc.kill_calls, 1)
+
+    def test_exit_grace_deadline_is_computed_from_the_injected_clock_not_wall_time(self):
+        proc = self._NeverExitsProc()
+
+        def popen(cmd, cwd, **kwargs):
+            return proc
+
+        clock = self._CountingClock()
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
+                patch("lightcycle.adapters.worker_session.time.sleep"):
+            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 0, clock=clock)
+        self.assertGreaterEqual(clock.calls, EXIT_GRACE_SECONDS)
+
+    def test_time_time_is_never_called(self):
+        captured = {}
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen",
+                    self._fake_popen(captured)), \
+                patch("lightcycle.adapters.worker_session.time.time") as faketime:
+            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
+        faketime.assert_not_called()
 
 
 class TestDispatchEvent(unittest.TestCase):
