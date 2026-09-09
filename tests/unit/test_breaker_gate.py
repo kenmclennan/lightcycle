@@ -78,20 +78,6 @@ class FakeWorkers:
     def log_mtime(self, path):
         return self._log_mtimes.get(path)
 
-    def usage_resume(self, spawnid):
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                return w.get("usage_resume")
-        return None
-
-    def set_usage_resume(self, spawnid, state):
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                if state is None:
-                    w.pop("usage_resume", None)
-                else:
-                    w["usage_resume"] = state
-
 
 class FakeBreakerPort:
     def __init__(self, state=None):
@@ -846,17 +832,17 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
             }),
         ]
         workers = FakeWorkers(
-            workers=[{
-                "spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0,
-                "usage_resume": {
-                    "offset": 0, "message_ids": ["msg-1"], "pending_tool_use": {},
-                    "posted_turn_count": 1,
-                    "posted_tool_usage": {"Read": {"calls": 1, "bytes": len(b"hello")}},
-                    "posted_input_tokens": 40, "posted_output_tokens": 20,
-                    "posted_cache_read_tokens": 4, "posted_cache_creation_tokens": 2,
-                    "posted_cost_usd": 0.4, "posted_thinking_tokens": None,
-                },
-            }]
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        store.record_live_usage(
+            spawnid="sp-1", log_file="/l/1.log", offset=0, message_ids=["msg-1"],
+            pending_tool_use={}, posted_turn_count=1,
+            posted_tool_usage={"Read": {"calls": 1, "bytes": len(b"hello")}},
+            posted_input_tokens=40, posted_output_tokens=20, posted_cache_read_tokens=4,
+            posted_cache_creation_tokens=2, posted_cost_usd=0.4,
+            tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
+            cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
+            turn_count=0, tool_usage={},
         )
         fs = FakeFs(files={"/l/1.log": "\n".join(lines).encode()})
         breaker_port = FakeBreakerPort()
@@ -871,7 +857,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         self.assertEqual(turn_count, 1)
         self.assertEqual(tool_usage["Read"].calls, 1)
         self.assertEqual(tool_usage["Read"].bytes, 10)
-        self.assertIsNone(workers.usage_resume("sp-1"))
+        self.assertIsNone(store.usage_accrual_state("sp-1"))
 
     def test_a_negative_token_or_cost_correction_is_written_as_computed_not_clamped(self):
         store = RecordingFakeStore()
@@ -886,16 +872,16 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
             },
         })
         workers = FakeWorkers(
-            workers=[{
-                "spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0,
-                "usage_resume": {
-                    "offset": 0, "message_ids": [], "pending_tool_use": {},
-                    "posted_turn_count": 0, "posted_tool_usage": {},
-                    "posted_input_tokens": 150, "posted_output_tokens": 0,
-                    "posted_cache_read_tokens": 0, "posted_cache_creation_tokens": 0,
-                    "posted_cost_usd": 0.9, "posted_thinking_tokens": None,
-                },
-            }]
+            workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
+        )
+        store.record_live_usage(
+            spawnid="sp-1", log_file="/l/1.log", offset=0, message_ids=[],
+            pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
+            posted_input_tokens=150, posted_output_tokens=0, posted_cache_read_tokens=0,
+            posted_cache_creation_tokens=0, posted_cost_usd=0.9,
+            tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
+            cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
+            turn_count=0, tool_usage={},
         )
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
@@ -903,7 +889,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         recorded = store.record_usage_calls[0]
         self.assertEqual(recorded[1], -50)
         self.assertAlmostEqual(recorded[5], -0.4)
-        self.assertIsNone(workers.usage_resume("sp-1"))
+        self.assertIsNone(store.usage_accrual_state("sp-1"))
 
     def test_a_dead_worker_with_no_resume_state_behaves_exactly_as_today(self):
         store = RecordingFakeStore()
@@ -924,7 +910,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         self.assertEqual(
             store.record_usage_calls, [(tid, 68, 10, 0, 0, 0.1, "list", None)],
         )
-        self.assertIsNone(workers.usage_resume("sp-1"))
+        self.assertIsNone(store.usage_accrual_state("sp-1"))
 
 
 if __name__ == "__main__":

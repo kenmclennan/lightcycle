@@ -7,6 +7,11 @@ from typing import Union
 from lightcycle.ports.github import Comment, GitHubEventsPort, ReadFailure, Review
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
+_GH_TIMEOUT_SECONDS = 30
+
+
+def _timeout_read_failure():
+    return ReadFailure(-1, "gh timed out after %ds" % _GH_TIMEOUT_SECONDS)
 
 
 def _parse_iso(s):
@@ -22,9 +27,13 @@ def _repo_parts(pr):
 
 class GitHubEventsAdapter(GitHubEventsPort):
     def _pr_state(self, pr: str) -> str:
-        result = subprocess.run(
-            ["gh", "pr", "view", pr, "--json", "state"], capture_output=True, text=True
-        )
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", pr, "--json", "state"], capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return ""
         if result.returncode != 0:
             return ""
         try:
@@ -40,9 +49,12 @@ class GitHubEventsAdapter(GitHubEventsPort):
         return self._pr_state(pr) == "CLOSED"
 
     def is_conflicted(self, pr: str) -> bool:
-        result = subprocess.run(
-            ["gh", "pr", "view", pr, "--json", "mergeable,mergeStateStatus"],
-            capture_output=True, text=True)
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", pr, "--json", "mergeable,mergeStateStatus"],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return False
         if result.returncode != 0:
             return False
         try:
@@ -57,14 +69,18 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if not parts:
             return 0.0
         owner, repo, number = parts
-        result = subprocess.run(
-            [
-                "gh", "api", "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number),
-                "--jq", ".[-1].commit.committer.date // empty",
-            ],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    "gh", "api", "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number),
+                    "--jq", ".[-1].commit.committer.date // empty",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
         if result.returncode != 0:
             return ReadFailure(result.returncode, result.stderr)
         date_str = result.stdout.strip()
@@ -87,15 +103,19 @@ class GitHubEventsAdapter(GitHubEventsPort):
             "{author: .user.login, body, id, created_at: (.created_at|fromdateiso8601)}"
             % since
         )
-        r = subprocess.run(
-            [
-                "gh", "api", "--paginate",
-                "/repos/%s/%s/issues/%s/comments" % (owner, repo, number),
-                "--jq", jq,
-            ],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            r = subprocess.run(
+                [
+                    "gh", "api", "--paginate",
+                    "/repos/%s/%s/issues/%s/comments" % (owner, repo, number),
+                    "--jq", jq,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
         if r.returncode != 0:
             return ReadFailure(r.returncode, r.stderr)
         for line in r.stdout.splitlines():
@@ -131,15 +151,19 @@ class GitHubEventsAdapter(GitHubEventsPort):
             "created_at: (.created_at|fromdateiso8601)}"
             % since
         )
-        r = subprocess.run(
-            [
-                "gh", "api", "--paginate",
-                "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number),
-                "--jq", jq,
-            ],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            r = subprocess.run(
+                [
+                    "gh", "api", "--paginate",
+                    "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number),
+                    "--jq", jq,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
         if r.returncode != 0:
             return ReadFailure(r.returncode, r.stderr)
         for line in r.stdout.splitlines():
@@ -169,9 +193,13 @@ class GitHubEventsAdapter(GitHubEventsPort):
         return result
 
     def head_sha(self, pr: str) -> str:
-        result = subprocess.run(
-            ["gh", "pr", "view", pr, "--json", "headRefOid"], capture_output=True, text=True
-        )
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", pr, "--json", "headRefOid"], capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return ""
         if result.returncode != 0:
             return ""
         try:
@@ -185,9 +213,13 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if not parts:
             return frozenset()
         owner, repo, number = parts
-        result = subprocess.run(
-            ["gh", "pr", "view", pr, "--json", "baseRefName"], capture_output=True, text=True
-        )
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", pr, "--json", "baseRefName"], capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
         if result.returncode != 0:
             return ReadFailure(result.returncode, result.stderr)
         try:
@@ -196,13 +228,17 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return frozenset()
         if not base:
             return frozenset()
-        r = subprocess.run(
-            [
-                "gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha),
-                "--jq", "[.files[]?.filename]",
-            ],
-            capture_output=True, text=True,
-        )
+        try:
+            r = subprocess.run(
+                [
+                    "gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha),
+                    "--jq", "[.files[]?.filename]",
+                ],
+                capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
         if r.returncode != 0:
             return ReadFailure(r.returncode, r.stderr)
         try:
@@ -212,10 +248,14 @@ class GitHubEventsAdapter(GitHubEventsPort):
         return frozenset(f for f in filenames if f)
 
     def ci_pending(self, pr: str, sha: str) -> Union[bool, ReadFailure]:
-        result = subprocess.run(
-            ["gh", "pr", "view", pr, "--json", "headRefOid,statusCheckRollup"],
-            capture_output=True, text=True,
-        )
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", pr, "--json", "headRefOid,statusCheckRollup"],
+                capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
         if result.returncode != 0:
             return ReadFailure(result.returncode, result.stderr)
         try:
@@ -242,15 +282,19 @@ class GitHubEventsAdapter(GitHubEventsPort):
             'created_at: ((.submitted_at // "1970-01-01T00:00:00Z")|fromdateiso8601)}'
             % since
         )
-        r = subprocess.run(
-            [
-                "gh", "api", "--paginate",
-                "/repos/%s/%s/pulls/%s/reviews" % (owner, repo, number),
-                "--jq", jq,
-            ],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            r = subprocess.run(
+                [
+                    "gh", "api", "--paginate",
+                    "/repos/%s/%s/pulls/%s/reviews" % (owner, repo, number),
+                    "--jq", jq,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
         if r.returncode != 0:
             return ReadFailure(r.returncode, r.stderr)
         for line in r.stdout.splitlines():

@@ -1,4 +1,5 @@
 import json
+import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -524,6 +525,91 @@ class TestCiPending(unittest.TestCase):
             pending = self.adapter.ci_pending(_PR, "sha1")
 
         self.assertIsInstance(pending, ReadFailure)
+
+
+def _timeout():
+    return subprocess.TimeoutExpired(cmd=["gh"], timeout=30)
+
+
+class TestReadFailureMethodsTimeOutCleanly(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_last_push_time_returns_read_failure_on_timeout(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = self.adapter.last_push_time(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_comments_since_returns_read_failure_on_timeout(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = self.adapter.comments_since(_PR, since=0.0)
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_pull_comments_returns_read_failure_on_timeout(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = self.adapter.pull_comments(_PR, since=0.0)
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_changed_files_returns_read_failure_on_timeout(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = self.adapter.changed_files(_PR, "abc123")
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_ci_pending_returns_read_failure_on_timeout(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = self.adapter.ci_pending(_PR, "sha1")
+
+        self.assertIsInstance(result, ReadFailure)
+
+
+class TestReviewsTimeout(unittest.TestCase):
+    def test_reviews_returns_read_failure_on_timeout(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = GitHubEventsAdapter().reviews(_PR, since=0.0)
+
+        self.assertIsInstance(result, ReadFailure)
+
+
+class TestNoChannelMethodsFailClosedOnTimeout(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_is_merged_matches_non_zero_returncode_behaviour_on_timeout(self):
+        with patch(
+            "lightcycle.adapters.github.subprocess.run",
+            return_value=_proc("", returncode=1, stderr="gh: auth error"),
+        ):
+            non_zero_result = self.adapter.is_merged(_PR)
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            timeout_result = self.adapter.is_merged(_PR)
+
+        self.assertEqual(timeout_result, non_zero_result)
+
+    def test_is_conflicted_matches_non_zero_returncode_behaviour_on_timeout(self):
+        with patch(
+            "lightcycle.adapters.github.subprocess.run",
+            return_value=_proc("", returncode=1, stderr="gh: auth error"),
+        ):
+            non_zero_result = self.adapter.is_conflicted(_PR)
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            timeout_result = self.adapter.is_conflicted(_PR)
+
+        self.assertEqual(timeout_result, non_zero_result)
+
+    def test_head_sha_matches_non_zero_returncode_behaviour_on_timeout(self):
+        with patch(
+            "lightcycle.adapters.github.subprocess.run",
+            return_value=_proc("", returncode=1, stderr="gh: auth error"),
+        ):
+            non_zero_result = self.adapter.head_sha(_PR)
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            timeout_result = self.adapter.head_sha(_PR)
+
+        self.assertEqual(timeout_result, non_zero_result)
 
 
 if __name__ == "__main__":

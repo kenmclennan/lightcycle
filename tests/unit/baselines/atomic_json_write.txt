@@ -1,2 +1,0 @@
-lightcycle/adapters/breaker.py: 1
-lightcycle/adapters/spin.py: 1

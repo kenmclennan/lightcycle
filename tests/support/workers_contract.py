@@ -77,16 +77,13 @@ class WorkersContractBase:
         self.assertTrue(state["w1"])
         self.assertFalse(state["w2"])
 
-    def test_usage_resume_round_trips_and_clears(self):
+    def test_set_pid_started_only_affects_the_matching_worker(self):
         w = self.make_workers()
         w.write_workers([
-            {"spawnid": "w1", "role": "coder", "pid": 1, "step": None},
-            {"spawnid": "w2", "role": "coder", "pid": 2, "step": None},
+            {"spawnid": "w1", "role": "coder", "pid": 1, "step": None, "pid_started": None},
+            {"spawnid": "w2", "role": "coder", "pid": 2, "step": None, "pid_started": None},
         ])
-        self.assertIsNone(w.usage_resume("w1"))
-        state = {"offset": 123, "message_ids": ["msg_1"], "pending_tool_use": {"tu_1": "Bash"}}
-        w.set_usage_resume("w1", state)
-        self.assertEqual(w.usage_resume("w1"), state)
-        self.assertIsNone(w.usage_resume("w2"))
-        w.set_usage_resume("w1", None)
-        self.assertIsNone(w.usage_resume("w1"))
+        w.set_pid_started("w1", "Mon Jan  1 00:00:00 2026")
+        state = {entry["spawnid"]: entry["pid_started"] for entry in w.workers_state()}
+        self.assertEqual(state["w1"], "Mon Jan  1 00:00:00 2026")
+        self.assertIsNone(state["w2"])

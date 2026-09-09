@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 from lightcycle.ports.breaker import BreakerPort
 
@@ -14,14 +15,18 @@ def load(root):
         return {}
     try:
         return json.loads(open(p).read())
-    except Exception:
-        return {}
+    except Exception as e:
+        sys.stderr.write("warning: could not read breaker state %s: %s\n" % (p, e))
+        return {"open": True, "reset_at": 0}
 
 
 def save(root, state):
     os.makedirs(os.path.join(root, "logs"), exist_ok=True)
-    with open(breaker_path(root), "w") as f:
+    p = breaker_path(root)
+    tmp = "%s.%d.tmp" % (p, os.getpid())
+    with open(tmp, "w") as f:
         f.write(json.dumps(state, indent=2))
+    os.replace(tmp, p)
 
 
 class BreakerAdapter(BreakerPort):

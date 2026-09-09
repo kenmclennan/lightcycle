@@ -75,8 +75,6 @@ class TickUseCase:
         ci_released = monitor_result.ci_released if monitor_result else []
         cadence_result = self._cadence_gate.execute(input.now) if self._cadence_gate else None
         cadence_fired = cadence_result.fired if cadence_result else []
-        hook_result = self._hook_completions.execute(input.since) if self._hook_completions else None
-        hook_completed = hook_result.completed if hook_result else []
         breaker_result = self._breaker_gate.execute(input.now) if self._breaker_gate else None
         breaker = breaker_result.breaker if breaker_result else Breaker()
         backup_result = self._backup_gate.execute(input.now) if self._backup_gate else None
@@ -88,12 +86,6 @@ class TickUseCase:
         pool = WorkerPool.from_state(self._workers.workers_state())
         probe = self._workers.pid_alive
         covered = pool.covered_steps(probe)
-        if covered and input.since is not None:
-            delta = min(
-                input.now - input.since, self._config.poll_seconds() * _ACTIVE_ACCRUAL_CAP_TICKS
-            )
-            if delta > 0:
-                self._store.accrue_active_seconds(covered, delta)
         max_agents = self._config.max_agents()
         slots = pool.free_slots(max_agents, probe)
         alive_count = max_agents - slots
@@ -111,6 +103,14 @@ class TickUseCase:
             for role in PoolPlan(inflight_dict, slots).roles_to_spawn(ready_roles):
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
+        hook_result = self._hook_completions.execute(input.since) if self._hook_completions else None
+        hook_completed = hook_result.completed if hook_result else []
+        if covered and input.since is not None:
+            delta = min(
+                input.now - input.since, self._config.poll_seconds() * _ACTIVE_ACCRUAL_CAP_TICKS
+            )
+            if delta > 0:
+                self._store.accrue_active_seconds(covered, delta)
         return TickResponse(
             swept=swept.swept,
             pruned=swept.pruned,

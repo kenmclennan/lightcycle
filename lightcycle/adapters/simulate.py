@@ -219,11 +219,8 @@ class NullWorkers(WorkersPort):
     def log_mtime(self, path):
         self._refuse("log_mtime")
 
-    def usage_resume(self, spawnid):
-        self._refuse("usage_resume")
-
-    def set_usage_resume(self, spawnid, state):
-        self._refuse("set_usage_resume")
+    def set_pid_started(self, spawnid, pid_started):
+        self._refuse("set_pid_started")
 
 
 class SimulateConfig:

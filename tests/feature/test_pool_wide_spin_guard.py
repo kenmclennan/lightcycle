@@ -53,20 +53,6 @@ class FakeWorkers:
     def prune_workers(self):
         return 0
 
-    def usage_resume(self, spawnid):
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                return w.get("usage_resume")
-        return None
-
-    def set_usage_resume(self, spawnid, state):
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                if state is None:
-                    w.pop("usage_resume", None)
-                else:
-                    w["usage_resume"] = state
-
 
 class FakeFs:
     def __init__(self):

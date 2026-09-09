@@ -43,9 +43,5 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
-    def usage_resume(self, spawnid):
-        pass
-
-    @abstractmethod
-    def set_usage_resume(self, spawnid, state):
+    def set_pid_started(self, spawnid, pid_started):
         pass

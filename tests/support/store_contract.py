@@ -329,6 +329,14 @@ class StoreContractBase:
         s.reclaim(tid)
         self.assertEqual(s.get_node(tid).state, "queued")
 
+    def test_reclaim_clears_assignee(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.claim_ready("agent")
+        self.assertTrue(s.get_node(tid).claimed_by)
+        s.reclaim(tid)
+        self.assertFalse(s.get_node(tid).claimed_by)
+
     def test_reclaimed_step_is_claimable_again(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
@@ -649,6 +657,85 @@ class StoreContractBase:
         self.assertFalse(stored)
         self.assertIn("/l/orphaned.log", s.usage_backfilled_logs())
         self.assertEqual(s.tool_usage_for("does-not-exist"), {})
+
+    def test_record_backfilled_usage_replayed_log_file_is_a_noop(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="list")
+        attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
+        s.record_backfilled_usage("/l/x.log", tid, usage, attribution)
+        stored = s.record_backfilled_usage("/l/x.log", tid, usage, attribution)
+        self.assertFalse(stored)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 5)
+        self.assertEqual(t.turn_count, 2)
+
+    def test_usage_accrual_state_absent_for_unknown_spawnid(self):
+        s = self.make_store()
+        self.assertIsNone(s.usage_accrual_state("nope"))
+
+    def test_record_live_usage_checkpoints_and_applies_deltas_atomically(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_live_usage(
+            spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=["m1"],
+            pending_tool_use={}, posted_turn_count=1,
+            posted_tool_usage={"Read": {"calls": 1, "bytes": 10}},
+            posted_input_tokens=5, posted_output_tokens=6, posted_cache_read_tokens=0,
+            posted_cache_creation_tokens=0, posted_cost_usd=1.0,
+            tid=tid, input_tokens=5, output_tokens=6, cache_read_tokens=0,
+            cache_creation_tokens=0, cost_usd=1.0, cost_basis="list", thinking_tokens=None,
+            turn_count=1, tool_usage={"Read": ToolUsage(calls=1, bytes=10)},
+        )
+        state = s.usage_accrual_state("sp1")
+        self.assertEqual(state["offset"], 100)
+        self.assertEqual(state["message_ids"], ["m1"])
+        self.assertEqual(state["posted_input_tokens"], 5)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 5)
+        self.assertEqual(t.turn_count, 1)
+
+    def test_record_live_usage_overwrites_prior_checkpoint_for_same_spawnid(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_live_usage(
+            spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=["m1"],
+            pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
+            posted_input_tokens=5, posted_output_tokens=0, posted_cache_read_tokens=0,
+            posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
+            cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
+            turn_count=0, tool_usage={},
+        )
+        s.record_live_usage(
+            spawnid="sp1", log_file="/l/x.log", offset=200, message_ids=["m1", "m2"],
+            pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
+            posted_input_tokens=10, posted_output_tokens=0, posted_cache_read_tokens=0,
+            posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
+            cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
+            turn_count=0, tool_usage={},
+        )
+        state = s.usage_accrual_state("sp1")
+        self.assertEqual(state["offset"], 200)
+        self.assertEqual(state["message_ids"], ["m1", "m2"])
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_input_tokens, 10)
+
+    def test_clear_usage_accrual_state_removes_the_row(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_live_usage(
+            spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=[],
+            pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
+            posted_input_tokens=0, posted_output_tokens=0, posted_cache_read_tokens=0,
+            posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
+            cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
+            turn_count=0, tool_usage={},
+        )
+        s.clear_usage_accrual_state("sp1")
+        self.assertIsNone(s.usage_accrual_state("sp1"))
 
     def test_usage_backfilled_logs_reflects_every_log_passed_matched_or_not(self):
         s = self.make_store()

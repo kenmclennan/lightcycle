@@ -2,7 +2,7 @@ import json
 import unittest
 from datetime import datetime
 
-from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
+from lightcycle.adapters.log_parser import MAX_BUFFER_BYTES, MAX_LOG_LINE_CHARS, LogLineParser
 from lightcycle.domain.work import LogKind
 
 HOOK_STARTED = b'{"type":"system","subtype":"hook_started","hook_id":"12bf4ec6-d046-45ba-b784-638a124d5a90","hook_name":"SessionStart:startup","hook_event":"SessionStart","uuid":"f641bc47-9f32-4e14-b3b6-fbe735cfdb6b","session_id":"7c5f0968-d6de-4df9-b07f-7cdb41e507ea"}\n'
@@ -250,6 +250,18 @@ class PartialLineBufferingTest(unittest.TestCase):
 
         self.assertEqual(naive_first[0].kind, LogKind.UNPARSED)
         self.assertEqual(naive_second[0].kind, LogKind.UNPARSED)
+
+
+class UnboundedBufferTest(unittest.TestCase):
+    def test_an_oversized_unterminated_chunk_is_truncated_not_grown_without_limit(self):
+        parser = LogLineParser()
+        huge = b"x" * (MAX_BUFFER_BYTES + 100)
+
+        lines = parser.feed(huge)
+
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].kind, LogKind.UNPARSED)
+        self.assertLessEqual(len(parser._buffer), 100)
 
 
 if __name__ == "__main__":

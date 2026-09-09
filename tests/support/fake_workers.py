@@ -1,7 +1,9 @@
 class FakeWorkers:
-    def __init__(self, workers=None, alive_pids=()):
+    def __init__(self, workers=None, alive_pids=(), delayed_death=False):
         self._workers = workers or []
         self._alive = set(alive_pids)
+        self._delayed_death = delayed_death
+        self._zombie_pids = set()
         self.killed = []
 
     def workers_state(self):
@@ -14,11 +16,16 @@ class FakeWorkers:
         return pid in self._alive
 
     def reap(self):
-        pass
+        for pid in self._zombie_pids:
+            self._alive.discard(pid)
+        self._zombie_pids.clear()
 
     def kill(self, pid):
         self.killed.append(pid)
-        self._alive.discard(pid)
+        if self._delayed_death:
+            self._zombie_pids.add(pid)
+        else:
+            self._alive.discard(pid)
 
     def prune_workers(self, keep_dead=None):
         if keep_dead is None:
@@ -50,16 +57,7 @@ class FakeWorkers:
     def log_mtime(self, path):
         return None
 
-    def usage_resume(self, spawnid):
+    def set_pid_started(self, spawnid, pid_started):
         for w in self._workers:
             if w.get("spawnid") == spawnid:
-                return w.get("usage_resume")
-        return None
-
-    def set_usage_resume(self, spawnid, state):
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                if state is None:
-                    w.pop("usage_resume", None)
-                else:
-                    w["usage_resume"] = state
+                w["pid_started"] = pid_started

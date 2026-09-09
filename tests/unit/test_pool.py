@@ -58,20 +58,6 @@ class FakeWorkers:
     def log_mtime(self, path):
         return self._log_mtimes.get(path)
 
-    def usage_resume(self, spawnid):
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                return w.get("usage_resume")
-        return None
-
-    def set_usage_resume(self, spawnid, state):
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                if state is None:
-                    w.pop("usage_resume", None)
-                else:
-                    w["usage_resume"] = state
-
 
 class FakeBreakerGate:
     def __init__(self, breaker, spin_open=False):

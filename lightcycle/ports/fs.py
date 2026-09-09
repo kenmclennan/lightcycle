@@ -51,6 +51,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def read_from_bounded(self, path, offset, max_bytes):
+        pass
+
+    @abstractmethod
     def read_tail(self, path, max_bytes):
         pass
 

@@ -49,6 +49,12 @@ class FsContractBase:
         self.assertEqual(data, b"3456789")
         self.assertEqual(offset, 10)
 
+    def test_read_from_bounded_exact_boundary_returns_exactly_max_bytes(self):
+        fs = self.make_fs(files={"a.txt": b"0123456789"})
+        data, offset = fs.read_from_bounded(self.path("a.txt"), 3, 7)
+        self.assertEqual(data, b"3456789")
+        self.assertEqual(offset, 10)
+
     def test_read_tail_max_bytes_at_or_above_file_size(self):
         fs = self.make_fs(files={"a.txt": _TAIL_CONTENT})
         data, offset = fs.read_tail(self.path("a.txt"), 100)

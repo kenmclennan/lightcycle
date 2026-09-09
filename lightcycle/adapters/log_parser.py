@@ -4,6 +4,7 @@ from datetime import datetime
 from lightcycle.domain.work.log_line import LogKind, LogLine
 
 MAX_LOG_LINE_CHARS = 8000
+MAX_BUFFER_BYTES = 1_000_000
 
 
 def _bounded(text):
@@ -90,6 +91,14 @@ class LogLineParser:
         lines = []
         for raw in complete:
             lines.extend(self._parse_line(raw))
+        if len(self._buffer) > MAX_BUFFER_BYTES:
+            discarded, self._buffer = (
+                self._buffer[:MAX_BUFFER_BYTES], self._buffer[MAX_BUFFER_BYTES:],
+            )
+            lines.append(LogLine(
+                self._last_timestamp, LogKind.UNPARSED,
+                _bounded(discarded.decode("utf-8", errors="replace")),
+            ))
         return lines
 
     def _parse_line(self, raw: bytes) -> list[LogLine]:

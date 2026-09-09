@@ -96,7 +96,7 @@ class _GitResult:
 
 class _FakeGit:
     def __init__(self, git_repos=(), sync_result=True, base=None, registered=(), branches=(),
-                 clone_result=True, sync_default_result=True, raises=()):
+                 clone_result=True, sync_default_result=True, raises=(), worktree_add_fails=False):
         self._git_repos = set(git_repos)
         self.calls = []
         self._sync_result = sync_result
@@ -106,6 +106,7 @@ class _FakeGit:
         self._clone_result = clone_result
         self._sync_default_result = sync_default_result
         self._raises = set(raises)
+        self._worktree_add_fails = worktree_add_fails
 
     def is_git_repo(self, path):
         self.calls.append(("is_git_repo", path))
@@ -143,6 +144,8 @@ class _FakeGit:
 
     def git(self, root, *args):
         self.calls.append(("git", root) + args)
+        if self._worktree_add_fails and "worktree" in args and "add" in args:
+            return _GitResult(returncode=1, stderr="boom")
         return _GitResult()
 
     def common_dir(self, root):
@@ -634,6 +637,19 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
 
         with self.assertRaises(UseCaseError):
             svc.ensure(item)
+
+    def test_branch_is_recorded_even_when_worktree_add_fails(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = _FakeGit(
+            git_repos={target}, sync_result=True, base="origin/main", worktree_add_fails=True,
+        )
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+
+        with self.assertRaises(UseCaseError):
+            svc.ensure(item)
+
+        self.assertTrue(svc.has_worktree_history(item))
 
 
 class TestSyncSpecs(unittest.TestCase):

@@ -12,9 +12,9 @@ class RecordingFakeFs(FakeFs):
         super().__init__(*args, **kwargs)
         self.read_from_calls = []
 
-    def read_from(self, path, offset):
+    def read_from_bounded(self, path, offset, max_bytes):
         self.read_from_calls.append((path, offset))
-        return super().read_from(path, offset)
+        return super().read_from_bounded(path, offset, max_bytes)
 
 
 class RecordingFakeStore(FakeStore):
@@ -91,7 +91,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         self.assertEqual(tool_usage["Bash"].calls, 1)
         self.assertEqual(tool_usage["Bash"].bytes, len(b"hello"))
 
-        resume = workers.usage_resume("sp-1")
+        resume = store.usage_accrual_state("sp-1")
         self.assertEqual(resume["offset"], len(content))
         self.assertEqual(resume["message_ids"], ["msg-1"])
         self.assertEqual(resume["pending_tool_use"], {})
@@ -113,7 +113,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         workers = FakeWorkers(workers=[self._worker(tid)], alive_pids={1})
         use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig())
         use_case.execute(now=100)
-        first_offset = workers.usage_resume("sp-1")["offset"]
+        first_offset = store.usage_accrual_state("sp-1")["offset"]
         self.assertEqual(fs.read_from_calls, [("/l/1.log", 0)])
 
         second_lines = [
@@ -162,7 +162,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         use_case.execute(now=100)
 
         self.assertEqual(store.record_attribution_calls, [])
-        self.assertIsNone(workers.usage_resume("sp-1"))
+        self.assertIsNone(store.usage_accrual_state("sp-1"))
 
         full_line = _assistant("msg-1") + "\n"
         fs._files["/l/1.log"] = full_line.encode()
@@ -171,7 +171,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         self.assertEqual(len(store.record_attribution_calls), 1)
         recorded_tid, turn_count, _ = store.record_attribution_calls[0]
         self.assertEqual(turn_count, 1)
-        self.assertEqual(workers.usage_resume("sp-1")["offset"], len(full_line.encode()))
+        self.assertEqual(store.usage_accrual_state("sp-1")["offset"], len(full_line.encode()))
 
 
 if __name__ == "__main__":

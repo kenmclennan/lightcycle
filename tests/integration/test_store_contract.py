@@ -7,6 +7,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
 import lightcycle.cli as cli
+from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.sqlite_store_factory import (
@@ -947,6 +948,41 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         cols = {r[1] for r in store._conn.execute("PRAGMA table_info(usage_backfill_log)").fetchall()}
         self.assertIn("had_result_line", cols)
         self.assertEqual(store.unclassified_backfill_logs(), [("/l/legacy.log", "s-1")])
+
+
+class TestSqliteStoreAtomicity(unittest.TestCase):
+    def _store(self):
+        return make_sqlite_store()
+
+    def test_reclaim_rolls_back_state_when_history_write_fails(self):
+        s = self._store()
+        tid = s.create_step("t", role="agent")
+        s.claim_ready("agent")
+        with patch.object(s, "_record_history", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                s.reclaim(tid)
+        self.assertEqual(s.get_node(tid).state, State.RUNNING)
+
+    def test_record_live_usage_rolls_back_checkpoint_when_attribution_write_fails(self):
+        s = self._store()
+        tid = s.create_step("t", role="agent")
+        with patch.object(
+            s, "_record_attribution_nocommit", side_effect=RuntimeError("boom")
+        ):
+            with self.assertRaises(RuntimeError):
+                s.record_live_usage(
+                    spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=[],
+                    pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
+                    posted_input_tokens=5, posted_output_tokens=0,
+                    posted_cache_read_tokens=0, posted_cache_creation_tokens=0,
+                    posted_cost_usd=0.0,
+                    tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
+                    cache_creation_tokens=0, cost_usd=0.0, cost_basis=None,
+                    thinking_tokens=None, turn_count=1,
+                    tool_usage={"Read": ToolUsage(calls=1, bytes=10)},
+                )
+        self.assertIsNone(s.usage_accrual_state("sp1"))
+        self.assertEqual(s.get_node(tid).usage_input_tokens, 0)
 
 
 if __name__ == "__main__":

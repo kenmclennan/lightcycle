@@ -61,6 +61,8 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 | `max-title-length` | cap on an item's or step's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description` |
 | `personal-origin` | the workflow origin `lc workflow init` scaffolded and registered, if you made one |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |
+| `shutdown-grace-seconds` | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping |
+| `tick-failure-cap` | consecutive tick exceptions the pool loop tolerates (logging and continuing) before it re-raises and exits non-gracefully |
 | `personal-origin` | the user's own workflow-origin repo, set by `lc workflow init`. Optional - unset (empty) until one exists |
 
 ## Workflow sources

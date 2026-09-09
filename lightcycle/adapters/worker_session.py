@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import subprocess
@@ -47,8 +48,11 @@ def plan_session(claim, resolve, reclaim, role):
 
 
 def session_cwd(workspace):
-    return workspace if workspace else tempfile.mkdtemp(prefix="lc-worker-")
+    if workspace:
+        return contextlib.nullcontext(workspace)
+    return tempfile.TemporaryDirectory(prefix="lc-worker-")
 
+MAX_LINE_BYTES = 1_000_000
 KICKOFF = ("You are the %s step. Claim your next step and complete it per your step instructions, "
            "then exit.")
 NUDGE_TEXT = ("Your previous turn ended but your step is not resolved yet. Continue and finish it, "
@@ -120,7 +124,10 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds):
             pass
 
     def reader():
-        for raw in proc.stdout:
+        while True:
+            raw = proc.stdout.readline(MAX_LINE_BYTES)
+            if raw == "":
+                break
             sys.stdout.write(raw)
             sys.stdout.flush()
             line = raw.strip()
@@ -190,8 +197,9 @@ def main():
         return 1
     if plan is None:
         return 0
-    return run(config.data_root(), session_cwd(plan.workspace), plan.stage, spawnid,
-               plan.model, plan.sysprompt, config.max_session_seconds())
+    with session_cwd(plan.workspace) as cwd:
+        return run(config.data_root(), cwd, plan.stage, spawnid,
+                   plan.model, plan.sysprompt, config.max_session_seconds())
 
 
 if __name__ == "__main__":

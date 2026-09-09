@@ -141,6 +141,13 @@ class FakeFs:
         data = content[offset:]
         return data, offset + len(data)
 
+    def read_from_bounded(self, path, offset, max_bytes):
+        content = self._files.get(path)
+        if content is None:
+            return b"", offset
+        data = content[offset:offset + max_bytes]
+        return data, offset + len(data)
+
     def read_tail(self, path, max_bytes):
         content = self._files.get(path)
         if content is None:
