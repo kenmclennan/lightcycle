@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.work import State
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ class ReopenItemUseCase:
             )
         if node.type != "item":
             raise UseCaseError("'%s' is not an item (type=%s)" % (input.item, node.type))
-        if str(node.state) != "done":
+        if node.state != State.DONE:
             raise UseCaseError("'%s' is not closed (state=%s)" % (input.item, node.state))
         self._store.reopen(input.item)
         return ReopenItemResponse(item=input.item)

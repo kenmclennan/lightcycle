@@ -834,14 +834,6 @@ def cmd_done(argv):
     return 0
 
 
-
-
-
-
-
-
-
-
 def cmd_trace(argv):
     ap = argparse.ArgumentParser(prog="lc trace")
     ap.add_argument("item")
@@ -1032,10 +1024,6 @@ def cmd_tui(argv):
     from lightcycle.adapters.tui.app import run
     run(_container)
     return 0
-
-
-
-
 
 
 _NODE_TYPES = ("item", "step")
@@ -1445,10 +1433,6 @@ def cmd_rm(argv):
     return 0
 
 
-
-
-
-
 def _tick_event_lines(result, ts):
     lines = []
     for role in result.spawned:
@@ -1825,10 +1809,6 @@ def cmd_status(argv):
                 )
                 print("  %s  %s%s%s" % (t.id, t.title, suffix, step_suffix))
     return 0
-
-
-
-
 
 
 def cmd_worklog(argv):

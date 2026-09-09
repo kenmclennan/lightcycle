@@ -3,6 +3,8 @@ import os
 from lightcycle.adapters import frontmatter
 from lightcycle.ports.fs import FsPort
 
+DB_FILENAME = "store.db"
+
 
 def _roots(roots):
     return roots if isinstance(roots, (list, tuple)) else [roots]
@@ -73,7 +75,7 @@ def worktrees_dir(root):
 
 
 def store_ready(root):
-    return os.path.exists(os.path.join(root, "store.db"))
+    return os.path.exists(os.path.join(root, DB_FILENAME))
 
 
 def read_bytes(path):

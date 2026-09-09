@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from lightcycle.adapters.backup import SqliteBackupAdapter
+from lightcycle.adapters.backup import SqliteBackupAdapter, _snapshot_name
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.application.pool.backup import BackupUseCase
 from tests.support.sqlite_store_factory import make_sqlite_store
@@ -35,6 +35,11 @@ def _adapter():
     backups_dir = tempfile.mkdtemp()
     config = FakeConfig(store._config.data_root(), backups_dir)
     return SqliteBackupAdapter(config), store, backups_dir
+
+
+class TestSnapshotName(unittest.TestCase):
+    def test_formats_the_timestamp_in_utc_regardless_of_host_timezone(self):
+        self.assertEqual(_snapshot_name(1000.0), "store-19700101T001640Z.db.gz")
 
 
 class TestCreateSnapshot(unittest.TestCase):
