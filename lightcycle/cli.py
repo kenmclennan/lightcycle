@@ -1375,17 +1375,14 @@ def cmd_set(argv):
         workflow_pin = resp.value
         if resp.resolved:
             resolved_pin = resp.value
-    if a.label:
-        _container.store.label_add(a.id, a.label)
     effective_description = "" if "description" in unset_fields else a.description
     effective_project = "" if "project" in unset_fields else a.project
     effective_notes = "" if "notes" in unset_fields else a.notes
-    if effective_notes is not None:
-        _container.store.set_notes(a.id, effective_notes)
     try:
         tid = EditNodeUseCase(_container.store).execute(
             EditNodeInput(step=a.id, title=a.title, description=effective_description,
-                          project=effective_project, workflow=workflow_pin)
+                          project=effective_project, workflow=workflow_pin,
+                          label=a.label, notes=effective_notes)
         ).id
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
