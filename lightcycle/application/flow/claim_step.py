@@ -100,9 +100,9 @@ class ClaimStepUseCase:
         if model:
             self._store.set_model(t.id, model)
         spawnid = self._config.spawn_id()
-        if spawnid:
-            self._workers.set_step(spawnid, t.id)
         try:
+            if spawnid:
+                self._workers.set_step(spawnid, t.id)
             return self._context(t, pin, meta)
         except Exception:
             self._store.reclaim(t.id)

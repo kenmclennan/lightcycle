@@ -5,6 +5,7 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.domain.pool.worker_session import saw_session_activity, saw_terminal_command
 from lightcycle.ports.git import GitReadError
+from lightcycle.ports.workers import RegistryUnreadable
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,10 @@ class SweepUseCase:
 
     def execute(self, now, max_boot, stall_seconds) -> SweepResponse:
         probe = self._workers.pid_alive
-        pool = WorkerPool.from_state(self._workers.workers_state())
+        try:
+            pool = WorkerPool.from_state(self._workers.workers_state())
+        except RegistryUnreadable:
+            return SweepResponse(swept=[], killed=[], pruned=0)
         claimed = self._store.claimed_steps()
         claimed_ids = {t.id for t in claimed}
         covered = pool.covered_steps(probe)
@@ -145,10 +149,14 @@ class SweepUseCase:
         orphans = pool.orphans(probe, now, max_boot, claimed_ids)
         for w in orphans:
             self._workers.kill(w.pid)
+        try:
+            pruned = self._workers.prune_workers()
+        except RegistryUnreadable:
+            pruned = 0
         return SweepResponse(
             swept=swept,
             killed=[w.spawnid for w in orphans] + [w.spawnid for w in stalled],
-            pruned=self._workers.prune_workers(),
+            pruned=pruned,
             preserved=preserved,
             capture_failed=capture_failed,
             parked=parked,

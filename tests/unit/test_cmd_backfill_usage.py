@@ -4,6 +4,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from lightcycle import cli
+from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -100,6 +101,15 @@ class TestCmdBackfillUsageSummary(unittest.TestCase):
         self.assertEqual(rc, 0)
         UseCase.return_value.execute.assert_called_once_with(repair=True)
         self.assertIn("repair: 2/5 steps corrected, 1 ledgered logs missing on disk", out)
+
+    def test_unreadable_registry_exits_one_with_a_clean_message(self):
+        with mock.patch.object(cli, "Container", lambda: FakeContainer()), \
+                mock.patch.object(cli, "BackfillUsageUseCase") as UseCase:
+            UseCase.return_value.execute.side_effect = RegistryUnreadable("boom")
+            rc, out, err = call(cli.main, "backfill-usage")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("boom", err)
 
 
 if __name__ == "__main__":

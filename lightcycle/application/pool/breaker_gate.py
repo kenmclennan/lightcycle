@@ -8,6 +8,7 @@ from lightcycle.domain.pool import (
 )
 from lightcycle.domain.pool.worker_session import saw_session_activity
 from lightcycle.ports.store import NodeNotFoundError
+from lightcycle.ports.workers import RegistryUnreadable
 
 
 def _corrected_usage(usage, resume):
@@ -116,7 +117,10 @@ class BreakerGateUseCase:
 
     def execute(self, now) -> BreakerGateResponse:
         state = Breaker.from_state(self._breaker_port.load())
-        pool = WorkerPool.from_state(self._workers.workers_state())
+        try:
+            pool = WorkerPool.from_state(self._workers.workers_state())
+        except RegistryUnreadable:
+            return BreakerGateResponse(breaker=state)
         probe = self._workers.pid_alive
         was_probing = state.is_probing(now)
         rates = self._config.usage_pricing()

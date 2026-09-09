@@ -11,6 +11,7 @@ from lightcycle.adapters.worker_session import (
     MAX_LINE_BYTES,
     SessionError,
     dispatch_event,
+    has_open_step,
     plan_session,
     poll_decision,
     run,
@@ -377,6 +378,16 @@ class TestDispatchEvent(unittest.TestCase):
         line = '{"type":"result"}'
         dispatch_event(json.loads(line), line, policy, counters, lock)
         self.assertEqual(counters["results"], 1)
+
+
+class TestHasOpenStep(unittest.TestCase):
+    def test_returns_true_not_false_when_registry_is_unreadable(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "logs", "workers.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write("{not valid json")
+        self.assertTrue(has_open_step(root, "spawn1"))
 
 
 if __name__ == "__main__":

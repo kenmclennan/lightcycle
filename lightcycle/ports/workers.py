@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
 
+class RegistryUnreadable(Exception):
+    pass
+
+
 class WorkersPort(ABC):
     @abstractmethod
     def workers_state(self):

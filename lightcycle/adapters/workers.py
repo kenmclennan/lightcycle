@@ -3,9 +3,10 @@ import json
 import os
 import signal
 import subprocess
+import sys
 from contextlib import contextmanager
 
-from lightcycle.ports.workers import WorkersPort
+from lightcycle.ports.workers import RegistryUnreadable, WorkersPort
 
 
 def workers_path(root):
@@ -34,8 +35,9 @@ def workers_state(root):
         return []
     try:
         return json.loads(open(p).read())
-    except Exception:
-        return []
+    except Exception as e:
+        sys.stderr.write("warning: could not read worker registry %s: %s\n" % (p, e))
+        raise RegistryUnreadable(str(e)) from e
 
 
 def write_workers(root, workers):

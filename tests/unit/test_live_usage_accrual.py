@@ -2,10 +2,16 @@ import json
 import unittest
 
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
+from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.step_factory import create_owned_step
+
+
+class RaisingFakeWorkers(FakeWorkers):
+    def workers_state(self):
+        raise RegistryUnreadable("boom")
 
 
 class RecordingFakeFs(FakeFs):
@@ -60,6 +66,14 @@ def _user(tool_use_id, content):
 
 
 class TestLiveUsageAccrualUseCase(unittest.TestCase):
+    def test_registry_unreadable_returns_without_recording_usage(self):
+        store = RecordingFakeStore()
+        create_owned_step(store, "build: t", step="build", role="agent")
+        workers = RaisingFakeWorkers()
+        LiveUsageAccrualUseCase(store, FakeFs(files={}), workers, FakeConfig()).execute(now=100)
+        self.assertEqual(store.record_usage_calls, [])
+        self.assertEqual(store.record_attribution_calls, [])
+
     def _worker(self, step):
         return {"spawnid": "sp-1", "role": "agent", "pid": 1, "step": step, "log": "/l/1.log",
                 "started": 0}

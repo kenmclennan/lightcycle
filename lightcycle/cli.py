@@ -121,6 +121,7 @@ from lightcycle.adapters.sqlite_store import LiveStoreRefused, SqliteStore
 from lightcycle.config import Config, ConfigError
 from lightcycle.container import Container, make_flow_service, make_worktrees, worktrees_for
 from lightcycle.ports.store import NodeNotFoundError
+from lightcycle.ports.workers import RegistryUnreadable
 
 
 _container = None
@@ -473,6 +474,9 @@ def cmd_claim(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
+    except RegistryUnreadable as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if resp is None:
         return 0
     print(json.dumps(resp.as_dict(), indent=2))
@@ -491,7 +495,11 @@ def cmd_ps(argv):
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    rows = ListWorkersUseCase(_container.workers, _container.store).execute().workers
+    try:
+        rows = ListWorkersUseCase(_container.workers, _container.store).execute().workers
+    except RegistryUnreadable as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if not a.all:
         rows = [w for w in rows if w["alive"]]
     if a.json:
@@ -511,11 +519,15 @@ def cmd_logs(argv):
     ap.add_argument("target")
     ap.add_argument("-f", action="store_true")
     a = ap.parse_args(argv)
-    path = (
-        ResolveLogUseCase(_container.store, _container.workers, _container.config)
-        .execute(ResolveLogInput(target=a.target))
-        .path
-    )
+    try:
+        path = (
+            ResolveLogUseCase(_container.store, _container.workers, _container.config)
+            .execute(ResolveLogInput(target=a.target))
+            .path
+        )
+    except RegistryUnreadable as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if not path or not os.path.exists(path):
         sys.stderr.write("no log for %s\n" % a.target)
         return 1
@@ -839,9 +851,13 @@ def cmd_trace(argv):
     ap.add_argument("item")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    resp = TraceUseCase(_container.store, _container.workers, _container.config).execute(
-        TraceInput(item=a.item)
-    )
+    try:
+        resp = TraceUseCase(_container.store, _container.workers, _container.config).execute(
+            TraceInput(item=a.item)
+        )
+    except RegistryUnreadable as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     if a.json:
         print(json.dumps(resp.as_dict(), indent=2))
     else:
@@ -951,9 +967,13 @@ def cmd_backfill_usage(argv):
     ap = argparse.ArgumentParser(prog="lc backfill-usage")
     ap.add_argument("--repair", action="store_true")
     a = ap.parse_args(argv)
-    resp = BackfillUsageUseCase(
-        _container.store, _container.fs, _container.workers, _container.config
-    ).execute(repair=a.repair)
+    try:
+        resp = BackfillUsageUseCase(
+            _container.store, _container.fs, _container.workers, _container.config
+        ).execute(repair=a.repair)
+    except RegistryUnreadable as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     ledger_total = len(_container.store.usage_backfilled_logs())
     print(
         "backfilled %d/%d logs (%d matched, %d orphaned (step no longer exists), "
