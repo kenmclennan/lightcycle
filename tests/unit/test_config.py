@@ -5,6 +5,8 @@ from pathlib import Path
 
 from lightcycle.config import _SEED_KEYS, Config, ConfigError
 
+_SEEDED_EMPTY_AND_REQUIRED = ("specs-remote",)
+
 HOME = os.path.expanduser("~")
 
 
@@ -181,7 +183,7 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
         self.assertIn("retro-interval-reflections: 20", text)
-        self.assertIn("specs-remote: git@github.com:you/lightcycle-specs.git", text)
+        self.assertIn("specs-remote: \n", text)
         self.assertIn("backups-dir: ~/.lightcycle-backups", text)
         self.assertIn("backup-interval-minutes: 15", text)
         self.assertIn("backup-retention: 96", text)
@@ -457,7 +459,17 @@ class TestResolvedSettings(unittest.TestCase):
         settings = c.resolved_settings()
         self.assertEqual(len(settings), len(_SEED_KEYS))
         for s in settings:
+            if s.key in _SEEDED_EMPTY_AND_REQUIRED:
+                continue
             self.assertEqual(s.state, "default", s.key)
+
+    def test_specs_remote_is_seeded_empty_so_it_reports_unset_until_the_user_sets_it(self):
+        c = _cfg()
+        c.ensure_config()
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["specs-remote"]
+        self.assertEqual(s.state, "unset")
+        self.assertIsNotNone(s.error)
 
     def test_missing_keys_of_different_shapes_still_report_every_key(self):
         c = _cfg()
@@ -475,6 +487,8 @@ class TestResolvedSettings(unittest.TestCase):
             self.assertIsNotNone(settings[key].error)
         for key, s in settings.items():
             if key not in ("max-agents", "backups-dir", "editor"):
+                if key in _SEEDED_EMPTY_AND_REQUIRED:
+                    continue
                 self.assertEqual(s.state, "default", key)
 
     def test_env_override_reports_env_state_and_value(self):
