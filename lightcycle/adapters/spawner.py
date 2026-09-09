@@ -5,7 +5,7 @@ import sys
 import time
 import uuid
 
-from lightcycle.adapters.workers import process_start_time, register_worker
+from lightcycle.adapters.workers import process_start_time, register_worker, set_pid_started
 from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.ports.spawner import SpawnerPort
 
@@ -33,25 +33,28 @@ def spawn_worker(config, role):
     override = config.spawn_cmd()
     if override:
         cmd = ["bash", "-c", override.format(log=shlex.quote(log), role=role)]
-        proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env)
+        proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env, start_new_session=True)
     else:
         cmd = [sys.executable, "-m", "lightcycle.adapters.worker_session"]
-        proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=root, env=env)
-    pid_started = capture_pid_started(proc)
-    if pid_started is None and proc.poll() is not None:
-        return None
+        proc = subprocess.Popen(
+            cmd, stdout=logf, stderr=logf, cwd=root, env=env, start_new_session=True
+        )
     register_worker(
         root,
         {
             "spawnid": spawnid,
             "role": role,
             "pid": proc.pid,
-            "pid_started": pid_started,
+            "pid_started": None,
             "log": log,
             "step": None,
             "started": time.time(),
         },
     )
+    pid_started = capture_pid_started(proc)
+    if pid_started is None and proc.poll() is not None:
+        return None
+    set_pid_started(root, spawnid, pid_started)
     return {"spawnid": spawnid, "role": role, "pid": proc.pid, "log": log}
 
 

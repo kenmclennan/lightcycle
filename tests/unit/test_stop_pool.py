@@ -74,6 +74,26 @@ class TestStopPool(unittest.TestCase):
         resp = StopPoolUseCase(workers, sweep).execute(100.0, 120, 1800)
         self.assertEqual((resp.stopped, resp.reclaimed), ([], []))
 
+    def test_a_worker_killed_but_not_yet_reaped_is_still_captured_and_reclaimed(self):
+        store = FakeStore()
+        item = store.create_item("an item", "a description")
+        step = store.create_step("build: x", step="build", role="agent", parent=item)
+        store.assign(step, "spawn-1")
+        store.update_state(step, State.RUNNING)
+        workers = FakeWorkers(alive_pids=(4242,), delayed_death=True)
+        workers.write_workers([
+            {"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}
+        ])
+        sweep = SweepUseCase(store, workers, worktrees=_Worktrees(), git=_Git(), fs=None)
+        uc = StopPoolUseCase(workers, sweep, sleep=lambda s: None)
+
+        resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800)
+
+        self.assertEqual(resp.reclaimed, [step])
+        after = store.get_step(step)
+        self.assertEqual(after.state, State.QUEUED)
+        self.assertFalse(after.claimed_by)
+
 
 if __name__ == "__main__":
     unittest.main()

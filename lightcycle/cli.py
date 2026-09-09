@@ -1600,6 +1600,10 @@ def _run_tick(tick, fs, tick_input, now):
     return result
 
 
+def _tick_failure_action(consecutive_failures, cap):
+    return "raise" if consecutive_failures >= cap else "continue"
+
+
 def _upgrade_notice(check=lambda: upgrade(__version__, check_only=True)):
     try:
         resp = check()
@@ -1620,6 +1624,7 @@ def _stop_pool():
     resp = StopPoolUseCase(_container.workers, sweep).execute(
         time.time(), _container.config.max_boot_seconds(),
         _container.config.stall_seconds(),
+        shutdown_grace_seconds=_container.config.shutdown_grace_seconds(),
     )
     lines = ["lc start stopped: %d worker(s) stopped, %d step(s) reclaimed"
              % (len(resp.stopped), len(resp.reclaimed))]
@@ -1710,9 +1715,19 @@ def cmd_start(argv):
         print("lc start  poll=%ds  max-agents=%d" % (interval, max_agents))
         prev_snapshot = None
         prev_now = time.time()
+        consecutive_failures = 0
+        tick_failure_cap = _container.config.tick_failure_cap()
         while True:
             now = time.time()
-            result = _run_tick(tick, _container.fs, TickInput(now=now, since=prev_now), now)
+            try:
+                result = _run_tick(tick, _container.fs, TickInput(now=now, since=prev_now), now)
+            except Exception:
+                consecutive_failures += 1
+                if _tick_failure_action(consecutive_failures, tick_failure_cap) == "raise":
+                    raise
+                time.sleep(interval)
+                continue
+            consecutive_failures = 0
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
             for line in lines:
                 print(line)

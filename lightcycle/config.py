@@ -25,6 +25,8 @@ _ENV_OVERRIDE_VARS = {
     "editor": "EDITOR",
     "retro-interval-reflections": "LC_RETRO_INTERVAL_REFLECTIONS",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
+    "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
+    "tick-failure-cap": "LC_TICK_FAILURE_CAP",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -73,6 +75,8 @@ _SEED_KEYS = [
     ("price-sonnet-output-per-mtok", "10.00"),
     ("price-sonnet-cache-write-per-mtok", "2.50"),
     ("price-sonnet-cache-read-per-mtok", "0.20"),
+    ("shutdown-grace-seconds", "10"),
+    ("tick-failure-cap", "5"),
 ]
 
 
@@ -373,6 +377,18 @@ class Config:
         if env is not None:
             return env
         return self._required_int("worker-history")
+
+    def shutdown_grace_seconds(self):
+        env = self._env_int("LC_SHUTDOWN_GRACE_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("shutdown-grace-seconds")
+
+    def tick_failure_cap(self):
+        env = self._env_int("LC_TICK_FAILURE_CAP", None)
+        if env is not None:
+            return env
+        return self._required_int("tick-failure-cap")
 
     def editor(self):
         raw = self._env("EDITOR")

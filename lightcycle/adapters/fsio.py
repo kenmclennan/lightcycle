@@ -104,6 +104,15 @@ def read_from(path, offset):
     return data, offset + len(data)
 
 
+def read_from_bounded(path, offset, max_bytes):
+    if not path or not os.path.exists(path):
+        return b"", offset
+    with open(path, "rb") as f:
+        f.seek(offset)
+        data = f.read(max_bytes)
+    return data, offset + len(data)
+
+
 def read_tail(path, max_bytes):
     if not path or not os.path.exists(path):
         return b"", 0
@@ -207,6 +216,9 @@ class FsAdapter(FsPort):
 
     def read_from(self, path, offset):
         return read_from(path, offset)
+
+    def read_from_bounded(self, path, offset, max_bytes):
+        return read_from_bounded(path, offset, max_bytes)
 
     def read_tail(self, path, max_bytes):
         return read_tail(path, max_bytes)

@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import tempfile
 import threading
 import types
@@ -8,6 +7,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lightcycle.adapters.worker_session import (
+    MAX_LINE_BYTES,
     SessionError,
     dispatch_event,
     plan_session,
@@ -187,21 +187,30 @@ class TestSessionPolicy(unittest.TestCase):
 
 class TestSessionCwd(unittest.TestCase):
     def test_present_workspace_returned_unchanged(self):
-        self.assertEqual(session_cwd("/some/workspace"), "/some/workspace")
+        with session_cwd("/some/workspace") as cwd:
+            self.assertEqual(cwd, "/some/workspace")
 
-    def test_missing_workspace_creates_fresh_scratch_dir(self):
-        created = session_cwd(None)
-        self.addCleanup(shutil.rmtree, created, ignore_errors=True)
-        self.assertTrue(os.path.isdir(created))
-        tmp_root = os.path.realpath(tempfile.gettempdir())
-        self.assertEqual(os.path.commonpath([os.path.realpath(created), tmp_root]), tmp_root)
+    def test_missing_workspace_creates_fresh_scratch_dir_and_removes_it_on_exit(self):
+        with session_cwd(None) as created:
+            self.assertTrue(os.path.isdir(created))
+            tmp_root = os.path.realpath(tempfile.gettempdir())
+            self.assertEqual(
+                os.path.commonpath([os.path.realpath(created), tmp_root]), tmp_root
+            )
+        self.assertFalse(os.path.isdir(created))
 
     def test_missing_workspace_is_fresh_per_call(self):
-        first = session_cwd(None)
-        second = session_cwd(None)
-        self.addCleanup(shutil.rmtree, first, ignore_errors=True)
-        self.addCleanup(shutil.rmtree, second, ignore_errors=True)
-        self.assertNotEqual(first, second)
+        with session_cwd(None) as first, session_cwd(None) as second:
+            self.assertNotEqual(first, second)
+
+    def test_missing_workspace_temp_dir_removed_even_when_the_body_raises(self):
+        created = None
+        with self.assertRaises(RuntimeError):
+            with session_cwd(None) as cwd:
+                created = cwd
+                self.assertTrue(os.path.isdir(created))
+                raise RuntimeError("boom")
+        self.assertFalse(os.path.isdir(created))
 
 
 class TestPollDecision(unittest.TestCase):
@@ -234,14 +243,32 @@ class TestPollDecision(unittest.TestCase):
         self.assertEqual(processed, 0)
 
 
+class _FakeStdout:
+    def __init__(self, text=""):
+        self._buf = text
+
+    def readline(self, size=-1):
+        if not self._buf:
+            return ""
+        nl = self._buf.find("\n")
+        if nl != -1 and (not size or size <= 0 or nl + 1 <= size):
+            line = self._buf[: nl + 1]
+        elif size and size > 0:
+            line = self._buf[:size]
+        else:
+            line = self._buf
+        self._buf = self._buf[len(line):]
+        return line
+
+
 class TestRun(unittest.TestCase):
-    def _fake_popen(self, captured):
+    def _fake_popen(self, captured, stdout_text=""):
         def popen(cmd, cwd, **kwargs):
             captured["cmd"] = cmd
             captured["cwd"] = cwd
             proc = MagicMock()
             proc.poll.return_value = 0
-            proc.stdout = iter(())
+            proc.stdout = _FakeStdout(stdout_text)
             proc.wait.return_value = 0
             return proc
         return popen
@@ -262,6 +289,14 @@ class TestRun(unittest.TestCase):
                     self._fake_popen(captured)):
             run("/data/root", "/tmp/lc-worker-xyz", "coder", "spid", "opus", "sys", 5)
         self.assertEqual(captured["cwd"], "/tmp/lc-worker-xyz")
+
+    def test_reader_bounds_an_unterminated_line_instead_of_growing_without_limit(self):
+        captured = {}
+        huge = "x" * (MAX_LINE_BYTES + 100)
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen",
+                    self._fake_popen(captured, stdout_text=huge)):
+            rc = run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
+        self.assertEqual(rc, 0)
 
 
 class TestDispatchEvent(unittest.TestCase):

@@ -3,9 +3,18 @@ import subprocess
 
 from lightcycle.ports.git import GitPort, GitReadError
 
+_GIT_TIMEOUT_SECONDS = 30
+
 
 def git(root, *args):
-    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    cmd = ["git", "-C", root, *args]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=_GIT_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=124, stdout="",
+            stderr="git timed out after %ds" % _GIT_TIMEOUT_SECONDS,
+        )
 
 
 def git_ok(root, *args):
@@ -54,15 +63,25 @@ def sync_to_origin(root):
 
 def clone(url, dest):
     os.makedirs(os.path.dirname(dest.rstrip(os.sep)) or ".", exist_ok=True)
-    proc = subprocess.run(["git", "clone", "--quiet", url, dest], capture_output=True, text=True)
+    try:
+        proc = subprocess.run(
+            ["git", "clone", "--quiet", url, dest], capture_output=True, text=True,
+            timeout=_GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return proc.returncode == 0
 
 
 def clone_identity(identity, dest):
     os.makedirs(os.path.dirname(dest.rstrip(os.sep)) or ".", exist_ok=True)
-    proc = subprocess.run(
-        ["gh", "repo", "clone", identity, dest], capture_output=True, text=True
-    )
+    try:
+        proc = subprocess.run(
+            ["gh", "repo", "clone", identity, dest], capture_output=True, text=True,
+            timeout=_GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return proc.returncode == 0
 
 

@@ -1,8 +1,10 @@
+import glob
 import io
 import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr
+from unittest.mock import patch
 
 from lightcycle.adapters.spin import SpinAdapter
 
@@ -44,6 +46,15 @@ class TestSpinAdapter(unittest.TestCase):
         self.assertEqual(state, {})
         self.assertIn(path, err.getvalue())
         self.assertIn("warning", err.getvalue())
+
+    def test_save_leaves_no_tmp_file_and_writes_via_replace(self):
+        with patch("os.replace", side_effect=os.replace) as replace:
+            self.spin.save({"pool": {"streak": 2, "tripped": False}})
+        target = os.path.join(self.root, "logs", "spin.json")
+        replace.assert_called_once()
+        self.assertEqual(replace.call_args[0][1], target)
+        leftover = glob.glob(os.path.join(self.root, "logs", "spin.json.*.tmp"))
+        self.assertEqual(leftover, [])
 
 
 if __name__ == "__main__":

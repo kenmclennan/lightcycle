@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import sqlite3
 
@@ -106,6 +107,21 @@ CREATE TABLE IF NOT EXISTS usage_backfill_log (
     step        TEXT,
     ingested_at TEXT,
     had_result_line INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS usage_accrual_state (
+    spawnid              TEXT PRIMARY KEY,
+    log_file             TEXT NOT NULL,
+    offset                INTEGER NOT NULL,
+    message_ids           TEXT NOT NULL,
+    pending_tool_use       TEXT NOT NULL,
+    posted_turn_count      INTEGER NOT NULL DEFAULT 0,
+    posted_tool_usage      TEXT NOT NULL,
+    posted_input_tokens    INTEGER NOT NULL DEFAULT 0,
+    posted_output_tokens   INTEGER NOT NULL DEFAULT 0,
+    posted_cache_read_tokens     INTEGER NOT NULL DEFAULT 0,
+    posted_cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+    posted_cost_usd         REAL NOT NULL DEFAULT 0.0
 );
 
 
@@ -904,8 +920,17 @@ class SqliteStore(StorePort):
         pass
 
     def reclaim(self, tid):
-        self.update_state(tid, State.QUEUED)
-        self.assign(tid, "")
+        try:
+            self._conn.execute(
+                "UPDATE %s SET state = ?, assignee = NULL WHERE id = ?"
+                % self._table_of(tid),
+                (_RAW_STORAGE_STATE.get(State.QUEUED, State.QUEUED), tid),
+            )
+            self._record_history(tid, State.QUEUED)
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
 
     def note(self, tid, text):
         row = self._conn.execute("SELECT notes FROM steps WHERE id = ?", (tid,)).fetchone()
@@ -1148,25 +1173,105 @@ class SqliteStore(StorePort):
         return {r[0] for r in rows}
 
     def record_backfilled_usage(self, log_file, step_id, usage, attribution):
-        stored = False
-        if step_id is not None:
-            rowcount = self._record_usage_nocommit(
-                step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
-                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
-                usage.thinking_tokens,
+        try:
+            cursor = self._conn.execute(
+                "INSERT OR IGNORE INTO usage_backfill_log "
+                "(log_file, step, ingested_at, had_result_line) VALUES (?, ?, ?, ?)",
+                (log_file, step_id, self._now(), 1 if usage.has_result_line else 0),
             )
-            stored = rowcount > 0
-            if stored:
-                self._record_attribution_nocommit(
-                    step_id, attribution.turn_count, attribution.tool_usage
+            if cursor.rowcount == 0:
+                self._conn.rollback()
+                return False
+            stored = False
+            if step_id is not None:
+                rowcount = self._record_usage_nocommit(
+                    step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+                    usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                    usage.thinking_tokens,
                 )
-        self._conn.execute(
-            "INSERT INTO usage_backfill_log (log_file, step, ingested_at, had_result_line) "
-            "VALUES (?, ?, ?, ?)",
-            (log_file, step_id, self._now(), 1 if usage.has_result_line else 0),
-        )
+                stored = rowcount > 0
+                if stored:
+                    self._record_attribution_nocommit(
+                        step_id, attribution.turn_count, attribution.tool_usage
+                    )
+            self._conn.commit()
+            return stored
+        except Exception:
+            self._conn.rollback()
+            raise
+
+    def record_live_usage(
+        self, spawnid, log_file, offset, message_ids, pending_tool_use,
+        posted_turn_count, posted_tool_usage, posted_input_tokens, posted_output_tokens,
+        posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd,
+        tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+        cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
+    ):
+        try:
+            self._conn.execute(
+                "INSERT INTO usage_accrual_state ("
+                "spawnid, log_file, offset, message_ids, pending_tool_use, "
+                "posted_turn_count, posted_tool_usage, posted_input_tokens, "
+                "posted_output_tokens, posted_cache_read_tokens, "
+                "posted_cache_creation_tokens, posted_cost_usd"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(spawnid) DO UPDATE SET "
+                "log_file = excluded.log_file, offset = excluded.offset, "
+                "message_ids = excluded.message_ids, "
+                "pending_tool_use = excluded.pending_tool_use, "
+                "posted_turn_count = excluded.posted_turn_count, "
+                "posted_tool_usage = excluded.posted_tool_usage, "
+                "posted_input_tokens = excluded.posted_input_tokens, "
+                "posted_output_tokens = excluded.posted_output_tokens, "
+                "posted_cache_read_tokens = excluded.posted_cache_read_tokens, "
+                "posted_cache_creation_tokens = excluded.posted_cache_creation_tokens, "
+                "posted_cost_usd = excluded.posted_cost_usd",
+                (
+                    spawnid, log_file, offset, json.dumps(message_ids),
+                    json.dumps(pending_tool_use), posted_turn_count,
+                    json.dumps(posted_tool_usage), posted_input_tokens, posted_output_tokens,
+                    posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd,
+                ),
+            )
+            if input_tokens or output_tokens or cache_read_tokens or cache_creation_tokens:
+                self._record_usage_nocommit(
+                    tid, input_tokens, output_tokens, cache_read_tokens,
+                    cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                )
+            if turn_count or tool_usage:
+                self._record_attribution_nocommit(tid, turn_count, tool_usage)
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+
+    def usage_accrual_state(self, spawnid):
+        row = self._conn.execute(
+            "SELECT log_file, offset, message_ids, pending_tool_use, posted_turn_count, "
+            "posted_tool_usage, posted_input_tokens, posted_output_tokens, "
+            "posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd "
+            "FROM usage_accrual_state WHERE spawnid = ?",
+            (spawnid,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "log_file": row[0],
+            "offset": row[1],
+            "message_ids": json.loads(row[2]),
+            "pending_tool_use": json.loads(row[3]),
+            "posted_turn_count": row[4],
+            "posted_tool_usage": json.loads(row[5]),
+            "posted_input_tokens": row[6],
+            "posted_output_tokens": row[7],
+            "posted_cache_read_tokens": row[8],
+            "posted_cache_creation_tokens": row[9],
+            "posted_cost_usd": row[10],
+        }
+
+    def clear_usage_accrual_state(self, spawnid):
+        self._conn.execute("DELETE FROM usage_accrual_state WHERE spawnid = ?", (spawnid,))
         self._conn.commit()
-        return stored
 
     def _seed_unclassified_backfill_row(self, log_file, step_id):
         self._conn.execute(

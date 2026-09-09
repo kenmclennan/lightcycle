@@ -123,6 +123,8 @@ def write_config(projects=None, specs=None):
         "price-sonnet-output-per-mtok: 10.00",
         "price-sonnet-cache-write-per-mtok: 2.50",
         "price-sonnet-cache-read-per-mtok: 0.20",
+        "shutdown-grace-seconds: 10",
+        "tick-failure-cap: 5",
     ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p
@@ -935,6 +937,34 @@ class TestRun(unittest.TestCase):
             rc, out, err = call(_cli_mod.cmd_start)
         self.assertEqual(rc, 0, err)
         self.assertNotIn(tid, out)
+
+    def test_a_node_closing_during_a_failed_tick_still_gets_its_hook_fired_later(self):
+        from lightcycle.application.pool.hook_completions import _iso
+
+        (_steps_dir(self.root) / "auditor.md").write_text(
+            "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
+        )
+        write_workflow_from_steps(self.root)
+        tid = self.store.create_step("audit: theme", step="audit", role="agent")
+
+        orig_run_tick = _cli_mod._run_tick
+        calls = {"n": 0}
+
+        def flaky_run_tick(tick, fs, tick_input, now):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                self.store.close(tid, "done")
+                self.store._records[tid]["closed_at"] = _iso(now)
+                raise RuntimeError("boom")
+            return orig_run_tick(tick, fs, tick_input, now)
+
+        with patch.object(_cli_mod, "_run_tick", side_effect=flaky_run_tick), \
+                patch("time.sleep", side_effect=[None, KeyboardInterrupt]):
+            rc, out, err = call(_cli_mod.cmd_start)
+
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(calls["n"], 2)
+        self.assertIn(tid, out)
 
 
 class TestRunSingletonLock(unittest.TestCase):

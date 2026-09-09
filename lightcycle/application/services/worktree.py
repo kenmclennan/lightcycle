@@ -146,13 +146,13 @@ class WorktreeService:
                 % (item, named, target)
             )
         branch = self._branch_for(item)
+        self._ensure_branch_artifact(item, branch)
         path = self.worktree_path(item)
         try:
             registered = self._git.worktree_registered(target, path)
         except GitReadError:
             registered = False
         if registered and os.path.isdir(path):
-            self._ensure_branch_artifact(item, branch)
             return path
         try:
             is_new_branch = not self._git.branch_exists(target, branch)
@@ -195,7 +195,6 @@ class WorktreeService:
             self._git.git(target, "config", "branch.%s.remote" % branch, "origin")
             self._git.git(target, "config", "branch.%s.merge" % branch,
                           "refs/heads/%s" % branch)
-        self._ensure_branch_artifact(item, branch)
         return path
 
     def sync_specs(self):

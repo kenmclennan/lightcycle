@@ -1,5 +1,3 @@
-lightcycle/adapters/github.py: 10
-lightcycle/adapters/gitio.py: 3
 lightcycle/adapters/launcher.py: 1
 lightcycle/adapters/spawner.py: 3
 lightcycle/adapters/worker_session.py: 1

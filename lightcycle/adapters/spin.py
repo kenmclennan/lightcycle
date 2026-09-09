@@ -22,8 +22,11 @@ def load(root):
 
 def save(root, state):
     os.makedirs(os.path.join(root, "logs"), exist_ok=True)
-    with open(spin_path(root), "w") as f:
+    p = spin_path(root)
+    tmp = "%s.%d.tmp" % (p, os.getpid())
+    with open(tmp, "w") as f:
         f.write(json.dumps(state, indent=2))
+    os.replace(tmp, p)
 
 
 class SpinAdapter(SpinPort):

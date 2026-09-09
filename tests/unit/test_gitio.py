@@ -1,3 +1,4 @@
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -38,7 +39,7 @@ class TestCloneIdentity(unittest.TestCase):
             self.assertTrue(result)
             mock_run.assert_called_once_with(
                 ["gh", "repo", "clone", "acme/widget", dest],
-                capture_output=True, text=True,
+                capture_output=True, text=True, timeout=gitio._GIT_TIMEOUT_SECONDS,
             )
 
     def test_returns_false_on_a_nonzero_returncode(self):
@@ -46,6 +47,23 @@ class TestCloneIdentity(unittest.TestCase):
         with patch("lightcycle.adapters.gitio.subprocess.run", return_value=_proc(1)):
             result = GitAdapter().clone_identity("acme/widget", dest)
             self.assertFalse(result)
+
+
+class TestGitTimeoutFailsClosed(unittest.TestCase):
+    def _timeout(self):
+        return subprocess.TimeoutExpired(cmd=["git"], timeout=gitio._GIT_TIMEOUT_SECONDS)
+
+    def test_timeout_yields_completed_process_with_nonzero_returncode(self):
+        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=self._timeout()):
+            proc = gitio.git("/repo", "rev-parse", "--git-dir")
+
+        self.assertNotEqual(proc.returncode, 0)
+
+    def test_is_git_repo_reads_timeout_as_not_a_repo_with_no_exception(self):
+        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=self._timeout()):
+            result = gitio.is_git_repo("/repo")
+
+        self.assertFalse(result)
 
 
 if __name__ == "__main__":

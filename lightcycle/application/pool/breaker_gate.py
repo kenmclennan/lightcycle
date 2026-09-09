@@ -149,12 +149,12 @@ class BreakerGateUseCase:
                     except NodeNotFoundError:
                         model = None
                     usage = resolve_usage(usage, attribution, model, rates)
-                resume = self._workers.usage_resume(w.spawnid)
+                resume = self._store.usage_accrual_state(w.spawnid)
                 if resume is not None:
                     usage = _corrected_usage(usage, resume)
                     attribution = _corrected_attribution(attribution, resume)
                 self._store.record_backfilled_usage(w.log, w.step, usage, attribution)
-                self._workers.set_usage_resume(w.spawnid, None)
+                self._store.clear_usage_accrual_state(w.spawnid)
             self._workers.mark_checked(w.spawnid)
             if event and event.is_rejected:
                 rejected_reset_ats.append(event.reset_at)
