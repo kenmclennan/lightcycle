@@ -112,6 +112,7 @@ from lightcycle.application.setup import (
     AddProjectUseCase,
     InitGridUseCase,
     ListProjectsUseCase,
+    ProcessListUnreadableError,
     RemoveProjectUseCase,
     ScanProjectsUseCase,
     VenvBusyError,
@@ -258,6 +259,11 @@ def cmd_upgrade(argv):
         resp = upgrade(__version__, check_only=a.check)
     except VenvBusyError as e:
         sys.stderr.write("%s\n" % e)
+        return 1
+    except ProcessListUnreadableError as e:
+        sys.stderr.write(
+            "lc upgrade refused: could not check whether the venv is in use (%s)\n" % e
+        )
         return 1
     except (urllib.error.URLError, ValueError) as e:
         sys.stderr.write("could not check for updates: %s\n" % e)

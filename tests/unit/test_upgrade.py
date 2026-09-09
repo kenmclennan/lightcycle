@@ -1,9 +1,13 @@
+import subprocess
 import unittest
+from unittest.mock import patch
 
 from lightcycle.application.setup.upgrade import (
+    ProcessListUnreadableError,
     VenvBusyError,
     filter_holders,
     format_holders_message,
+    list_processes,
     parse_process_list,
     parse_remote_version,
     upgrade,
@@ -61,6 +65,24 @@ class TestFilterHolders(unittest.TestCase):
 
     def test_returns_empty_when_nothing_matches(self):
         self.assertEqual(filter_holders(self.processes, ["/no-such-signature"], exclude_pid=999), [])
+
+
+class TestListProcesses(unittest.TestCase):
+    def test_raises_when_ps_cannot_be_run(self):
+        with patch("lightcycle.application.setup.upgrade.subprocess.run", side_effect=OSError("no such file")):
+            with self.assertRaises(ProcessListUnreadableError):
+                list_processes()
+
+    def test_raises_when_ps_exits_nonzero(self):
+        result = subprocess.CompletedProcess(args=["ps"], returncode=1, stdout=b"")
+        with patch("lightcycle.application.setup.upgrade.subprocess.run", return_value=result):
+            with self.assertRaises(ProcessListUnreadableError):
+                list_processes()
+
+    def test_returns_decoded_output_when_ps_succeeds(self):
+        result = subprocess.CompletedProcess(args=["ps"], returncode=0, stdout=b"123 command\n")
+        with patch("lightcycle.application.setup.upgrade.subprocess.run", return_value=result):
+            self.assertEqual(list_processes(), "123 command\n")
 
 
 class TestFormatHoldersMessage(unittest.TestCase):
@@ -130,6 +152,16 @@ class TestUpgrade(unittest.TestCase):
         holders = [(123, "/venv/bin/python -m lightcycle.pool")]
         with self.assertRaises(VenvBusyError):
             upgrade("0.1.0", fetch=lambda: "0.2.0", install=installer, holders=lambda: holders)
+        self.assertEqual(installer.calls, 0)
+
+    def test_refuses_and_does_not_install_when_holders_cannot_be_read(self):
+        installer = FakeInstaller()
+
+        def unreadable_holders():
+            raise ProcessListUnreadableError("ps exited with status 1")
+
+        with self.assertRaises(ProcessListUnreadableError):
+            upgrade("0.1.0", fetch=lambda: "0.2.0", install=installer, holders=unreadable_holders)
         self.assertEqual(installer.calls, 0)
 
 
