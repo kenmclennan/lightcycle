@@ -110,37 +110,38 @@ class TestBacklogViewRebuildGapAtZeroWidth(unittest.TestCase):
         session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
         session.pause()
 
-    def test_zero_width_then_real_width_with_same_shape_still_rebuilds(self):
+    def test_zero_width_then_real_width_with_same_shape_takes_cheap_path(self):
         session = self._launch()
         view = session.app.query_one(BacklogView)
         rows = [_row("a"), _row("b")]
 
         self._apply(session, view, rows, 2, None)
-        self.assertTrue(view._backlog_needs_rebuild)
+        table = session.app.query_one(BacklogTable)
+        self.assertFalse(view._backlog_needs_rebuild)
+        self.assertEqual(table.row_count, len(rows))
 
         with patch.object(BacklogView, "refresh_column_width"):
             session.press("tab")
 
-        table = session.app.query_one(BacklogTable)
-        self.assertGreater(table.size.width, 0)
+        with patch.object(BacklogView, "_rebuild_table") as rebuild, \
+                patch.object(BacklogView, "_update_cells") as update:
+            self._apply(session, view, rows, 2, None)
+            update.assert_called_once()
+            rebuild.assert_not_called()
 
-        self._apply(session, view, rows, 2, None)
-
-        self.assertEqual(table.row_count, len(rows))
-
-    def test_zero_width_both_times_does_not_raise_or_render(self):
+    def test_zero_width_both_times_builds_from_screen_width_without_raising(self):
         session = self._launch()
         view = session.app.query_one(BacklogView)
         rows = [_row("a")]
 
         self._apply(session, view, rows, 1, None)
-        self.assertTrue(view._backlog_needs_rebuild)
+        self.assertFalse(view._backlog_needs_rebuild)
+        table = session.app.query_one(BacklogTable)
+        self.assertEqual(table.row_count, len(rows))
 
         self._apply(session, view, rows, 1, None)
-        self.assertTrue(view._backlog_needs_rebuild)
 
-        table = session.app.query_one(BacklogTable)
-        self.assertEqual(table.row_count, 0)
+        self.assertEqual(table.row_count, len(rows))
 
 
 class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
@@ -184,6 +185,69 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
         table = session.app.query_one(BacklogTable)
         self.assertEqual(table.row_count, 0)
 
+    def test_resize_wide_clears_the_floor_and_renders_the_table(self):
+        session = self._launch()
+        view = session.app.query_one(BacklogView)
+        rows = [_row("a"), _row("b")]
+
+        with patch.object(BacklogView, "refresh_column_width"):
+            session.press("tab")
+
+        self._apply(session, view, rows, 2, None)
+        self.assertTrue(view._floor)
+
+        session.resize(220, 24)
+
+        table = session.app.query_one(BacklogTable)
+        floor_static = session.app.query_one("#backlog-floor")
+        self.assertTrue(table.display)
+        self.assertEqual(table.row_count, len(rows))
+        self.assertFalse(floor_static.display)
+
+
+class TestDoneViewRebuildGapAtFloorWidth(unittest.TestCase):
+    def _floor_terminal_width(self):
+        glyph_total = BACKLOG_CONTINUATION_INDENT
+        atomic_values = {"id": ["a", "b"], "project": [""]}
+        atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
+        first_line_width = glyph_total + atomic_total
+        floor_width = max(first_line_width, BACKLOG_CONTINUATION_INDENT + FLEXIBLE_MINIMUM)
+        row_budget = floor_width - 1
+        return row_budget + 2 + 2 * len(BACKLOG_COLUMNS) + scrollbar_reservation_width(DoneTable)
+
+    def _launch(self):
+        store = FakeStore()
+        item = store.create_item("seed", "a description")
+        store.close(item, "done")
+        width = self._floor_terminal_width()
+        session = launch(make_test_container(store=store), size=(width, 24))
+        self.addCleanup(session.close)
+        return session
+
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
+        session.pause()
+
+    def test_resize_wide_clears_the_floor_and_renders_the_table(self):
+        session = self._launch()
+        view = session.app.query_one(DoneView)
+        rows = [_row("a"), _row("b")]
+
+        with patch.object(DoneView, "refresh_column_width"):
+            session.press("tab")
+            session.press("tab")
+
+        self._apply(session, view, rows, 2, None)
+        self.assertTrue(view._floor)
+
+        session.resize(220, 24)
+
+        table = session.app.query_one(DoneTable)
+        floor_static = session.app.query_one("#done-floor")
+        self.assertTrue(table.display)
+        self.assertEqual(table.row_count, len(rows))
+        self.assertFalse(floor_static.display)
+
 
 class TestBacklogViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
     _STACKED_WIDTH = 38
@@ -216,8 +280,8 @@ class TestBacklogViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
         with patch.object(view, "_rebuild_table", wraps=view._rebuild_table) as rebuild, \
                 patch.object(view, "_update_cells") as update:
             self._apply(session, view, rows, 2, None)
-            rebuild.assert_called_once()
-            update.assert_not_called()
+            update.assert_called_once()
+            rebuild.assert_not_called()
 
         with patch.object(BacklogView, "refresh_column_width"):
             session.press("tab")
@@ -261,8 +325,8 @@ class TestDoneViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
         with patch.object(view, "_rebuild_table", wraps=view._rebuild_table) as rebuild, \
                 patch.object(view, "_update_cells") as update:
             self._apply(session, view, rows, 2, None)
-            rebuild.assert_called_once()
-            update.assert_not_called()
+            update.assert_called_once()
+            rebuild.assert_not_called()
 
         with patch.object(DoneView, "refresh_column_width"):
             session.press("tab")

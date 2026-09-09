@@ -45,8 +45,8 @@ from lightcycle.adapters.tui.row_grid import (
     pad_atomic_field,
     pad_field,
     pad_field_right,
-    render_row_budget,
-    row_budget_for,
+    render_screen_row_budget,
+    screen_row_budget_for,
     stacked_cell,
 )
 from lightcycle.application.pool import (
@@ -343,10 +343,8 @@ class BacklogView(Vertical):
         left = self.query_one("#backlog-filter-left", Static)
         right = self.query_one("#backlog-filter-right", Static)
         left.update(Text(value, style=COLOURS["text"]))
-        available = self.size.width
-        fits = available == 0 or (
-            FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
-        )
+        available = self.screen.size.width
+        fits = FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
         right.display = fits
         if fits:
             right.update(Text(count_text, style=COLOURS["text"]))
@@ -365,15 +363,12 @@ class BacklogView(Vertical):
             "id": [row.id for row in self._rows],
             "project": [row.project for row in self._rows],
         }
-        row_budget = row_budget_for(table, len(BACKLOG_COLUMNS))
+        row_budget = screen_row_budget_for(table, len(BACKLOG_COLUMNS))
         indent = BACKLOG_CONTINUATION_INDENT
         return compute_layout(row_budget, ["cursor"], atomic_values, indent)
 
     def _rebuild_table(self, rows) -> None:
         table = self.query_one(BacklogTable)
-        if table.size.width == 0:
-            self._backlog_needs_rebuild = True
-            return
         layout = self._layout(table)
         self._backlog_stacked = layout.stacked
         self._floor = bool(rows) and layout.floor
@@ -388,7 +383,7 @@ class BacklogView(Vertical):
         selected_id = self._selected_row_id(table)
 
         table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -421,7 +416,7 @@ class BacklogView(Vertical):
     def _update_cells(self, rows) -> None:
         table = self.query_one(BacklogTable)
         layout = self._layout(table)
-        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
         selected_id = self._selected_row_id(table)
         for row in rows:
             cells = _backlog_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
@@ -551,10 +546,8 @@ class DoneView(Vertical):
         left = self.query_one("#done-filter-left", Static)
         right = self.query_one("#done-filter-right", Static)
         left.update(Text(value, style=COLOURS["text"]))
-        available = self.size.width
-        fits = available == 0 or (
-            FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
-        )
+        available = self.screen.size.width
+        fits = FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
         right.display = fits
         if fits:
             right.update(Text(count_text, style=COLOURS["text"]))
@@ -573,15 +566,12 @@ class DoneView(Vertical):
             "id": [row.id for row in self._rows],
             "project": [row.project for row in self._rows],
         }
-        row_budget = row_budget_for(table, len(BACKLOG_COLUMNS))
+        row_budget = screen_row_budget_for(table, len(BACKLOG_COLUMNS))
         indent = BACKLOG_CONTINUATION_INDENT
         return compute_layout(row_budget, ["cursor"], atomic_values, indent)
 
     def _rebuild_table(self, rows) -> None:
         table = self.query_one(DoneTable)
-        if table.size.width == 0:
-            self._backlog_needs_rebuild = True
-            return
         layout = self._layout(table)
         self._backlog_stacked = layout.stacked
         self._floor = bool(rows) and layout.floor
@@ -596,7 +586,7 @@ class DoneView(Vertical):
         selected_id = self._selected_row_id(table)
 
         table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -629,7 +619,7 @@ class DoneView(Vertical):
     def _update_cells(self, rows) -> None:
         table = self.query_one(DoneTable)
         layout = self._layout(table)
-        row_budget = render_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
         selected_id = self._selected_row_id(table)
         for row in rows:
             cells = _backlog_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
@@ -1224,6 +1214,14 @@ class LightcycleApp(App):
         if self._container.config.tui_autostart_pool():
             self._start_pool()
 
+    def on_resize(self, event: events.Resize) -> None:
+        self.call_after_refresh(self._on_terminal_resized)
+
+    def _on_terminal_resized(self) -> None:
+        self.refresh_priority_layout()
+        self.query_one(BacklogView).refresh_column_width()
+        self.query_one(DoneView).refresh_column_width()
+
     def _check_upgrade(self):
         try:
             response = self._upgrade_check()
@@ -1518,7 +1516,7 @@ class LightcycleApp(App):
             "cost": [row.cost for row in rows],
             "time": [row.time for row in rows],
         }
-        row_budget = row_budget_for(table, len(DATA_COLUMNS)) if table.size.width else None
+        row_budget = screen_row_budget_for(table, len(DATA_COLUMNS))
         return compute_layout(row_budget, ["cursor", "icon"], atomic_values, PRIORITY_CONTINUATION_INDENT)
 
     def _add_columns(self, table, layout, row_budget) -> None:
@@ -1589,7 +1587,7 @@ class LightcycleApp(App):
     def _update_cells(self, table, rows) -> None:
         self._last_priority_rows = rows
         layout = self._priority_layout(table, rows)
-        row_budget = render_row_budget(table, layout, len(DATA_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(DATA_COLUMNS))
         if not layout.stacked:
             apply_widths(
                 table,
@@ -1683,9 +1681,6 @@ class LightcycleApp(App):
 
     def _rebuild_table(self, table, rows) -> None:
         self._last_priority_rows = rows
-        if table.size.width == 0:
-            self._priority_needs_rebuild = True
-            return
         layout = self._priority_layout(table, rows)
         self._priority_floor = bool(rows) and layout.floor
         self._priority_stacked = layout.stacked
@@ -1701,7 +1696,7 @@ class LightcycleApp(App):
         selected_id = self._selected_row_id(table) if has_prior else None
 
         table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(DATA_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(DATA_COLUMNS))
         self._add_columns(table, layout, row_budget)
         self._priority_layout_cache = layout
         self._priority_row_budget_cache = row_budget
