@@ -4,6 +4,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeView, State
 from lightcycle.ports.store import ProjectResolutionError
@@ -20,6 +21,7 @@ _STRUCTURAL_META_KEYS = ("model", "accepts", "produces")
 @dataclass(frozen=True)
 class ClaimResponse:
     view: NodeView
+    surface: dict
     workspace: Optional[str] = None
     branch: Optional[str] = None
     pr: Optional[str] = None
@@ -30,6 +32,21 @@ class ClaimResponse:
     phase: Optional[str] = None
     pin: Optional[str] = None
     step_file: Optional[str] = None
+
+    def as_dict(self) -> dict:
+        out = dict(self.surface)
+        if self.workspace:
+            out["workspace"] = self.workspace
+        if self.branch:
+            out["branch"] = self.branch
+        if self.spec_path:
+            out["spec_path"] = self.spec_path
+        out["description"] = self.description
+        if self.repo_path:
+            out["repo_path"] = self.repo_path
+        if self.config:
+            out["config"] = self.config
+        return out
 
 
 class ClaimStepUseCase:
@@ -97,10 +114,10 @@ class ClaimStepUseCase:
         if meta is None:
             meta = self._flow.meta_for_step(t.step, pin) if pin else {}
         view = self._store.node_view(t.id)
+        surface = node_read_surface(self._store, self._flow, view)
         item = t.parent or t.id
         ws = self._worktrees.ensure(item)
         branch = self._worktrees.item_branch(item)
-        run = self._store.current_run(item, self._flow.phase_for(t) if pin else None)
         spec = next((a.value for a in view.item_artifacts if a.type == "spec"), None)
         spec_path = None
         if spec:
@@ -116,12 +133,11 @@ class ClaimStepUseCase:
             except ProjectResolutionError as e:
                 raise UseCaseError(str(e))
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
-        phase = self._flow.phase_for(t)
         step_file = self._flow.file_for_step(t.step, pin) if pin else t.step
         return ClaimResponse(
-            view=view, workspace=ws, branch=branch, pr=run.pr if run else None,
-            spec_path=spec_path,
+            view=view, surface=surface, workspace=ws, branch=branch,
+            pr=surface.get("pr"), spec_path=spec_path,
             description=self._store.get_node(item).description,
-            repo_path=repo_path, config=config or None, phase=phase, pin=pin,
-            step_file=step_file
+            repo_path=repo_path, config=config or None,
+            phase=surface.get("phase"), pin=pin, step_file=step_file,
         )

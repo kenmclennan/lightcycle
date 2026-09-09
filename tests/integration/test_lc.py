@@ -2864,7 +2864,7 @@ class TestRunReadSurface(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_show, item)
         self.assertEqual(rc, 0, err)
         run = json.loads(out)["runs"][0]
-        for field in ("comments_handled_through", "comments_dispatched_through"):
+        for field in self.RUN_FIELDS_A_STEP_READS:
             self.assertIn(field, run, "lc show dropped run field: %s" % field)
         self.assertEqual(run["comments_handled_through"], "1500.0")
 
@@ -2876,6 +2876,28 @@ class TestRunReadSurface(unittest.TestCase):
         for field in self.RUN_FIELDS_A_STEP_READS:
             self.assertIn(field, run, "lc claim dropped run field: %s" % field)
         self.assertEqual(run["comments_handled_through"], "1500.0")
+
+
+class TestShowAndClaimAgreeOnSharedFields(unittest.TestCase):
+    SHARED_KEYS = (
+        "id", "item", "title", "stage", "pass", "role", "state", "claimed_by",
+        "park", "runs", "workflow", "workflow_resolved", "workflow_source", "workflow_error",
+    )
+
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_claim_then_show_agree_on_every_shared_key(self):
+        item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
+        self.store.create_step("build: x", step="build", role="agent", parent=item)
+        _, claim_out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(err, "")
+        claimed = json.loads(claim_out)
+        _, show_out, err = call(_cli_mod.cmd_show, claimed["id"])
+        self.assertEqual(err, "")
+        shown = json.loads(show_out)
+        for key in self.SHARED_KEYS:
+            self.assertEqual(claimed.get(key), shown.get(key), "field %r diverged" % key)
 
 
 class TestNodeDTOReadSurface(unittest.TestCase):

@@ -439,37 +439,8 @@ def cmd_show(argv):
     ap = argparse.ArgumentParser(prog="lc show")
     ap.add_argument("id")
     a = ap.parse_args(argv)
-    view = ShowNodeUseCase(_container.store).execute(ShowNodeInput(step=a.id)).view
-    out = view.as_dict()
-    item_id = getattr(view.step, "item", None) or view.step.id
-    if "workflow" not in out:
-        out["workflow"] = _container.store.get_item(item_id).workflow
-    out["passes"] = [p.as_dict() for p in _container.store.passes_of(item_id)]
-    out["runs"] = [r.as_dict() for r in _container.store.runs_of(item_id)]
-    flow = _flow()
-    skill = flow.step_skill(view.step)
-    if skill:
-        out["skill"] = skill
-    selector, source = flow.workflow_owner(view.step)
-    out["workflow_resolved"] = None
-    out["workflow_source"] = source
-    out["workflow_error"] = None
-    if selector is not None:
-        try:
-            pin = flow.resolve_selection(selector)
-            flow.load_graph(pin)
-        except ValueError as e:
-            out["workflow_error"] = str(e)
-        else:
-            out["workflow_resolved"] = pin
-    if out["workflow_resolved"]:
-        phase = flow.phase_for(view.step)
-        if phase:
-            out["phase"] = phase
-            run = _container.store.current_run(item_id, phase)
-            if run and run.pr:
-                out["pr"] = run.pr
-    print(json.dumps(out, indent=2))
+    resp = ShowNodeUseCase(_container.store, _flow()).execute(ShowNodeInput(step=a.id))
+    print(json.dumps(resp.as_dict(), indent=2))
     return 0
 
 
@@ -505,33 +476,7 @@ def cmd_claim(argv):
         return 1
     if resp is None:
         return 0
-    out = resp.view.as_dict()
-    out["workflow"] = _container.store.get_item(resp.view.step.item).workflow
-    if resp.workspace:
-        out["workspace"] = resp.workspace
-    if resp.branch:
-        out["branch"] = resp.branch
-    if resp.pr:
-        out["pr"] = resp.pr
-    runs = [
-        {"phase": r.phase, "pass": r.pass_id, "branch": r.branch, "pr": r.pr,
-         "comments_handled_through": r.comments_handled_through,
-         "comments_dispatched_through": r.comments_dispatched_through,
-         "state": r.state}
-        for r in _container.store.runs_of(resp.view.step.parent or resp.view.step.id)
-    ]
-    if runs:
-        out["runs"] = runs
-    if resp.spec_path:
-        out["spec_path"] = resp.spec_path
-    out["description"] = resp.description
-    if resp.repo_path:
-        out["repo_path"] = resp.repo_path
-    if resp.config:
-        out["config"] = resp.config
-    if resp.phase:
-        out["phase"] = resp.phase
-    print(json.dumps(out, indent=2))
+    print(json.dumps(resp.as_dict(), indent=2))
     return 0
 
 

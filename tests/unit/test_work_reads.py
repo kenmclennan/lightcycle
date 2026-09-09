@@ -59,10 +59,10 @@ class TestShowNode(unittest.TestCase):
     def test_returns_task_view(self):
         s = FakeStore()
         tid = s.create_step("build: x", step="build", role="agent")
-        view = ShowNodeUseCase(s).execute(ShowNodeInput(step=tid)).view
-        self.assertEqual(view.step.id, tid)
-        self.assertEqual(view.step.title, "build: x")
-        self.assertIn("item_artifacts", view.as_dict())
+        resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=tid))
+        self.assertEqual(resp.view.step.id, tid)
+        self.assertEqual(resp.view.step.title, "build: x")
+        self.assertIn("item_artifacts", resp.as_dict())
 
 
 class TestTrace(unittest.TestCase):
