@@ -7,5 +7,5 @@ class SpinPort(ABC):
         pass
 
     @abstractmethod
-    def save(self, state):
+    def update(self, mutate):
         pass

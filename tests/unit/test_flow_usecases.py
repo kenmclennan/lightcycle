@@ -2,6 +2,7 @@ import os
 import unittest
 
 from lightcycle.domain.audit import FINDINGS_STEP
+from lightcycle.domain.pool import SpinLedger
 from pathlib import Path
 
 from lightcycle.adapters.fsio import parse_step, step_roles, workflow_text
@@ -23,6 +24,7 @@ from lightcycle.application.flow import (
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.step_factory import create_owned_step
@@ -945,7 +947,9 @@ class TestClaimTask(unittest.TestCase):
         node_before = s.get_node(bid)
         expected_reason = node_before.park.reason
         expected_needs = node_before.park.needs
-        UnblockStepUseCase(s, flow_for(SPEC_METAS, s)).execute(UnblockInput(step=bid))
+        UnblockStepUseCase(s, flow_for(SPEC_METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         node = s.get_node(bid)
         self.assertIsNone(node.park.needs)
         self.assertNotIn("BLOCKED:", node.notes or "")
@@ -1158,7 +1162,9 @@ class TestUnblockTask(unittest.TestCase):
     def test_flips_back_to_agent_role(self):
         s = FakeStore()
         bid = create_owned_step(s, "build: x", step="build", role="human")
-        resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        resp = UnblockStepUseCase(s, flow_for(METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         self.assertEqual(resp.role, "agent")
         self.assertEqual(s.get_node(bid).role, "agent")
         self.assertEqual(s.get_node(bid).notes or "", "")
@@ -1167,7 +1173,9 @@ class TestUnblockTask(unittest.TestCase):
         s = FakeStore()
         bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
-        resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        resp = UnblockStepUseCase(s, flow_for(METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         self.assertEqual(resp.role, "agent")
         self.assertEqual(s.get_node(bid).role, "agent")
 
@@ -1175,7 +1183,9 @@ class TestUnblockTask(unittest.TestCase):
         s = make_sqlite_store()
         bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
-        resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        resp = UnblockStepUseCase(s, flow_for(METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         self.assertEqual(resp.role, "agent")
         self.assertEqual(s.get_node(bid).role, "agent")
 
@@ -1183,7 +1193,9 @@ class TestUnblockTask(unittest.TestCase):
         s = FakeStore()
         bid = create_owned_step(s, "a todo", role="human")
         with self.assertRaises(UseCaseError):
-            UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+            UnblockStepUseCase(
+                s, flow_for(METAS, s), spin_port=FakeSpinPort()
+            ).execute(UnblockInput(step=bid))
 
     def test_clears_needs_and_blocked_note(self):
         s = FakeStore()
@@ -1191,7 +1203,9 @@ class TestUnblockTask(unittest.TestCase):
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="confirm approach", reason="oops")
         )
-        UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        UnblockStepUseCase(s, flow_for(METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         t = s.get_node(bid)
         self.assertIsNone(t.park.needs)
         self.assertNotIn("BLOCKED:", t.notes or "")
@@ -1203,7 +1217,9 @@ class TestUnblockTask(unittest.TestCase):
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="decide X", reason="oops", tried="a,b")
         )
-        UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        UnblockStepUseCase(s, flow_for(METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         t = s.get_node(bid)
         self.assertIsNone(t.park.reason)
         self.assertIsNone(t.park.needs)
@@ -1219,7 +1235,9 @@ class TestUnblockTask(unittest.TestCase):
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="confirm approach", reason="oops")
         )
-        UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        UnblockStepUseCase(s, flow_for(METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         t = s.get_node(bid)
         notes = t.notes or ""
         self.assertIn("from review: lgtm", notes)
@@ -1237,7 +1255,9 @@ class TestUnblockTask(unittest.TestCase):
             BlockInput(step=bid, needs="decide X", reason="line one\nline two")
         )
         before_lines = (s.get_node(bid).notes or "").split("\n")
-        UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+        UnblockStepUseCase(s, flow_for(METAS, s), spin_port=FakeSpinPort()).execute(
+            UnblockInput(step=bid)
+        )
         t = s.get_node(bid)
         notes = t.notes or ""
         lines = notes.split("\n")
@@ -1248,42 +1268,22 @@ class TestUnblockTask(unittest.TestCase):
         self.assertNotIn("line one\nline two", notes)
 
     def test_clears_the_steps_spin_streak(self):
-        class FakeSpinPort:
-            def __init__(self, state):
-                self._state = state
-
-            def load(self):
-                return self._state
-
-            def save(self, state):
-                self._state = state
-
         s = FakeStore()
         bid = create_owned_step(s, "build: x", step="build", role="human")
         spin_port = FakeSpinPort({"steps": {bid: {"count": 3, "since": 0, "last_line": "x"}}})
         UnblockStepUseCase(s, flow_for(METAS, s), spin_port=spin_port).execute(
             UnblockInput(step=bid)
         )
-        self.assertNotIn(bid, spin_port.load().get("steps") or {})
+        self.assertIsNone(spin_port.load().entry(bid))
 
     def test_unblock_without_a_spin_streak_is_a_noop_for_spin_state(self):
-        class FakeSpinPort:
-            def __init__(self, state):
-                self._state = state
-
-            def load(self):
-                return self._state
-
-            def save(self, state):
-                self._state = state
-
         s = FakeStore()
         bid = create_owned_step(s, "build: x", step="build", role="human")
         spin_port = FakeSpinPort({})
         UnblockStepUseCase(s, flow_for(METAS, s), spin_port=spin_port).execute(
             UnblockInput(step=bid)
         )
-        self.assertEqual(spin_port.load(), {})
+        self.assertEqual(spin_port.load(), SpinLedger())
 
     def test_a_failing_reassign_leaves_the_earlier_writes_unapplied(self):
         s = FakeStore()
@@ -1298,7 +1298,9 @@ class TestUnblockTask(unittest.TestCase):
 
         s.reassign = raising_reassign
         with self.assertRaises(RuntimeError):
-            UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
+            UnblockStepUseCase(
+                s, flow_for(METAS, s), spin_port=FakeSpinPort()
+            ).execute(UnblockInput(step=bid))
         after = s.get_node(bid)
         self.assertEqual(
             (after.park.reason, after.park.needs, after.park.tried), before_metadata

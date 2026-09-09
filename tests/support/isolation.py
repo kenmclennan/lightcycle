@@ -14,8 +14,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def engine_lc_outside_any_worktree():
     dst = tempfile.mkdtemp()
-    shutil.copytree(str(REPO_ROOT / "lightcycle"), os.path.join(dst, "lightcycle"))
-    shutil.copytree(str(REPO_ROOT / "bin"), os.path.join(dst, "bin"))
+    ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
+    shutil.copytree(
+        str(REPO_ROOT / "lightcycle"), os.path.join(dst, "lightcycle"), ignore=ignore
+    )
+    shutil.copytree(str(REPO_ROOT / "bin"), os.path.join(dst, "bin"), ignore=ignore)
     return os.path.join(dst, "bin", "lc")
 
 

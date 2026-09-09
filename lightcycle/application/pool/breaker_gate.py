@@ -71,39 +71,33 @@ class BreakerGateUseCase:
         self._store = store
 
     def _pool_wide_spin(self, rejected, dead_with_step, no_work_with_step, saw_real_activity, rep_step):
-        state = self._spin_port.load()
-        pool_state = dict(state.get("pool") or {})
-        streak = pool_state.get("streak", 0)
-        tripped = pool_state.get("tripped", False)
-        if not rejected and dead_with_step >= 2 and no_work_with_step == dead_with_step:
-            streak += 1
-        elif saw_real_activity:
-            streak = 0
-            tripped = False
-        spin_opened = False
         spin_cap = self._config.spin_cap()
-        if not tripped and streak >= spin_cap:
-            tripped = True
-            spin_opened = True
-            if self._store is not None and rep_step is not None:
-                observation = (
-                    "%d workers across the pool died within one check, none producing any "
-                    "model activity - a pool-wide pattern, not specific to this step."
-                    % no_work_with_step
-                )
-                decision = (
-                    "Confirm the pool can actually reach the model (auth, network, or model "
-                    "access) before continuing - this looks like an engine-level problem, not "
-                    "one specific to this step."
-                )
-                ParkStepUseCase(self._store).execute(
-                    ParkInput(step=rep_step, observation=observation, decision=decision)
-                )
-        pool_state["streak"] = streak
-        pool_state["tripped"] = tripped
-        state["pool"] = pool_state
-        self._spin_port.save(state)
-        return tripped, spin_opened
+        outcome = {}
+
+        def _mutate(ledger):
+            new_ledger, tripped, spin_opened = ledger.advance_pool(
+                rejected, dead_with_step, no_work_with_step, saw_real_activity, spin_cap
+            )
+            outcome["tripped"] = tripped
+            outcome["spin_opened"] = spin_opened
+            return new_ledger
+
+        self._spin_port.update(_mutate)
+        if outcome["spin_opened"] and self._store is not None and rep_step is not None:
+            observation = (
+                "%d workers across the pool died within one check, none producing any "
+                "model activity - a pool-wide pattern, not specific to this step."
+                % no_work_with_step
+            )
+            decision = (
+                "Confirm the pool can actually reach the model (auth, network, or model "
+                "access) before continuing - this looks like an engine-level problem, not "
+                "one specific to this step."
+            )
+            ParkStepUseCase(self._store).execute(
+                ParkInput(step=rep_step, observation=observation, decision=decision)
+            )
+        return outcome["tripped"], outcome["spin_opened"]
 
     def _probe_signal(self, w, now):
         event = parse_rate_limit_event(self._fs.iter_lines(w.log))

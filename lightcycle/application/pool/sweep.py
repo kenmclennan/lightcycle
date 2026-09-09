@@ -81,26 +81,23 @@ class SweepUseCase:
         )
 
     def _advance_spin(self, step_id, now, no_work, last_line):
-        state = self._spin_port.load()
-        steps = dict(state.get("steps") or {})
         if not no_work:
-            if step_id in steps:
-                del steps[step_id]
-                state["steps"] = steps
-                self._spin_port.save(state)
+            self._spin_port.update(lambda ledger: ledger.record_activity(step_id))
             return False
-        entry = steps.get(step_id) or {}
-        count = entry.get("count", 0) + 1
-        since = entry.get("since", now)
-        if count >= self._spin_cap:
-            del steps[step_id]
-            state["steps"] = steps
-            self._spin_port.save(state)
-            self._park_for_spin(step_id, count, since, now, last_line)
+        parked_entry = []
+
+        def _mutate(ledger):
+            ledger = ledger.record_death(step_id, now, last_line)
+            if ledger.should_park(step_id, self._spin_cap):
+                parked_entry.append(ledger.entry(step_id))
+                return ledger.clear(step_id)
+            return ledger
+
+        self._spin_port.update(_mutate)
+        if parked_entry:
+            entry = parked_entry[0]
+            self._park_for_spin(step_id, entry.count, entry.since, now, last_line)
             return True
-        steps[step_id] = {"count": count, "since": since, "last_line": last_line}
-        state["steps"] = steps
-        self._spin_port.save(state)
         return False
 
     def execute(self, now, max_boot, stall_seconds) -> SweepResponse:

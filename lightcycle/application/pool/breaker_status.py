@@ -21,7 +21,7 @@ class BreakerStatusUseCase:
         state = Breaker.from_state(self._breaker_port.load())
         pool_spin_open = False
         if self._spin_port is not None:
-            pool_spin_open = bool((self._spin_port.load().get("pool") or {}).get("tripped"))
+            pool_spin_open = self._spin_port.load().pool_tripped
         return BreakerStatusResponse(
             is_open=state.is_open, reset_at=state.reset_at, is_probing=state.is_probing(now),
             pool_spin_open=pool_spin_open,

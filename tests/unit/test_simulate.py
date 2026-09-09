@@ -48,7 +48,7 @@ class _FakeGit:
 
 
 def _use_case(store, git):
-    return WorkflowSimulateUseCase(store, None, None, None, None, None, git)
+    return WorkflowSimulateUseCase(store, None, None, None, None, None, git, None)
 
 
 class TestPassEndCoverageViolations(unittest.TestCase):

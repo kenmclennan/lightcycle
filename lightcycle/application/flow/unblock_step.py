@@ -14,7 +14,7 @@ class UnblockResponse:
 
 
 class UnblockStepUseCase:
-    def __init__(self, store, flow, spin_port=None):
+    def __init__(self, store, flow, *, spin_port):
         self._store = store
         self._flow = flow
         self._spin_port = spin_port
@@ -36,11 +36,5 @@ class UnblockStepUseCase:
             )
             self._store.set_notes(input.step, "\n".join(kept))
             self._store.reassign(input.step, role)
-        if self._spin_port is not None:
-            state = self._spin_port.load()
-            steps = dict(state.get("steps") or {})
-            if input.step in steps:
-                del steps[input.step]
-                state["steps"] = steps
-                self._spin_port.save(state)
+        self._spin_port.update(lambda ledger: ledger.clear(input.step))
         return UnblockResponse(role=role)

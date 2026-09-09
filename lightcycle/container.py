@@ -42,6 +42,13 @@ class Container:
     def worktrees(self):
         return worktrees_for(self)
 
+    def unblock_step_use_case(self, flow=None):
+        from lightcycle.application.flow.unblock_step import UnblockStepUseCase
+
+        return UnblockStepUseCase(
+            self.store, flow if flow is not None else self.flow_service(), spin_port=self.spin
+        )
+
 
 def make_flow_service(fs, store, config, workflow_source):
     from lightcycle.application.services.flow import FlowService
