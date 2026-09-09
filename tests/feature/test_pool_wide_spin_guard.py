@@ -1,10 +1,10 @@
-import json
-
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
+from lightcycle.domain.pool import SpinLedger
+from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -79,17 +79,6 @@ class FakeBreakerPort:
 
     def save(self, state):
         self._state = dict(state)
-
-
-class FakeSpinPort:
-    def __init__(self):
-        self._state = {}
-
-    def load(self):
-        return json.loads(json.dumps(self._state))
-
-    def save(self, state):
-        self._state = json.loads(json.dumps(state))
 
 
 class FakeConfig:
@@ -240,12 +229,14 @@ def _one_shows_real_activity(ctx):
 
 @given("the pool-wide spin guard's streak has already advanced from an earlier check")
 def _streak_advanced(ctx):
-    ctx["spin_port"].save({"pool": {"streak": 1, "tripped": False}})
+    ctx["spin_port"].update(lambda _: SpinLedger(pool_streak=1, pool_tripped=False))
 
 
 @given("the pool-wide spin guard is open")
 def _guard_open(ctx):
-    ctx["spin_port"].save({"pool": {"streak": ctx["config"].spin_cap(), "tripped": True}})
+    ctx["spin_port"].update(
+        lambda _: SpinLedger(pool_streak=ctx["config"].spin_cap(), pool_tripped=True)
+    )
 
 
 @given("the pool has more than one free slot")
@@ -307,7 +298,7 @@ def _parked_pool_wide(ctx):
 
 @then("the pool-wide spin guard's streak resets")
 def _streak_resets(ctx):
-    assert ctx["spin_port"].load()["pool"]["streak"] == 0
+    assert ctx["spin_port"].load().pool_streak == 0
 
 
 @then("the pool-wide spin guard closes on that same check")

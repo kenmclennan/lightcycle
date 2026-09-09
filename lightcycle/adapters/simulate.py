@@ -2,6 +2,7 @@ import os
 
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import Comment, GitHubEventsPort
+from lightcycle.ports.spin import SpinPort
 from lightcycle.ports.workers import WorkersPort
 
 _WORKTREE_BASE = "sim-base"
@@ -218,6 +219,17 @@ class NullWorkers(WorkersPort):
 
     def set_pid_started(self, spawnid, pid_started):
         self._refuse("set_pid_started")
+
+
+class NullSpin(SpinPort):
+    def _refuse(self, name):
+        raise AssertionError("not expected during simulation: %s" % name)
+
+    def load(self):
+        self._refuse("load")
+
+    def update(self, mutate):
+        self._refuse("update")
 
 
 class SimulateConfig:

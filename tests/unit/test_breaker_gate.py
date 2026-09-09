@@ -1,9 +1,9 @@
-import copy
 import json
 import unittest
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -114,17 +114,6 @@ class FakeConfig:
 
     def usage_pricing(self):
         return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
-
-
-class FakeSpinPort:
-    def __init__(self, state=None):
-        self._state = state or {}
-
-    def load(self):
-        return copy.deepcopy(self._state)
-
-    def save(self, state):
-        self._state = copy.deepcopy(state)
 
 
 class TestBreakerGateUseCase(unittest.TestCase):
@@ -764,7 +753,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
             spin_port=spin_port, store=s,
         ).execute(now=100)
         self.assertFalse(result.spin_open)
-        self.assertEqual(spin_port.load()["pool"]["streak"], 0)
+        self.assertEqual(spin_port.load().pool_streak, 0)
 
     def test_streak_accumulates_one_check_at_a_time_until_the_cap(self):
         s = FakeStore()

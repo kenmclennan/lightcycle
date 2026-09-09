@@ -11,7 +11,7 @@ import traceback
 import urllib.error
 
 from lightcycle import __version__
-from lightcycle.adapters.simulate import NullWorkers, RecordingGit, SimulateConfig
+from lightcycle.adapters.simulate import NullSpin, NullWorkers, RecordingGit, SimulateConfig
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
@@ -86,7 +86,6 @@ from lightcycle.application.flow import (
     FlowCheckInput,
     FlowCheckUseCase,
     UnblockInput,
-    UnblockStepUseCase,
 )
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
@@ -770,7 +769,7 @@ def _workflow_simulate(selector):
         claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
-            store, flow, worktrees, claim, complete, projects_root, git
+            store, flow, worktrees, claim, complete, projects_root, git, NullSpin()
         )
         try:
             resp = use_case.execute(SimulateInput(workflow=selector))
@@ -1296,9 +1295,7 @@ def cmd_set(argv):
             )
             return 0
         if a.state == "ready":
-            UnblockStepUseCase(
-                _container.store, _flow(), spin_port=_container.spin
-            ).execute(UnblockInput(step=a.id))
+            _container.unblock_step_use_case().execute(UnblockInput(step=a.id))
             return 0
         if a.state == "in_progress":
             ReopenItemUseCase(_container.store).execute(ReopenItemInput(item=a.id))
@@ -1618,7 +1615,8 @@ def cmd_start(argv):
         complete = CompleteStepUseCase(
             _container.store, flow_service, worktrees, _container.config)
         monitor = MonitorPrsUseCase(
-            _container.store, _container.github, worktrees, flow_service, complete
+            _container.store, _container.github, worktrees, flow_service, complete,
+            spin_port=_container.spin,
         )
         cadence_gate = RetroCadenceUseCase(_container.store, _container.config)
         breaker_gate = BreakerGateUseCase(

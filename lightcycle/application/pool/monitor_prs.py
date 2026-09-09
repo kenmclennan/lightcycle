@@ -81,12 +81,13 @@ class MonitorPrsResponse:
 
 
 class MonitorPrsUseCase:
-    def __init__(self, store, github, worktrees, flow_service, complete=None):
+    def __init__(self, store, github, worktrees, flow_service, complete=None, *, spin_port):
         self._store = store
         self._github = github
         self._worktrees = worktrees
         self._flow_service = flow_service
         self._complete = complete
+        self._spin_port = spin_port
 
     def _flow_for(self, node):
         return self._flow_service.flow_for(node)
@@ -217,9 +218,9 @@ class MonitorPrsUseCase:
                 )
                 continue
             with self._store.transaction():
-                UnblockStepUseCase(self._store, self._flow_service).execute(
-                    UnblockInput(step=step.id)
-                )
+                UnblockStepUseCase(
+                    self._store, self._flow_service, spin_port=self._spin_port
+                ).execute(UnblockInput(step=step.id))
                 self._store.label_remove(step.id, CI_PENDING_LABEL)
                 self._store.label_add(
                     step.id, "%s%d" % (CI_RELEASED_PREFIX, released_so_far + 1)

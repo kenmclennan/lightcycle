@@ -14,6 +14,7 @@ from tests.support.fake_fs import FakeFs, flow_from_metas
 from lightcycle.domain.work import State
 from lightcycle.ports.github import Comment, Review
 from tests.support.fake_github import FakeGitHub
+from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -223,7 +224,9 @@ class TestMonitorPrsSkipsPrlessItems(unittest.TestCase):
     def test_backlogged_item_with_an_inherited_selector_is_never_flow_resolved(self):
         store = FakeStore()
         store.create_item("backlog", "a description", workflow="lightcycle/spec-driven")
-        uc = MonitorPrsUseCase(store, FakeGitHub(), FakeWorktrees(), _TripwireFlow())
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(), FakeWorktrees(), _TripwireFlow(), spin_port=FakeSpinPort()
+        )
         result = uc.execute()
         self.assertEqual(result.merged, [])
         self.assertEqual(result.abandoned, [])
@@ -281,7 +284,7 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
 
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={code_url, spec_url})
-        uc = MonitorPrsUseCase(store, github, worktrees, flow_service)
+        uc = MonitorPrsUseCase(store, github, worktrees, flow_service, spin_port=FakeSpinPort())
 
         result = uc.execute()
 
@@ -367,7 +370,7 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
         )
         uc = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), FakeWorktrees(), flow_service,
-            CompleteStepUseCase(store, flow_service),
+            CompleteStepUseCase(store, flow_service), spin_port=FakeSpinPort(),
         )
         return store, item, step, uc
 
@@ -407,7 +410,9 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={spec_url})
         complete = CompleteStepUseCase(store, flow_service)
-        uc = MonitorPrsUseCase(store, github, worktrees, flow_service, complete)
+        uc = MonitorPrsUseCase(
+            store, github, worktrees, flow_service, complete, spin_port=FakeSpinPort()
+        )
         return store, spec_item, uc, spec_url, worktrees, github
 
     def test_spec_merge_advances_the_same_item_to_write_code(self):
@@ -503,7 +508,9 @@ class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, flow_service)
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, flow_service, complete)
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={url}), worktrees, flow_service, complete, spin_port=FakeSpinPort()
+        )
 
         uc.execute()
 
@@ -520,7 +527,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
             "ready-merge: my feature", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(flow or _FLOW))
+        uc = MonitorPrsUseCase(
+            store, github, worktrees, _FlowAdapter(flow or _FLOW), spin_port=FakeSpinPort()
+        )
         return store, item, step, worktrees, uc
 
     def test_merged_pr_closes_story_and_children(self):
@@ -567,7 +576,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store.close(step, "merged")
         store.close(item, "merged")
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -582,7 +593,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
             "build: upstream feature", step="build", role="agent", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -601,7 +614,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
             "review: regressed feature", step="review", role="agent", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -616,7 +631,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={"anything"})
-        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(_FLOW))
+        uc = MonitorPrsUseCase(
+            store, github, worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -626,7 +643,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         create_owned_step(store, "ready-merge: orphan", step="ready-merge", role="human")
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={"x"}), worktrees, _FlowAdapter(_FLOW))
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={"x"}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -649,7 +668,9 @@ class TestMonitorPrsMerged(unittest.TestCase):
         plant_pr(store, item, url)
         store.create_step("await-ship: ship it", step="await-ship", role="human", parent=item)
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(arbitrary_flow))
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(arbitrary_flow), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -668,7 +689,9 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
             "ready-merge: abandoned feature", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(flow or _FLOW))
+        uc = MonitorPrsUseCase(
+            store, github, worktrees, _FlowAdapter(flow or _FLOW), spin_port=FakeSpinPort()
+        )
         return store, item, step, worktrees, uc
 
     def test_closed_unmerged_pr_closes_story(self):
@@ -732,7 +755,9 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
             "await-ship: cancelled work", step="await-ship", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(arbitrary_flow))
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(arbitrary_flow), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -764,7 +789,8 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         flow_adapter = _FlowAdapter(_CLOSE_ROUTES_TO_HUMAN_GATE_FLOW)
         complete = CompleteStepUseCase(store, flow_adapter)
         uc = MonitorPrsUseCase(
-            store, FakeGitHub(closed_prs={url}), worktrees, flow_adapter, complete
+            store, FakeGitHub(closed_prs={url}), worktrees, flow_adapter, complete,
+            spin_port=FakeSpinPort(),
         )
 
         result = uc.execute()
@@ -785,7 +811,9 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
             "watch-pr: watched feature", step="watch-pr", role="agent", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW))
+        uc = MonitorPrsUseCase(
+            store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -831,7 +859,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
             "ready-merge: in-review feature", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f))
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f), spin_port=FakeSpinPort())
         return store, item, step, worktrees, uc
 
     def _spawned_feedback_steps(self, store, watched_step):
@@ -1259,7 +1287,9 @@ class TestMonitorPrsConflict(unittest.TestCase):
                                  role="agent", parent=item)
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(f))
-        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f), complete)
+        uc = MonitorPrsUseCase(
+            store, github, worktrees, _FlowAdapter(f), complete, spin_port=FakeSpinPort()
+        )
         return store, item, step, worktrees, uc
 
     def test_conflicting_pr_advances_task_via_conflict_outcome(self):
@@ -1330,7 +1360,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), worktrees,
-                               _FlowAdapter(arbitrary_flow), complete)
+                               _FlowAdapter(arbitrary_flow), complete, spin_port=FakeSpinPort())
 
         result = uc.execute()
 
@@ -1379,7 +1409,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                                  parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
-                               _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete)
+                               _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete, spin_port=FakeSpinPort())
 
         result = uc.execute()
 
@@ -1401,7 +1431,9 @@ class TestMonitorPrsConflict(unittest.TestCase):
         )
         gh = FakeGitHub(conflicted_prs={url}, push_time=1000.0, timed_comments=[feedback_comment])
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
-        uc = MonitorPrsUseCase(store, gh, FakeWorktrees(), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete)
+        uc = MonitorPrsUseCase(
+            store, gh, FakeWorktrees(), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete, spin_port=FakeSpinPort()
+        )
 
         result = uc.execute()
 
@@ -1441,7 +1473,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                                  role="agent", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow))
         uc = MonitorPrsUseCase(store, FakeGitHub(conflicted_prs={url}), FakeWorktrees(),
-                               _FlowAdapter(no_cap_flow), complete)
+                               _FlowAdapter(no_cap_flow), complete, spin_port=FakeSpinPort())
 
         result = uc.execute()
 
@@ -1459,7 +1491,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         plant_pr(store, item, self._URL)
         step = store.create_step("build: guarded feature", step="build", role="agent", parent=item)
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f))
+        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(f), spin_port=FakeSpinPort())
         return store, item, step, uc
 
     def _pin(self, store, item):
@@ -1588,7 +1620,9 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(store.get_node(step).role, "human")
 
-        resp = UnblockStepUseCase(store, _FlowAdapter(flow)).execute(UnblockInput(step=step))
+        resp = UnblockStepUseCase(
+            store, _FlowAdapter(flow), spin_port=FakeSpinPort()
+        ).execute(UnblockInput(step=step))
 
         self.assertEqual(resp.role, "agent")
         self.assertEqual(store.get_node(step).role, "agent")
@@ -1709,7 +1743,9 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         )
         store.close(step_9, "done")
         store.close(step_10, "done")
-        uc = MonitorPrsUseCase(store, gh, FakeWorktrees(), _FlowAdapter(_FLOW))
+        uc = MonitorPrsUseCase(
+            store, gh, FakeWorktrees(), _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
         uc.execute()
 
         gh._head_shas[self._URL] = "sha2"
@@ -1922,7 +1958,9 @@ class TestTickWithMonitor(unittest.TestCase):
         plant_pr(store, item, url)
         store.create_step("ready-merge: merge me", step="ready-merge", role="human", parent=item)
         worktrees = FakeWorktrees()
-        monitor = MonitorPrsUseCase(store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW))
+        monitor = MonitorPrsUseCase(
+            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = TickUseCase(
             store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
@@ -1940,7 +1978,9 @@ class TestTickWithMonitor(unittest.TestCase):
             "ready-merge: abandoned me", step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        monitor = MonitorPrsUseCase(store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW))
+        monitor = MonitorPrsUseCase(
+            store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+        )
 
         result = TickUseCase(
             store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
@@ -1980,18 +2020,32 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
             parent=item,
         )
         worktrees = FakeWorktrees()
-        uc = MonitorPrsUseCase(store, github, worktrees, _FlowAdapter(_CI_PENDING_FLOW))
-        return store, item, step, uc
+        spin_port = FakeSpinPort({"steps": {step: {"count": 2, "since": 0, "last_line": "x"}}})
+        uc = MonitorPrsUseCase(
+            store, github, worktrees, _FlowAdapter(_CI_PENDING_FLOW), spin_port=spin_port
+        )
+        return store, item, step, uc, spin_port
 
     def _label_and_park(self, store, step, reason="something odd", needs="confirm CI"):
         store.label_add(step, "ci-pending")
         BlockStepUseCase(store).execute(BlockInput(step=step, needs=needs, reason=reason))
 
+    def test_ci_concluded_release_clears_the_steps_spin_entry(self):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
+        )
+        store, item, step, uc, spin_port = self._setup(gh)
+        self._label_and_park(store, step)
+
+        uc.execute()
+
+        self.assertIsNone(spin_port.load().entry(step))
+
     def test_ci_still_pending_does_not_release(self):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): True}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         self._label_and_park(store, step)
 
         result = uc.execute()
@@ -2003,7 +2057,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         self._label_and_park(store, step)
 
         result = uc.execute()
@@ -2018,7 +2072,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         self._label_and_park(store, step)
 
         uc.execute()
@@ -2037,7 +2091,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         self._label_and_park(store, step)
 
         original_label_add = store.label_add
@@ -2060,7 +2114,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         self._label_and_park(store, step, reason="something odd", needs="confirm CI")
 
         uc.execute()
@@ -2072,7 +2126,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
 
     def test_read_failure_never_releases(self):
         gh = FakeGitHub(head_shas={self._URL: "sha1"}, failing_calls={"ci_pending"})
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         self._label_and_park(store, step)
 
         result = uc.execute()
@@ -2083,7 +2137,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
 
     def test_empty_head_sha_never_releases(self):
         gh = FakeGitHub()
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         self._label_and_park(store, step)
 
         result = uc.execute()
@@ -2095,7 +2149,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         BlockStepUseCase(store).execute(
             BlockInput(step=step, needs="confirm CI", reason="waiting")
         )
@@ -2109,7 +2163,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         BlockStepUseCase(store).execute(BlockInput(
             step=step, needs="check CI pending state",
             reason="waiting on CI, pending forever it seems",
@@ -2124,7 +2178,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         for _ in range(3):
             self._label_and_park(store, step)
             uc.execute()
@@ -2141,7 +2195,7 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"}, ci_pending_by_sha={(self._URL, "sha1"): False}
         )
-        store, item, step, uc = self._setup(gh)
+        store, item, step, uc, spin_port = self._setup(gh)
         store.label_add(step, "ci-released:1")
         store.label_add(step, "ci-released:2")
         self._label_and_park(store, step)

@@ -18,9 +18,10 @@ from lightcycle.application.pool import (
 )
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.domain.pool import Breaker
+from lightcycle.domain.pool import Breaker, SpinLedger
 from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -254,17 +255,6 @@ class TestTailLog(unittest.TestCase):
         )
         self.assertEqual(result.data, b"456789")
         self.assertEqual(result.offset, 10)
-
-
-class FakeSpinPort:
-    def __init__(self, state=None):
-        self._state = state or {}
-
-    def load(self):
-        return json.loads(json.dumps(self._state))
-
-    def save(self, state):
-        self._state = json.loads(json.dumps(state))
 
 
 _NO_WORK_LOG = (
@@ -740,7 +730,7 @@ class TestSweep(unittest.TestCase):
         )
         self.assertIn(step, result.swept)
         self.assertEqual(result.parked, [])
-        self.assertEqual(spin_port.load(), {})
+        self.assertEqual(spin_port.load(), SpinLedger())
 
     def test_a_stalled_alive_reclaim_never_touches_the_spin_state(self):
         spin_port = FakeSpinPort()
@@ -760,7 +750,7 @@ class TestSweep(unittest.TestCase):
         )
         self.assertIn(step, result.swept)
         self.assertEqual(result.parked, [])
-        self.assertEqual(spin_port.load(), {})
+        self.assertEqual(spin_port.load(), SpinLedger())
 
 
 class TestTick(unittest.TestCase):

@@ -45,7 +45,7 @@ from lightcycle.adapters.tui.row_grid import (
     wrap_continuation,
 )
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.flow import UnblockInput, UnblockStepUseCase
+from lightcycle.application.flow import UnblockInput
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
     PoolRunningUseCase,
@@ -2046,7 +2046,7 @@ class NodeHubScreen(Screen):
         if node.type != "step" or not node.park:
             return
         try:
-            response = UnblockStepUseCase(store, self._container.flow_service()).execute(
+            response = self._container.unblock_step_use_case().execute(
                 UnblockInput(step=self._node_id)
             )
         except UseCaseError as e:

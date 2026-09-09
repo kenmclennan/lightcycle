@@ -7,9 +7,11 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.services.flow import FlowService
+from lightcycle.domain.pool import SpinLedger, StepSpin
 from lightcycle.domain.pool.worker_session import saw_session_activity
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs as FlowFakeFs
+from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -92,17 +94,6 @@ class FakeFs:
             yield line
 
 
-class FakeSpinPort:
-    def __init__(self, state=None):
-        self._state = state or {}
-
-    def load(self):
-        return json.loads(json.dumps(self._state))
-
-    def save(self, state):
-        self._state = json.loads(json.dumps(state))
-
-
 def _run_sweep(ctx):
     use_case = SweepUseCase(
         ctx["store"], ctx["workers"], fs=ctx["fs"],
@@ -173,11 +164,13 @@ def _died_no_work_with_line(ctx, last_line):
 def _prior_streak(ctx, prior_count):
     if prior_count == 0:
         return
-    state = ctx["spin_port"].load()
-    steps = dict(state.get("steps") or {})
-    steps[ctx["step"]] = {"count": prior_count, "since": ctx["now"] - 10, "last_line": "prior"}
-    state["steps"] = steps
-    ctx["spin_port"].save(state)
+    entry = StepSpin(count=prior_count, since=ctx["now"] - 10, last_line="prior")
+    ctx["spin_port"].update(
+        lambda ledger: SpinLedger(
+            steps={**ledger.steps, ctx["step"]: entry},
+            pool_streak=ledger.pool_streak, pool_tripped=ledger.pool_tripped,
+        )
+    )
 
 
 @given(parsers.parse(
@@ -185,11 +178,13 @@ def _prior_streak(ctx, prior_count):
 ))
 def _prior_streak_no_work(ctx, prior_count):
     since = ctx["now"] - 42
-    state = ctx["spin_port"].load()
-    steps = dict(state.get("steps") or {})
-    steps[ctx["step"]] = {"count": prior_count, "since": since, "last_line": "prior"}
-    state["steps"] = steps
-    ctx["spin_port"].save(state)
+    entry = StepSpin(count=prior_count, since=since, last_line="prior")
+    ctx["spin_port"].update(
+        lambda ledger: SpinLedger(
+            steps={**ledger.steps, ctx["step"]: entry},
+            pool_streak=ledger.pool_streak, pool_tripped=ledger.pool_tripped,
+        )
+    )
     ctx["expected_elapsed_marker"] = "~42s"
 
 
@@ -226,11 +221,13 @@ def _past_boot(ctx):
 def _step_parked(ctx):
     step = create_owned_step(ctx["store"], "build: t", step="build", role="agent")
     ctx["step"] = step
-    state = ctx["spin_port"].load()
-    steps = dict(state.get("steps") or {})
-    steps[step] = {"count": 3, "since": ctx["now"] - 100, "last_line": "prior"}
-    state["steps"] = steps
-    ctx["spin_port"].save(state)
+    entry = StepSpin(count=3, since=ctx["now"] - 100, last_line="prior")
+    ctx["spin_port"].update(
+        lambda ledger: SpinLedger(
+            steps={**ledger.steps, step: entry},
+            pool_streak=ledger.pool_streak, pool_tripped=ledger.pool_tripped,
+        )
+    )
     ParkStepUseCase(ctx["store"]).execute(
         ParkInput(
             step=step, observation="died 3 times in a row with no work", decision="check auth"
@@ -296,14 +293,12 @@ def _verdict(ctx, verdict):
 
 @then("the step's no-work streak is reset to zero")
 def _streak_reset(ctx):
-    steps = ctx["spin_port"].load().get("steps") or {}
-    assert ctx["step"] not in steps
+    assert ctx["spin_port"].load().entry(ctx["step"]) is None
 
 
 @then("the step's no-work streak is unaffected")
 def _streak_unaffected(ctx):
-    steps = ctx["spin_port"].load().get("steps") or {}
-    assert ctx["step"] not in steps
+    assert ctx["spin_port"].load().entry(ctx["step"]) is None
 
 
 @then("the worker is killed")
