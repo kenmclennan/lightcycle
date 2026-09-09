@@ -2,12 +2,13 @@ import unittest
 
 from lightcycle.adapters.tui.hub import COST_NOT_RECORDED, hierarchy_usage_text
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 class TestHierarchyUsageText(unittest.TestCase):
     def test_a_human_step_is_blank_for_both_turns_and_cost(self):
         store = FakeStore()
-        step = store.create_step("await merge", step="code-await-merge", role="human")
+        step = create_owned_step(store, "await merge", step="code-await-merge", role="human")
         node = store.get_node(step)
 
         self.assertEqual(hierarchy_usage_text(node), ("", ""))
@@ -21,7 +22,7 @@ class TestHierarchyUsageText(unittest.TestCase):
 
     def test_an_agent_step_that_has_not_run_is_blank_for_both(self):
         store = FakeStore()
-        step = store.create_step("queued build", step="build", role="agent")
+        step = create_owned_step(store, "queued build", step="build", role="agent")
         node = store.get_node(step)
 
         self.assertEqual(hierarchy_usage_text(node), ("", ""))
@@ -30,7 +31,7 @@ class TestHierarchyUsageText(unittest.TestCase):
         self,
     ):
         store = FakeStore()
-        step = store.create_step("building", step="build", role="agent")
+        step = create_owned_step(store, "building", step="build", role="agent")
         store.record_attribution(step, 246, {})
         node = store.get_node(step)
 
@@ -38,7 +39,7 @@ class TestHierarchyUsageText(unittest.TestCase):
 
     def test_an_agent_step_with_recorded_cost_shows_both_turns_and_cost(self):
         store = FakeStore()
-        step = store.create_step("building", step="build", role="agent")
+        step = create_owned_step(store, "building", step="build", role="agent")
         store.record_usage(step, 100, 10, 0, 0, 2.91, "list", None)
         store.record_attribution(step, 50, {})
         node = store.get_node(step)
@@ -49,7 +50,7 @@ class TestHierarchyUsageText(unittest.TestCase):
         self,
     ):
         store = FakeStore()
-        step = store.create_step("building", step="build", role="agent")
+        step = create_owned_step(store, "building", step="build", role="agent")
         store.record_usage(step, 0, 0, 0, 0, 0.0, "list", None)
         store.record_attribution(step, 50, {})
         node = store.get_node(step)
@@ -58,7 +59,7 @@ class TestHierarchyUsageText(unittest.TestCase):
 
     def test_a_single_turn_is_singular(self):
         store = FakeStore()
-        step = store.create_step("building", step="build", role="agent")
+        step = create_owned_step(store, "building", step="build", role="agent")
         store.record_attribution(step, 1, {})
         node = store.get_node(step)
 

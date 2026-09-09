@@ -20,6 +20,7 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.project_of import short_project_label
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 def _empty_flow(store):
@@ -58,7 +59,7 @@ class _Config:
 class TestShowNode(unittest.TestCase):
     def test_returns_task_view(self):
         s = FakeStore()
-        tid = s.create_step("build: x", step="build", role="agent")
+        tid = create_owned_step(s, "build: x", step="build", role="agent")
         resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=tid))
         self.assertEqual(resp.view.step.id, tid)
         self.assertEqual(resp.view.step.title, "build: x")
@@ -127,9 +128,9 @@ def _seed_mixed_store():
     s = FakeStore()
     todo_item = s.create_item("todo item", "a description")
     active_item = s.create_item("active item", "a description")
-    ready = s.create_step("ready one", step="build", role="agent")
-    human = s.create_step("needs me", role="human")
-    running = s.create_step("running", step="build", role="agent")
+    ready = create_owned_step(s, "ready one", step="build", role="agent")
+    human = create_owned_step(s, "needs me", role="human")
+    running = create_owned_step(s, "running", step="build", role="agent")
     s.assign(running, "worker-1")
     non_steps = [todo_item, active_item]
     return s, non_steps, {"ready": ready, "human": human, "running": running}
@@ -138,9 +139,9 @@ def _seed_mixed_store():
 class TestStatus(unittest.TestCase):
     def test_lanes_tasks_by_status(self):
         s = FakeStore()
-        ready = s.create_step("ready one", step="build", role="agent")
-        human = s.create_step("needs me", role="human")
-        running = s.create_step("running", step="build", role="agent")
+        ready = create_owned_step(s, "ready one", step="build", role="agent")
+        human = create_owned_step(s, "needs me", role="human")
+        running = create_owned_step(s, "running", step="build", role="agent")
         s.assign(running, "worker-1")
         lanes = StatusUseCase(s).execute().lanes
         self.assertEqual([t.id for t in lanes["queue"]], [ready])
@@ -149,7 +150,7 @@ class TestStatus(unittest.TestCase):
 
     def test_watched_step_leaves_the_inbox_lane_while_its_feedback_step_is_open(self):
         s = FakeStore()
-        watched = s.create_step("await-merge: thing", step="await-merge", role="human")
+        watched = create_owned_step(s, "await-merge: thing", step="await-merge", role="human")
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                            parent=s.get_node(watched).parent)
         s.set_watched_step(fb, watched)
@@ -160,7 +161,7 @@ class TestStatus(unittest.TestCase):
 
     def test_watched_step_returns_to_the_inbox_lane_once_its_feedback_step_closes(self):
         s = FakeStore()
-        watched = s.create_step("await-merge: thing", step="await-merge", role="human")
+        watched = create_owned_step(s, "await-merge: thing", step="await-merge", role="human")
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                            parent=s.get_node(watched).parent)
         s.set_watched_step(fb, watched)
@@ -172,8 +173,8 @@ class TestStatus(unittest.TestCase):
 
     def test_dep_blocked_task_lands_in_queue(self):
         s = FakeStore()
-        blocker = s.create_step("blocker", step="build", role="agent")
-        blocked = s.create_step("blocked", step="build", role="agent", deps=[blocker])
+        blocker = create_owned_step(s, "blocker", step="build", role="agent")
+        blocked = create_owned_step(s, "blocked", step="build", role="agent", deps=[blocker])
         lanes = StatusUseCase(s).execute().lanes
         self.assertIn(blocked, [t.id for t in lanes["queue"]])
         self.assertNotIn("blocked", lanes)
@@ -192,8 +193,8 @@ class TestStatus(unittest.TestCase):
 class TestActiveTasks(unittest.TestCase):
     def test_returns_only_in_progress(self):
         s = FakeStore()
-        s.create_step("waiting", step="build", role="agent")
-        running = s.create_step("running", step="build", role="agent")
+        create_owned_step(s, "waiting", step="build", role="agent")
+        running = create_owned_step(s, "running", step="build", role="agent")
         s.assign(running, "worker-1")
         self.assertEqual([t.id for t in ActiveStepsUseCase(s).execute().steps], [running])
 
@@ -208,7 +209,7 @@ class TestActiveTasks(unittest.TestCase):
 class TestQueue(unittest.TestCase):
     def test_lists_ready_capped_at_n(self):
         s = FakeStore()
-        ids = [s.create_step("t%d" % i, step="build", role="agent") for i in range(3)]
+        ids = [create_owned_step(s, "t%d" % i, step="build", role="agent") for i in range(3)]
         out = QueueUseCase(s).execute(QueueInput(n=2)).steps
         self.assertEqual(len(out), 2)
         self.assertTrue(set(t.id for t in out).issubset(set(ids)))
@@ -216,7 +217,7 @@ class TestQueue(unittest.TestCase):
     def test_default_n_is_ten(self):
         s = FakeStore()
         for i in range(12):
-            s.create_step("t%d" % i, step="build", role="agent")
+            create_owned_step(s, "t%d" % i, step="build", role="agent")
         self.assertEqual(len(QueueUseCase(s).execute(QueueInput()).steps), 10)
 
     def test_queue_contains_only_steps_never_items(self):
@@ -251,7 +252,7 @@ class TestInboxBacklog(unittest.TestCase):
     def _store(self):
         s = FakeStore()
         self.todo = s.create_item("todo item", "a description")
-        self.gate = s.create_step("a gate", step="review", role="human")
+        self.gate = create_owned_step(s, "a gate", step="review", role="human")
         return s
 
     def test_inbox_has_stepped_human_tasks_not_todos(self):
@@ -338,7 +339,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
 
     def test_workflow_less_service_step_classifies_from_role_without_a_default(self):
         s = FakeStore()
-        tid = s.create_step("review-findings: x", step="review-findings", role="human")
+        tid = create_owned_step(s, "review-findings: x", step="review-findings", role="human")
         resp = InboxUseCase(s, FlowService(FakeFs({}), s)).execute(InboxInput())
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.kind, "action")

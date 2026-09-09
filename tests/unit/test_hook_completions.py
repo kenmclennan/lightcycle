@@ -5,6 +5,7 @@ from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
 from lightcycle.application.services.flow import FlowService
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 def _ts(iso_str):
@@ -48,7 +49,7 @@ class TestHookCompletionsDetection(unittest.TestCase):
     def test_non_hook_step_task_not_reported(self):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"coder": {"model": "sonnet", "step": "build"}}), s)
-        tid = s.create_step("build: x", step="build", role="agent")
+        tid = create_owned_step(s, "build: x", step="build", role="agent")
         s.close(tid, "done")
         result = HookCompletionsUseCase(s, flow_svc).execute(None)
         self.assertEqual(result.completed, [])

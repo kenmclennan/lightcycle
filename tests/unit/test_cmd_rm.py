@@ -4,6 +4,7 @@ from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 def call(fn, *args):
@@ -45,7 +46,7 @@ class TestCmdRm(unittest.TestCase):
         cli.set_container(FakeContainer(self.store))
 
     def test_force_flag_parses_and_delegates_to_the_use_case(self):
-        step = self.store.create_step("orphan build", role="agent")
+        step = create_owned_step(self.store, "orphan build", role="agent")
         rc, out, err = call(cli.cmd_rm, step, "--force")
         self.assertEqual(rc, 0)
         self.assertIn(step, out)

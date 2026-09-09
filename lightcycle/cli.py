@@ -1109,6 +1109,11 @@ def cmd_new(argv):
                 "--step <name> is required for 'lc new step'; it determines the owning role\n"
             )
             return 2
+        if not a.parent:
+            sys.stderr.write(
+                "--parent <item> is required for 'lc new step'; it names the owning item\n"
+            )
+            return 2
         flow_service = _flow()
         flow = None
         if a.workflow:

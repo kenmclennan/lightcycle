@@ -7,6 +7,7 @@ from lightcycle.adapters.tui.row_grid import scrollbar_reservation_width
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
+from tests.support.step_factory import create_owned_step
 
 _NOW = datetime.datetime(2026, 1, 1, 14, 16, 0)
 _SIZE = (100, 30)
@@ -26,7 +27,7 @@ def _frame_text(session):
 def _priority_active_store(count):
     store = FakeStore(now=lambda: _at(14))
     for i in range(count):
-        step = store.create_step(
+        step = create_owned_step(store, 
             "row %d" % i, step="write-code", role="agent", id="LC-%d.1" % (1000 + i),
         )
         store.assign(step, "worker-%d" % i)

@@ -4,6 +4,7 @@ from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 
 def call(fn, *args):
@@ -56,7 +57,7 @@ class TestCmdSetTitleCap(unittest.TestCase):
         self.store = FakeStore()
         self.cap = 10
         cli.set_container(FakeContainer(self.store, cap=self.cap))
-        self.step_id = self.store.create_step("original", role="human")
+        self.step_id = create_owned_step(self.store, "original", role="human")
 
     def test_set_title_over_cap_is_rejected(self):
         rc, out, err = call(cli.cmd_set, self.step_id, "--title", "x" * (self.cap + 1))

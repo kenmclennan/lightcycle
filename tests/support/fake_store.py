@@ -658,7 +658,7 @@ class FakeStore(StorePort):
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
                     id=None):
         if parent is None:
-            parent = self.create_item(title, "an owning item")
+            raise ValueError("create_step requires a parent")
         fields = dict(
             title=title,
             type="step",

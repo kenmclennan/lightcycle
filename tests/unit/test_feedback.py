@@ -15,6 +15,7 @@ from lightcycle.application.work.pending_reflections import pending_reflection_c
 from lightcycle.domain.feedback import UNLABELED_MODEL
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 _METAS = {"reviewer": {"model": "opus", "step": "review", "signals": {"review_rounds": "rejected"}}}
 
@@ -45,14 +46,14 @@ class TestReflect(unittest.TestCase):
 
     def test_unknown_spec_hash_when_no_spec(self):
         s = FakeStore()
-        k = s.create_step("loose step", role="human")
+        k = create_owned_step(s, "loose step", role="human")
         ReflectUseCase(s, FakeFs()).execute(ReflectInput(step=k, feedback="fb"))
         refl = json.loads(s.item_artifacts(k)[0].value)
         self.assertEqual(refl["spec_hash"], "unknown")
 
     def test_reflection_artifact_is_internal(self):
         s = FakeStore()
-        k = s.create_step("loose step", role="human")
+        k = create_owned_step(s, "loose step", role="human")
         ReflectUseCase(s, FakeFs()).execute(ReflectInput(step=k, feedback="fb"))
         arts = [a for a in s.item_artifacts(k) if a.type == "reflection"]
         self.assertTrue(arts[0].internal)

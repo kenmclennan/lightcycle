@@ -15,6 +15,7 @@ from lightcycle.domain.work import State
 from lightcycle.ports.github import Comment, Review
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import create_owned_step
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
 
@@ -623,7 +624,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
     def test_task_without_parent_is_skipped(self):
         store = FakeStore()
-        store.create_step("ready-merge: orphan", step="ready-merge", role="human")
+        create_owned_step(store, "ready-merge: orphan", step="ready-merge", role="human")
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(store, FakeGitHub(merged_prs={"x"}), worktrees, _FlowAdapter(_FLOW))
 

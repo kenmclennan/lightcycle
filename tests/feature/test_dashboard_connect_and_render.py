@@ -10,6 +10,7 @@ from lightcycle.adapters.tui.design_system import COLOURS, FOOTER_GLYPHS
 from lightcycle.application.setup import UpgradeResponse
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import FakeBreakerPort, FakeLock, launch, make_test_container
+from tests.support.step_factory import create_owned_step
 
 scenarios("dashboard-connect-and-render.feature")
 
@@ -51,17 +52,17 @@ def _launch(ctx):
 @given("the lightcycle store is reachable")
 def _reachable(ctx):
     store = FakeStore()
-    store.create_step("a", step="build", role="agent")
-    store.create_step("b", step="build", role="agent")
-    blocker = store.create_step("blocker", step="build", role="agent")
-    store.create_step("c", step="build", role="agent", deps=[blocker])
+    create_owned_step(store, "a", step="build", role="agent")
+    create_owned_step(store, "b", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    create_owned_step(store, "c", step="build", role="agent", deps=[blocker])
     ctx["store"] = store
 
 
 @given("the store has more than ten queued or blocked steps")
 def _many(ctx):
     store = FakeStore()
-    ctx["ids"] = [store.create_step("t%d" % i, step="build", role="agent") for i in range(12)]
+    ctx["ids"] = [create_owned_step(store, "t%d" % i, step="build", role="agent") for i in range(12)]
     ctx["store"] = store
 
 
@@ -133,7 +134,7 @@ def _read_interval(ctx):
 @when("the store's queue changes")
 def _queue_changes(ctx):
     session = ctx["session"]
-    ctx["new_step"] = session.app.container.store.create_step(
+    ctx["new_step"] = create_owned_step(session.app.container.store, 
         "new", step="build", role="agent"
     )
 

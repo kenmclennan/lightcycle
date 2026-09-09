@@ -25,6 +25,7 @@ from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.sqlite_store_factory import make_sqlite_store
+from tests.support.step_factory import create_owned_step
 
 _ROOT = str(Path(__file__).resolve().parents[1] / "support" / "library")
 
@@ -144,7 +145,7 @@ class TestAdvanceTask(unittest.TestCase):
 
     def test_unknown_outcome_returns_none(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         resp = AdvanceStepUseCase(s, flow_for(METAS, s)).execute(
             AdvanceInput(step=bid, outcome="nope")
         )
@@ -220,7 +221,7 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_invalid_outcome_raises(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         with self.assertRaises(UseCaseError):
             CompleteStepUseCase(s, flow_for(METAS, s)).execute(
                 CompleteInput(step=bid, outcome="banana")
@@ -238,7 +239,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_terminal_step_closes_without_routing(self):
         terminal_metas = {"finaliser": {"model": "sonnet", "step": "finalise"}}
         s = FakeStore()
-        tid = s.create_step("finalise: x", step="finalise", role="agent")
+        tid = create_owned_step(s, "finalise: x", step="finalise", role="agent")
         resp = CompleteStepUseCase(s, flow_for(terminal_metas, s)).execute(
             CompleteInput(step=tid, outcome="done")
         )
@@ -247,7 +248,7 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_step_with_routes_unknown_outcome_still_errors(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         with self.assertRaises(UseCaseError):
             CompleteStepUseCase(s, flow_for(METAS, s)).execute(
                 CompleteInput(step=bid, outcome="typo")
@@ -266,7 +267,7 @@ class TestCompleteTask(unittest.TestCase):
         )
         s = FakeStore()
         flow_svc = FlowService(FakeFs(metas, workflow=graph_text), s)
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         resp = CompleteStepUseCase(s, flow_svc).execute(
             CompleteInput(step=bid, outcome="clean")
         )
@@ -275,7 +276,7 @@ class TestCompleteTask(unittest.TestCase):
 
     def test_unknown_stage_routes_to_human_instead_of_silent_close(self):
         s = FakeStore()
-        rid = s.create_step("review-code: x", step="review-code", role="agent")
+        rid = create_owned_step(s, "review-code: x", step="review-code", role="agent")
         resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=rid, outcome="done")
         )
@@ -297,7 +298,7 @@ class TestCompleteTask(unittest.TestCase):
             },
         }
         s = FakeStore()
-        tid = s.create_step("finalise: x", step="finalise", role="agent")
+        tid = create_owned_step(s, "finalise: x", step="finalise", role="agent")
         resp = CompleteStepUseCase(s, flow_for(terminal_metas, s)).execute(
             CompleteInput(step=tid, outcome="done")
         )
@@ -453,7 +454,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
 
     def test_blocked_on_outcome_whose_target_requires_the_produce(self):
         s = FakeStore()
-        aid = s.create_step("alpha: x", step="alpha", role="agent")
+        aid = create_owned_step(s, "alpha: x", step="alpha", role="agent")
         with self.assertRaises(UseCaseError):
             CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
                 CompleteInput(step=aid, outcome="forward")
@@ -789,7 +790,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_claims_ready_task(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.view.step.id, bid)
 
@@ -830,9 +831,9 @@ class TestClaimTask(unittest.TestCase):
 
     def test_idempotent_returns_assigned_inflight_without_a_fresh_claim(self):
         s = FakeStore()
-        assigned = s.create_step("build: x", step="build", role="agent")
+        assigned = create_owned_step(s, "build: x", step="build", role="agent")
         self._inprogress(s, assigned, "sp1")
-        later = s.create_step("build: y", step="build", role="agent")
+        later = create_owned_step(s, "build: y", step="build", role="agent")
         resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": assigned})).execute(
             ClaimInput(role="agent"))
         self.assertEqual(resp.view.step.id, assigned)
@@ -840,25 +841,25 @@ class TestClaimTask(unittest.TestCase):
 
     def test_idempotent_falls_through_when_assignment_is_done(self):
         s = FakeStore()
-        old = s.create_step("build: x", step="build", role="agent")
+        old = create_owned_step(s, "build: x", step="build", role="agent")
         s.close(old, "done")
-        fresh = s.create_step("build: y", step="build", role="agent")
+        fresh = create_owned_step(s, "build: y", step="build", role="agent")
         resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": old})).execute(
             ClaimInput(role="agent"))
         self.assertEqual(resp.view.step.id, fresh)
 
     def test_idempotent_falls_through_when_reassigned_to_another_worker(self):
         s = FakeStore()
-        stolen = s.create_step("build: x", step="build", role="agent")
+        stolen = create_owned_step(s, "build: x", step="build", role="agent")
         self._inprogress(s, stolen, "other")
-        fresh = s.create_step("build: y", step="build", role="agent")
+        fresh = create_owned_step(s, "build: y", step="build", role="agent")
         resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": stolen})).execute(
             ClaimInput(role="agent"))
         self.assertEqual(resp.view.step.id, fresh)
 
     def test_resume_after_a_real_claim_ready_agrees_on_owner(self):
         s = FakeStore(config=FakeConfig(spawn="sp1"))
-        step = s.create_step("build: x", step="build", role="agent")
+        step = create_owned_step(s, "build: x", step="build", role="agent")
         workers = FakeWorkers()
         uc = ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"))
@@ -869,7 +870,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_idempotent_falls_through_when_assigned_step_is_gone(self):
         s = FakeStore()
-        fresh = s.create_step("build: y", step="build", role="agent")
+        fresh = create_owned_step(s, "build: y", step="build", role="agent")
         resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": "ghost"})).execute(
             ClaimInput(role="agent"))
         self.assertEqual(resp.view.step.id, fresh)
@@ -913,7 +914,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_stamps_spawn_id_when_present(self):
         s = FakeStore()
-        s.create_step("build: x", step="build", role="agent")
+        create_owned_step(s, "build: x", step="build", role="agent")
         workers = FakeWorkers()
         ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
@@ -1006,7 +1007,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_omits_repo_path_when_no_repo_artifact(self):
         s = FakeStore()
-        s.create_step("build: x", step="build", role="agent")
+        create_owned_step(s, "build: x", step="build", role="agent")
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertIsNone(resp.repo_path)
 
@@ -1023,13 +1024,13 @@ class TestClaimTask(unittest.TestCase):
 
     def test_claim_phase_is_none_when_undeclared(self):
         s = FakeStore()
-        s.create_step("build: x", step="build", role="agent")
+        create_owned_step(s, "build: x", step="build", role="agent")
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertIsNone(resp.phase)
 
     def test_ensure_failure_rolls_back_claim_to_ready(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         uc = ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(ensure_error=RuntimeError("boom")),
             FakeWorkers(), FakeConfig()
@@ -1055,7 +1056,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_claim_does_not_sync_specs_without_a_spec_artifact(self):
         s = FakeStore()
-        s.create_step("build: x", step="build", role="agent")
+        create_owned_step(s, "build: x", step="build", role="agent")
         worktrees = FakeWorktrees()
 
         ClaimStepUseCase(
@@ -1112,7 +1113,7 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
 class TestBlockTask(unittest.TestCase):
     def test_routes_to_human_with_resume(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="decide X", reason="oops")
         )
@@ -1122,13 +1123,13 @@ class TestBlockTask(unittest.TestCase):
 
     def test_empty_reason_raises(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         with self.assertRaises(UseCaseError):
             BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason=""))
 
     def test_resume_fields_round_trip(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="decide X", reason="oops", tried="a,b")
         )
@@ -1156,7 +1157,7 @@ class TestFlowCheck(unittest.TestCase):
 class TestUnblockTask(unittest.TestCase):
     def test_flips_back_to_agent_role(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="human")
+        bid = create_owned_step(s, "build: x", step="build", role="human")
         resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         self.assertEqual(resp.role, "agent")
         self.assertEqual(s.get_node(bid).role, "agent")
@@ -1164,7 +1165,7 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_block_then_single_unblock_restores_role_on_fake_store(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
         resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         self.assertEqual(resp.role, "agent")
@@ -1172,7 +1173,7 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_block_then_single_unblock_restores_role_on_sqlite_store(self):
         s = make_sqlite_store()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
         resp = UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
         self.assertEqual(resp.role, "agent")
@@ -1180,13 +1181,13 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_no_agent_owner_raises(self):
         s = FakeStore()
-        bid = s.create_step("a todo", role="human")
+        bid = create_owned_step(s, "a todo", role="human")
         with self.assertRaises(UseCaseError):
             UnblockStepUseCase(s, flow_for(METAS, s)).execute(UnblockInput(step=bid))
 
     def test_clears_needs_and_blocked_note(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="confirm approach", reason="oops")
         )
@@ -1198,7 +1199,7 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_unblock_history_note_includes_tried(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="decide X", reason="oops", tried="a,b")
         )
@@ -1213,7 +1214,7 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_preserves_notes_unrelated_to_block(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         s.note(bid, "from review: lgtm")
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="confirm approach", reason="oops")
@@ -1231,7 +1232,7 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_unblock_collapses_multiline_reason_into_one_history_line(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(
             BlockInput(step=bid, needs="decide X", reason="line one\nline two")
         )
@@ -1258,7 +1259,7 @@ class TestUnblockTask(unittest.TestCase):
                 self._state = state
 
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="human")
+        bid = create_owned_step(s, "build: x", step="build", role="human")
         spin_port = FakeSpinPort({"steps": {bid: {"count": 3, "since": 0, "last_line": "x"}}})
         UnblockStepUseCase(s, flow_for(METAS, s), spin_port=spin_port).execute(
             UnblockInput(step=bid)
@@ -1277,7 +1278,7 @@ class TestUnblockTask(unittest.TestCase):
                 self._state = state
 
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="human")
+        bid = create_owned_step(s, "build: x", step="build", role="human")
         spin_port = FakeSpinPort({})
         UnblockStepUseCase(s, flow_for(METAS, s), spin_port=spin_port).execute(
             UnblockInput(step=bid)
@@ -1286,7 +1287,7 @@ class TestUnblockTask(unittest.TestCase):
 
     def test_a_failing_reassign_leaves_the_earlier_writes_unapplied(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", step="build", role="agent")
         BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
         before = s.get_node(bid)
         before_metadata = (before.park.reason, before.park.needs, before.park.tried)
