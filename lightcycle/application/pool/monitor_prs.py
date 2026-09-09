@@ -25,6 +25,10 @@ def _is_bot(author):
     return "[bot]" in author
 
 
+def _false_on_failure(result):
+    return False if isinstance(result, ReadFailure) else result
+
+
 def _eligible(author, allowlist):
     return not _is_bot(author) or author in allowlist
 
@@ -143,6 +147,8 @@ class MonitorPrsUseCase:
         if run is None:
             return
         head = self._github.head_sha(pr_value)
+        if isinstance(head, ReadFailure):
+            return
         if run.pr != pr_value:
             self._store.set_run_field(run.id, pr=pr_value, content_pin=head)
             return
@@ -208,7 +214,7 @@ class MonitorPrsUseCase:
             if not pr_value:
                 continue
             sha = self._github.head_sha(pr_value)
-            if not sha:
+            if isinstance(sha, ReadFailure) or not sha:
                 continue
             pending = self._github.ci_pending(pr_value, sha)
             if isinstance(pending, ReadFailure) or pending:
@@ -284,7 +290,7 @@ class MonitorPrsUseCase:
                 self._check_content_pin(item, pr_value, phase)
                 merge_outcome = flow.merge_outcome(stage)
                 close_outcome = flow.close_outcome(stage)
-                if merge_outcome and self._github.is_merged(pr_value):
+                if merge_outcome and _false_on_failure(self._github.is_merged(pr_value)):
                     nxt = flow.next(stage, merge_outcome)
                     if nxt and nxt.to_step and not nxt.to_terminal:
                         step = self._active_step_at(item.id, stage)
@@ -304,7 +310,7 @@ class MonitorPrsUseCase:
                         )
                         resolved = True
                         merged.append(item.id)
-                elif close_outcome and self._github.is_closed_unmerged(pr_value):
+                elif close_outcome and _false_on_failure(self._github.is_closed_unmerged(pr_value)):
                     nxt = flow.next(stage, close_outcome)
                     if nxt and nxt.to_step and not nxt.to_terminal:
                         step = self._active_step_at(item.id, stage)
@@ -364,7 +370,9 @@ class MonitorPrsUseCase:
                                 run.id, comments_dispatched_through=str(newest)
                             )
                         reworked.append(step.parent)
-            if not advanced and conflict_outcome and self._github.is_conflicted(pr_value):
+            if not advanced and conflict_outcome and _false_on_failure(
+                self._github.is_conflicted(pr_value)
+            ):
                 history = [t for t in self._store.steps_at_step(step.step)
                            if t.parent == step.parent and t.state == State.DONE]
                 prior = total_outcome_count(history, conflict_outcome)

@@ -26,41 +26,43 @@ def _repo_parts(pr):
 
 
 class GitHubEventsAdapter(GitHubEventsPort):
-    def _pr_state(self, pr: str) -> str:
+    def _pr_state(self, pr: str) -> Union[str, ReadFailure]:
         try:
             result = subprocess.run(
                 ["gh", "pr", "view", pr, "--json", "state"], capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
-            return ""
+            return _timeout_read_failure()
         if result.returncode != 0:
-            return ""
+            return ReadFailure(result.returncode, result.stderr)
         try:
             data = json.loads(result.stdout)
         except (json.JSONDecodeError, ValueError):
-            return ""
+            return ReadFailure(-1, "could not parse gh pr view JSON for state")
         return data.get("state", "")
 
-    def is_merged(self, pr: str) -> bool:
-        return self._pr_state(pr) == "MERGED"
+    def is_merged(self, pr: str) -> Union[bool, ReadFailure]:
+        state = self._pr_state(pr)
+        return state if isinstance(state, ReadFailure) else state == "MERGED"
 
-    def is_closed_unmerged(self, pr: str) -> bool:
-        return self._pr_state(pr) == "CLOSED"
+    def is_closed_unmerged(self, pr: str) -> Union[bool, ReadFailure]:
+        state = self._pr_state(pr)
+        return state if isinstance(state, ReadFailure) else state == "CLOSED"
 
-    def is_conflicted(self, pr: str) -> bool:
+    def is_conflicted(self, pr: str) -> Union[bool, ReadFailure]:
         try:
             result = subprocess.run(
                 ["gh", "pr", "view", pr, "--json", "mergeable,mergeStateStatus"],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
-            return False
+            return _timeout_read_failure()
         if result.returncode != 0:
-            return False
+            return ReadFailure(result.returncode, result.stderr)
         try:
             data = json.loads(result.stdout)
         except (json.JSONDecodeError, ValueError):
-            return False
+            return ReadFailure(-1, "could not parse gh pr view JSON for mergeable state")
         return (data.get("mergeable") == "CONFLICTING"
                 or data.get("mergeStateStatus") == "DIRTY")
 
@@ -192,26 +194,26 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
         return result
 
-    def head_sha(self, pr: str) -> str:
+    def head_sha(self, pr: str) -> Union[str, ReadFailure]:
         try:
             result = subprocess.run(
                 ["gh", "pr", "view", pr, "--json", "headRefOid"], capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
-            return ""
+            return _timeout_read_failure()
         if result.returncode != 0:
-            return ""
+            return ReadFailure(result.returncode, result.stderr)
         try:
             data = json.loads(result.stdout)
         except (json.JSONDecodeError, ValueError):
-            return ""
+            return ReadFailure(-1, "could not parse gh pr view JSON for headRefOid")
         return data.get("headRefOid", "")
 
     def changed_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
-            return frozenset()
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         try:
             result = subprocess.run(
@@ -225,9 +227,9 @@ class GitHubEventsAdapter(GitHubEventsPort):
         try:
             base = json.loads(result.stdout).get("baseRefName", "")
         except (json.JSONDecodeError, ValueError):
-            return frozenset()
+            return ReadFailure(-1, "could not parse gh pr view JSON for baseRefName")
         if not base:
-            return frozenset()
+            return ReadFailure(-1, "gh pr view returned an empty baseRefName for %r" % pr)
         try:
             r = subprocess.run(
                 [
@@ -244,7 +246,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         try:
             filenames = json.loads(r.stdout)
         except (json.JSONDecodeError, ValueError):
-            return frozenset()
+            return ReadFailure(-1, "could not parse gh api compare JSON for changed filenames")
         return frozenset(f for f in filenames if f)
 
     def ci_pending(self, pr: str, sha: str) -> Union[bool, ReadFailure]:
