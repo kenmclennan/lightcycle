@@ -29,7 +29,7 @@ def _subscript_keys(tree):
 ON_THE_READ_SURFACE = ("Step", "Item", "PhaseRun", "Pass", "NodeView")
 
 
-def json_surface(sources, cli_source=""):
+def json_surface(sources, flat_sources=()):
     keys = set()
     for source in sources:
         tree = ast.parse(source)
@@ -40,7 +40,7 @@ def json_surface(sources, cli_source=""):
                 if isinstance(child, ast.FunctionDef) and child.name == "as_dict":
                     keys |= _dict_keys(child)
                     keys |= _subscript_keys(child)
-    if cli_source:
-        tree = ast.parse(cli_source)
-        keys |= _subscript_keys(tree)
+    for source in flat_sources:
+        if source:
+            keys |= _subscript_keys(ast.parse(source))
     return keys
