@@ -6,6 +6,7 @@ import lightcycle.cli as cli_mod
 from lightcycle.cli import cmd_specs_dir
 from lightcycle.config import ConfigError
 from lightcycle.container import Container
+from tests.support.fake_git import FakeGit
 
 
 class FakeConfig:
@@ -21,18 +22,6 @@ class FakeConfig:
         if self._remote_missing:
             raise ConfigError("required config value 'specs-remote' is not set")
         return self._remote
-
-
-class FakeGit:
-    def __init__(self, is_repo=True, origin="git@github.com:x/specs.git"):
-        self._is_repo = is_repo
-        self._origin = origin
-
-    def is_git_repo(self, root):
-        return self._is_repo
-
-    def remote_url(self, root):
-        return self._origin
 
 
 class TestSpecsDirCheck(unittest.TestCase):
@@ -51,7 +40,7 @@ class TestSpecsDirCheck(unittest.TestCase):
         return rc, out.getvalue(), err.getvalue()
 
     def test_passes_when_origin_matches_specs_remote(self):
-        rc, out, err = self._run(FakeConfig(), FakeGit())
+        rc, out, err = self._run(FakeConfig(), FakeGit(origin="git@github.com:x/specs.git"))
         self.assertEqual(rc, 0, err)
         self.assertIn("ok", out)
         self.assertIn("/specs", out)

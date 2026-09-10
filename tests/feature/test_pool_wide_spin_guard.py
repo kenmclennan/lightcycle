@@ -5,6 +5,7 @@ from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
 from lightcycle.domain.pool import SpinLedger
 from lightcycle.domain.pool.worker import Worker
+from lightcycle.ports.breaker import BreakerPort
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -71,7 +72,7 @@ class FakeFs:
         return None
 
 
-class FakeBreakerPort:
+class FakeBreakerPort(BreakerPort):
     def __init__(self):
         self._state = {}
 

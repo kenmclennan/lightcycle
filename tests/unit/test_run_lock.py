@@ -5,10 +5,10 @@ from lightcycle.application.pool import (
     PoolRunningUseCase,
     ReleaseRunLockUseCase,
 )
-from lightcycle.ports.lock import LockAcquisition
+from lightcycle.ports.lock import LockAcquisition, RunLockPort
 
 
-class FakeLock:
+class FakeLock(RunLockPort):
     def __init__(self, acquire_result=LockAcquisition(True, 123), running=False):
         self._acquire_result = acquire_result
         self._running = running

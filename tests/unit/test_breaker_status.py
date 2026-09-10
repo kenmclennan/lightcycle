@@ -4,10 +4,11 @@ from lightcycle.application.pool.breaker_status import (
     BreakerStatusResponse,
     BreakerStatusUseCase,
 )
+from lightcycle.ports.breaker import BreakerPort
 from tests.support.fake_spin import FakeSpinPort
 
 
-class FakeBreakerPort:
+class FakeBreakerPort(BreakerPort):
     def __init__(self, state=None):
         self._state = state or {}
 

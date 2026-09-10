@@ -2,11 +2,12 @@ import pytest
 from pytest_bdd import given, scenarios, then, when
 
 from lightcycle.application.pool.breaker_status import BreakerStatusUseCase
+from lightcycle.ports.breaker import BreakerPort
 
 scenarios("breaker-status.feature")
 
 
-class FakeBreakerPort:
+class FakeBreakerPort(BreakerPort):
     def __init__(self, state=None):
         self._state = state or {}
         self.save_calls = []

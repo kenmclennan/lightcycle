@@ -1,7 +1,8 @@
 from lightcycle.domain.pool.worker import Worker
+from lightcycle.ports.workers import WorkersPort
 
 
-class FakeWorkers:
+class FakeWorkers(WorkersPort):
     def __init__(self, workers=None, alive_pids=(), delayed_death=False):
         self._workers = workers or []
         self._alive = set(alive_pids)

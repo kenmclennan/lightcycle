@@ -6,6 +6,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.work import State
+from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -94,24 +95,6 @@ class FakeWorktrees:
         return self.paths.get(item, "/worktrees/%s" % item)
 
 
-class FakeGit:
-    def __init__(self, events):
-        self.dirty = set()
-        self.commits = []
-        self._events = events
-
-    def is_git_repo(self, root):
-        return True
-
-    def has_tracked_changes(self, root):
-        return root in self.dirty
-
-    def commit_tracked(self, root, message):
-        self.commits.append((root, message))
-        self._events.append(("commit", root))
-        return True
-
-
 class TrackingStore(FakeStore):
     def __init__(self, events):
         super().__init__()
@@ -134,7 +117,7 @@ def ctx():
         "workers": FakeWorkers(),
         "fs": FakeFs(),
         "worktrees": FakeWorktrees(),
-        "git": FakeGit(events),
+        "git": FakeGit(events=events),
         "events": events,
     }
 

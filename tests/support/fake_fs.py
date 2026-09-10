@@ -1,6 +1,8 @@
 import os
 
-from lightcycle.ports.workflow_bundle import StepPrompt
+from lightcycle.ports.fs import FsPort
+from lightcycle.ports.worker_log import WorkerLogPort
+from lightcycle.ports.workflow_bundle import StepPrompt, WorkflowBundlePort
 
 
 def flow_from_metas(metas, disposition=None):
@@ -73,7 +75,7 @@ def graph_text_from_metas(metas, entry=None, requires=None, disposition=None):
     return "\n\n".join(out) + "\n"
 
 
-class FakeFs:
+class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
     def __init__(self, metas=None, files=None, dirs=None, workflow=None, workflows=None,
                  bodies=None, store_ready=True, log_mtimes=None):
         self._metas = metas or {}

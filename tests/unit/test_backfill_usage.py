@@ -5,6 +5,7 @@ from lightcycle.application.pool.backfill_usage import BackfillUsageUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.pool.worker import Worker
+from lightcycle.ports.breaker import BreakerPort
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -80,7 +81,7 @@ class ReapAndBackfillWorkers:
                 w["checked"] = True
 
 
-class FakeBreakerPort:
+class FakeBreakerPort(BreakerPort):
     def __init__(self):
         self._state = {}
 

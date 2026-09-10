@@ -14,6 +14,7 @@ from lightcycle.ports.workflow_source import FetchedBundle, OriginRegistration, 
 from lightcycle.render import render_workflow_mermaid
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
 
@@ -120,17 +121,6 @@ class FakeConfig:
 
     def set_personal_origin(self, name):
         self.personal_origin_set = name
-
-
-class FakeGit:
-    def __init__(self):
-        self.calls = []
-
-    def init_repo(self, root, branch="main"):
-        self.calls.append(("init_repo", root, branch))
-
-    def commit_all(self, root, message):
-        self.calls.append(("commit_all", root, message))
 
 
 class FakeContainer:

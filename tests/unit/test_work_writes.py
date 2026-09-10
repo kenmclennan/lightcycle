@@ -18,6 +18,7 @@ from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -28,14 +29,6 @@ def _add_reflection(store, node_id, feedback):
     store.add_artifact(
         node_id, "reflection", json.dumps({"step": node_id, "feedback": feedback, "spec_hash": "h"})
     )
-
-
-class FakeGit:
-    def __init__(self, repos=()):
-        self._repos = set(repos)
-
-    def is_git_repo(self, path):
-        return path in self._repos
 
 
 class FakeConfig:
@@ -50,24 +43,6 @@ class FakeConfig:
 
     def branch_prefix(self):
         return "feat"
-
-
-class FakeGitRemove:
-    def __init__(self, repos=()):
-        self._repos = set(repos)
-        self.remote_deletes = []
-
-    def is_git_repo(self, path):
-        return path in self._repos
-
-    def remove_worktree(self, root, path):
-        pass
-
-    def delete_branch(self, root, branch):
-        pass
-
-    def delete_remote_branch(self, root, branch):
-        self.remote_deletes.append((root, branch))
 
 
 class _RaisingFlow:
@@ -128,18 +103,6 @@ class FakeWorkersForRemove:
 class UnreadableWorkersForRemove:
     def workers_state(self):
         raise RegistryUnreadable("boom")
-
-
-class FakeGitForRemove:
-    def __init__(self, registered=(), dirty=()):
-        self._registered = set(registered)
-        self._dirty = set(dirty)
-
-    def worktree_registered(self, root, path):
-        return path in self._registered
-
-    def has_uncommitted(self, path):
-        return path in self._dirty
 
 
 class RaisingGitForRemove:
@@ -699,7 +662,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         s.add_artifact(sid, "repo", "app")
         rid = s.open_run(sid, s.open_pass(sid), None)
         s.set_branch(rid, "feat/my-branch")
-        git = FakeGitRemove(repos={"/projects/app"})
+        git = FakeGit(repos={"/projects/app"})
         svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
         svc.remove(sid)
         self.assertIn(("/projects/app", "feat/my-branch"), git.remote_deletes)
@@ -710,7 +673,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         s.add_project("acme/app", local_path="/projects/app")
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
-        git = FakeGitRemove(repos=set())
+        git = FakeGit(repos=set())
         svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
         svc.remove(sid)
         self.assertEqual(git.remote_deletes, [])
@@ -733,7 +696,7 @@ class TestRemoveNode(unittest.TestCase):
             alive_pids={111},
         )
         wt = FakeWorktreesForRemove()
-        git = FakeGitForRemove()
+        git = FakeGit()
         with self.assertRaises(UseCaseError) as ctx:
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertIn(step, str(ctx.exception))
@@ -745,7 +708,7 @@ class TestRemoveNode(unittest.TestCase):
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         workers = UnreadableWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = FakeGitForRemove()
+        git = FakeGit()
         with self.assertRaises(UseCaseError) as ctx:
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertIn(item, str(ctx.exception))
@@ -759,7 +722,7 @@ class TestRemoveNode(unittest.TestCase):
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         path = wt.worktree_path(item)
-        git = FakeGitForRemove(registered={path}, dirty={path})
+        git = FakeGit(registered={path}, dirty={path})
         with self.assertRaises(UseCaseError) as ctx:
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertIn(item, str(ctx.exception))
@@ -811,7 +774,7 @@ class TestRemoveNode(unittest.TestCase):
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = FakeGitForRemove()
+        git = FakeGit()
         RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         with self.assertRaises(KeyError):
             s.get_node(item)
@@ -824,7 +787,7 @@ class TestRemoveNode(unittest.TestCase):
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = FakeGitForRemove()
+        git = FakeGit()
         resp = RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertEqual(resp.steps_removed, 1)
         self.assertTrue(resp.worktree_removed)
@@ -840,7 +803,7 @@ class TestRemoveNode(unittest.TestCase):
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         path = wt.worktree_path(item)
-        git = FakeGitForRemove(registered={path}, dirty={path})
+        git = FakeGit(registered={path}, dirty={path})
         resp = RemoveNodeUseCase(s, workers, wt, git).execute(
             RemoveNodeInput(id=item, force=True)
         )
@@ -859,7 +822,7 @@ class TestRemoveNode(unittest.TestCase):
             alive_pids={111},
         )
         wt = FakeWorktreesForRemove()
-        git = FakeGitForRemove()
+        git = FakeGit()
         with self.assertRaises(UseCaseError):
             RemoveNodeUseCase(s, workers, wt, git).execute(
                 RemoveNodeInput(id=item, force=True)
@@ -870,7 +833,7 @@ class TestRemoveNode(unittest.TestCase):
         item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove(has_repo=False)
-        git = FakeGitForRemove(registered={wt.worktree_path(item)}, dirty={wt.worktree_path(item)})
+        git = FakeGit(registered={wt.worktree_path(item)}, dirty={wt.worktree_path(item)})
         resp = RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertTrue(resp.worktree_removed)
         self.assertEqual(wt.removed, [item])
@@ -879,7 +842,7 @@ class TestRemoveNode(unittest.TestCase):
         s = FakeStore()
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = FakeGitForRemove()
+        git = FakeGit()
         with self.assertRaises(UseCaseError):
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id="nope"))
 
@@ -900,7 +863,7 @@ class TestRemoveNode(unittest.TestCase):
         step = s.create_step("build: feature", step="build", role="agent", parent=item)
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = FakeGitForRemove()
+        git = FakeGit()
 
         original_delete = s.delete
 
