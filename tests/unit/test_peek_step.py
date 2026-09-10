@@ -1,5 +1,4 @@
 import unittest
-from unittest import mock
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.peek_step import PeekStepInput, PeekStepUseCase
@@ -26,25 +25,33 @@ class _FakeFlow:
         return self._files.get(stage, stage)
 
 
+class _FakeWorkflowSource:
+    def __init__(self, result=None):
+        self._result = result
+        self.calls = []
+
+    def resolve_agent(self, role, pin):
+        self.calls.append((role, pin))
+        return self._result
+
+
 class TestPeekStepUseCase(unittest.TestCase):
     def test_no_workflow_pin_in_ancestry_raises(self):
         store = FakeStore()
         item = store.create_item("an item", "a description")
         flow = _FakeFlow(pin=None)
         with self.assertRaises(UseCaseError):
-            PeekStepUseCase(store, flow, config=object(), workflow_source=None).execute(
+            PeekStepUseCase(store, flow, workflow_source=None).execute(
                 PeekStepInput(node_id=item, stage="write-code"))
 
     def test_stage_absent_from_resolved_bundle_raises(self):
         store = FakeStore()
         item = store.create_item("an item", "a description", workflow="acme/build@sha-old")
         flow = _FakeFlow(pin="acme/build@sha-old", resolved="acme/build@sha-new")
-        with mock.patch(
-            "lightcycle.application.work.peek_step.resolve_agent_for_pin", return_value=None,
-        ):
-            with self.assertRaises(UseCaseError):
-                PeekStepUseCase(store, flow, config=object(), workflow_source=None).execute(
-                    PeekStepInput(node_id=item, stage="ghost-stage"))
+        workflow_source = _FakeWorkflowSource(result=None)
+        with self.assertRaises(UseCaseError):
+            PeekStepUseCase(store, flow, workflow_source=workflow_source).execute(
+                PeekStepInput(node_id=item, stage="ghost-stage"))
 
     def test_resolve_selection_valueerror_is_wrapped_as_usecase_error(self):
         store = FakeStore()
@@ -54,19 +61,17 @@ class TestPeekStepUseCase(unittest.TestCase):
             error=ValueError("origin 'acme' has no pulled version; run `lc workflow add`/`upgrade`"),
         )
         with self.assertRaises(UseCaseError):
-            PeekStepUseCase(store, flow, config=object(), workflow_source=None).execute(
+            PeekStepUseCase(store, flow, workflow_source=None).execute(
                 PeekStepInput(node_id=item, stage="write-code"))
 
     def test_happy_path_returns_fresh_pin_and_body(self):
         store = FakeStore()
         item = store.create_item("an item", "a description", workflow="acme/build@sha-old")
         flow = _FakeFlow(pin="acme/build@sha-old", resolved="acme/build@sha-new")
-        with mock.patch(
-            "lightcycle.application.work.peek_step.resolve_agent_for_pin",
-            return_value=StepPrompt(meta={}, body="step body text"),
-        ):
-            resp = PeekStepUseCase(store, flow, config=object(), workflow_source=None).execute(
-                PeekStepInput(node_id=item, stage="write-code"))
+        workflow_source = _FakeWorkflowSource(
+            result=StepPrompt(meta={}, body="step body text"))
+        resp = PeekStepUseCase(store, flow, workflow_source=workflow_source).execute(
+            PeekStepInput(node_id=item, stage="write-code"))
         self.assertEqual(resp.pin, "acme/build@sha-new")
         self.assertEqual(resp.body, "step body text")
 
@@ -77,13 +82,10 @@ class TestPeekStepUseCase(unittest.TestCase):
             pin="acme/build@sha-old", resolved="acme/build@sha-new",
             files={"write-code": "coder"},
         )
-        with mock.patch(
-            "lightcycle.application.work.peek_step.resolve_agent_for_pin",
-            return_value=StepPrompt(meta={}, body="b"),
-        ) as resolve:
-            PeekStepUseCase(store, flow, config=object(), workflow_source=None).execute(
-                PeekStepInput(node_id=item, stage="write-code"))
-        self.assertEqual(resolve.call_args[0][1], "coder")
+        workflow_source = _FakeWorkflowSource(result=StepPrompt(meta={}, body="b"))
+        PeekStepUseCase(store, flow, workflow_source=workflow_source).execute(
+            PeekStepInput(node_id=item, stage="write-code"))
+        self.assertEqual(workflow_source.calls[0][0], "coder")
 
 
 if __name__ == "__main__":

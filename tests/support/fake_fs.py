@@ -99,7 +99,7 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
         return graph_text_from_metas(self._metas)
 
     def workflow_meta(self, name, root=None):
-        from lightcycle.adapters.frontmatter import split_frontmatter
+        from lightcycle.frontmatter import split_frontmatter
         text = self.workflow_text(name, root)
         if not text:
             return {}

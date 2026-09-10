@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.peek_step import PeekStepInput, PeekStepUseCase
@@ -24,7 +25,7 @@ class FakeConfig:
 class TestPeekStepUseCaseReadsTheOriginsCurrentBundle(unittest.TestCase):
     def test_returns_the_current_sha_body_not_the_frozen_historical_one(self):
         config = FakeConfig(tempfile.mkdtemp(), tempfile.mkdtemp())
-        adapter = WorkflowSourceAdapter(config)
+        adapter = WorkflowSourceAdapter(config, WorkflowBundleAdapter())
 
         adapter.pin("acme", FetchedBundle(
             manifest='name = "acme"\ncontract = 1\n', sha="sha-old",
@@ -40,7 +41,7 @@ class TestPeekStepUseCaseReadsTheOriginsCurrentBundle(unittest.TestCase):
         item = store.create_item("an item", "a description", workflow="acme/build@sha-old")
         flow = FlowService(FakeFs(), store, config, adapter)
 
-        resp = PeekStepUseCase(store, flow, config, adapter).execute(
+        resp = PeekStepUseCase(store, flow, adapter).execute(
             PeekStepInput(node_id=item, stage="write-code"))
 
         self.assertEqual(resp.pin, "acme/build@sha-new")

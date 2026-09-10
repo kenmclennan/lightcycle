@@ -9,7 +9,13 @@ import time
 import traceback
 
 from lightcycle import __version__
-from lightcycle.adapters.simulate import NullSpin, NullWorkers, RecordingGit, SimulateConfig
+from lightcycle.adapters.simulate import (
+    NullSpin,
+    NullWorkers,
+    RecordingGit,
+    ScriptedGitHub,
+    SimulateConfig,
+)
 from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
@@ -462,7 +468,7 @@ def cmd_peek(argv):
     a = ap.parse_args(argv)
     try:
         resp = PeekStepUseCase(
-            _container.store, _flow(), _container.config, _container.workflow_source
+            _container.store, _flow(), _container.workflow_source
         ).execute(PeekStepInput(node_id=a.id, stage=a.stage))
     except KeyError:
         sys.stderr.write("unknown node '%s'\n" % a.id)
@@ -793,7 +799,7 @@ def _workflow_simulate(selector):
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git, NullSpin(),
-            scaffold=c.scaffold,
+            scaffold=c.scaffold, github_factory=ScriptedGitHub,
         )
         try:
             resp = use_case.execute(SimulateInput(workflow=selector))

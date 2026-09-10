@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
@@ -46,7 +47,7 @@ def _make_source_repo(branch="main"):
 
 
 def _adapter():
-    return WorkflowSourceAdapter(FakeConfig(tempfile.mkdtemp()))
+    return WorkflowSourceAdapter(FakeConfig(tempfile.mkdtemp()), WorkflowBundleAdapter())
 
 
 class TestFetch(unittest.TestCase):

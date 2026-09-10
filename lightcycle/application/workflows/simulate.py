@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass, field
 from typing import List
 
-from lightcycle.adapters.simulate import ScriptedGitHub
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimInput
 from lightcycle.application.flow.complete_step import CompleteInput
@@ -58,7 +57,7 @@ def _named_workspaces(graph):
 
 class WorkflowSimulateUseCase:
     def __init__(self, store, flow, worktrees, claim, complete, projects_root, git, spin_port,
-                 scaffold=None):
+                 scaffold=None, github_factory=None):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
@@ -68,6 +67,7 @@ class WorkflowSimulateUseCase:
         self._git = git
         self._spin_port = spin_port
         self._scaffold = scaffold
+        self._github_factory = github_factory
 
     def execute(self, input: SimulateInput) -> SimulateResponse:
         pin = self._flow.resolve_selection(input.workflow)
@@ -95,7 +95,7 @@ class WorkflowSimulateUseCase:
                 )
                 continue
             item_id = self._seed_item(pin, graph)
-            github = ScriptedGitHub()
+            github = self._github_factory()
             monitor = MonitorPrsUseCase(
                 self._store, github, self._worktrees, self._flow, self._complete,
                 spin_port=self._spin_port,

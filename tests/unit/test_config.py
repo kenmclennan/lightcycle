@@ -585,5 +585,12 @@ class TestTuiAutostartPool(unittest.TestCase):
         self.assertEqual(dict(_SEED_KEYS)["tui-autostart-pool"], "false")
 
 
+class TestVersion(unittest.TestCase):
+    def test_returns_the_package_version(self):
+        from lightcycle import __version__
+
+        self.assertEqual(_cfg().version(), __version__)
+
+
 if __name__ == "__main__":
     unittest.main()

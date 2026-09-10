@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
@@ -43,7 +44,7 @@ class FakeConfig:
 def _use_case():
     projects_root = tempfile.mkdtemp()
     config = FakeConfig(projects_root, tempfile.mkdtemp())
-    source = WorkflowSourceAdapter(config)
+    source = WorkflowSourceAdapter(config, WorkflowBundleAdapter())
     return (
         InitWorkflowOriginUseCase(config, GitAdapter(), source, FakeStore(), ScaffoldAdapter()),
         config, source,
@@ -107,7 +108,8 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
 
         config_before_init = _real_config()
         add_before_init = AddWorkflowSourceUseCase(
-            WorkflowSourceAdapter(config_before_init), FakeStore(), config_before_init)
+            WorkflowSourceAdapter(config_before_init, WorkflowBundleAdapter()),
+            FakeStore(), config_before_init)
         with self.assertRaises(ConfigError) as cm:
             add_before_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertIn("workflow-retention", str(cm.exception))
@@ -115,7 +117,8 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         config_after_init = _real_config()
         config_after_init.ensure_config()
         add_after_init = AddWorkflowSourceUseCase(
-            WorkflowSourceAdapter(config_after_init), FakeStore(), config_after_init)
+            WorkflowSourceAdapter(config_after_init, WorkflowBundleAdapter()),
+            FakeStore(), config_after_init)
         resp = add_after_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertEqual(resp.origin, "ci-bundle")
 

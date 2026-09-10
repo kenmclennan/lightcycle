@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.adapters.workers import workers_state
-from lightcycle.adapters.workflow_source import resolve_agent_for_pin
 from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
 from lightcycle.container import Container
 from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
@@ -193,7 +192,7 @@ def main():
     try:
         plan = plan_session(
             lambda r: claim.execute(ClaimInput(role=r)),
-            lambda r, pin: resolve_agent_for_pin(config, r, pin),
+            lambda r, pin: container.workflow_source.resolve_agent(r, pin),
             container.store.reclaim,
             role,
         )

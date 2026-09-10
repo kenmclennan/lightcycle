@@ -41,7 +41,7 @@ class Container:
         self.backup = backup if backup is not None else SqliteBackupAdapter(self.config)
         self.workflow_source = (
             workflow_source if workflow_source is not None
-            else WorkflowSourceAdapter(self.config)
+            else WorkflowSourceAdapter(self.config, self.workflow_bundle)
         )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)

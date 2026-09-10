@@ -5,7 +5,13 @@ import unittest
 from pathlib import Path
 
 import lightcycle.cli as cli
-from lightcycle.adapters.simulate import NullSpin, NullWorkers, RecordingGit, SimulateConfig
+from lightcycle.adapters.simulate import (
+    NullSpin,
+    NullWorkers,
+    RecordingGit,
+    ScriptedGitHub,
+    SimulateConfig,
+)
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.application.flow.claim_step import ClaimStepUseCase
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
@@ -224,7 +230,7 @@ class SimulateTestCase(unittest.TestCase):
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git, NullSpin(),
-            scaffold=c.scaffold,
+            scaffold=c.scaffold, github_factory=ScriptedGitHub,
         )
         resp = use_case.execute(SimulateInput(workflow=selector))
         return resp, store
