@@ -25,6 +25,11 @@ APPLICATION_BANNED_IMPORTS = ("lightcycle.adapters", "lightcycle.container")
 PORTS_BANNED_IMPORTS = ("lightcycle.application", "lightcycle.adapters")
 DRIVEN_ADAPTER_BANNED_IMPORTS = ("lightcycle.application", "lightcycle.container")
 
+DOMAIN_BANNED_FORMATTER_FUNCTIONS = (
+    "format_usd", "format_tokens", "format_rate", "format_elapsed",
+    "format_wall_and_active", "landing_tab", "display_stage", "display_role",
+)
+
 DRIVEN_ADAPTER_IMPORT_EXEMPT = {
     ADAPTERS / "upgrade.py":
         "imports plain exception types and a pure helper from application/setup/upgrade.py; "
@@ -110,6 +115,43 @@ class TestDomainImportsNothingAboveIt(unittest.TestCase):
             for module in find_banned_imports(tree, DOMAIN_BANNED_IMPORTS):
                 offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), module))
         self.assertEqual(offenders, [], "domain imports above its own layer: %s" % offenders)
+
+
+class TestDomainFormatsNothingAndComposesNoLcSyntax(unittest.TestCase):
+    def test_no_currency_elapsed_or_tui_label_formatter_defined_in_domain(self):
+        offenders = []
+        for path in sorted(DOMAIN.rglob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if node.name in DOMAIN_BANNED_FORMATTER_FUNCTIONS:
+                        offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), node.name))
+        self.assertEqual(
+            offenders, [], "currency/elapsed/TUI-label formatter defined in domain: %s" % offenders
+        )
+
+    def test_no_lc_command_string_composed_in_domain(self):
+        offenders = []
+        for path in sorted(DOMAIN.rglob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+                    left = node.left
+                    if (
+                        isinstance(left, ast.Constant)
+                        and isinstance(left.value, str)
+                        and left.value.startswith("lc ")
+                    ):
+                        offenders.append("%s: %r" % (path.relative_to(REPO_ROOT), left.value))
+                elif isinstance(node, ast.JoinedStr) and node.values:
+                    first = node.values[0]
+                    if (
+                        isinstance(first, ast.Constant)
+                        and isinstance(first.value, str)
+                        and first.value.startswith("lc ")
+                    ):
+                        offenders.append("%s: f-string %r" % (path.relative_to(REPO_ROOT), first.value))
+        self.assertEqual(offenders, [], "lc-prefixed command string composed in domain: %s" % offenders)
 
 
 class TestApplicationImportsNoAdaptersOrContainer(unittest.TestCase):

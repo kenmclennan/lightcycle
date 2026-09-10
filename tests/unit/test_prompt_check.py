@@ -1,9 +1,9 @@
 import unittest
 
 from lightcycle.application.workflows.prompt_check import check_prompt_commands
+from lightcycle.application.workflows.prompt_commands import json_field_reads, lc_calls
 from lightcycle.domain.contracts.cli_surface import cli_surface
 from lightcycle.domain.contracts.json_surface import json_surface
-from lightcycle.domain.contracts.prompt_commands import json_field_reads, lc_calls
 
 _CLI = '''
 def cmd_set(argv):

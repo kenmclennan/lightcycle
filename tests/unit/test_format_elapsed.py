@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.feedback.format_elapsed import format_elapsed
+from lightcycle.render import format_elapsed
 
 
 class TestFormatElapsed(unittest.TestCase):

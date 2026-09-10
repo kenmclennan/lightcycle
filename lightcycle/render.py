@@ -1,6 +1,40 @@
 from lightcycle.application.flow.engine_steps import StepKind
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
-from lightcycle.domain.work import display_stage, park_resume_command
+
+
+def format_usd(amount) -> str:
+    return "$%.2f" % amount
+
+
+def format_tokens(n) -> str:
+    return "{:,}".format(n)
+
+
+def format_rate(rate) -> str:
+    return "n/a" if rate is None else "%.1f%%" % (rate * 100)
+
+
+def format_elapsed(seconds):
+    total_seconds = int(seconds)
+    if total_seconds < 60:
+        return "%ds" % total_seconds
+    minutes = total_seconds // 60
+    if minutes < 60:
+        return "%dm" % minutes
+    hours, minutes = divmod(minutes, 60)
+    return "%dh %dm" % (hours, minutes)
+
+
+def format_wall_and_active(wall_seconds, active_seconds):
+    return "%s (%s active)" % (format_elapsed(wall_seconds), format_elapsed(active_seconds))
+
+
+def display_stage(phrase, stage):
+    return "%s · %s" % (phrase, stage) if phrase else stage
+
+
+def _park_resume_command(node_id):
+    return "lc set %s --state ready" % node_id
 
 
 def node_extra(node, *, show_description=False, description=None, artifacts=None):
@@ -80,7 +114,7 @@ def _strategy_suffix(r):
         parts = ["needs:%s" % r.step.park.needs]
         if r.step.park.reason:
             parts.append("reason:%s" % _truncate(r.step.park.reason))
-        parts.append("resume:%s" % park_resume_command(r.step.id))
+        parts.append("resume:%s" % _park_resume_command(r.step.id))
         return "  " + "  ".join(parts)
     if StepKind.of(r.step) is StepKind.ENGINE_FINDINGS and r.step.notes:
         return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])

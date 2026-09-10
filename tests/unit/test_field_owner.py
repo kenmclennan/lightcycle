@@ -1,29 +1,31 @@
 import unittest
 
-from lightcycle.domain.work import refuse_fields, refuse_state
+from lightcycle.domain.work import FieldRefusal, StateRefusal, refuse_fields, refuse_state
 
 
 class TestRefuseFields(unittest.TestCase):
     def test_a_step_field_on_an_item_names_both_structures(self):
         self.assertEqual(
-            refuse_fields("item", {"needs"}), "--needs belongs to a step, not an item"
+            refuse_fields("item", {"needs"}),
+            FieldRefusal(fields=("needs",), requested_type="item", owner="step"),
         )
 
     def test_an_item_field_on_a_step_names_both_structures(self):
         self.assertEqual(
             refuse_fields("step", {"description"}),
-            "--description belongs to an item, not a step",
+            FieldRefusal(fields=("description",), requested_type="step", owner="item"),
         )
 
     def test_several_wrong_fields_are_listed_together_and_agree_in_number(self):
         self.assertEqual(
             refuse_fields("item", {"needs", "reason"}),
-            "--needs, --reason belong to a step, not an item",
+            FieldRefusal(fields=("needs", "reason"), requested_type="item", owner="step"),
         )
 
     def test_a_field_of_neither_structure_says_so(self):
         self.assertEqual(
-            refuse_fields("item", {"goal"}), "--goal belongs to no structure"
+            refuse_fields("item", {"goal"}),
+            FieldRefusal(fields=("goal",), requested_type="item", owner=None),
         )
 
     def test_fields_the_type_owns_are_accepted(self):
@@ -41,21 +43,28 @@ class TestRefuseState(unittest.TestCase):
     def test_a_park_is_refused_on_an_item_and_names_what_it_takes(self):
         self.assertEqual(
             refuse_state("item", "waiting"),
-            "--state waiting applies to a step, not an item; "
-            "an item takes --state active, --state in_progress",
+            StateRefusal(
+                state="waiting", requested_type="item", owner="step",
+                allowed=("active", "in_progress"),
+            ),
         )
 
     def test_activation_is_refused_on_a_step_and_names_what_it_takes(self):
         self.assertEqual(
             refuse_state("step", "active"),
-            "--state active applies to an item, not a step; "
-            "a step takes --state ready, --state waiting",
+            StateRefusal(
+                state="active", requested_type="step", owner="item",
+                allowed=("ready", "waiting"),
+            ),
         )
 
     def test_an_unknown_state_lists_every_state(self):
         self.assertEqual(
             refuse_state("item", "bogus"),
-            "unknown --state 'bogus'; use active, in_progress, ready, waiting",
+            StateRefusal(
+                state="bogus", requested_type="item", owner=None,
+                allowed=("active", "in_progress", "ready", "waiting"),
+            ),
         )
 
     def test_a_state_the_type_owns_is_accepted(self):

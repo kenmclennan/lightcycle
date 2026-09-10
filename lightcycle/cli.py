@@ -15,7 +15,7 @@ from lightcycle.adapters.simulate import (
 from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
-    render_backlog, render_inbox, render_queue, render_search,
+    display_stage, format_elapsed, render_backlog, render_inbox, render_queue, render_search,
     render_workflow_mermaid,
 )
 
@@ -27,8 +27,7 @@ from lightcycle.application.feedback import (
     WorklogInput,
     WorklogUseCase,
 )
-from lightcycle.domain.feedback import format_elapsed
-from lightcycle.domain.work import State, display_stage, refuse_fields, refuse_state
+from lightcycle.domain.work import FieldRefusal, State, refuse_fields, refuse_state
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_shortcode import resolve_shortcode
@@ -1224,6 +1223,33 @@ def _reject_unset_targets(unset_fields):
     return "; ".join(parts) + "\n"
 
 
+def _named(node_type):
+    return "an item" if node_type == "item" else "a step"
+
+
+def _render_refusal(refusal):
+    if isinstance(refusal, FieldRefusal):
+        return _render_field_refusal(refusal)
+    return _render_state_refusal(refusal)
+
+
+def _render_field_refusal(r):
+    named = ", ".join("--%s" % f for f in r.fields)
+    verb = "belong" if len(r.fields) > 1 else "belongs"
+    if r.owner is None:
+        return "%s %s to no structure" % (named, verb)
+    return "%s %s to %s, not %s" % (named, verb, _named(r.owner), _named(r.requested_type))
+
+
+def _render_state_refusal(r):
+    if r.owner is None:
+        return "unknown --state %r; use %s" % (r.state, ", ".join(r.allowed))
+    takes = ", ".join("--state %s" % s for s in r.allowed)
+    return "--state %s applies to %s, not %s; %s takes %s" % (
+        r.state, _named(r.owner), _named(r.requested_type), _named(r.requested_type), takes,
+    )
+
+
 def cmd_set(argv):
     ap = argparse.ArgumentParser(prog="lc set")
     for opt in ("title", "description", "project", "workflow", "state", "label",
@@ -1249,9 +1275,9 @@ def cmd_set(argv):
         sys.stderr.write(msg)
         return 2
     given = given_values | unset_fields
-    msg = refuse_fields(node_type, given) or refuse_state(node_type, a.state)
-    if msg:
-        sys.stderr.write("%s\n" % msg)
+    refusal = refuse_fields(node_type, given) or refuse_state(node_type, a.state)
+    if refusal is not None:
+        sys.stderr.write("%s\n" % _render_refusal(refusal))
         return 2
     if not given and a.state is None:
         sys.stderr.write("nothing to set on '%s'\n" % a.id)

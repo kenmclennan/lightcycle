@@ -8,8 +8,8 @@ from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.feedback import format_elapsed
-from lightcycle.domain.work import format_usd, is_human_step, item_active_seconds, row_bucket
+from lightcycle.domain.work import is_human_step, item_active_seconds, row_bucket
+from lightcycle.render import format_elapsed, format_usd
 
 
 @dataclass(frozen=True)

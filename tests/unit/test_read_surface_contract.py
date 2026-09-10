@@ -2,8 +2,8 @@ import pathlib
 import unittest
 
 from lightcycle.application.workflows.prompt_check import engine_sources
+from lightcycle.application.workflows.prompt_commands import json_field_reads
 from lightcycle.domain.contracts.json_surface import json_surface
-from lightcycle.domain.contracts.prompt_commands import json_field_reads
 
 LIBRARY = pathlib.Path(__file__).resolve().parents[1] / "support" / "library" / "steps"
 

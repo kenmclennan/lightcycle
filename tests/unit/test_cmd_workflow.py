@@ -9,9 +9,8 @@ from lightcycle import cli
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.work.hierarchy import display_stage
 from lightcycle.ports.workflow_source import FetchedBundle, OriginRegistration, WorkflowSourceError
-from lightcycle.render import render_workflow_mermaid
+from lightcycle.render import display_stage, render_workflow_mermaid
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit

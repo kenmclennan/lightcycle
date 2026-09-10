@@ -17,12 +17,6 @@ def compose_hierarchy(root, steps_by_item):
     return rows
 
 
-def landing_tab(node):
-    if node.type == "item":
-        return "description"
-    return "log" if node.state == State.RUNNING else "detail"
-
-
 def row_bucket(node, flow):
     if node.state == State.DONE:
         return "done"
@@ -36,20 +30,8 @@ def row_bucket(node, flow):
     return "queued"
 
 
-def display_role(role):
-    return role or "human"
-
-
 def is_human_step(node):
-    return node.type == "step" and display_role(node.role) == "human"
-
-
-def display_stage(phrase, stage):
-    return "%s · %s" % (phrase, stage) if phrase else stage
-
-
-def park_resume_command(node_id):
-    return "lc set %s --state ready" % node_id
+    return node.type == "step" and (node.role or "human") == "human"
 
 
 def viewable_artifacts(node):
