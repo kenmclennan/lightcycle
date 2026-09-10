@@ -112,10 +112,15 @@ class LogLineParser:
         return self._dispatch(event, text)
 
     def _resolve_timestamp(self, event):
-        if event.get("type") in ("assistant", "user"):
-            raw_ts = event.get("timestamp")
-            if raw_ts:
-                self._last_timestamp = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+        if event.get("type") not in ("assistant", "user"):
+            return self._last_timestamp
+        raw_ts = event.get("timestamp")
+        if not raw_ts:
+            return self._last_timestamp
+        try:
+            self._last_timestamp = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+        except ValueError:
+            return None
         return self._last_timestamp
 
     def _dispatch(self, event, raw_text) -> list[LogLine]:

@@ -30,15 +30,15 @@ class Reflection:
 
 
 def parse_reflections(artifacts):
-    out = []
+    out, unreadable = [], []
     for a in artifacts:
         if a.type != "reflection":
             continue
         try:
             out.append(Reflection.from_dict(json.loads(a.value)))
         except (ValueError, KeyError):
-            continue
-    return out
+            unreadable.append(a.value)
+    return out, unreadable
 
 
 def reflections_of(item_artifacts, steps, retroed_pass_ids):

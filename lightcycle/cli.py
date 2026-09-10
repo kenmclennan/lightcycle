@@ -1862,6 +1862,10 @@ def _print_retro(resp, interval=None):
         )
     else:
         print("== retro: %s  (N=%d) ==" % (resp.subject, resp.reflection_count))
+    if resp.unreadable:
+        print("\n%d reflection(s) could not be parsed and were excluded:" % len(resp.unreadable))
+        for value in resp.unreadable:
+            print("  %s" % (value[:200] + "…" if len(value) > 200 else value))
     if resp.feedback:
         print("\nFeedback (read it; an analyser agent can later):")
         for item in resp.feedback:

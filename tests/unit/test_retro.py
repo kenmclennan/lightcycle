@@ -1,6 +1,7 @@
 import unittest
 
-from lightcycle.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec
+from lightcycle.domain.feedback import UNLABELED_MODEL, Reflection, Retro, SignalSpec, parse_reflections
+from lightcycle.domain.work import Artifact
 from tests.support.fake_fs import signals_from_metas
 from tests.support.factories import make_step
 
@@ -98,6 +99,29 @@ class TestSignals(unittest.TestCase):
         self.assertEqual(
             signals_from_metas(metas).tally(steps), {"resets": {"opus": 1, "sonnet": 3}}
         )
+
+
+class TestParseReflections(unittest.TestCase):
+    def test_well_formed_reflections_parse_with_no_unreadable(self):
+        artifacts = [Artifact(type="reflection", value='{"step": "t1", "feedback": "ok"}')]
+        refs, unreadable = parse_reflections(artifacts)
+        self.assertEqual([r.step for r in refs], ["t1"])
+        self.assertEqual(unreadable, [])
+
+    def test_malformed_reflection_is_reported_not_dropped_silently(self):
+        artifacts = [
+            Artifact(type="reflection", value="not json"),
+            Artifact(type="reflection", value='{"step": "t2", "feedback": "fine"}'),
+        ]
+        refs, unreadable = parse_reflections(artifacts)
+        self.assertEqual([r.step for r in refs], ["t2"])
+        self.assertEqual(unreadable, ["not json"])
+
+    def test_non_reflection_artifacts_are_ignored_not_reported_as_unreadable(self):
+        artifacts = [Artifact(type="pr", value="not json")]
+        refs, unreadable = parse_reflections(artifacts)
+        self.assertEqual(refs, [])
+        self.assertEqual(unreadable, [])
 
 
 class TestRetro(unittest.TestCase):
