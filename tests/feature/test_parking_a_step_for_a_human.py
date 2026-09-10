@@ -94,7 +94,7 @@ def _block_with_question(ctx, question):
 @when("I read the inbox")
 def _read_inbox(ctx):
     container = cli.container()
-    flow = make_flow_service(container.fs, container.store, container.config,
+    flow = make_flow_service(container.workflow_bundle, container.store, container.config,
                               container.workflow_source)
     resp = InboxUseCase(container.store, flow).execute(InboxInput())
     ctx["inbox_rows"] = resp.rows

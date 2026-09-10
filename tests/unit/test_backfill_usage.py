@@ -105,7 +105,7 @@ class TestBackfillUsageUseCase(unittest.TestCase):
         })
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.total, 3)
         self.assertEqual(resp.matched, 2)
@@ -120,12 +120,47 @@ class TestBackfillUsageUseCase(unittest.TestCase):
             {"/home/logs/worker-a.log", "/home/logs/worker-b.log", "/home/logs/worker-c.log"},
         )
 
+    def test_fs_and_worker_log_are_used_as_two_distinct_ports_not_one_object_twice(self):
+        store = FakeStore()
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        files = {"/home/logs/worker-a.log": _claim_result_log(tid)}
+
+        class _ExistsOnlyFs:
+            def exists(self, path):
+                return path in files
+
+        class _WorkerLogOnly:
+            def iter_lines(self, path):
+                content = files.get(path)
+                if content is None:
+                    return
+                for line in content.decode("utf-8", errors="replace").splitlines(keepends=True):
+                    yield line
+
+            def list_worker_log_files(self, root):
+                prefix = root + "/logs/"
+                return sorted(
+                    f for f in files
+                    if f.startswith(prefix) and f.rsplit("/", 1)[-1].startswith("worker-")
+                    and f.endswith(".log")
+                )
+
+        workers = FakeWorkers()
+
+        resp = BackfillUsageUseCase(
+            store, _ExistsOnlyFs(), workers, FakeConfig(), _WorkerLogOnly()
+        ).execute()
+
+        self.assertEqual(resp.total, 1)
+        self.assertEqual(resp.matched, 1)
+        self.assertEqual(resp.stored, 1)
+
     def test_matched_log_whose_step_no_longer_exists_is_reported_as_orphaned_not_stored(self):
         store = FakeStore()
         fs = FakeFs(files={"/home/logs/worker-a.log": _claim_result_log("gone-step")})
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.matched, 1)
         self.assertEqual(resp.orphaned, 1)
@@ -142,9 +177,9 @@ class TestBackfillUsageUseCase(unittest.TestCase):
             "/home/logs/worker-c.log": _no_claim_log(),
         })
         workers = FakeWorkers()
-        BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.matched, 0)
         self.assertEqual(resp.total, 0)
@@ -157,7 +192,7 @@ class TestBackfillUsageUseCase(unittest.TestCase):
             {"spawnid": "sp-1", "log": "/home/logs/worker-a.log", "checked": False},
         ])
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.total, 1)
         self.assertEqual(resp.matched, 0)
@@ -193,7 +228,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         store._backfill_log[log_file] = (tid, None)
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.reclassified, 1)
         self.assertEqual(resp.recovered, 1)
@@ -210,7 +245,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         store._backfill_log[log_file] = (tid, None)
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.reclassified, 1)
         self.assertEqual(resp.recovered, 0)
@@ -224,7 +259,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         fs = FakeFs(files={"/home/logs/worker-a.log": _claim_result_log(tid)})
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.reclassified, 0)
         self.assertEqual(resp.recovered, 0)
@@ -280,7 +315,7 @@ class TestBackfillUsageDoesNotDoubleALiveCapturedLog(unittest.TestCase):
         single_ingest_tools = store.tool_usage_for(tid)
         self.assertIn(log_file, store.usage_backfilled_logs())
 
-        resp = BackfillUsageUseCase(store, fs, workers, config).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, config, fs).execute()
 
         self.assertEqual(resp.total, 0)
         self.assertEqual(store.get_node(tid).usage_input_tokens, single_ingest_usage)
@@ -308,9 +343,9 @@ class TestBackfillUsageRepair(unittest.TestCase):
             log_b: _claim_result_log_with_usage(tid, 20, 0.2),
         })
         workers = FakeWorkers()
-        BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute(repair=True)
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
 
         self.assertEqual(resp.repair_examined, 1)
         self.assertEqual(resp.repair_corrected, 0)
@@ -328,7 +363,7 @@ class TestBackfillUsageRepair(unittest.TestCase):
         store._backfill_log[log_file] = (tid, True)
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute(repair=True)
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
 
         self.assertEqual(resp.repair_examined, 1)
         self.assertEqual(resp.repair_corrected, 1)
@@ -345,10 +380,10 @@ class TestBackfillUsageRepair(unittest.TestCase):
         missing_log = "/home/logs/worker-b.log"
         fs = FakeFs(files={present_log: _claim_result_log_with_usage(tid, 68, 0.5)})
         workers = FakeWorkers()
-        BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
         store._backfill_log[missing_log] = (tid, True)
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute(repair=True)
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
 
         self.assertEqual(resp.repair_examined, 1)
         self.assertEqual(resp.repair_missing_logs, 1)
@@ -367,12 +402,12 @@ class TestBackfillUsageTransitionWindowHazard(unittest.TestCase):
         store.record_attribution(tid, 1, _bash_tool_usage(tid))
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
 
         self.assertEqual(resp.stored, 1)
         self.assertEqual(store.get_node(tid).usage_input_tokens, 136)
 
-        repair_resp = BackfillUsageUseCase(store, fs, workers, FakeConfig()).execute(repair=True)
+        repair_resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
 
         self.assertEqual(repair_resp.repair_corrected, 1)
         self.assertEqual(store.get_node(tid).usage_input_tokens, 68)

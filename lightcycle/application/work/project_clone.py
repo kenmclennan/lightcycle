@@ -4,7 +4,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.ports.store import ProjectResolutionError
 
 
-def ensure_project_cloned(store, git, config, ref):
+def ensure_project_cloned(store, git, config, ref, scaffold):
     if not ref or os.path.isabs(ref):
         return
     try:
@@ -12,7 +12,7 @@ def ensure_project_cloned(store, git, config, ref):
     except ProjectResolutionError as e:
         raise UseCaseError(str(e))
     if project.local_path:
-        if not os.path.isdir(project.local_path):
+        if not scaffold.is_dir(project.local_path):
             raise UseCaseError(
                 "project '%s' is registered at '%s' but that directory is missing - re-run "
                 "`lc project add %s --path <dir>` to point at a real checkout"
@@ -20,7 +20,7 @@ def ensure_project_cloned(store, git, config, ref):
             )
         return
     dest = os.path.join(config.projects_root(), *project.identity.split("/"))
-    if os.path.isdir(dest):
+    if scaffold.is_dir(dest):
         if not git.is_git_repo(dest):
             raise UseCaseError(
                 "clone destination '%s' for '%s' already exists and is not a git repo - "

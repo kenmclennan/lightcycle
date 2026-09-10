@@ -22,6 +22,7 @@ class _Container:
         self.fs = None
         self.git = None
         self.workflow_source = None
+        self.workflow_bundle = None
 
 
 class TestMainRefusesUnknownNodeId(unittest.TestCase):

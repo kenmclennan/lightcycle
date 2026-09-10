@@ -117,17 +117,13 @@ one with the `lightcycle:author-workflow` skill.
 """
 
 
-def _write_scaffold(project_dir, name):
-    with open(os.path.join(project_dir, "source.toml"), "w") as f:
-        f.write(_SOURCE_TOML % (name, ENGINE_CONTRACT, name))
-    with open(os.path.join(project_dir, "CLAUDE.md"), "w") as f:
-        f.write(_CLAUDE_MD % name)
+def _write_scaffold(project_dir, name, scaffold):
+    scaffold.write_text(os.path.join(project_dir, "source.toml"), _SOURCE_TOML % (name, ENGINE_CONTRACT, name))
+    scaffold.write_text(os.path.join(project_dir, "CLAUDE.md"), _CLAUDE_MD % name)
     workflows_dir = os.path.join(project_dir, ".github", "workflows")
-    os.makedirs(workflows_dir)
-    with open(os.path.join(workflows_dir, "simulate.yml"), "w") as f:
-        f.write(_SIMULATE_YML)
-    with open(os.path.join(project_dir, "README.md"), "w") as f:
-        f.write(_README_MD % name)
+    scaffold.make_dir(workflows_dir)
+    scaffold.write_text(os.path.join(workflows_dir, "simulate.yml"), _SIMULATE_YML)
+    scaffold.write_text(os.path.join(project_dir, "README.md"), _README_MD % name)
 
 
 @dataclass(frozen=True)
@@ -138,20 +134,21 @@ class InitWorkflowOriginResponse:
 
 
 class InitWorkflowOriginUseCase:
-    def __init__(self, config, git, source, store, fs):
+    def __init__(self, config, git, source, store, fs, scaffold):
         self._config = config
         self._git = git
         self._source = source
         self._store = store
         self._fs = fs
+        self._scaffold = scaffold
 
     def execute(self, name) -> InitWorkflowOriginResponse:
         project_dir = os.path.join(self._config.projects_root(), name)
         if os.path.exists(project_dir):
             raise WorkflowSourceError(
                 "%s already exists; choose a different name or remove it first" % project_dir)
-        os.makedirs(project_dir)
-        _write_scaffold(project_dir, name)
+        self._scaffold.make_dir(project_dir)
+        _write_scaffold(project_dir, name, self._scaffold)
         self._git.init_repo(project_dir, "main")
         self._git.commit_all(project_dir, "scaffold workflow-origin repo")
         add_resp = AddWorkflowSourceUseCase(self._source, self._store, self._config, self._fs).execute(

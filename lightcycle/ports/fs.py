@@ -3,30 +3,6 @@ from abc import ABC, abstractmethod
 
 class FsPort(ABC):
     @abstractmethod
-    def step_roles(self, root):
-        pass
-
-    @abstractmethod
-    def read_md(self, relpath, root):
-        pass
-
-    @abstractmethod
-    def parse_step(self, role, root):
-        pass
-
-    @abstractmethod
-    def workflow_text(self, name, root):
-        pass
-
-    @abstractmethod
-    def workflow_meta(self, name, root):
-        pass
-
-    @abstractmethod
-    def workflow_names(self, root):
-        pass
-
-    @abstractmethod
     def worktrees_dir(self, root):
         pass
 
@@ -39,23 +15,7 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
-    def iter_lines(self, path):
-        pass
-
-    @abstractmethod
     def exists(self, path):
-        pass
-
-    @abstractmethod
-    def read_from(self, path, offset):
-        pass
-
-    @abstractmethod
-    def read_from_bounded(self, path, offset, max_bytes):
-        pass
-
-    @abstractmethod
-    def read_tail(self, path, max_bytes):
         pass
 
     @abstractmethod
@@ -68,12 +28,4 @@ class FsPort(ABC):
 
     @abstractmethod
     def ensure_worktrees_ignored(self, git_dir):
-        pass
-
-    @abstractmethod
-    def append_run_log(self, text):
-        pass
-
-    @abstractmethod
-    def list_worker_log_files(self, root):
         pass

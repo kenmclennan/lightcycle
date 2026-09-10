@@ -21,11 +21,12 @@ class ActivateItemResponse:
 
 
 class ActivateItemUseCase:
-    def __init__(self, store, flow, git, config):
+    def __init__(self, store, flow, git, config, scaffold=None):
         self._store = store
         self._flow = flow
         self._git = git
         self._config = config
+        self._scaffold = scaffold
 
     def execute(self, input: ActivateItemInput) -> ActivateItemResponse:
         node = self._store.get_node(input.item)
@@ -47,7 +48,7 @@ class ActivateItemUseCase:
             raise UseCaseError(str(e))
         step_name, role = check_step_filing(self._store, self._flow, item_id, node, pin, input.step)
         repo = self._store.get_item(item_id).repo
-        ensure_project_cloned(self._store, self._git, self._config, repo)
+        ensure_project_cloned(self._store, self._git, self._config, repo, self._scaffold)
         self._store.edit_node(item_id, workflow=pin)
         step = file_step(
             self._store, self._flow, item_id, node, pin, step_name, role, deps=input.deps

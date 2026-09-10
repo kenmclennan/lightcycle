@@ -1,73 +1,8 @@
 import os
 
-from lightcycle.adapters import frontmatter
 from lightcycle.ports.fs import FsPort
 
 DB_FILENAME = "store.db"
-
-
-def _roots(roots):
-    return roots if isinstance(roots, (list, tuple)) else [roots]
-
-
-def step_roles(roots):
-    names, seen = [], set()
-    for root in _roots(roots):
-        adir = os.path.join(root, "steps")
-        if not os.path.isdir(adir):
-            continue
-        for f in os.listdir(adir):
-            role = f[:-3]
-            if f.endswith(".md") and role not in seen:
-                seen.add(role)
-                names.append(role)
-    return sorted(names)
-
-
-def read_md(roots, relpath):
-    for root in _roots(roots):
-        path = os.path.join(root, relpath)
-        if os.path.exists(path):
-            with open(path) as f:
-                text = f.read()
-            meta, body = frontmatter.split_frontmatter(text)
-            return {"meta": meta, "body": body, "path": path}
-    return None
-
-
-def parse_step(roots, role):
-    return read_md(roots, os.path.join("steps", "%s.md" % role))
-
-
-def workflow_text(roots, name):
-    for root in _roots(roots):
-        path = os.path.join(root, "workflows", "%s.md" % name)
-        if os.path.exists(path):
-            with open(path) as f:
-                return f.read()
-    return None
-
-
-def workflow_meta(roots, name):
-    text = workflow_text(roots, name)
-    if text is None:
-        return {}
-    meta, _ = frontmatter.split_frontmatter(text)
-    return meta
-
-
-def workflow_names(roots):
-    names, seen = [], set()
-    for root in _roots(roots):
-        adir = os.path.join(root, "workflows")
-        if not os.path.isdir(adir):
-            continue
-        for f in os.listdir(adir):
-            name = f[:-3]
-            if f.endswith(".md") and name not in seen:
-                seen.add(name)
-                names.append(name)
-    return sorted(names)
 
 
 def worktrees_dir(root):
@@ -85,48 +20,8 @@ def read_bytes(path):
         return f.read()
 
 
-def iter_lines(path):
-    if not path or not os.path.exists(path):
-        return
-    with open(path, "rb") as f:
-        for raw in f:
-            yield raw.decode("utf-8", errors="replace")
-
-
 def exists(path):
     return bool(path) and os.path.exists(path)
-
-
-def read_from(path, offset):
-    if not path or not os.path.exists(path):
-        return b"", offset
-    with open(path, "rb") as f:
-        f.seek(offset)
-        data = f.read()
-    return data, offset + len(data)
-
-
-def read_from_bounded(path, offset, max_bytes):
-    if not path or not os.path.exists(path):
-        return b"", offset
-    with open(path, "rb") as f:
-        f.seek(offset)
-        data = f.read(max_bytes)
-    return data, offset + len(data)
-
-
-def read_tail(path, max_bytes):
-    if not path or not os.path.exists(path):
-        return b"", 0
-    start = max(0, os.path.getsize(path) - max_bytes)
-    if start == 0:
-        return read_from(path, start)
-    data, offset = read_from(path, start - 1)
-    preceding, rest = data[:1], data[1:]
-    if preceding != b"\n":
-        newline = rest.find(b"\n")
-        rest = rest[newline + 1:] if newline != -1 else b""
-    return rest, offset
 
 
 def list_dir(path):
@@ -139,27 +34,6 @@ def ensure_logs_dir(root):
     d = os.path.join(root, "logs")
     os.makedirs(d, exist_ok=True)
     return d
-
-
-def run_log_path(root):
-    return os.path.join(root, "logs", "run.log")
-
-
-def append_run_log(root, text):
-    os.makedirs(os.path.join(root, "logs"), exist_ok=True)
-    with open(run_log_path(root), "a") as f:
-        f.write(text)
-
-
-def list_worker_log_files(root):
-    logs_dir = os.path.join(root, "logs")
-    if not os.path.isdir(logs_dir):
-        return []
-    return sorted(
-        os.path.join(logs_dir, e.name)
-        for e in os.scandir(logs_dir)
-        if e.is_file() and e.name.startswith("worker-") and e.name.endswith(".log")
-    )
 
 
 def ensure_worktrees_ignored(git_dir):
@@ -183,24 +57,6 @@ class FsAdapter(FsPort):
     def __init__(self, config):
         self._config = config
 
-    def step_roles(self, root):
-        return step_roles([root]) if root else []
-
-    def read_md(self, relpath, root):
-        return read_md([root], relpath) if root else None
-
-    def parse_step(self, role, root):
-        return parse_step([root], role) if root else None
-
-    def workflow_text(self, name, root):
-        return workflow_text([root], name) if root else None
-
-    def workflow_meta(self, name, root):
-        return workflow_meta([root], name) if root else {}
-
-    def workflow_names(self, root):
-        return workflow_names([root]) if root else []
-
     def worktrees_dir(self, root):
         return worktrees_dir(root)
 
@@ -210,20 +66,8 @@ class FsAdapter(FsPort):
     def read_bytes(self, path):
         return read_bytes(path)
 
-    def iter_lines(self, path):
-        return iter_lines(path)
-
     def exists(self, path):
         return exists(path)
-
-    def read_from(self, path, offset):
-        return read_from(path, offset)
-
-    def read_from_bounded(self, path, offset, max_bytes):
-        return read_from_bounded(path, offset, max_bytes)
-
-    def read_tail(self, path, max_bytes):
-        return read_tail(path, max_bytes)
 
     def list_dir(self, path):
         return list_dir(path)
@@ -233,9 +77,3 @@ class FsAdapter(FsPort):
 
     def ensure_worktrees_ignored(self, git_dir):
         return ensure_worktrees_ignored(git_dir)
-
-    def append_run_log(self, text):
-        return append_run_log(self._config.data_root(), text)
-
-    def list_worker_log_files(self, root):
-        return list_worker_log_files(root)

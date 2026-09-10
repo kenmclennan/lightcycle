@@ -11,6 +11,7 @@ from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work.hierarchy import display_stage
 from lightcycle.ports.workflow_source import WorkflowSourceError
 from lightcycle.render import render_workflow_mermaid
+from lightcycle.adapters.scaffold import ScaffoldAdapter
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
@@ -141,6 +142,8 @@ class FakeContainer:
         self.store = store
         self.config = FakeConfig()
         self.fs = FakeFs()
+        self.workflow_bundle = self.fs
+        self.scaffold = ScaffoldAdapter()
         self.git = FakeGit()
 
 
@@ -181,6 +184,7 @@ class TestCmdWorkflow(unittest.TestCase):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         container = FakeContainer(self.source, self.store)
         container.fs = FakeFs(workflows={"build": "entry: missing-step\n"})
+        container.workflow_bundle = container.fs
         cli.set_container(container)
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 1)
@@ -200,6 +204,7 @@ class TestCmdWorkflow(unittest.TestCase):
             metas={"coder": {"model": "x"}, "reviewer": {"model": "x"}},
             workflows={"build": text},
         )
+        container.workflow_bundle = container.fs
         cli.set_container(container)
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 1)
@@ -219,6 +224,7 @@ class TestCmdWorkflow(unittest.TestCase):
             metas={"coder": {"model": "x"}},
             workflows={"build": text},
         )
+        container.workflow_bundle = container.fs
         cli.set_container(container)
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 1)
@@ -336,6 +342,7 @@ class TestCmdWorkflow(unittest.TestCase):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         container = FakeContainer(self.source, self.store)
         container.fs = FakeFs(metas=STEP_METAS, workflows={"build": GRAPH_TEXT})
+        container.workflow_bundle = container.fs
         cli.set_container(container)
         rc, out, err = call(cli.cmd_workflow, "describe", "acme/build@sha1")
         self.assertEqual(rc, 0)
@@ -355,6 +362,7 @@ class TestCmdWorkflow(unittest.TestCase):
         container = FakeContainer(self.source, self.store)
         display_graph_text = GRAPH_TEXT + "\ndisplay:\n  build  Coding\n  review  Review the PR\n"
         container.fs = FakeFs(metas=STEP_METAS, workflows={"build": display_graph_text})
+        container.workflow_bundle = container.fs
         cli.set_container(container)
         rc, out, err = call(cli.cmd_workflow, "describe", "acme/build@sha1")
         self.assertEqual(rc, 0)
@@ -369,6 +377,7 @@ class TestCmdWorkflow(unittest.TestCase):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         container = FakeContainer(self.source, self.store)
         container.fs = FakeFs(metas=STEP_METAS, workflows={"build": GRAPH_TEXT})
+        container.workflow_bundle = container.fs
         cli.set_container(container)
         rc, out, err = call(cli.cmd_workflow, "describe", "acme/build@sha1", "--mermaid")
         self.assertEqual(rc, 0)

@@ -112,9 +112,6 @@ class FakeFs:
             return None
         return {"meta": self._metas[role] or {}, "body": self._bodies.get(role, ""), "path": role}
 
-    def read_md(self, relpath, root=None):
-        return None
-
     def worktrees_dir(self, root):
         return os.path.join(root, ".worktrees")
 

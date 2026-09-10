@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import unittest
 
+from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.ports.git import GitOutcome, GitReadError
@@ -547,7 +548,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         item = self._item_with_repo()
         target = os.path.join(self.projects_root, "saga")
         git = _FakeGit(git_repos={target}, sync_result=True, base="origin/main")
-        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         svc.ensure(item)
 
@@ -561,7 +562,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         path = os.path.join(target, ".worktrees", item)
         os.makedirs(path, exist_ok=True)
         git = _FakeGit(git_repos={target}, registered={path})
-        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         result = svc.ensure(item)
 
@@ -589,7 +590,8 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         target = os.path.join(self.projects_root, "staging")
         git = _FakeGit(git_repos={target}, sync_result=True, base="origin/main")
         svc = WorktreeService(
-            self.store, git, FakeFs(), _Cfg(self.projects_root), flow=_FakeFlow(workspace="staging")
+            self.store, git, FakeFs(), _Cfg(self.projects_root), flow=_FakeFlow(workspace="staging"),
+            scaffold=ScaffoldAdapter(),
         )
 
         svc.ensure(item)
@@ -603,7 +605,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
             git_repos={target}, sync_result=True, base="origin/main",
             branches={(target, self.store.get_node(item).id)}, raises={"worktree_registered"},
         )
-        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         svc.ensure(item)
 
@@ -617,7 +619,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         git = _FakeGit(
             git_repos={target}, sync_result=True, base="origin/main", raises={"branch_exists"},
         )
-        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         svc.ensure(item)
 
@@ -631,7 +633,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         git = _FakeGit(
             git_repos={target}, sync_result=True, base="origin/main", raises={"common_dir"},
         )
-        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         with self.assertRaises(UseCaseError):
             svc.ensure(item)
@@ -642,7 +644,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         git = _FakeGit(
             git_repos={target}, sync_result=True, base="origin/main", worktree_add_fails=True,
         )
-        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         with self.assertRaises(UseCaseError):
             svc.ensure(item)
