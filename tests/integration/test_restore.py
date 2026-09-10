@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
+import lightcycle.adapters.lock as _lock_mod
 import lightcycle.cli as cli
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.config import Config
@@ -65,7 +66,9 @@ class TestRestoreCommand(unittest.TestCase):
 
     def test_force_refused_while_run_lock_held_by_a_live_pid(self):
         self.container.backup.create_snapshot(time.time())
-        Path(self.home, ".lc-run.pid").write_text(str(os.getpid()))
+        acquired, _, fd = _lock_mod.acquire(self.home)
+        self.assertTrue(acquired)
+        self.addCleanup(lambda: _lock_mod.release(self.home, fd))
         before = self._store_bytes()
         rc, out, err = call(cli.cmd_restore, "--force")
         self.assertNotEqual(rc, 0)
@@ -78,7 +81,7 @@ class TestRestoreCommand(unittest.TestCase):
         later_tid = create_owned_step(self.container.store, "added-after-snapshot", role="agent")
         rc, out, err = call(cli.cmd_restore, "--force")
         self.assertEqual(rc, 0, err)
-        self.assertFalse(Path(self.home, ".lc-run.pid").exists())
+        self.assertIsNone(_lock_mod.holder_pid(self.home))
         reopened = SqliteStore(self.config)
         self.assertEqual(reopened.get_node(tid).id, tid)
         with self.assertRaises(KeyError):
