@@ -456,10 +456,35 @@ class TestChangedFiles(unittest.TestCase):
 
         self.assertEqual(files, ReadFailure(1, "gh: auth error"))
 
-    def test_non_pr_url_returns_empty_frozenset(self):
+    def test_non_pr_url_returns_a_distinguishable_read_failure(self):
         files = self.adapter.changed_files("not-a-pr-url", "abc123")
 
-        self.assertEqual(files, frozenset())
+        self.assertIsInstance(files, ReadFailure)
+
+    def test_unparseable_base_ref_returns_read_failure(self):
+        pr_view = _proc("not json")
+        mock_run = MagicMock(side_effect=[pr_view])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            files = self.adapter.changed_files(_PR, "abc123")
+
+        self.assertIsInstance(files, ReadFailure)
+
+    def test_empty_base_ref_returns_read_failure(self):
+        pr_view = _proc(json.dumps({"baseRefName": ""}))
+        mock_run = MagicMock(side_effect=[pr_view])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            files = self.adapter.changed_files(_PR, "abc123")
+
+        self.assertIsInstance(files, ReadFailure)
+
+    def test_unparseable_filenames_returns_read_failure(self):
+        pr_view = _proc(json.dumps({"baseRefName": "main"}))
+        compare = _proc("not json")
+        mock_run = MagicMock(side_effect=[pr_view, compare])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            files = self.adapter.changed_files(_PR, "abc123")
+
+        self.assertIsInstance(files, ReadFailure)
 
 
 class TestCiPending(unittest.TestCase):
@@ -574,42 +599,104 @@ class TestReviewsTimeout(unittest.TestCase):
         self.assertIsInstance(result, ReadFailure)
 
 
-class TestNoChannelMethodsFailClosedOnTimeout(unittest.TestCase):
+class TestIsMerged(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()
 
-    def test_is_merged_matches_non_zero_returncode_behaviour_on_timeout(self):
-        with patch(
-            "lightcycle.adapters.github.subprocess.run",
-            return_value=_proc("", returncode=1, stderr="gh: auth error"),
-        ):
-            non_zero_result = self.adapter.is_merged(_PR)
+    def test_is_merged_returns_read_failure_on_timeout(self):
         with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
-            timeout_result = self.adapter.is_merged(_PR)
+            result = self.adapter.is_merged(_PR)
 
-        self.assertEqual(timeout_result, non_zero_result)
+        self.assertIsInstance(result, ReadFailure)
 
-    def test_is_conflicted_matches_non_zero_returncode_behaviour_on_timeout(self):
-        with patch(
-            "lightcycle.adapters.github.subprocess.run",
-            return_value=_proc("", returncode=1, stderr="gh: auth error"),
-        ):
-            non_zero_result = self.adapter.is_conflicted(_PR)
+    def test_non_zero_exit_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.is_merged(_PR)
+
+        self.assertEqual(result, ReadFailure(1, "gh: auth error"))
+
+    def test_invalid_json_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("not json", returncode=0))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.is_merged(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
+
+
+class TestIsClosedUnmerged(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_is_closed_unmerged_returns_read_failure_on_timeout(self):
         with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
-            timeout_result = self.adapter.is_conflicted(_PR)
+            result = self.adapter.is_closed_unmerged(_PR)
 
-        self.assertEqual(timeout_result, non_zero_result)
+        self.assertIsInstance(result, ReadFailure)
 
-    def test_head_sha_matches_non_zero_returncode_behaviour_on_timeout(self):
-        with patch(
-            "lightcycle.adapters.github.subprocess.run",
-            return_value=_proc("", returncode=1, stderr="gh: auth error"),
-        ):
-            non_zero_result = self.adapter.head_sha(_PR)
+    def test_non_zero_exit_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.is_closed_unmerged(_PR)
+
+        self.assertEqual(result, ReadFailure(1, "gh: auth error"))
+
+    def test_invalid_json_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("not json", returncode=0))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.is_closed_unmerged(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
+
+
+class TestIsConflicted(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_is_conflicted_returns_read_failure_on_timeout(self):
         with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
-            timeout_result = self.adapter.head_sha(_PR)
+            result = self.adapter.is_conflicted(_PR)
 
-        self.assertEqual(timeout_result, non_zero_result)
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_non_zero_exit_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.is_conflicted(_PR)
+
+        self.assertEqual(result, ReadFailure(1, "gh: auth error"))
+
+    def test_invalid_json_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("not json", returncode=0))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.is_conflicted(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
+
+
+class TestHeadSha(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_head_sha_returns_read_failure_on_timeout(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = self.adapter.head_sha(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_non_zero_exit_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.head_sha(_PR)
+
+        self.assertEqual(result, ReadFailure(1, "gh: auth error"))
+
+    def test_invalid_json_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("not json", returncode=0))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.head_sha(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
 
 
 if __name__ == "__main__":

@@ -17,12 +17,18 @@ class FakeGitHub(GitHubEventsPort):
         self._failing_calls = set(failing_calls)
 
     def is_merged(self, pr):
+        if "is_merged" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return pr in self._merged
 
     def is_closed_unmerged(self, pr):
+        if "is_closed_unmerged" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return pr in self._closed
 
     def is_conflicted(self, pr):
+        if "is_conflicted" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return pr in self._conflicted
 
     def last_push_time(self, pr):
@@ -46,6 +52,8 @@ class FakeGitHub(GitHubEventsPort):
         return [r for ts, r in self._timed_reviews if ts > since]
 
     def head_sha(self, pr):
+        if "head_sha" in self._failing_calls:
+            return ReadFailure(1, "boom")
         return self._head_shas.get(pr, "")
 
     def changed_files(self, pr, sha):

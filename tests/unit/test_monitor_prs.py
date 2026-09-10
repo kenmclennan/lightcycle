@@ -565,6 +565,19 @@ class TestMonitorPrsMerged(unittest.TestCase):
         self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(worktrees.removed, [])
 
+    def test_is_merged_failure_does_not_close_story(self):
+        url = "https://github.com/x/y/pull/44"
+        store, item, step, worktrees, uc = self._setup(
+            url, FakeGitHub(merged_prs={url}, failing_calls={"is_merged"})
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertEqual(store.get_node(item).state, State.WAITING)
+        self.assertNotEqual(store.get_node(step).state, "done")
+        self.assertEqual(worktrees.removed, [])
+
     def test_already_closed_story_is_skipped(self):
         url = "https://github.com/x/y/pull/4"
         store = FakeStore()
@@ -724,6 +737,19 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
 
         self.assertEqual(result.abandoned, [])
         self.assertEqual(store.get_node(item).state, State.WAITING)
+        self.assertEqual(worktrees.removed, [])
+
+    def test_is_closed_unmerged_failure_does_not_close_story(self):
+        url = "https://github.com/x/y/pull/45"
+        store, item, step, worktrees, uc = self._setup(
+            url, FakeGitHub(closed_prs={url}, failing_calls={"is_closed_unmerged"})
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertEqual(store.get_node(item).state, State.WAITING)
+        self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(worktrees.removed, [])
 
     def test_merged_pr_does_not_take_abandon_path(self):
@@ -1322,6 +1348,17 @@ class TestMonitorPrsConflict(unittest.TestCase):
         self.assertEqual(result.conflicted, [])
         self.assertNotEqual(store.get_node(step).state, "done")
 
+    def test_is_conflicted_failure_does_not_route_to_rework(self):
+        url = "https://github.com/x/y/pull/54"
+        store, item, step, _, uc = self._setup(
+            url, FakeGitHub(conflicted_prs={url}, failing_calls={"is_conflicted"})
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(result.conflicted, [])
+        self.assertNotEqual(store.get_node(step).state, "done")
+
     def test_merged_pr_does_not_take_conflict_path(self):
         url = "https://github.com/x/y/pull/53"
         store, item, step, worktrees, uc = self._setup(
@@ -1506,6 +1543,27 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(self._pin(store, item), "sha1")
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(store.get_node(step).role, "agent")
+
+    def test_head_sha_failure_never_pins_content_on_first_observation(self):
+        gh = FakeGitHub(failing_calls={"head_sha"})
+        store, item, step, uc = self._setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(
+            [r for r in store.runs_of(item) if r.content_pin is not None], []
+        )
+
+    def test_head_sha_failure_does_not_overwrite_an_established_pin(self):
+        gh = FakeGitHub(head_shas={self._URL: "sha1"})
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._failing_calls = {"head_sha"}
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha1")
 
     def test_forward_progress_updates_pin_without_escalating(self):
         gh = FakeGitHub(
@@ -2144,6 +2202,17 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
 
         self.assertEqual(store.get_node(step).role, "human")
         self.assertEqual(result.ci_released, [])
+
+    def test_head_sha_read_failure_never_releases(self):
+        gh = FakeGitHub(head_shas={self._URL: "sha1"}, failing_calls={"head_sha"})
+        store, item, step, uc, spin_port = self._setup(gh)
+        self._label_and_park(store, step)
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
+        self.assertEqual(result.ci_released, [])
+        self.assertNotIn("ci-released:1", store.labels_of(step))
 
     def test_park_without_the_label_is_never_released(self):
         gh = FakeGitHub(

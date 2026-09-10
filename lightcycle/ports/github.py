@@ -31,11 +31,11 @@ class ReadFailure:
 
 class GitHubEventsPort(ABC):
     @abstractmethod
-    def is_merged(self, pr: str) -> bool:
+    def is_merged(self, pr: str) -> Union[bool, ReadFailure]:
         pass
 
     @abstractmethod
-    def is_closed_unmerged(self, pr: str) -> bool:
+    def is_closed_unmerged(self, pr: str) -> Union[bool, ReadFailure]:
         pass
 
     @abstractmethod
@@ -43,8 +43,9 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
-    def is_conflicted(self, pr: str) -> bool:
-        """Return True only for definitive conflict (CONFLICTING/DIRTY); False for UNKNOWN."""
+    def is_conflicted(self, pr: str) -> Union[bool, ReadFailure]:
+        """Return True only for definitive conflict (CONFLICTING/DIRTY), False for a
+        definitive non-conflicting state, and ReadFailure when the state could not be read."""
 
     @abstractmethod
     def comments_since(self, pr: str, since: float) -> Union[List[Comment], ReadFailure]:
@@ -59,7 +60,7 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
-    def head_sha(self, pr: str) -> str:
+    def head_sha(self, pr: str) -> Union[str, ReadFailure]:
         pass
 
     @abstractmethod
