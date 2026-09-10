@@ -138,7 +138,7 @@ def container():
 
 def _flow():
     return make_flow_service(
-        _container.fs, _container.store, _container.config, _container.workflow_source)
+        _container.workflow_bundle, _container.store, _container.config, _container.workflow_source)
 
 
 def ready_roles():
@@ -386,7 +386,7 @@ def cmd_workflow(argv):
     c = _container
     try:
         if a.sub == "add":
-            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.fs).execute(
+            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.workflow_bundle).execute(
                 url=a.url, ref=a.ref, name=a.name)
             msg = "added %s @ %s" % (resp.origin, resp.sha)
             if resp.pruned:
@@ -394,12 +394,16 @@ def cmd_workflow(argv):
             print(msg)
             return 0
         if a.sub == "init":
-            resp = InitWorkflowOriginUseCase(c.config, c.git, c.workflow_source, c.store, c.fs).execute(a.name)
+            resp = InitWorkflowOriginUseCase(
+                c.config, c.git, c.workflow_source, c.store, c.workflow_bundle, c.scaffold
+            ).execute(a.name)
             print("created %s, registered as %s @ %s, personal-origin set" % (
                 resp.project_dir, resp.origin, resp.sha))
             return 0
         if a.sub == "upgrade":
-            resp = UpgradeWorkflowSourcesUseCase(c.workflow_source, c.store, c.config, c.fs).execute(a.origin)
+            resp = UpgradeWorkflowSourcesUseCase(
+                c.workflow_source, c.store, c.config, c.workflow_bundle
+            ).execute(a.origin)
             if not resp.results and not resp.failures:
                 print("no workflow sources registered")
                 return 0
@@ -412,7 +416,7 @@ def cmd_workflow(argv):
                 sys.stderr.write("lc workflow: %s: %s\n" % (f.origin, f.error))
             return 1 if resp.failures else 0
         if a.sub == "list":
-            resp = ListWorkflowSourcesUseCase(c.workflow_source, c.store, c.fs).execute()
+            resp = ListWorkflowSourcesUseCase(c.workflow_source, c.store, c.workflow_bundle).execute()
             if not resp.origins:
                 print("no workflow sources registered")
                 return 0
@@ -776,12 +780,13 @@ def _workflow_simulate(selector):
         store = SqliteStore(store_config)
         sim_config = SimulateConfig(c.config, specs_root, projects_root)
         git = RecordingGit()
-        flow = make_flow_service(c.fs, store, c.config, c.workflow_source)
-        worktrees = make_worktrees(store, git, c.fs, sim_config, flow)
+        flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)
+        worktrees = make_worktrees(store, git, c.fs, sim_config, flow, c.scaffold)
         claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
-            store, flow, worktrees, claim, complete, projects_root, git, NullSpin()
+            store, flow, worktrees, claim, complete, projects_root, git, NullSpin(),
+            scaffold=c.scaffold,
         )
         try:
             resp = use_case.execute(SimulateInput(workflow=selector))
@@ -875,7 +880,7 @@ def cmd_trace(argv):
 
 def cmd_sweep(argv):
     result = SweepUseCase(
-        _container.store, _container.workers, _worktrees(), _container.git, _container.fs,
+        _container.store, _container.workers, _worktrees(), _container.git, _container.worker_log,
         spin_port=_container.spin, spin_cap=_container.config.spin_cap(),
     ).execute(time.time(), _container.config.max_boot_seconds(), _container.config.stall_seconds())
     for bid in result.swept:
@@ -969,7 +974,8 @@ def cmd_backfill_usage(argv):
     a = ap.parse_args(argv)
     try:
         resp = BackfillUsageUseCase(
-            _container.store, _container.fs, _container.workers, _container.config
+            _container.store, _container.fs, _container.workers, _container.config,
+            _container.worker_log,
         ).execute(repair=a.repair)
     except RegistryUnreadable as e:
         sys.stderr.write("%s\n" % e)
@@ -1281,7 +1287,7 @@ def cmd_set(argv):
                     sys.stderr.write("unknown node '%s'\n" % node_id)
                     return 1
             resp = ActivateItemUseCase(
-                _container.store, _flow(), _container.git, _container.config
+                _container.store, _flow(), _container.git, _container.config, _container.scaffold
             ).execute(
                 ActivateItemInput(
                     item=a.id, workflow=a.workflow, step=a.step, deps=depends_ids
@@ -1564,7 +1570,7 @@ def _stop_pool():
     sweep = SweepUseCase(
         _container.store, _container.workers,
         worktrees=worktrees_for(_container, flow=_flow()),
-        git=_container.git, fs=_container.fs,
+        git=_container.git, fs=_container.worker_log,
         spin_port=_container.spin, spin_cap=_container.config.spin_cap(),
     )
     resp = StopPoolUseCase(_container.workers, sweep).execute(
@@ -1622,13 +1628,13 @@ def cmd_start(argv):
         )
         cadence_gate = RetroCadenceUseCase(_container.store, _container.config)
         breaker_gate = BreakerGateUseCase(
-            _container.workers, _container.fs, _container.breaker, _container.config,
+            _container.workers, _container.worker_log, _container.breaker, _container.config,
             spin_port=_container.spin, store=_container.store,
         )
         hook_completions = HookCompletionsUseCase(_container.store, flow_service)
         backup_gate = BackupUseCase(_container.backup, _container.config)
         usage_gate = LiveUsageAccrualUseCase(
-            _container.store, _container.fs, _container.workers, _container.config,
+            _container.store, _container.worker_log, _container.workers, _container.config,
         )
         tick = TickUseCase(
             _container.store,
@@ -1642,14 +1648,14 @@ def cmd_start(argv):
             worktrees=worktrees,
             git=_container.git,
             backup_gate=backup_gate,
-            fs=_container.fs,
+            fs=_container.worker_log,
             flow_service=flow_service,
             spin_port=_container.spin,
             usage_gate=usage_gate,
         )
         if a.once:
             now = time.time()
-            result = _run_tick(tick, _container.fs, TickInput(now=now), now)
+            result = _run_tick(tick, _container.worker_log, TickInput(now=now), now)
             lines, _ = _format_tick(result, None, now)
             for line in lines:
                 print(line)
@@ -1666,7 +1672,7 @@ def cmd_start(argv):
         while True:
             now = time.time()
             try:
-                result = _run_tick(tick, _container.fs, TickInput(now=now, since=prev_now), now)
+                result = _run_tick(tick, _container.worker_log, TickInput(now=now, since=prev_now), now)
             except Exception:
                 consecutive_failures += 1
                 if _tick_failure_action(consecutive_failures, tick_failure_cap) == "raise":
@@ -1774,7 +1780,7 @@ def _init_pull_default_origin():
     url = _container.config.workflows_remote()
     try:
         resp = AddWorkflowSourceUseCase(
-            _container.workflow_source, _container.store, _container.config, _container.fs
+            _container.workflow_source, _container.store, _container.config, _container.workflow_bundle
         ).execute(url=url, ref="main", name=origin)
         print("pulled %s workflows @ %s" % (resp.origin, resp.sha))
     except WorkflowSourceError as e:

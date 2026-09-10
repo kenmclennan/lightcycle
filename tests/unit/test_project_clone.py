@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import unittest
 
+from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.project_clone import ensure_project_cloned
 from tests.support.fake_store import FakeStore
@@ -44,20 +45,20 @@ class TestEnsureProjectCloned(unittest.TestCase):
     def test_no_ref_is_a_no_op(self):
         s = FakeStore()
         git = _FakeGit()
-        ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), None)
+        ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), None, ScaffoldAdapter())
         self.assertEqual(git.calls, [])
 
     def test_absolute_path_ref_is_a_no_op(self):
         s = FakeStore()
         git = _FakeGit()
-        ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "/elsewhere/app")
+        ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "/elsewhere/app", ScaffoldAdapter())
         self.assertEqual(git.calls, [])
 
     def test_unregistered_ref_raises_use_case_error(self):
         s = FakeStore()
         git = _FakeGit()
         with self.assertRaises(UseCaseError):
-            ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "ghost")
+            ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "ghost", ScaffoldAdapter())
 
     def test_ambiguous_ref_raises_use_case_error(self):
         s = FakeStore()
@@ -65,14 +66,14 @@ class TestEnsureProjectCloned(unittest.TestCase):
         s.add_project("other/app", local_path=_real_repo())
         git = _FakeGit()
         with self.assertRaises(UseCaseError):
-            ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "app")
+            ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "app", ScaffoldAdapter())
 
     def test_already_has_a_real_local_checkout_is_a_no_op(self):
         s = FakeStore()
         local = tempfile.mkdtemp()
         s.add_project("acme/horde", local_path=local)
         git = _FakeGit()
-        ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "horde")
+        ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "horde", ScaffoldAdapter())
         self.assertEqual(git.calls, [])
 
     def test_local_path_set_but_directory_gone_raises_use_case_error(self):
@@ -82,7 +83,7 @@ class TestEnsureProjectCloned(unittest.TestCase):
         s.add_project("acme/horde", local_path=local)
         git = _FakeGit()
         with self.assertRaises(UseCaseError) as ctx:
-            ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "horde")
+            ensure_project_cloned(s, git, _Cfg(tempfile.mkdtemp()), "horde", ScaffoldAdapter())
         self.assertIn(local, str(ctx.exception))
 
     def test_null_local_path_and_no_destination_clones_and_records_the_path(self):
@@ -91,7 +92,7 @@ class TestEnsureProjectCloned(unittest.TestCase):
         projects_root = tempfile.mkdtemp()
         git = _FakeGit(clone_result=True)
 
-        ensure_project_cloned(s, git, _Cfg(projects_root), "horde")
+        ensure_project_cloned(s, git, _Cfg(projects_root), "horde", ScaffoldAdapter())
 
         expected = os.path.join(projects_root, "acme", "horde")
         self.assertEqual(git.calls, [("clone_identity", "acme/horde", expected)])
@@ -104,7 +105,7 @@ class TestEnsureProjectCloned(unittest.TestCase):
         git = _FakeGit(clone_result=False)
 
         with self.assertRaises(UseCaseError) as ctx:
-            ensure_project_cloned(s, git, _Cfg(projects_root), "horde")
+            ensure_project_cloned(s, git, _Cfg(projects_root), "horde", ScaffoldAdapter())
 
         self.assertIn("acme/horde", str(ctx.exception))
         self.assertIsNone(s.get_project("acme/horde").local_path)
@@ -117,7 +118,7 @@ class TestEnsureProjectCloned(unittest.TestCase):
         os.makedirs(dest)
         git = _FakeGit(git_repos={dest})
 
-        ensure_project_cloned(s, git, _Cfg(projects_root), "horde")
+        ensure_project_cloned(s, git, _Cfg(projects_root), "horde", ScaffoldAdapter())
 
         self.assertEqual(git.calls, [("is_git_repo", dest)])
         self.assertEqual(s.get_project("acme/horde").local_path, dest)
@@ -132,7 +133,7 @@ class TestEnsureProjectCloned(unittest.TestCase):
         git = _FakeGit(git_repos=())
 
         with self.assertRaises(UseCaseError) as ctx:
-            ensure_project_cloned(s, git, _Cfg(projects_root), "horde")
+            ensure_project_cloned(s, git, _Cfg(projects_root), "horde", ScaffoldAdapter())
 
         self.assertIn(dest, str(ctx.exception))
         self.assertTrue(os.path.isfile(os.path.join(dest, "keepme.txt")))

@@ -1,5 +1,3 @@
-import os
-
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.runs import pass_number
@@ -10,12 +8,13 @@ from lightcycle.ports.store import ProjectResolutionError
 
 
 class WorktreeService:
-    def __init__(self, store, git, fs, config, flow=None):
+    def __init__(self, store, git, fs, config, flow=None, scaffold=None):
         self._store = store
         self._git = git
         self._fs = fs
         self._config = config
         self._flow = flow
+        self._scaffold = scaffold
 
     def _item(self, item):
         return self._store.get_item(item)
@@ -151,7 +150,7 @@ class WorktreeService:
             registered = self._git.worktree_registered(target, path)
         except GitReadError:
             registered = False
-        if registered and os.path.isdir(path):
+        if registered and self._scaffold.is_dir(path):
             return path
         try:
             is_new_branch = not self._git.branch_exists(target, branch)
@@ -170,7 +169,7 @@ class WorktreeService:
                 )
         else:
             base = None
-        os.makedirs(self._fs.worktrees_dir(target), exist_ok=True)
+        self._scaffold.make_dir(self._fs.worktrees_dir(target))
         try:
             common = self._git.common_dir(target)
         except GitReadError as e:

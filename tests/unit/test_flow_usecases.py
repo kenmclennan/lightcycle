@@ -5,7 +5,7 @@ from lightcycle.domain.audit import FINDINGS_STEP
 from lightcycle.domain.pool import SpinLedger
 from pathlib import Path
 
-from lightcycle.adapters.fsio import parse_step, step_roles, workflow_text
+from lightcycle.adapters.workflow_bundle import parse_step, step_roles, workflow_text
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow import (
     AdvanceInput,

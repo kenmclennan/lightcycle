@@ -10,6 +10,8 @@ class _Collaborators:
         self.fs = object()
         self.config = object()
         self.workflow_source = object()
+        self.workflow_bundle = object()
+        self.scaffold = object()
 
 
 class TestWorktreesFor(unittest.TestCase):
@@ -22,6 +24,7 @@ class TestWorktreesFor(unittest.TestCase):
         self.assertIs(svc._git, c.git)
         self.assertIs(svc._fs, c.fs)
         self.assertIs(svc._config, c.config)
+        self.assertIs(svc._scaffold, c.scaffold)
 
     def test_reuses_a_supplied_flow_instead_of_building_one(self):
         c = _Collaborators()

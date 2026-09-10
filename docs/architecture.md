@@ -24,7 +24,7 @@ graph TD
 ```
 
 - **domain/** - entities (`Item`, `Step`, `Pass`, `PhaseRun`) and value objects (`State`, `Park`), plus pure logic: state roll-up, lane derivation, artifact contracts, flow assembly, retro signals. Stdlib only, no IO, no ambient time/uuid/random. Millisecond unit tests.
-- **ports/** - the interfaces the application depends on: `StorePort`, `GitPort`, `FsPort`, `WorkersPort`, `SpawnerPort`, `RunLockPort`.
+- **ports/** - the interfaces the application depends on: `StorePort`, `GitPort`, `FsPort`, `WorkflowBundlePort`, `WorkerLogPort`, `ScaffoldPort`, `WorkersPort`, `SpawnerPort`, `RunLockPort`.
 - **application/** - one use case per action, grouped by activity (inspect, work, flow, pool, feedback, setup), plus services (`FlowService`, `WorktreeService`). Depends on ports, not adapters.
 - **adapters/** - all IO: `SqliteStore`, git, the worker spawner, the workers registry, the filesystem, the run-lock. The only callers of `sqlite3` / `git` / `subprocess`.
 - **config.py / container.py** - the environment boundary and the composition root.

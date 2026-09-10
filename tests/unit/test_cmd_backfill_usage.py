@@ -46,11 +46,12 @@ class FakeConfig:
 
 
 class FakeContainer:
-    def __init__(self, store=None, fs=None, workers=None, config=None):
+    def __init__(self, store=None, fs=None, workers=None, config=None, worker_log=None):
         self.store = store or FakeStore()
         self.fs = fs or FakeFs()
         self.workers = workers or FakeWorkers()
         self.config = config or FakeConfig()
+        self.worker_log = worker_log if worker_log is not None else self.fs
 
 
 class TestCmdBackfillUsage(unittest.TestCase):

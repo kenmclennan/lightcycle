@@ -1,6 +1,3 @@
-import os
-
-
 def render_frontmatter(meta):
     lines = ["---"]
     for k, v in meta.items():
@@ -38,6 +35,75 @@ class FsContractBase:
     def test_read_bytes_returns_seeded_content(self):
         fs = self.make_fs(files={"a.txt": b"hello"})
         self.assertEqual(fs.read_bytes(self.path("a.txt")), b"hello")
+
+    def test_list_dir_returns_only_subdirectories_sorted(self):
+        fs = self.make_fs(files={"d/file.txt": b"x"}, dirs={"d": ["sub", "another"]})
+        self.assertEqual(fs.list_dir(self.path("d")), ["another", "sub"])
+
+    def test_worktrees_dir_joins_dot_worktrees(self):
+        fs = self.make_fs()
+        root = self.root()
+        self.assertTrue(fs.worktrees_dir(root).endswith("/.worktrees"))
+        self.assertTrue(fs.worktrees_dir(root).startswith(root))
+
+    def test_store_ready_false_when_store_marker_absent(self):
+        fs = self.make_fs()
+        self.assertFalse(fs.store_ready())
+
+    def test_store_ready_true_when_store_marker_present(self):
+        fs = self.make_fs(files={"store.db": b""})
+        self.assertTrue(fs.store_ready())
+
+
+class WorkflowBundleContractBase:
+    def make_fs(self, files=None, dirs=None, metas=None, bodies=None, workflows=None):
+        raise NotImplementedError
+
+    def path(self, relpath):
+        raise NotImplementedError
+
+    def root(self):
+        raise NotImplementedError
+
+    def test_step_roles_lists_seeded_roles_sorted(self):
+        fs = self.make_fs(metas={"build": {"step": "build"}, "review": {"step": "review"}})
+        self.assertEqual(fs.step_roles(self.root()), ["build", "review"])
+
+    def test_parse_step_returns_meta_and_body(self):
+        fs = self.make_fs(
+            metas={"build": {"step": "build", "phase": "code"}},
+            bodies={"build": "do the thing"},
+        )
+        parsed = fs.parse_step("build", self.root())
+        self.assertEqual(parsed["meta"], {"step": "build", "phase": "code"})
+        self.assertEqual(parsed["body"], "do the thing")
+
+    def test_parse_step_unknown_role_returns_none(self):
+        fs = self.make_fs(metas={"build": {"step": "build"}})
+        self.assertIsNone(fs.parse_step("missing", self.root()))
+
+    def test_workflow_text_returns_seeded_text(self):
+        fs = self.make_fs(workflows={"main": "---\nentry: build\n---\nbody text\n"})
+        self.assertEqual(fs.workflow_text("main", self.root()), "---\nentry: build\n---\nbody text\n")
+
+    def test_workflow_meta_parses_frontmatter(self):
+        fs = self.make_fs(workflows={"main": "---\nentry: build\n---\nbody text\n"})
+        self.assertEqual(fs.workflow_meta("main", self.root()), {"entry": "build"})
+
+    def test_workflow_names_lists_seeded_workflows_sorted(self):
+        fs = self.make_fs(workflows={"b": "b text\n", "a": "a text\n"})
+        self.assertEqual(fs.workflow_names(self.root()), ["a", "b"])
+
+
+class WorkerLogContractBase:
+    def make_fs(self, files=None, dirs=None, metas=None, bodies=None, workflows=None):
+        raise NotImplementedError
+
+    def path(self, relpath):
+        raise NotImplementedError
+
+    def root(self):
+        raise NotImplementedError
 
     def test_iter_lines_splits_seeded_content(self):
         fs = self.make_fs(files={"a.txt": b"one\ntwo\nthree"})
@@ -78,58 +144,3 @@ class FsContractBase:
         data, offset = fs.read_tail(self.path("a.txt"), 2)
         self.assertEqual(data, b"")
         self.assertEqual(offset, len(_TAIL_CONTENT))
-
-    def test_list_dir_returns_only_subdirectories_sorted(self):
-        fs = self.make_fs(files={"d/file.txt": b"x"}, dirs={"d": ["sub", "another"]})
-        self.assertEqual(fs.list_dir(self.path("d")), ["another", "sub"])
-
-    def test_worktrees_dir_joins_dot_worktrees(self):
-        fs = self.make_fs()
-        root = self.root()
-        self.assertTrue(fs.worktrees_dir(root).endswith("/.worktrees"))
-        self.assertTrue(fs.worktrees_dir(root).startswith(root))
-
-    def test_step_roles_lists_seeded_roles_sorted(self):
-        fs = self.make_fs(metas={"build": {"step": "build"}, "review": {"step": "review"}})
-        self.assertEqual(fs.step_roles(self.root()), ["build", "review"])
-
-    def test_parse_step_returns_meta_and_body(self):
-        fs = self.make_fs(
-            metas={"build": {"step": "build", "phase": "code"}},
-            bodies={"build": "do the thing"},
-        )
-        parsed = fs.parse_step("build", self.root())
-        self.assertEqual(parsed["meta"], {"step": "build", "phase": "code"})
-        self.assertEqual(parsed["body"], "do the thing")
-
-    def test_parse_step_unknown_role_returns_none(self):
-        fs = self.make_fs(metas={"build": {"step": "build"}})
-        self.assertIsNone(fs.parse_step("missing", self.root()))
-
-    def test_workflow_text_returns_seeded_text(self):
-        fs = self.make_fs(workflows={"main": "---\nentry: build\n---\nbody text\n"})
-        self.assertEqual(fs.workflow_text("main", self.root()), "---\nentry: build\n---\nbody text\n")
-
-    def test_workflow_meta_parses_frontmatter(self):
-        fs = self.make_fs(workflows={"main": "---\nentry: build\n---\nbody text\n"})
-        self.assertEqual(fs.workflow_meta("main", self.root()), {"entry": "build"})
-
-    def test_workflow_names_lists_seeded_workflows_sorted(self):
-        fs = self.make_fs(workflows={"b": "b text\n", "a": "a text\n"})
-        self.assertEqual(fs.workflow_names(self.root()), ["a", "b"])
-
-    def test_store_ready_false_when_store_marker_absent(self):
-        fs = self.make_fs()
-        self.assertFalse(fs.store_ready())
-
-    def test_store_ready_true_when_store_marker_present(self):
-        fs = self.make_fs(files={"store.db": b""})
-        self.assertTrue(fs.store_ready())
-
-    def test_ensure_logs_dir_and_append_run_log_agree_on_target(self):
-        fs = self.make_fs()
-        fs.ensure_logs_dir()
-        fs.append_run_log("first\n")
-        fs.append_run_log("second\n")
-        log_path = os.path.join(fs.ensure_logs_dir(), "run.log")
-        self.assertEqual(list(fs.iter_lines(log_path)), ["first\n", "second\n"])

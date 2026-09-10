@@ -13,14 +13,18 @@ from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lock import RunLockAdapter
+from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.adapters.worker_log import WorkerLogAdapter
 from lightcycle.adapters.workers import WorkersAdapter
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.config import Config, _SEED_KEYS
 from lightcycle.container import Container
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.git import GitPort
+from lightcycle.ports.scaffold import ScaffoldPort
 from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from lightcycle.adapters.tui.hub import NodeHubScreen
@@ -165,6 +169,9 @@ _LIVE_ADAPTER_TYPES = {
     "backup": SqliteBackupAdapter,
     "workflow_source": WorkflowSourceAdapter,
     "launcher": LauncherAdapter,
+    "workflow_bundle": WorkflowBundleAdapter,
+    "worker_log": WorkerLogAdapter,
+    "scaffold": ScaffoldAdapter,
 }
 
 
@@ -179,14 +186,18 @@ def assert_hermetic(container):
 
 def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None,
                          launcher=None, git=None, spawner=None, github=None, backup=None,
-                         autostart_pool=False):
+                         workflow_bundle=None, worker_log=None, autostart_pool=False):
+    fs_double = fs or FakeFs()
     container = Container(
         store=store or FakeStore(),
         lock=lock or FakeLock(running=False),
         config=HermeticTuiConfig(autostart_pool=autostart_pool),
         workflow_source=FakeWorkflowSource(),
         breaker=breaker or FakeBreakerPort(),
-        fs=fs or FakeFs(),
+        fs=fs_double,
+        workflow_bundle=workflow_bundle if workflow_bundle is not None else fs_double,
+        worker_log=worker_log if worker_log is not None else fs_double,
+        scaffold=_poisoned(ScaffoldPort, "scaffold"),
         workers=workers or FakeWorkers(),
         launcher=launcher or FakeLauncher(),
         git=git or _poisoned(GitPort, "git"),

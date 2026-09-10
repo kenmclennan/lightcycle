@@ -218,12 +218,13 @@ class SimulateTestCase(unittest.TestCase):
         store = SqliteStore(store_config)
         sim_config = SimulateConfig(c.config, specs_root, projects_root)
         git = RecordingGit()
-        flow = make_flow_service(c.fs, store, c.config, c.workflow_source)
-        worktrees = make_worktrees(store, git, c.fs, sim_config, flow)
+        flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)
+        worktrees = make_worktrees(store, git, c.fs, sim_config, flow, c.scaffold)
         claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
-            store, flow, worktrees, claim, complete, projects_root, git, NullSpin()
+            store, flow, worktrees, claim, complete, projects_root, git, NullSpin(),
+            scaffold=c.scaffold,
         )
         resp = use_case.execute(SimulateInput(workflow=selector))
         return resp, store

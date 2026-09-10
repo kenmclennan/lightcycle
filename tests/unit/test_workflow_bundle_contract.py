@@ -3,13 +3,11 @@ import shutil
 import tempfile
 import unittest
 
-from lightcycle.adapters.fsio import FsAdapter
-from lightcycle.adapters.worker_log import WorkerLogAdapter
-from lightcycle.config import Config
-from tests.support.fs_contract import FsContractBase, render_frontmatter
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
+from tests.support.fs_contract import WorkflowBundleContractBase, render_frontmatter
 
 
-class TestFsAdapterContract(FsContractBase, unittest.TestCase):
+class TestWorkflowBundleAdapterContract(WorkflowBundleContractBase, unittest.TestCase):
     def setUp(self):
         self._root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._root, ignore_errors=True)
@@ -39,24 +37,7 @@ class TestFsAdapterContract(FsContractBase, unittest.TestCase):
             self._write(os.path.join("steps", "%s.md" % role), render_frontmatter(meta) + body, "w")
         for name, text in (workflows or {}).items():
             self._write(os.path.join("workflows", "%s.md" % name), text, "w")
-        config = Config(environ={"LC_HOME": self._root})
-        return FsAdapter(config)
-
-
-class TestFsAdapterAndWorkerLogAdapterAgreeOnTheLogsDir(unittest.TestCase):
-    def test_ensure_logs_dir_and_append_run_log_agree_on_target(self):
-        root = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
-        config = Config(environ={"LC_HOME": root})
-        fs = FsAdapter(config)
-        worker_log = WorkerLogAdapter(config)
-
-        fs.ensure_logs_dir()
-        worker_log.append_run_log("first\n")
-        worker_log.append_run_log("second\n")
-
-        log_path = os.path.join(fs.ensure_logs_dir(), "run.log")
-        self.assertEqual(list(worker_log.iter_lines(log_path)), ["first\n", "second\n"])
+        return WorkflowBundleAdapter()
 
 
 if __name__ == "__main__":

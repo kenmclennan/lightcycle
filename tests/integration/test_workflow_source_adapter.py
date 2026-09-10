@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from lightcycle.adapters.fsio import FsAdapter
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
@@ -255,7 +255,7 @@ class TestBundleReferenceValidation(unittest.TestCase):
     def test_add_refuses_unresolved_step_reference_against_real_checkout(self):
         repo = _make_source_repo_with_unresolved_step()
         source = _adapter()
-        fs = FsAdapter(None)
+        fs = WorkflowBundleAdapter()
         with self.assertRaises(WorkflowSourceError):
             AddWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute(
                 url=repo, ref="main", name=None)
@@ -265,7 +265,7 @@ class TestBundleReferenceValidation(unittest.TestCase):
     def test_upgrade_refuses_unresolved_step_reference_against_real_checkout(self):
         repo, head = _make_source_repo()
         source = _adapter()
-        fs = FsAdapter(None)
+        fs = WorkflowBundleAdapter()
         AddWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute(
             url=repo, ref="main", name="acme")
         with open(os.path.join(repo, "workflows", "build.md"), "w") as f:
@@ -281,7 +281,7 @@ class TestUpgradeReplaysNoRefOrigin(unittest.TestCase):
     def test_upgrade_replays_no_ref_origin_after_source_advances(self):
         repo, head = _make_source_repo(branch="trunk")
         source = _adapter()
-        fs = FsAdapter(None)
+        fs = WorkflowBundleAdapter()
         AddWorkflowSourceUseCase(source, FakeStore(), _Config(), fs).execute(
             url=repo, ref=None, name="acme")
         self.assertEqual(source.current_sha("acme"), head)

@@ -21,6 +21,7 @@ import lightcycle.container as _container_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.workers import process_start_time
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
@@ -1610,7 +1611,7 @@ class TestAgentFrontmatter(unittest.TestCase):
         )
 
     def test_parse_step_extracts_model_and_strips_frontmatter(self):
-        a = _cli_mod.container().fs.parse_step("coder", _bundle(self.root))
+        a = _cli_mod.container().workflow_bundle.parse_step("coder", _bundle(self.root))
         self.assertEqual(a["meta"]["model"], "sonnet")
         self.assertTrue(a["body"].startswith("# Coder"))
         self.assertNotIn("model:", a["body"])
@@ -1620,7 +1621,7 @@ class TestAgentFrontmatter(unittest.TestCase):
             "---\nmodel: opus\nstep: review\nroutes:\n  done: open-pr\n"
             "  rejected: build\n---\n# Reviewer\n"
         )
-        a = _cli_mod.container().fs.parse_step("reviewer", _bundle(self.root))
+        a = _cli_mod.container().workflow_bundle.parse_step("reviewer", _bundle(self.root))
         self.assertEqual(a["meta"]["step"], "review")
         self.assertEqual(a["meta"]["routes"], {"done": "open-pr", "rejected": "build"})
         self.assertTrue(a["body"].startswith("# Reviewer"))
@@ -1632,7 +1633,7 @@ class TestFlowFromAgents(unittest.TestCase):
 
     def _flow(self):
         c = _cli_mod.container()
-        return FlowService(c.fs, c.store, c.config, c.workflow_source)
+        return FlowService(c.workflow_bundle, c.store, c.config, c.workflow_source)
 
     def test_flow_next_derives_role_from_owner(self):
         t = self._flow().flow_next("build", "done")
@@ -3182,7 +3183,7 @@ class TestWorktreePushTarget(unittest.TestCase):
             def worktree_retry_sleep(self):
                 return 0.1
 
-        return WorktreeService(store, GitAdapter(), _Fs(), _Cfg())
+        return WorktreeService(store, GitAdapter(), _Fs(), _Cfg(), scaffold=ScaffoldAdapter())
 
     def _git(self, path, *args):
         return subprocess.run(["git", "-C", path] + list(args),

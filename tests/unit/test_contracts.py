@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from lightcycle.adapters.fsio import parse_step, step_roles, workflow_text
+from lightcycle.adapters.workflow_bundle import parse_step, step_roles, workflow_text
 from lightcycle.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph

@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 
+from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
@@ -315,7 +316,7 @@ class TestInit(unittest.TestCase):
         cfg = FakeConfig(projects_root=root)
         git = FakeGit()
         with self.assertRaises(WorkflowSourceError):
-            InitWorkflowOriginUseCase(cfg, git, FakeSource(), FakeStore(), FakeFs()).execute("acme")
+            InitWorkflowOriginUseCase(cfg, git, FakeSource(), FakeStore(), FakeFs(), ScaffoldAdapter()).execute("acme")
         self.assertEqual(git.calls, [])
 
     def test_creates_scaffold_registers_with_head_ref_and_sets_personal_origin(self):
@@ -325,7 +326,7 @@ class TestInit(unittest.TestCase):
         source = FakeSource()
         source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
         git = FakeGit()
-        resp = InitWorkflowOriginUseCase(cfg, git, source, FakeStore(), FakeFs()).execute("acme")
+        resp = InitWorkflowOriginUseCase(cfg, git, source, FakeStore(), FakeFs(), ScaffoldAdapter()).execute("acme")
         self.assertEqual(resp.project_dir, project_dir)
         self.assertEqual(resp.origin, "acme")
         self.assertEqual(resp.sha, "sha1")
@@ -345,7 +346,7 @@ class TestInit(unittest.TestCase):
         cfg = FakeConfig(projects_root=root)
         source = FakeSource()
         source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
-        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), FakeFs()).execute("acme")
+        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), FakeFs(), ScaffoldAdapter()).execute("acme")
         with open(os.path.join(project_dir, ".github", "workflows", "simulate.yml")) as f:
             content = f.read()
         self.assertEqual(content, """name: simulate
@@ -409,7 +410,7 @@ jobs:
         cfg = FakeConfig(projects_root=root)
         source = FakeSource()
         source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
-        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), FakeFs()).execute("acme")
+        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), FakeFs(), ScaffoldAdapter()).execute("acme")
         for fname in ("source.toml", "README.md"):
             with open(os.path.join(project_dir, fname)) as f:
                 text = f.read()

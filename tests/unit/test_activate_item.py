@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 
+from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
@@ -99,7 +100,9 @@ class TestActivateItem(unittest.TestCase):
         item = s.create_item("add refunds", "a description")
         s.add_artifact(item, "repo", "saga")
         s.add_project("acme/saga", local_path=tempfile.mkdtemp())
-        resp = ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None).execute(
+        resp = ActivateItemUseCase(
+            s, _flow(s, requires={"repo"}), None, None, scaffold=ScaffoldAdapter()
+        ).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "queued")

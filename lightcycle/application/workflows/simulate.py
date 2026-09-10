@@ -57,7 +57,8 @@ def _named_workspaces(graph):
 
 
 class WorkflowSimulateUseCase:
-    def __init__(self, store, flow, worktrees, claim, complete, projects_root, git, spin_port):
+    def __init__(self, store, flow, worktrees, claim, complete, projects_root, git, spin_port,
+                 scaffold=None):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
@@ -66,6 +67,7 @@ class WorkflowSimulateUseCase:
         self._projects_root = projects_root
         self._git = git
         self._spin_port = spin_port
+        self._scaffold = scaffold
 
     def execute(self, input: SimulateInput) -> SimulateResponse:
         pin = self._flow.resolve_selection(input.workflow)
@@ -105,7 +107,7 @@ class WorkflowSimulateUseCase:
     def _seed_named_workspaces(self, graph):
         for workspace in sorted(_named_workspaces(graph)):
             path = os.path.join(self._projects_root, workspace)
-            os.makedirs(path, exist_ok=True)
+            self._scaffold.make_dir(path)
             self._store.add_project("simulate/%s" % workspace, local_path=path)
 
     def _seed_item(self, pin, graph):
@@ -115,7 +117,7 @@ class WorkflowSimulateUseCase:
         needed = set(graph.requires) | StepContract.from_meta(entry_meta).required_inputs()
         repo_name = "repo-%s" % item_id.replace("/", "-")
         repo_path = os.path.join(self._projects_root, repo_name)
-        os.makedirs(repo_path, exist_ok=True)
+        self._scaffold.make_dir(repo_path)
         self._store.add_project("simulate/%s" % repo_name, local_path=repo_path)
         self._store.add_artifact(item_id, "repo", repo_name)
         for req in sorted(needed):

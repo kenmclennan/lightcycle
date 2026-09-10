@@ -4,8 +4,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.adapters.scaffold import ScaffoldAdapter
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
@@ -44,8 +45,11 @@ def _use_case():
     projects_root = tempfile.mkdtemp()
     config = FakeConfig(projects_root, tempfile.mkdtemp())
     source = WorkflowSourceAdapter(config)
-    fs = FsAdapter(config)
-    return InitWorkflowOriginUseCase(config, GitAdapter(), source, FakeStore(), fs), config, source
+    fs = WorkflowBundleAdapter()
+    return (
+        InitWorkflowOriginUseCase(config, GitAdapter(), source, FakeStore(), fs, ScaffoldAdapter()),
+        config, source,
+    )
 
 
 class TestInitWorkflowOrigin(unittest.TestCase):
@@ -106,7 +110,7 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         config_before_init = _real_config()
         add_before_init = AddWorkflowSourceUseCase(
             WorkflowSourceAdapter(config_before_init), FakeStore(),
-            config_before_init, FsAdapter(config_before_init))
+            config_before_init, WorkflowBundleAdapter())
         with self.assertRaises(ConfigError) as cm:
             add_before_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertIn("workflow-retention", str(cm.exception))
@@ -115,7 +119,7 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         config_after_init.ensure_config()
         add_after_init = AddWorkflowSourceUseCase(
             WorkflowSourceAdapter(config_after_init), FakeStore(),
-            config_after_init, FsAdapter(config_after_init))
+            config_after_init, WorkflowBundleAdapter())
         resp = add_after_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertEqual(resp.origin, "ci-bundle")
 

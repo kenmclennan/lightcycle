@@ -1,10 +1,12 @@
 import unittest
 
 from tests.support.fake_fs import FakeFs
-from tests.support.fs_contract import FsContractBase
+from tests.support.fs_contract import (
+    FsContractBase, WorkerLogContractBase, WorkflowBundleContractBase,
+)
 
 
-class TestFakeFsContract(FsContractBase, unittest.TestCase):
+class TestFakeFsContract(FsContractBase, WorkflowBundleContractBase, WorkerLogContractBase, unittest.TestCase):
     def root(self):
         return "/root"
 

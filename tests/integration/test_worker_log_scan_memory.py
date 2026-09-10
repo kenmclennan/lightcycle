@@ -5,7 +5,7 @@ import sys
 import tempfile
 import unittest
 
-from lightcycle.adapters.fsio import iter_lines
+from lightcycle.adapters.worker_log import iter_lines
 from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
 from lightcycle.domain.pool.worker_session import saw_terminal_command
 

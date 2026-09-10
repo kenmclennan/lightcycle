@@ -1336,13 +1336,15 @@ class NodeHubScreen(Screen):
 
     def _run_initial_tail(self):
         use_case = TailLogUseCase(
-            self._container.store, self._container.workers, self._container.fs, self._container.config
+            self._container.store, self._container.workers, self._container.worker_log,
+            self._container.config
         )
         return use_case.execute(TailLogInput(target=self._log_target, max_bytes=LOG_INITIAL_TAIL_BYTES))
 
     def _run_tail(self, offset):
         use_case = TailLogUseCase(
-            self._container.store, self._container.workers, self._container.fs, self._container.config
+            self._container.store, self._container.workers, self._container.worker_log,
+            self._container.config
         )
         return use_case.execute(TailLogInput(target=self._log_target, offset=offset))
 
