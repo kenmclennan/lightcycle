@@ -49,11 +49,15 @@ class WorkersContractBase:
         pid = self._seeded_pid(w, "_alive_seed")
         self.assertTrue(w.pid_alive(pid))
         w.kill(pid)
-        deadline = time.time() + 5
-        while time.time() < deadline and w.pid_alive(pid):
+        deadline = time.monotonic() + 5
+        while w.pid_alive(pid):
+            if time.monotonic() >= deadline:
+                self.fail(
+                    "pid %d still alive 5s after kill() with reap() polled throughout "
+                    "(timed out, not a confirmed kill failure)" % pid
+                )
             w.reap()
             time.sleep(0.05)
-        self.assertFalse(w.pid_alive(pid))
 
     def test_prune_workers_drops_oldest_dead_beyond_keep_dead(self):
         w = self.make_workers()
