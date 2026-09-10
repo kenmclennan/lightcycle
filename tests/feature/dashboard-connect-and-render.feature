@@ -57,10 +57,10 @@ Feature: The dashboard connects to the store and renders on launch
     When I launch the dashboard
     Then the status bar shows no upgrade indicator
 
-  Scenario: The status bar shows no upgrade indicator when the upgrade check fails
+  Scenario: The status bar shows the failure reason when the upgrade check fails
     Given the upgrade check fails
     When I launch the dashboard
-    Then the status bar shows no upgrade indicator
+    Then the status bar shows the upgrade check failure reason
     And the priority list is rendered with one row per queued or blocked step
 
   Scenario: The dashboard's poll interval is ten seconds

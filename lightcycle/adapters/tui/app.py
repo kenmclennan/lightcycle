@@ -56,7 +56,7 @@ from lightcycle.application.pool import (
     StartPoolUseCase,
     StopPoolSignalUseCase,
 )
-from lightcycle.application.setup import upgrade
+from lightcycle.application.setup import UpgradeNoticeUseCase, upgrade
 from lightcycle.application.work import (
     BacklogInput,
     BacklogUseCase,
@@ -1160,6 +1160,7 @@ class LightcycleApp(App):
         self._now = now or (lambda: datetime.datetime.now().astimezone())
         self._upgrade_check = upgrade_check or (lambda: upgrade(__version__, check_only=True))
         self._upgrade_version = None
+        self._upgrade_error = None
         self._last_shape = None
         self._last_attention_ids = None
         self._selected_flat_index = 0
@@ -1194,6 +1195,10 @@ class LightcycleApp(App):
     def upgrade_version(self):
         return self._upgrade_version
 
+    @property
+    def upgrade_error(self):
+        return self._upgrade_error
+
     def compose(self) -> ComposeResult:
         yield TabStrip(id="tab-strip")
         yield PriorityTable(id="priority-list")
@@ -1207,7 +1212,7 @@ class LightcycleApp(App):
         table = self.query_one(PriorityTable)
         table.cursor_type = "row"
         table.show_header = False
-        self._upgrade_version = self._check_upgrade()
+        self._upgrade_version, self._upgrade_error = self._check_upgrade()
         self.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self._refresh)
@@ -1223,13 +1228,8 @@ class LightcycleApp(App):
         self.query_one(DoneView).refresh_column_width()
 
     def _check_upgrade(self):
-        try:
-            response = self._upgrade_check()
-        except Exception:
-            return None
-        if not response.available:
-            return None
-        return response.remote
+        response = UpgradeNoticeUseCase(__version__, check=self._upgrade_check).execute()
+        return response.remote, response.error
 
     def _refresh(self) -> None:
         lanes = StatusUseCase(self._container.store).execute().lanes
@@ -1280,6 +1280,7 @@ class LightcycleApp(App):
             breaker_reset_at=breaker.reset_at,
             version=__version__,
             upgrade_version=self._upgrade_version,
+            upgrade_error=self._upgrade_error,
         )
 
     def _refresh_backlog_view(self) -> None:

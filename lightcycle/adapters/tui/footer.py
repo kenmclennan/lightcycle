@@ -24,6 +24,7 @@ class StatusBar(Horizontal):
         breaker_reset_at,
         version,
         upgrade_version,
+        upgrade_error=None,
     ):
         pool_glyph, pool_colour = FOOTER_GLYPHS["pool-running" if pool_running else "pool-stopped"]
         pool = Text("%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running"),
@@ -51,6 +52,11 @@ class StatusBar(Horizontal):
             upgrade_glyph, upgrade_colour = FOOTER_GLYPHS["upgrade-available"]
             upgrade_widget.update(
                 Text("%s v%s available" % (upgrade_glyph, upgrade_version), style=COLOURS[upgrade_colour])
+            )
+            upgrade_widget.display = True
+        elif upgrade_error is not None:
+            upgrade_widget.update(
+                Text("upgrade check failed: %s" % upgrade_error, style=COLOURS["dim"])
             )
             upgrade_widget.display = True
         else:
