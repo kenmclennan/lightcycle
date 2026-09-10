@@ -9,14 +9,13 @@ from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
-    merge_condition_note,
+    merge_condition_note, role_state,
 )
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
     ItemText,
     NodeNotFoundError,
     ProjectEntry,
-    ProjectResolutionError,
     StoreError,
     StorePort,
 )
@@ -901,12 +900,8 @@ class SqliteStore(StorePort):
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
-        self.update_state(tid, State.WAITING if role == "human" else State.QUEUED)
+        self.update_state(tid, role_state(role))
         self.assign(tid, "")
-
-    def route_to_human(self, tid, note):
-        self.note(tid, note)
-        self.reassign(tid, "human")
 
     def closed_items(self):
         rows = self._conn.execute(
@@ -1123,7 +1118,7 @@ class SqliteStore(StorePort):
             ")"
         )
 
-    def claim_ready(self, role):
+    def claim_ready(self, role, assignee=None):
         row = self._conn.execute(
             "SELECT id FROM steps WHERE state = 'ready' "
             "AND role = ? AND NOT EXISTS ("
@@ -1136,7 +1131,7 @@ class SqliteStore(StorePort):
         if row is None:
             return None
         tid = row[0]
-        assignee = self._config.spawn_id() or role
+        assignee = assignee or role
         cur = self._conn.execute(
             "UPDATE steps SET assignee = ?, state = 'in_progress', claim_epoch = claim_epoch + 1 "
             "WHERE id = ? AND state = 'ready'",
@@ -1510,13 +1505,7 @@ class SqliteStore(StorePort):
         self._commit()
 
     def set_pr(self, rid, pr):
-        current = self.get_run(rid)
-        if current is not None and current.pr != pr:
-            self._conn.execute(
-                "UPDATE phase_runs SET pr = ?, content_pin = ? WHERE id = ?", (pr, None, rid)
-            )
-        else:
-            self._conn.execute("UPDATE phase_runs SET pr = ? WHERE id = ?", (pr, rid))
+        self._conn.execute("UPDATE phase_runs SET pr = ? WHERE id = ?", (pr, rid))
         self._commit()
 
     def set_content_pin(self, rid, content_pin):
@@ -1649,35 +1638,3 @@ class SqliteStore(StorePort):
         self._commit()
         if cur.rowcount == 0:
             raise KeyError("project not registered: %s" % identity)
-
-    def _match_projects(self, ref):
-        rows = self.list_projects()
-        if "/" in ref:
-            return [p for p in rows if p.identity == ref]
-        return [p for p in rows if p.identity.rsplit("/", 1)[-1] == ref]
-
-    def find_project(self, ref):
-        matches = self._match_projects(ref)
-        if not matches:
-            raise ProjectResolutionError(
-                "project '%s' is not registered - run `lc project add <owner/name> --path <dir>`"
-                % ref
-            )
-        if len(matches) > 1:
-            raise ProjectResolutionError(
-                "project name '%s' is ambiguous - matches %s; use the full owner/name identity"
-                % (ref, ", ".join(p.identity for p in matches))
-            )
-        return matches[0]
-
-    def resolve_project_path(self, ref):
-        if os.path.isabs(ref):
-            return ref
-        project = self.find_project(ref)
-        if not project.local_path:
-            raise ProjectResolutionError(
-                "project '%s' is registered but has no local checkout - activate the item to "
-                "clone it automatically, or run `lc project add %s --path <dir>` to point at an "
-                "existing one" % (project.identity, project.identity)
-            )
-        return project.local_path

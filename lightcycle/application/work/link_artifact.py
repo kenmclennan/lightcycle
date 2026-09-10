@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.work import State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
 from lightcycle.ports.store import ProjectResolutionError
@@ -81,11 +82,17 @@ class LinkArtifactUseCase:
                 "item '%s' has no open phase run to attach '%s' to" % (input.item, input.atype)
             )
         if input.atype == "pr":
-            self._store.set_pr(run.id, input.value)
+            self._set_pr(run, input.value)
         elif input.atype == "branch":
             self._store.set_branch(run.id, input.value)
         else:
             self._store.set_comments_handled_through(run.id, input.value)
+
+    def _set_pr(self, run, value):
+        if run.pr != value:
+            self._store.record_pr_pin(run.id, value, None)
+        else:
+            self._store.set_pr(run.id, value)
 
     def _current_run(self, item):
         open_runs = self._store.open_runs_of(item)
@@ -118,12 +125,13 @@ class LinkArtifactUseCase:
         repo_value = self._store.get_item(item).repo
         if repo_value is None:
             return None
+        registry = ProjectRegistry(self._store)
         try:
-            repo_project = self._store.find_project(repo_value)
+            repo_project = registry.find(repo_value)
         except ProjectResolutionError:
             return None
         try:
-            leading_project = self._store.find_project(leading)
+            leading_project = registry.find(leading)
         except ProjectResolutionError:
             return "leading directory '%s' is not a registered project (item's repo project is '%s')" % (
                 leading, repo_project.identity,

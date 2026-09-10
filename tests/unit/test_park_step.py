@@ -59,14 +59,14 @@ class TestParkTask(unittest.TestCase):
         )
         self.assertEqual(s.get_node(bid).park.tried, "a,b")
 
-    def test_a_failing_route_to_human_leaves_the_metadata_write_unapplied(self):
+    def test_a_failing_reassign_leaves_the_metadata_write_unapplied(self):
         s = FakeStore()
         bid = create_owned_step(s, "build: x", step="build", role="agent")
 
-        def raising_route_to_human(tid, note):
+        def raising_reassign(tid, role):
             raise RuntimeError("boom")
 
-        s.route_to_human = raising_route_to_human
+        s.reassign = raising_reassign
         with self.assertRaises(RuntimeError):
             ParkStepUseCase(s).execute(
                 ParkInput(step=bid, observation="something happened", decision="decide X")

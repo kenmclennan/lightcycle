@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.work import State, derive_state
+from lightcycle.domain.work import State, derive_state, role_state
 
 
 class DeriveStepStateTest(unittest.TestCase):
@@ -86,6 +86,20 @@ class DeriveContainerStateTest(unittest.TestCase):
     def test_items_own_unresolved_dep_outranks_its_childrens_rollup(self):
         s = self._item([State.DONE, State.RUNNING, State.QUEUED], has_unresolved_deps=True)
         self.assertEqual(s, State.BLOCKED)
+
+
+class RoleStateTest(unittest.TestCase):
+    def test_no_role_is_waiting(self):
+        self.assertEqual(role_state(None), State.WAITING)
+
+    def test_human_role_is_waiting(self):
+        self.assertEqual(role_state("human"), State.WAITING)
+
+    def test_agent_role_is_queued(self):
+        self.assertEqual(role_state("agent"), State.QUEUED)
+
+    def test_any_other_role_is_queued(self):
+        self.assertEqual(role_state("reviewer"), State.QUEUED)
 
 
 if __name__ == "__main__":

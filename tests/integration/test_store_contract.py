@@ -90,15 +90,6 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         self.assertIn(blocked, queued)
         self.assertFalse(queued[blocked].blocked_by)
 
-    def test_route_to_human_relabels_and_notes(self):
-        s = self._store()
-        tid = create_owned_step(s, "build: x", step="build", role="agent")
-        s.route_to_human(tid, "needs a human")
-        t = s.get_node(tid)
-        self.assertEqual(t.role, "human")
-        self.assertEqual(t.state, State.WAITING)
-        self.assertIn("needs a human", t.notes or "")
-
     def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
         s = self._store()
         tid = create_owned_step(s, "build: x", step="build", role="agent")

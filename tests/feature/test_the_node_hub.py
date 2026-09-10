@@ -12,6 +12,7 @@ from lightcycle.adapters.tui.hub import (
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import route_to_human
 from tests.support.tui_harness import launch, make_test_container
 
 scenarios("the-node-hub.feature")
@@ -485,7 +486,7 @@ def _item_escalated_rework(ctx):
     item = store.create_item("Item", "a description")
     step = store.create_step("write code", step="write-code", role="agent", parent=item)
     store.update_metadata(step, {"needs": "Resolve the merge conflict manually"})
-    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    route_to_human(store, step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
     session = _launch(ctx, store)
@@ -501,7 +502,7 @@ def _item_escalated_rework_with_reason(ctx):
         step,
         {"needs": "Resolve the merge conflict manually", "reason": "CI reported a real conflict"},
     )
-    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    route_to_human(store, step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
     session = _launch(ctx, store)
@@ -517,7 +518,7 @@ def _step_parked_with_needs_and_reason(ctx):
         step,
         {"needs": "Resolve the merge conflict manually", "reason": "CI reported a real conflict"},
     )
-    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    route_to_human(store, step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
     session = _launch(ctx, store)
@@ -535,7 +536,7 @@ def _item_escalated_over_cap_reason(ctx):
     store.update_metadata(
         step, {"needs": "Resolve the merge conflict manually", "reason": LC_277_6_REASON_EXTENDED}
     )
-    store.route_to_human(step, "BLOCKED: Resolve the merge conflict manually")
+    route_to_human(store, step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
     ctx["step_id"] = step
     session = _launch(ctx, store, size=WRAPPING_HUB_SIZE)

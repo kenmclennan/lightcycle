@@ -230,6 +230,41 @@ class TestLinkArtifact(unittest.TestCase):
             )
         self.assertIsNone(s.get_run(rid).pr)
 
+    def test_setting_a_different_pr_nulls_the_content_pin(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        rid = s.open_run(sid, s.open_pass(sid), "spec")
+        s.record_pr_pin(rid, "http://x/pull/1", "sha1")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/2")
+        )
+        run = s.get_run(rid)
+        self.assertEqual(run.pr, "http://x/pull/2")
+        self.assertIsNone(run.content_pin)
+
+    def test_setting_the_same_pr_again_leaves_the_content_pin_untouched(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        rid = s.open_run(sid, s.open_pass(sid), "spec")
+        s.record_pr_pin(rid, "http://x/pull/1", "sha1")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/1")
+        )
+        run = s.get_run(rid)
+        self.assertEqual(run.pr, "http://x/pull/1")
+        self.assertEqual(run.content_pin, "sha1")
+
+    def test_setting_a_pr_on_a_run_with_no_prior_pin_behaves_as_before(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        rid = s.open_run(sid, s.open_pass(sid), "spec")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/1")
+        )
+        run = s.get_run(rid)
+        self.assertEqual(run.pr, "http://x/pull/1")
+        self.assertIsNone(run.content_pin)
+
     def test_run_field_empty_branch_raises_and_leaves_run_unchanged(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")

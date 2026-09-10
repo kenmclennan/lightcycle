@@ -1,4 +1,5 @@
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import State
@@ -66,7 +67,7 @@ class WorktreeService:
 
     def _resolve_repo(self, repo):
         try:
-            return self._store.resolve_project_path(repo)
+            return ProjectRegistry(self._store).resolve_path(repo)
         except ProjectResolutionError as e:
             raise UseCaseError(str(e))
 

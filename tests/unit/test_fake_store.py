@@ -259,29 +259,6 @@ class TestListNodes(unittest.TestCase):
         self.assertEqual(self.s.closed_items(), [])
 
 
-class TestRouteToHuman(unittest.TestCase):
-    def setUp(self):
-        self.s = FakeStore()
-        self.tid = create_owned_step(self.s, "build: thing", step="build", role="agent")
-
-    def test_routes_to_human(self):
-        self.s.route_to_human(self.tid, "needs review")
-        step = self.s.get_node(self.tid)
-        self.assertEqual(step.role, "human")
-        self.assertEqual(step.state, "waiting")
-        self.assertIsNone(self.s._records[self.tid]["assignee"])
-
-    def test_route_adds_note(self):
-        self.s.route_to_human(self.tid, "needs review")
-        self.assertIn("needs review", self.s.get_node(self.tid).notes)
-
-    def test_route_removes_old_for_label(self):
-        self.s.route_to_human(self.tid, "blocked")
-        labels = self.s._records[self.tid]["labels"]
-        self.assertNotIn("for:coder", labels)
-        self.assertIn("for:human", labels)
-
-
 class TestNoSubprocess(unittest.TestCase):
     def test_importable_without_subprocess(self):
         from tests.support.fake_store import FakeStore as FS

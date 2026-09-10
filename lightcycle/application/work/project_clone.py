@@ -1,6 +1,7 @@
 import os
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.ports.store import ProjectResolutionError
 
 
@@ -8,7 +9,7 @@ def ensure_project_cloned(store, git, config, ref, scaffold):
     if not ref or os.path.isabs(ref):
         return
     try:
-        project = store.find_project(ref)
+        project = ProjectRegistry(store).find(ref)
     except ProjectResolutionError as e:
         raise UseCaseError(str(e))
     if project.local_path:

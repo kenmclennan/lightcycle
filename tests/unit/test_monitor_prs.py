@@ -1620,7 +1620,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store, item, step, uc = self._setup(gh)
         uc.execute()
 
-        store.set_pr(store.current_run(item, None).id, new_url)
+        store.record_pr_pin(store.current_run(item, None).id, new_url, None)
         uc.execute()
 
         self.assertEqual(self._pin(store, item), "sha9")
@@ -1640,7 +1640,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store, item, step, uc = self._setup(gh)
         uc.execute()
 
-        store.set_pr(store.current_run(item, None).id, new_url)
+        store.record_pr_pin(store.current_run(item, None).id, new_url, None)
         uc.execute()
 
         self.assertEqual(self._pin(store, item), "sha9")

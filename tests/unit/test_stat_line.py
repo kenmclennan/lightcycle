@@ -3,6 +3,7 @@ import unittest
 from lightcycle.adapters.tui.hub import _stat_line_item, _stat_line_step
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
+from tests.support.step_factory import route_to_human
 
 NOW = "2026-01-01T12:00:00"
 
@@ -282,7 +283,7 @@ class TestStatLineStepHuman(unittest.TestCase):
         clock["now"] = "2026-01-01T09:05:00"
         store.claim_ready("agent")
         clock["now"] = "2026-01-01T11:00:00"
-        store.route_to_human(step, "BLOCKED: needs a human decision")
+        route_to_human(store, step, "BLOCKED: needs a human decision")
         node = store.get_node(step)
 
         now = "2026-01-01T11:10:00"

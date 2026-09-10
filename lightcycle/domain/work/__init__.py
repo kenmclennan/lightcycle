@@ -12,7 +12,7 @@ from lightcycle.domain.work.cost import (
 from lightcycle.domain.work.lane import Lane
 from lightcycle.domain.work.state import State, lane_for
 from lightcycle.domain.work.rollup import roll_up
-from lightcycle.domain.work.derive import derive_state
+from lightcycle.domain.work.derive import derive_state, role_state
 from lightcycle.domain.work.hierarchy import (
     HierarchyRow, compose_hierarchy, is_human_step, row_bucket, viewable_artifacts,
 )
@@ -41,7 +41,7 @@ __all__ = [
     "Artifact", "default_kind_for", "type_label", "Lane", "State", "lane_for", "roll_up",
     "ItemCost", "StageSubtotal", "StepCost", "ToolUsageRow", "cache_hit_rate",
     "item_cost", "step_cost",
-    "derive_state",
+    "derive_state", "role_state",
     "HierarchyRow", "compose_hierarchy",
     "is_human_step", "row_bucket", "viewable_artifacts",
     "FIELDS_BY_TYPE", "FieldRefusal", "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "StateRefusal",
