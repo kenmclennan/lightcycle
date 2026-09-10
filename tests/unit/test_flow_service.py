@@ -151,8 +151,8 @@ class TestFlowService(unittest.TestCase):
 
     def test_load_flow_returns_assembled_flow(self):
         flow = svc().load_flow()
-        self.assertEqual(flow.owner_of("build"), "agent")
-        self.assertEqual(flow.owner_of("review"), "agent")
+        self.assertEqual(flow.step_def("build").owner, "agent")
+        self.assertEqual(flow.step_def("review").owner, "agent")
         self.assertEqual(flow.next("build", "done").to_step, "review")
 
     def test_flow_next_derives_owner_of_target(self):
@@ -181,7 +181,7 @@ class TestFlowService(unittest.TestCase):
         }
         fs = FakeFs(metas, workflow=graph_text_from_metas(metas, entry="review-plan"))
         service = FlowService(fs, FakeStore())
-        self.assertEqual(service.load_flow().owner_of("review-plan"), "human")
+        self.assertEqual(service.load_flow().step_def("review-plan").owner, "human")
         self.assertEqual(service.meta_for_step("review-plan"), metas["review-plan"])
 
     def test_ready_roles_from_store(self):

@@ -39,25 +39,25 @@ HUMAN_METAS = {
 class TestFlowAssembly(unittest.TestCase):
     def test_owner_and_routes(self):
         flow = mkflow(METAS)
-        self.assertEqual(flow.owner_of("build"), "agent")
-        self.assertEqual(flow.owner_of("review"), "agent")
-        self.assertEqual(flow.outcomes_for("build"), ["done"])
+        self.assertEqual(flow.step_def("build").owner, "agent")
+        self.assertEqual(flow.step_def("review").owner, "agent")
+        self.assertEqual(sorted(flow.step_def("build").routes.keys()), ["done"])
         self.assertEqual(flow.next("build", "done").to_step, "review")
 
     def test_every_owned_stage_collapses_to_the_one_agent_role(self):
         flow = mkflow(METAS)
-        self.assertEqual({flow.owner_of(s) for s in flow.steps()}, {"agent"})
+        self.assertEqual({flow.step_def(s).owner for s in flow.steps()}, {"agent"})
         self.assertEqual(flow.steps(), ["build", "open-pr", "review"])
 
 
 class TestHumanSteps(unittest.TestCase):
     def test_a_stage_with_a_model_is_owned_by_the_agent_role_not_its_step_file(self):
-        self.assertEqual(mkflow(HUMAN_METAS).owner_of("watch-pr"), "agent")
+        self.assertEqual(mkflow(HUMAN_METAS).step_def("watch-pr").owner, "agent")
 
     def test_no_model_step_owned_by_human(self):
         flow = mkflow(HUMAN_METAS)
-        self.assertEqual(flow.owner_of("ready-merge"), "human")
-        self.assertEqual(flow.owner_of("cleanup"), "human")
+        self.assertEqual(flow.step_def("ready-merge").owner, "human")
+        self.assertEqual(flow.step_def("cleanup").owner, "human")
 
     def test_routes_to_human_step(self):
         t = mkflow(HUMAN_METAS).next("watch-pr", "done")
@@ -84,7 +84,7 @@ class TestNext(unittest.TestCase):
         self.assertIsNone(self.flow.next("build", "banana"))
 
     def test_outcomes_for(self):
-        self.assertEqual(self.flow.outcomes_for("review"), ["done", "rejected"])
+        self.assertEqual(sorted(self.flow.step_def("review").routes.keys()), ["done", "rejected"])
 
 
 class TestTransition(unittest.TestCase):

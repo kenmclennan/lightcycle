@@ -14,7 +14,7 @@ def check_step_filing(store, flow, item_id, node, workflow, step):
         )
     step_name = step or graph.entry
     f = flow.load_flow(workflow)
-    role = f.owner_of(step_name)
+    role = f.step_def(step_name).owner
     if not role:
         raise UseCaseError(
             "step '%s' is not owned in workflow '%s'; owned steps: %s"

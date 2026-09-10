@@ -705,7 +705,9 @@ def _workflow_describe(selector, as_mermaid=False):
             "%s %s" % pair for pair in sorted(graph.pass_ends)))
     print(
         "  steps        %s"
-        % ", ".join(display_stage(assembled.display_of(s), s) for s in assembled.steps())
+        % ", ".join(
+            display_stage(assembled.step_def(s).display, s) for s in assembled.steps()
+        )
     )
     return 0
 

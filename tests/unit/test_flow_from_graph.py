@@ -53,16 +53,16 @@ class TestFlowFromGraph(unittest.TestCase):
         self.flow = Flow.from_graph(self.graph, STEP_METAS)
 
     def test_a_stage_whose_step_file_declares_a_model_is_owned_by_the_agent_role(self):
-        self.assertEqual(self.flow.owner_of("build"), "agent")
-        self.assertEqual(self.flow.owner_of("review"), "agent")
-        self.assertEqual(self.flow.owner_of("audit"), "agent")
+        self.assertEqual(self.flow.step_def("build").owner, "agent")
+        self.assertEqual(self.flow.step_def("review").owner, "agent")
+        self.assertEqual(self.flow.step_def("audit").owner, "agent")
 
     def test_the_owner_never_carries_the_stage_or_its_step_file(self):
         for stage in ("build", "review", "audit"):
-            self.assertNotIn(self.flow.owner_of(stage), (stage, self.graph.file_for(stage)))
+            self.assertNotIn(self.flow.step_def(stage).owner, (stage, self.graph.file_for(stage)))
 
     def test_stage_with_a_step_file_but_no_model_is_human(self):
-        self.assertEqual(self.flow.owner_of("ready-merge"), "human")
+        self.assertEqual(self.flow.step_def("ready-merge").owner, "human")
 
     def test_routing_carries_target_and_role(self):
         t = self.flow.next("build", "done")
@@ -71,31 +71,31 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertEqual(self.flow.next("review", "rejected").to_step, "build")
 
     def test_terminal_and_conflict_outcomes(self):
-        self.assertEqual(self.flow.merge_outcome("ready-merge"), "merged")
-        self.assertEqual(self.flow.pr_conflict_outcome("ready-merge"), "conflicted")
-        self.assertEqual(self.flow.pr_conflict_cap("ready-merge"), 3)
-        self.assertEqual(self.flow.pr_conflict_escalate("ready-merge"), "gave-up")
+        self.assertEqual(self.flow.step_def("ready-merge").pr_merge, "merged")
+        self.assertEqual(self.flow.step_def("ready-merge").pr_conflict, "conflicted")
+        self.assertEqual(self.flow.step_def("ready-merge").pr_conflict_cap, 3)
+        self.assertEqual(self.flow.step_def("ready-merge").pr_conflict_escalate, "gave-up")
 
     def test_pr_feedback_step_registers_as_a_stage(self):
-        self.assertEqual(self.flow.pr_feedback_step("ready-merge"), "handle-feedback")
-        self.assertEqual(self.flow.owner_of("handle-feedback"), "agent")
+        self.assertEqual(self.flow.step_def("ready-merge").pr_feedback, "handle-feedback")
+        self.assertEqual(self.flow.step_def("handle-feedback").owner, "agent")
 
     def test_pr_feedback_step_absent_by_default(self):
-        self.assertIsNone(self.flow.pr_feedback_step("build"))
+        self.assertIsNone(self.flow.step_def("build").pr_feedback)
 
     def test_mention_token_and_review_bot_allowlist(self):
-        self.assertEqual(self.flow.mention_token("ready-merge"), "@lc")
+        self.assertEqual(self.flow.step_def("ready-merge").mention_token, "@lc")
         self.assertEqual(
-            self.flow.review_bot_allowlist("ready-merge"),
+            self.flow.step_def("ready-merge").review_bot_allowlist,
             {"copilot-pull-request-reviewer[bot]", "another-bot[bot]"},
         )
 
     def test_mention_token_and_review_bot_allowlist_absent_by_default(self):
-        self.assertIsNone(self.flow.mention_token("build"))
-        self.assertEqual(self.flow.review_bot_allowlist("build"), set())
+        self.assertIsNone(self.flow.step_def("build").mention_token)
+        self.assertEqual(self.flow.step_def("build").review_bot_allowlist, frozenset())
 
     def test_bare_terminal_has_no_owner_and_routes_to_human(self):
-        self.assertIsNone(self.flow.owner_of("conflict-review"))
+        self.assertIsNone(self.flow.step_def("conflict-review").owner)
         self.assertEqual(self.flow.next("ready-merge", "gave-up").to_role, "human")
 
     def test_audit_findings_routes_to_review_findings(self):
@@ -105,21 +105,20 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_audit_clean_is_a_declared_terminal_outcome(self):
         self.assertIsNone(self.flow.next("audit", "clean"))
-        self.assertIn("clean", self.flow.outcomes_for("audit"))
+        self.assertIn("clean", self.flow.step_def("audit").routes.keys())
 
     def test_ci_failed_cap_and_target(self):
-        self.assertEqual(self.flow.ci_failed_cap_outcome("watch-pr"), "ci-failed")
-        self.assertEqual(self.flow.ci_failed_cap_n("watch-pr"), 3)
-        self.assertEqual(self.flow.ci_failed_cap_target("watch-pr"), "review-ci")
+        cap = self.flow.step_def("watch-pr").ci_cap
+        self.assertEqual(cap.outcome, "ci-failed")
+        self.assertEqual(cap.n, 3)
+        self.assertEqual(cap.target, "review-ci")
 
     def test_ci_failed_cap_absent_by_default(self):
-        self.assertIsNone(self.flow.ci_failed_cap_outcome("build"))
-        self.assertIsNone(self.flow.ci_failed_cap_n("build"))
-        self.assertIsNone(self.flow.ci_failed_cap_target("build"))
+        self.assertIsNone(self.flow.step_def("build").ci_cap)
 
     def test_ci_failed_cap_escalation_target_is_a_known_terminal_human_step(self):
-        self.assertEqual(self.flow.owner_of("review-ci"), "human")
-        self.assertEqual(self.flow.outcomes_for("review-ci"), [])
+        self.assertEqual(self.flow.step_def("review-ci").owner, "human")
+        self.assertEqual(sorted(self.flow.step_def("review-ci").routes.keys()), [])
 
     def test_effective_transition_non_matching_outcome_is_never_redirected(self):
         raw = self.flow.next("watch-pr", "done")
@@ -133,13 +132,13 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertIsNone(self.flow.effective_transition(None, "ci-failed", 5))
 
     def test_primary_outcome_returns_the_marked_outcome(self):
-        self.assertEqual(self.flow.primary_outcome("open-pr"), "done")
+        self.assertEqual(self.flow.step_def("open-pr").primary, "done")
 
     def test_primary_outcome_absent_by_default(self):
-        self.assertIsNone(self.flow.primary_outcome("review"))
+        self.assertIsNone(self.flow.step_def("review").primary)
 
     def test_display_of_absent_by_default(self):
-        self.assertIsNone(self.flow.display_of("build"))
+        self.assertIsNone(self.flow.step_def("build").display)
 
 
 DISPLAY_GRAPH_TEXT = """
@@ -164,14 +163,14 @@ class TestFlowDisplayOf(unittest.TestCase):
         self.flow = Flow.from_graph(parse_graph(DISPLAY_GRAPH_TEXT), STEP_METAS)
 
     def test_returns_the_declared_phrase(self):
-        self.assertEqual(self.flow.display_of("build"), "Coding")
-        self.assertEqual(self.flow.display_of("review"), "Review the PR")
+        self.assertEqual(self.flow.step_def("build").display, "Coding")
+        self.assertEqual(self.flow.step_def("review").display, "Review the PR")
 
     def test_returns_none_for_a_stage_with_no_declared_phrase(self):
-        self.assertIsNone(self.flow.display_of("cleanup"))
+        self.assertIsNone(self.flow.step_def("cleanup").display)
 
     def test_returns_none_for_an_undeclared_stage_named_audit(self):
-        self.assertIsNone(self.flow.display_of("audit"))
+        self.assertIsNone(self.flow.step_def("audit").display)
 
 
 DISPOSITION_GRAPH_TEXT = """

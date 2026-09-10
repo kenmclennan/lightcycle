@@ -431,14 +431,14 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(graph.file_for("spec-open-pr"), "open-pr")
         self.assertEqual(graph.target("spec-open-pr", "done"), "spec-await-merge")
         self.assertEqual(graph.target("spec-await-merge", "changes"), "spec-writer")
-        self.assertEqual(flow.merge_outcome("spec-await-merge"), "spec-merged")
-        self.assertEqual(flow.close_outcome("spec-await-merge"), "abandoned")
-        self.assertEqual(flow.mention_token("spec-await-merge"), "@lc")
+        self.assertEqual(flow.step_def("spec-await-merge").pr_merge, "spec-merged")
+        self.assertEqual(flow.step_def("spec-await-merge").pr_close, "abandoned")
+        self.assertEqual(flow.step_def("spec-await-merge").mention_token, "@lc")
 
     def test_spec_merge_continues_into_the_code_phase(self):
         graph, flow, _ = self._graph_flow()
         self.assertEqual(graph.target("spec-await-merge", "spec-merged"), "write-code")
-        self.assertEqual(flow.merge_outcome("code-await-merge"), "merged")
+        self.assertEqual(flow.step_def("code-await-merge").pr_merge, "merged")
 
     def test_spec_writer_step_accepts_nothing_and_produces_spec(self):
         meta = (parse_step(_ROOT, "spec-writer") or StepPrompt(meta={}, body="")).meta
@@ -447,10 +447,11 @@ class TestRealStepsFlowComposition(unittest.TestCase):
 
     def test_ci_failed_cap_escalates_to_review_ci_after_three(self):
         graph, flow, _ = self._graph_flow()
-        self.assertEqual(flow.ci_failed_cap_n("watch-ci"), 3)
-        self.assertEqual(flow.ci_failed_cap_target("watch-ci"), "review-ci")
-        self.assertEqual(flow.owner_of("review-ci"), "human")
-        self.assertEqual(flow.outcomes_for("review-ci"), [])
+        cap = flow.step_def("watch-ci").ci_cap
+        self.assertEqual(cap.n, 3)
+        self.assertEqual(cap.target, "review-ci")
+        self.assertEqual(flow.step_def("review-ci").owner, "human")
+        self.assertEqual(sorted(flow.step_def("review-ci").routes.keys()), [])
 
 
 if __name__ == "__main__":

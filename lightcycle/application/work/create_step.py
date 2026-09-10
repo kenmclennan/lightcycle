@@ -42,7 +42,7 @@ class CreateStepUseCase:
                 "no workflow to resolve --step against; pass --workflow <origin>/<name> "
                 "or --parent <item pinned to one>"
             )
-        role = flow.owner_of(input.step)
+        role = flow.step_def(input.step).owner
         if not role:
             raise UseCaseError(
                 "step '%s' is not owned in this workflow; owned steps: %s"

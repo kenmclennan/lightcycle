@@ -15,7 +15,7 @@ def flow_for(flow_service, node):
 
 
 def run_of(store, flow_service, node):
-    phase = flow_for(flow_service, node).phase_of(getattr(node, "step", None))
+    phase = flow_for(flow_service, node).step_def(getattr(node, "step", None)).phase
     return store.current_run(node.item, phase)
 
 

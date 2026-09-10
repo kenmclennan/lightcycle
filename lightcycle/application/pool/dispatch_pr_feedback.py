@@ -57,13 +57,13 @@ class DispatchPrFeedbackUseCase:
             self._note_gh_read_failure(step.id, failure)
             return []
 
-        allowlist = flow.review_bot_allowlist(step.step)
+        allowlist = flow.step_def(step.step).review_bot_allowlist
         items = [c for c in outstanding_threads(inline) if eligible(c.author, allowlist)]
         items += [
             r for r in outstanding_reviews(reviews, top_level + inline) if r.author in allowlist
         ]
 
-        mention_token = flow.mention_token(step.step)
+        mention_token = flow.step_def(step.step).mention_token
         if mention_token:
             feedback_run = run_of(self._store, self._flow_service, step)
             watermark = _epoch(feedback_run.comments_handled_through) if feedback_run else 0.0
@@ -83,8 +83,8 @@ class DispatchPrFeedbackUseCase:
             if not step.parent:
                 continue
             flow = flow_for(self._flow_service, step)
-            feedback_step = flow.pr_feedback_step(step.step)
-            conflict_outcome = flow.pr_conflict_outcome(step.step)
+            feedback_step = flow.step_def(step.step).pr_feedback
+            conflict_outcome = flow.step_def(step.step).pr_conflict
             if feedback_step is None and conflict_outcome is None:
                 continue
             run = run_of(self._store, self._flow_service, step)
@@ -103,7 +103,7 @@ class DispatchPrFeedbackUseCase:
                     )
                     spawned_through = _epoch(run.comments_dispatched_through) if run else 0.0
                     if not open_now and newest > spawned_through:
-                        role = flow.owner_of(feedback_step)
+                        role = flow.step_def(feedback_step).owner
                         title = self._store.get_node(step.parent).title
                         tid = self._store.create_step(
                             "%s: %s" % (feedback_step, title), step=feedback_step,

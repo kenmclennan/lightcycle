@@ -62,7 +62,7 @@ class InboxUseCase:
     def _pr_for(self, t, resolver):
         if not t.parent:
             return None
-        run = self._store.current_run(t.parent, resolver(t).phase_of(t.step))
+        run = self._store.current_run(t.parent, resolver(t).step_def(t.step).phase)
         return run.pr if run else None
 
     def _item(self, item_id):
