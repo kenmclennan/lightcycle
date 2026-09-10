@@ -36,7 +36,7 @@ def plant_pr(store, item, url, phase=None):
     pid = store.current_pass(item)
     pid = pid.id if pid else store.open_pass(item)
     rid = store.open_run(item, pid, phase)
-    store.set_run_field(rid, pr=url)
+    store.set_pr(rid, url)
     return rid
 
 
@@ -165,7 +165,7 @@ class TestStatus(unittest.TestCase):
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                            parent=s.get_node(watched).parent)
         s.set_watched_step(fb, watched)
-        s.close(fb, "done")
+        s.complete_node(fb, "done")
 
         lanes = StatusUseCase(s).execute().lanes
 
@@ -395,7 +395,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                             parent=item)
         s.set_watched_step(fb, watched)
-        s.close(fb, "done")
+        s.complete_node(fb, "done")
         resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
         self.assertIn(watched, [r.step.id for r in resp.rows])
 

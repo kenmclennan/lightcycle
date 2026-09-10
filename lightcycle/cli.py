@@ -931,7 +931,7 @@ def cmd_restore(argv):
                           % lock_result.holder_pid)
         return 1
     try:
-        _container.store.disconnect()
+        _container.store.release()
         _container.backup.restore(target)
     finally:
         ReleaseRunLockUseCase(_container.lock).execute()

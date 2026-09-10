@@ -300,7 +300,7 @@ class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
         step_id = step_id.strip()
         self.assertTrue(step_id)
         self.assertNotIn(step_id, [t.id for t in h.store.ready_steps()])
-        h.store.close(blocker, "done")
+        h.store.complete_node(blocker, "done")
         self.assertIn(step_id, [t.id for t in h.store.ready_steps()])
 
     def test_active_with_unknown_depends_id_is_refused_before_activation(self):

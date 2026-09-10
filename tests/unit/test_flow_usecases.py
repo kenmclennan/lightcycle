@@ -326,12 +326,12 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
 
     def _reviewed_item(self, store, repo=None, reflection=True):
         item = store.create_item("reviewed", "a description")
-        store.close(item, "done")
+        store.complete_node(item, "done")
         if repo is not None:
             store.add_artifact(item, "repo", repo)
         if reflection:
             k = store.create_step("build: x", step="build", role="agent", parent=item)
-            store.close(k, "done")
+            store.complete_node(k, "done")
             store.add_artifact(k, "reflection", "fb")
         return item
 
@@ -529,7 +529,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
     def _fail_n_times(self, store, item, n):
         for _ in range(n):
             old = store.create_step("watch: x", step="watch", role="agent", parent=item)
-            store.close(old, "ci-failed")
+            store.complete_node(old, "ci-failed")
 
     def test_under_cap_routes_normally(self):
         s = FakeStore()
@@ -572,7 +572,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         for _ in range(2):
             old = s.create_step("watch: x", step="watch", role="agent", parent=item)
-            s.close(old, "done")
+            s.complete_node(old, "done")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
         self.assertEqual(s.get_node(resp.next_step).step, "ship")
@@ -598,7 +598,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         uc = CompleteStepUseCase(s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s))
         for _ in range(5):
             old = s.create_step("watch: x", step="watch", role="agent", parent=item)
-            s.close(old, "ci-failed")
+            s.complete_node(old, "ci-failed")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "build")
@@ -607,13 +607,13 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         done_step = s.create_step("watch: x", step="watch", role="agent", parent=item)
-        s.close(done_step, "done")
+        s.complete_node(done_step, "done")
         s._records[done_step]["created_at"] = "2026-01-01T10:00:00+00:00"
         first_fail = s.create_step("watch: x", step="watch", role="agent", parent=item)
-        s.close(first_fail, "ci-failed")
+        s.complete_node(first_fail, "ci-failed")
         s._records[first_fail]["created_at"] = "2026-01-01T05:00:00-12:00"
         second_fail = s.create_step("watch: x", step="watch", role="agent", parent=item)
-        s.close(second_fail, "ci-failed")
+        s.complete_node(second_fail, "ci-failed")
         s._records[second_fail]["created_at"] = "2026-01-01T20:00:00+00:00"
 
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
@@ -626,7 +626,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
         passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
-        s.close(passed, "done")
+        s.complete_node(passed, "done")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "build")
@@ -636,7 +636,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
         passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
-        s.close(passed, "done")
+        s.complete_node(passed, "done")
         self._fail_n_times(s, item, 2)
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
@@ -647,7 +647,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
         passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
-        s.close(passed, "done")
+        s.complete_node(passed, "done")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "build")
@@ -658,15 +658,15 @@ class TestCiFailedCapRouting(unittest.TestCase):
         pass_id = s.create_step(
             "watch: x", step="watch", role="agent", parent=item, id="%s.30" % item
         )
-        s.close(pass_id, "done")
+        s.complete_node(pass_id, "done")
         reject_a = s.create_step(
             "watch: x", step="watch", role="agent", parent=item, id="%s.10" % item
         )
-        s.close(reject_a, "ci-failed")
+        s.complete_node(reject_a, "ci-failed")
         reject_b = s.create_step(
             "watch: x", step="watch", role="agent", parent=item, id="%s.20" % item
         )
-        s.close(reject_b, "ci-failed")
+        s.complete_node(reject_b, "ci-failed")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "build")
@@ -679,7 +679,7 @@ class TestCiFailedCapAdvancePath(unittest.TestCase):
     def _fail_n_times(self, store, item, n):
         for _ in range(n):
             old = store.create_step("watch: x", step="watch", role="agent", parent=item)
-            store.close(old, "ci-failed")
+            store.complete_node(old, "ci-failed")
 
     def test_advance_under_cap_routes_normally(self):
         s = FakeStore()
@@ -708,7 +708,7 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
     def _fail_n_times(self, store, item, n):
         for _ in range(n):
             old = store.create_step("watch: x", step="watch", role="agent", parent=item)
-            store.close(old, "ci-failed")
+            store.complete_node(old, "ci-failed")
 
     def _setup(self, prior_failures):
         s = FakeStore()
@@ -746,7 +746,7 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
         passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
-        s.close(passed, "done")
+        s.complete_node(passed, "done")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
@@ -770,7 +770,7 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         for _ in range(3):
             old = s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
-            s.close(old, "ci-failed")
+            s.complete_node(old, "ci-failed")
         wid = s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).step, "review-ci")
@@ -869,7 +869,7 @@ class TestClaimTask(unittest.TestCase):
     def test_idempotent_falls_through_when_assignment_is_done(self):
         s = FakeStore()
         old = create_owned_step(s, "build: x", step="build", role="agent")
-        s.close(old, "done")
+        s.complete_node(old, "done")
         fresh = create_owned_step(s, "build: y", step="build", role="agent")
         resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": old})).execute(
             ClaimInput(role="agent"))

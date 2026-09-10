@@ -21,8 +21,8 @@ class CloseItemUseCase:
         with self._store.transaction():
             for kt in self._store.children(input.item):
                 if kt.state != State.DONE:
-                    self._store.close(kt.id, input.reason)
-            self._store.close(input.item, input.reason, input.disposition)
+                    self._store.complete_node(kt.id, input.reason)
+            self._store.complete_node(input.item, input.reason, input.disposition)
             for run in self._store.open_runs_of(input.item):
                 self._store.close_run(run.id, RunState.ABANDONED)
             current = self._store.current_pass(input.item)

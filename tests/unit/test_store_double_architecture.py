@@ -3,6 +3,7 @@ import pathlib
 import unittest
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parents[1]
+LIGHTCYCLE_ROOT = TESTS_ROOT.parent / "lightcycle"
 
 
 def _base_names(cls):
@@ -61,6 +62,54 @@ class TestNoAdHocStoreDoubles(unittest.TestCase):
                 offenders.append("%s: %s" % (path.relative_to(TESTS_ROOT.parent), name))
         self.assertEqual(
             offenders, [], "ad-hoc StorePort-shaped double(s) found: %s" % offenders
+        )
+
+
+def _declared_store_port_methods():
+    tree = ast.parse((LIGHTCYCLE_ROOT / "ports" / "store.py").read_text())
+    cls = next(
+        n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "StorePort"
+    )
+    return {
+        n.name for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _is_store_receiver(receiver):
+    if isinstance(receiver, ast.Name) and receiver.id == "store":
+        return True
+    if isinstance(receiver, ast.Attribute) and receiver.attr in ("store", "_store"):
+        return True
+    return False
+
+
+def _store_call_names(tree):
+    names = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not isinstance(func, ast.Attribute):
+            continue
+        if _is_store_receiver(func.value):
+            names.append(func.attr)
+    return names
+
+
+class TestStorePortDeclaresEverythingCalled(unittest.TestCase):
+    def test_no_undeclared_method_is_called_on_a_store_receiver(self):
+        declared = _declared_store_port_methods()
+        undeclared = set()
+        for path in sorted(LIGHTCYCLE_ROOT.rglob("*.py")):
+            rel = path.relative_to(LIGHTCYCLE_ROOT)
+            if rel.parts[0] in ("adapters", "ports"):
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for name in _store_call_names(tree):
+                if name not in declared:
+                    undeclared.add("%s: %s" % (rel, name))
+        self.assertEqual(
+            undeclared, set(), "undeclared store method(s) called: %s" % sorted(undeclared)
         )
 
 

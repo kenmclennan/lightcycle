@@ -24,7 +24,7 @@ def _item_rollup_query_count(done_child_count):
     item = s.create_item("item", "a description")
     for i in range(done_child_count):
         step = s.create_step("step %d" % i, parent=item)
-        s.close(step, "done")
+        s.complete_node(step, "done")
     counter = QueryCounter(s._conn)
     s.get_node(item)
     return counter.count
@@ -66,7 +66,7 @@ class TestRollupQueryCount(unittest.TestCase):
             item = s.create_item("item", "a description")
             for i in range(done_child_count):
                 step = s.create_step("step %d" % i, parent=item)
-                s.close(step, "done")
+                s.complete_node(step, "done")
             counter = QueryCounter(s._conn)
             s.all_nodes()
             return counter.count

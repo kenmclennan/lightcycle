@@ -71,7 +71,7 @@ def _assert_picker_option_count(ctx, label, expected):
 def _store_has_closed_item(ctx):
     store = FakeStore()
     item = store.create_item("closed item", "a description")
-    store.close(item, "merged")
+    store.complete_node(item, "merged")
     ctx["item_id"] = item
     ctx["store"] = store
 
@@ -80,7 +80,7 @@ def _store_has_closed_item(ctx):
 def _store_open_and_closed(ctx):
     store = FakeStore()
     closed = store.create_item("closed item", "a description")
-    store.close(closed, "merged")
+    store.complete_node(closed, "merged")
     store.create_item("open item", "a description")
     ctx["item_id"] = closed
     ctx["store"] = store
@@ -92,9 +92,9 @@ def _store_open_and_closed(ctx):
 def _store_two_items_closed_in_order(ctx, first, second):
     store = FakeStore()
     first_id = store.create_item(first, "a description")
-    store.close(first_id, "merged")
+    store.complete_node(first_id, "merged")
     second_id = store.create_item(second, "a description")
-    store.close(second_id, "merged")
+    store.complete_node(second_id, "merged")
     ctx["first_id"] = first_id
     ctx["second_id"] = second_id
     ctx["store"] = store
@@ -114,7 +114,7 @@ def _store_closed_items_other_project(ctx, project):
     for i in range(2):
         item = store.create_item("item %d" % i, "a description")
         store.add_artifact(item, "repo", "other-project")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
     ctx["store"] = store
 
 
@@ -128,10 +128,10 @@ def _done_shown_two_projects(ctx, project_a, project_b):
     store.add_project(project_b)
     item_a = store.create_item("item a", "a description")
     store.add_artifact(item_a, "repo", project_a)
-    store.close(item_a, "merged")
+    store.complete_node(item_a, "merged")
     item_b = store.create_item("item b", "a description")
     store.add_artifact(item_b, "repo", project_b)
-    store.close(item_b, "merged")
+    store.complete_node(item_b, "merged")
     short_a = project_a.rsplit("/", 1)[-1]
     short_b = project_b.rsplit("/", 1)[-1]
     ctx["expected_counts"] = {short_a: 1, short_b: 1}
@@ -149,10 +149,10 @@ def _done_shown_two_projects_shared_title(ctx, project_a, project_b, title):
     store.add_project(project_b)
     item_a = store.create_item(title, "a description")
     store.add_artifact(item_a, "repo", project_a)
-    store.close(item_a, "merged")
+    store.complete_node(item_a, "merged")
     item_b = store.create_item(title, "a description")
     store.add_artifact(item_b, "repo", project_b)
-    store.close(item_b, "merged")
+    store.complete_node(item_b, "merged")
     _launch_and_switch_to_done(ctx, store)
 
 
@@ -160,7 +160,7 @@ def _done_shown_two_projects_shared_title(ctx, project_a, project_b, title):
 def _done_shown_with_closed_item(ctx):
     store = FakeStore()
     item = store.create_item("closed item", "a description")
-    store.close(item, "merged")
+    store.complete_node(item, "merged")
     ctx["item_id"] = item
     _launch_and_switch_to_done(ctx, store)
 
@@ -169,9 +169,9 @@ def _done_shown_with_closed_item(ctx):
 def _done_shown_two_titled_items(ctx, title_a, title_b):
     store = FakeStore()
     item_a = store.create_item(title_a, "a description")
-    store.close(item_a, "merged")
+    store.complete_node(item_a, "merged")
     item_b = store.create_item(title_b, "a description")
-    store.close(item_b, "merged")
+    store.complete_node(item_b, "merged")
     ctx["item_ids"] = {title_a: item_a, title_b: item_b}
     _launch_and_switch_to_done(ctx, store)
 

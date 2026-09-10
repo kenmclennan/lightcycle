@@ -175,8 +175,8 @@ def test_a_narrow_header_holds_the_guard_on_the_true_first_paint():
     store, scan, coding = _populated_store()
     store.record_usage("LC-143.3.1", 1000, 200, 0, 0, 2.91, "list", None)
     store.record_attribution("LC-143.3.1", 20, {})
-    store.close(coding, "done")
-    store.close(scan, "done")
+    store.complete_node(coding, "done")
+    store.complete_node(scan, "done")
     store._records[scan]["closed_at"] = _at(-100000)
 
     session = _launch(store, size=narrow)

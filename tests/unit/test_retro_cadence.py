@@ -31,12 +31,12 @@ def _add_reflection(store, node_id, feedback):
 
 def _close_item(store, title, repo=None, reflections=0, id=None):
     eid = store.create_item(title, "a description", id=id)
-    store.close(eid, "done")
+    store.complete_node(eid, "done")
     if repo is not None:
         store.add_artifact(eid, "repo", repo)
     if reflections:
         k = store.create_step("build: x", step="build", role="agent", parent=eid)
-        store.close(k, "done")
+        store.complete_node(k, "done")
         for i in range(reflections):
             _add_reflection(store, k, "fb %d" % i)
     return eid
@@ -48,7 +48,7 @@ def _open_item_with_closed_pass(store, title, reflections=0):
     if reflections:
         k = store.create_step("build: x", step="build", role="agent", parent=eid)
         store.set_step_pass(k, pid)
-        store.close(k, "done")
+        store.complete_node(k, "done")
         for i in range(reflections):
             _add_reflection(store, k, "fb %d" % i)
     store.close_pass(pid)
@@ -97,7 +97,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         parent = s.get_node(step.parent)
         self.assertEqual(parent.type, "item")
         self.assertEqual(s.item_artifacts(parent.id), [])
-        s.close(step.parent, "done")
+        s.complete_node(step.parent, "done")
         self.assertNotIn(step.parent, [i.id for i in s.closed_unretroed_items()])
 
     def test_fired_audit_title(self):
@@ -194,7 +194,7 @@ class TestRetroCadenceNoRunaway(unittest.TestCase):
         first = gate.execute(0.0)
         for item in items:
             s.label_add(item, "retroed")
-        s.close(first.fired[0], "clean")
+        s.complete_node(first.fired[0], "clean")
         self.assertEqual(gate.execute(0.0).fired, [])
 
     def test_refires_for_a_fresh_batch(self):
@@ -204,7 +204,7 @@ class TestRetroCadenceNoRunaway(unittest.TestCase):
         first = gate.execute(0.0)
         for item in items:
             s.label_add(item, "retroed")
-        s.close(first.fired[0], "clean")
+        s.complete_node(first.fired[0], "clean")
         for i in range(3):
             _close_item(s, "fresh %d" % i, reflections=1)
         self.assertEqual(len(gate.execute(0.0).fired), 1)

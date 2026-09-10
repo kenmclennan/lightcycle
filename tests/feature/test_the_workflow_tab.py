@@ -192,8 +192,8 @@ def _item_with_all_steps_done_highlighted(ctx):
     node_id = store.create_item("Item", "a description")
     first = store.create_step("s1", step="build", role="agent", parent=node_id)
     last = store.create_step("s2", step="write-code", role="agent", parent=node_id)
-    store.close(first, "done")
-    store.close(last, "done")
+    store.complete_node(first, "done")
+    store.complete_node(last, "done")
     ctx["node_id"] = node_id
     ctx["last_step_id"] = last
     _launch(ctx, store, node_id)
@@ -226,7 +226,7 @@ def _human_step_that_is_done(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step("s", step="await-merge", role="human", parent=item)
-    store.close(step, "done")
+    store.complete_node(step, "done")
     ctx["step_id"] = step
     _launch(ctx, store, item)
 
@@ -249,7 +249,7 @@ def _done_and_queued_agent_steps(ctx):
     blocker = create_owned_step(store, "blocker", step="build", role="agent")
     item = store.create_item("Item", "a description")
     done_step = store.create_step("done", step="build", role="agent", parent=item)
-    store.close(done_step, "done")
+    store.complete_node(done_step, "done")
     queued_step = store.create_step(
         "queued", step="build", role="agent", parent=item, deps=[blocker],
     )
@@ -539,7 +539,7 @@ def _done_step_highlighted(ctx):
     item = store.create_item("Item", "a description")
     step = store.create_step("s", step="write-code", role="agent", parent=item)
     store.create_step("o", step="review-code", role="agent", parent=item)
-    store.close(step, "done")
+    store.complete_node(step, "done")
     ctx["step_id"] = step
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -551,7 +551,7 @@ def _human_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step("s", step="await-merge", role="human", parent=item)
-    store.close(step, "done")
+    store.complete_node(step, "done")
     ctx["step_id"] = step
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -592,7 +592,7 @@ def _item_one_done_one_queued(ctx):
     item = store.create_item("Item", "a description")
     done_step = store.create_step("s1", step="build", role="agent", parent=item)
     queued_step = store.create_step("s2", step="write-code", role="agent", parent=item)
-    store.close(done_step, "done")
+    store.complete_node(done_step, "done")
     ctx["item_id"] = item
     ctx["step_id"] = queued_step
     _launch(ctx, store, item)
@@ -604,7 +604,7 @@ def _item_forty_done_one_queued(ctx):
     item = store.create_item("Item", "a description")
     for i in range(40):
         step = store.create_step("s%d" % i, step="build", role="agent", parent=item)
-        store.close(step, "done")
+        store.complete_node(step, "done")
     queued_step = store.create_step("s-last", step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = queued_step
@@ -617,7 +617,7 @@ def _item_every_step_done(ctx):
     item = store.create_item("Item", "a description")
     for i in range(3):
         step = store.create_step("s%d" % i, step="build", role="agent", parent=item)
-        store.close(step, "done")
+        store.complete_node(step, "done")
     ctx["item_id"] = item
     _launch(ctx, store, item)
 

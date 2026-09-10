@@ -294,7 +294,7 @@ def _not_claimable_while_open(ctx):
 
 @when("the dependency closes")
 def _dependency_closes(ctx):
-    ctx["store"].close(ctx["blocker"], "done")
+    ctx["store"].complete_node(ctx["blocker"], "done")
 
 
 @then("the step becomes claimable")

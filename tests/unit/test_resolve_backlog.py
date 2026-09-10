@@ -63,7 +63,7 @@ class TestRetireResolved(unittest.TestCase):
         owner = s.create_item("an item", "a description")
         b1 = create_owned_step(s, "backlog one", role="human")
         link_resolves(s, owner, [b1])
-        s.close(b1, "already handled")
+        s.complete_node(b1, "already handled")
         retire_resolved(s, owner)
         self.assertEqual(s.get_node(b1).outcome, "already handled")
         self.assertEqual(s.item_artifacts(b1), [])

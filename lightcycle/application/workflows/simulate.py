@@ -170,7 +170,10 @@ class WorkflowSimulateUseCase:
                     run = self._store.get_run(self._store.open_run(item_id, pid, phase))
                 if getattr(run, _RUN_FIELDS[req.type]) is None:
                     value = "<simulated-%s-%s>" % (req.type, phase or "-")
-                    self._store.set_run_field(run.id, **{_RUN_FIELDS[req.type]: value})
+                    if req.type == "pr":
+                        self._store.set_pr(run.id, value)
+                    else:
+                        self._store.set_branch(run.id, value)
                 continue
             if req.type not in present:
                 self._store.add_artifact(item_id, req.type, "<simulated>")

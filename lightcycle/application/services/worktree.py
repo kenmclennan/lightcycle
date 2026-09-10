@@ -133,7 +133,7 @@ class WorktreeService:
         run = self._run(item, create=True)
         if run.branch == branch:
             return
-        self._store.set_run_field(run.id, branch=branch)
+        self._store.set_branch(run.id, branch)
 
     def ensure(self, item):
         if self._uses_item_repo(item) and not self.has_repo(item):

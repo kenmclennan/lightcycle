@@ -80,7 +80,12 @@ class LinkArtifactUseCase:
             raise UseCaseError(
                 "item '%s' has no open phase run to attach '%s' to" % (input.item, input.atype)
             )
-        self._store.set_run_field(run.id, **{_RUN_FIELDS[input.atype]: input.value})
+        if input.atype == "pr":
+            self._store.set_pr(run.id, input.value)
+        elif input.atype == "branch":
+            self._store.set_branch(run.id, input.value)
+        else:
+            self._store.set_comments_handled_through(run.id, input.value)
 
     def _current_run(self, item):
         open_runs = self._store.open_runs_of(item)

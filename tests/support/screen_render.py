@@ -55,7 +55,7 @@ def _populated_store(claimed_minutes_ago=14):
     )
     spec = store.step("LC-143.3.1", "write the spec", step="spec-writer", role="agent",
                       parent=scan)
-    store.close(spec, "done")
+    store.complete_node(spec, "done")
     coding = store.step("LC-143.3.4", "write the code", step="write-code", role="agent",
                         parent=scan)
     store.step("LC-143.3.5", "open the pr", step="code-open-pr", role="agent", parent=scan)
@@ -307,7 +307,7 @@ def _priority_cost_store():
     store = DemoStore(now=lambda: _at(14))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     spec = store.step("LC-143.3.1", "write the spec", step="spec-writer", role="agent", parent=item)
-    store.close(spec, "done")
+    store.complete_node(spec, "done")
     store.record_usage(spec, 1000, 200, 0, 0, 2.91, "list", None)
     store.record_attribution(spec, 20, {})
     store.step("LC-143.3.4", "write the code", step="write-code", role="agent", parent=item)
@@ -325,7 +325,7 @@ def _priority_cost_not_recorded_store():
     feedback = store.step(
         "LC-447.4", "handle feedback", step="handle-feedback", role="agent", parent=item,
     )
-    store.close(feedback, "done")
+    store.complete_node(feedback, "done")
     store.record_attribution(feedback, 246, {})
     store.step("LC-447.5", "write the code", step="write-code", role="agent", parent=item)
     store.claim_ready("agent")
@@ -465,12 +465,12 @@ def _done_store():
     store = DemoStore()
     lc273 = store.item("LC-273", "Row title repeats the step name", project="lightcycle")
     store.add_artifact(lc273, "repo", "kenmclennan/lightcycle")
-    store.close(lc273, "merged")
+    store.complete_node(lc273, "merged")
     lc275 = store.item("LC-275", "Active glyph unreadable at terminal size", project="lightcycle")
     store.add_artifact(lc275, "repo", "kenmclennan/lightcycle")
-    store.close(lc275, "merged")
+    store.complete_node(lc275, "merged")
     lc277 = store.item("LC-277", "Human-facing step display names", project="saga")
-    store.close(lc277, "merged")
+    store.complete_node(lc277, "merged")
     store.add_project("kenmclennan/lightcycle")
     return store
 
@@ -510,7 +510,7 @@ def _stacked_done_store():
     store = DemoStore()
     item = store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
     store.add_artifact(item, "repo", STACKED_BACKLOG_PROJECT_REPO)
-    store.close(item, "merged")
+    store.complete_node(item, "merged")
     return store
 
 
@@ -537,13 +537,13 @@ def _hierarchy_cost_store():
     recorded = store.step(
         "LC-143.3.1", "write the spec", step="spec-writer", role="agent", parent=item,
     )
-    store.close(recorded, "done")
+    store.complete_node(recorded, "done")
     store.record_usage(recorded, 1000, 200, 0, 0, 2.91, "list", None)
     store.record_attribution(recorded, 20, {})
     not_recorded = store.step(
         "LC-143.3.4", "handle feedback", step="handle-feedback", role="agent", parent=item,
     )
-    store.close(not_recorded, "done")
+    store.complete_node(not_recorded, "done")
     store.record_attribution(not_recorded, 246, {})
     store.step("LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item)
     return store, item
@@ -561,7 +561,7 @@ def _hierarchy_human_square_store():
     done_human = store.step(
         "LC-143.3.1", "review the spec", step="ready-merge", role="human", parent=item,
     )
-    store.close(done_human, "merged")
+    store.complete_node(done_human, "merged")
     store._records[done_human]["closed_at"] = _at(10)
 
     blocker = store.step("LC-143.3.4", "write the code", step="write-code", role="agent", parent=item)
@@ -573,7 +573,7 @@ def _hierarchy_human_square_store():
     done_agent = store.step(
         "LC-143.3.6", "write the spec", step="spec-writer", role="agent", parent=item,
     )
-    store.close(done_agent, "done")
+    store.complete_node(done_agent, "done")
     store._records[done_agent]["closed_at"] = _at(8)
 
     store.step("LC-143.3.7", "await merge", step="code-await-merge", role="human", parent=item)
@@ -595,7 +595,7 @@ def _hierarchy_time_store():
     store.claim_ready("agent")
     store.accrue_active_seconds([done], 60 * 20)
     clock["now"] = _at(16)
-    store.close(done, "done")
+    store.complete_node(done, "done")
     store._records[done]["closed_at"] = _at(16)
 
     clock["now"] = _at(12)
@@ -753,8 +753,8 @@ def _hub_done_item(size):
     store, scan, coding = _populated_store()
     store.record_usage("LC-143.3.1", 1000, 200, 0, 0, 2.91, "list", None)
     store.record_attribution("LC-143.3.1", 20, {})
-    store.close(coding, "done")
-    store.close(scan, "done")
+    store.complete_node(coding, "done")
+    store.complete_node(scan, "done")
     store._records[scan]["closed_at"] = _at(2)
     return _open_hub(_launch(store, size=size), scan)
 
@@ -843,7 +843,7 @@ def _hub_step_done_with_cost_store():
     store.record_usage(step, 1000, 200, 0, 0, 2.91, "list", None)
     store.record_attribution(step, 20, {})
     clock["now"] = _at(2)
-    store.close(step, "done")
+    store.complete_node(step, "done")
     store._records[step]["closed_at"] = _at(2)
     return store, step
 
@@ -896,9 +896,8 @@ def _detail_store():
     pid = store.open_pass(item)
     store.set_step_pass(step, pid)
     rid = store.open_run(item, pid, "code")
-    store.set_run_field(
-        rid, branch="feat/LC-143-scan", pr="https://github.com/kenmclennan/lightcycle/pull/143"
-    )
+    store.set_branch(rid, "feat/LC-143-scan")
+    store.set_pr(rid, "https://github.com/kenmclennan/lightcycle/pull/143")
     store.set_notes(step, "opened for review")
     return store, step
 
@@ -995,7 +994,7 @@ def _cost_item_store():
         "LC-143.3.6", "await merge", step="code-await-merge", role="human", parent=item,
     )
     store.set_step_pass(gate, pass_1)
-    store.close(gate, "merged")
+    store.complete_node(gate, "merged")
     store.close_pass(pass_1)
 
     pass_2 = store.open_pass(item)

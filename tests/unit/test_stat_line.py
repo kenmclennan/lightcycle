@@ -132,8 +132,8 @@ class TestStatLineItem(unittest.TestCase):
         item = store.create_item("Item", "a description")
         step = store.create_step("s", step="build", role="agent", parent=item)
         store.claim_ready("agent")
-        store.close(step, "done")
-        store.close(item, "done")
+        store.complete_node(step, "done")
+        store.complete_node(item, "done")
         store._records[item]["closed_at"] = "2026-01-01T10:30:00"
         node = store.get_node(item)
 
@@ -211,7 +211,7 @@ class TestStatLineStepAgent(unittest.TestCase):
         store.record_usage(step, 100, 10, 0, 0, 2.0, "list", None)
         store.record_attribution(step, 20, {})
         clock["now"] = "2026-01-01T10:30:00"
-        store.close(step, "done")
+        store.complete_node(step, "done")
         store._records[step]["closed_at"] = "2026-01-01T10:30:00"
         node = store.get_node(step)
 
@@ -256,7 +256,7 @@ class TestStatLineStepHuman(unittest.TestCase):
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
         step = store.create_step("await-merge", step="await-merge", role="human", parent=item)
-        store.close(step, "merged")
+        store.complete_node(step, "merged")
         store._records[step]["closed_at"] = "2026-01-01T09:15:00"
         node = store.get_node(step)
 

@@ -84,7 +84,7 @@ class TestRetroItemScope(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "a description", workflow="standard")
         k = s.create_step("review: x", step="review", role="agent", parent=item)
-        s.close(k, "rejected")
+        s.complete_node(k, "rejected")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item))
         self.assertEqual(resp.item_signals[0].signals.get("review_rounds"), {UNLABELED_MODEL: 1})
 
@@ -95,10 +95,10 @@ class TestRetroItemScope(unittest.TestCase):
         flow = FlowService(FakeFs(_METAS, workflow={"wf-a": wf_a, "wf-b": wf_b}), s)
         a = s.create_item("a", "a description", workflow="wf-a")
         b = s.create_item("b", "a description", workflow="wf-b")
-        s.close(s.create_step("review: a", step="review", role="agent", parent=a), "rejected")
-        s.close(s.create_step("review: b", step="review", role="agent", parent=b), "rejected")
-        s.close(a, "merged")
-        s.close(b, "merged")
+        s.complete_node(s.create_step("review: a", step="review", role="agent", parent=a), "rejected")
+        s.complete_node(s.create_step("review: b", step="review", role="agent", parent=b), "rejected")
+        s.complete_node(a, "merged")
+        s.complete_node(b, "merged")
 
         rows = {r.item.id: r.signals for r in RetroUseCase(s, flow).execute(RetroInput(last=2)).item_signals}
 
@@ -111,7 +111,7 @@ class TestRetroItemScope(unittest.TestCase):
         s = FakeStore()
         flow = FlowService(FakeFs(_METAS, workflow={"wf-a": "entry: review\n"}), s)
         item = s.create_item("gone", "a description", workflow="pruned-workflow")
-        s.close(s.create_step("review: x", step="review", role="agent", parent=item), "rejected")
+        s.complete_node(s.create_step("review: x", step="review", role="agent", parent=item), "rejected")
 
         resp = RetroUseCase(s, flow).execute(RetroInput(subject=item))
 
@@ -139,12 +139,12 @@ class TestRetroSinceScope(unittest.TestCase):
         s = FakeStore()
         story1 = s.create_item("story1", "a description")
         k1 = s.create_step("build: a", step="build", role="agent", parent=story1)
-        s.close(k1, "done")
+        s.complete_node(k1, "done")
         _add_reflection(s, k1, "reflection from story1")
 
         story2 = s.create_item("story2", "a description")
         k2 = s.create_step("build: b", step="build", role="agent", parent=story2)
-        s.close(k2, "done")
+        s.complete_node(k2, "done")
         _add_reflection(s, k2, "reflection from story2")
 
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(since="2020-01-01"))
@@ -172,7 +172,7 @@ class TestRetroSinceScope(unittest.TestCase):
         item = s.create_item("epicless item", "a description")
         s._records[item]["parent"] = None
         k = s.create_step("build: x", role="agent", parent=item)
-        s.close(k, "done")
+        s.complete_node(k, "done")
         _add_reflection(s, k, "epicless fb")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(since="2020-01-01"))
         self.assertEqual(resp.reflection_count, 1)
@@ -181,11 +181,11 @@ class TestRetroSinceScope(unittest.TestCase):
 class TestRetroProjectScope(unittest.TestCase):
     def _closed_item(self, s, title, project, text):
         item = s.create_item(title, "a description")
-        s.close(item, "merged")
+        s.complete_node(item, "merged")
         if project is not None:
             s.add_artifact(item, "repo", project)
         k = s.create_step("build: x", step="build", role="agent", parent=item)
-        s.close(k, "done")
+        s.complete_node(k, "done")
         _add_reflection(s, k, text)
         return item
 
@@ -209,11 +209,11 @@ class TestRetroProjectScope(unittest.TestCase):
 class TestRetroPendingScope(unittest.TestCase):
     def _closed_item(self, s, title, project, text):
         item = s.create_item(title, "a description")
-        s.close(item, "merged")
+        s.complete_node(item, "merged")
         if project is not None:
             s.add_artifact(item, "repo", project)
         k = s.create_step("build: x", step="build", role="agent", parent=item)
-        s.close(k, "done")
+        s.complete_node(k, "done")
         _add_reflection(s, k, text)
         return item
 
@@ -230,7 +230,7 @@ class TestRetroPendingScope(unittest.TestCase):
     def test_pending_scope_excludes_feedback_less_items(self):
         s = FakeStore()
         item = s.create_item("no feedback", "a description")
-        s.close(item, "done")
+        s.complete_node(item, "done")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
         self.assertEqual(resp.item_signals, [])
 
@@ -251,10 +251,10 @@ class TestRetroPendingScope(unittest.TestCase):
     def test_pending_scope_counts_per_reflection_not_per_item(self):
         s = FakeStore()
         item = s.create_item("saga work", "a description")
-        s.close(item, "merged")
+        s.complete_node(item, "merged")
         s.add_artifact(item, "repo", "saga")
         k = s.create_step("build: x", step="build", role="agent", parent=item)
-        s.close(k, "done")
+        s.complete_node(k, "done")
         _add_reflection(s, k, "first friction")
         _add_reflection(s, k, "second friction")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
@@ -267,7 +267,7 @@ class TestRetroPendingScope(unittest.TestCase):
         pid = s.open_pass(item)
         k = s.create_step("build: x", step="build", role="agent", parent=item)
         s.set_step_pass(k, pid)
-        s.close(k, "done")
+        s.complete_node(k, "done")
         _add_reflection(s, k, "loop friction")
         s.close_pass(pid)
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
@@ -280,7 +280,7 @@ class TestRetroPendingScope(unittest.TestCase):
         pid = s.open_pass(item)
         k = s.create_step("build: x", step="build", role="agent", parent=item)
         s.set_step_pass(k, pid)
-        s.close(k, "done")
+        s.complete_node(k, "done")
         _add_reflection(s, k, "loop friction")
         s.close_pass(pid)
         s.label_add(pid, "retroed")
@@ -291,7 +291,7 @@ class TestRetroPendingScope(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item-level feedback only", "a description")
         _add_reflection(s, item, "item-level feedback")
-        s.close(item, "done")
+        s.complete_node(item, "done")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
         self.assertEqual({row.item.id for row in resp.item_signals}, {item})
         self.assertEqual(resp.reflection_count, 1)
@@ -303,7 +303,7 @@ class TestRetroPendingScope(unittest.TestCase):
         pid1 = s.open_pass(item)
         k1 = s.create_step("build: 0", step="build", role="agent", parent=item)
         s.set_step_pass(k1, pid1)
-        s.close(k1, "done")
+        s.complete_node(k1, "done")
         _add_reflection(s, k1, "pass one friction")
         s.close_pass(pid1)
         s.label_add(pid1, "retroed")
@@ -311,11 +311,11 @@ class TestRetroPendingScope(unittest.TestCase):
         pid2 = s.open_pass(item)
         k2 = s.create_step("build: 1", step="build", role="agent", parent=item)
         s.set_step_pass(k2, pid2)
-        s.close(k2, "done")
+        s.complete_node(k2, "done")
         _add_reflection(s, k2, "pass two friction")
         s.close_pass(pid2)
 
-        s.close(item, "done")
+        s.complete_node(item, "done")
 
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(pending=True))
         texts = [f.text for f in resp.feedback]
@@ -328,7 +328,7 @@ class TestRetroLastScope(unittest.TestCase):
         item = s.create_item(title, "a description")
         k = s.create_step("step", role="agent", parent=item)
         _add_reflection(s, k, "fb from %s" % title)
-        s.close(item, "merged")
+        s.complete_node(item, "merged")
         return item
 
     def test_last_n_aggregates_exactly_n_closed_items(self):
@@ -367,7 +367,7 @@ class TestWorklog(unittest.TestCase):
     def test_lists_stories_closed_in_period(self):
         s = FakeStore()
         sid = s.create_item("shipped item", "a description")
-        s.close(sid, "merged")
+        s.complete_node(sid, "merged")
         today, tz = self._now()
         resp = WorklogUseCase(s).execute(WorklogInput(period_args=[], today=today, tz=tz))
         self.assertIn(sid, [e.id for e in resp.entries])

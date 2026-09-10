@@ -148,7 +148,7 @@ class TestActivateItem(unittest.TestCase):
         resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
             ActivateItemInput(item=item, workflow="standard", deps=[blocker])
         )
-        s.close(blocker, "done")
+        s.complete_node(blocker, "done")
         self.assertIn(resp.step, [t.id for t in s.ready_steps()])
 
     def test_a_clone_failure_leaves_the_pin_unwritten(self):

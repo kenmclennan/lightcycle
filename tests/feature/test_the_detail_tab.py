@@ -67,13 +67,10 @@ def _set_phase_run(store, item, step_id, phase, branch=None, pr=None):
     pid = store.open_pass(item)
     store.set_step_pass(step_id, pid)
     rid = store.open_run(item, pid, phase)
-    fields = {}
     if branch is not None:
-        fields["branch"] = branch
+        store.set_branch(rid, branch)
     if pr is not None:
-        fields["pr"] = pr
-    if fields:
-        store.set_run_field(rid, **fields)
+        store.set_pr(rid, pr)
 
 
 def _push_hub(ctx, node_id):
@@ -141,7 +138,7 @@ def _step_stage_state_role_model(ctx):
 def _step_claimed_outcome_notes(ctx):
     store, step_id = _launch_step(ctx)
     store.assign(step_id, "agent-1")
-    store.close(step_id, "done")
+    store.complete_node(step_id, "done")
     store.set_notes(step_id, "reviewed and merged")
     _push_hub(ctx, step_id)
 

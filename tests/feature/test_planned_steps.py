@@ -168,7 +168,7 @@ def _filed_with_lead_in(ctx, spec, stage, target):
 def _completed_then_filed(ctx, spec, done_step, stage):
     item = _item(ctx)
     done_id = _store(ctx).create_step("%s: %s" % (done_step, spec), step=done_step, parent=item)
-    _store(ctx).close(done_id, "done")
+    _store(ctx).complete_node(done_id, "done")
     _file_step(ctx, spec, stage)
 
 
@@ -181,7 +181,7 @@ def _not_yet_filed(ctx, spec):
 def _completed_terminal(ctx, spec):
     item = _item(ctx)
     sid = _store(ctx).create_step("last: %s" % spec, step="last", parent=item)
-    _store(ctx).close(sid, "done")
+    _store(ctx).complete_node(sid, "done")
 
 
 @when("the item's planned steps are read")

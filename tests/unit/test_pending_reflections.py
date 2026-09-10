@@ -17,10 +17,10 @@ def _add_reflection(store, node_id, feedback):
 
 def _close_item(store, title, per_step_reflections=(0,)):
     eid = store.create_item(title, "a description")
-    store.close(eid, "done")
+    store.complete_node(eid, "done")
     for i, count in enumerate(per_step_reflections):
         k = store.create_step("build: %d" % i, step="build", role="agent", parent=eid)
-        store.close(k, "done")
+        store.complete_node(k, "done")
         for j in range(count):
             _add_reflection(store, k, "fb %d.%d" % (i, j))
     return eid
@@ -32,7 +32,7 @@ def _open_item_with_closed_pass(store, title, per_step_reflections=(0,)):
     for i, count in enumerate(per_step_reflections):
         k = store.create_step("build: %d" % i, step="build", role="agent", parent=eid)
         store.set_step_pass(k, pid)
-        store.close(k, "done")
+        store.complete_node(k, "done")
         for j in range(count):
             _add_reflection(store, k, "fb %d.%d" % (i, j))
     store.close_pass(pid)
@@ -90,13 +90,13 @@ class TestPassReflectionCount(unittest.TestCase):
         pid1 = s.open_pass(item)
         k1 = s.create_step("build: 0", step="build", role="agent", parent=item)
         s.set_step_pass(k1, pid1)
-        s.close(k1, "done")
+        s.complete_node(k1, "done")
         _add_reflection(s, k1, "fb 1")
         s.close_pass(pid1)
         pid2 = s.open_pass(item)
         k2 = s.create_step("build: 1", step="build", role="agent", parent=item)
         s.set_step_pass(k2, pid2)
-        s.close(k2, "done")
+        s.complete_node(k2, "done")
         _add_reflection(s, k2, "fb 2")
         _add_reflection(s, k2, "fb 3")
         s.close_pass(pid2)
@@ -122,7 +122,7 @@ class TestPendingReflectionCountAcrossOpenItems(unittest.TestCase):
         pid1 = s.open_pass(item)
         k1 = s.create_step("build: 0", step="build", role="agent", parent=item)
         s.set_step_pass(k1, pid1)
-        s.close(k1, "done")
+        s.complete_node(k1, "done")
         _add_reflection(s, k1, "pass 1 feedback")
         s.close_pass(pid1)
         s.label_add(pid1, "retroed")
@@ -130,11 +130,11 @@ class TestPendingReflectionCountAcrossOpenItems(unittest.TestCase):
         pid2 = s.open_pass(item)
         k2 = s.create_step("build: 1", step="build", role="agent", parent=item)
         s.set_step_pass(k2, pid2)
-        s.close(k2, "done")
+        s.complete_node(k2, "done")
         _add_reflection(s, k2, "pass 2 feedback")
         s.close_pass(pid2)
 
-        s.close(item, "done")
+        s.complete_node(item, "done")
 
         self.assertEqual(item_reflection_count(s, s.get_node(item)), 1)
 

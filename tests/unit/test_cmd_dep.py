@@ -114,7 +114,7 @@ class TestCmdDep(unittest.TestCase):
         closed = create_owned_step(self.store, "closed", role="agent")
         got = self.store.claim_ready("agent")
         self.assertEqual(got.id, closed)
-        self.store.close(closed, "done")
+        self.store.complete_node(closed, "done")
         rc, out, err = call(cli.cmd_dep, closed, "--needs", blocker)
         self.assertEqual(rc, 0)
         self.assertEqual(self.store._deps.get(closed), {blocker})

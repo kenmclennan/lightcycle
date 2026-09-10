@@ -218,7 +218,7 @@ class TestDoneViewRebuildGapAtFloorWidth(unittest.TestCase):
     def _launch(self):
         store = FakeStore()
         item = store.create_item("seed", "a description")
-        store.close(item, "done")
+        store.complete_node(item, "done")
         width = self._floor_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)
@@ -298,7 +298,7 @@ class TestDoneViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
     def _launch(self):
         store = FakeStore()
         item = store.create_item("seed", "a description")
-        store.close(item, "done")
+        store.complete_node(item, "done")
         session = launch(make_test_container(store=store), size=(self._STACKED_WIDTH, 24))
         self.addCleanup(session.close)
         return session

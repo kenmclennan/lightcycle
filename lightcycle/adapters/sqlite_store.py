@@ -13,7 +13,7 @@ from lightcycle.domain.work import (
 )
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
-    ItemTextRow,
+    ItemText,
     NodeNotFoundError,
     ProjectEntry,
     ProjectResolutionError,
@@ -818,11 +818,11 @@ class SqliteStore(StorePort):
     def all_steps_including_done(self):
         return self._select_steps("")
 
-    def item_text_rows(self):
+    def item_texts(self):
         rows = self._conn.execute(
             "SELECT id, title, description, NULL FROM items"
         ).fetchall()
-        return [ItemTextRow(*row) for row in rows]
+        return [ItemText(*row) for row in rows]
 
     def all_steps(self):
         return self._select_steps("state != 'done'")
@@ -905,7 +905,7 @@ class SqliteStore(StorePort):
     def shortcode(self):
         return self._config.shortcode()
 
-    def export_rows(self):
+    def snapshot_nodes(self):
         result = []
         for row in self._conn.execute(
             "SELECT %s FROM items ORDER BY rowid" % ", ".join(_ITEM_COLUMNS)
@@ -983,7 +983,7 @@ class SqliteStore(StorePort):
         )
         self._commit()
 
-    def close(self, tid, reason, disposition=None):
+    def complete_node(self, tid, reason, disposition=None):
         table = self._table_of(tid)
         if table == "items" and disposition is not None:
             self._conn.execute(
@@ -1022,7 +1022,7 @@ class SqliteStore(StorePort):
             raise
         return (True, new_id)
 
-    def disconnect(self):
+    def release(self):
         self._conn.close()
 
     def update_metadata(self, tid, meta):
@@ -1482,21 +1482,43 @@ class SqliteStore(StorePort):
     def open_runs_of(self, item, pid=None):
         return [r for r in self.runs_of(item, pid) if r.is_open]
 
-    def set_run_field(self, rid, **fields):
-        allowed = {
-            k: v for k, v in fields.items()
-            if k in ("branch", "pr", "content_pin",
-                     "comments_dispatched_through", "comments_handled_through")
-        }
-        if not allowed:
-            return
-        if "pr" in allowed and "content_pin" not in allowed:
-            current = self.get_run(rid)
-            if current is not None and current.pr != allowed["pr"]:
-                allowed["content_pin"] = None
-        clause = ", ".join("%s = ?" % k for k in allowed)
+    def set_branch(self, rid, branch):
         self._conn.execute(
-            "UPDATE phase_runs SET %s WHERE id = ?" % clause, (*allowed.values(), rid)
+            "UPDATE phase_runs SET branch = ? WHERE id = ?", (branch, rid)
+        )
+        self._commit()
+
+    def set_pr(self, rid, pr):
+        current = self.get_run(rid)
+        if current is not None and current.pr != pr:
+            self._conn.execute(
+                "UPDATE phase_runs SET pr = ?, content_pin = ? WHERE id = ?", (pr, None, rid)
+            )
+        else:
+            self._conn.execute("UPDATE phase_runs SET pr = ? WHERE id = ?", (pr, rid))
+        self._commit()
+
+    def set_content_pin(self, rid, content_pin):
+        self._conn.execute(
+            "UPDATE phase_runs SET content_pin = ? WHERE id = ?", (content_pin, rid)
+        )
+        self._commit()
+
+    def record_pr_pin(self, rid, pr, content_pin):
+        self._conn.execute(
+            "UPDATE phase_runs SET pr = ?, content_pin = ? WHERE id = ?", (pr, content_pin, rid)
+        )
+        self._commit()
+
+    def set_comments_dispatched_through(self, rid, value):
+        self._conn.execute(
+            "UPDATE phase_runs SET comments_dispatched_through = ? WHERE id = ?", (value, rid)
+        )
+        self._commit()
+
+    def set_comments_handled_through(self, rid, value):
+        self._conn.execute(
+            "UPDATE phase_runs SET comments_handled_through = ? WHERE id = ?", (value, rid)
         )
         self._commit()
 

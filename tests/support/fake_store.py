@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 
 from lightcycle.ports.store import (
-    ItemTextRow,
+    ItemText,
     NodeNotFoundError,
     ProjectEntry,
     ProjectResolutionError,
@@ -267,9 +267,9 @@ class FakeStore(StorePort):
         return [self._to_step(b) for b in self._records.values()
                 if b.get("type") == "step"]
 
-    def item_text_rows(self):
+    def item_texts(self):
         return [
-            ItemTextRow(
+            ItemText(
                 id=b["id"], title=b.get("title", ""),
                 description=b.get("description"), notes=b.get("notes"),
             )
@@ -357,6 +357,20 @@ class FakeStore(StorePort):
             )
         return result
 
+    def snapshot_nodes(self):
+        result = []
+        for tid, b in self._records.items():
+            if b.get("type") == "item":
+                d = self._to_item(b).as_dict()
+                d["type"] = "item"
+            else:
+                d = self._to_step(b).as_dict()
+                d["type"] = "step"
+            d["blocked_by"] = list(self._deps.get(tid, ()))
+            d["labels"] = b.get("labels") or []
+            result.append(d)
+        return result
+
     def ensure_store(self):
         pass
 
@@ -384,7 +398,7 @@ class FakeStore(StorePort):
         b["outcome"] = None
         b["closed_at"] = None
 
-    def close(self, tid, reason, disposition=None):
+    def complete_node(self, tid, reason, disposition=None):
         b = self._get(tid)
         if b.get("state") == "done":
             return
@@ -409,13 +423,13 @@ class FakeStore(StorePort):
         never_claimed = not assignee and not b.get("claim_epoch")
         if expected and not never_claimed and assignee != expected:
             return (False, None)
-        self.close(step, outcome)
+        self.complete_node(step, outcome)
         new_id = None
         if next_step_spec is not None:
             new_id = self.create_step(**next_step_spec.as_kwargs())
         return (True, new_id)
 
-    def disconnect(self):
+    def release(self):
         pass
 
     def update_metadata(self, tid, meta):
@@ -766,19 +780,40 @@ class FakeStore(StorePort):
     def open_runs_of(self, item, pid=None):
         return [r for r in self.runs_of(item, pid) if r.is_open]
 
-    def set_run_field(self, rid, **fields):
-        allowed = {
-            k: v for k, v in fields.items()
-            if k in ("branch", "pr", "content_pin",
-                     "comments_dispatched_through", "comments_handled_through")
-        }
-        if not allowed:
-            return
-        if "pr" in allowed and "content_pin" not in allowed:
-            current = self.get_run(rid)
-            if current is not None and current.pr != allowed["pr"]:
-                allowed["content_pin"] = None
-        self._runs = [replace(r, **allowed) if r.id == rid else r for r in self._runs]
+    def set_branch(self, rid, branch):
+        self._runs = [replace(r, branch=branch) if r.id == rid else r for r in self._runs]
+
+    def set_pr(self, rid, pr):
+        current = self.get_run(rid)
+        if current is not None and current.pr != pr:
+            self._runs = [
+                replace(r, pr=pr, content_pin=None) if r.id == rid else r for r in self._runs
+            ]
+        else:
+            self._runs = [replace(r, pr=pr) if r.id == rid else r for r in self._runs]
+
+    def set_content_pin(self, rid, content_pin):
+        self._runs = [
+            replace(r, content_pin=content_pin) if r.id == rid else r for r in self._runs
+        ]
+
+    def record_pr_pin(self, rid, pr, content_pin):
+        self._runs = [
+            replace(r, pr=pr, content_pin=content_pin) if r.id == rid else r
+            for r in self._runs
+        ]
+
+    def set_comments_dispatched_through(self, rid, value):
+        self._runs = [
+            replace(r, comments_dispatched_through=value) if r.id == rid else r
+            for r in self._runs
+        ]
+
+    def set_comments_handled_through(self, rid, value):
+        self._runs = [
+            replace(r, comments_handled_through=value) if r.id == rid else r
+            for r in self._runs
+        ]
 
     def close_run(self, rid, state="merged"):
         self._runs = [
