@@ -87,10 +87,6 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def route_to_human(self, tid, note):
-        pass
-
-    @abstractmethod
     def closed_items(self):
         pass
 
@@ -179,7 +175,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def claim_ready(self, role):
+    def claim_ready(self, role, assignee=None):
         pass
 
     @abstractmethod
@@ -382,12 +378,4 @@ class StorePort(ABC):
 
     @abstractmethod
     def remove_project(self, identity):
-        pass
-
-    @abstractmethod
-    def find_project(self, ref):
-        pass
-
-    @abstractmethod
-    def resolve_project_path(self, ref):
         pass

@@ -1,6 +1,6 @@
 from lightcycle.domain.pool import AttributionEvent, ToolUsage, UsageEvent
 from lightcycle.domain.work import NodeSpec
-from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
+from lightcycle.ports.store import NodeNotFoundError
 from tests.support.step_factory import create_owned_step
 
 
@@ -929,6 +929,40 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         self.assertEqual(s.history(tid), [])
 
+    def test_every_live_write_path_stamps_from_the_injected_clock_not_the_wall_clock(self):
+        sentinel = "SENTINEL-1999-01-01T00:00:00"
+        s = self.make_store(now=lambda: sentinel)
+
+        item = s.create_item("t", "a description")
+        self.assertEqual(s.get_node(item).created_at, sentinel)
+
+        tid = s.create_step("s", step="build", role="agent", parent=item)
+        self.assertEqual(s.get_node(tid).created_at, sentinel)
+
+        pid = s.open_pass(item)
+        self.assertEqual(s.get_pass(pid).opened_at, sentinel)
+
+        rid = s.open_run(item, pid, "build")
+        self.assertEqual(s.get_run(rid).opened_at, sentinel)
+
+        claimed = s.claim_ready("agent")
+        self.assertEqual(claimed.id, tid)
+        self.assertEqual(s.history(tid)[-1], ("running", sentinel))
+
+        s.note_condition(tid, "a condition")
+        self.assertIn(sentinel, s.get_node(tid).notes)
+
+        won, _ = s.complete_step_atomic(tid, "done", "", None)
+        self.assertTrue(won)
+        self.assertEqual(s.get_node(tid).closed_at, sentinel)
+        self.assertEqual(s.history(tid)[-1], ("done", sentinel))
+
+        s.close_pass(pid)
+        self.assertEqual(s.get_pass(pid).closed_at, sentinel)
+
+        s.close_run(rid)
+        self.assertEqual(s.get_run(rid).closed_at, sentinel)
+
     def test_steps_at_step_created_at_set_and_orders_by_creation(self):
         s = self.make_store()
         item = s.create_item("owner", "an owning item")
@@ -1071,68 +1105,6 @@ class StoreContractBase:
         s = self.make_store()
         with self.assertRaises(KeyError):
             s.remove_project("acme/ghost")
-
-    def test_resolve_project_path_passes_through_an_absolute_ref_without_a_lookup(self):
-        s = self.make_store()
-        self.assertEqual(s.resolve_project_path("/elsewhere/app"), "/elsewhere/app")
-
-    def test_resolve_project_path_matches_the_exact_owner_slash_name_identity(self):
-        s = self.make_store()
-        s.add_project("acme/horde", local_path="/p/horde")
-        self.assertEqual(s.resolve_project_path("acme/horde"), "/p/horde")
-
-    def test_resolve_project_path_matches_an_unambiguous_bare_name(self):
-        s = self.make_store()
-        s.add_project("acme/horde", local_path="/p/horde")
-        self.assertEqual(s.resolve_project_path("horde"), "/p/horde")
-
-    def test_resolve_project_path_raises_on_an_unregistered_ref(self):
-        s = self.make_store()
-        with self.assertRaises(ProjectResolutionError):
-            s.resolve_project_path("ghost")
-
-    def test_resolve_project_path_raises_on_an_ambiguous_bare_name(self):
-        s = self.make_store()
-        s.add_project("acme/app", local_path="/p/acme-app")
-        s.add_project("other/app", local_path="/p/other-app")
-        with self.assertRaises(ProjectResolutionError):
-            s.resolve_project_path("app")
-
-    def test_resolve_project_path_raises_when_registered_without_a_local_checkout(self):
-        s = self.make_store()
-        s.add_project("acme/horde", shortcode="HORDE")
-        with self.assertRaises(ProjectResolutionError) as ctx:
-            s.resolve_project_path("horde")
-        self.assertIn("activate the item to clone it automatically", str(ctx.exception))
-
-    def test_find_project_matches_the_exact_owner_slash_name_identity(self):
-        s = self.make_store()
-        s.add_project("acme/horde", local_path="/p/horde")
-        self.assertEqual(s.find_project("acme/horde").identity, "acme/horde")
-
-    def test_find_project_matches_an_unambiguous_bare_name(self):
-        s = self.make_store()
-        s.add_project("acme/horde", local_path="/p/horde")
-        self.assertEqual(s.find_project("horde").identity, "acme/horde")
-
-    def test_find_project_raises_on_an_unregistered_ref(self):
-        s = self.make_store()
-        with self.assertRaises(ProjectResolutionError):
-            s.find_project("ghost")
-
-    def test_find_project_raises_on_an_ambiguous_bare_name(self):
-        s = self.make_store()
-        s.add_project("acme/app", local_path="/p/acme-app")
-        s.add_project("other/app", local_path="/p/other-app")
-        with self.assertRaises(ProjectResolutionError):
-            s.find_project("app")
-
-    def test_find_project_returns_the_entry_with_a_null_local_path_without_raising(self):
-        s = self.make_store()
-        s.add_project("acme/horde", shortcode="HORDE")
-        project = s.find_project("horde")
-        self.assertEqual(project.identity, "acme/horde")
-        self.assertIsNone(project.local_path)
 
     def test_replace_artifact_only_replaces_the_matching_label(self):
         s = self.make_store()

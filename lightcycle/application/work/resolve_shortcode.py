@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.ports.store import ProjectResolutionError
 
 
@@ -14,7 +15,7 @@ def resolve_shortcode(store, config, project):
     if not project:
         return ResolvedShortcode(config.shortcode(), True)
     try:
-        matched = store.find_project(project)
+        matched = ProjectRegistry(store).find(project)
     except ProjectResolutionError as e:
         raise UseCaseError(str(e))
     if not matched.shortcode:

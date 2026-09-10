@@ -1,6 +1,5 @@
 import copy
 import datetime
-import os
 import uuid
 from contextlib import contextmanager
 from dataclasses import replace
@@ -9,14 +8,13 @@ from lightcycle.ports.store import (
     ItemText,
     NodeNotFoundError,
     ProjectEntry,
-    ProjectResolutionError,
     StorePort,
 )
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
-    merge_condition_note,
+    merge_condition_note, role_state,
 )
 
 _DEFAULT_CONTEXT_TYPES = frozenset({"spec"})
@@ -340,12 +338,8 @@ class FakeStore(StorePort):
         if cur and cur != role:
             self.label_remove(tid, "for:%s" % cur)
         self.label_add(tid, "for:%s" % role)
-        self.update_state(tid, State.WAITING if role == "human" else State.QUEUED)
+        self.update_state(tid, role_state(role))
         self.assign(tid, "")
-
-    def route_to_human(self, tid, note):
-        self.note(tid, note)
-        self.reassign(tid, "human")
 
     def closed_items(self):
         result = []
@@ -519,15 +513,14 @@ class FakeStore(StorePort):
     def ready_steps(self):
         return [self._to_node(b) for b in self._ready_records()]
 
-    def claim_ready(self, role):
+    def claim_ready(self, role, assignee=None):
         candidates = [
             b for b in self._ready_records() if "for:%s" % role in (b.get("labels") or [])
         ]
         if not candidates:
             return None
         b = candidates[0]
-        spawn_id = self._config.spawn_id() if self._config else None
-        b["assignee"] = spawn_id or role
+        b["assignee"] = assignee or role
         b["state"] = "in_progress"
         b["claim_epoch"] = (b.get("claim_epoch") or 0) + 1
         self._record_history(b["id"], State.RUNNING)
@@ -743,7 +736,7 @@ class FakeStore(StorePort):
 
     def open_pass(self, item):
         n = max([p.n for p in self._passes if p.item == item], default=0) + 1
-        rec = Pass(pass_id(item, n), item, n, "open", "t0", None)
+        rec = Pass(pass_id(item, n), item, n, "open", self._now(), None)
         self._passes.append(rec)
         return rec.id
 
@@ -760,14 +753,14 @@ class FakeStore(StorePort):
 
     def close_pass(self, pid):
         self._passes = [
-            replace(p, state="closed", closed_at="t1") if p.id == pid and p.is_open else p
+            replace(p, state="closed", closed_at=self._now()) if p.id == pid and p.is_open else p
             for p in self._passes
         ]
 
     def open_run(self, item, pid, phase):
         rid = run_id(pid, phase)
         if not any(r.id == rid for r in self._runs):
-            self._runs.append(PhaseRun(rid, item, pid, phase, opened_at="t0"))
+            self._runs.append(PhaseRun(rid, item, pid, phase, opened_at=self._now()))
         return rid
 
     def get_run(self, rid):
@@ -793,13 +786,7 @@ class FakeStore(StorePort):
         self._runs = [replace(r, branch=branch) if r.id == rid else r for r in self._runs]
 
     def set_pr(self, rid, pr):
-        current = self.get_run(rid)
-        if current is not None and current.pr != pr:
-            self._runs = [
-                replace(r, pr=pr, content_pin=None) if r.id == rid else r for r in self._runs
-            ]
-        else:
-            self._runs = [replace(r, pr=pr) if r.id == rid else r for r in self._runs]
+        self._runs = [replace(r, pr=pr) if r.id == rid else r for r in self._runs]
 
     def set_content_pin(self, rid, content_pin):
         self._runs = [
@@ -826,7 +813,7 @@ class FakeStore(StorePort):
 
     def close_run(self, rid, state="merged"):
         self._runs = [
-            replace(r, state=state, closed_at="t1") if r.id == rid and r.is_open else r
+            replace(r, state=state, closed_at=self._now()) if r.id == rid and r.is_open else r
             for r in self._runs
         ]
 
@@ -921,35 +908,3 @@ class FakeStore(StorePort):
         if identity not in self._projects:
             raise KeyError("project not registered: %s" % identity)
         del self._projects[identity]
-
-    def _match_projects(self, ref):
-        rows = self.list_projects()
-        if "/" in ref:
-            return [p for p in rows if p.identity == ref]
-        return [p for p in rows if p.identity.rsplit("/", 1)[-1] == ref]
-
-    def find_project(self, ref):
-        matches = self._match_projects(ref)
-        if not matches:
-            raise ProjectResolutionError(
-                "project '%s' is not registered - run `lc project add <owner/name> --path <dir>`"
-                % ref
-            )
-        if len(matches) > 1:
-            raise ProjectResolutionError(
-                "project name '%s' is ambiguous - matches %s; use the full owner/name identity"
-                % (ref, ", ".join(p.identity for p in matches))
-            )
-        return matches[0]
-
-    def resolve_project_path(self, ref):
-        if os.path.isabs(ref):
-            return ref
-        project = self.find_project(ref)
-        if not project.local_path:
-            raise ProjectResolutionError(
-                "project '%s' is registered but has no local checkout - activate the item to "
-                "clone it automatically, or run `lc project add %s --path <dir>` to point at an "
-                "existing one" % (project.identity, project.identity)
-            )
-        return project.local_path

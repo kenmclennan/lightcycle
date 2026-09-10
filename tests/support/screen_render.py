@@ -7,6 +7,7 @@ from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
+from tests.support.step_factory import route_to_human
 from tests.support.tui_harness import FakeBreakerPort, FakeLauncher, FakeLock, launch, make_test_container
 
 NOW = datetime.datetime(2026, 1, 1, 14, 16, 0)
@@ -128,7 +129,7 @@ def _escalated_step_store():
             "reason": "Two agents wrote to the same project slug",
         },
     )
-    store.route_to_human(step, "BLOCKED: Which registry key wins on a naming collision")
+    route_to_human(store, step, "BLOCKED: Which registry key wins on a naming collision")
     fs = FakeFs(metas={
         "write-code": {"step": "write-code", "model": "sonnet", "routes": {"done": "code-open-pr"}},
     })

@@ -107,14 +107,6 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         self.assertEqual(items[0]["outcome"], "done")
         self.assertEqual(len(items[0]["artifacts"]), 1)
 
-    def test_route_to_human(self):
-        s = self.make_store()
-        tid = create_owned_step(s, "t", step="build", role="agent")
-        s.route_to_human(tid, "needs review")
-        step = s.get_node(tid)
-        self.assertEqual(step.role, "human")
-        self.assertIn("needs review", step.notes)
-
     def test_disconnect_is_a_noop(self):
         s = self.make_store()
         s.release()

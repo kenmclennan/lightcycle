@@ -4,6 +4,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeView, State
@@ -79,7 +80,8 @@ class ClaimStepUseCase:
         return node
 
     def _claim(self, role):
-        t = self._store.claim_ready(role)
+        spawnid = self._config.spawn_id()
+        t = self._store.claim_ready(role, spawnid or role)
         if t is None:
             return None
         selection = self._flow.workflow_for(t)
@@ -99,7 +101,6 @@ class ClaimStepUseCase:
         model = meta.get("model")
         if model:
             self._store.set_model(t.id, model)
-        spawnid = self._config.spawn_id()
         try:
             if spawnid:
                 self._workers.set_step(spawnid, t.id)
@@ -129,7 +130,7 @@ class ClaimStepUseCase:
         repo_path = None
         if repo:
             try:
-                repo_path = self._store.resolve_project_path(repo)
+                repo_path = ProjectRegistry(self._store).resolve_path(repo)
             except ProjectResolutionError as e:
                 raise UseCaseError(str(e))
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}

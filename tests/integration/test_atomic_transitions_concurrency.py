@@ -33,7 +33,7 @@ def _successor_spec(step_id, item=None):
 def _seed_claimed(root, spawn_id):
     store = _store_for(root, spawn_id)
     create_owned_step(store, "build: x", step="build", role="agent")
-    step_id = store.claim_ready("agent").id
+    step_id = store.claim_ready("agent", spawn_id).id
     store.release()
     return step_id
 
@@ -42,7 +42,7 @@ def _claim_worker(root, spawn_id, barrier, q):
     try:
         store = _store_for(root, spawn_id)
         barrier.wait()
-        node = store.claim_ready("agent")
+        node = store.claim_ready("agent", spawn_id)
         q.put((spawn_id, node.id if node else None))
         store.release()
     except Exception as exc:
@@ -144,7 +144,7 @@ class TestAtomicComplete(unittest.TestCase):
         store_a.reclaim(step_id)
 
         store_b = _store_for(root, "B")
-        reclaimed = store_b.claim_ready("agent")
+        reclaimed = store_b.claim_ready("agent", "B")
         self.assertEqual(reclaimed.id, step_id)
         self.assertEqual(store_b.get_node(step_id).claimed_by, "B")
 

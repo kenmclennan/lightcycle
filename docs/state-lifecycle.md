@@ -26,7 +26,7 @@ stateDiagram-v2
 - **waiting** - waiting on the human: a gate or an escalation, undifferentiated at item level.
 - **done** - terminal; the `outcome` says how it ended, and (for an item) `disposition` says whether that ending was a completion or an abandonment.
 
-`role`, `outcome` and `disposition` ride alongside the state, not inside it. An unassigned, unblocked step with `role=human` is `waiting`, not `queued` - the state already encodes "needs a human." Reassigning a step to `human` (`route_to_human`, i.e. `lc set <step> --state waiting`) sets state to `waiting`; reassigning it back to an agent role sets it to `queued`.
+`role`, `outcome` and `disposition` ride alongside the state, not inside it. An unassigned, unblocked step with `role=human` is `waiting`, not `queued` - the state already encodes "needs a human." Reassigning a step to `human` (`reassign`, deriving the resulting state via `role_state`; i.e. `lc set <step> --state waiting`) sets state to `waiting`; reassigning it back to an agent role sets it to `queued`.
 
 ## The raw storage column keeps its own, older vocabulary
 

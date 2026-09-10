@@ -4,6 +4,7 @@ from lightcycle.application.setup.project_registry import (
     AddProjectInput,
     AddProjectUseCase,
     ListProjectsUseCase,
+    ProjectRegistry,
     RemoveProjectUseCase,
 )
 from lightcycle.application.setup.project_scan import ScanCandidate, ScanProjectsUseCase
@@ -19,7 +20,8 @@ from lightcycle.application.setup.upgrade_notice import UpgradeNoticeResponse, U
 
 __all__ = [
     "ExportSnapshotUseCase", "InitGridUseCase", "AddProjectInput", "AddProjectUseCase",
-    "ListProjectsUseCase", "RemoveProjectUseCase", "ScanCandidate", "ScanProjectsUseCase",
+    "ListProjectsUseCase", "ProjectRegistry", "RemoveProjectUseCase", "ScanCandidate",
+    "ScanProjectsUseCase",
     "RestoreInput", "RestoreStoreUseCase",
     "upgrade", "UpgradeResponse", "VenvBusyError", "ProcessListUnreadableError",
     "RemoteVersionUnavailableError", "UpgradeNoticeResponse", "UpgradeNoticeUseCase",
