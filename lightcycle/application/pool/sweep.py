@@ -15,13 +15,11 @@ class SweepResponse:
     preserved: List[str] = field(default_factory=list)
     capture_failed: List[str] = field(default_factory=list)
     parked: List[str] = field(default_factory=list)
+    not_checked: List[str] = field(default_factory=list)
 
 
 class SweepUseCase:
-    def __init__(
-        self, store, workers, worktrees=None, git=None, fs=None, spin_port=None, spin_cap=None,
-        stream=None,
-    ):
+    def __init__(self, store, workers, worktrees, git, fs, spin_port, spin_cap, stream):
         self._store = store
         self._workers = workers
         self._worktrees = worktrees
@@ -32,14 +30,12 @@ class SweepUseCase:
         self._stream = stream
 
     def _capture(self, t):
-        if self._worktrees is None or self._git is None:
-            return None
         item = t.parent or t.id
         if not self._worktrees.has_repo(item):
-            return None
+            return "not_checked"
         path = self._worktrees.worktree_path(item)
         if not self._git.is_git_repo(path):
-            return None
+            return "not_checked"
         try:
             dirty = self._git.has_tracked_changes(path)
         except GitReadError:
@@ -50,8 +46,6 @@ class SweepUseCase:
         return self._git.commit_tracked(path, message)
 
     def _saw_terminal_command(self, log):
-        if self._fs is None or self._stream is None:
-            return False
         return self._stream.saw_terminal_command(self._fs.iter_lines(log))
 
     def _last_nonempty_line(self, lines):
@@ -115,13 +109,7 @@ class SweepUseCase:
         booting = pool.any_booting(probe, now, max_boot)
         stalled = [
             w
-            for w in pool.stalled(
-                probe,
-                now,
-                max_boot,
-                stall_seconds,
-                self._fs.log_mtime if self._fs is not None else (lambda path: None),
-            )
+            for w in pool.stalled(probe, now, max_boot, stall_seconds, self._fs.log_mtime)
             if not self._saw_terminal_command(w.log)
         ]
         stalled_ids = {w.step for w in stalled}
@@ -131,6 +119,7 @@ class SweepUseCase:
         swept = []
         preserved = []
         capture_failed = []
+        not_checked = []
         parked = []
         for t in claimed:
             if t.id not in stalled_ids and (
@@ -142,9 +131,11 @@ class SweepUseCase:
                 preserved.append(t.id)
             elif captured is False:
                 capture_failed.append(t.id)
-            if t.id not in stalled_ids and self._spin_port is not None and self._spin_cap is not None:
+            elif captured == "not_checked":
+                not_checked.append(t.id)
+            if t.id not in stalled_ids:
                 dead = pool.dead_for_step(probe, t.id)
-                if dead is not None and self._fs is not None and self._stream is not None:
+                if dead is not None:
                     lines = list(self._fs.iter_lines(dead.log))
                     no_work = not self._stream.saw_session_activity(lines)
                     last_line = self._last_nonempty_line(lines)
@@ -167,4 +158,5 @@ class SweepUseCase:
             preserved=preserved,
             capture_failed=capture_failed,
             parked=parked,
+            not_checked=not_checked,
         )

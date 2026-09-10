@@ -1310,37 +1310,45 @@ def _tick_event_lines(result, ts):
     lines = []
     for role in result.spawned:
         lines.append("%s  %-7s  %s" % (ts, "spawn", role))
-    for sid in result.merged:
+    for sid in result.monitor.merged:
         lines.append("%s  %-7s  %s" % (ts, "merge", sid))
-    for sid in result.abandoned:
+    for sid in result.monitor.abandoned:
         lines.append("%s  %-7s  %s" % (ts, "abandon", sid))
-    for sid in result.reworked:
+    for sid in result.monitor.reworked:
         lines.append("%s  %-7s  %s" % (ts, "rework", sid))
-    for sid in result.conflicted:
+    for sid in result.monitor.conflicted:
         lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
-    for sid in result.ci_released:
+    for sid in result.monitor.ci_released:
         lines.append("%s  %-7s  %s" % (ts, "ci-release", sid))
-    for bid in result.swept:
+    for bid in result.sweep.swept:
         lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
-    for sid in result.cadence_fired:
+    for bid in result.sweep.preserved:
+        lines.append("%s  %-7s  %s" % (ts, "preserve", bid))
+    for bid in result.sweep.capture_failed:
+        lines.append("%s  %-7s  %s" % (ts, "preserve-fail", bid))
+    for bid in result.sweep.parked:
+        lines.append("%s  %-7s  %s" % (ts, "park", bid))
+    for spawnid in result.sweep.killed:
+        lines.append("%s  %-7s  %s" % (ts, "kill", spawnid))
+    for sid in result.cadence.fired:
         lines.append("%s  %-7s  %s" % (ts, "audit", sid))
-    for step, tid, detail in result.hook_completed:
+    for step, tid, detail in result.hooks.completed:
         msg = "%s: %s" % (tid, detail) if detail else tid
         lines.append("%s  %-7s  %s" % (ts, step, msg))
-    if result.backed_up:
-        msg = result.backed_up
-        if result.backup_pruned:
-            msg += " pruned=%d" % len(result.backup_pruned)
+    if result.backup.created:
+        msg = result.backup.created
+        if result.backup.pruned:
+            msg += " pruned=%d" % len(result.backup.pruned)
         lines.append("%s  %-7s  %s" % (ts, "backup", msg))
-    if result.breaker_opened:
-        reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
+    if result.breaker.opened:
+        reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker.reset_at))
         lines.append("%s  %-7s  %s" % (ts, "breaker", "opened until %s" % reset_ts))
-    if result.breaker_closed:
+    if result.breaker.closed:
         lines.append("%s  %-7s  %s" % (ts, "breaker", "closed"))
-    if result.breaker_rearmed:
-        reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker_reset_at))
+    if result.breaker.rearmed:
+        reset_ts = time.strftime("%H:%M:%S", time.localtime(result.breaker.reset_at))
         lines.append("%s  %-7s  %s" % (ts, "breaker", "probe stalled, retrying after %s" % reset_ts))
-    if result.spin_opened:
+    if result.breaker.spin_opened:
         lines.append(
             "%s  %-7s  %s" % (ts, "spin", "opened - workers died with no observed work")
         )
@@ -1349,24 +1357,24 @@ def _tick_event_lines(result, ts):
 
 def _state_line(result, ts, reason=None):
     state = "active=%d/%d ready=%d inflight=%d" % (
-        result.alive, result.max_agents, result.ready, result.inflight_count)
-    if result.pruned:
-        state += " pruned=%d" % result.pruned
+        result.pool.alive, result.pool.max_agents, result.pool.ready, result.pool.inflight_count)
+    if result.sweep.pruned:
+        state += " pruned=%d" % result.sweep.pruned
     if reason:
         state += " reason=%s" % reason
     return "%s  %-7s  %s" % (ts, "state", state)
 
 
 def _idle_reason(result):
-    if not result.ready:
+    if not result.pool.ready:
         return None
-    if result.breaker_open:
+    if result.breaker.open:
         return "breaker-open"
-    if result.spin_open:
+    if result.breaker.spin_open:
         return "spin-open"
     if result.spawned:
         return None
-    if result.free_slots <= 0:
+    if result.pool.free_slots <= 0:
         return "no-free-slots"
     return "ready-role-already-inflight"
 
@@ -1374,8 +1382,8 @@ def _idle_reason(result):
 def _format_tick(result, prev_snapshot, now):
     ts = time.strftime("%H:%M:%S", time.localtime(now))
     lines = _tick_event_lines(result, ts)
-    cur = (result.alive, result.max_agents, result.ready, result.inflight_count)
-    if cur != prev_snapshot or result.pruned:
+    cur = (result.pool.alive, result.pool.max_agents, result.pool.ready, result.pool.inflight_count)
+    if cur != prev_snapshot or result.sweep.pruned:
         lines.append(_state_line(result, ts))
     return lines, cur
 

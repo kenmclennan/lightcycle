@@ -5,6 +5,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
+from lightcycle.application.pool.no_op_gates import NoOpGit, NoOpWorktrees
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.services.flow import FlowService
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter, saw_session_activity
@@ -98,7 +99,7 @@ class FakeFs:
 
 def _run_sweep(ctx):
     use_case = SweepUseCase(
-        ctx["store"], ctx["workers"], fs=ctx["fs"],
+        ctx["store"], ctx["workers"], worktrees=NoOpWorktrees(), git=NoOpGit(), fs=ctx["fs"],
         spin_port=ctx["spin_port"], spin_cap=ctx["spin_cap"], stream=ClaudeStreamAdapter(),
     )
     ctx["result"] = use_case.execute(ctx["now"], MAX_BOOT, STALL_SECONDS)
