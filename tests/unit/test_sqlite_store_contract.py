@@ -12,6 +12,9 @@ class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
     def make_store(self, now=None):
         return make_sqlite_store(now=now)
 
+    def make_store_with_context_artifact_types(self, types):
+        return make_sqlite_store(extra_config={"context-artifact-types": " ".join(types)})
+
 
 class TestSqliteStoreDisconnect(unittest.TestCase):
     def test_disconnect_closes_the_underlying_connection(self):

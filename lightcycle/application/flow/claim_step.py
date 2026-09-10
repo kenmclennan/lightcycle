@@ -118,7 +118,7 @@ class ClaimStepUseCase:
         item = t.parent or t.id
         ws = self._worktrees.ensure(item)
         branch = self._worktrees.item_branch(item)
-        spec = next((a.value for a in view.item_artifacts if a.type == "spec"), None)
+        spec = next((a.value for a in view.item_artifacts if a.kind == "filepath"), None)
         spec_path = None
         if spec:
             self._worktrees.sync_specs()

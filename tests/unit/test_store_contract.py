@@ -1,5 +1,8 @@
+import os
+import tempfile
 import unittest
 
+from lightcycle.config import Config
 from tests.support.fake_store import FakeStore
 from tests.support.store_contract import StoreContractBase
 from tests.support.step_factory import create_owned_step
@@ -8,6 +11,18 @@ from tests.support.step_factory import create_owned_step
 class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
     def make_store(self, now=None):
         return FakeStore(now=now)
+
+    def make_store_with_context_artifact_types(self, types):
+        cfg_path = os.path.join(tempfile.mkdtemp(), "config")
+        with open(cfg_path, "w") as f:
+            f.write("context-artifact-types: %s\n" % " ".join(types))
+        store = FakeStore()
+        store.bind_config(Config(environ={"LC_CONFIG": cfg_path}))
+        return store
+
+    def test_unconfigured_default_kind_for_resolves_spec_to_filepath(self):
+        s = FakeStore()
+        self.assertEqual(s.default_kind_for("spec"), "filepath")
 
     def test_label_add_idempotent(self):
         s = self.make_store()

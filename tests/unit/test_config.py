@@ -452,6 +452,15 @@ class TestPersonalOrigin(unittest.TestCase):
         self.assertEqual(c.personal_origin(), "other")
 
 
+class TestContextArtifactTypes(unittest.TestCase):
+    def test_returns_spec_when_unset(self):
+        self.assertEqual(_cfg().context_artifact_types(), frozenset({"spec"}))
+
+    def test_returns_declared_types_when_set(self):
+        c = _cfg(context_artifact_types="spec brief")
+        self.assertEqual(c.context_artifact_types(), frozenset({"spec", "brief"}))
+
+
 class TestResolvedSettings(unittest.TestCase):
     def test_freshly_seeded_config_reports_all_keys_as_default(self):
         c = _cfg()

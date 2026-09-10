@@ -1,8 +1,6 @@
 from lightcycle.domain.contracts.step_contract import StepContract
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
 
-FILE_PROVIDES = {"spec"}
-
 
 class FlowContracts:
     def __init__(self, flow, graph, step_metas):
@@ -12,7 +10,7 @@ class FlowContracts:
         self._contract = {
             s: StepContract.from_meta(step_metas.get(graph.file_for(s))) for s in self._steps
         }
-        self._provided = set(FILE_PROVIDES) | set(graph.requires)
+        self._provided = set(graph.requires) | set(graph.provides)
         self._dups = []
 
     def _required(self):
@@ -169,6 +167,7 @@ class FlowContracts:
     def as_dict(self):
         return {
             "steps": self._steps,
+            "provided": sorted(self._provided),
             "req": self._required(),
             "opt": {s: self._contract[s].optional_inputs() for s in self._steps},
             "prod": self._produced(),

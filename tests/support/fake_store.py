@@ -19,6 +19,8 @@ from lightcycle.domain.work import (
     merge_condition_note,
 )
 
+_DEFAULT_CONTEXT_TYPES = frozenset({"spec"})
+
 _RAW_STORAGE_STATE = {
     State.BACKLOGGED: "backlogged",
     State.BLOCKED: "backlogged",
@@ -212,6 +214,13 @@ class FakeStore(StorePort):
         b = self._get(item_id)
         return [Artifact.from_dict(a) for a in ((b.get("metadata") or {}).get("artifacts") or [])]
 
+    def default_kind_for(self, atype):
+        context_types = (
+            self._config.context_artifact_types() if self._config is not None
+            else _DEFAULT_CONTEXT_TYPES
+        )
+        return default_kind_for(atype, context_types=context_types)
+
     def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         if atype == "repo":
             self._get(item_id)["repo"] = value
@@ -219,7 +228,7 @@ class FakeStore(StorePort):
         b = self._get(item_id)
         meta = dict(b.get("metadata") or {})
         artifacts = list(meta.get("artifacts") or [])
-        resolved_kind = kind if kind is not None else default_kind_for(atype)
+        resolved_kind = kind if kind is not None else self.default_kind_for(atype)
         entry = {"type": atype, "value": value, "kind": resolved_kind}
         if label:
             entry["label"] = label
@@ -239,7 +248,7 @@ class FakeStore(StorePort):
             a for a in (meta.get("artifacts") or [])
             if not (a.get("type") == atype and a.get("label") == label)
         ]
-        resolved_kind = kind if kind is not None else default_kind_for(atype)
+        resolved_kind = kind if kind is not None else self.default_kind_for(atype)
         entry = {"type": atype, "value": value, "kind": resolved_kind}
         if label:
             entry["label"] = label

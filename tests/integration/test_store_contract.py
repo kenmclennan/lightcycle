@@ -28,6 +28,9 @@ class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
     def make_store(self, now=None):
         return make_sqlite_store(now=now)
 
+    def make_store_with_context_artifact_types(self, types):
+        return make_sqlite_store(extra_config={"context-artifact-types": " ".join(types)})
+
 
 class TestSqliteStoreRoundtrips(unittest.TestCase):
     def _store(self):

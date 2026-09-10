@@ -77,6 +77,7 @@ _SEED_KEYS = [
     ("price-sonnet-cache-read-per-mtok", "0.20"),
     ("shutdown-grace-seconds", "10"),
     ("tick-failure-cap", "5"),
+    ("context-artifact-types", "spec"),
 ]
 
 
@@ -447,6 +448,10 @@ class Config:
     def personal_origin(self):
         v = self.load_config().get("personal-origin")
         return v or None
+
+    def context_artifact_types(self):
+        raw = self.load_config().get("context-artifact-types")
+        return frozenset((raw or "spec").split())
 
     def set_personal_origin(self, name):
         p = self.config_path()
