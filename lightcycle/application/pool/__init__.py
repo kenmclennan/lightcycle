@@ -11,7 +11,7 @@ from lightcycle.application.pool.hook_completions import (
 )
 from lightcycle.application.pool.list_workers import ListWorkersUseCase
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
-from lightcycle.application.pool.monitor_prs import LC_MARKER, MonitorPrsUseCase
+from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.pool.pool_control import (
     LiveWorkerCountUseCase,
     StartPoolResponse,
@@ -46,7 +46,6 @@ __all__ = [
     "BreakerStatusUseCase",
     "HookCompletionsResponse",
     "HookCompletionsUseCase",
-    "LC_MARKER",
     "ListWorkersUseCase",
     "LiveUsageAccrualUseCase",
     "MonitorPrsUseCase",

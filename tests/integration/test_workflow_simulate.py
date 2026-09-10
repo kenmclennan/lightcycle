@@ -234,7 +234,7 @@ class SimulateTestCase(unittest.TestCase):
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git, NullSpin(),
-            scaffold=c.scaffold, github_factory=ScriptedGitHub,
+            scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
         )
         resp = use_case.execute(SimulateInput(workflow=selector))
         return resp, store
