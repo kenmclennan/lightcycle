@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from lightcycle.adapters import frontmatter
+from lightcycle import frontmatter
 
 
 _GETTER_NAME_OVERRIDES = {
@@ -131,6 +131,11 @@ class Config:
 
     def prompts_root(self):
         return str(Path(__file__).resolve().parent / "prompts")
+
+    def version(self):
+        from lightcycle import __version__
+
+        return __version__
 
     def data_root(self):
         override = self._env("LC_HOME")

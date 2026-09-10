@@ -6,6 +6,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOMAIN = REPO_ROOT / "lightcycle" / "domain"
 LIGHTCYCLE = REPO_ROOT / "lightcycle"
 APPLICATION = LIGHTCYCLE / "application"
+PORTS = LIGHTCYCLE / "ports"
+ADAPTERS = LIGHTCYCLE / "adapters"
+ADAPTERS_TUI = ADAPTERS / "tui"
 CLI = LIGHTCYCLE / "cli.py"
 
 BD_MARKERS = ('"Issue"', "issue_type", "close_reason", "dependency_count")
@@ -13,6 +16,45 @@ ALLOW = set()
 
 BANNED_ADAPTER_IMPORTS = ("subprocess", "urllib", "sqlite3")
 BANNED_ADAPTER_IMPORT_ALLOW = set()
+
+DOMAIN_BANNED_IMPORTS = (
+    "lightcycle.application", "lightcycle.adapters", "lightcycle.ports",
+    "lightcycle.cli", "lightcycle.container",
+)
+APPLICATION_BANNED_IMPORTS = ("lightcycle.adapters", "lightcycle.container")
+PORTS_BANNED_IMPORTS = ("lightcycle.application", "lightcycle.adapters")
+DRIVEN_ADAPTER_BANNED_IMPORTS = ("lightcycle.application",)
+
+DRIVEN_ADAPTER_IMPORT_EXEMPT = {
+    ADAPTERS / "worker_session.py":
+        "imports the application layer directly because it is a second composition root; "
+        "LC-584 (F-22) gives it its own entry point and removes this need",
+    ADAPTERS / "upgrade.py":
+        "imports plain exception types and a pure helper from application/setup/upgrade.py; "
+        "LC-594 scoped this deliberately, per F-32's convention - lc show LC-594 or read its "
+        "spec for the reasoning",
+}
+
+
+def _imported_modules(tree):
+    modules = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules += [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                modules.append(node.module)
+    return modules
+
+
+def find_banned_imports(tree, banned_prefixes):
+    offenders = []
+    for module in _imported_modules(tree):
+        for prefix in banned_prefixes:
+            if module == prefix or module.startswith(prefix + "."):
+                offenders.append(module)
+                break
+    return offenders
 
 
 class TestDomainSpeaksNoBead(unittest.TestCase):
@@ -48,6 +90,66 @@ class TestApplicationImportsNoAdapterTech(unittest.TestCase):
                         offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), name))
         self.assertEqual(
             offenders, [], "adapter exception types crossing the port boundary: %s" % offenders
+        )
+
+
+class TestFindBannedImports(unittest.TestCase):
+    def test_flags_a_banned_application_import(self):
+        tree = ast.parse("from lightcycle.application.something import Thing\n")
+        offenders = find_banned_imports(tree, DRIVEN_ADAPTER_BANNED_IMPORTS)
+        self.assertEqual(offenders, ["lightcycle.application.something"])
+
+    def test_does_not_flag_an_unrelated_import(self):
+        tree = ast.parse("from lightcycle.domain.something import Thing\n")
+        offenders = find_banned_imports(tree, DRIVEN_ADAPTER_BANNED_IMPORTS)
+        self.assertEqual(offenders, [])
+
+
+class TestDomainImportsNothingAboveIt(unittest.TestCase):
+    def test_no_application_adapters_ports_cli_or_container_imports(self):
+        offenders = []
+        for path in sorted(DOMAIN.rglob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for module in find_banned_imports(tree, DOMAIN_BANNED_IMPORTS):
+                offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), module))
+        self.assertEqual(offenders, [], "domain imports above its own layer: %s" % offenders)
+
+
+class TestApplicationImportsNoAdaptersOrContainer(unittest.TestCase):
+    def test_no_adapters_or_container_imports(self):
+        offenders = []
+        for path in sorted(APPLICATION.rglob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for module in find_banned_imports(tree, APPLICATION_BANNED_IMPORTS):
+                offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), module))
+        self.assertEqual(
+            offenders, [], "application imports adapters or the container: %s" % offenders
+        )
+
+
+class TestPortsImportNoApplicationOrAdapters(unittest.TestCase):
+    def test_no_application_or_adapters_imports(self):
+        offenders = []
+        for path in sorted(PORTS.rglob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for module in find_banned_imports(tree, PORTS_BANNED_IMPORTS):
+                offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), module))
+        self.assertEqual(offenders, [], "ports import application or adapters: %s" % offenders)
+
+
+class TestDrivenAdaptersImportNoApplication(unittest.TestCase):
+    def test_no_application_imports(self):
+        offenders = []
+        for path in sorted(ADAPTERS.rglob("*.py")):
+            if ADAPTERS_TUI in path.parents:
+                continue
+            if path in DRIVEN_ADAPTER_IMPORT_EXEMPT:
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for module in find_banned_imports(tree, DRIVEN_ADAPTER_BANNED_IMPORTS):
+                offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), module))
+        self.assertEqual(
+            offenders, [], "a driven adapter imports the application layer: %s" % offenders
         )
 
 

@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import tomllib
 
+from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.ports.workflow_source import (
     FetchedBundle,
     OriginRegistration,
@@ -19,27 +20,10 @@ def _toml_str(value):
     return '"%s"' % value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def bundle_for_pin(config, pin):
-    from lightcycle.domain.workflows.identity import parse_pin
-
-    parsed = parse_pin(pin) if pin else None
-    if parsed is None:
-        return None
-    origin, _name, sha = parsed
-    return WorkflowSourceAdapter(config).pinned_bundle(origin, sha)
-
-
-def resolve_agent_for_pin(config, role, pin):
-    from lightcycle.adapters import workflow_bundle
-
-    bundle = bundle_for_pin(config, pin)
-    roots = [config.prompts_root()] + ([bundle] if bundle else [])
-    return workflow_bundle.parse_step(roots, role)
-
-
 class WorkflowSourceAdapter(WorkflowSourcePort):
-    def __init__(self, config):
+    def __init__(self, config, workflow_bundle):
         self._config = config
+        self._workflow_bundle = workflow_bundle
 
     def _root(self):
         return os.path.join(self._config.data_root(), "workflows")
@@ -179,3 +163,13 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
 
     def remove_origin(self, origin):
         shutil.rmtree(self._origin_dir(origin), ignore_errors=True)
+
+    def resolve_agent(self, role, pin):
+        parsed = parse_pin(pin) if pin else None
+        bundle = self.pinned_bundle(parsed[0], parsed[2]) if parsed else None
+        roots = [self._config.prompts_root()] + ([bundle] if bundle else [])
+        for root in roots:
+            prompt = self._workflow_bundle.parse_step(role, root)
+            if prompt is not None:
+                return prompt
+        return None

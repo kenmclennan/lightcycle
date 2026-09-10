@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.adapters.frontmatter import parse_frontmatter, split_frontmatter
+from lightcycle.frontmatter import parse_frontmatter, split_frontmatter
 
 
 class TestParseFrontmatter(unittest.TestCase):

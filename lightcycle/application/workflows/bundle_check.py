@@ -1,4 +1,4 @@
-from lightcycle.adapters import frontmatter
+from lightcycle import frontmatter
 from lightcycle.application.workflows.prompt_check import check_prompt_commands
 from lightcycle.domain.contracts import FlowContracts
 from lightcycle.domain.flow import Flow

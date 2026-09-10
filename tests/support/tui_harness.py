@@ -134,6 +134,9 @@ class FakeWorkflowSource(WorkflowSourcePort):
     def remove_origin(self, origin):
         pass
 
+    def resolve_agent(self, role, pin):
+        return None
+
 
 _TEMP_ROOTS = []
 

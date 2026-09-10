@@ -10,7 +10,6 @@ from textual.screen import ModalScreen
 from textual.widgets import DataTable, Input, Static
 from textual.widgets.data_table import CellDoesNotExist
 
-from lightcycle import __version__
 from lightcycle.adapters.tui.backlog_list import build_backlog_rows
 from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_FRAMES,
@@ -1160,7 +1159,8 @@ class LightcycleApp(App):
         self._now = now or (lambda: datetime.datetime.now().astimezone())
         self._upgrade_check = upgrade_check or (
             lambda: upgrade(
-                __version__, check_only=True, fetch=self._container.upgrade.fetch_remote_version)
+                self._container.config.version(), check_only=True,
+                fetch=self._container.upgrade.fetch_remote_version)
         )
         self._upgrade_version = None
         self._upgrade_error = None
@@ -1231,7 +1231,8 @@ class LightcycleApp(App):
         self.query_one(DoneView).refresh_column_width()
 
     def _check_upgrade(self):
-        response = UpgradeNoticeUseCase(__version__, check=self._upgrade_check).execute()
+        response = UpgradeNoticeUseCase(
+            self._container.config.version(), check=self._upgrade_check).execute()
         return response.remote, response.error
 
     def _refresh(self) -> None:
@@ -1281,7 +1282,7 @@ class LightcycleApp(App):
             breaker_is_open=breaker.is_open,
             breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
-            version=__version__,
+            version=self._container.config.version(),
             upgrade_version=self._upgrade_version,
             upgrade_error=self._upgrade_error,
         )

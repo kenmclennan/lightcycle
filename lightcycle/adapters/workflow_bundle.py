@@ -1,6 +1,6 @@
 import os
 
-from lightcycle.adapters import frontmatter
+from lightcycle import frontmatter
 from lightcycle.ports.workflow_bundle import StepPrompt, WorkflowBundlePort
 
 

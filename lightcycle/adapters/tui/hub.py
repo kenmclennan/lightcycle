@@ -10,7 +10,6 @@ from textual.screen import Screen
 from textual.widgets import DataTable, RichLog, Static
 from textual.widgets.data_table import CellDoesNotExist
 
-from lightcycle import __version__
 from lightcycle.adapters.log_parser import LogLineParser
 from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_FRAMES,
@@ -1062,7 +1061,7 @@ class ArtifactViewerScreen(Screen):
             breaker_is_open=breaker.is_open,
             breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
-            version=__version__,
+            version=container.config.version(),
             upgrade_version=self.app.upgrade_version,
             upgrade_error=self.app.upgrade_error,
         )
@@ -1454,7 +1453,7 @@ class NodeHubScreen(Screen):
             breaker_is_open=breaker.is_open,
             breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
-            version=__version__,
+            version=self._container.config.version(),
             upgrade_version=self.app.upgrade_version,
             upgrade_error=self.app.upgrade_error,
         )

@@ -194,7 +194,7 @@ def write_workflow(root, metas, name="spec-driven", entry=None, disposition=None
 
 
 def write_workflow_from_steps(root, name="spec-driven"):
-    from lightcycle.adapters import frontmatter
+    from lightcycle import frontmatter
 
     metas = {}
     for f in sorted(_steps_dir(root).glob("*.md")):

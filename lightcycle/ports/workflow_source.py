@@ -77,3 +77,7 @@ class WorkflowSourcePort(ABC):
     @abstractmethod
     def remove_origin(self, origin):
         pass
+
+    @abstractmethod
+    def resolve_agent(self, role, pin):
+        pass
