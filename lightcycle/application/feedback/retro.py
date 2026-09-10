@@ -42,6 +42,7 @@ class RetroResponse:
     reflection_count: int
     feedback: List[FeedbackItem]
     item_signals: List[ItemSignals]
+    unreadable: List[str] = field(default_factory=list)
 
 
 class RetroUseCase:
@@ -68,33 +69,37 @@ class RetroUseCase:
         return resolve
 
     def _project_scope(self, project, signals_for):
-        rows, all_refs = [], []
+        rows, all_refs, all_unreadable = [], [], []
         for item in self._store.closed_unretroed_items():
             if project_of(self._store, item) != project:
                 continue
-            row, refs = self._collect_item_row(item, signals_for)
+            row, refs, unreadable = self._collect_item_row(item, signals_for)
             rows.append(row)
             all_refs.extend(refs)
-        return rows, all_refs
+            all_unreadable.extend(unreadable)
+        return rows, all_refs, all_unreadable
 
     def _pending_scope(self, signals_for):
-        rows, all_refs = [], []
+        rows, all_refs, all_unreadable = [], [], []
         for item in self._store.closed_unretroed_items():
             if not has_feedback(self._store, item):
                 continue
-            row, refs = self._collect_pending_item_row(item, signals_for)
-            if not refs:
+            row, refs, unreadable = self._collect_pending_item_row(item, signals_for)
+            if not refs and not unreadable:
                 continue
             rows.append(row)
             all_refs.extend(refs)
+            all_unreadable.extend(unreadable)
         for pass_record in self._store.closed_unretroed_passes():
             steps = [
                 s for s in self._store.children(pass_record.item) if s.pass_id == pass_record.id
             ]
-            refs = []
+            refs, unreadable = [], []
             for t in steps:
-                refs.extend(parse_reflections(self._store.item_artifacts(t.id)))
-            if not refs:
+                r, u = parse_reflections(self._store.item_artifacts(t.id))
+                refs.extend(r)
+                unreadable.extend(u)
+            if not refs and not unreadable:
                 continue
             item = self._store.get_node(pass_record.item)
             rows.append(ItemSignals(
@@ -102,7 +107,8 @@ class RetroUseCase:
                 durations=self._durations_of(steps),
             ))
             all_refs.extend(refs)
-        return rows, all_refs
+            all_unreadable.extend(unreadable)
+        return rows, all_refs, all_unreadable
 
     def _collect_pending_item_row(self, item, signals_for):
         excluded = retroed_pass_ids(self._store, item.id)
@@ -110,13 +116,13 @@ class RetroUseCase:
         steps = [c for c in children if c.type == "step"]
         step_pairs = [(s.pass_id, self._store.item_artifacts(s.id)) for s in steps]
         artifacts = reflections_of(self._store.item_artifacts(item.id), step_pairs, excluded)
-        refs = parse_reflections(artifacts)
+        refs, unreadable = parse_reflections(artifacts)
         included_steps = [s for s in steps if s.pass_id not in excluded]
         row = ItemSignals(
             item=item, signals=signals_for(item).tally(included_steps), reflections=len(refs),
             durations=self._durations_of(included_steps),
         )
-        return row, refs
+        return row, refs, unreadable
 
     def _durations_of(self, steps):
         result = {}
@@ -130,21 +136,22 @@ class RetroUseCase:
         steps = [c for c in children if c.type == "step"]
         step_pairs = [(s.pass_id, self._store.item_artifacts(s.id)) for s in steps]
         artifacts = reflections_of(self._store.item_artifacts(item.id), step_pairs, set())
-        refs = parse_reflections(artifacts)
+        refs, unreadable = parse_reflections(artifacts)
         row = ItemSignals(
             item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
             durations=self._durations_of(steps),
         )
-        return row, refs
+        return row, refs, unreadable
 
     def execute(self, input: RetroInput) -> RetroResponse:
         signals_for = self._signals_resolver()
 
         if input.subject is not None:
             subject = self._store.get_node(input.subject)
-            row, refs = self._collect_item_row(subject, signals_for)
+            row, refs, unreadable = self._collect_item_row(subject, signals_for)
             rows = [row]
             all_refs = list(refs)
+            all_unreadable = list(unreadable)
             label = input.subject
 
         elif input.since is not None:
@@ -157,12 +164,16 @@ class RetroUseCase:
                 else:
                     orphan_steps.append(step)
             all_refs = []
+            all_unreadable = []
             rows = []
             for item_id, item_steps in item_groups.items():
-                refs = []
+                refs, unreadable = [], []
                 for t in item_steps:
-                    refs.extend(parse_reflections(self._store.item_artifacts(t.id)))
+                    r, u = parse_reflections(self._store.item_artifacts(t.id))
+                    refs.extend(r)
+                    unreadable.extend(u)
                 all_refs.extend(refs)
+                all_unreadable.extend(unreadable)
                 item = self._store.get_node(item_id)
                 rows.append(
                     ItemSignals(
@@ -171,24 +182,28 @@ class RetroUseCase:
                     )
                 )
             for step in orphan_steps:
-                all_refs.extend(parse_reflections(self._store.item_artifacts(step.id)))
+                r, u = parse_reflections(self._store.item_artifacts(step.id))
+                all_refs.extend(r)
+                all_unreadable.extend(u)
             label = "since:%s" % input.since
 
         elif input.project is not None:
-            rows, all_refs = self._project_scope(input.project, signals_for)
+            rows, all_refs, all_unreadable = self._project_scope(input.project, signals_for)
             label = "project:%s" % input.project
 
         elif input.pending:
-            rows, all_refs = self._pending_scope(signals_for)
+            rows, all_refs, all_unreadable = self._pending_scope(signals_for)
             label = "pending"
 
         else:
             all_refs = []
+            all_unreadable = []
             rows = []
             for item in self._store.last_n_closed_items(input.last):
-                row, refs = self._collect_item_row(item, signals_for)
+                row, refs, unreadable = self._collect_item_row(item, signals_for)
                 rows.append(row)
                 all_refs.extend(refs)
+                all_unreadable.extend(unreadable)
             label = "last:%d" % input.last
 
         reflection_count = len(all_refs)
@@ -197,5 +212,6 @@ class RetroUseCase:
             for f in cfeedback.Retro(all_refs).feedback()
         ]
         return RetroResponse(
-            subject=label, reflection_count=reflection_count, feedback=feedback, item_signals=rows
+            subject=label, reflection_count=reflection_count, feedback=feedback, item_signals=rows,
+            unreadable=all_unreadable,
         )

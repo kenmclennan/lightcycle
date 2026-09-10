@@ -124,6 +124,15 @@ class TestRetroItemScope(unittest.TestCase):
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item))
         self.assertEqual(resp.reflection_count, 1)
 
+    def test_unparseable_reflection_is_reported_as_unreadable_not_dropped_silently(self):
+        s = FakeStore()
+        item = s.create_item("item with a corrupt reflection", "a description")
+        s.add_artifact(item, "reflection", "not valid json")
+        _add_reflection(s, item, "good feedback")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item))
+        self.assertEqual(resp.reflection_count, 1)
+        self.assertEqual(resp.unreadable, ["not valid json"])
+
 
 class TestRetroSinceScope(unittest.TestCase):
     def test_since_aggregates_closed_tasks_across_stories(self):

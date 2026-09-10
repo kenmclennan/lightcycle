@@ -171,6 +171,16 @@ def _tool_result_event(content, is_error=False):
     }) + "\n").encode()
 
 
+def _tool_result_event_with_ts(content, timestamp):
+    return (json.dumps({
+        "type": "user",
+        "message": {"role": "user", "content": [{
+            "type": "tool_result", "tool_use_id": "toolu_1", "content": content, "is_error": False,
+        }]},
+        "timestamp": timestamp,
+    }) + "\n").encode()
+
+
 class BoundedLogLineSizeTest(unittest.TestCase):
     def test_tool_result_over_the_cap_is_truncated_with_a_marker(self):
         content = "x" * (MAX_LOG_LINE_CHARS + 500)
@@ -209,6 +219,23 @@ class BoundedLogLineSizeTest(unittest.TestCase):
         self.assertEqual(lines[0].kind, LogKind.SYSTEM)
         self.assertTrue(lines[0].text.endswith("…[truncated]"))
         self.assertLessEqual(len(lines[0].text), MAX_LOG_LINE_CHARS + len(" …[truncated]"))
+
+
+class MalformedTimestampTest(unittest.TestCase):
+    def test_malformed_timestamp_yields_a_timestampless_line_not_a_raise(self):
+        lines = LogLineParser().feed(_tool_result_event_with_ts("ok", "not-a-timestamp"))
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].kind, LogKind.RESULT)
+        self.assertIsNone(lines[0].timestamp)
+
+    def test_malformed_timestamp_does_not_corrupt_the_last_known_timestamp(self):
+        parser = LogLineParser()
+        parser.feed(_tool_result_event_with_ts("first", "2026-07-03T12:00:00.000Z"))
+        parser.feed(_tool_result_event_with_ts("bad", "not-a-timestamp"))
+
+        lines = parser.feed(_tool_result_event("later"))
+
+        self.assertEqual(lines[0].timestamp, _ts("2026-07-03T12:00:00.000Z"))
 
 
 class BlankAndMalformedLineTest(unittest.TestCase):
