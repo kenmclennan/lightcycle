@@ -1,3 +1,5 @@
+import os
+
 from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
 from lightcycle.adapters.fsio import FsAdapter
@@ -52,6 +54,55 @@ class Container:
     def worktrees(self):
         return worktrees_for(self)
 
+    def tick(self, flow=None):
+        from lightcycle.application.flow.complete_step import CompleteStepUseCase
+        from lightcycle.application.pool.backup import BackupUseCase
+        from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+        from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
+        from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
+        from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
+        from lightcycle.application.pool.tick import TickUseCase
+        from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
+
+        flow = flow if flow is not None else self.flow_service()
+        worktrees = worktrees_for(self, flow=flow)
+        complete = CompleteStepUseCase(self.store, flow, worktrees, self.config)
+        return TickUseCase(
+            self.store,
+            self.workers,
+            self.spawner,
+            self.config,
+            monitor=MonitorPrsUseCase(
+                self.store, self.github, worktrees, flow, complete, spin_port=self.spin,
+            ),
+            cadence_gate=RetroCadenceUseCase(self.store, self.config),
+            breaker_gate=BreakerGateUseCase(
+                self.workers, self.worker_log, self.breaker, self.config,
+                spin_port=self.spin, store=self.store,
+            ),
+            hook_completions=HookCompletionsUseCase(self.store, flow),
+            worktrees=worktrees,
+            git=self.git,
+            backup_gate=BackupUseCase(self.backup, self.config),
+            fs=self.worker_log,
+            flow_service=flow,
+            spin_port=self.spin,
+            usage_gate=LiveUsageAccrualUseCase(
+                self.store, self.worker_log, self.workers, self.config,
+            ),
+        )
+
+    def sweep(self, flow=None):
+        from lightcycle.application.pool.sweep import SweepUseCase
+
+        flow = flow if flow is not None else self.flow_service()
+        return SweepUseCase(
+            self.store, self.workers,
+            worktrees=worktrees_for(self, flow=flow),
+            git=self.git, fs=self.worker_log,
+            spin_port=self.spin, spin_cap=self.config.spin_cap(),
+        )
+
     def unblock_step_use_case(self, flow=None):
         from lightcycle.application.flow.unblock_step import UnblockStepUseCase
 
@@ -80,3 +131,39 @@ def worktrees_for(container, flow=None):
     return make_worktrees(
         container.store, container.git, container.fs, container.config, flow, container.scaffold,
     )
+
+
+class SimulationContainer:
+    def __init__(self, container, scratch):
+        from lightcycle.adapters.sqlite_store import SqliteStore
+        from lightcycle.application.flow.claim_step import ClaimStepUseCase
+        from lightcycle.application.flow.complete_step import CompleteStepUseCase
+        from lightcycle.adapters.simulate import (
+            NullSpin, NullWorkers, RecordingGit, SimulateConfig,
+        )
+        from lightcycle.config import Config
+
+        self.home = os.path.join(scratch, "home")
+        self.specs_root = os.path.join(scratch, "specs")
+        self.projects_root = os.path.join(scratch, "projects")
+        for d in (self.home, self.specs_root, self.projects_root):
+            os.makedirs(d, exist_ok=True)
+        cfg_path = os.path.join(self.home, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: SIM\n")
+
+        self.config = SimulateConfig(container.config, self.specs_root, self.projects_root)
+        self.store = SqliteStore(Config(environ={"LC_HOME": self.home, "LC_CONFIG": cfg_path}))
+        self.git = RecordingGit()
+        self.spin = NullSpin()
+        self.scaffold = container.scaffold
+        self.flow = make_flow_service(
+            container.workflow_bundle, self.store, container.config, container.workflow_source
+        )
+        self.worktrees = make_worktrees(
+            self.store, self.git, container.fs, self.config, self.flow, container.scaffold
+        )
+        self.claim = ClaimStepUseCase(
+            self.store, self.flow, self.worktrees, NullWorkers(), self.config
+        )
+        self.complete = CompleteStepUseCase(self.store, self.flow, self.worktrees, self.config)

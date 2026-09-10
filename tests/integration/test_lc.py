@@ -22,6 +22,7 @@ import lightcycle.container as _container_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
+from lightcycle.application.pool.tick import TickUseCase
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.workers import process_start_time
 from lightcycle.application.services.flow import FlowService
@@ -872,7 +873,7 @@ class TestRun(unittest.TestCase):
         self.assertIn("reason=no-free-slots", self._run_log())
 
     def test_run_once_tick_exception_is_logged_and_reraised(self):
-        with patch.object(_cli_mod.TickUseCase, "execute", side_effect=RuntimeError("boom")):
+        with patch.object(TickUseCase, "execute", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 _cli_mod.cmd_start(["--once"])
         run_log = self._run_log()
