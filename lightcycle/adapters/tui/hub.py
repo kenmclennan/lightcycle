@@ -1064,6 +1064,7 @@ class ArtifactViewerScreen(Screen):
             breaker_reset_at=breaker.reset_at,
             version=__version__,
             upgrade_version=self.app.upgrade_version,
+            upgrade_error=self.app.upgrade_error,
         )
 
     def action_close(self) -> None:
@@ -1453,6 +1454,7 @@ class NodeHubScreen(Screen):
             breaker_reset_at=breaker.reset_at,
             version=__version__,
             upgrade_version=self.app.upgrade_version,
+            upgrade_error=self.app.upgrade_error,
         )
 
     def _hierarchy_layout(self, table, rows):

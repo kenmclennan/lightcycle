@@ -987,15 +987,23 @@ class TestFooterUpgradeSegment(unittest.TestCase):
         self.assertFalse(widget.display)
         self.assertEqual(text.strip(), "")
 
-    def test_failed_upgrade_check_renders_no_upgrade_segment_and_rest_of_footer_still_renders(self):
+    def test_failed_upgrade_check_renders_a_dim_reason_and_rest_of_footer_still_renders(self):
         def _raising_check():
-            raise RuntimeError("network down")
+            raise ConnectionError("network down")
 
         session = self._launch(_raising_check)
 
-        widget, text, _ = _rendered_segment(session, "#status-upgrade")
-        self.assertFalse(widget.display)
-        self.assertEqual(text.strip(), "")
+        widget, text, style = _rendered_segment(session, "#status-upgrade")
+        self.assertTrue(widget.display)
+        self.assertEqual(text.strip(), "upgrade check failed: network down")
+        self.assertEqual(_colour_of(style), COLOURS["dim"].lower())
+
+        _, pool_text, _ = _rendered_segment(session, "#status-pool")
+        _, claude_text, _ = _rendered_segment(session, "#status-claude")
+        _, version_text, _ = _rendered_segment(session, "#status-version")
+        self.assertNotEqual(pool_text.strip(), "")
+        self.assertNotEqual(claude_text.strip(), "")
+        self.assertNotEqual(version_text.strip(), "")
 
         _, pool_text, _ = _rendered_segment(session, "#status-pool")
         _, claude_text, _ = _rendered_segment(session, "#status-claude")

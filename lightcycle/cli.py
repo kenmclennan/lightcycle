@@ -114,6 +114,7 @@ from lightcycle.application.setup import (
     ProcessListUnreadableError,
     RemoveProjectUseCase,
     ScanProjectsUseCase,
+    UpgradeNoticeUseCase,
     VenvBusyError,
     upgrade,
 )
@@ -1552,14 +1553,12 @@ def _tick_failure_action(consecutive_failures, cap):
     return "raise" if consecutive_failures >= cap else "continue"
 
 
-def _upgrade_notice(check=lambda: upgrade(__version__, check_only=True)):
-    try:
-        resp = check()
-    except Exception:
-        return None
-    if not resp.available:
-        return None
-    return "a newer lightcycle is available (%s -> %s); run lc upgrade" % (resp.current, resp.remote)
+def _upgrade_notice_lines(resp):
+    if resp.notice:
+        return [resp.notice]
+    if resp.error:
+        return ["could not check for updates: %s" % resp.error]
+    return []
 
 
 def _stop_pool():
@@ -1658,9 +1657,8 @@ def cmd_start(argv):
             return 0
         interval = _container.config.poll_seconds()
         max_agents = _container.config.max_agents()
-        notice = _upgrade_notice()
-        if notice:
-            print(notice)
+        for line in _upgrade_notice_lines(UpgradeNoticeUseCase(__version__).execute()):
+            print(line)
         print("lc start  poll=%ds  max-agents=%d" % (interval, max_agents))
         prev_snapshot = None
         prev_now = time.time()

@@ -13,9 +13,11 @@ from lightcycle.application.setup.upgrade import (
     VenvBusyError,
     upgrade,
 )
+from lightcycle.application.setup.upgrade_notice import UpgradeNoticeResponse, UpgradeNoticeUseCase
 
 __all__ = [
     "ExportSnapshotUseCase", "InitGridUseCase", "AddProjectInput", "AddProjectUseCase",
     "ListProjectsUseCase", "RemoveProjectUseCase", "ScanCandidate", "ScanProjectsUseCase",
     "upgrade", "UpgradeResponse", "VenvBusyError", "ProcessListUnreadableError",
+    "UpgradeNoticeResponse", "UpgradeNoticeUseCase",
 ]

@@ -100,7 +100,7 @@ def _no_newer_version(ctx):
 @given("the upgrade check fails")
 def _upgrade_check_fails(ctx):
     def _raise():
-        raise RuntimeError("network down")
+        raise ConnectionError("network down")
 
     ctx["upgrade_check"] = _raise
 
@@ -235,6 +235,14 @@ def _shows_no_upgrade_indicator(ctx):
     widget, text, _ = _rendered_segment(ctx["session"], "#status-upgrade")
     assert not widget.display
     assert text.strip() == ""
+
+
+@then("the status bar shows the upgrade check failure reason")
+def _shows_upgrade_check_failure_reason(ctx):
+    widget, text, style = _rendered_segment(ctx["session"], "#status-upgrade")
+    assert widget.display
+    assert text.strip() == "upgrade check failed: network down"
+    assert _colour_of(style) == COLOURS["dim"].lower()
 
 
 @then("the priority list reflects the changed queue")
