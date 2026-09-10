@@ -25,3 +25,7 @@ class WorkerLogPort(ABC):
     @abstractmethod
     def append_run_log(self, text):
         pass
+
+    @abstractmethod
+    def log_mtime(self, path):
+        pass

@@ -1,3 +1,6 @@
+from lightcycle.domain.pool.worker import Worker
+
+
 class FakeWorkers:
     def __init__(self, workers=None, alive_pids=(), delayed_death=False):
         self._workers = workers or []
@@ -7,7 +10,7 @@ class FakeWorkers:
         self.killed = []
 
     def workers_state(self):
-        return list(self._workers)
+        return [Worker.from_state(d) for d in self._workers]
 
     def seed(self, workers):
         self._workers = list(workers)
@@ -53,9 +56,6 @@ class FakeWorkers:
         for w in self._workers:
             if w.get("spawnid") == spawnid:
                 w["checked"] = True
-
-    def log_mtime(self, path):
-        return None
 
     def set_pid_started(self, spawnid, pid_started):
         for w in self._workers:

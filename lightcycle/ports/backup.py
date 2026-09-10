@@ -1,4 +1,11 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    name: str
+    taken_at: float
 
 
 class BackupPort(ABC):

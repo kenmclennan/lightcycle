@@ -13,6 +13,7 @@ from lightcycle.application.work import (
     RemoveNodeUseCase,
 )
 from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.domain.pool.worker import Worker
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
@@ -118,7 +119,7 @@ class FakeWorkersForRemove:
         self._alive = set(alive_pids)
 
     def workers_state(self):
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         return pid in self._alive

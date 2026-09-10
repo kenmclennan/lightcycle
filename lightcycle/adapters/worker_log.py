@@ -35,6 +35,15 @@ def read_tail(path, max_bytes):
     return rest, offset
 
 
+def log_mtime(path):
+    if not path:
+        return None
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
 def iter_lines(path):
     if not path or not os.path.exists(path):
         return
@@ -85,3 +94,6 @@ class WorkerLogAdapter(WorkerLogPort):
 
     def append_run_log(self, text):
         return append_run_log(self._config.data_root(), text)
+
+    def log_mtime(self, path):
+        return log_mtime(path)

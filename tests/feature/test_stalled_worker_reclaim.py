@@ -4,6 +4,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.application.pool.sweep import SweepUseCase
+from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -30,7 +31,6 @@ class FakeWorkers:
     def __init__(self):
         self._workers = []
         self._alive = set()
-        self._log_mtimes = {}
         self.killed = []
         self.checked = []
 
@@ -39,11 +39,8 @@ class FakeWorkers:
         if alive:
             self._alive.add(entry["pid"])
 
-    def set_log_mtime(self, log, mtime):
-        self._log_mtimes[log] = mtime
-
     def workers_state(self):
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         return pid in self._alive
@@ -58,13 +55,14 @@ class FakeWorkers:
     def mark_checked(self, spawnid):
         self.checked.append(spawnid)
 
-    def log_mtime(self, path):
-        return self._log_mtimes.get(path)
-
 
 class FakeFs:
     def __init__(self):
         self.files = {}
+        self._log_mtimes = {}
+
+    def set_log_mtime(self, log, mtime):
+        self._log_mtimes[log] = mtime
 
     def read_bytes(self, path):
         return self.files.get(path)
@@ -75,6 +73,9 @@ class FakeFs:
             return
         for line in content.decode("utf-8", errors="replace").splitlines():
             yield line
+
+    def log_mtime(self, path):
+        return self._log_mtimes.get(path)
 
 
 class FakeWorktrees:
@@ -189,12 +190,12 @@ def _inside_boot(ctx):
 
 @given("the worker's log last grew more than the stall threshold ago")
 def _log_stale(ctx):
-    ctx["workers"].set_log_mtime(ctx["log"], ctx["now"] - STALL_SECONDS - 1)
+    ctx["fs"].set_log_mtime(ctx["log"], ctx["now"] - STALL_SECONDS - 1)
 
 
 @given("the worker's log last grew within the stall threshold")
 def _log_fresh(ctx):
-    ctx["workers"].set_log_mtime(ctx["log"], ctx["now"] - STALL_SECONDS + 1)
+    ctx["fs"].set_log_mtime(ctx["log"], ctx["now"] - STALL_SECONDS + 1)
 
 
 @given("the worker's log contains no terminal marker")
@@ -209,7 +210,7 @@ def _terminal_marker(ctx):
 
 @given("the worker's log stopped growing well before a multi-hour suspend")
 def _log_stopped_before_suspend(ctx):
-    ctx["workers"].set_log_mtime(ctx["log"], ctx["now"] - 60)
+    ctx["fs"].set_log_mtime(ctx["log"], ctx["now"] - 60)
 
 
 @given("the wall clock then advances by several hours across the suspend")

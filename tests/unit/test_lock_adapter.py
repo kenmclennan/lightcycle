@@ -26,29 +26,29 @@ class TestRunLockAdapter(unittest.TestCase):
         self.lock = RunLockAdapter(FakeConfig(self.root))
 
     def test_acquire_succeeds_when_no_lock_file(self):
-        acquired, holder_pid = self.lock.acquire()
-        self.assertTrue(acquired)
-        self.assertEqual(holder_pid, os.getpid())
+        result = self.lock.acquire()
+        self.assertTrue(result.acquired)
+        self.assertEqual(result.holder_pid, os.getpid())
 
     def test_second_acquire_refused_while_first_alive(self):
         self.lock.acquire()
-        acquired, holder_pid = RunLockAdapter(FakeConfig(self.root)).acquire()
-        self.assertFalse(acquired)
-        self.assertEqual(holder_pid, os.getpid())
+        result = RunLockAdapter(FakeConfig(self.root)).acquire()
+        self.assertFalse(result.acquired)
+        self.assertEqual(result.holder_pid, os.getpid())
 
     def test_stale_lock_reclaimed(self):
         dead_pid = 999999
         with open(os.path.join(self.root, ".lc-run.pid"), "w") as f:
             f.write(str(dead_pid))
-        acquired, holder_pid = self.lock.acquire()
-        self.assertTrue(acquired)
-        self.assertEqual(holder_pid, os.getpid())
+        result = self.lock.acquire()
+        self.assertTrue(result.acquired)
+        self.assertEqual(result.holder_pid, os.getpid())
 
     def test_release_removes_lock_file(self):
         self.lock.acquire()
         self.lock.release()
-        acquired, _ = RunLockAdapter(FakeConfig(self.root)).acquire()
-        self.assertTrue(acquired)
+        result = RunLockAdapter(FakeConfig(self.root)).acquire()
+        self.assertTrue(result.acquired)
 
     def test_release_without_ownership_leaves_other_holder_lock(self):
         with open(os.path.join(self.root, ".lc-run.pid"), "w") as f:

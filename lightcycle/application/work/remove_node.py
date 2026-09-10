@@ -29,7 +29,7 @@ class RemoveNodeUseCase:
     def _live_step(self, step_ids):
         if not step_ids:
             return None
-        covered = WorkerPool.from_state(self._workers.workers_state()).covered_steps(
+        covered = WorkerPool(self._workers.workers_state()).covered_steps(
             self._workers.pid_alive
         )
         for t in self._store.claimed_steps():

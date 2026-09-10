@@ -18,6 +18,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.project_of import short_project_label
+from lightcycle.domain.pool.worker import Worker
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -45,7 +46,7 @@ class _Workers:
         self._workers = workers or []
 
     def workers_state(self):
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
 
 class _Config:

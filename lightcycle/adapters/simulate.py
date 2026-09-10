@@ -212,9 +212,6 @@ class NullWorkers(WorkersPort):
     def mark_checked(self, spawnid):
         self._refuse("mark_checked")
 
-    def log_mtime(self, path):
-        self._refuse("log_mtime")
-
     def set_pid_started(self, spawnid, pid_started):
         self._refuse("set_pid_started")
 

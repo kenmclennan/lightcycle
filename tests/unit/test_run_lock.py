@@ -5,10 +5,11 @@ from lightcycle.application.pool import (
     PoolRunningUseCase,
     ReleaseRunLockUseCase,
 )
+from lightcycle.ports.lock import LockAcquisition
 
 
 class FakeLock:
-    def __init__(self, acquire_result=(True, 123), running=False):
+    def __init__(self, acquire_result=LockAcquisition(True, 123), running=False):
         self._acquire_result = acquire_result
         self._running = running
         self.released = False
@@ -28,12 +29,12 @@ class FakeLock:
 
 class TestAcquireRunLockUseCase(unittest.TestCase):
     def test_reports_acquired_with_holder_pid(self):
-        resp = AcquireRunLockUseCase(FakeLock(acquire_result=(True, 123))).execute()
+        resp = AcquireRunLockUseCase(FakeLock(acquire_result=LockAcquisition(True, 123))).execute()
         self.assertTrue(resp.acquired)
         self.assertEqual(resp.holder_pid, 123)
 
     def test_reports_refused_with_existing_holder_pid(self):
-        resp = AcquireRunLockUseCase(FakeLock(acquire_result=(False, 456))).execute()
+        resp = AcquireRunLockUseCase(FakeLock(acquire_result=LockAcquisition(False, 456))).execute()
         self.assertFalse(resp.acquired)
         self.assertEqual(resp.holder_pid, 456)
 

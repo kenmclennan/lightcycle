@@ -2,6 +2,7 @@ import json
 import unittest
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.domain.pool.worker import Worker
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_spin import FakeSpinPort
@@ -52,10 +53,9 @@ class RecordingFakeFs(FakeFs):
 
 
 class FakeWorkers:
-    def __init__(self, workers=None, alive_pids=(), log_mtimes=None, raise_workers_state=False):
+    def __init__(self, workers=None, alive_pids=(), raise_workers_state=False):
         self._workers = workers or []
         self._alive = set(alive_pids)
-        self._log_mtimes = log_mtimes or {}
         self.killed = []
         self.checked = []
         self._raise_workers_state = raise_workers_state
@@ -63,7 +63,7 @@ class FakeWorkers:
     def workers_state(self):
         if self._raise_workers_state:
             raise RegistryUnreadable("boom")
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         return pid in self._alive
@@ -79,9 +79,6 @@ class FakeWorkers:
         for w in self._workers:
             if w.get("spawnid") == spawnid:
                 w["checked"] = True
-
-    def log_mtime(self, path):
-        return self._log_mtimes.get(path)
 
 
 class FakeBreakerPort:
@@ -227,9 +224,8 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 }
             ],
             alive_pids={3},
-            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
         )
-        fs = FakeFs(files={})
+        fs = FakeFs(files={}, log_mtimes={"/l/probe.log": 1000 - 1800 - 1})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
@@ -254,9 +250,8 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 }
             ],
             alive_pids={3},
-            log_mtimes={"/l/probe.log": 1000 - 1800 + 1},
         )
-        fs = FakeFs(files={})
+        fs = FakeFs(files={}, log_mtimes={"/l/probe.log": 1000 - 1800 + 1})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
@@ -276,7 +271,6 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 }
             ],
             alive_pids={3},
-            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
         )
         log_line = json.dumps(
             {
@@ -286,7 +280,10 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 },
             }
         )
-        fs = FakeFs(files={"/l/probe.log": log_line.encode()})
+        fs = FakeFs(
+            files={"/l/probe.log": log_line.encode()},
+            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
+        )
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
@@ -343,9 +340,11 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 }
             ],
             alive_pids={3},
+        )
+        fs = FakeFs(
+            files={"/l/probe.log": b'{"type":"result","subtype":"success"}'},
             log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
         )
-        fs = FakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
@@ -365,9 +364,8 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 }
             ],
             alive_pids={3},
-            log_mtimes={"/l/probe.log": 0},
         )
-        fs = FakeFs(files={})
+        fs = FakeFs(files={}, log_mtimes={"/l/probe.log": 0})
         for state in ({"open": False, "reset_at": None}, {"open": True, "reset_at": 2000}):
             breaker_port = FakeBreakerPort(state)
             result = BreakerGateUseCase(
@@ -388,9 +386,11 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 },
             ],
             alive_pids={3},
+        )
+        fs = FakeFs(
+            files={"/l/dead.log": (_REJECTED % 5000).encode()},
             log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
         )
-        fs = FakeFs(files={"/l/dead.log": (_REJECTED % 5000).encode()})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
@@ -411,9 +411,8 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 }
             ],
             alive_pids={3},
-            log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
         )
-        fs = RecordingFakeFs(files={})
+        fs = RecordingFakeFs(files={}, log_mtimes={"/l/probe.log": 1000 - 1800 - 1})
         breaker_port = FakeBreakerPort({"open": False, "reset_at": None})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
@@ -434,9 +433,11 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 },
             ],
             alive_pids={3},
+        )
+        fs = RecordingFakeFs(
+            files={"/l/dead.log": (_REJECTED % 5000).encode()},
             log_mtimes={"/l/probe.log": 1000 - 1800 - 1},
         )
-        fs = RecordingFakeFs(files={"/l/dead.log": (_REJECTED % 5000).encode()})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()
@@ -459,9 +460,11 @@ class TestBreakerGateUseCase(unittest.TestCase):
                 },
             ],
             alive_pids={4},
+        )
+        fs = RecordingFakeFs(
+            files={"/l/probe.log": b'{"type":"result","subtype":"success"}'},
             log_mtimes={"/l/other.log": 500 - 1800 - 1},
         )
-        fs = RecordingFakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
             workers, fs, breaker_port, FakeConfig()

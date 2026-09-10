@@ -40,7 +40,7 @@ class TestResolveAgentForPin(unittest.TestCase):
         _write_prompt(prompts, "audit", model="haiku")
         agent = resolve_agent_for_pin(_Cfg(prompts, data), "audit", None)
         self.assertIsNotNone(agent)
-        self.assertEqual(agent["meta"].get("model"), "haiku")
+        self.assertEqual(agent.meta.get("model"), "haiku")
 
     def test_pin_none_does_not_search_any_bundle(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
@@ -53,7 +53,7 @@ class TestResolveAgentForPin(unittest.TestCase):
         agent = resolve_agent_for_pin(
             _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
         self.assertIsNotNone(agent)
-        self.assertEqual(agent["meta"].get("model"), "opus")
+        self.assertEqual(agent.meta.get("model"), "opus")
 
     def test_pin_honours_its_sha_over_a_drifted_sibling(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
@@ -61,7 +61,7 @@ class TestResolveAgentForPin(unittest.TestCase):
         _write_bundle_prompt(data, "lightcycle", "sha2", "write-code", model="sonnet")
         agent = resolve_agent_for_pin(
             _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
-        self.assertEqual(agent["meta"].get("model"), "opus")
+        self.assertEqual(agent.meta.get("model"), "opus")
 
     def test_prompts_root_wins_over_the_bundle(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
@@ -69,7 +69,7 @@ class TestResolveAgentForPin(unittest.TestCase):
         _write_bundle_prompt(data, "lightcycle", "sha1", "write-code", model="opus")
         agent = resolve_agent_for_pin(
             _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
-        self.assertEqual(agent["meta"].get("model"), "haiku")
+        self.assertEqual(agent.meta.get("model"), "haiku")
 
     def test_unknown_role_returns_none(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()

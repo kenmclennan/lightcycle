@@ -4,6 +4,7 @@ import unittest
 from lightcycle.application.pool.backfill_usage import BackfillUsageUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import ToolUsage
+from lightcycle.domain.pool.worker import Worker
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -37,7 +38,7 @@ class FakeWorkers:
         self._workers = workers or []
 
     def workers_state(self):
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
 
 class FakeConfig:
@@ -68,7 +69,7 @@ class ReapAndBackfillWorkers:
         self._workers = workers
 
     def workers_state(self):
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         return False
@@ -77,9 +78,6 @@ class ReapAndBackfillWorkers:
         for w in self._workers:
             if w.get("spawnid") == spawnid:
                 w["checked"] = True
-
-    def log_mtime(self, path):
-        return None
 
 
 class FakeBreakerPort:

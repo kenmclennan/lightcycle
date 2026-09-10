@@ -1,4 +1,11 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class StepPrompt:
+    meta: dict
+    body: str
 
 
 class WorkflowBundlePort(ABC):

@@ -46,5 +46,5 @@ class LiveWorkerCountUseCase:
         self._workers = workers
 
     def execute(self) -> int:
-        pool = WorkerPool.from_state(self._workers.workers_state())
+        pool = WorkerPool(self._workers.workers_state())
         return len(pool.alive(self._workers.pid_alive))

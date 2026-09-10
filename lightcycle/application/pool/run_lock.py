@@ -13,8 +13,8 @@ class AcquireRunLockUseCase:
         self._lock = lock
 
     def execute(self) -> AcquireRunLockResponse:
-        acquired, holder_pid = self._lock.acquire()
-        return AcquireRunLockResponse(acquired=acquired, holder_pid=holder_pid)
+        result = self._lock.acquire()
+        return AcquireRunLockResponse(acquired=result.acquired, holder_pid=result.holder_pid)
 
 
 class ReleaseRunLockUseCase:

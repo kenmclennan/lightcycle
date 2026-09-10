@@ -1,3 +1,4 @@
+import dataclasses
 import json
 
 import pytest
@@ -5,6 +6,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import Breaker
+from lightcycle.domain.pool.worker import Worker
 
 scenarios("breaker-probe-stall-recovery.feature")
 
@@ -37,19 +39,16 @@ class FakeWorkers:
     def __init__(self):
         self._workers = []
         self._alive = set()
-        self._log_mtimes = {}
         self.killed = []
         self.checked = []
 
-    def add(self, spawnid, pid, alive, mtime=None):
+    def add(self, spawnid, pid, alive):
         self._workers.append(
-            {"spawnid": spawnid, "pid": pid, "step": "probe", "started": 0,
-             "log": "/l/%s.log" % spawnid}
+            Worker(spawnid=spawnid, pid=pid, step="probe", started=0,
+                   log="/l/%s.log" % spawnid)
         )
         if alive:
             self._alive.add(pid)
-        if mtime is not None:
-            self._log_mtimes["/l/%s.log" % spawnid] = mtime
 
     def workers_state(self):
         return self._workers
@@ -65,20 +64,21 @@ class FakeWorkers:
 
     def mark_checked(self, spawnid):
         self.checked.append(spawnid)
-        for w in self._workers:
-            if w.get("spawnid") == spawnid:
-                w["checked"] = True
-
-    def log_mtime(self, path):
-        return self._log_mtimes.get(path)
+        for i, w in enumerate(self._workers):
+            if w.spawnid == spawnid:
+                self._workers[i] = dataclasses.replace(w, checked=True)
 
 
 class FakeFs:
     def __init__(self):
         self._files = {}
+        self._log_mtimes = {}
 
     def set_file(self, spawnid, content):
         self._files["/l/%s.log" % spawnid] = content.encode()
+
+    def set_mtime(self, spawnid, mtime):
+        self._log_mtimes["/l/%s.log" % spawnid] = mtime
 
     def read_bytes(self, path):
         return self._files.get(path)
@@ -89,6 +89,9 @@ class FakeFs:
             return
         for line in content.decode("utf-8", errors="replace").splitlines():
             yield line
+
+    def log_mtime(self, path):
+        return self._log_mtimes.get(path)
 
 
 class FakeBreakerPort:
@@ -156,7 +159,9 @@ def _breaker_state(ctx, breaker_state):
 def _add_worker(ctx, name, alive, mtime=None):
     pid = len(ctx["spawnids"]) + 1
     ctx["spawnids"][name] = "%s-sp" % name
-    ctx["workers"].add(ctx["spawnids"][name], pid, alive, mtime=mtime)
+    ctx["workers"].add(ctx["spawnids"][name], pid, alive)
+    if mtime is not None:
+        ctx["fs"].set_mtime(ctx["spawnids"][name], mtime)
     return ctx["spawnids"][name]
 
 

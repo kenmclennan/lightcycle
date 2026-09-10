@@ -1,7 +1,7 @@
 import os
 
 from lightcycle.adapters import frontmatter
-from lightcycle.ports.workflow_bundle import WorkflowBundlePort
+from lightcycle.ports.workflow_bundle import StepPrompt, WorkflowBundlePort
 
 
 def _roots(roots):
@@ -29,7 +29,7 @@ def read_md(roots, relpath):
             with open(path) as f:
                 text = f.read()
             meta, body = frontmatter.split_frontmatter(text)
-            return {"meta": meta, "body": body, "path": path}
+            return StepPrompt(meta=meta, body=body)
     return None
 
 

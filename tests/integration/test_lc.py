@@ -1612,9 +1612,9 @@ class TestAgentFrontmatter(unittest.TestCase):
 
     def test_parse_step_extracts_model_and_strips_frontmatter(self):
         a = _cli_mod.container().workflow_bundle.parse_step("coder", _bundle(self.root))
-        self.assertEqual(a["meta"]["model"], "sonnet")
-        self.assertTrue(a["body"].startswith("# Coder"))
-        self.assertNotIn("model:", a["body"])
+        self.assertEqual(a.meta["model"], "sonnet")
+        self.assertTrue(a.body.startswith("# Coder"))
+        self.assertNotIn("model:", a.body)
 
     def test_parse_step_reads_nested_routes(self):
         (_steps_dir(self.root) / "reviewer.md").write_text(
@@ -1622,9 +1622,9 @@ class TestAgentFrontmatter(unittest.TestCase):
             "  rejected: build\n---\n# Reviewer\n"
         )
         a = _cli_mod.container().workflow_bundle.parse_step("reviewer", _bundle(self.root))
-        self.assertEqual(a["meta"]["step"], "review")
-        self.assertEqual(a["meta"]["routes"], {"done": "open-pr", "rejected": "build"})
-        self.assertTrue(a["body"].startswith("# Reviewer"))
+        self.assertEqual(a.meta["step"], "review")
+        self.assertEqual(a.meta["routes"], {"done": "open-pr", "rejected": "build"})
+        self.assertTrue(a.body.startswith("# Reviewer"))
 
 
 class TestFlowFromAgents(unittest.TestCase):

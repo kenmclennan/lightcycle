@@ -5,6 +5,7 @@ from lightcycle.application.pool import (
     StartPoolUseCase,
     StopPoolSignalUseCase,
 )
+from lightcycle.domain.pool.worker import Worker
 
 
 class FakeLock:
@@ -31,7 +32,7 @@ class FakeWorkers:
         self.killed = []
 
     def workers_state(self):
-        return list(self._workers)
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         return pid > 0

@@ -916,20 +916,20 @@ def cmd_restore(argv):
     snapshots = _container.backup.list_snapshots()
     if a.list:
         now = time.time()
-        for name, mtime in snapshots:
-            print("%s  age=%ds" % (name, int(now - mtime)))
+        for snap in snapshots:
+            print("%s  age=%ds" % (snap.name, int(now - snap.taken_at)))
         return 0
     if not snapshots:
         sys.stderr.write("lc restore: no snapshots in %s\n" % _container.config.backups_dir())
         return 1
     if a.snapshot is None:
-        target, target_mtime = snapshots[0]
+        target, target_mtime = snapshots[0].name, snapshots[0].taken_at
     else:
-        match = next(((n, m) for n, m in snapshots if n == a.snapshot), None)
+        match = next((s for s in snapshots if s.name == a.snapshot), None)
         if match is None:
             sys.stderr.write("lc restore: no such snapshot %s\n" % a.snapshot)
             return 1
-        target, target_mtime = match
+        target, target_mtime = match.name, match.taken_at
     if not a.force:
         sys.stderr.write(
             "lc restore: this would overwrite the live store from %s; re-run with --force\n"

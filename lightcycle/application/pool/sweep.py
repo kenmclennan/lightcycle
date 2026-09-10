@@ -104,7 +104,7 @@ class SweepUseCase:
     def execute(self, now, max_boot, stall_seconds) -> SweepResponse:
         probe = self._workers.pid_alive
         try:
-            pool = WorkerPool.from_state(self._workers.workers_state())
+            pool = WorkerPool(self._workers.workers_state())
         except RegistryUnreadable:
             return SweepResponse(swept=[], killed=[], pruned=0)
         claimed = self._store.claimed_steps()
@@ -114,7 +114,13 @@ class SweepUseCase:
         booting = pool.any_booting(probe, now, max_boot)
         stalled = [
             w
-            for w in pool.stalled(probe, now, max_boot, stall_seconds, self._workers.log_mtime)
+            for w in pool.stalled(
+                probe,
+                now,
+                max_boot,
+                stall_seconds,
+                self._fs.log_mtime if self._fs is not None else (lambda path: None),
+            )
             if not self._saw_terminal_command(w.log)
         ]
         stalled_ids = {w.step for w in stalled}

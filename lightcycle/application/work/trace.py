@@ -47,8 +47,8 @@ class TraceUseCase:
 
     def _log_for_step(self, node):
         for w in reversed(self._workers.workers_state()):
-            if w.get("step") == node.id:
-                return w.get("log")
+            if w.step == node.id:
+                return w.log
         if node.role and node.claimed_by:
             candidate = os.path.join(
                 self._config.data_root(), "logs", worker_log_filename(node.role, node.claimed_by)

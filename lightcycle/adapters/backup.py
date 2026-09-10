@@ -5,7 +5,7 @@ import re
 import sqlite3
 
 from lightcycle.adapters.fsio import DB_FILENAME
-from lightcycle.ports.backup import BackupPort
+from lightcycle.ports.backup import BackupPort, Snapshot
 
 _PREFIX = "store-"
 _SUFFIX = ".db.gz"
@@ -32,11 +32,11 @@ class SqliteBackupAdapter(BackupPort):
         if not os.path.isdir(d):
             return []
         entries = [
-            (n, os.path.getmtime(os.path.join(d, n)))
+            Snapshot(n, os.path.getmtime(os.path.join(d, n)))
             for n in os.listdir(d)
             if _SNAPSHOT_RE.match(n)
         ]
-        entries.sort(key=lambda entry: entry[1], reverse=True)
+        entries.sort(key=lambda entry: entry.taken_at, reverse=True)
         return entries
 
     def create_snapshot(self, now):
@@ -63,9 +63,9 @@ class SqliteBackupAdapter(BackupPort):
 
     def prune(self, keep):
         removed = []
-        for name, _mtime in self.list_snapshots()[keep:]:
-            os.remove(os.path.join(self._backups_dir(), name))
-            removed.append(name)
+        for snap in self.list_snapshots()[keep:]:
+            os.remove(os.path.join(self._backups_dir(), snap.name))
+            removed.append(snap.name)
         return removed
 
     def restore(self, name):
@@ -75,7 +75,7 @@ class SqliteBackupAdapter(BackupPort):
             snapshots = self.list_snapshots()
             if not snapshots:
                 raise FileNotFoundError("no snapshots in %s" % d)
-            target = snapshots[0][0]
+            target = snapshots[0].name
         src = os.path.join(d, target)
         store_path = self._store_path()
         tmp_db = "%s.%d.tmp" % (store_path, os.getpid())

@@ -39,12 +39,12 @@ def plan_session(claim, resolve, reclaim, role):
     if agent is None:
         reclaim(resp.view.step.id)
         raise SessionError("no step definition %r" % step_file)
-    model = agent["meta"].get("model")
+    model = agent.meta.get("model")
     if not model:
         reclaim(resp.view.step.id)
         raise SessionError("step %r has no 'model' in frontmatter" % step_file)
     return SessionPlan(
-        model=model, sysprompt=agent["body"], workspace=resp.workspace, stage=resp.view.step.step
+        model=model, sysprompt=agent.body, workspace=resp.workspace, stage=resp.view.step.step
     )
 
 

@@ -3,6 +3,7 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
+from lightcycle.domain.pool.worker import Worker
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -23,7 +24,7 @@ class FakeWorkers:
         self._alive = alive
 
     def workers_state(self):
-        return self._state
+        return [Worker.from_state(d) for d in self._state]
 
     def pid_alive(self, pid, started=None):
         return self._alive
