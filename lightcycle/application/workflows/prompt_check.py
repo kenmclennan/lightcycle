@@ -8,9 +8,10 @@ from lightcycle.domain.work import all_states, missing_for_state
 _PLACEHOLDER = "<"
 
 
-def check_prompt_commands(step_texts, cli_source, domain_sources=()):
+def check_prompt_commands(step_texts, cli_source, domain_sources=(), flat_sources=None):
     surface = cli_surface(cli_source)
-    emitted = json_surface(domain_sources, cli_source) if domain_sources else None
+    flat = (cli_source,) if flat_sources is None else flat_sources
+    emitted = json_surface(domain_sources, flat) if domain_sources else None
     problems = {}
     for name, text in sorted(step_texts.items()):
         messages = []
@@ -55,11 +56,18 @@ def _check_call(call, surface):
     return messages
 
 
+READ_SURFACE_MODULES = (
+    "cli.py",
+    "application/flow/claim_step.py",
+    "application/work/node_read_surface.py",
+)
+
+
 def engine_sources():
     root = Path(__file__).resolve().parents[1]
-    cli = (root.parent / "cli.py").read_text()
+    flat = [(root.parent / rel).read_text() for rel in READ_SURFACE_MODULES]
     domain = [p.read_text() for p in sorted((root.parent / "domain").rglob("*.py"))]
-    return cli, domain
+    return flat[0], domain, flat
 
 
 def prompt_drift_detail(drift):

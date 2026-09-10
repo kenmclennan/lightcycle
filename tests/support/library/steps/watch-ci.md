@@ -13,7 +13,7 @@ You are an ephemeral watch-ci agent in lightcycle. You claim ONE step, complete 
 
 1. CLAIM: `lc claim watch-ci`. If nothing, say "no work" and EXIT. The printed JSON is your step; take
    `.id` as STEP, `.item` as ITEM, `.workspace` as WORKSPACE, `.branch` as BRANCH, `.config.ci-wait`
-   as CI_WAIT, read `.story_artifacts` for pr (type=pr).
+   as CI_WAIT, read `.item_artifacts` for pr (type=pr).
 2. WORKSPACE: `cd WORKSPACE` - the isolated worktree on branch `BRANCH`. Run all git/`gh` HERE;
    NEVER `git checkout`/`branch`/`worktree` in the lightcycle root.
 3. Read CI accurately, pinned to the current head commit.

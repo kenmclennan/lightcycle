@@ -5,13 +5,13 @@ from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 
 
-def check_prompts(bundle, cli_source, domain_sources):
+def check_prompts(bundle, cli_source, domain_sources, flat_sources=None):
     texts = {}
     for role, text in bundle.steps.items():
         _, body = frontmatter.split_frontmatter(text)
         if body:
             texts["steps/%s.md" % role] = body
-    return check_prompt_commands(texts, cli_source, domain_sources)
+    return check_prompt_commands(texts, cli_source, domain_sources, flat_sources)
 
 
 def check_bundle_references(bundle):

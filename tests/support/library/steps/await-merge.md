@@ -3,7 +3,7 @@
 A PR is green, comments resolved, and rebased on the tip of main - ready to merge. You merge it
 (lightcycle never merges for you); the driver runs this skill to set it up and record the outcome.
 
-1. `lc show STEP` for the item's pr artifact (type=pr); open it on GitHub.
+1. `lc show STEP`. Take the `.runs` entry whose `pass` matches the step's `.pass`, and open its `pr` on GitHub.
 2. Confirm CI is green and review comments are resolved; summarise the PR for the human.
 3. The human merges it on GitHub - their call, their click.
 4. The pool's PR monitor closes the item automatically once GitHub shows the merge; run
