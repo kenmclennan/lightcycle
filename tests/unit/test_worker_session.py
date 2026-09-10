@@ -1,16 +1,23 @@
+import ast
 import json
+import pathlib
 import os
 import tempfile
-import threading
 import types
 import unittest
 from unittest.mock import MagicMock, patch
 
+import queue
+
+import lightcycle.adapters.worker_session as worker_session_mod
 from lightcycle.adapters.worker_session import (
     EXIT_GRACE_SECONDS,
     MAX_LINE_BYTES,
     SessionError,
+    COMMAND,
+    RESULT,
     dispatch_event,
+    drain,
     has_open_step,
     plan_session,
     poll_decision,
@@ -216,11 +223,15 @@ class TestSessionCwd(unittest.TestCase):
         self.assertFalse(os.path.isdir(created))
 
 
+def _fail_has_open_step(root, spawnid):
+    raise AssertionError("has_open_step should not be called")
+
+
 class TestPollDecision(unittest.TestCase):
     def test_pending_result_looks_up_open_step_against_add_dir(self):
         policy = SessionPolicy()
-        counters = {"results": 1}
-        lock = threading.Lock()
+        events = queue.Queue()
+        events.put((RESULT, None))
         seen = {}
 
         def fake_has_open_step(root, spawnid):
@@ -228,22 +239,40 @@ class TestPollDecision(unittest.TestCase):
             return True
 
         with patch("lightcycle.adapters.worker_session.has_open_step", fake_has_open_step):
-            poll_decision("/data/root", "spid", policy, counters, lock, processed=0)
+            poll_decision("/data/root", "spid", policy, events)
         self.assertEqual(seen["root"], "/data/root")
 
     def test_no_pending_result_skips_lookup_and_returns_none(self):
         policy = SessionPolicy()
-        counters = {"results": 0}
-        lock = threading.Lock()
+        events = queue.Queue()
 
         def fail_has_open_step(root, spawnid):
             raise AssertionError("has_open_step should not be called")
 
         with patch("lightcycle.adapters.worker_session.has_open_step", fail_has_open_step):
-            decision, processed = poll_decision(
-                "/data/root", "spid", policy, counters, lock, processed=0)
+            decision = poll_decision("/data/root", "spid", policy, events)
         self.assertIsNone(decision)
-        self.assertEqual(processed, 0)
+
+    def test_a_result_is_consumed_so_the_next_poll_is_quiet(self):
+        policy = SessionPolicy()
+        events = queue.Queue()
+        events.put((RESULT, None))
+        with patch("lightcycle.adapters.worker_session.has_open_step", lambda r, s: True):
+            first = poll_decision("/data/root", "spid", policy, events)
+        with patch("lightcycle.adapters.worker_session.has_open_step",
+                   _fail_has_open_step):
+            second = poll_decision("/data/root", "spid", policy, events)
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+
+    def test_a_terminal_command_queued_before_the_result_is_applied_first(self):
+        policy = SessionPolicy()
+        policy.observe_claimed(True)
+        events = queue.Queue()
+        events.put((COMMAND, "lc done abc.1 done"))
+        events.put((RESULT, None))
+        with patch("lightcycle.adapters.worker_session.has_open_step", lambda r, s: True):
+            self.assertEqual(poll_decision("/data/root", "spid", policy, events), CLOSE)
 
 
 class _FakeStdout:
@@ -366,19 +395,23 @@ class TestDispatchEvent(unittest.TestCase):
     def test_rejected_rate_limit_line_forwards_to_policy_and_closes(self):
         policy = SessionPolicy()
         policy.observe_claimed(True)
-        counters = {"results": 0}
-        lock = threading.Lock()
-        d = json.loads(REJECTED_LINE)
-        dispatch_event(d, REJECTED_LINE, policy, counters, lock)
+        events = queue.Queue()
+        dispatch_event(json.loads(REJECTED_LINE), REJECTED_LINE, events)
+        drain(events, policy)
         self.assertEqual(policy.on_result(has_open_step=True), CLOSE)
 
-    def test_result_line_increments_counter(self):
-        policy = SessionPolicy()
-        counters = {"results": 0}
-        lock = threading.Lock()
+    def test_result_line_queues_a_result_event(self):
+        events = queue.Queue()
         line = '{"type":"result"}'
-        dispatch_event(json.loads(line), line, policy, counters, lock)
-        self.assertEqual(counters["results"], 1)
+        dispatch_event(json.loads(line), line, events)
+        self.assertEqual(events.get_nowait(), (RESULT, None))
+
+    def test_dispatch_never_touches_the_policy(self):
+        events = queue.Queue()
+        line = '{"type":"result"}'
+        dispatch_event(json.loads(line), line, events)
+        dispatch_event(json.loads(REJECTED_LINE), REJECTED_LINE, events)
+        self.assertEqual(events.qsize(), 2)
 
 
 class TestHasOpenStep(unittest.TestCase):
@@ -393,3 +426,38 @@ class TestHasOpenStep(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSessionPolicyHasOneWriter(unittest.TestCase):
+    def _fn(self, name):
+        src = pathlib.Path(worker_session_mod.__file__).read_text()
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.FunctionDef) and node.name == name:
+                return node
+        raise AssertionError("no function %r" % name)
+
+    def test_the_reader_thread_entry_takes_no_policy(self):
+        args = [a.arg for a in self._fn("dispatch_event").args.args]
+        self.assertNotIn("policy", args)
+
+    def test_the_reader_closure_never_names_the_policy(self):
+        reader = self._fn("reader")
+        named = {n.id for n in ast.walk(reader) if isinstance(n, ast.Name)}
+        self.assertNotIn("policy", named)
+
+    READER_THREAD_FUNCTIONS = ("dispatch_event", "reader")
+
+    def test_no_policy_mutation_sits_on_the_reader_thread(self):
+        src = pathlib.Path(worker_session_mod.__file__).read_text()
+        callers = set()
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for child in ast.walk(node):
+                if (isinstance(child, ast.Attribute)
+                        and isinstance(child.value, ast.Name)
+                        and child.value.id == "policy"
+                        and child.attr.startswith("observe_")):
+                    callers.add(node.name)
+        self.assertEqual(callers, {"drain", "poll_decision"})
+        self.assertEqual(callers.intersection(self.READER_THREAD_FUNCTIONS), set())
