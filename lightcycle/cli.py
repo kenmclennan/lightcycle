@@ -30,7 +30,6 @@ from lightcycle.application.feedback import (
 from lightcycle.domain.work import FieldRefusal, State, refuse_fields, refuse_state
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
-from lightcycle.application.work.resolve_shortcode import resolve_shortcode
 from lightcycle.application.work.resolve_workflow_selection import (
     ResolveWorkflowSelectionInput,
     ResolveWorkflowSelectionUseCase,
@@ -42,6 +41,10 @@ from lightcycle.application.work import (
     BacklogUseCase,
     CloseItemInput,
     CloseItemUseCase,
+    CreateItemInput,
+    CreateItemUseCase,
+    CreateStepInput,
+    CreateStepUseCase,
     EditNodeInput,
     EditNodeUseCase,
     InboxInput,
@@ -105,6 +108,8 @@ from lightcycle.application.setup import (
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
     RemoveProjectUseCase,
+    RestoreInput,
+    RestoreStoreUseCase,
     ScanProjectsUseCase,
     UpgradeNoticeUseCase,
     VenvBusyError,
@@ -836,40 +841,19 @@ def cmd_sweep(argv):
 
 def cmd_restore(argv):
     a = build_parser(COMMANDS["restore"]).parse_args(argv)
-    snapshots = _container.backup.list_snapshots()
     if a.list:
         now = time.time()
-        for snap in snapshots:
+        for snap in _container.backup.list_snapshots():
             print("%s  age=%ds" % (snap.name, int(now - snap.taken_at)))
         return 0
-    if not snapshots:
-        sys.stderr.write("lc restore: no snapshots in %s\n" % _container.config.backups_dir())
-        return 1
-    if a.snapshot is None:
-        target, target_mtime = snapshots[0].name, snapshots[0].taken_at
-    else:
-        match = next((s for s in snapshots if s.name == a.snapshot), None)
-        if match is None:
-            sys.stderr.write("lc restore: no such snapshot %s\n" % a.snapshot)
-            return 1
-        target, target_mtime = match.name, match.taken_at
-    if not a.force:
-        sys.stderr.write(
-            "lc restore: this would overwrite the live store from %s; re-run with --force\n"
-            % target
-        )
-        return 1
-    lock_result = AcquireRunLockUseCase(_container.lock).execute()
-    if not lock_result.acquired:
-        sys.stderr.write("lc restore: lc start is running (pid %d); stop it first\n"
-                          % lock_result.holder_pid)
-        return 1
     try:
-        _container.store.release()
-        _container.backup.restore(target)
-    finally:
-        ReleaseRunLockUseCase(_container.lock).execute()
-    print("restored %s (age %ds)" % (target, int(time.time() - target_mtime)))
+        resp = RestoreStoreUseCase(
+            _container.lock, _container.store, _container.backup, _container.config
+        ).execute(RestoreInput(snapshot=a.snapshot, force=a.force))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print("restored %s (age %ds)" % (resp.snapshot, int(time.time() - resp.taken_at)))
     return 0
 
 
@@ -1001,26 +985,22 @@ def cmd_new(argv):
                 "the work, which the entry step reads\n"
             )
             return 2
+        if not a.project:
+            sys.stderr.write(
+                "no --project given; minted with the global shortcode '%s'\n"
+                % _container.config.shortcode()
+            )
         try:
-            resolved = resolve_shortcode(_container.store, _container.config, a.project)
+            resp = CreateItemUseCase(_container.store, _container.config).execute(
+                CreateItemInput(
+                    title=a.title, description=a.description, project=a.project,
+                    workflow=a.workflow, repo=a.repo, backlog=a.backlog,
+                )
+            )
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
-        if resolved.defaulted:
-            sys.stderr.write(
-                "no --project given; minted with the global shortcode '%s'\n" % resolved.value)
-        tid = _container.store.create_item(
-            a.title, a.description, project=a.project, workflow=a.workflow,
-            shortcode=resolved.value)
-        if a.repo:
-            _container.store.add_artifact(tid, "repo", a.repo)
-        if a.backlog:
-            try:
-                link_resolves(_container.store, tid, a.backlog)
-            except UseCaseError as e:
-                sys.stderr.write("%s\n" % e)
-                return 1
-        print(tid)
+        print(resp.id)
     else:
         if not a.step:
             sys.stderr.write(
@@ -1032,40 +1012,17 @@ def cmd_new(argv):
                 "--parent <item> is required for 'lc new step'; it names the owning item\n"
             )
             return 2
-        flow_service = _flow()
-        flow = None
-        if a.workflow:
-            try:
-                selected = flow_service.resolve_selection(a.workflow)
-                flow = flow_service.load_flow(selected)
-            except (UseCaseError, ValueError) as e:
-                sys.stderr.write("%s\n" % e)
-                return 1
-        elif a.parent:
-            try:
-                parent = _container.store.get_node(a.parent)
-            except KeyError:
-                sys.stderr.write("unknown parent '%s'\n" % a.parent)
-                return 1
-            flow = flow_service.flow_for(parent)
-        if flow is None or not flow.steps():
-            sys.stderr.write(
-                "no workflow to resolve --step against; pass --workflow <origin>/<name> "
-                "or --parent <item pinned to one>\n"
+        try:
+            resp = CreateStepUseCase(_container.store, _flow()).execute(
+                CreateStepInput(
+                    title=a.title, step=a.step, parent=a.parent, workflow=a.workflow,
+                    note=a.note,
+                )
             )
-            return 2
-        role = flow.owner_of(a.step)
-        if not role:
-            sys.stderr.write(
-                "step '%s' is not owned in this workflow; owned steps: %s\n"
-                % (a.step, ", ".join(flow.steps()) or "(none)")
-            )
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
             return 1
-        tid = _container.store.create_step(
-            a.title, step=a.step, role=role, parent=a.parent)
-        if a.note:
-            _container.store.note(tid, " ".join(a.note))
-        print(tid)
+        print(resp.id)
     return 0
 
 
