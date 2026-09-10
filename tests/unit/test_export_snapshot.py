@@ -1,13 +1,13 @@
 import json
 import unittest
 
-from tests.support.sqlite_store_factory import make_sqlite_store
+from tests.support.fake_store import FakeStore
 from lightcycle.application.setup import ExportSnapshotUseCase
 
 
 class TestExportSnapshot(unittest.TestCase):
     def test_export_reproduces_store_contents(self):
-        store = make_sqlite_store()
+        store = FakeStore()
         item = store.create_item("some work", "a description")
         store.add_artifact(item, "spec", "/specs/GRID-059.md")
         step = store.create_step("build it", step="build", role="agent", parent=item)
@@ -15,7 +15,7 @@ class TestExportSnapshot(unittest.TestCase):
         store.label_add(step, "retro-origin")
         blocker = store.create_step("blocker", parent=item)
         store.dep_add(step, blocker)
-        store.close(blocker, "done")
+        store.complete_node(blocker, "done")
 
         response = ExportSnapshotUseCase(store).execute()
         rows = {json.loads(line)["id"]: json.loads(line) for line in response.lines}

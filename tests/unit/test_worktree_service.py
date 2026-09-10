@@ -175,7 +175,7 @@ def plant_run(store, item, phase, branch=None, n=1, state="open"):
         store.open_pass(item)
     rid = store.open_run(item, store.current_pass(item).id, phase)
     if branch is not None:
-        store.set_run_field(rid, branch=branch)
+        store.set_branch(rid, branch)
     if state != "open":
         store.close_run(rid, state)
     return rid

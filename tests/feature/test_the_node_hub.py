@@ -359,7 +359,7 @@ def _item_with_status(ctx, status):
     elif status == "done":
         item = store.create_item("Item", "a description")
         step = store.create_step("s", step="build", role="agent", parent=item)
-        store.close(step, "done")
+        store.complete_node(step, "done")
         node_id = item
     else:
         raise AssertionError("unhandled status %r" % status)
@@ -385,7 +385,7 @@ def _step_with_status(ctx, status):
         step = store.create_step("s", step="build", role="agent", parent=item)
     elif status == "done":
         step = store.create_step("s", step="build", role="agent", parent=item)
-        store.close(step, "done")
+        store.complete_node(step, "done")
     else:
         raise AssertionError("unhandled status %r" % status)
     ctx["node_id"] = step

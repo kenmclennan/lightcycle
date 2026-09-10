@@ -51,7 +51,7 @@ class SearchUseCase:
     def execute(self, input: SearchInput) -> SearchResponse:
         needle = input.text.lower()
         matches = []
-        rows = sorted(self._store.item_text_rows(), key=lambda r: node_id_key(r.id))
+        rows = sorted(self._store.item_texts(), key=lambda r: node_id_key(r.id))
         for row in rows:
             hit = _first_match(row, needle)
             if hit is None:

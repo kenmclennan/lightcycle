@@ -3,7 +3,7 @@ from collections import namedtuple
 
 
 ProjectEntry = namedtuple("ProjectEntry", "identity shortcode local_path remote")
-ItemTextRow = namedtuple("ItemTextRow", "id title description notes")
+ItemText = namedtuple("ItemText", "id title description notes")
 
 
 class ProjectResolutionError(Exception):
@@ -43,7 +43,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def item_text_rows(self):
+    def item_texts(self):
         pass
 
     @abstractmethod
@@ -51,9 +51,18 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def type_of(self, tid):
-        raise NotImplementedError
+    def all_steps_including_done(self):
+        pass
 
+    @abstractmethod
+    def type_of(self, tid):
+        pass
+
+    @abstractmethod
+    def get_item(self, tid):
+        pass
+
+    @abstractmethod
     def get_node(self, tid):
         pass
 
@@ -75,6 +84,10 @@ class StorePort(ABC):
 
     @abstractmethod
     def closed_items(self):
+        pass
+
+    @abstractmethod
+    def snapshot_nodes(self):
         pass
 
     @abstractmethod
@@ -101,7 +114,8 @@ class StorePort(ABC):
     def reopen(self, tid):
         pass
 
-    def close(self, tid, reason, disposition=None):
+    @abstractmethod
+    def complete_node(self, tid, reason, disposition=None):
         pass
 
     @abstractmethod
@@ -113,7 +127,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def disconnect(self):
+    def release(self):
         pass
 
     @abstractmethod
@@ -275,7 +289,27 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def set_run_field(self, rid, **fields):
+    def set_branch(self, rid, branch):
+        pass
+
+    @abstractmethod
+    def set_pr(self, rid, pr):
+        pass
+
+    @abstractmethod
+    def set_content_pin(self, rid, content_pin):
+        pass
+
+    @abstractmethod
+    def record_pr_pin(self, rid, pr, content_pin):
+        pass
+
+    @abstractmethod
+    def set_comments_dispatched_through(self, rid, value):
+        pass
+
+    @abstractmethod
+    def set_comments_handled_through(self, rid, value):
         pass
 
     @abstractmethod
@@ -284,8 +318,9 @@ class StorePort(ABC):
 
     @abstractmethod
     def set_watched_step(self, tid, watched):
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def set_step_pass(self, tid, pid):
         pass
 

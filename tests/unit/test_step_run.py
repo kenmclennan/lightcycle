@@ -20,7 +20,8 @@ class TestStepRunUseCase(unittest.TestCase):
         pid = s.open_pass(item)
         s.set_step_pass(step, pid)
         rid = s.open_run(item, pid, "code")
-        s.set_run_field(rid, branch="feat/x", pr="https://gh/pr/1")
+        s.set_branch(rid, "feat/x")
+        s.set_pr(rid, "https://gh/pr/1")
 
         result = StepRunUseCase(s, _PhaseFlow("code")).execute(StepRunInput(step=step))
 

@@ -45,7 +45,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         create_owned_step(s, "build: x", step="build", role="agent")
         claimed = s.claim_ready("agent")
         self.assertEqual(claimed.state, State.RUNNING)
-        s.close(claimed.id, "done")
+        s.complete_node(claimed.id, "done")
         self.assertEqual(s.get_node(claimed.id).state, "done")
         self.assertEqual(s.get_node(claimed.id).outcome, "done")
 
@@ -66,7 +66,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         ready = [t.id for t in s.ready_steps()]
         self.assertIn(blocker, ready)
         self.assertNotIn(blocked, ready)
-        s.close(blocker, "done")
+        s.complete_node(blocker, "done")
         self.assertIn(blocked, [t.id for t in s.ready_steps()])
 
     def test_status_queue_lane_reflects_open_blocker(self):
@@ -80,7 +80,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         self.assertIn(blocked, queued)
         self.assertTrue(queued[blocked].blocked_by)
         self.assertIn(blocker, queued)
-        s.close(blocker, "done")
+        s.complete_node(blocker, "done")
         lanes = StatusUseCase(s).execute().lanes
         queued = {t.id: t for t in lanes["queue"]}
         self.assertIn(blocked, queued)
@@ -98,7 +98,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
         s = self._store()
         tid = create_owned_step(s, "build: x", step="build", role="agent")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         results = s.nodes_closed_since("2000-01-01")
         self.assertIn(tid, [t.id for t in results])
 
@@ -111,24 +111,24 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_tasks_closed_since_excludes_stories(self):
         s = self._store()
         sid = s.create_item("closed item", "a description")
-        s.close(sid, "merged")
+        s.complete_node(sid, "merged")
         results = s.nodes_closed_since("2000-01-01")
         self.assertNotIn(sid, [t.id for t in results])
 
     def test_closed_unretroed_items_returns_closed_items(self):
         s = self._store()
         sid = s.create_item("closed item", "a description")
-        s.close(sid, "merged")
+        s.complete_node(sid, "merged")
         self.assertIn(sid, [t.id for t in s.closed_unretroed_items()])
 
     def test_closed_unretroed_items_excludes_open_and_retroed_and_origin(self):
         s = self._store()
         s.create_item("open item", "a description")
         retroed = s.create_item("retroed item", "a description")
-        s.close(retroed, "merged")
+        s.complete_node(retroed, "merged")
         s.label_add(retroed, "retroed")
         origin = s.create_item("origin item", "a description")
-        s.close(origin, "merged")
+        s.complete_node(origin, "merged")
         s.label_add(origin, "retro-origin")
         ids = [t.id for t in s.closed_unretroed_items()]
         self.assertNotIn(retroed, ids)
@@ -147,7 +147,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         closed_item = s.create_item("closed item", "a description")
         closed_item_pass = s.open_pass(closed_item)
         s.close_pass(closed_item_pass)
-        s.close(closed_item, "merged")
+        s.complete_node(closed_item, "merged")
 
         open_item = s.create_item("open item", "a description")
         open_pass = s.open_pass(open_item)
@@ -171,9 +171,9 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_last_n_closed_items_returns_closed_items(self):
         s = self._store()
         first = s.create_item("first", "a description")
-        s.close(first, "merged")
+        s.complete_node(first, "merged")
         second = s.create_item("second", "a description")
-        s.close(second, "merged")
+        s.complete_node(second, "merged")
         results = s.last_n_closed_items(1)
         self.assertEqual(len(results), 1)
 
@@ -187,8 +187,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         s = self._store()
         item = s.create_item("item", "a description")
         step = s.create_step("build", parent=item)
-        s.close(step, "done")
-        s.close(item, "merged")
+        s.complete_node(step, "done")
+        s.complete_node(item, "merged")
         result_ids = [t.id for t in s.last_n_closed_items(10)]
         self.assertIn(item, result_ids)
         self.assertNotIn(step, result_ids)
@@ -441,7 +441,7 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
             "  state TEXT NOT NULL DEFAULT 'open', opened_at TEXT, closed_at TEXT)"
         )
         s._conn.commit()
-        s.disconnect()
+        s.release()
         return SqliteStore(s._config)
 
     def test_a_phase_four_runs_table_gains_the_comment_ledger(self):
@@ -478,7 +478,7 @@ class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):
             "state TEXT NOT NULL, ts TEXT)"
         )
         s._conn.commit()
-        s.disconnect()
+        s.release()
         return SqliteStore(s._config)
 
     def test_an_existing_store_missing_the_index_gains_it_on_reopen(self):
@@ -487,7 +487,7 @@ class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):
 
     def test_reopening_the_migrated_store_a_second_time_is_idempotent(self):
         s = self._store_without_the_history_index()
-        s.disconnect()
+        s.release()
         s = SqliteStore(s._config)
         name = self._find_history_index(s._conn)
         self.assertIsNotNone(name)
@@ -501,7 +501,7 @@ class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):
         self.assertIsNotNone(self._find_history_index(s._conn))
         tid = self._step(s, "t", role="agent")
         s.claim_ready("agent")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         states = [state for state, _ in s.history(tid)]
         self.assertEqual(states, ["running", "done"])
 
@@ -509,7 +509,7 @@ class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):
         s = make_sqlite_store()
         tid = self._step(s, "t", role="agent")
         s.claim_ready("agent")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
 
         plan = s._conn.execute(
             "EXPLAIN QUERY PLAN SELECT state, ts FROM history WHERE node_id = ? ORDER BY seq ASC",
@@ -524,7 +524,7 @@ class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
     def _store_without_disposition(self):
         s = make_sqlite_store()
         item = s.create_item("an item", "a description")
-        s.close(item, "done")
+        s.complete_node(item, "done")
         s._conn.execute("ALTER TABLE items RENAME TO items_old")
         s._conn.execute(
             "CREATE TABLE items ("
@@ -540,7 +540,7 @@ class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
         )
         s._conn.execute("DROP TABLE items_old")
         s._conn.commit()
-        s.disconnect()
+        s.release()
         return item, SqliteStore(s._config)
 
     def test_a_pre_disposition_items_table_gains_the_column(self):
@@ -554,7 +554,7 @@ class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
 
     def test_reopening_the_migrated_store_is_idempotent(self):
         item, s = self._store_without_disposition()
-        s.disconnect()
+        s.release()
         s = SqliteStore(s._config)
         self.assertIsNone(s.get_node(item).disposition)
 
@@ -589,7 +589,7 @@ class TestSqliteStoreAddsClaimEpochToSteps(unittest.TestCase):
         )
         s._conn.execute("DROP TABLE steps_old")
         s._conn.commit()
-        s.disconnect()
+        s.release()
         return tid, SqliteStore(s._config)
 
     def test_a_pre_claim_epoch_steps_table_gains_the_column(self):
@@ -606,7 +606,7 @@ class TestSqliteStoreAddsClaimEpochToSteps(unittest.TestCase):
 
     def test_reopening_the_migrated_store_a_second_time_is_idempotent(self):
         tid, s = self._store_without_claim_epoch()
-        s.disconnect()
+        s.release()
         s = SqliteStore(s._config)
         row = s._conn.execute(
             "SELECT claim_epoch FROM steps WHERE id = ?", (tid,)

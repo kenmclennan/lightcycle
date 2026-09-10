@@ -34,7 +34,7 @@ def _seed_claimed(root, spawn_id):
     store = _store_for(root, spawn_id)
     create_owned_step(store, "build: x", step="build", role="agent")
     step_id = store.claim_ready("agent").id
-    store.disconnect()
+    store.release()
     return step_id
 
 
@@ -44,7 +44,7 @@ def _claim_worker(root, spawn_id, barrier, q):
         barrier.wait()
         node = store.claim_ready("agent")
         q.put((spawn_id, node.id if node else None))
-        store.disconnect()
+        store.release()
     except Exception as exc:
         q.put((spawn_id, "ERROR: %s" % exc))
 
@@ -56,7 +56,7 @@ def _complete_worker(root, spawn_id, expected_assignee, step_id, barrier, q):
         won, new_id = store.complete_step_atomic(
             step_id, "done", expected_assignee, _successor_spec(step_id, store.get_step(step_id).item))
         q.put((spawn_id, won, new_id))
-        store.disconnect()
+        store.release()
     except Exception as exc:
         q.put((spawn_id, "ERROR", str(exc)))
 
@@ -66,7 +66,7 @@ class TestAtomicClaim(unittest.TestCase):
         root = _make_root()
         seed = _store_for(root)
         step_id = create_owned_step(seed, "build: x", step="build", role="agent")
-        seed.disconnect()
+        seed.release()
 
         n = 8
         barrier = _CTX.Barrier(n)
@@ -167,7 +167,7 @@ def _create_item_worker(root, spawn_id, barrier, q):
         barrier.wait()
         item_id = store.create_item("title %s" % spawn_id, "description")
         q.put((spawn_id, item_id))
-        store.disconnect()
+        store.release()
     except Exception as exc:
         q.put((spawn_id, "ERROR: %s" % exc))
 
@@ -178,7 +178,7 @@ def _open_pass_worker(root, spawn_id, item_id, barrier, q):
         barrier.wait()
         pid = store.open_pass(item_id)
         q.put((spawn_id, pid))
-        store.disconnect()
+        store.release()
     except Exception as exc:
         q.put((spawn_id, "ERROR: %s" % exc))
 
@@ -209,7 +209,7 @@ class TestConcurrentPassOpening(unittest.TestCase):
         root = _make_root()
         seed = _store_for(root)
         item_id = seed.create_item("title", "description")
-        seed.disconnect()
+        seed.release()
 
         n = 8
         barrier = _CTX.Barrier(n)

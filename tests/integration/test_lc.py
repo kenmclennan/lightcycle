@@ -456,7 +456,7 @@ class TestFlow(unittest.TestCase):
     def test_advance_creates_next_step(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
         b = self.store.create_step("build: t", step="build", role="agent", parent=item)
-        self.store.close(b, "done")
+        self.store.complete_node(b, "done")
         rc, out, err = call(_cli_mod.cmd_advance, b, "done")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -957,7 +957,7 @@ class TestRun(unittest.TestCase):
             "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
         )
         tid = create_owned_step(self.store, "audit: theme", step="audit", role="agent")
-        self.store.close(tid, "done")
+        self.store.complete_node(tid, "done")
         self.store._records[tid]["closed_at"] = "2020-01-01T00:00:00"
         with patch("time.sleep", side_effect=KeyboardInterrupt):
             rc, out, err = call(_cli_mod.cmd_start)
@@ -979,7 +979,7 @@ class TestRun(unittest.TestCase):
         def flaky_run_tick(tick, fs, tick_input, now):
             calls["n"] += 1
             if calls["n"] == 1:
-                self.store.close(tid, "done")
+                self.store.complete_node(tid, "done")
                 self.store._records[tid]["closed_at"] = _iso(now)
                 raise RuntimeError("boom")
             return orig_run_tick(tick, fs, tick_input, now)
@@ -1402,7 +1402,7 @@ class TestFileItem(unittest.TestCase):
         rc, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
         sid = out.strip()
         build = self.store.children(sid)[0].id
-        self.store.close(build, "done")
+        self.store.complete_node(build, "done")
         rc2, out2, err2 = call(_cli_mod.cmd_advance, build, "done")
         new = out2.strip()
         rc3, out3, _ = call(_cli_mod.cmd_show, new)
@@ -1422,7 +1422,7 @@ class TestNewStep(unittest.TestCase):
         item = item.strip()
         rc, entry_step, err = call(_cli_mod.cmd_set, item, "--state", "active")
         self.assertEqual(rc, 0, err)
-        self.store.close(entry_step.strip(), "done")
+        self.store.complete_node(entry_step.strip(), "done")
         return item
 
     def test_missing_step_flag_refuses_and_creates_nothing(self):
@@ -1515,7 +1515,7 @@ class TestFileBlockedBy(unittest.TestCase):
         call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven", "--blocked-by", gate)
         rc, out, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(out.strip(), "")
-        self.store.close(gate, "approved")
+        self.store.complete_node(gate, "approved")
         rc2, out2, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertTrue(out2.strip())
 
@@ -2322,7 +2322,7 @@ class TestClose(unittest.TestCase):
         item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
         self.store.create_step("build: t", step="build", role="agent", parent=item)
         claimed = self.store.claim_ready("agent")
-        self.store.close(claimed.id, "done")
+        self.store.complete_node(claimed.id, "done")
         rc, out, err = call(_cli_mod.cmd_done, item, "done", "--disposition", "completed")
         self.assertEqual(rc, 0, err)
         self.assertEqual([a for a in self.store.item_artifacts(item) if a.type == "retro"], [])
@@ -2603,8 +2603,8 @@ class TestReflect(unittest.TestCase):
 
         sid, tid = self._file_story()
         call(_cli_mod.cmd_attach, tid, "reflection", "the spec was thin on errors")
-        self.store.close(tid, "done")
-        self.store.close(sid, "done")
+        self.store.complete_node(tid, "done")
+        self.store.complete_node(sid, "done")
 
         resp = RetroUseCase(self.store, _cli_mod._flow()).execute(RetroInput(subject=sid))
 
@@ -2683,7 +2683,7 @@ class TestRetro(unittest.TestCase):
         sid = self._item()
         self.store.create_step("review: s", step="review", role="agent", parent=sid)
         rtid = self.store.create_step("review: s2", step="review", role="agent", parent=sid)
-        self.store.close(rtid, "rejected")
+        self.store.complete_node(rtid, "rejected")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
         self.assertIn("review_rounds=1", out)
@@ -2691,7 +2691,7 @@ class TestRetro(unittest.TestCase):
     def test_retro_signals_conflict(self):
         sid = self._item()
         pr_tid = self.store.create_step("open-pr: s", step="open-pr", role="agent", parent=sid)
-        self.store.close(pr_tid, "conflict-rebase")
+        self.store.complete_node(pr_tid, "conflict-rebase")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
         self.assertIn("conflicts=1", out)
@@ -2700,7 +2700,7 @@ class TestRetro(unittest.TestCase):
         sid = self._item()
         self.store.create_step("build: s", step="build", role="agent", parent=sid)
         claimed = self.store.claim_ready("agent")
-        self.store.close(claimed.id, "done")
+        self.store.complete_node(claimed.id, "done")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
         self.assertRegex(out, r"duration=\d")
@@ -2708,23 +2708,23 @@ class TestRetro(unittest.TestCase):
     def test_retro_shows_unknown_duration_when_task_never_claimed(self):
         sid = self._item()
         tid = self.store.create_step("build: s", step="build", role="agent", parent=sid)
-        self.store.close(tid, "done")
+        self.store.complete_node(tid, "done")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
         self.assertIn("duration=unknown", out)
 
     def test_retro_pending_gathers_feedback_across_projects_and_projectless_items(self):
         saga = self.store.create_item("saga work", "a description")
-        self.store.close(saga, "merged")
+        self.store.complete_node(saga, "merged")
         self.store.add_artifact(saga, "repo", "saga")
         k1 = self.store.create_step("build: x", step="build", role="agent", parent=saga)
-        self.store.close(k1, "done")
+        self.store.complete_node(k1, "done")
         call(_cli_mod.cmd_attach, k1, "feedback", "saga friction")
 
         orphan = self.store.create_item("orphan work", "a description")
-        self.store.close(orphan, "merged")
+        self.store.complete_node(orphan, "merged")
         k2 = self.store.create_step("build: y", step="build", role="agent", parent=orphan)
-        self.store.close(k2, "done")
+        self.store.complete_node(k2, "done")
         call(_cli_mod.cmd_attach, k2, "feedback", "orphan friction")
 
         rc, out, err = call(_cli_mod.cmd_retro, "--pending")
@@ -2741,9 +2741,9 @@ class TestRetro(unittest.TestCase):
             extra_env={"LC_RETRO_INTERVAL_REFLECTIONS": "2"},
         )
         saga = self.store.create_item("saga work", "a description")
-        self.store.close(saga, "merged")
+        self.store.complete_node(saga, "merged")
         k1 = self.store.create_step("build: x", step="build", role="agent", parent=saga)
-        self.store.close(k1, "done")
+        self.store.complete_node(k1, "done")
         call(_cli_mod.cmd_attach, k1, "feedback", "one")
         call(_cli_mod.cmd_attach, k1, "feedback", "two")
         call(_cli_mod.cmd_attach, k1, "feedback", "three")
@@ -2759,9 +2759,9 @@ class TestRetro(unittest.TestCase):
             extra_env={"LC_RETRO_INTERVAL_REFLECTIONS": "2"},
         )
         saga = self.store.create_item("saga work", "a description")
-        self.store.close(saga, "merged")
+        self.store.complete_node(saga, "merged")
         k1 = self.store.create_step("build: x", step="build", role="agent", parent=saga)
-        self.store.close(k1, "done")
+        self.store.complete_node(k1, "done")
         call(_cli_mod.cmd_attach, k1, "feedback", "one")
         call(_cli_mod.cmd_attach, k1, "feedback", "two")
 
@@ -2786,7 +2786,7 @@ class TestWorklog(unittest.TestCase):
 
     def _close_story(self, title="feat: shipped-thing", reason="merged"):
         sid = self.store.create_item(title, "a description", workflow="lightcycle/spec-driven")
-        self.store.close(sid, reason)
+        self.store.complete_node(sid, reason)
         return sid
 
     def test_worklog_no_args_shows_stories_closed_today(self):
@@ -2895,7 +2895,7 @@ class TestRunReadSurface(unittest.TestCase):
         step = self.store.create_step("build: x", step="build", role="agent", parent=item)
         pid = self.store.open_pass(item)
         rid = self.store.open_run(item, pid, None)
-        self.store.set_run_field(rid, comments_handled_through="1500.0")
+        self.store.set_comments_handled_through(rid, "1500.0")
         return item, step
 
     def test_show_surfaces_every_run_field_a_step_reads(self):
@@ -3076,7 +3076,7 @@ class TestShowSurfacesPhaseAndPr(unittest.TestCase):
     def _open_run(self, phase, pr=None):
         rid = self.store.open_run(self.item, self.pid, phase)
         if pr:
-            self.store.set_run_field(rid, pr=pr)
+            self.store.set_pr(rid, pr)
         return rid
 
     def test_step_in_code_phase_gets_its_own_phase_and_pr(self):
@@ -3194,7 +3194,7 @@ class TestWorktreePushTarget(unittest.TestCase):
         sid = store.create_item("my-feat", "a description", workflow="lightcycle/spec-driven")
         store.add_artifact(sid, "repo", "app")
         rid = store.open_run(sid, store.open_pass(sid), None)
-        store.set_run_field(rid, branch=branch)
+        store.set_branch(rid, branch)
         return store, sid
 
     def test_branch_tracking_targets_feature_not_main(self):

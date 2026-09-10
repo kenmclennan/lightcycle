@@ -16,7 +16,7 @@ class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
 class TestSqliteStoreDisconnect(unittest.TestCase):
     def test_disconnect_closes_the_underlying_connection(self):
         s = make_sqlite_store()
-        s.disconnect()
+        s.release()
         with self.assertRaises(sqlite3.ProgrammingError):
             create_owned_step(s, "t")
 

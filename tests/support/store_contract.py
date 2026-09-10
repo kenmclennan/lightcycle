@@ -109,20 +109,20 @@ class StoreContractBase:
     def test_close_status_is_done(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         self.assertEqual(s.get_node(tid).state, "done")
 
     def test_outcome_preserved(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.close(tid, "rejected")
+        s.complete_node(tid, "rejected")
         self.assertEqual(s.get_node(tid).outcome, "rejected")
 
     def test_close_overrides_in_progress(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "worker-1")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         self.assertEqual(s.get_node(tid).state, "done")
 
     def test_note_roundtrip(self):
@@ -225,7 +225,7 @@ class StoreContractBase:
         blocker = self._step(s, "blocker", role="agent")
         blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, blocker)
-        s.close(blocker, "done")
+        s.complete_node(blocker, "done")
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
@@ -280,7 +280,7 @@ class StoreContractBase:
         blocked = self._step(s, "blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
-        s.close(dep1, "done")
+        s.complete_node(dep1, "done")
         node = s.get_node(blocked)
         self.assertEqual(set(node.blocked_by), {dep2})
         self.assertEqual(node.deps, 1)
@@ -312,7 +312,7 @@ class StoreContractBase:
         s.dep_remove(blocked, blocker1)
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertNotIn(blocked, ready_ids)
-        s.close(blocker2, "done")
+        s.complete_node(blocker2, "done")
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
@@ -880,7 +880,7 @@ class StoreContractBase:
         s = self.make_store()
         open_tid = self._step(s, "open step")
         closed_tid = self._step(s, "closed step")
-        s.close(closed_tid, "done")
+        s.complete_node(closed_tid, "done")
         ids = [t.id for t in s.all_nodes()]
         self.assertIn(open_tid, ids)
         self.assertNotIn(closed_tid, ids)
@@ -889,7 +889,7 @@ class StoreContractBase:
         s = self.make_store()
         open_tid = self._step(s, "open step")
         closed_tid = self._step(s, "closed step")
-        s.close(closed_tid, "done")
+        s.complete_node(closed_tid, "done")
         ids = [t.id for t in s.all_nodes()]
         self.assertIn(open_tid, ids)
         self.assertNotIn(closed_tid, ids)
@@ -901,7 +901,7 @@ class StoreContractBase:
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
         s.claim_ready("agent")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         states = [state for state, _ in s.history(tid)]
         self.assertEqual(states, ["running", "done"])
 
@@ -910,7 +910,7 @@ class StoreContractBase:
         s = self.make_store(now=lambda: next(ticks))
         tid = self._step(s, "t", role="agent")
         s.claim_ready("agent")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         stamps = [ts for _, ts in s.history(tid)]
         self.assertEqual(len(stamps), 2)
         self.assertTrue(all(ts.startswith("2026-01-01T1") for ts in stamps))
@@ -936,7 +936,7 @@ class StoreContractBase:
         s = self.make_store()
         open_tid = self._step(s, "open step")
         closed_tid = self._step(s, "closed step")
-        s.close(closed_tid, "done")
+        s.complete_node(closed_tid, "done")
         ids = [t.id for t in s.all_steps()]
         self.assertIn(open_tid, ids)
         self.assertNotIn(closed_tid, ids)
@@ -967,14 +967,14 @@ class StoreContractBase:
         blocker = self._step(s, "blocker")
         blocked = self._step(s, "blocked", deps=[blocker])
         s.assign(blocked, "w1")
-        s.close(blocked, "done")
+        s.complete_node(blocked, "done")
         self.assertEqual(s.get_node(blocked).state, "done")
 
     def test_step_state_queued_when_unblocked(self):
         s = self.make_store()
         blocker = self._step(s, "blocker", role="agent")
         blocked = self._step(s, "blocked", role="agent", deps=[blocker])
-        s.close(blocker, "done")
+        s.complete_node(blocker, "done")
         self.assertEqual(s.get_node(blocked).state, "queued")
 
     def test_step_state_queued_when_blocker_deleted(self):
@@ -989,7 +989,7 @@ class StoreContractBase:
         item = s.create_item("item", "a description")
         done_step = self._step(s, "done step", role="agent", parent=item)
         self._step(s, "open step", role="agent", parent=item)
-        s.close(done_step, "done")
+        s.complete_node(done_step, "done")
         self.assertEqual(s.get_node(item).state, "queued")
 
     def test_item_state_done_when_all_children_done(self):
@@ -997,8 +997,8 @@ class StoreContractBase:
         item = s.create_item("item", "a description")
         a = self._step(s, "a", parent=item)
         b = self._step(s, "b", parent=item)
-        s.close(a, "done")
-        s.close(b, "done")
+        s.complete_node(a, "done")
+        s.complete_node(b, "done")
         self.assertEqual(s.get_node(item).state, "done")
 
     def test_item_state_queued_when_all_children_queued(self):
@@ -1022,7 +1022,7 @@ class StoreContractBase:
     def test_closed_empty_container_state_done(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
-        s.close(item, "done")
+        s.complete_node(item, "done")
         self.assertEqual(s.get_node(item).state, "done")
 
     def test_add_project_creates_a_new_entry(self):

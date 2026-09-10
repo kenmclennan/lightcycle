@@ -140,7 +140,7 @@ class TestLandingTab(unittest.TestCase):
     def test_done_step_lands_on_detail(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
-        s.close(step, "done")
+        s.complete_node(step, "done")
         self.assertEqual(landing_tab(s.get_node(step)), "detail")
 
 class TestRowBucket(unittest.TestCase):
@@ -174,7 +174,7 @@ class TestRowBucket(unittest.TestCase):
     def test_done_step_is_done(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
-        s.close(step, "done")
+        s.complete_node(step, "done")
         self.assertEqual(row_bucket(s.get_node(step), FLOW), "done")
 
     def test_dependency_blocked_item_is_queued(self):
@@ -194,7 +194,7 @@ class TestRowBucket(unittest.TestCase):
         item = s.create_item("item", "a description")
         for i in range(11):
             done = s.create_step("done %d" % i, step="build", role="agent", parent=item)
-            s.close(done, "done")
+            s.complete_node(done, "done")
         s.create_step("await-merge: item", step="await-merge", role="human", parent=item)
         self.assertEqual(row_bucket(s.get_node(item), FLOW), "gate")
 

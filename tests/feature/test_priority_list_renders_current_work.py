@@ -733,7 +733,7 @@ def _w_press_ctrl_u(ctx):
 
 @when("that step is completed")
 def _w_complete_target(ctx):
-    ctx["store"].close(ctx["target_id"], "done")
+    ctx["store"].complete_node(ctx["target_id"], "done")
 
 
 @then("the inbox step's row is grouped above the active and queued groups")

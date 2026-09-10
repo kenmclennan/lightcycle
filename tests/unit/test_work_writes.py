@@ -583,13 +583,13 @@ class TestCloseItem(unittest.TestCase):
         sid = s.create_item("st", "a description")
         k = s.create_step("build: x", step="build", role="agent", parent=sid)
         calls = []
-        original_close = s.close
+        original_close = s.complete_node
 
         def spy_close(tid, reason, disposition=None):
             calls.append((tid, disposition))
             return original_close(tid, reason, disposition)
 
-        s.close = spy_close
+        s.complete_node = spy_close
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged", disposition="completed"))
         self.assertIn((sid, "completed"), calls)
@@ -643,7 +643,7 @@ class TestCloseItemBacklogResolution(unittest.TestCase):
         backlog = create_owned_step(s, "a backlog item", role="human")
         item = s.create_item("my item", "a description")
         s.add_artifact(item, "resolves", backlog)
-        s.close(backlog, "already handled")
+        s.complete_node(backlog, "already handled")
         _close_item(s, item)
         self.assertEqual(s.get_node(backlog).outcome, "already handled")
         self.assertEqual(s.item_artifacts(backlog), [])
@@ -668,7 +668,7 @@ class TestWorktreeServiceItemBranch(unittest.TestCase):
         svc = WorktreeService(s, None, None, None)
         self.assertIsNone(svc.item_branch(sid))
         rid = s.open_run(sid, s.open_pass(sid), None)
-        s.set_run_field(rid, branch="feat/x")
+        s.set_branch(rid, "feat/x")
         self.assertEqual(svc.item_branch(sid), "feat/x")
 
 
@@ -685,7 +685,7 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), None)
-        s.set_run_field(rid, branch="feat/custom-branch")
+        s.set_branch(rid, "feat/custom-branch")
         svc = WorktreeService(s, None, None, FakeConfig())
         self.assertEqual(svc._branch_for(sid), "feat/custom-branch")
 
@@ -697,7 +697,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         s.add_project("acme/app", local_path="/projects/app")
         s.add_artifact(sid, "repo", "app")
         rid = s.open_run(sid, s.open_pass(sid), None)
-        s.set_run_field(rid, branch="feat/my-branch")
+        s.set_branch(rid, "feat/my-branch")
         git = FakeGitRemove(repos={"/projects/app"})
         svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
         svc.remove(sid)

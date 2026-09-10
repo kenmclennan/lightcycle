@@ -70,7 +70,7 @@ def test_hierarchy_cursor_survives_a_layout_forced_rerender():
     item = store.create_item("Item", "a description")
     done_step = store.create_step("s1", step="build", role="agent", parent=item)
     queued_step = store.create_step("s2", step="write-code", role="agent", parent=item)
-    store.close(done_step, "done")
+    store.complete_node(done_step, "done")
     session = launch(make_test_container(store=store))
     try:
         session.run(

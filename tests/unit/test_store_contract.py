@@ -30,17 +30,17 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         blocked = create_owned_step(s, "blocked", role="agent")
         s.dep_add(blocked, dep1)
         s.dep_add(blocked, dep2)
-        s.close(dep1, "done")
+        s.complete_node(dep1, "done")
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertNotIn(blocked, ready_ids)
-        s.close(dep2, "done")
+        s.complete_node(dep2, "done")
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
     def test_closed_task_not_in_ready(self):
         s = self.make_store()
         tid = create_owned_step(s, "t", role="agent")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         self.assertEqual(s.ready_steps(), [])
 
     def test_claimed_task_not_in_ready(self):
@@ -85,7 +85,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         s = self.make_store()
         sid = s.create_item("item: foo", "a description")
         s.add_artifact(sid, "spec", "specs/foo.md")
-        s.close(sid, "done")
+        s.complete_node(sid, "done")
         items = s.closed_items()
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], sid)
@@ -102,7 +102,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_disconnect_is_a_noop(self):
         s = self.make_store()
-        s.disconnect()
+        s.release()
         create_owned_step(s, "t")
 
 

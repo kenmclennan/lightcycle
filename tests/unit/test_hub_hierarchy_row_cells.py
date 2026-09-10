@@ -80,7 +80,7 @@ class TestGlyphSelectionPerBucket(unittest.TestCase):
     def test_done_agent_step(self):
         store = FakeStore()
         step = create_owned_step(store, "s", step="build", role="agent")
-        store.close(step, "done")
+        store.complete_node(step, "done")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, DONE_GLYPH.glyph)
 
@@ -99,7 +99,7 @@ class TestGlyphSelectionPerBucket(unittest.TestCase):
     def test_done_human_step_uses_the_human_glyph_not_the_done_glyph(self):
         store = FakeStore()
         step = create_owned_step(store, "s", step="await-merge", role="human")
-        store.close(step, "merged")
+        store.complete_node(step, "merged")
         icon_cell = self._glyph_for(store, store.get_node(step))
         self.assertEqual(icon_cell.plain, HUMAN_STEP_GLYPH.glyph)
 
@@ -156,7 +156,7 @@ class TestActiveFrameOverride(unittest.TestCase):
     def test_leaves_a_done_node_untouched(self):
         store = FakeStore()
         step = create_owned_step(store, "s", step="build", role="agent")
-        store.close(step, "done")
+        store.complete_node(step, "done")
         row = HierarchyRow(store.get_node(step), 0)
 
         icon_cell, *_ = hierarchy_row_cells(

@@ -24,7 +24,7 @@ def make_legacy_sqlite_store(rows, artifacts=(), shortcode="GRID"):
     config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
     store = SqliteStore(config)
     db_path = store._db_path
-    store.disconnect()
+    store.release()
     plant_legacy_nodes(db_path, rows, artifacts)
     return SqliteStore(config)
 
@@ -34,6 +34,6 @@ def plant_legacy_db(config, rows=(), artifacts=()):
 
     store = SqliteStore(config)
     db_path = store._db_path
-    store.disconnect()
+    store.release()
     plant_legacy_nodes(db_path, rows, artifacts)
     return db_path

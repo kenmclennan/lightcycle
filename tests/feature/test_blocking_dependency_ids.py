@@ -45,7 +45,7 @@ def _no_deps(ctx, name):
 
 @given(parsers.parse('"{name}" is closed'))
 def _closed(ctx, name):
-    ctx["store"].close(ctx["ids"][name], "done")
+    ctx["store"].complete_node(ctx["ids"][name], "done")
 
 
 @given(parsers.parse('"{name}" is deleted'))

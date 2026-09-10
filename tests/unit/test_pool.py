@@ -940,7 +940,7 @@ class TestTick(unittest.TestCase):
         tid = s.create_step("audit: release", step="audit", role="agent",
                             parent=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         s._records[tid]["closed_at"] = "2026-01-01T12:00:00"
         result = TickUseCase(
             s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4),
@@ -955,7 +955,7 @@ class TestTick(unittest.TestCase):
         tid = s.create_step("audit: release", step="audit", role="agent",
                             parent=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         s._records[tid]["closed_at"] = "2026-01-01T12:00:00"
         tick = TickUseCase(
             s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4),

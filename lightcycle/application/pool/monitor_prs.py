@@ -150,7 +150,7 @@ class MonitorPrsUseCase:
         if isinstance(head, ReadFailure):
             return
         if run.pr != pr_value:
-            self._store.set_run_field(run.id, pr=pr_value, content_pin=head)
+            self._store.record_pr_pin(run.id, pr_value, head)
             return
         pin = run.content_pin
         if pin == head:
@@ -197,7 +197,7 @@ class MonitorPrsUseCase:
                     target = step or self._latest_step(item.id)
                     if target is not None:
                         self._store.note_condition(target.id, base_note)
-        self._store.set_run_field(run.id, content_pin=head)
+        self._store.set_content_pin(run.id, head)
 
     def _release_ci_pending(self):
         released = []
@@ -366,9 +366,7 @@ class MonitorPrsUseCase:
                         )
                         self._store.set_watched_step(tid, step.id)
                         if run is not None:
-                            self._store.set_run_field(
-                                run.id, comments_dispatched_through=str(newest)
-                            )
+                            self._store.set_comments_dispatched_through(run.id, str(newest))
                         reworked.append(step.parent)
             if not advanced and conflict_outcome and _false_on_failure(
                 self._github.is_conflicted(pr_value)

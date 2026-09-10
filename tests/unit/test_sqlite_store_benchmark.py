@@ -49,7 +49,7 @@ class TestSqliteStoreBenchmark(unittest.TestCase):
     def test_close_is_fast_relative_to_calibration(self):
         s = make_sqlite_store()
         ids = iter([create_owned_step(s, "t%d" % i, role="agent") for i in range(_ITERATIONS)])
-        elapsed = _median_ms(lambda: s.close(next(ids), "done"))
+        elapsed = _median_ms(lambda: s.complete_node(next(ids), "done"))
         calibration = _median_ms(_calibration_ms)
         _assert_ratio_within(self, "close", elapsed, calibration, _SINGLE_OP_MAX_RATIO)
 

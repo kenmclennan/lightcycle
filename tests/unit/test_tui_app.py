@@ -802,7 +802,7 @@ class TestSelectionFollow(unittest.TestCase):
         table.move_cursor(row=table.get_row_index(row_key(session, target)))
         session.pause()
 
-        store.close(target, "done")
+        store.complete_node(target, "done")
         session.poll_tick()
 
         cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
@@ -2050,7 +2050,7 @@ class TestDoneRows(unittest.TestCase):
     def test_closed_items_render_as_rows_once_done_is_current(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
 
         session = self._launch(store)
 
@@ -2130,7 +2130,7 @@ class TestDoneFilterRowRerendersOnResize(unittest.TestCase):
     def test_resize_alone_hides_the_count_without_new_data(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
         session = self._launch(store)
         right = session.app.query_one("#done-filter-right", Static)
         self.assertTrue(right.display)
@@ -2163,7 +2163,7 @@ class TestDoneFooter(unittest.TestCase):
     def test_rows_present_shows_the_done_shortcuts(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
 
         session = self._launch(store)
 
@@ -2178,7 +2178,7 @@ class TestDoneFooter(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("done item", "a description")
         store.add_artifact(item, "repo", "other")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
         session = self._launch(store)
 
         session.app._done_project_filter = "lightcycle"
@@ -2192,7 +2192,7 @@ class TestDoneFooter(unittest.TestCase):
     def test_focusing_the_search_box_with_rows_present_shows_the_search_shortcuts(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
         session = self._launch(store)
 
         session.press("/")
@@ -2202,7 +2202,7 @@ class TestDoneFooter(unittest.TestCase):
     def test_focusing_the_search_box_with_zero_filtered_rows_shows_the_search_empty_shortcuts(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
         session = self._launch(store)
         app = session.app
 
@@ -2215,7 +2215,7 @@ class TestDoneFooter(unittest.TestCase):
     def test_leaving_the_search_box_restores_the_shortcuts_the_row_state_calls_for(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
         session = self._launch(store)
         app = session.app
 
@@ -2234,9 +2234,9 @@ class TestDoneSearchInput(unittest.TestCase):
     def test_on_input_changed_sets_the_done_text_filter_and_refreshes(self):
         store = FakeStore()
         keep = store.create_item("keep this", "a description")
-        store.close(keep, "merged")
+        store.complete_node(keep, "merged")
         drop = store.create_item("drop this", "a description")
-        store.close(drop, "merged")
+        store.complete_node(drop, "merged")
         session = self._launch(store)
         app = session.app
 
@@ -2251,7 +2251,7 @@ class TestDoneSearchInput(unittest.TestCase):
     def test_escape_returns_focus_to_the_table_without_clearing_the_term(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
         session = self._launch(store)
         app = session.app
 
@@ -2270,9 +2270,9 @@ class TestDoneSearchInput(unittest.TestCase):
     def test_down_moves_focus_to_the_table_leaving_the_term_and_rows_unchanged(self):
         store = FakeStore()
         widget_item = store.create_item("widget one", "a description")
-        store.close(widget_item, "merged")
+        store.complete_node(widget_item, "merged")
         gadget_item = store.create_item("gadget two", "a description")
-        store.close(gadget_item, "merged")
+        store.complete_node(gadget_item, "merged")
         session = self._launch(store)
         app = session.app
 
@@ -2290,9 +2290,9 @@ class TestDoneSearchInput(unittest.TestCase):
     def test_up_moves_focus_to_the_table_leaving_the_term_and_rows_unchanged(self):
         store = FakeStore()
         widget_item = store.create_item("widget one", "a description")
-        store.close(widget_item, "merged")
+        store.complete_node(widget_item, "merged")
         gadget_item = store.create_item("gadget two", "a description")
-        store.close(gadget_item, "merged")
+        store.complete_node(gadget_item, "merged")
         session = self._launch(store)
         app = session.app
 
@@ -2312,9 +2312,9 @@ class TestDoneSearchInput(unittest.TestCase):
 
         store = FakeStore()
         widget_item = store.create_item("widget one", "a description")
-        store.close(widget_item, "merged")
+        store.complete_node(widget_item, "merged")
         gadget_item = store.create_item("gadget two", "a description")
-        store.close(gadget_item, "merged")
+        store.complete_node(gadget_item, "merged")
         session = self._launch(store)
         app = session.app
 
@@ -2337,7 +2337,7 @@ class TestDoneSearchInput(unittest.TestCase):
     def test_enter_with_zero_filtered_rows_does_nothing(self):
         store = FakeStore()
         item = store.create_item("widget one", "a description")
-        store.close(item, "merged")
+        store.complete_node(item, "merged")
         session = self._launch(store)
         app = session.app
         default_screen = app.screen

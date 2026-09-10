@@ -67,11 +67,11 @@ class TestClose(unittest.TestCase):
         self.tid = create_owned_step(self.s, "build: thing", role="agent")
 
     def test_close_sets_done_status(self):
-        self.s.close(self.tid, "done")
+        self.s.complete_node(self.tid, "done")
         self.assertEqual(self.s.get_node(self.tid).state, "done")
 
     def test_outcome_roundtrip(self):
-        self.s.close(self.tid, "rejected")
+        self.s.complete_node(self.tid, "rejected")
         self.assertEqual(self.s.get_node(self.tid).outcome, "rejected")
 
 
@@ -159,7 +159,7 @@ class TestReady(unittest.TestCase):
         blocker = create_owned_step(self.s, "build: dep", role="agent")
         blocked = create_owned_step(self.s, "build: thing", role="agent")
         self.s.dep_add(blocked, blocker)
-        self.s.close(blocker, "done")
+        self.s.complete_node(blocker, "done")
         ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
@@ -169,10 +169,10 @@ class TestReady(unittest.TestCase):
         blocked = create_owned_step(self.s, "build: thing", role="agent")
         self.s.dep_add(blocked, dep1)
         self.s.dep_add(blocked, dep2)
-        self.s.close(dep1, "done")
+        self.s.complete_node(dep1, "done")
         ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertNotIn(blocked, ready_ids)
-        self.s.close(dep2, "done")
+        self.s.complete_node(dep2, "done")
         ready_ids = [t.id for t in self.s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
@@ -183,7 +183,7 @@ class TestReady(unittest.TestCase):
 
     def test_closed_task_not_in_ready(self):
         tid = create_owned_step(self.s, "build: thing", role="agent")
-        self.s.close(tid, "done")
+        self.s.complete_node(tid, "done")
         self.assertEqual(self.s.ready_steps(), [])
 
     def test_stories_excluded_from_ready(self):
@@ -242,7 +242,7 @@ class TestListNodes(unittest.TestCase):
     def test_closed_stories_roundtrip(self):
         sid = self.s.create_item("item: foo", "a description")
         self.s.add_artifact(sid, "spec", "specs/foo.md")
-        self.s.close(sid, "done")
+        self.s.complete_node(sid, "done")
         items = self.s.closed_items()
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], sid)
@@ -251,7 +251,7 @@ class TestListNodes(unittest.TestCase):
 
     def test_closed_stories_excludes_tasks(self):
         tid = create_owned_step(self.s, "build: thing")
-        self.s.close(tid, "done")
+        self.s.complete_node(tid, "done")
         self.assertEqual(self.s.closed_items(), [])
 
     def test_closed_stories_excludes_open_stories(self):
@@ -289,7 +289,7 @@ class TestNoSubprocess(unittest.TestCase):
         s = FS()
         tid = create_owned_step(s, "build: thing", role="agent")
         s.note(tid, "hello")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
 
 
 if __name__ == "__main__":

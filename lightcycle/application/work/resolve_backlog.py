@@ -17,5 +17,5 @@ def retire_resolved(store, work_id):
         if artifact.type != "resolves":
             continue
         if store.get_node(artifact.value).state != State.DONE:
-            store.close(artifact.value, "resolved by %s" % work_id)
+            store.complete_node(artifact.value, "resolved by %s" % work_id)
             store.add_artifact(artifact.value, "resolved-by", work_id, internal=True)

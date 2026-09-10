@@ -13,5 +13,5 @@ class ExportSnapshotUseCase:
         self._store = store
 
     def execute(self) -> ExportSnapshotResponse:
-        rows = self._store.export_rows()
+        rows = self._store.snapshot_nodes()
         return ExportSnapshotResponse(lines=[json.dumps(row) for row in rows])

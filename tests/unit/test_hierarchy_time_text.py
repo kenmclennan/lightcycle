@@ -52,7 +52,7 @@ class TestHierarchyTimeText(unittest.TestCase):
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 300)
         clock["now"] = "2026-01-01T10:30:00"
-        store.close(step, "done")
+        store.complete_node(step, "done")
         store._records[step]["closed_at"] = "2026-01-01T10:30:00"
         node = store.get_node(step)
 
@@ -86,7 +86,7 @@ class TestHierarchyTimeText(unittest.TestCase):
         clock = {"now": "2026-01-01T09:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         step = create_owned_step(store, "await-merge", step="await-merge", role="human")
-        store.close(step, "merged")
+        store.complete_node(step, "merged")
         store._records[step]["closed_at"] = "2026-01-01T09:15:00"
         node = store.get_node(step)
 

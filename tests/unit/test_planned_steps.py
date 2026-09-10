@@ -35,7 +35,7 @@ class TestPlannedStepsUseCase(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         build = s.create_step("build: x", step="build", role="agent", parent=item)
-        s.close(build, "done")
+        s.complete_node(build, "done")
         s.create_step("review: x", step="review", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
@@ -58,7 +58,7 @@ class TestPlannedStepsUseCase(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         build = s.create_step("build: x", step="build", role="agent", parent=item)
-        s.close(build, "done")
+        s.complete_node(build, "done")
         review = s.create_step("review: x", step="review", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
@@ -78,7 +78,7 @@ class TestPlannedStepsUseCase(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         audit = s.create_step("audit: x", step="audit", role="agent", parent=item)
-        s.close(audit, "clean")
+        s.complete_node(audit, "clean")
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
 

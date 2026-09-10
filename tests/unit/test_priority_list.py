@@ -330,7 +330,7 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
         item = store.create_item("story", "a description")
         done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
         store.record_usage(done, 100, 10, 0, 0, 2.50, "list", None)
-        store.close(done, "done")
+        store.complete_node(done, "done")
         step = store.create_step("building", step="build", role="agent", parent=item)
         store.record_usage(step, 100, 10, 0, 0, 1.25, "list", None)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
@@ -377,7 +377,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         item = store.create_item("story", "a description")
         done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
         store.accrue_active_seconds([done], 300)
-        store.close(done, "done")
+        store.complete_node(done, "done")
         step = store.create_step("building", step="build", role="agent", parent=item)
         store.accrue_active_seconds([step], 540)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
@@ -391,7 +391,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         item = store.create_item("story", "a description")
         done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
         store.accrue_active_seconds([done], 540)
-        store.close(done, "done")
+        store.complete_node(done, "done")
         gate = store.create_step(
             "await merge", step="ready-merge", role="human", parent=item
         )
@@ -406,7 +406,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         item = store.create_item("story", "a description")
         done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
         store.accrue_active_seconds([done], 540)
-        store.close(done, "done")
+        store.complete_node(done, "done")
         step = store.create_step("queued build", step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 

@@ -21,7 +21,7 @@ class TestSearchUseCase(unittest.TestCase):
     def test_matches_a_done_item(self):
         s = FakeStore()
         tid = s.create_item("guard pytest-bdd step definitions", "a description")
-        s.close(tid, "done")
+        s.complete_node(tid, "done")
         resp = SearchUseCase(s).execute(SearchInput(text="pytest-bdd step"))
         self.assertEqual([m.node.id for m in resp.matches], [tid])
         self.assertEqual(resp.matches[0].node.state, State.DONE)

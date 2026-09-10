@@ -88,7 +88,7 @@ class TestPassBoundaryViolations(unittest.TestCase):
         pid = store.open_pass(item)
         before_pass = store.get_pass(pid)
         rid = store.open_run(item, pid, "code")
-        store.set_run_field(rid, branch="feat/x")
+        store.set_branch(rid, "feat/x")
         store.close_run(rid)
         store.close_pass(pid)
         store.open_pass(item)
@@ -104,7 +104,7 @@ class TestPassBoundaryViolations(unittest.TestCase):
         pid = store.open_pass(item)
         before_pass = store.get_pass(pid)
         rid = store.open_run(item, pid, "code")
-        store.set_run_field(rid, branch="feat/leaked")
+        store.set_branch(rid, "feat/leaked")
         store.close_run(rid)
         store.close_pass(pid)
         store.open_pass(item)
@@ -121,7 +121,7 @@ class TestPassBoundaryViolations(unittest.TestCase):
         pid = store.open_pass(item)
         before_pass = store.get_pass(pid)
         store.close_pass(pid)
-        store.close(item, "done")
+        store.complete_node(item, "done")
 
         violations = _use_case(store, _FakeGit())._pass_boundary_violations(0, item, before_pass)
 

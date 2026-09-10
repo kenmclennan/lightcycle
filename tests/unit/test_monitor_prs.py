@@ -29,7 +29,8 @@ def plant_pr(store, item, url, phase=None, branch=None, n=1, state="open"):
             store.close_pass(current.id)
         store.open_pass(item)
     rid = store.open_run(item, store.current_pass(item).id, phase)
-    store.set_run_field(rid, pr=url, branch=branch)
+    store.set_branch(rid, branch)
+    store.set_pr(rid, url)
     if state != "open":
         store.close_run(rid, state)
     return rid
@@ -586,8 +587,8 @@ class TestMonitorPrsMerged(unittest.TestCase):
         step = store.create_step(
             "ready-merge: done feature", step="ready-merge", role="human", parent=item
         )
-        store.close(step, "merged")
-        store.close(item, "merged")
+        store.complete_node(step, "merged")
+        store.complete_node(item, "merged")
         worktrees = FakeWorktrees()
         uc = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
@@ -1147,7 +1148,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         uc.execute()
         spawned = self._spawned_feedback_steps(store, step)
-        store.close(spawned[0].id, "done")
+        store.complete_node(spawned[0].id, "done")
         store.replace_artifact(step, "feedback-watermark", "1500.0")
 
         result = uc.execute()
@@ -1161,7 +1162,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         uc.execute()
         spawned = self._spawned_feedback_steps(store, step)
-        store.close(spawned[0].id, "done")
+        store.complete_node(spawned[0].id, "done")
 
         result = uc.execute()
 
@@ -1182,7 +1183,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         reply1 = self._inline_comment(
             1250.0, body="queued %s" % LC_MARKER, cid="c1-reply", in_reply_to="c1"
         )
-        store.close(spawned1[0].id, "done")
+        store.complete_node(spawned1[0].id, "done")
         gh._timed_comments = [round1, reply1]
 
         result2 = uc.execute()
@@ -1308,7 +1309,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         for _ in range(prior_conflicts):
             old = store.create_step("watch-step: conflicting feature", step="watch-step",
                                     role="agent", parent=item)
-            store.close(old, "conflicted")
+            store.complete_node(old, "conflicted")
         step = store.create_step("watch-step: conflicting feature", step="watch-step",
                                  role="agent", parent=item)
         worktrees = FakeWorktrees()
@@ -1505,7 +1506,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         for _ in range(5):
             old = store.create_step("watch-step: no-cap feature", step="watch-step",
                                     role="agent", parent=item)
-            store.close(old, "conflicted")
+            store.complete_node(old, "conflicted")
         step = store.create_step("watch-step: no-cap feature", step="watch-step",
                                  role="agent", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow))
@@ -1619,7 +1620,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store, item, step, uc = self._setup(gh)
         uc.execute()
 
-        store.set_run_field(store.current_run(item, None).id, pr=new_url)
+        store.set_pr(store.current_run(item, None).id, new_url)
         uc.execute()
 
         self.assertEqual(self._pin(store, item), "sha9")
@@ -1639,7 +1640,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store, item, step, uc = self._setup(gh)
         uc.execute()
 
-        store.set_run_field(store.current_run(item, None).id, pr=new_url)
+        store.set_pr(store.current_run(item, None).id, new_url)
         uc.execute()
 
         self.assertEqual(self._pin(store, item), "sha9")
@@ -1772,7 +1773,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         )
         store, item, step, uc = self._setup(gh)
         uc.execute()
-        store.close(step, "done")
+        store.complete_node(step, "done")
 
         gh._head_shas[self._URL] = "sha2"
         gh._files_by_sha[(self._URL, "sha2")] = frozenset()
@@ -1799,8 +1800,8 @@ class TestMonitorPrsContentPin(unittest.TestCase):
             "build: guarded feature", step="build", role="agent", parent=item,
             id="%s.10" % item,
         )
-        store.close(step_9, "done")
-        store.close(step_10, "done")
+        store.complete_node(step_9, "done")
+        store.complete_node(step_10, "done")
         uc = MonitorPrsUseCase(
             store, gh, FakeWorktrees(), _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
         )
