@@ -5,9 +5,8 @@ import sys
 import tempfile
 import unittest
 
+from lightcycle.adapters.claude_stream import parse_rate_limit_event, saw_terminal_command
 from lightcycle.adapters.worker_log import iter_lines
-from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
-from lightcycle.domain.pool.worker_session import saw_terminal_command
 
 _TARGET_BYTES = 20 * 1024 * 1024
 _MULTIBYTE_TEXT = "café ☃ 你好 ❤️ résumé naïve"

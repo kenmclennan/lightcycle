@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 
+from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
@@ -89,7 +90,8 @@ class FakeConfig:
 
 
 def _add(source, store=None, config=None):
-    return AddWorkflowSourceUseCase(source, store or FakeStore(), config or FakeConfig())
+    config = config or FakeConfig()
+    return AddWorkflowSourceUseCase(source, store or FakeStore(), config, FsAdapter(config))
 
 
 class TestAdd(unittest.TestCase):
@@ -188,7 +190,8 @@ class TestUpgrade(unittest.TestCase):
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
         _add(source).execute(url="u", ref="main", name=None)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
-        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), FakeConfig()).execute("acme")
+        cfg = FakeConfig()
+        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
         self.assertEqual(resp.sha, "sha2")
         self.assertTrue(resp.changed)
         self.assertEqual(source.read_registry("acme").current, "sha2")
@@ -202,26 +205,30 @@ class TestUpgrade(unittest.TestCase):
             steps={"code": _step_text(
                 {"model": "x", "step": "code"}, "1. Run `lc frobnicate STEP` and exit.")},
             workflows={"build": "entry: code\n"})
+        cfg = FakeConfig()
         with self.assertRaises(WorkflowSourceError):
-            UpgradeWorkflowSourceUseCase(source, FakeStore(), FakeConfig()).execute("acme")
+            UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
         self.assertEqual(source.read_registry("acme").current, "sha1")
         self.assertFalse(source.has_version("acme", "sha2"))
 
     def test_upgrade_unregistered_origin_raises(self):
+        cfg = FakeConfig()
         with self.assertRaises(WorkflowSourceError):
-            UpgradeWorkflowSourceUseCase(FakeSource(), FakeStore(), FakeConfig()).execute("nope")
+            UpgradeWorkflowSourceUseCase(
+                FakeSource(), FakeStore(), cfg, FsAdapter(cfg)).execute("nope")
 
     def test_upgrade_prunes_beyond_retention_but_keeps_pinned(self):
         source = FakeSource()
         store = FakeStore()
         store.create_item("t", "d", workflow="acme/build@sha1")
         cfg = FakeConfig(retention=1)
+        fs = FsAdapter(cfg)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        AddWorkflowSourceUseCase(source, store, cfg).execute(url="u", ref="main", name=None)
+        AddWorkflowSourceUseCase(source, store, cfg, fs).execute(url="u", ref="main", name=None)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
-        UpgradeWorkflowSourceUseCase(source, store, cfg).execute("acme")
+        UpgradeWorkflowSourceUseCase(source, store, cfg, fs).execute("acme")
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha3")
-        UpgradeWorkflowSourceUseCase(source, store, cfg).execute("acme")
+        UpgradeWorkflowSourceUseCase(source, store, cfg, fs).execute("acme")
         self.assertEqual(set(source.materialized["acme"]), {"sha1", "sha3"})
 
 
@@ -234,7 +241,8 @@ class TestUpgradeAll(unittest.TestCase):
         _add(source).execute(url="u2", ref="main", name=None)
         source.add_remote("u1", 'name = "healthy"\ncontract = 1\n', "sha2")
         source.fail_remote("u2", "ref 'branch-x' not found in u2")
-        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), FakeConfig()).execute()
+        cfg = FakeConfig()
+        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute()
         self.assertEqual(len(resp.results), 1)
         self.assertEqual(resp.results[0].origin, "healthy")
         self.assertEqual(resp.results[0].sha, "sha2")
@@ -249,7 +257,9 @@ class TestRemove(unittest.TestCase):
         store = FakeStore()
         store.create_item("t", "d", workflow="acme/build@sha1")
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        AddWorkflowSourceUseCase(source, store, FakeConfig()).execute(url="u", ref="main", name=None)
+        cfg = FakeConfig()
+        AddWorkflowSourceUseCase(source, store, cfg, FsAdapter(cfg)).execute(
+            url="u", ref="main", name=None)
         with self.assertRaises(WorkflowSourceError):
             RemoveWorkflowSourceUseCase(source, store).execute("acme")
         self.assertEqual(source.list_origins(), ["acme"])
@@ -272,10 +282,11 @@ class TestList(unittest.TestCase):
         store = FakeStore()
         store.create_item("t", "d", workflow="acme/build@sha1")
         cfg = FakeConfig(retention=5)
+        fs = FsAdapter(cfg)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        AddWorkflowSourceUseCase(source, store, cfg).execute(url="u", ref="main", name=None)
+        AddWorkflowSourceUseCase(source, store, cfg, fs).execute(url="u", ref="main", name=None)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
-        UpgradeWorkflowSourceUseCase(source, store, cfg).execute("acme")
+        UpgradeWorkflowSourceUseCase(source, store, cfg, fs).execute("acme")
         resp = ListWorkflowSourcesUseCase(source, store).execute()
         self.assertEqual(len(resp.origins), 1)
         view = resp.origins[0]
@@ -293,7 +304,9 @@ class TestInit(unittest.TestCase):
         cfg = FakeConfig(projects_root=root)
         git = FakeGit()
         with self.assertRaises(WorkflowSourceError):
-            InitWorkflowOriginUseCase(cfg, git, FakeSource(), FakeStore(), ScaffoldAdapter()).execute("acme")
+            InitWorkflowOriginUseCase(
+                cfg, git, FakeSource(), FakeStore(), ScaffoldAdapter(), FsAdapter(cfg)
+            ).execute("acme")
         self.assertEqual(git.calls, [])
 
     def test_creates_scaffold_registers_with_head_ref_and_sets_personal_origin(self):
@@ -303,7 +316,9 @@ class TestInit(unittest.TestCase):
         source = FakeSource()
         source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
         git = FakeGit()
-        resp = InitWorkflowOriginUseCase(cfg, git, source, FakeStore(), ScaffoldAdapter()).execute("acme")
+        resp = InitWorkflowOriginUseCase(
+            cfg, git, source, FakeStore(), ScaffoldAdapter(), FsAdapter(cfg)
+        ).execute("acme")
         self.assertEqual(resp.project_dir, project_dir)
         self.assertEqual(resp.origin, "acme")
         self.assertEqual(resp.sha, "sha1")
@@ -323,7 +338,9 @@ class TestInit(unittest.TestCase):
         cfg = FakeConfig(projects_root=root)
         source = FakeSource()
         source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
-        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), ScaffoldAdapter()).execute("acme")
+        InitWorkflowOriginUseCase(
+            cfg, FakeGit(), source, FakeStore(), ScaffoldAdapter(), FsAdapter(cfg)
+        ).execute("acme")
         with open(os.path.join(project_dir, ".github", "workflows", "simulate.yml")) as f:
             content = f.read()
         self.assertEqual(content, """name: simulate
@@ -387,7 +404,9 @@ jobs:
         cfg = FakeConfig(projects_root=root)
         source = FakeSource()
         source.add_remote(project_dir, 'name = "acme"\ncontract = 1\n', "sha1")
-        InitWorkflowOriginUseCase(cfg, FakeGit(), source, FakeStore(), ScaffoldAdapter()).execute("acme")
+        InitWorkflowOriginUseCase(
+            cfg, FakeGit(), source, FakeStore(), ScaffoldAdapter(), FsAdapter(cfg)
+        ).execute("acme")
         for fname in ("source.toml", "README.md"):
             with open(os.path.join(project_dir, fname)) as f:
                 text = f.read()

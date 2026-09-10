@@ -3,7 +3,6 @@ from typing import List
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import WorkerPool
-from lightcycle.domain.pool.worker_session import saw_session_activity, saw_terminal_command
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
 
@@ -20,7 +19,8 @@ class SweepResponse:
 
 class SweepUseCase:
     def __init__(
-        self, store, workers, worktrees=None, git=None, fs=None, spin_port=None, spin_cap=None
+        self, store, workers, worktrees=None, git=None, fs=None, spin_port=None, spin_cap=None,
+        stream=None,
     ):
         self._store = store
         self._workers = workers
@@ -29,6 +29,7 @@ class SweepUseCase:
         self._fs = fs
         self._spin_port = spin_port
         self._spin_cap = spin_cap
+        self._stream = stream
 
     def _capture(self, t):
         if self._worktrees is None or self._git is None:
@@ -49,9 +50,9 @@ class SweepUseCase:
         return self._git.commit_tracked(path, message)
 
     def _saw_terminal_command(self, log):
-        if self._fs is None:
+        if self._fs is None or self._stream is None:
             return False
-        return saw_terminal_command(self._fs.iter_lines(log))
+        return self._stream.saw_terminal_command(self._fs.iter_lines(log))
 
     def _last_nonempty_line(self, lines):
         last = None
@@ -143,9 +144,9 @@ class SweepUseCase:
                 capture_failed.append(t.id)
             if t.id not in stalled_ids and self._spin_port is not None and self._spin_cap is not None:
                 dead = pool.dead_for_step(probe, t.id)
-                if dead is not None and self._fs is not None:
+                if dead is not None and self._fs is not None and self._stream is not None:
                     lines = list(self._fs.iter_lines(dead.log))
-                    no_work = not saw_session_activity(lines)
+                    no_work = not self._stream.saw_session_activity(lines)
                     last_line = self._last_nonempty_line(lines)
                     if self._advance_spin(t.id, now, no_work, last_line):
                         parked.append(t.id)

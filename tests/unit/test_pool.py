@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool import (
     BackupResponse,
     BreakerGateResponse,
@@ -573,7 +574,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
-        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = SweepUseCase(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [999])
         self.assertEqual(workers.checked, ["stalled-sp"])
         self.assertIn(step, result.swept)
@@ -591,7 +592,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 + 1})
-        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = SweepUseCase(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
         self.assertEqual(s.get_node(step).state, "running")
@@ -603,7 +604,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 0})
-        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = SweepUseCase(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
 
@@ -630,7 +631,7 @@ class TestSweep(unittest.TestCase):
             files={"/l/1.log": log_line.encode()},
             log_mtimes={"/l/1.log": 1000 - 1800 - 1},
         )
-        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = SweepUseCase(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
         self.assertEqual(s.get_node(step).state, "running")
@@ -669,7 +670,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
-        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = SweepUseCase(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [999])
         self.assertIn(step, result.swept)
         self.assertEqual(s.get_node(step).state, "queued")
@@ -687,7 +688,7 @@ class TestSweep(unittest.TestCase):
     def test_a_no_work_death_below_the_cap_is_reclaimed_not_parked(self):
         spin_port = FakeSpinPort()
         s, step, workers, fs = self._dead_no_work_setup(spin_port)
-        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
             now=1000, max_boot=120, stall_seconds=1800
         )
         self.assertIn(step, result.swept)
@@ -708,7 +709,7 @@ class TestSweep(unittest.TestCase):
                 workers=[{"spawnid": spawnid, "pid": i + 1, "step": step, "started": 0, "log": log}]
             )
             fs = FakeFs(files={log: _NO_WORK_LOG})
-            result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+            result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
                 now=1000 + i, max_boot=120, stall_seconds=1800
             )
         self.assertEqual(result.parked, [step])
@@ -730,7 +731,7 @@ class TestSweep(unittest.TestCase):
                 workers=[{"spawnid": spawnid, "pid": i + 1, "step": step, "started": 0, "log": log}]
             )
             fs = FakeFs(files={log: _NO_WORK_LOG})
-            SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+            SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
                 now=1000 + i, max_boot=120, stall_seconds=1800
             )
 
@@ -741,7 +742,7 @@ class TestSweep(unittest.TestCase):
             workers=[{"spawnid": "dead-real-activity", "pid": 50, "step": step, "started": 0, "log": log}]
         )
         fs = FakeFs(files={log: _REAL_ACTIVITY_LOG})
-        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
             now=2000, max_boot=120, stall_seconds=1800
         )
         self.assertIn(step, result.swept)
@@ -756,7 +757,7 @@ class TestSweep(unittest.TestCase):
                 workers=[{"spawnid": spawnid, "pid": 60 + i, "step": step, "started": 0, "log": log}]
             )
             fs = FakeFs(files={log: _NO_WORK_LOG})
-            result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+            result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
                 now=3000 + i, max_boot=120, stall_seconds=1800
             )
         self.assertEqual(result.parked, [], "streak should not yet have reached the cap again")
@@ -787,7 +788,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
-        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
+        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
             now=1000, max_boot=120, stall_seconds=1800
         )
         self.assertIn(step, result.swept)

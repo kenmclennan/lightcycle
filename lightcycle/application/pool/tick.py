@@ -46,7 +46,7 @@ class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor=None, cadence_gate=None, breaker_gate=None,
         hook_completions=None, worktrees=None, git=None, backup_gate=None, fs=None,
-        flow_service=None, spin_port=None, usage_gate=None,
+        flow_service=None, spin_port=None, usage_gate=None, stream=None,
     ):
         self._store = store
         self._workers = workers
@@ -55,6 +55,7 @@ class TickUseCase:
         self._sweep = SweepUseCase(
             store, workers, worktrees, git, fs,
             spin_port=spin_port, spin_cap=config.spin_cap() if spin_port else None,
+            stream=stream,
         )
         self._monitor = monitor
         self._cadence_gate = cadence_gate

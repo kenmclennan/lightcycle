@@ -1,46 +1,16 @@
-import ast
+from lightcycle.domain.runs.pass_record import Pass
+from lightcycle.domain.runs.phase_run import PhaseRun
+from lightcycle.domain.work.item import Item
+from lightcycle.domain.work.node_view import NodeView
+from lightcycle.domain.work.step import Step
 
 
-def _dict_keys(node):
-    out = set()
-    for child in ast.walk(node):
-        if isinstance(child, ast.Dict):
-            for key in child.keys:
-                if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                    out.add(key.value)
-    return out
-
-
-def _subscript_keys(tree):
-    out = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if (
-                isinstance(target, ast.Subscript)
-                and isinstance(target.slice, ast.Constant)
-                and isinstance(target.slice.value, str)
-            ):
-                out.add(target.slice.value)
-    return out
-
-
-ON_THE_READ_SURFACE = ("Step", "Item", "PhaseRun", "Pass", "NodeView")
-
-
-def json_surface(sources, flat_sources=()):
+def json_surface():
     keys = set()
-    for source in sources:
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef) or node.name not in ON_THE_READ_SURFACE:
-                continue
-            for child in node.body:
-                if isinstance(child, ast.FunctionDef) and child.name == "as_dict":
-                    keys |= _dict_keys(child)
-                    keys |= _subscript_keys(child)
-    for source in flat_sources:
-        if source:
-            keys |= _subscript_keys(ast.parse(source))
+    keys |= Item(id="x").as_dict().keys()
+    step = Step(id="x", item="y")
+    keys |= step.as_dict().keys()
+    keys |= NodeView(step=step, item_artifacts=[]).as_dict().keys()
+    keys |= PhaseRun(id="x", item="y", pass_id="z").as_dict().keys()
+    keys |= Pass(id="x", item="y", n=1).as_dict().keys()
     return keys

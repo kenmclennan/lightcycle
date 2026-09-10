@@ -9,8 +9,8 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
+from lightcycle.adapters.claude_stream import parse_rate_limit_event
 from lightcycle.adapters.workers import workers_state
-from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 from lightcycle.ports.workers import RegistryUnreadable
 

@@ -24,7 +24,7 @@ from lightcycle.adapters.worker_session import (
     run,
     session_cwd,
 )
-from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
+from lightcycle.adapters.claude_stream import parse_rate_limit_event, saw_session_activity
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.domain.pool.worker_session import (
     CLOSE,
@@ -32,7 +32,6 @@ from lightcycle.domain.pool.worker_session import (
     NUDGE,
     SessionPolicy,
     is_terminal_command,
-    saw_session_activity,
 )
 
 REJECTED_LINE = (

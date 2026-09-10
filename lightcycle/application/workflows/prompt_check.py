@@ -1,29 +1,26 @@
+import ast
 from pathlib import Path
 
 from lightcycle.application.workflows.prompt_commands import json_field_reads, lc_calls
-from lightcycle.domain.contracts.cli_surface import cli_surface
+from lightcycle.cli_commands import flags_by_verb
 from lightcycle.domain.contracts.json_surface import json_surface
 from lightcycle.domain.work import all_states, missing_for_state
 
 _PLACEHOLDER = "<"
 
 
-def check_prompt_commands(step_texts, cli_source, domain_sources=(), flat_sources=None):
-    surface = cli_surface(cli_source)
-    flat = (cli_source,) if flat_sources is None else flat_sources
-    emitted = json_surface(domain_sources, flat) if domain_sources else None
+def check_prompt_commands(step_texts, cli_surface, json_keys):
     problems = {}
     for name, text in sorted(step_texts.items()):
         messages = []
         for call in lc_calls(text):
-            messages += _check_call(call, surface)
-        if emitted is not None:
-            for read in json_field_reads(text):
-                if read["field"] not in emitted:
-                    messages.append(
-                        "line %d: the engine emits no `.%s` - a step reading it gets null"
-                        % (read["line"], read["field"])
-                    )
+            messages += _check_call(call, cli_surface)
+        for read in json_field_reads(text):
+            if read["field"] not in json_keys:
+                messages.append(
+                    "line %d: the engine emits no `.%s` - a step reading it gets null"
+                    % (read["line"], read["field"])
+                )
         if messages:
             problems[name] = messages
     return problems
@@ -56,18 +53,44 @@ def _check_call(call, surface):
     return messages
 
 
+def _subscript_keys(tree):
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if (
+                isinstance(target, ast.Subscript)
+                and isinstance(target.slice, ast.Constant)
+                and isinstance(target.slice.value, str)
+            ):
+                out.add(target.slice.value)
+    return out
+
+
 READ_SURFACE_MODULES = (
-    "cli.py",
     "application/flow/claim_step.py",
     "application/work/node_read_surface.py",
 )
 
 
-def engine_sources():
+class PromptSurfaceUnavailable(Exception):
+    pass
+
+
+def extra_json_keys(fs):
     root = Path(__file__).resolve().parents[1]
-    flat = [(root.parent / rel).read_text() for rel in READ_SURFACE_MODULES]
-    domain = [p.read_text() for p in sorted((root.parent / "domain").rglob("*.py"))]
-    return flat[0], domain, flat
+    keys = set()
+    for rel in READ_SURFACE_MODULES:
+        data = fs.read_bytes(str(root.parent / rel))
+        if data is None:
+            raise PromptSurfaceUnavailable("could not read %s to determine the JSON surface" % rel)
+        keys |= _subscript_keys(ast.parse(data.decode("utf-8")))
+    return keys
+
+
+def engine_sources(fs):
+    return flags_by_verb(), json_surface() | extra_json_keys(fs)
 
 
 def prompt_drift_detail(drift):

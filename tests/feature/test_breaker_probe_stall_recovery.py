@@ -4,6 +4,7 @@ import json
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import Breaker
 from lightcycle.domain.pool.worker import Worker
@@ -237,7 +238,7 @@ def _no_worker_alive(ctx):
 
 @when("the pool's breaker gate runs")
 def _run_gate(ctx):
-    use_case = BreakerGateUseCase(ctx["workers"], ctx["fs"], ctx["breaker_port"], ctx["config"])
+    use_case = BreakerGateUseCase(ctx["workers"], ctx["fs"], ctx["breaker_port"], ctx["config"], stream=ClaudeStreamAdapter())
     ctx["result"] = use_case.execute(now=ctx["now"])
 
 

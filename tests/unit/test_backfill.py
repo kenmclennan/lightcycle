@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from lightcycle.domain.pool import extract_claimed_step
+from lightcycle.adapters.claude_stream import extract_claimed_step
 
 
 def _assistant(blocks):

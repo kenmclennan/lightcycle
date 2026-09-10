@@ -6,6 +6,7 @@ from lightcycle.application.workflows.bundle_check import (
     check_prompts,
 )
 from lightcycle.application.workflows.prompt_check import (
+    PromptSurfaceUnavailable,
     engine_sources,
     prompt_drift_detail,
 )
@@ -33,10 +34,11 @@ def prune_origin(source, store, origin, keep_n):
 
 
 class AddWorkflowSourceUseCase:
-    def __init__(self, source, store, config):
+    def __init__(self, source, store, config, fs):
         self._source = source
         self._store = store
         self._config = config
+        self._fs = fs
 
     def execute(self, url, ref, name) -> AddResponse:
         bundle = self._source.fetch(url, ref)
@@ -62,8 +64,13 @@ class AddWorkflowSourceUseCase:
             )
             raise WorkflowSourceError(
                 "bundle has composition problem(s) - %s" % detail)
+        try:
+            sources = engine_sources(self._fs)
+        except PromptSurfaceUnavailable as e:
+            raise WorkflowSourceError(
+                "could not determine the engine's prompt-check surface: %s" % e)
         detail = prompt_drift_detail(
-            check_prompts(bundle, *engine_sources())
+            check_prompts(bundle, *sources)
         )
         if detail:
             raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)

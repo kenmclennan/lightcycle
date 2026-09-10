@@ -1,7 +1,8 @@
 import json
 import unittest
 
-from lightcycle.domain.pool import AttributionEvent, parse_usage_event
+from lightcycle.adapters.claude_stream import parse_usage_event
+from lightcycle.domain.pool import AttributionEvent
 from lightcycle.domain.pool.usage import UsageEvent, price_tokens, resolve_usage
 
 
