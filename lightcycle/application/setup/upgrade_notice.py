@@ -12,9 +12,11 @@ class UpgradeNoticeResponse:
 
 
 class UpgradeNoticeUseCase:
-    def __init__(self, current_version, check=None):
+    def __init__(self, current_version, check=None, port=None):
         self._current_version = current_version
-        self._check = check or (lambda: upgrade(current_version, check_only=True))
+        self._check = check or (
+            lambda: upgrade(current_version, check_only=True, fetch=port.fetch_remote_version)
+        )
 
     def execute(self) -> UpgradeNoticeResponse:
         try:

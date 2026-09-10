@@ -12,9 +12,7 @@ BD_MARKERS = ('"Issue"', "issue_type", "close_reason", "dependency_count")
 ALLOW = set()
 
 BANNED_ADAPTER_IMPORTS = ("subprocess", "urllib", "sqlite3")
-BANNED_ADAPTER_IMPORT_ALLOW = {
-    APPLICATION / "setup" / "upgrade.py",
-}
+BANNED_ADAPTER_IMPORT_ALLOW = set()
 
 
 class TestDomainSpeaksNoBead(unittest.TestCase):

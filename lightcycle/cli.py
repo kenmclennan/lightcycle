@@ -10,6 +10,7 @@ import traceback
 
 from lightcycle import __version__
 from lightcycle.adapters.simulate import NullSpin, NullWorkers, RecordingGit, SimulateConfig
+from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
@@ -116,6 +117,7 @@ from lightcycle.application.setup import (
     VenvBusyError,
     upgrade,
 )
+from lightcycle.application.setup.upgrade import scan_venv_holders
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SqliteStore
 from lightcycle.config import Config, ConfigError
 from lightcycle.container import Container, make_flow_service, make_worktrees, worktrees_for
@@ -255,8 +257,13 @@ def cmd_upgrade(argv):
     ap = argparse.ArgumentParser(prog="lc upgrade")
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
+    port = _container.upgrade if _container is not None else UpgradeAdapter(Config())
     try:
-        resp = upgrade(__version__, check_only=a.check)
+        resp = upgrade(
+            __version__, check_only=a.check, fetch=port.fetch_remote_version,
+            install=port.install_upgrade, installed=port.installed_version,
+            holders=lambda: scan_venv_holders(port.list_processes),
+        )
     except VenvBusyError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -386,7 +393,7 @@ def cmd_workflow(argv):
     c = _container
     try:
         if a.sub == "add":
-            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.workflow_bundle).execute(
+            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config).execute(
                 url=a.url, ref=a.ref, name=a.name)
             msg = "added %s @ %s" % (resp.origin, resp.sha)
             if resp.pruned:
@@ -395,14 +402,14 @@ def cmd_workflow(argv):
             return 0
         if a.sub == "init":
             resp = InitWorkflowOriginUseCase(
-                c.config, c.git, c.workflow_source, c.store, c.workflow_bundle, c.scaffold
+                c.config, c.git, c.workflow_source, c.store, c.scaffold
             ).execute(a.name)
             print("created %s, registered as %s @ %s, personal-origin set" % (
                 resp.project_dir, resp.origin, resp.sha))
             return 0
         if a.sub == "upgrade":
             resp = UpgradeWorkflowSourcesUseCase(
-                c.workflow_source, c.store, c.config, c.workflow_bundle
+                c.workflow_source, c.store, c.config
             ).execute(a.origin)
             if not resp.results and not resp.failures:
                 print("no workflow sources registered")
@@ -1662,7 +1669,9 @@ def cmd_start(argv):
             return 0
         interval = _container.config.poll_seconds()
         max_agents = _container.config.max_agents()
-        for line in _upgrade_notice_lines(UpgradeNoticeUseCase(__version__).execute()):
+        for line in _upgrade_notice_lines(
+            UpgradeNoticeUseCase(__version__, port=_container.upgrade).execute()
+        ):
             print(line)
         print("lc start  poll=%ds  max-agents=%d" % (interval, max_agents))
         prev_snapshot = None
@@ -1780,7 +1789,7 @@ def _init_pull_default_origin():
     url = _container.config.workflows_remote()
     try:
         resp = AddWorkflowSourceUseCase(
-            _container.workflow_source, _container.store, _container.config, _container.workflow_bundle
+            _container.workflow_source, _container.store, _container.config
         ).execute(url=url, ref="main", name=origin)
         print("pulled %s workflows @ %s" % (resp.origin, resp.sha))
     except WorkflowSourceError as e:

@@ -4,11 +4,15 @@ import subprocess
 import tempfile
 import tomllib
 
-from lightcycle.ports.workflow_source import WorkflowSourceError, WorkflowSourcePort
+from lightcycle.ports.workflow_source import (
+    FetchedBundle,
+    OriginRegistration,
+    WorkflowSourceError,
+    WorkflowSourcePort,
+)
 
 _MANIFEST = "source.toml"
 _REGISTRY = "origin.toml"
-_BUNDLE_DIRS = ("workflows", "steps")
 
 
 def _toml_str(value):
@@ -22,7 +26,7 @@ def bundle_for_pin(config, pin):
     if parsed is None:
         return None
     origin, _name, sha = parsed
-    return WorkflowSourceAdapter(config).bundle_path(origin, sha)
+    return WorkflowSourceAdapter(config).pinned_bundle(origin, sha)
 
 
 def resolve_agent_for_pin(config, role, pin):
@@ -46,55 +50,79 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
     def _bundle_dir(self, origin, sha):
         return os.path.join(self._origin_dir(origin), sha)
 
+    def _read_dir_texts(self, checkout_dir, name):
+        d = os.path.join(checkout_dir, name)
+        if not os.path.isdir(d):
+            return {}
+        texts = {}
+        for entry in os.scandir(d):
+            if entry.name.endswith(".md"):
+                with open(entry.path) as f:
+                    texts[entry.name[:-3]] = f.read()
+        return texts
+
     def fetch(self, url, ref):
         checkout = tempfile.mkdtemp(prefix="lc-workflow-src-")
         try:
-            subprocess.run(["git", "clone", "--quiet", url, checkout],
-                           check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            raise WorkflowSourceError("could not clone %s: %s" % (url, e.stderr.strip())) from e
-        if ref:
             try:
-                subprocess.run(["git", "-C", checkout, "checkout", "--quiet", ref],
+                subprocess.run(["git", "clone", "--quiet", url, checkout],
                                check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError:
-                raise WorkflowSourceError("ref %r not found in %s" % (ref, url))
-        try:
-            sha = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"],
-                                 check=True, capture_output=True, text=True).stdout.strip()
-        except subprocess.CalledProcessError as e:
-            raise WorkflowSourceError(
-                "could not resolve HEAD in checkout of %s: %s" % (url, e.stderr.strip())) from e
-        return checkout, sha
+            except subprocess.CalledProcessError as e:
+                raise WorkflowSourceError(
+                    "could not clone %s: %s" % (url, e.stderr.strip())) from e
+            if ref:
+                try:
+                    subprocess.run(["git", "-C", checkout, "checkout", "--quiet", ref],
+                                   check=True, capture_output=True, text=True)
+                except subprocess.CalledProcessError:
+                    raise WorkflowSourceError("ref %r not found in %s" % (ref, url))
+            try:
+                sha = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"],
+                                     check=True, capture_output=True, text=True).stdout.strip()
+            except subprocess.CalledProcessError as e:
+                raise WorkflowSourceError(
+                    "could not resolve HEAD in checkout of %s: %s"
+                    % (url, e.stderr.strip())) from e
+            with open(os.path.join(checkout, _MANIFEST)) as f:
+                manifest = f.read()
+            steps = self._read_dir_texts(checkout, "steps")
+            workflows = self._read_dir_texts(checkout, "workflows")
+        finally:
+            shutil.rmtree(checkout, ignore_errors=True)
+        return FetchedBundle(manifest=manifest, sha=sha, steps=steps, workflows=workflows)
 
     def read_manifest(self, checkout_dir):
         with open(os.path.join(checkout_dir, _MANIFEST)) as f:
             return f.read()
 
-    def materialize(self, origin, sha, checkout_dir):
-        bundle = self._bundle_dir(origin, sha)
-        if os.path.isdir(bundle):
-            return bundle
-        tmp = bundle + ".%d.tmp" % os.getpid()
+    def pin(self, origin, bundle):
+        target = self._bundle_dir(origin, bundle.sha)
+        if os.path.isdir(target):
+            return target
+        tmp = target + ".%d.tmp" % os.getpid()
         os.makedirs(tmp, exist_ok=True)
-        shutil.copy2(os.path.join(checkout_dir, _MANIFEST), os.path.join(tmp, _MANIFEST))
-        for name in _BUNDLE_DIRS:
-            src = os.path.join(checkout_dir, name)
-            if os.path.isdir(src):
-                shutil.copytree(src, os.path.join(tmp, name))
+        with open(os.path.join(tmp, _MANIFEST), "w") as f:
+            f.write(bundle.manifest)
+        for name, texts in (("steps", bundle.steps), ("workflows", bundle.workflows)):
+            if not texts:
+                continue
+            os.makedirs(os.path.join(tmp, name), exist_ok=True)
+            for role, text in texts.items():
+                with open(os.path.join(tmp, name, "%s.md" % role), "w") as f:
+                    f.write(text)
         os.makedirs(self._origin_dir(origin), exist_ok=True)
-        os.replace(tmp, bundle)
-        return bundle
+        os.replace(tmp, target)
+        return target
 
     def has_version(self, origin, sha):
         return os.path.isdir(self._bundle_dir(origin, sha))
 
-    def bundle_path(self, origin, sha):
+    def pinned_bundle(self, origin, sha):
         return self._bundle_dir(origin, sha)
 
     def current_sha(self, origin):
         registry = self.read_registry(origin)
-        return registry["current"] if registry else None
+        return registry.current if registry else None
 
     def unresolvable_reason(self, url, ref):
         try:
@@ -129,7 +157,8 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
             return None
         with open(path, "rb") as f:
             data = tomllib.load(f)
-        return {"url": data.get("url"), "ref": data.get("ref"), "current": data.get("current")}
+        return OriginRegistration(
+            url=data.get("url"), ref=data.get("ref"), current=data.get("current"))
 
     def list_origins(self):
         root = self._root()
@@ -150,6 +179,3 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
 
     def remove_origin(self, origin):
         shutil.rmtree(self._origin_dir(origin), ignore_errors=True)
-
-    def cleanup(self, checkout_dir):
-        shutil.rmtree(checkout_dir, ignore_errors=True)

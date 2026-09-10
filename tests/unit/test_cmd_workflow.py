@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import os
 import tempfile
@@ -9,7 +10,7 @@ from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work.hierarchy import display_stage
-from lightcycle.ports.workflow_source import WorkflowSourceError
+from lightcycle.ports.workflow_source import FetchedBundle, OriginRegistration, WorkflowSourceError
 from lightcycle.render import render_workflow_mermaid
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from tests.support.fake_fs import FakeFs
@@ -17,10 +18,17 @@ from tests.support.fake_store import FakeStore
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
 
 
+def _step_text(meta, body=""):
+    lines = ["---"] + ["%s: %s" % (k, v) for k, v in meta.items()] + ["---"]
+    if body:
+        lines.append(body)
+    return "\n".join(lines) + "\n"
+
+
 class TestWorkflowListSummaries(unittest.TestCase):
     def test_list_shows_each_workflows_summary(self):
         source = FakeSource()
-        source.registries["acme"] = {"url": "u", "ref": "main", "current": "sha1"}
+        source.registries["acme"] = OriginRegistration(url="u", ref="main", current="sha1")
         source.materialized["acme"] = ["sha1"]
         source.workflow_names = lambda o, s: ["bdd-driven", "spec-driven"]
         fs = FakeFs(workflows={
@@ -48,13 +56,11 @@ class FakeSource:
         self.remotes = {}
         self.materialized = {}
         self.registries = {}
-        self._checkouts = {}
-        self._n = 0
         self.last_ref = None
         self.failing = {}
 
-    def add_remote(self, url, manifest, sha):
-        self.remotes[url] = (manifest, sha)
+    def add_remote(self, url, manifest, sha, steps=None, workflows=None):
+        self.remotes[url] = (manifest, sha, steps or {}, workflows or {})
 
     def fail_remote(self, url, message):
         self.failing[url] = message
@@ -62,33 +68,27 @@ class FakeSource:
     def fetch(self, url, ref):
         if url in self.failing:
             raise WorkflowSourceError(self.failing[url])
-        manifest, sha = self.remotes[url]
-        self._n += 1
-        checkout = "c-%d" % self._n
-        self._checkouts[checkout] = manifest
+        manifest, sha, steps, workflows = self.remotes[url]
         self.last_ref = ref
-        return checkout, sha
+        return FetchedBundle(manifest=manifest, sha=sha, steps=steps, workflows=workflows)
 
-    def read_manifest(self, checkout_dir):
-        return self._checkouts[checkout_dir]
-
-    def materialize(self, origin, sha, checkout_dir):
+    def pin(self, origin, bundle):
         self.materialized.setdefault(origin, [])
-        if sha not in self.materialized[origin]:
-            self.materialized[origin].append(sha)
-        return "%s/%s" % (origin, sha)
+        if bundle.sha not in self.materialized[origin]:
+            self.materialized[origin].append(bundle.sha)
+        return "%s/%s" % (origin, bundle.sha)
 
     def has_version(self, origin, sha):
         return sha in self.materialized.get(origin, [])
 
-    def bundle_path(self, origin, sha):
+    def pinned_bundle(self, origin, sha):
         return "%s/%s" % (origin, sha)
 
     def workflow_names(self, origin, sha):
         return []
 
     def write_registry(self, origin, url, ref, current):
-        self.registries[origin] = {"url": url, "ref": ref, "current": current}
+        self.registries[origin] = OriginRegistration(url=url, ref=ref, current=current)
 
     def read_registry(self, origin):
         return self.registries.get(origin)
@@ -105,9 +105,6 @@ class FakeSource:
     def remove_origin(self, origin):
         self.materialized.pop(origin, None)
         self.registries.pop(origin, None)
-
-    def cleanup(self, checkout_dir):
-        pass
 
 
 class FakeConfig:
@@ -159,7 +156,7 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("acme", out)
         self.assertIn("sha1", out)
-        self.assertEqual(self.source.read_registry("acme")["current"], "sha1")
+        self.assertEqual(self.source.read_registry("acme").current, "sha1")
 
     def test_add_with_no_ref_flag_reaches_the_use_case_as_none(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
@@ -181,51 +178,44 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertEqual(self.source.list_origins(), [])
 
     def test_add_unresolved_step_reference_errors(self):
-        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        container = FakeContainer(self.source, self.store)
-        container.fs = FakeFs(workflows={"build": "entry: missing-step\n"})
-        container.workflow_bundle = container.fs
-        cli.set_container(container)
+        self.source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha1",
+            workflows={"build": "entry: missing-step\n"})
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 1)
         self.assertIn("missing-step", err)
         self.assertEqual(self.source.list_origins(), [])
 
     def test_add_incomplete_phase_block_errors(self):
-        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        container = FakeContainer(self.source, self.store)
         text = (
             "entry: build\n\n"
             "nodes:\n  build  coder\n  review  reviewer\n\n"
             "edges:\n  build  done  review\n\n"
             "phase:\n  build  code\n"
         )
-        container.fs = FakeFs(
-            metas={"coder": {"model": "x"}, "reviewer": {"model": "x"}},
-            workflows={"build": text},
-        )
-        container.workflow_bundle = container.fs
-        cli.set_container(container)
+        self.source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha1",
+            steps={
+                "coder": _step_text({"model": "x"}),
+                "reviewer": _step_text({"model": "x"}),
+            },
+            workflows={"build": text})
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 1)
         self.assertIn("review", err)
         self.assertEqual(self.source.list_origins(), [])
 
     def test_add_phase_on_fileless_terminal_names_non_owned(self):
-        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
-        container = FakeContainer(self.source, self.store)
         text = (
             "entry: build\n\n"
             "nodes:\n  build  coder\n\n"
             "edges:\n  build  done  review\n  build  conflict  review-conflict\n\n"
             "phase:\n  build  code\n  review-conflict  code\n"
         )
-        container.fs = FakeFs(
-            metas={"coder": {"model": "x"}},
-            workflows={"build": text},
-        )
-        container.workflow_bundle = container.fs
-        cli.set_container(container)
+        self.source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha1",
+            steps={"coder": _step_text({"model": "x"})},
+            workflows={"build": text})
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 1)
         self.assertNotIn("unknown stage", err)
@@ -241,7 +231,7 @@ class TestCmdWorkflow(unittest.TestCase):
         rc, out, err = call(cli.cmd_workflow, "upgrade")
         self.assertEqual(rc, 0)
         self.assertIn("sha2", out)
-        self.assertEqual(self.source.read_registry("acme")["current"], "sha2")
+        self.assertEqual(self.source.read_registry("acme").current, "sha2")
 
     def test_upgrade_reports_every_origin_even_when_one_fails(self):
         self.source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha1")
@@ -253,18 +243,20 @@ class TestCmdWorkflow(unittest.TestCase):
         self.source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha2")
         self.source.add_remote("u3", 'name = "third"\ncontract = 1\n', "sha2")
         self.source.fail_remote("u2", "ref 'branch-x' not found in u2")
-        first_before = dict(self.source.read_registry("first"))
-        second_before = dict(self.source.read_registry("second"))
-        third_before = dict(self.source.read_registry("third"))
+        first_before = self.source.read_registry("first")
+        second_before = self.source.read_registry("second")
+        third_before = self.source.read_registry("third")
         rc, out, err = call(cli.cmd_workflow, "upgrade")
         self.assertEqual(rc, 1)
         self.assertIn("upgraded first @ sha2", out)
         self.assertIn("upgraded third @ sha2", out)
         self.assertIn("second", err)
         self.assertIn("ref 'branch-x' not found in u2", err)
-        self.assertEqual(self.source.read_registry("first"), {**first_before, "current": "sha2"})
+        self.assertEqual(
+            self.source.read_registry("first"), dataclasses.replace(first_before, current="sha2"))
         self.assertEqual(self.source.read_registry("second"), second_before)
-        self.assertEqual(self.source.read_registry("third"), {**third_before, "current": "sha2"})
+        self.assertEqual(
+            self.source.read_registry("third"), dataclasses.replace(third_before, current="sha2"))
 
     def test_upgrade_all_origins_failing_reports_each_and_exits_nonzero(self):
         self.source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha1")
@@ -404,7 +396,7 @@ class TestCmdWorkflowInit(unittest.TestCase):
         self.assertIn("acme", out)
         self.assertIn("sha1", out)
         self.assertTrue(os.path.isfile(os.path.join(project_dir, "source.toml")))
-        self.assertEqual(self.source.read_registry("acme")["current"], "sha1")
+        self.assertEqual(self.source.read_registry("acme").current, "sha1")
         self.assertEqual(self.source.last_ref, "HEAD")
         self.assertEqual(self.container.config.personal_origin_set, "acme")
         self.assertIn(("init_repo", project_dir, "main"), self.container.git.calls)

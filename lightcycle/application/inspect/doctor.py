@@ -53,7 +53,7 @@ class DoctorUseCase:
             if not self._workflow_source.has_version(origin, sha):
                 pins.append(Problem("pins", "pinned bundle %s no longer resolves on disk" % pin, n.id))
                 continue
-            bundle = self._workflow_source.bundle_path(origin, sha)
+            bundle = self._workflow_source.pinned_bundle(origin, sha)
             manifest = parse_source_manifest(self._workflow_source.read_manifest(bundle))
             if not contract_compatible(manifest.contract):
                 contracts.append(Problem(
@@ -71,8 +71,9 @@ class DoctorUseCase:
                 problems.append(
                     Problem("origin", "default-origin %r is set but has no pulled bundle" % origin))
         for name in self._workflow_source.list_origins():
-            registry = self._workflow_source.read_registry(name) or {}
-            reason = self._workflow_source.unresolvable_reason(registry.get("url"), registry.get("ref"))
+            registry = self._workflow_source.read_registry(name)
+            reason = self._workflow_source.unresolvable_reason(
+                registry.url if registry else None, registry.ref if registry else None)
             if reason:
                 problems.append(Problem("origin", "%s: %s" % (name, reason)))
         return problems

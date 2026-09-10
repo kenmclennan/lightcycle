@@ -33,45 +33,41 @@ def prune_origin(source, store, origin, keep_n):
 
 
 class AddWorkflowSourceUseCase:
-    def __init__(self, source, store, config, fs):
+    def __init__(self, source, store, config):
         self._source = source
         self._store = store
         self._config = config
-        self._fs = fs
 
     def execute(self, url, ref, name) -> AddResponse:
-        checkout, sha = self._source.fetch(url, ref)
-        try:
-            manifest = parse_source_manifest(self._source.read_manifest(checkout))
-            origin = name or manifest.name
-            if not origin:
-                raise WorkflowSourceError(
-                    "source declares no name; pass --name to name the origin")
-            if not contract_compatible(manifest.contract):
-                raise WorkflowSourceError(
-                    "source targets contract %d, engine provides %d; `lc upgrade` the engine "
-                    "or use a source ref that targets %d"
-                    % (manifest.contract, ENGINE_CONTRACT, ENGINE_CONTRACT))
-            if self._source.read_registry(origin) is not None:
-                raise WorkflowSourceError(
-                    "origin %r is already registered; use `lc workflow upgrade %s`"
-                    % (origin, origin))
-            problems = check_bundle_references(self._fs, checkout)
-            if problems:
-                detail = "; ".join(
-                    "%r: %s" % (wf, "; ".join(messages))
-                    for wf, messages in sorted(problems.items())
-                )
-                raise WorkflowSourceError(
-                    "bundle has composition problem(s) - %s" % detail)
-            detail = prompt_drift_detail(
-                check_prompts(self._fs, checkout, *engine_sources())
+        bundle = self._source.fetch(url, ref)
+        manifest = parse_source_manifest(bundle.manifest)
+        origin = name or manifest.name
+        if not origin:
+            raise WorkflowSourceError(
+                "source declares no name; pass --name to name the origin")
+        if not contract_compatible(manifest.contract):
+            raise WorkflowSourceError(
+                "source targets contract %d, engine provides %d; `lc upgrade` the engine "
+                "or use a source ref that targets %d"
+                % (manifest.contract, ENGINE_CONTRACT, ENGINE_CONTRACT))
+        if self._source.read_registry(origin) is not None:
+            raise WorkflowSourceError(
+                "origin %r is already registered; use `lc workflow upgrade %s`"
+                % (origin, origin))
+        problems = check_bundle_references(bundle)
+        if problems:
+            detail = "; ".join(
+                "%r: %s" % (wf, "; ".join(messages))
+                for wf, messages in sorted(problems.items())
             )
-            if detail:
-                raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
-            self._source.materialize(origin, sha, checkout)
-            self._source.write_registry(origin, url, ref, sha)
-            pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
-        finally:
-            self._source.cleanup(checkout)
-        return AddResponse(origin=origin, sha=sha, pruned=pruned)
+            raise WorkflowSourceError(
+                "bundle has composition problem(s) - %s" % detail)
+        detail = prompt_drift_detail(
+            check_prompts(bundle, *engine_sources())
+        )
+        if detail:
+            raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
+        self._source.pin(origin, bundle)
+        self._source.write_registry(origin, url, ref, bundle.sha)
+        pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
+        return AddResponse(origin=origin, sha=bundle.sha, pruned=pruned)

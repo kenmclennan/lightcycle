@@ -134,12 +134,11 @@ class InitWorkflowOriginResponse:
 
 
 class InitWorkflowOriginUseCase:
-    def __init__(self, config, git, source, store, fs, scaffold):
+    def __init__(self, config, git, source, store, scaffold):
         self._config = config
         self._git = git
         self._source = source
         self._store = store
-        self._fs = fs
         self._scaffold = scaffold
 
     def execute(self, name) -> InitWorkflowOriginResponse:
@@ -151,7 +150,7 @@ class InitWorkflowOriginUseCase:
         _write_scaffold(project_dir, name, self._scaffold)
         self._git.init_repo(project_dir, "main")
         self._git.commit_all(project_dir, "scaffold workflow-origin repo")
-        add_resp = AddWorkflowSourceUseCase(self._source, self._store, self._config, self._fs).execute(
+        add_resp = AddWorkflowSourceUseCase(self._source, self._store, self._config).execute(
             url=project_dir, ref="HEAD", name=name)
         self._config.set_personal_origin(name)
         return InitWorkflowOriginResponse(

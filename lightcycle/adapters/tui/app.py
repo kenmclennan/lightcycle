@@ -1158,7 +1158,10 @@ class LightcycleApp(App):
         super().__init__()
         self._container = container
         self._now = now or (lambda: datetime.datetime.now().astimezone())
-        self._upgrade_check = upgrade_check or (lambda: upgrade(__version__, check_only=True))
+        self._upgrade_check = upgrade_check or (
+            lambda: upgrade(
+                __version__, check_only=True, fetch=self._container.upgrade.fetch_remote_version)
+        )
         self._upgrade_version = None
         self._upgrade_error = None
         self._last_shape = None

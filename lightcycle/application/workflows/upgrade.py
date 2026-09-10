@@ -36,11 +36,10 @@ class UpgradeAllResponse:
 
 
 class UpgradeWorkflowSourceUseCase:
-    def __init__(self, source, store, config, fs):
+    def __init__(self, source, store, config):
         self._source = source
         self._store = store
         self._config = config
-        self._fs = fs
 
     def execute(self, origin) -> UpgradeResponse:
         registry = self._source.read_registry(origin)
@@ -48,40 +47,38 @@ class UpgradeWorkflowSourceUseCase:
             raise WorkflowSourceError(
                 "origin %r is not registered; use `lc workflow add <url> --name %s`"
                 % (origin, origin))
-        previous = registry["current"]
-        checkout, sha = self._source.fetch(registry["url"], registry["ref"])
-        try:
-            manifest = parse_source_manifest(self._source.read_manifest(checkout))
-            if not contract_compatible(manifest.contract):
-                raise WorkflowSourceError(
-                    "source targets contract %d, engine provides %d; `lc upgrade` the engine "
-                    "or use a source ref that targets %d"
-                    % (manifest.contract, ENGINE_CONTRACT, ENGINE_CONTRACT))
-            problems = check_bundle_references(self._fs, checkout)
-            if problems:
-                detail = "; ".join(
-                    "%r: %s" % (wf, "; ".join(messages))
-                    for wf, messages in sorted(problems.items())
-                )
-                raise WorkflowSourceError(
-                    "bundle has composition problem(s) - %s" % detail)
-            detail = prompt_drift_detail(
-                check_prompts(self._fs, checkout, *engine_sources())
+        previous = registry.current
+        bundle = self._source.fetch(registry.url, registry.ref)
+        manifest = parse_source_manifest(bundle.manifest)
+        if not contract_compatible(manifest.contract):
+            raise WorkflowSourceError(
+                "source targets contract %d, engine provides %d; `lc upgrade` the engine "
+                "or use a source ref that targets %d"
+                % (manifest.contract, ENGINE_CONTRACT, ENGINE_CONTRACT))
+        problems = check_bundle_references(bundle)
+        if problems:
+            detail = "; ".join(
+                "%r: %s" % (wf, "; ".join(messages))
+                for wf, messages in sorted(problems.items())
             )
-            if detail:
-                raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
-            self._source.materialize(origin, sha, checkout)
-            self._source.write_registry(origin, registry["url"], registry["ref"], sha)
-            pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
-        finally:
-            self._source.cleanup(checkout)
-        return UpgradeResponse(origin=origin, sha=sha, changed=(sha != previous), pruned=pruned)
+            raise WorkflowSourceError(
+                "bundle has composition problem(s) - %s" % detail)
+        detail = prompt_drift_detail(
+            check_prompts(bundle, *engine_sources())
+        )
+        if detail:
+            raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
+        self._source.pin(origin, bundle)
+        self._source.write_registry(origin, registry.url, registry.ref, bundle.sha)
+        pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
+        return UpgradeResponse(
+            origin=origin, sha=bundle.sha, changed=(bundle.sha != previous), pruned=pruned)
 
 
 class UpgradeWorkflowSourcesUseCase:
-    def __init__(self, source, store, config, fs):
+    def __init__(self, source, store, config):
         self._source = source
-        self._single = UpgradeWorkflowSourceUseCase(source, store, config, fs)
+        self._single = UpgradeWorkflowSourceUseCase(source, store, config)
 
     def execute(self, origin=None) -> UpgradeAllResponse:
         origins = [origin] if origin else self._source.list_origins()

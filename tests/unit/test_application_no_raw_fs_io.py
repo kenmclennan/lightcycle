@@ -36,15 +36,25 @@ def _is_write_open(node):
     return any(isinstance(a, ast.Constant) and a.value in _WRITE_MODES for a in args)
 
 
+def _is_os_environ_access(node):
+    return (
+        isinstance(node, ast.Attribute) and node.attr == "environ"
+        and isinstance(node.value, ast.Name) and node.value.id == "os"
+    )
+
+
 class TestApplicationDoesNoRawFsIo(unittest.TestCase):
     def test_no_raw_makedirs_isdir_sleep_or_write_open_under_application(self):
         offenders = []
         for path in sorted(APPLICATION_ROOT.rglob("*.py")):
             tree = ast.parse(path.read_text(), filename=str(path))
             for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                if _is_os_makedirs(node) or _is_os_path_isdir(node) or _is_time_sleep(node) or _is_write_open(node):
+                if isinstance(node, ast.Call) and (
+                    _is_os_makedirs(node) or _is_os_path_isdir(node)
+                    or _is_time_sleep(node) or _is_write_open(node)
+                ):
+                    offenders.append("%s:%d" % (path.relative_to(APPLICATION_ROOT.parent.parent), node.lineno))
+                elif _is_os_environ_access(node):
                     offenders.append("%s:%d" % (path.relative_to(APPLICATION_ROOT.parent.parent), node.lineno))
         self.assertEqual(offenders, [])
 

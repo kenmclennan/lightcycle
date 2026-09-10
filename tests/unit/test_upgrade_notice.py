@@ -47,14 +47,20 @@ class TestUpgradeNoticeUseCase(unittest.TestCase):
         self.assertEqual(resp.error, "unreachable")
 
     def test_default_check_calls_upgrade_with_the_given_current_version(self):
+        class FakePort:
+            def fetch_remote_version(self):
+                pass
+
+        fake_port = FakePort()
         with patch("lightcycle.application.setup.upgrade_notice.upgrade") as fake_upgrade:
             fake_upgrade.return_value = UpgradeResponse(
                 current="0.2.0", remote="0.2.0", available=False, applied=False
             )
 
-            UpgradeNoticeUseCase("0.2.0").execute()
+            UpgradeNoticeUseCase("0.2.0", port=fake_port).execute()
 
-            fake_upgrade.assert_called_once_with("0.2.0", check_only=True)
+            fake_upgrade.assert_called_once_with(
+                "0.2.0", check_only=True, fetch=fake_port.fetch_remote_version)
 
 
 if __name__ == "__main__":
