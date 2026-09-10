@@ -72,7 +72,7 @@ The periodic retro **audit** is no longer a workflow step - it is an **engine se
 
 ## Deployment (engine, data home, workflow sources)
 
-- **engine** - the installed package (pipx venv): the code plus `prompts/` (the engine-owned agent prompts it spawns directly - `driver.md`, `audit.md`). Replaced wholesale by `lc upgrade`. The engine ships no workflow library; workflows are pulled.
+- **engine** - the installed package (pipx venv): the code plus `prompts/` (the engine-owned agent prompts it spawns directly - `prompts/steps/audit.md`, the retro auditor). Replaced wholesale by `lc upgrade`. The engine ships no workflow library; workflows are pulled.
 - **data home** (`~/.lightcycle`, named by `LC_HOME`) - the store (`store.db`), config, logs, worktrees, and the pulled workflow bundles under `workflows/<origin>/<sha>/`. Never touched by `lc upgrade`.
 - **workflow source** - a git repo (an **origin**) holding a `source.toml` manifest plus `workflows/*.md` and `steps/*.md`. The engine pulls it into an immutable, sha-pinned **bundle**; each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves the flow and steps from that pin. Managed with `lc workflow add|upgrade|list|rm`. There is no `.lightcycle/` step/workflow override and no resolution chain - a pinned bundle is self-contained.
 
