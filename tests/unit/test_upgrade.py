@@ -1,16 +1,10 @@
-import subprocess
 import unittest
-import urllib.error
-from unittest.mock import patch
 
 from lightcycle.application.setup.upgrade import (
     ProcessListUnreadableError,
-    RemoteVersionUnavailableError,
     VenvBusyError,
-    fetch_remote_version,
     filter_holders,
     format_holders_message,
-    list_processes,
     parse_process_list,
     parse_remote_version,
     upgrade,
@@ -68,32 +62,6 @@ class TestFilterHolders(unittest.TestCase):
 
     def test_returns_empty_when_nothing_matches(self):
         self.assertEqual(filter_holders(self.processes, ["/no-such-signature"], exclude_pid=999), [])
-
-
-class TestListProcesses(unittest.TestCase):
-    def test_raises_when_ps_cannot_be_run(self):
-        with patch("lightcycle.application.setup.upgrade.subprocess.run", side_effect=OSError("no such file")):
-            with self.assertRaises(ProcessListUnreadableError):
-                list_processes()
-
-    def test_raises_when_ps_exits_nonzero(self):
-        result = subprocess.CompletedProcess(args=["ps"], returncode=1, stdout=b"")
-        with patch("lightcycle.application.setup.upgrade.subprocess.run", return_value=result):
-            with self.assertRaises(ProcessListUnreadableError):
-                list_processes()
-
-    def test_returns_decoded_output_when_ps_succeeds(self):
-        result = subprocess.CompletedProcess(args=["ps"], returncode=0, stdout=b"123 command\n")
-        with patch("lightcycle.application.setup.upgrade.subprocess.run", return_value=result):
-            self.assertEqual(list_processes(), "123 command\n")
-
-
-class TestFetchRemoteVersion(unittest.TestCase):
-    def test_wraps_url_error_in_remote_version_unavailable_error(self):
-        with patch("lightcycle.application.setup.upgrade.urllib.request.urlopen",
-                   side_effect=urllib.error.URLError("unreachable")):
-            with self.assertRaises(RemoteVersionUnavailableError):
-                fetch_remote_version()
 
 
 class TestFormatHoldersMessage(unittest.TestCase):

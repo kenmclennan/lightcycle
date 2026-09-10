@@ -40,7 +40,7 @@ class FlowService:
         if parsed is None:
             raise ValueError("workflow %r is not a pin '<origin>/<name>@<sha>'" % pin)
         origin, wfname, sha = parsed
-        return wfname, self._workflow_source.bundle_path(origin, sha)
+        return wfname, self._workflow_source.pinned_bundle(origin, sha)
 
     def resolve_selection(self, selector):
         if self._workflow_source is None:

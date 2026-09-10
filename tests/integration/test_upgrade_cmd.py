@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.application.setup.upgrade import filter_holders, scan_venv_holders
+from lightcycle.config import Config
 
 ROOT = Path(__file__).resolve().parents[2]
 LC = str(ROOT / "bin" / "lc")
@@ -55,7 +57,7 @@ class TestFilterHolders(unittest.TestCase):
 
 class TestScanVenvHolders(unittest.TestCase):
     def test_never_reports_the_scanning_process_as_a_holder(self):
-        holders = scan_venv_holders()
+        holders = scan_venv_holders(UpgradeAdapter(Config()).list_processes)
         self.assertNotIn(os.getpid(), [pid for pid, _ in holders])
 
     def test_reports_a_re_execd_worker_process_via_the_module_invocation_shape(self):

@@ -2376,7 +2376,7 @@ class TestInitPullsWorkflows(unittest.TestCase):
         self.assertIn("pulled lightcycle", out)
         registry = _cli_mod.container().workflow_source.read_registry("lightcycle")
         self.assertIsNotNone(registry)
-        self.assertEqual(registry["url"], self.repo)
+        self.assertEqual(registry.url, self.repo)
 
     def test_init_is_idempotent_and_does_not_repull(self):
         call(_cli_mod.cmd_init)

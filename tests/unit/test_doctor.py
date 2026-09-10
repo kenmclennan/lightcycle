@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.config import Config
+from lightcycle.ports.workflow_source import OriginRegistration
 from tests.support.fake_store import FakeStore
 
 
@@ -44,15 +45,15 @@ class FakeWorkflowSource:
             self.currents[origin] = sha
 
     def register_origin(self, name, url=None, ref=""):
-        self.registries[name] = {"url": url or name, "ref": ref}
+        self.registries[name] = OriginRegistration(url=url or name, ref=ref, current=None)
 
     def fail_resolve(self, name, reason):
-        self.failures[self.registries[name]["url"]] = reason
+        self.failures[self.registries[name].url] = reason
 
     def has_version(self, origin, sha):
         return sha in self.materialized.get(origin, [])
 
-    def bundle_path(self, origin, sha):
+    def pinned_bundle(self, origin, sha):
         return (origin, sha)
 
     def read_manifest(self, bundle):

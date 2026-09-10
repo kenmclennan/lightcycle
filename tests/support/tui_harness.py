@@ -87,7 +87,7 @@ class FakeWorkflowSource:
     def workflow_names(self, origin, sha):
         return []
 
-    def bundle_path(self, origin, sha):
+    def pinned_bundle(self, origin, sha):
         return None
 
 

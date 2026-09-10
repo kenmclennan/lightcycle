@@ -1,8 +1,24 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 
 class WorkflowSourceError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class FetchedBundle:
+    manifest: str
+    sha: str
+    steps: dict
+    workflows: dict
+
+
+@dataclass(frozen=True)
+class OriginRegistration:
+    url: str
+    ref: str
+    current: str
 
 
 class WorkflowSourcePort(ABC):
@@ -15,7 +31,7 @@ class WorkflowSourcePort(ABC):
         pass
 
     @abstractmethod
-    def materialize(self, origin, sha, checkout_dir):
+    def pin(self, origin, bundle):
         pass
 
     @abstractmethod
@@ -23,7 +39,7 @@ class WorkflowSourcePort(ABC):
         pass
 
     @abstractmethod
-    def bundle_path(self, origin, sha):
+    def pinned_bundle(self, origin, sha):
         pass
 
     @abstractmethod
@@ -60,8 +76,4 @@ class WorkflowSourcePort(ABC):
 
     @abstractmethod
     def remove_origin(self, origin):
-        pass
-
-    @abstractmethod
-    def cleanup(self, checkout_dir):
         pass

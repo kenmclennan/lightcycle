@@ -1,26 +1,27 @@
+from lightcycle.adapters import frontmatter
 from lightcycle.application.workflows.prompt_check import check_prompt_commands
 from lightcycle.domain.contracts import FlowContracts
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 
 
-def check_prompts(fs, root, cli_source, domain_sources):
+def check_prompts(bundle, cli_source, domain_sources):
     texts = {}
-    for role in fs.step_roles(root):
-        parsed = fs.parse_step(role, root)
-        if parsed and parsed.get("body"):
-            texts["steps/%s.md" % role] = parsed["body"]
+    for role, text in bundle.steps.items():
+        _, body = frontmatter.split_frontmatter(text)
+        if body:
+            texts["steps/%s.md" % role] = body
     return check_prompt_commands(texts, cli_source, domain_sources)
 
 
-def check_bundle_references(fs, root):
-    step_metas = {
-        role: (fs.parse_step(role, root) or {"meta": {}})["meta"]
-        for role in fs.step_roles(root)
-    }
+def check_bundle_references(bundle):
+    step_metas = {}
+    for role, text in bundle.steps.items():
+        meta, _ = frontmatter.split_frontmatter(text)
+        step_metas[role] = meta
     problems = {}
-    for name in fs.workflow_names(root):
-        graph = parse_graph(fs.workflow_text(name, root))
+    for name, text in bundle.workflows.items():
+        graph = parse_graph(text)
         flow = Flow.from_graph(graph, step_metas)
         contracts = FlowContracts(flow, graph, step_metas)
         messages = []

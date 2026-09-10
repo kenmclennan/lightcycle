@@ -29,7 +29,7 @@ class ListWorkflowSourcesUseCase:
     def _workflows(self, origin, current):
         if not current or self._fs is None:
             return []
-        root = self._source.bundle_path(origin, current)
+        root = self._source.pinned_bundle(origin, current)
         return [
             (wf, self._fs.workflow_meta(wf, root).get("summary", ""))
             for wf in sorted(self._source.workflow_names(origin, current))
@@ -38,12 +38,12 @@ class ListWorkflowSourcesUseCase:
     def execute(self) -> ListResponse:
         origins = []
         for name in self._source.list_origins():
-            registry = self._source.read_registry(name) or {}
-            current = registry.get("current")
+            registry = self._source.read_registry(name)
+            current = registry.current if registry else None
             origins.append(OriginView(
                 name=name,
-                url=registry.get("url"),
-                ref=registry.get("ref"),
+                url=registry.url if registry else None,
+                ref=registry.ref if registry else None,
                 current=current,
                 versions=self._source.list_versions(name),
                 pinned=sorted(pinned_shas(self._store, name)),

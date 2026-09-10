@@ -3,6 +3,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
+from lightcycle import cli
 from lightcycle.application.setup import (
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
@@ -11,7 +12,31 @@ from lightcycle.application.setup import (
 from lightcycle.cli import cmd_upgrade
 
 
+class FakeUpgradePort:
+    def fetch_remote_version(self):
+        pass
+
+    def install_upgrade(self):
+        pass
+
+    def installed_version(self):
+        pass
+
+    def list_processes(self):
+        pass
+
+
+class FakeContainer:
+    def __init__(self):
+        self.upgrade = FakeUpgradePort()
+
+
 class TestCmdUpgrade(unittest.TestCase):
+    def setUp(self):
+        self._orig = cli._container
+        cli.set_container(FakeContainer())
+        self.addCleanup(lambda: cli.set_container(self._orig))
+
     def test_reports_already_at_latest_when_no_newer_version(self):
         with patch("lightcycle.cli.upgrade") as fake_upgrade:
             fake_upgrade.return_value.available = False

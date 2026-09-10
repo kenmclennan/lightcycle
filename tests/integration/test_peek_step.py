@@ -1,10 +1,10 @@
-import os
 import tempfile
 import unittest
 
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.peek_step import PeekStepInput, PeekStepUseCase
+from lightcycle.ports.workflow_source import FetchedBundle
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -21,27 +21,18 @@ class FakeConfig:
         return self._prompts_root
 
 
-def _write_bundle(checkout_dir, role, body):
-    with open(os.path.join(checkout_dir, "source.toml"), "w") as f:
-        f.write('name = "acme"\ncontract = 1\n')
-    os.makedirs(os.path.join(checkout_dir, "workflows"), exist_ok=True)
-    os.makedirs(os.path.join(checkout_dir, "steps"), exist_ok=True)
-    with open(os.path.join(checkout_dir, "steps", "%s.md" % role), "w") as f:
-        f.write("---\nmodel: x\n---\n%s\n" % body)
-
-
 class TestPeekStepUseCaseReadsTheOriginsCurrentBundle(unittest.TestCase):
     def test_returns_the_current_sha_body_not_the_frozen_historical_one(self):
         config = FakeConfig(tempfile.mkdtemp(), tempfile.mkdtemp())
         adapter = WorkflowSourceAdapter(config)
 
-        old_checkout = tempfile.mkdtemp()
-        _write_bundle(old_checkout, "write-code", "old body")
-        adapter.materialize("acme", "sha-old", old_checkout)
+        adapter.pin("acme", FetchedBundle(
+            manifest='name = "acme"\ncontract = 1\n', sha="sha-old",
+            steps={"write-code": "---\nmodel: x\n---\nold body\n"}, workflows={}))
 
-        new_checkout = tempfile.mkdtemp()
-        _write_bundle(new_checkout, "write-code", "new body")
-        adapter.materialize("acme", "sha-new", new_checkout)
+        adapter.pin("acme", FetchedBundle(
+            manifest='name = "acme"\ncontract = 1\n', sha="sha-new",
+            steps={"write-code": "---\nmodel: x\n---\nnew body\n"}, workflows={}))
 
         adapter.write_registry("acme", "https://example.invalid/acme", "main", "sha-new")
 

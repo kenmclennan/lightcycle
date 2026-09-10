@@ -9,6 +9,7 @@ from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.spin import SpinAdapter
 from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.adapters.worker_log import WorkerLogAdapter
 from lightcycle.adapters.workers import WorkersAdapter
 from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
@@ -20,7 +21,7 @@ class Container:
     def __init__(
         self, *, config=None, store=None, git=None, spawner=None, workers=None, fs=None,
         github=None, lock=None, breaker=None, backup=None, workflow_source=None, launcher=None,
-        spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None,
+        spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -43,6 +44,7 @@ class Container:
             else WorkflowSourceAdapter(self.config)
         )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
+        self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)
 
     def flow_service(self):
         return make_flow_service(self.workflow_bundle, self.store, self.config, self.workflow_source)
