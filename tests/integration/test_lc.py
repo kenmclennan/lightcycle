@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LC = str(ROOT / "bin" / "lc")
 
 sys.path.insert(0, str(ROOT))
+import lightcycle.adapters.lock as _lock_mod
 import lightcycle.cli as _cli_mod
 import lightcycle.container as _container_mod
 from tests.support.fake_fs import graph_text_from_metas
@@ -877,7 +878,7 @@ class TestRun(unittest.TestCase):
         run_log = self._run_log()
         self.assertIn("tick raised", run_log)
         self.assertIn("RuntimeError: boom", run_log)
-        self.assertFalse((Path(self.root) / ".lc-run.pid").exists())
+        self.assertIsNone(_lock_mod.holder_pid(self.root))
 
     def test_detach_spawns_the_pool_and_reports_the_pid(self):
         spawned = []
@@ -1023,16 +1024,22 @@ class TestRunSingletonLock(unittest.TestCase):
     def _lock_path(self):
         return Path(self.root) / ".lc-run.pid"
 
+    def _hold_the_lock(self):
+        acquired, pid, fd = _lock_mod.acquire(self.root)
+        self.assertTrue(acquired)
+        self.addCleanup(lambda: _lock_mod.release(self.root, fd))
+        return pid
+
     def test_second_start_refused_while_holder_alive(self):
-        self._lock_path().write_text(str(os.getpid()))
+        pid = self._hold_the_lock()
         rc, _, err = self._run_once()
         self.assertNotEqual(rc, 0)
-        self.assertIn("already running, pid %d" % os.getpid(), err)
+        self.assertIn("already running, pid %d" % pid, err)
 
     def test_start_succeeds_after_holder_releases(self):
         rc1, _, err1 = self._run_once()
         self.assertEqual(rc1, 0, err1)
-        self.assertFalse(self._lock_path().exists())
+        self.assertIsNone(_lock_mod.holder_pid(self.root))
         rc2, _, err2 = self._run_once()
         self.assertEqual(rc2, 0, err2)
 
@@ -1048,7 +1055,10 @@ class TestRunSingletonLock(unittest.TestCase):
 
     def test_clean_exit_releases_lock(self):
         self._run_once()
-        self.assertFalse(self._lock_path().exists())
+        self.assertIsNone(_lock_mod.holder_pid(self.root))
+        acquired, _, fd = _lock_mod.acquire(self.root)
+        _lock_mod.release(self.root, fd)
+        self.assertTrue(acquired, "the lock was not free after a clean exit")
 
 
 class TestAdd(unittest.TestCase):

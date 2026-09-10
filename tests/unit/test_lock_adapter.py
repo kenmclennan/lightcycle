@@ -44,7 +44,7 @@ class TestRunLockAdapter(unittest.TestCase):
         self.assertTrue(result.acquired)
         self.assertEqual(result.holder_pid, os.getpid())
 
-    def test_release_removes_lock_file(self):
+    def test_release_frees_the_lock_for_the_next_acquirer(self):
         self.lock.acquire()
         self.lock.release()
         result = RunLockAdapter(FakeConfig(self.root)).acquire()
