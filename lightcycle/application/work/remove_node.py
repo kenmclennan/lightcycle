@@ -29,11 +29,13 @@ class RemoveNodeUseCase:
     def _live_step(self, step_ids):
         if not step_ids:
             return None
-        covered = WorkerPool(self._workers.workers_state()).covered_steps(
-            self._workers.pid_alive
-        )
+        pool = WorkerPool(self._workers.workers_state())
+        covered = pool.covered_steps(self._workers.pid_alive)
+        live_spawnids = pool.live_spawnids(self._workers.pid_alive)
         for t in self._store.claimed_steps():
-            if t.id in step_ids and t.id in covered:
+            if t.id in step_ids and (
+                t.id in covered or (t.claimed_by and t.claimed_by in live_spawnids)
+            ):
                 return t.id
         return None
 
