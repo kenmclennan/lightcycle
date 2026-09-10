@@ -23,8 +23,13 @@ from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.config import Config, _SEED_KEYS
 from lightcycle.container import Container
 from lightcycle.ports.backup import BackupPort
+from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.git import GitPort
+from lightcycle.ports.launcher import LauncherPort
+from lightcycle.ports.lock import LockAcquisition, RunLockPort
 from lightcycle.ports.scaffold import ScaffoldPort
+from lightcycle.ports.spawner import SpawnerPort
+from lightcycle.ports.workflow_source import WorkflowSourcePort
 from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from lightcycle.adapters.tui.hub import NodeHubScreen
@@ -38,10 +43,16 @@ def _no_upgrade_available():
     return UpgradeResponse(current=__version__, remote=__version__, available=False, applied=False)
 
 
-class FakeLock:
+class FakeLock(RunLockPort):
     def __init__(self, running=False, pid=4242):
         self._running = running
         self._pid = pid
+
+    def acquire(self):
+        return LockAcquisition(True, self._pid)
+
+    def release(self):
+        pass
 
     def is_running(self):
         return self._running
@@ -53,7 +64,7 @@ class FakeLock:
         self._running = running
 
 
-class FakeBreakerPort:
+class FakeBreakerPort(BreakerPort):
     def __init__(self, is_open=False, reset_at=None):
         self._state = {"open": is_open, "reset_at": reset_at}
 
@@ -64,7 +75,7 @@ class FakeBreakerPort:
         self._state = dict(state)
 
 
-class FakeLauncher:
+class FakeLauncher(LauncherPort):
     def __init__(self, url_succeeds=True, path_succeeds=True):
         self.url_succeeds = url_succeeds
         self.path_succeeds = path_succeeds
@@ -80,15 +91,48 @@ class FakeLauncher:
         return self.path_succeeds
 
 
-class FakeWorkflowSource:
+class FakeWorkflowSource(WorkflowSourcePort):
+    def fetch(self, url, ref):
+        return None
+
+    def read_manifest(self, checkout_dir):
+        return None
+
+    def pin(self, origin, bundle):
+        return None
+
+    def has_version(self, origin, sha):
+        return False
+
+    def pinned_bundle(self, origin, sha):
+        return None
+
     def current_sha(self, origin):
+        return None
+
+    def unresolvable_reason(self, url, ref):
         return None
 
     def workflow_names(self, origin, sha):
         return []
 
-    def pinned_bundle(self, origin, sha):
+    def write_registry(self, origin, url, ref, current):
+        pass
+
+    def read_registry(self, origin):
         return None
+
+    def list_origins(self):
+        return []
+
+    def list_versions(self, origin):
+        return []
+
+    def remove_version(self, origin, sha):
+        pass
+
+    def remove_origin(self, origin):
+        pass
 
 
 _TEMP_ROOTS = []
@@ -128,7 +172,7 @@ class NonHermeticContainerError(Exception):
     pass
 
 
-class FakeSpawner:
+class FakeSpawner(SpawnerPort):
     def __init__(self, pid=4242):
         self._pid = pid
         self.pool_spawns = 0

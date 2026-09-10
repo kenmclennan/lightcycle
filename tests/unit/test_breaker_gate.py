@@ -3,6 +3,7 @@ import unittest
 
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool.worker import Worker
+from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_spin import FakeSpinPort
@@ -81,7 +82,7 @@ class FakeWorkers:
                 w["checked"] = True
 
 
-class FakeBreakerPort:
+class FakeBreakerPort(BreakerPort):
     def __init__(self, state=None):
         self._state = state or {}
 

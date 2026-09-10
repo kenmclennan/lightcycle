@@ -10,9 +10,10 @@ from lightcycle.application.setup import (
     VenvBusyError,
 )
 from lightcycle.cli import cmd_upgrade
+from lightcycle.ports.upgrade import UpgradePort
 
 
-class FakeUpgradePort:
+class FakeUpgradePort(UpgradePort):
     def fetch_remote_version(self):
         pass
 

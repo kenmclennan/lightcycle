@@ -7,6 +7,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import Breaker
 from lightcycle.domain.pool.worker import Worker
+from lightcycle.ports.breaker import BreakerPort
 
 scenarios("breaker-probe-stall-recovery.feature")
 
@@ -94,7 +95,7 @@ class FakeFs:
         return self._log_mtimes.get(path)
 
 
-class FakeBreakerPort:
+class FakeBreakerPort(BreakerPort):
     def __init__(self):
         self._state = {}
 

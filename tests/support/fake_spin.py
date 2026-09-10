@@ -1,7 +1,8 @@
 from lightcycle.domain.pool.spin_ledger import SpinLedger
+from lightcycle.ports.spin import SpinPort
 
 
-class FakeSpinPort:
+class FakeSpinPort(SpinPort):
     def __init__(self, state=None):
         self._ledger = SpinLedger.from_state(state or {})
 
