@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.pinned import pinned_shas
+from lightcycle.ports.workflow_source import WorkflowSourceError
 
 
 @dataclass(frozen=True)

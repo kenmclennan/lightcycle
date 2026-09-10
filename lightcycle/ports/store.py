@@ -10,6 +10,10 @@ class ProjectResolutionError(Exception):
     pass
 
 
+class StoreError(Exception):
+    pass
+
+
 class NodeNotFoundError(KeyError):
     def __str__(self):
         if self.args:

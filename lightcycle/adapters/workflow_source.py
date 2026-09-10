@@ -4,8 +4,7 @@ import subprocess
 import tempfile
 import tomllib
 
-from lightcycle.application.workflows.errors import WorkflowSourceError
-from lightcycle.ports.workflow_source import WorkflowSourcePort
+from lightcycle.ports.workflow_source import WorkflowSourceError, WorkflowSourcePort
 
 _MANIFEST = "source.toml"
 _REGISTRY = "origin.toml"
@@ -49,16 +48,23 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
 
     def fetch(self, url, ref):
         checkout = tempfile.mkdtemp(prefix="lc-workflow-src-")
-        subprocess.run(["git", "clone", "--quiet", url, checkout],
-                       check=True, capture_output=True, text=True)
+        try:
+            subprocess.run(["git", "clone", "--quiet", url, checkout],
+                           check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            raise WorkflowSourceError("could not clone %s: %s" % (url, e.stderr.strip())) from e
         if ref:
             try:
                 subprocess.run(["git", "-C", checkout, "checkout", "--quiet", ref],
                                check=True, capture_output=True, text=True)
             except subprocess.CalledProcessError:
                 raise WorkflowSourceError("ref %r not found in %s" % (ref, url))
-        sha = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"],
-                             check=True, capture_output=True, text=True).stdout.strip()
+        try:
+            sha = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"],
+                                 check=True, capture_output=True, text=True).stdout.strip()
+        except subprocess.CalledProcessError as e:
+            raise WorkflowSourceError(
+                "could not resolve HEAD in checkout of %s: %s" % (url, e.stderr.strip())) from e
         return checkout, sha
 
     def read_manifest(self, checkout_dir):

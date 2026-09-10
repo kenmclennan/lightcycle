@@ -3,12 +3,10 @@ import json
 import os
 import shutil
 import signal
-import subprocess
 import sys
 import tempfile
 import time
 import traceback
-import urllib.error
 
 from lightcycle import __version__
 from lightcycle.adapters.simulate import NullSpin, NullWorkers, RecordingGit, SimulateConfig
@@ -68,7 +66,6 @@ from lightcycle.application.work import (
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
@@ -112,6 +109,7 @@ from lightcycle.application.setup import (
     InitGridUseCase,
     ListProjectsUseCase,
     ProcessListUnreadableError,
+    RemoteVersionUnavailableError,
     RemoveProjectUseCase,
     ScanProjectsUseCase,
     UpgradeNoticeUseCase,
@@ -123,6 +121,7 @@ from lightcycle.config import Config, ConfigError
 from lightcycle.container import Container, make_flow_service, make_worktrees, worktrees_for
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
+from lightcycle.ports.workflow_source import WorkflowSourceError
 
 
 _container = None
@@ -266,7 +265,7 @@ def cmd_upgrade(argv):
             "lc upgrade refused: could not check whether the venv is in use (%s)\n" % e
         )
         return 1
-    except (urllib.error.URLError, ValueError) as e:
+    except (RemoteVersionUnavailableError, ValueError) as e:
         sys.stderr.write("could not check for updates: %s\n" % e)
         return 1
     if not resp.available:
@@ -431,7 +430,7 @@ def cmd_workflow(argv):
             resp = RemoveWorkflowSourceUseCase(c.workflow_source, c.store).execute(a.origin)
             print("removed %s" % resp.origin)
             return 0
-    except (WorkflowSourceError, subprocess.CalledProcessError) as e:
+    except WorkflowSourceError as e:
         sys.stderr.write("lc workflow: %s\n" % e)
         return 1
 
@@ -1778,7 +1777,7 @@ def _init_pull_default_origin():
             _container.workflow_source, _container.store, _container.config, _container.fs
         ).execute(url=url, ref="main", name=origin)
         print("pulled %s workflows @ %s" % (resp.origin, resp.sha))
-    except (WorkflowSourceError, subprocess.CalledProcessError) as e:
+    except WorkflowSourceError as e:
         sys.stderr.write(
             "could not pull workflows: %s\nrun `lc workflow add %s --name %s` once reachable\n"
             % (e, url, origin))

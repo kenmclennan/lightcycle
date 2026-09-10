@@ -8,9 +8,9 @@ from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.config import Config, ConfigError
+from lightcycle.ports.workflow_source import WorkflowSourceError
 from tests.support.fake_store import FakeStore
 
 _GIT_IDENTITY_ENV = {

@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
 
+class WorkflowSourceError(Exception):
+    pass
+
+
 class WorkflowSourcePort(ABC):
     @abstractmethod
     def fetch(self, url, ref):

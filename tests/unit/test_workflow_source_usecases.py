@@ -3,13 +3,13 @@ import tempfile
 import unittest
 
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import (
     UpgradeWorkflowSourceUseCase, UpgradeWorkflowSourcesUseCase,
 )
+from lightcycle.ports.workflow_source import WorkflowSourceError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 

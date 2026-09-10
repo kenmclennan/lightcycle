@@ -1,4 +1,3 @@
-import subprocess
 from dataclasses import dataclass, field
 from typing import List
 
@@ -11,9 +10,9 @@ from lightcycle.application.workflows.prompt_check import (
     engine_sources,
     prompt_drift_detail,
 )
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.source import parse_source_manifest
+from lightcycle.ports.workflow_source import WorkflowSourceError
 
 
 @dataclass(frozen=True)
@@ -91,6 +90,6 @@ class UpgradeWorkflowSourcesUseCase:
         for o in origins:
             try:
                 results.append(self._single.execute(o))
-            except (WorkflowSourceError, subprocess.CalledProcessError) as e:
+            except WorkflowSourceError as e:
                 failures.append(UpgradeOriginFailure(origin=o, error=str(e)))
         return UpgradeAllResponse(results=results, failures=failures)

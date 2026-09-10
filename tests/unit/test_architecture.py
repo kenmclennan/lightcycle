@@ -1,12 +1,20 @@
+import ast
 import pathlib
 import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOMAIN = REPO_ROOT / "lightcycle" / "domain"
 LIGHTCYCLE = REPO_ROOT / "lightcycle"
+APPLICATION = LIGHTCYCLE / "application"
+CLI = LIGHTCYCLE / "cli.py"
 
 BD_MARKERS = ('"Issue"', "issue_type", "close_reason", "dependency_count")
 ALLOW = set()
+
+BANNED_ADAPTER_IMPORTS = ("subprocess", "urllib", "sqlite3")
+BANNED_ADAPTER_IMPORT_ALLOW = {
+    APPLICATION / "setup" / "upgrade.py",
+}
 
 
 class TestDomainSpeaksNoBead(unittest.TestCase):
@@ -20,6 +28,29 @@ class TestDomainSpeaksNoBead(unittest.TestCase):
                 if marker in text:
                     offenders.append("%s: %s" % (path.relative_to(DOMAIN), marker))
         self.assertEqual(offenders, [], "bd wire-format leaked into the domain: %s" % offenders)
+
+
+class TestApplicationImportsNoAdapterTech(unittest.TestCase):
+    def test_no_subprocess_urllib_sqlite3_imports(self):
+        offenders = []
+        paths = sorted(APPLICATION.rglob("*.py")) + [CLI]
+        for path in paths:
+            if path in BANNED_ADAPTER_IMPORT_ALLOW:
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names = [alias.name.split(".")[0] for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    names = [node.module.split(".")[0]] if node.module else []
+                else:
+                    continue
+                for name in names:
+                    if name in BANNED_ADAPTER_IMPORTS:
+                        offenders.append("%s: %s" % (path.relative_to(REPO_ROOT), name))
+        self.assertEqual(
+            offenders, [], "adapter exception types crossing the port boundary: %s" % offenders
+        )
 
 
 class TestStoreFilenameHasOneDefinition(unittest.TestCase):

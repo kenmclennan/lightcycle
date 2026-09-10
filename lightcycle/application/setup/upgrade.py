@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
@@ -26,6 +27,10 @@ class VenvBusyError(Exception):
 
 
 class ProcessListUnreadableError(Exception):
+    pass
+
+
+class RemoteVersionUnavailableError(Exception):
     pass
 
 
@@ -87,8 +92,11 @@ def parse_remote_version(text):
 
 
 def fetch_remote_version():
-    with urllib.request.urlopen(_REMOTE_INIT_URL, timeout=10) as resp:
-        version = parse_remote_version(resp.read().decode())
+    try:
+        with urllib.request.urlopen(_REMOTE_INIT_URL, timeout=10) as resp:
+            version = parse_remote_version(resp.read().decode())
+    except urllib.error.URLError as e:
+        raise RemoteVersionUnavailableError(str(e)) from e
     if version is None:
         raise ValueError("no __version__ found in the remote file")
     return version

@@ -1,10 +1,13 @@
 import subprocess
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 from lightcycle.application.setup.upgrade import (
     ProcessListUnreadableError,
+    RemoteVersionUnavailableError,
     VenvBusyError,
+    fetch_remote_version,
     filter_holders,
     format_holders_message,
     list_processes,
@@ -83,6 +86,14 @@ class TestListProcesses(unittest.TestCase):
         result = subprocess.CompletedProcess(args=["ps"], returncode=0, stdout=b"123 command\n")
         with patch("lightcycle.application.setup.upgrade.subprocess.run", return_value=result):
             self.assertEqual(list_processes(), "123 command\n")
+
+
+class TestFetchRemoteVersion(unittest.TestCase):
+    def test_wraps_url_error_in_remote_version_unavailable_error(self):
+        with patch("lightcycle.application.setup.upgrade.urllib.request.urlopen",
+                   side_effect=urllib.error.URLError("unreachable")):
+            with self.assertRaises(RemoteVersionUnavailableError):
+                fetch_remote_version()
 
 
 class TestFormatHoldersMessage(unittest.TestCase):

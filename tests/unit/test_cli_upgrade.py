@@ -3,7 +3,11 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
-from lightcycle.application.setup import ProcessListUnreadableError, VenvBusyError
+from lightcycle.application.setup import (
+    ProcessListUnreadableError,
+    RemoteVersionUnavailableError,
+    VenvBusyError,
+)
 from lightcycle.cli import cmd_upgrade
 
 
@@ -64,6 +68,15 @@ class TestCmdUpgrade(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("could not check", err.getvalue())
         self.assertNotIn("in use by other processes", err.getvalue())
+
+    def test_reports_and_refuses_when_the_remote_version_cannot_be_fetched(self):
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
+            fake_upgrade.side_effect = RemoteVersionUnavailableError("unreachable")
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = cmd_upgrade([]) or 0
+        self.assertEqual(rc, 1)
+        self.assertIn("could not check for updates", err.getvalue())
 
 
 if __name__ == "__main__":

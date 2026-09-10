@@ -5,11 +5,11 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work.hierarchy import display_stage
+from lightcycle.ports.workflow_source import WorkflowSourceError
 from lightcycle.render import render_workflow_mermaid
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore

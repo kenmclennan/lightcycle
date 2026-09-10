@@ -1,2 +1,0 @@
-class WorkflowSourceError(Exception):
-    pass
