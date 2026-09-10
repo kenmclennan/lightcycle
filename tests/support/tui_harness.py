@@ -77,11 +77,13 @@ class FakeBreakerPort(BreakerPort):
 
 
 class FakeLauncher(LauncherPort):
-    def __init__(self, url_succeeds=True, path_succeeds=True):
+    def __init__(self, url_succeeds=True, path_succeeds=True, returncode=0):
         self.url_succeeds = url_succeeds
         self.path_succeeds = path_succeeds
+        self.returncode = returncode
         self.opened_urls = []
         self.opened_paths = []
+        self.edited = None
 
     def open_url(self, url):
         self.opened_urls.append(url)
@@ -90,6 +92,10 @@ class FakeLauncher(LauncherPort):
     def open_path(self, path):
         self.opened_paths.append(path)
         return self.path_succeeds
+
+    def edit(self, editor, path):
+        self.edited = (editor, path)
+        return self.returncode
 
 
 class FakeWorkflowSource(WorkflowSourcePort):

@@ -214,6 +214,23 @@ class TestNoSpecLiteralInEngineCore(unittest.TestCase):
         self.assertEqual(offenders, [], "literal \"spec\" found in engine core: %s" % offenders)
 
 
+class TestCliDoesNoRawFileIoOrProcessReplace(unittest.TestCase):
+    def test_no_open_os_read_or_execvp_in_cli(self):
+        tree = ast.parse(CLI.read_text(), filename=str(CLI))
+        offenders = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Name) and node.func.id == "open":
+                offenders.append("cli.py:%d: open(...)" % node.lineno)
+            elif (
+                isinstance(node.func, ast.Attribute) and node.func.attr in ("read", "execvp")
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "os"
+            ):
+                offenders.append("cli.py:%d: os.%s(...)" % (node.lineno, node.func.attr))
+        self.assertEqual(offenders, [])
+
+
 class TestHookLiteralsHaveOneDefinition(unittest.TestCase):
     def test_hook_literals_appear_only_in_hooks_module(self):
         tokens = ('"pr_merge"', '"pr_feedback"', '"pr_conflict"', '"ci_failed_cap"')
