@@ -53,8 +53,9 @@ class Step:
         return self.park.needs
 
     def classify_for_human(self, flow):
-        outs = flow.outcomes_for(self.stage)
-        owner = flow.owner_of(self.stage)
+        sd = flow.step_def(self.stage)
+        outs = sorted(sd.routes.keys())
+        owner = sd.owner
         if owner is None or owner == "human":
             return ("action", outs)
         return ("blocked", outs + ["unblock"])

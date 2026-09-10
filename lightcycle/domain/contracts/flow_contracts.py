@@ -28,7 +28,9 @@ class FlowContracts:
         universe = set().union(self._provided, *prod.values()) if self._steps else set()
         incoming = {s: [] for s in self._steps}
         for src in self._steps:
-            for nxt in self._flow.targets_from(src):
+            for nxt in self._flow.step_def(src).routes.values():
+                if not nxt:
+                    continue
                 if nxt in incoming:
                     incoming[nxt].append(src)
         ga = {s: set(universe) for s in self._steps}
@@ -49,7 +51,10 @@ class FlowContracts:
             if s in reach:
                 continue
             reach.add(s)
-            stack += [n for n in self._flow.targets_from(s) if self._flow.owner_of(n)]
+            stack += [
+                n for n in self._flow.step_def(s).routes.values()
+                if n and self._flow.step_def(n).owner
+            ]
         return reach
 
     def unreachable(self):
@@ -63,8 +68,8 @@ class FlowContracts:
     def terminals(self):
         targets = set()
         for s in self._steps:
-            targets.update(self._flow.targets_from(s))
-        return sorted(t for t in targets if not self._flow.owner_of(t))
+            targets.update(t for t in self._flow.step_def(s).routes.values() if t)
+        return sorted(t for t in targets if not self._flow.step_def(t).owner)
 
     def duplicates(self):
         return list(self._dups)
@@ -81,15 +86,15 @@ class FlowContracts:
         return stages
 
     def unresolved_steps(self):
-        return sorted(s for s in self._source_stages() if not self._flow.owner_of(s))
+        return sorted(s for s in self._source_stages() if not self._flow.step_def(s).owner)
 
     def phase_gaps(self):
         if not self._graph.phases:
             return []
-        return sorted(s for s in self._steps if self._flow.phase_of(s) is None)
+        return sorted(s for s in self._steps if self._flow.step_def(s).phase is None)
 
     def unknown_phases(self):
-        return sorted(s for s in self._graph.phases if not self._flow.owner_of(s))
+        return sorted(s for s in self._graph.phases if not self._flow.step_def(s).owner)
 
     def unknown_display(self):
         known = set(self._steps) | set(self.terminals())
@@ -114,7 +119,7 @@ class FlowContracts:
     def phase_conflicts(self):
         groups = {}
         for stage, phase in self._graph.phases.items():
-            if not self._flow.owner_of(stage):
+            if not self._flow.step_def(stage).owner:
                 continue
             groups.setdefault(phase, set()).add(self._flow.workspace_of(stage))
         return {p: sorted(ws) for p, ws in groups.items() if len(ws) > 1}
@@ -123,9 +128,10 @@ class FlowContracts:
         if len(occ) <= target_index:
             return
         gate, target = occ[0], occ[target_index]
-        if not self._flow.owner_of(target):
+        if not self._flow.step_def(target).owner:
             return
-        gate_phase, target_phase = self._flow.phase_of(gate), self._flow.phase_of(target)
+        gate_phase = self._flow.step_def(gate).phase
+        target_phase = self._flow.step_def(target).phase
         if gate_phase and target_phase and gate_phase != target_phase:
             mismatches.append((hook, gate, gate_phase, target, target_phase))
 

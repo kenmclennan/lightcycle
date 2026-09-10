@@ -333,7 +333,7 @@ class TestCmdWorkflow(unittest.TestCase):
             "acme/build@sha1\n"
             "  entry        build\n"
             "  steps        %s\n" % ", ".join(
-                display_stage(flow.display_of(s), s) for s in flow.steps()
+                display_stage(flow.step_def(s).display, s) for s in flow.steps()
             )
         )
         self.assertEqual(out, expected)
@@ -352,7 +352,7 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertIn("Coding · build", out)
         self.assertIn("Review the PR · review", out)
         for step in flow.steps():
-            if flow.display_of(step) is None:
+            if flow.step_def(step).display is None:
                 self.assertIn(step, out)
 
     def test_describe_mermaid_flag_prints_diagram(self):

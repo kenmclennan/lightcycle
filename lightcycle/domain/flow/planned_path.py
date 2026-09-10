@@ -16,18 +16,19 @@ def planned_path(flow, from_step):
 
 
 def _normal_outcome(flow, stage):
-    outcomes = flow.outcomes_for(stage)
+    sd = flow.step_def(stage)
+    outcomes = sorted(sd.routes.keys())
     if len(outcomes) == 1:
         return outcomes[0]
-    merge = flow.merge_outcome(stage)
+    merge = sd.pr_merge
     if merge is not None:
         return merge
-    cap_outcome = flow.ci_failed_cap_outcome(stage)
+    cap_outcome = sd.ci_cap.outcome if sd.ci_cap else None
     if cap_outcome is not None:
         remaining = [o for o in outcomes if o != cap_outcome]
         if len(remaining) == 1:
             return remaining[0]
-    primary = flow.primary_outcome(stage)
+    primary = sd.primary
     if primary is not None:
         return primary
     return None

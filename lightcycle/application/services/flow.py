@@ -208,22 +208,25 @@ class FlowService:
         return graph.file_for(step)
 
     def outcomes_for(self, step, name=None):
-        return self.load_flow(name).outcomes_for(step)
+        return sorted(self.load_flow(name).step_def(step).routes.keys())
 
     def is_known_step(self, step, name=None):
-        return bool(self.load_flow(name).owner_of(step))
+        return bool(self.load_flow(name).step_def(step).owner)
 
     def owner_of(self, step, name=None):
-        return self.load_flow(name).owner_of(step)
+        return self.load_flow(name).step_def(step).owner
 
     def ci_failed_cap_outcome(self, step, name=None):
-        return self.load_flow(name).ci_failed_cap_outcome(step)
+        cap = self.load_flow(name).step_def(step).ci_cap
+        return cap.outcome if cap else None
 
     def ci_failed_cap_n(self, step, name=None):
-        return self.load_flow(name).ci_failed_cap_n(step)
+        cap = self.load_flow(name).step_def(step).ci_cap
+        return cap.n if cap else None
 
     def ci_failed_cap_target(self, step, name=None):
-        return self.load_flow(name).ci_failed_cap_target(step)
+        cap = self.load_flow(name).step_def(step).ci_cap
+        return cap.target if cap else None
 
     def effective_transition(self, transition, outcome, prior_count, name=None):
         return self.load_flow(name).effective_transition(transition, outcome, prior_count)

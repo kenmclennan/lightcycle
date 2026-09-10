@@ -43,28 +43,31 @@ class _FlowAdapter:
         return self._flow.next(step, outcome)
 
     def outcomes_for(self, step, name=None, project=None):
-        return self._flow.outcomes_for(step)
+        return sorted(self._flow.step_def(step).routes.keys())
 
     def meta_for_step(self, step, name=None, project=None):
         return {}
 
     def owner_of(self, step, name=None, project=None):
-        return self._flow.owner_of(step)
+        return self._flow.step_def(step).owner
 
     def ci_failed_cap_outcome(self, step, name=None, project=None):
-        return self._flow.ci_failed_cap_outcome(step)
+        cap = self._flow.step_def(step).ci_cap
+        return cap.outcome if cap else None
 
     def ci_failed_cap_n(self, step, name=None, project=None):
-        return self._flow.ci_failed_cap_n(step)
+        cap = self._flow.step_def(step).ci_cap
+        return cap.n if cap else None
 
     def ci_failed_cap_target(self, step, name=None, project=None):
-        return self._flow.ci_failed_cap_target(step)
+        cap = self._flow.step_def(step).ci_cap
+        return cap.target if cap else None
 
     def effective_transition(self, transition, outcome, prior_count, name=None, project=None):
         return self._flow.effective_transition(transition, outcome, prior_count)
 
     def phase_for(self, node):
-        return self._flow.phase_of(getattr(node, "step", None))
+        return self._flow.step_def(getattr(node, "step", None)).phase
 
     def phase_for_stage(self, stage, name=None):
         return "code"

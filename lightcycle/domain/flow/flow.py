@@ -1,5 +1,7 @@
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
-from lightcycle.domain.flow.step_def import CiCap, StepDef
+from dataclasses import replace
+
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
+from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.flow.transition import Transition
 
 SPECS_WORKSPACE = "specs"
@@ -44,101 +46,25 @@ class Flow:
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())
 
-        owner, routes = {}, {}
+        owner = {}
         for stage in stages:
             meta = step_metas.get(graph.file_for(stage))
             if meta is None:
                 continue
             owner[stage] = "agent" if meta.get("model") else "human"
-        for stage in owner:
-            routes[stage] = dict(graph.edges.get(stage) or {})
 
-        primary = dict(graph.primary)
-        pr_merge, pr_close, pr_feedback = {}, {}, {}
-        pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
-        outcome_hooks = {
-            PR_MERGE: pr_merge,
-            "pr_close": pr_close,
-            PR_FEEDBACK: pr_feedback,
-            PR_CONFLICT: pr_conflict,
-            "pr_conflict_escalate": pr_conflict_escalate,
+        step_stages = stages | set(graph.workspaces) | set(graph.phases) | set(graph.display)
+        steps = {
+            stage: replace(StepDef.from_graph(graph, stage), owner=owner.get(stage))
+            for stage in step_stages
         }
-        for name, bucket in outcome_hooks.items():
-            for occ in graph.hook_occurrences(name):
-                bucket[occ[0]] = occ[1] if len(occ) > 1 else None
-        for occ in graph.hook_occurrences("pr_conflict_cap"):
-            pr_conflict_cap[occ[0]] = int(occ[1])
-
-        ci_cap = {}
-        for occ in graph.hook_occurrences(CI_FAILED_CAP):
-            ci_cap[occ[0]] = CiCap(occ[1], int(occ[2]), occ[3])
-
-        mention_token, review_bot_allowlist = {}, {}
-        for occ in graph.hook_occurrences("mention_token"):
-            mention_token[occ[0]] = occ[1]
-        for occ in graph.hook_occurrences("review_bot_allowlist"):
-            review_bot_allowlist[occ[0]] = frozenset(occ[1:])
-
-        step_hooks = {}
-        for name, occs in graph.hooks.items():
-            for occ in occs:
-                if occ:
-                    step_hooks.setdefault(occ[0], set()).add("on_" + name)
-
-        workspaces = dict(graph.workspaces)
-        phases = dict(graph.phases)
-        display = dict(graph.display)
-
-        steps = {}
-        all_stages = (
-            set(owner) | set(workspaces) | set(phases) | set(pr_merge) | set(pr_close)
-            | set(pr_feedback) | set(pr_conflict) | set(pr_conflict_cap)
-            | set(pr_conflict_escalate) | set(mention_token) | set(review_bot_allowlist)
-            | set(ci_cap) | set(step_hooks) | set(primary) | set(display)
-        )
-        for stage in all_stages:
-            steps[stage] = StepDef(
-                owner=owner.get(stage),
-                routes=routes.get(stage, {}),
-                pr_merge=pr_merge.get(stage),
-                pr_close=pr_close.get(stage),
-                pr_feedback=pr_feedback.get(stage),
-                pr_conflict=pr_conflict.get(stage),
-                pr_conflict_cap=pr_conflict_cap.get(stage),
-                pr_conflict_escalate=pr_conflict_escalate.get(stage),
-                mention_token=mention_token.get(stage),
-                review_bot_allowlist=review_bot_allowlist.get(stage, frozenset()),
-                ci_cap=ci_cap.get(stage),
-                workspace=workspaces.get(stage),
-                phase=phases.get(stage),
-                hooks=frozenset(step_hooks.get(stage, set())),
-                primary=primary.get(stage),
-                display=display.get(stage),
-            )
         return cls(steps, graph.workspace, dict(graph.disposition))
 
-    def owner_of(self, step):
-        sd = self._steps.get(step)
-        return sd.owner if sd else None
+    def step_def(self, stage) -> StepDef:
+        return self._steps.get(stage) or StepDef()
 
     def steps(self):
         return sorted(s for s, sd in self._steps.items() if sd.owner is not None)
-
-    def outcomes_for(self, step):
-        sd = self._steps.get(step)
-        return sorted((sd.routes if sd else {}).keys())
-
-    def targets_from(self, step):
-        sd = self._steps.get(step)
-        return [t for t in (sd.routes if sd else {}).values() if t]
-
-    def merge_outcome(self, step):
-        sd = self._steps.get(step)
-        return sd.pr_merge if sd else None
-
-    def close_outcome(self, step):
-        sd = self._steps.get(step)
-        return sd.pr_close if sd else None
 
     def merge_stages(self):
         return sorted(
@@ -147,65 +73,14 @@ class Flow:
         )
 
     def workspace_of(self, stage):
-        sd = self._steps.get(stage)
-        if sd and sd.workspace is not None:
-            return sd.workspace
-        return self._workspace_default
-
-    def phase_of(self, step):
-        sd = self._steps.get(step)
-        return sd.phase if sd else None
-
-    def display_of(self, step):
-        sd = self._steps.get(step)
-        return sd.display if sd else None
-
-    def pr_feedback_step(self, step):
-        sd = self._steps.get(step)
-        return sd.pr_feedback if sd else None
-
-    def pr_conflict_outcome(self, step):
-        sd = self._steps.get(step)
-        return sd.pr_conflict if sd else None
-
-    def pr_conflict_cap(self, step):
-        sd = self._steps.get(step)
-        return sd.pr_conflict_cap if sd else None
-
-    def pr_conflict_escalate(self, step):
-        sd = self._steps.get(step)
-        return sd.pr_conflict_escalate if sd else None
-
-    def mention_token(self, step):
-        sd = self._steps.get(step)
-        return sd.mention_token if sd else None
-
-    def review_bot_allowlist(self, step):
-        sd = self._steps.get(step)
-        return set(sd.review_bot_allowlist) if sd else set()
-
-    def ci_failed_cap_outcome(self, step):
-        sd = self._steps.get(step)
-        return sd.ci_cap.outcome if sd and sd.ci_cap else None
-
-    def ci_failed_cap_n(self, step):
-        sd = self._steps.get(step)
-        return sd.ci_cap.n if sd and sd.ci_cap else None
-
-    def ci_failed_cap_target(self, step):
-        sd = self._steps.get(step)
-        return sd.ci_cap.target if sd and sd.ci_cap else None
-
-    def primary_outcome(self, step):
-        sd = self._steps.get(step)
-        return sd.primary if sd else None
+        sd = self.step_def(stage)
+        return sd.workspace if sd.workspace is not None else self._workspace_default
 
     def effective_transition(self, transition, outcome, prior_count):
         if transition is None:
             return None
         step = transition.from_step
-        sd = self._steps.get(step)
-        cap = sd.ci_cap if sd else None
+        cap = self.step_def(step).ci_cap
         if cap is None or outcome != cap.outcome:
             return transition
         if prior_count < cap.n:
@@ -214,14 +89,12 @@ class Flow:
             from_step=step,
             outcome=outcome,
             to_step=cap.target,
-            to_role=self.owner_of(cap.target) or "human",
-            to_terminal=self.owner_of(cap.target) is None,
+            to_role=self.step_def(cap.target).owner or "human",
+            to_terminal=self.step_def(cap.target).owner is None,
         )
 
     def pr_conflict_transition(self, step, conflict_outcome, prior_count):
-        sd = self._steps.get(step)
-        if sd is None:
-            return conflict_outcome
+        sd = self.step_def(step)
         if sd.pr_conflict_cap is None or not sd.pr_conflict_escalate:
             return conflict_outcome
         return sd.pr_conflict_escalate if prior_count >= sd.pr_conflict_cap else conflict_outcome
@@ -240,14 +113,13 @@ class Flow:
         return self._disposition.get(outcome)
 
     def next(self, step, outcome):
-        sd = self._steps.get(step)
-        target = (sd.routes if sd else {}).get(outcome)
+        target = self.step_def(step).routes.get(outcome)
         if not target:
             return None
         return Transition(
             from_step=step,
             outcome=outcome,
             to_step=target,
-            to_role=self.owner_of(target) or "human",
-            to_terminal=self.owner_of(target) is None,
+            to_role=self.step_def(target).owner or "human",
+            to_terminal=self.step_def(target).owner is None,
         )

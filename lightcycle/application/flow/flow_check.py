@@ -27,11 +27,11 @@ class FlowCheckUseCase:
         graph = self._flow.load_graph(input.workflow)
         flow = Flow.from_graph(graph, role_metas)
         steps = flow.steps()
-        owner = {s: flow.owner_of(s) for s in steps}
+        owner = {s: flow.step_def(s).owner for s in steps}
         routes = {
             s: {
                 o: transition.to_step
-                for o in flow.outcomes_for(s)
+                for o in sorted(flow.step_def(s).routes.keys())
                 if (transition := flow.next(s, o)) is not None
             }
             for s in steps

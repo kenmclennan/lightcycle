@@ -167,37 +167,37 @@ def _mermaid_declare(stage, kind):
 
 
 def _mermaid_consumed_outcomes(graph, flow, stage):
+    sd = flow.step_def(stage)
     consumed = set()
-    for outcome in (
-        flow.merge_outcome(stage), flow.close_outcome(stage), flow.pr_conflict_outcome(stage)
-    ):
+    for outcome in (sd.pr_merge, sd.pr_close, sd.pr_conflict):
         if outcome and graph.target(stage, outcome):
             consumed.add(outcome)
     return consumed
 
 
 def _mermaid_hook_edges(graph, flow, stage):
+    sd = flow.step_def(stage)
     sid = _mermaid_node_id(stage)
     edges = []
-    merge_o = flow.merge_outcome(stage)
+    merge_o = sd.pr_merge
     if merge_o:
         target = graph.target(stage, merge_o)
         if target:
             edges.append("%s -.->|pr_merge: %s| %s" % (sid, merge_o, _mermaid_node_id(target)))
-    close_o = flow.close_outcome(stage)
+    close_o = sd.pr_close
     if close_o:
         target = graph.target(stage, close_o)
         if target:
             edges.append("%s -.->|pr_close: %s| %s" % (sid, close_o, _mermaid_node_id(target)))
-    conflict_o = flow.pr_conflict_outcome(stage)
+    conflict_o = sd.pr_conflict
     if conflict_o:
         target = graph.target(stage, conflict_o)
         if target:
             edges.append(
                 "%s -.->|pr_conflict: %s| %s" % (sid, conflict_o, _mermaid_node_id(target))
             )
-    cap = flow.pr_conflict_cap(stage)
-    escalate = flow.pr_conflict_escalate(stage)
+    cap = sd.pr_conflict_cap
+    escalate = sd.pr_conflict_escalate
     if cap and escalate:
         target = graph.target(stage, escalate)
         if target:
@@ -205,22 +205,21 @@ def _mermaid_hook_edges(graph, flow, stage):
                 "%s -.->|pr_conflict_cap x%d: %s| %s"
                 % (sid, cap, escalate, _mermaid_node_id(target))
             )
-    feedback = flow.pr_feedback_step(stage)
+    feedback = sd.pr_feedback
     if feedback:
         edges.append("%s -.->|pr_feedback| %s" % (sid, _mermaid_node_id(feedback)))
-    ci_target = flow.ci_failed_cap_target(stage)
+    ci_target = sd.ci_cap.target if sd.ci_cap else None
     if ci_target:
         edges.append(
             "%s -.->|ci_failed_cap x%d: %s| %s"
-            % (sid, flow.ci_failed_cap_n(stage), flow.ci_failed_cap_outcome(stage),
-               _mermaid_node_id(ci_target))
+            % (sid, sd.ci_cap.n, sd.ci_cap.outcome, _mermaid_node_id(ci_target))
         )
     return edges
 
 
 def render_workflow_mermaid(graph, flow):
     stages = _mermaid_stages(graph)
-    kinds = {stage: _mermaid_kind(flow.owner_of(stage)) for stage in stages}
+    kinds = {stage: _mermaid_kind(flow.step_def(stage).owner) for stage in stages}
 
     lines = ["flowchart TD"]
 

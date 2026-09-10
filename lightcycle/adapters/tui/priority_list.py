@@ -36,7 +36,7 @@ def _project(store, node):
 def _resolved_step(node, flow):
     if not node.step:
         return ""
-    phrase = flow.display_of(node.step) or engine_display_of(node.step)
+    phrase = flow.step_def(node.step).display or engine_display_of(node.step)
     return truncate_field(phrase, STEP_PHRASE_BUDGET) if phrase else node.step
 
 
