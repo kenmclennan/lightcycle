@@ -2,8 +2,8 @@ import os
 from dataclasses import dataclass
 
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT
+from lightcycle.ports.workflow_source import WorkflowSourceError
 
 _SOURCE_TOML = """name = "%s"
 contract = %d

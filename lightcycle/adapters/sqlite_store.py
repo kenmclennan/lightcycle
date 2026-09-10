@@ -17,6 +17,7 @@ from lightcycle.ports.store import (
     NodeNotFoundError,
     ProjectEntry,
     ProjectResolutionError,
+    StoreError,
     StorePort,
 )
 
@@ -234,6 +235,32 @@ _INTERNAL_ARTIFACT_TYPES = (
 )
 
 
+class _ErrorTranslatingConnection:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def execute(self, *args, **kwargs):
+        return self._guarded(self._conn.execute, *args, **kwargs)
+
+    def executescript(self, *args, **kwargs):
+        return self._guarded(self._conn.executescript, *args, **kwargs)
+
+    def commit(self, *args, **kwargs):
+        return self._guarded(self._conn.commit, *args, **kwargs)
+
+    def rollback(self, *args, **kwargs):
+        return self._guarded(self._conn.rollback, *args, **kwargs)
+
+    def _guarded(self, fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except sqlite3.Error as e:
+            raise StoreError(str(e)) from e
+
+
 class SqliteStore(StorePort):
     def __init__(self, config, now=None, package_root=None, default_data_root=None):
         self._config = config
@@ -242,7 +269,10 @@ class SqliteStore(StorePort):
         self._refuse_live_store_from_worktree(package_root, default_data_root)
         self._db_path = os.path.join(config.data_root(), DB_FILENAME)
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
-        self._conn = sqlite3.connect(self._db_path)
+        try:
+            self._conn = _ErrorTranslatingConnection(sqlite3.connect(self._db_path))
+        except sqlite3.Error as e:
+            raise StoreError(str(e)) from e
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA busy_timeout=5000")

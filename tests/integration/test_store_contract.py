@@ -21,6 +21,7 @@ from lightcycle.application.work.activate_item import ActivateItemInput, Activat
 from lightcycle.application.work.status import StatusUseCase
 from lightcycle.config import Config
 from lightcycle.container import Container
+from lightcycle.ports.store import StoreError
 
 
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
@@ -612,6 +613,22 @@ class TestSqliteStoreAddsClaimEpochToSteps(unittest.TestCase):
             "SELECT claim_epoch FROM steps WHERE id = ?", (tid,)
         ).fetchone()
         self.assertEqual(row[0], 0)
+
+
+class TestSqliteStoreTranslatesSqliteErrors(unittest.TestCase):
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def test_corrupt_store_surfaces_store_error_not_sqlite_operational_error(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        store._conn.execute("DROP TABLE items")
+
+        with self.assertRaises(StoreError):
+            store.all_items()
 
 
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):

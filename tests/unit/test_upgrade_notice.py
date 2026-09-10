@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from lightcycle.application.setup.upgrade import UpgradeResponse
+from lightcycle.application.setup.upgrade import RemoteVersionUnavailableError, UpgradeResponse
 from lightcycle.application.setup.upgrade_notice import UpgradeNoticeUseCase
 
 
@@ -35,6 +35,16 @@ class TestUpgradeNoticeUseCase(unittest.TestCase):
         self.assertIsNone(resp.notice)
         self.assertIsNone(resp.remote)
         self.assertEqual(resp.error, "boom")
+
+    def test_error_surfaced_when_check_raises_remote_version_unavailable(self):
+        def raising_check():
+            raise RemoteVersionUnavailableError("unreachable")
+
+        resp = UpgradeNoticeUseCase("0.2.0", check=raising_check).execute()
+
+        self.assertIsNone(resp.notice)
+        self.assertIsNone(resp.remote)
+        self.assertEqual(resp.error, "unreachable")
 
     def test_default_check_calls_upgrade_with_the_given_current_version(self):
         with patch("lightcycle.application.setup.upgrade_notice.upgrade") as fake_upgrade:

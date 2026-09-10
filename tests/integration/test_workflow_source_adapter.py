@@ -1,13 +1,15 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
+from lightcycle.ports.workflow_source import WorkflowSourceError
 from tests.support.fake_store import FakeStore
 
 
@@ -100,6 +102,27 @@ class TestFetch(unittest.TestCase):
             adapter.fetch(repo, "does-not-exist")
         self.assertIn("does-not-exist", str(cm.exception))
         self.assertIn(repo, str(cm.exception))
+
+    def test_fetch_against_a_nonexistent_url_raises_workflow_source_error(self):
+        adapter = _adapter()
+        with self.assertRaises(WorkflowSourceError):
+            adapter.fetch(os.path.join(tempfile.mkdtemp(), "does-not-exist"), None)
+
+    def test_fetch_rev_parse_failure_raises_workflow_source_error(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        original_run = subprocess.run
+
+        def _corrupt_git_dir_after_clone(cmd, *args, **kwargs):
+            result = original_run(cmd, *args, **kwargs)
+            if cmd[:2] == ["git", "clone"]:
+                shutil.rmtree(os.path.join(cmd[-1], ".git"))
+            return result
+
+        with mock.patch("lightcycle.adapters.workflow_source.subprocess.run",
+                        side_effect=_corrupt_git_dir_after_clone):
+            with self.assertRaises(WorkflowSourceError):
+                adapter.fetch(repo, None)
 
 
 class TestMaterialize(unittest.TestCase):

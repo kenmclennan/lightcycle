@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.application.setup.upgrade import upgrade
+from lightcycle.application.setup.upgrade import RemoteVersionUnavailableError, upgrade
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class UpgradeNoticeUseCase:
     def execute(self) -> UpgradeNoticeResponse:
         try:
             resp = self._check()
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, RemoteVersionUnavailableError) as e:
             return UpgradeNoticeResponse(notice=None, remote=None, error=str(e))
         if not resp.available:
             return UpgradeNoticeResponse(notice=None, remote=None, error=None)

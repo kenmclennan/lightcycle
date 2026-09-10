@@ -1,10 +1,10 @@
-import sqlite3
 import unittest
 
 from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.store_contract import StoreContractBase
 from lightcycle.adapters import sqlite_store
 from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.ports.store import StoreError
 from tests.support.step_factory import create_owned_step
 
 
@@ -17,7 +17,7 @@ class TestSqliteStoreDisconnect(unittest.TestCase):
     def test_disconnect_closes_the_underlying_connection(self):
         s = make_sqlite_store()
         s.release()
-        with self.assertRaises(sqlite3.ProgrammingError):
+        with self.assertRaises(StoreError):
             create_owned_step(s, "t")
 
 

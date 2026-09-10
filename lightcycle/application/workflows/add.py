@@ -9,11 +9,11 @@ from lightcycle.application.workflows.prompt_check import (
     engine_sources,
     prompt_drift_detail,
 )
-from lightcycle.application.workflows.errors import WorkflowSourceError
 from lightcycle.application.workflows.pinned import pinned_shas
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.retention import versions_to_prune
 from lightcycle.domain.workflows.source import parse_source_manifest
+from lightcycle.ports.workflow_source import WorkflowSourceError
 
 
 @dataclass(frozen=True)
