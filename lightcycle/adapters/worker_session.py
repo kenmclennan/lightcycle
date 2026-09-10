@@ -1,5 +1,6 @@
 import contextlib
 import json
+import queue
 import subprocess
 import sys
 import tempfile
@@ -62,18 +63,22 @@ def user_message(text):
                        "message": {"role": "user", "content": [{"type": "text", "text": text}]}})
 
 
-def dispatch_event(d, line, policy, counters, lock):
+COMMAND = "command"
+RESULT = "result"
+RATE_LIMIT = "rate-limit"
+
+
+def dispatch_event(d, line, events):
     t = d.get("type")
     if t == "assistant":
         for c in d.get("message", {}).get("content", []):
             if c.get("type") == "tool_use":
                 inp = c.get("input", {}) or {}
-                policy.observe_command(str(inp.get("command", "")))
+                events.put((COMMAND, str(inp.get("command", ""))))
     elif t == "result":
-        with lock:
-            counters["results"] += 1
+        events.put((RESULT, None))
     elif t == "rate_limit_event":
-        policy.observe_rate_limit(parse_rate_limit_event([line]))
+        events.put((RATE_LIMIT, parse_rate_limit_event([line])))
 
 
 def has_open_step(root, spawnid):
@@ -98,15 +103,27 @@ def build_command(model, sysprompt, root):
             "--dangerously-skip-permissions"]
 
 
-def poll_decision(add_dir, spawnid, policy, counters, lock, processed):
-    with lock:
-        pending = counters["results"] > processed
-        processed = counters["results"]
-    if not pending:
-        return None, processed
+def drain(events, policy):
+    results = 0
+    while True:
+        try:
+            kind, payload = events.get_nowait()
+        except queue.Empty:
+            return results
+        if kind == COMMAND:
+            policy.observe_command(payload)
+        elif kind == RATE_LIMIT:
+            policy.observe_rate_limit(payload)
+        elif kind == RESULT:
+            results += 1
+
+
+def poll_decision(add_dir, spawnid, policy, events):
+    if not drain(events, policy):
+        return None
     open_step = has_open_step(add_dir, spawnid)
     policy.observe_claimed(open_step)
-    return policy.on_result(open_step), processed
+    return policy.on_result(open_step)
 
 
 def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clock=time.monotonic):
@@ -114,8 +131,7 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clo
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1)
     policy = SessionPolicy()
-    counters = {"results": 0}
-    lock = threading.Lock()
+    events = queue.Queue()
 
     def send(text):
         try:
@@ -138,19 +154,18 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clo
                 d = json.loads(line)
             except ValueError:
                 continue
-            dispatch_event(d, line, policy, counters, lock)
+            dispatch_event(d, line, events)
 
     reader_thread = threading.Thread(target=reader, daemon=True)
     reader_thread.start()
     send(KICKOFF % stage)
 
     start = clock()
-    processed = 0
     while proc.poll() is None:
         if clock() - start > max_session_seconds:
             proc.terminate()
             break
-        decision, processed = poll_decision(add_dir, spawnid, policy, counters, lock, processed)
+        decision = poll_decision(add_dir, spawnid, policy, events)
         if decision == CLOSE:
             try:
                 proc.stdin.close()
