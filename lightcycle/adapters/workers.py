@@ -119,6 +119,20 @@ def register_worker(root, entry):
         write_workers(root, workers)
 
 
+def reap_worker_group(pid):
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0 or pid_alive(pid):
+        return False
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def prune_workers(root, keep_dead):
     with registry_lock(root):
         workers = workers_state(root)
@@ -127,6 +141,8 @@ def prune_workers(root, keep_dead):
             for i, w in enumerate(workers)
             if not worker_alive(w.get("pid", -1), w.get("pid_started"))
         ]
+        for i in dead_idx:
+            reap_worker_group(workers[i].get("pid", -1))
         n_drop = max(0, len(dead_idx) - keep_dead)
         if not n_drop:
             return 0
