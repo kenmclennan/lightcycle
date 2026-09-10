@@ -1,6 +1,13 @@
 import unittest
 
 from lightcycle.application.pool import StopPoolUseCase, SweepUseCase
+from lightcycle.application.pool.no_op_gates import (
+    NoOpFs,
+    NoOpGit,
+    NoOpSpinPort,
+    NoOpStream,
+    NoOpWorktrees,
+)
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -43,7 +50,10 @@ class TestStopPool(unittest.TestCase):
             workers=[{"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}],
         )
         git = _Git(dirty=dirty)
-        sweep = SweepUseCase(store, workers, worktrees=_Worktrees(), git=git, fs=None)
+        sweep = SweepUseCase(
+            store, workers, worktrees=_Worktrees(), git=git, fs=NoOpFs(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+        )
         return store, workers, git, step, StopPoolUseCase(workers, sweep)
 
     def test_a_live_worker_is_stopped(self):
@@ -70,7 +80,10 @@ class TestStopPool(unittest.TestCase):
     def test_stopping_an_idle_pool_stops_and_reclaims_nothing(self):
         store = FakeStore()
         workers = FakeWorkers()
-        sweep = SweepUseCase(store, workers)
+        sweep = SweepUseCase(
+            store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(), fs=NoOpFs(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+        )
         resp = StopPoolUseCase(workers, sweep).execute(100.0, 120, 1800)
         self.assertEqual((resp.stopped, resp.reclaimed), ([], []))
 
@@ -108,7 +121,10 @@ class TestStopPool(unittest.TestCase):
             delayed_death=True,
             workers=[{"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}],
         )
-        sweep = SweepUseCase(store, workers, worktrees=_Worktrees(), git=_Git(), fs=None)
+        sweep = SweepUseCase(
+            store, workers, worktrees=_Worktrees(), git=_Git(), fs=NoOpFs(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+        )
         uc = StopPoolUseCase(workers, sweep, sleep=lambda s: None)
 
         resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800)

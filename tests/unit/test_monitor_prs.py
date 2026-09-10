@@ -1,6 +1,20 @@
 import unittest
 
 from lightcycle.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
+from lightcycle.application.pool.no_op_gates import (
+    NoOpBackupGate,
+    NoOpBreakerGate,
+    NoOpCadenceGate,
+    NoOpFlowService,
+    NoOpFs,
+    NoOpGit,
+    NoOpHookCompletions,
+    NoOpMonitor,
+    NoOpSpinPort,
+    NoOpStream,
+    NoOpUsageGate,
+    NoOpWorktrees,
+)
 from tests.support.fake_fs import flow_from_metas
 from lightcycle.ports.github import Comment
 from tests.support.fake_github import FakeGitHub
@@ -149,6 +163,20 @@ class FakeConfig:
     def ci_release_cap(self):
         return 3
 
+    def spin_cap(self):
+        return 3
+
+
+def make_tick(store, workers, spawner, config, **overrides):
+    kwargs = dict(
+        monitor=NoOpMonitor(), cadence_gate=NoOpCadenceGate(), breaker_gate=NoOpBreakerGate(),
+        hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
+        backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
+        spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
+    )
+    kwargs.update(overrides)
+    return TickUseCase(store, workers, spawner, config, **kwargs)
+
 
 class TestTickWithMonitor(unittest.TestCase):
     def test_tick_runs_monitor_and_returns_merged(self):
@@ -162,12 +190,12 @@ class TestTickWithMonitor(unittest.TestCase):
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
         )
 
-        result = TickUseCase(
+        result = make_tick(
             store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
         ).execute(TickInput(now=1000.0))
 
-        self.assertEqual(result.merged, [item])
-        self.assertEqual(result.abandoned, [])
+        self.assertEqual(result.monitor.merged, [item])
+        self.assertEqual(result.monitor.abandoned, [])
 
     def test_tick_runs_monitor_and_returns_abandoned(self):
         url = "https://github.com/x/y/pull/6"
@@ -182,21 +210,21 @@ class TestTickWithMonitor(unittest.TestCase):
             store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
         )
 
-        result = TickUseCase(
+        result = make_tick(
             store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor
         ).execute(TickInput(now=1000.0))
 
-        self.assertEqual(result.abandoned, [item])
-        self.assertEqual(result.merged, [])
+        self.assertEqual(result.monitor.abandoned, [item])
+        self.assertEqual(result.monitor.merged, [])
 
     def test_tick_without_monitor_has_empty_merged_and_abandoned(self):
         store = FakeStore()
-        result = TickUseCase(store, FakeWorkers(), FakeSpawner(), FakeConfig()).execute(
+        result = make_tick(store, FakeWorkers(), FakeSpawner(), FakeConfig()).execute(
             TickInput(now=1000.0)
         )
-        self.assertEqual(result.merged, [])
-        self.assertEqual(result.abandoned, [])
-        self.assertEqual(result.reworked, [])
+        self.assertEqual(result.monitor.merged, [])
+        self.assertEqual(result.monitor.abandoned, [])
+        self.assertEqual(result.monitor.reworked, [])
 
 
 class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):

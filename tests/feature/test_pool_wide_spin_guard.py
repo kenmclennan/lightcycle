@@ -3,6 +3,16 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.application.pool.no_op_gates import (
+    NoOpBackupGate,
+    NoOpCadenceGate,
+    NoOpFlowService,
+    NoOpGit,
+    NoOpHookCompletions,
+    NoOpMonitor,
+    NoOpUsageGate,
+    NoOpWorktrees,
+)
 from lightcycle.application.pool.tick import TickInput, TickUseCase
 from lightcycle.domain.pool import SpinLedger
 from lightcycle.domain.pool.worker import Worker
@@ -268,8 +278,11 @@ def _pool_ticks(ctx):
         spin_port=ctx["spin_port"], store=ctx["store"], stream=ClaudeStreamAdapter())
     spawner = FakeSpawner()
     tick = TickUseCase(
-        ctx["store"], ctx["workers"], spawner, ctx["config"], breaker_gate=breaker_gate,
-        spin_port=ctx["spin_port"],
+        ctx["store"], ctx["workers"], spawner, ctx["config"],
+        monitor=NoOpMonitor(), cadence_gate=NoOpCadenceGate(), breaker_gate=breaker_gate,
+        hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
+        backup_gate=NoOpBackupGate(), fs=ctx["fs"], flow_service=NoOpFlowService(),
+        spin_port=ctx["spin_port"], usage_gate=NoOpUsageGate(), stream=ClaudeStreamAdapter(),
     )
     ctx["tick_result"] = tick.execute(TickInput(now=ctx["now"]))
     ctx["spawner"] = spawner

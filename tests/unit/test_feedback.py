@@ -10,6 +10,14 @@ from lightcycle.application.feedback import (
     WorklogInput,
     WorklogUseCase,
 )
+from lightcycle.application.feedback.retro_scope import (
+    LastNScope,
+    PendingScope,
+    ProjectScope,
+    RetroScope,
+    SinceScope,
+    SubjectScope,
+)
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.pending_reflections import pending_reflection_count
 from lightcycle.domain.feedback import UNLABELED_MODEL
@@ -357,6 +365,32 @@ class TestRetroLastScope(unittest.TestCase):
         self._make_closed_item(s, "only item")
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(last=5))
         self.assertEqual(resp.reflection_count, 1)
+
+
+class TestRetroScopePrecedence(unittest.TestCase):
+    def test_subject_wins_over_every_other_field(self):
+        scope = RetroScope.from_input(
+            RetroInput(subject="i1", since="2020-01-01", project="p", pending=True, last=3)
+        )
+        self.assertIsInstance(scope, SubjectScope)
+
+    def test_since_wins_over_project_pending_and_last(self):
+        scope = RetroScope.from_input(
+            RetroInput(since="2020-01-01", project="p", pending=True, last=3)
+        )
+        self.assertIsInstance(scope, SinceScope)
+
+    def test_project_wins_over_pending_and_last(self):
+        scope = RetroScope.from_input(RetroInput(project="p", pending=True, last=3))
+        self.assertIsInstance(scope, ProjectScope)
+
+    def test_pending_wins_over_last(self):
+        scope = RetroScope.from_input(RetroInput(pending=True, last=3))
+        self.assertIsInstance(scope, PendingScope)
+
+    def test_last_is_the_fallback(self):
+        scope = RetroScope.from_input(RetroInput(last=3))
+        self.assertIsInstance(scope, LastNScope)
 
 
 class TestWorklog(unittest.TestCase):

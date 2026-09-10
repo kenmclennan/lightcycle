@@ -1,17 +1,49 @@
 import unittest
 
-from lightcycle.application.pool.tick import TickResponse
+from lightcycle.application.pool.backup import BackupResponse
+from lightcycle.application.pool.hook_completions import HookCompletionsResponse
+from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
+from lightcycle.application.pool.sweep import SweepResponse
+from lightcycle.application.pool.tick import BreakerState, PoolState, TickResponse
 from lightcycle.cli import _format_tick, _idle_reason, _run_log_lines
 
 _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 
 
 def _result(**kw):
-    defaults = dict(swept=[], pruned=0, spawned=[], merged=[], abandoned=[], reworked=[],
-                    hook_completed=[], cadence_fired=[], alive=0, max_agents=4, ready=0,
-                    inflight_count=0, breaker_open=False, free_slots=0)
+    defaults = dict(
+        swept=[], killed=[], pruned=0, spawned=[], merged=[], abandoned=[], reworked=[],
+        conflicted=[], ci_released=[], hook_completed=[], cadence_fired=[], backed_up=None,
+        backup_pruned=[], alive=0, max_agents=4, ready=0, inflight_count=0, free_slots=0,
+        breaker_open=False, breaker_reset_at=None, breaker_opened=False, breaker_closed=False,
+        breaker_rearmed=False, spin_open=False, spin_opened=False,
+    )
     defaults.update(kw)
-    return TickResponse(**defaults)
+    return TickResponse(
+        sweep=SweepResponse(
+            swept=defaults["swept"], killed=defaults["killed"], pruned=defaults["pruned"],
+        ),
+        spawned=defaults["spawned"],
+        monitor=MonitorPrsResponse(
+            merged=defaults["merged"], abandoned=defaults["abandoned"],
+            reworked=defaults["reworked"], conflicted=defaults["conflicted"],
+            ci_released=defaults["ci_released"],
+        ),
+        cadence=RetroCadenceResponse(fired=defaults["cadence_fired"]),
+        hooks=HookCompletionsResponse(completed=defaults["hook_completed"]),
+        backup=BackupResponse(created=defaults["backed_up"], pruned=defaults["backup_pruned"]),
+        pool=PoolState(
+            alive=defaults["alive"], max_agents=defaults["max_agents"], ready=defaults["ready"],
+            inflight_count=defaults["inflight_count"], free_slots=defaults["free_slots"],
+        ),
+        breaker=BreakerState(
+            open=defaults["breaker_open"], reset_at=defaults["breaker_reset_at"],
+            opened=defaults["breaker_opened"], closed=defaults["breaker_closed"],
+            rearmed=defaults["breaker_rearmed"], spin_open=defaults["spin_open"],
+            spin_opened=defaults["spin_opened"],
+        ),
+    )
 
 
 class TestFormatTick(unittest.TestCase):
