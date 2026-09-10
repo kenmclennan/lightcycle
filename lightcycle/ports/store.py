@@ -27,6 +27,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def default_kind_for(self, atype):
+        pass
+
+    @abstractmethod
     def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         pass
 

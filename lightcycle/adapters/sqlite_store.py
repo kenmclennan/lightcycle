@@ -381,7 +381,7 @@ class SqliteStore(StorePort):
             for atype in atypes:
                 self._conn.execute(
                     "UPDATE artifacts SET kind = ? WHERE atype = ?",
-                    (default_kind_for(atype), atype),
+                    (self.default_kind_for(atype), atype),
                 )
 
     def _migrate_resume_fields(self):
@@ -797,6 +797,9 @@ class SqliteStore(StorePort):
             for r in rows
         ]
 
+    def default_kind_for(self, atype):
+        return default_kind_for(atype, context_types=self._config.context_artifact_types())
+
     def _set_repo(self, item_id, value):
         self._conn.execute("UPDATE items SET repo = ? WHERE id = ?", (value, item_id))
         self._commit()
@@ -804,7 +807,7 @@ class SqliteStore(StorePort):
     def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         if atype == "repo":
             return self._set_repo(item_id, value)
-        resolved_kind = kind if kind is not None else default_kind_for(atype)
+        resolved_kind = kind if kind is not None else self.default_kind_for(atype)
         self._conn.execute(
             "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -815,7 +818,7 @@ class SqliteStore(StorePort):
     def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
         if atype == "repo":
             return self._set_repo(item_id, value)
-        resolved_kind = kind if kind is not None else default_kind_for(atype)
+        resolved_kind = kind if kind is not None else self.default_kind_for(atype)
         if label is None:
             self._conn.execute(
                 "DELETE FROM artifacts WHERE item_id = ? AND atype = ? AND label IS NULL",

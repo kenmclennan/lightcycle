@@ -11,6 +11,9 @@ class StoreContractBase:
     def make_store(self, now=None):
         raise NotImplementedError
 
+    def make_store_with_context_artifact_types(self, types):
+        raise NotImplementedError
+
     def test_complete_step_atomic_wins_and_files_successor(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
@@ -427,6 +430,11 @@ class StoreContractBase:
             "pr": "url", "spec": "filepath",
             "branch": "text", "resolves": "text",
         })
+
+    def test_default_kind_for_resolves_declared_context_artifact_types_to_filepath(self):
+        s = self.make_store_with_context_artifact_types({"spec"})
+        self.assertEqual(s.default_kind_for("spec"), "filepath")
+        self.assertEqual(s.default_kind_for("branch"), "text")
 
     def test_add_artifact_internal_defaults_false_and_persists_true(self):
         s = self.make_store()

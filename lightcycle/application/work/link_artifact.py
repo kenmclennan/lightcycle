@@ -36,7 +36,7 @@ class LinkArtifactUseCase:
                 "empty value for '%s' on '%s' is refused - attach has no way to store or "
                 "clear a blank artifact" % (input.atype, input.item)
             )
-        if input.atype == "spec":
+        if self._store.default_kind_for(input.atype) == "filepath":
             self._validate_spec(input.item, input.value)
         if input.atype in _RUN_FIELDS:
             self._route_to_run(input)

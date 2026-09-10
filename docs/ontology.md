@@ -37,7 +37,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 ## The workflow (how steps chain)
 
-- **workflow** - the graph, defined in markdown: `entry`, `requires` (artifacts the item must carry to start), `workspace` (which repo a stage runs in), `nodes` (stage -> step file), `edges` (outcome -> next step), `hooks` (external event -> transition), `signals`, `display` (stage -> human-facing phrase).
+- **workflow** - the graph, defined in markdown: `entry`, `requires` (artifacts the item must carry to start), `provides` (artifact types assumed available for graph-validity checking, without also demanding they be attached before activation - e.g. `spec`, produced mid-flow by the spec phase rather than attached upfront), `workspace` (which repo a stage runs in), `nodes` (stage -> step file), `edges` (outcome -> next step), `hooks` (external event -> transition), `signals`, `display` (stage -> human-facing phrase).
 - **workflow** (second sense, TUI-only) - an item's own executed workflow: the ordered sequence of steps it has actually run - done, in progress, or filed but blocked - shown in the hub's Workflow tab. Distinct from the graph definition above; context disambiguates the two, since the tab is always scoped to one item - "this item's Workflow" means the executed sequence, while "workflow" unqualified elsewhere in this doc means the graph.
 - **step file** / **step markdown** - the prompt for a stage (`steps/<name>.md`, in a workflow source). Workflow policy and conventions live here; the engine stays agnostic.
 - **entry** - the step filed when an item is activated.

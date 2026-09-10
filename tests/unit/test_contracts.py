@@ -31,8 +31,8 @@ CONTRACT_METAS = {
 }
 
 
-def contracts(metas):
-    graph = parse_graph(graph_text_from_metas(metas))
+def contracts(metas, provides=("spec",)):
+    graph = parse_graph(graph_text_from_metas(metas, provides=provides))
     return FlowContracts(Flow.from_graph(graph, metas), graph, metas)
 
 

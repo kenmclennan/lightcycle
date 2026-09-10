@@ -3,12 +3,13 @@ from typing import Optional
 
 _KIND_DEFAULTS = {
     "pr": "url",
-    "spec": "filepath",
     "branch": "text",
 }
 
 
-def default_kind_for(atype: str) -> str:
+def default_kind_for(atype: str, context_types=frozenset()) -> str:
+    if atype in context_types:
+        return "filepath"
     return _KIND_DEFAULTS.get(atype, "text")
 
 

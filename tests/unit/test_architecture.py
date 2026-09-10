@@ -164,6 +164,17 @@ class TestStoreFilenameHasOneDefinition(unittest.TestCase):
         self.assertEqual(sites[0].split(":")[0], "adapters/fsio.py")
 
 
+class TestNoSpecLiteralInEngineCore(unittest.TestCase):
+    def test_no_spec_artifact_type_literal_in_domain_or_application(self):
+        offenders = []
+        for root in (DOMAIN, APPLICATION):
+            for path in sorted(root.rglob("*.py")):
+                for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                    if '"spec"' in line:
+                        offenders.append("%s:%d" % (path.relative_to(REPO_ROOT), lineno))
+        self.assertEqual(offenders, [], "literal \"spec\" found in engine core: %s" % offenders)
+
+
 class TestHookLiteralsHaveOneDefinition(unittest.TestCase):
     def test_hook_literals_appear_only_in_hooks_module(self):
         tokens = ('"pr_merge"', '"pr_feedback"', '"pr_conflict"', '"ci_failed_cap"')

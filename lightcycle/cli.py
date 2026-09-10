@@ -17,7 +17,6 @@ from lightcycle.adapters.simulate import (
     SimulateConfig,
 )
 from lightcycle.adapters.upgrade import UpgradeAdapter
-from lightcycle.domain.contracts import FILE_PROVIDES
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
     render_backlog, render_inbox, render_queue, render_search,
@@ -650,6 +649,7 @@ def _workflow_check(selector, as_json):
                     "produces": {s: sorted(prod[s]) for s in steps},
                     "entries": entries,
                     "terminals": terminals,
+                    "provided": an["provided"],
                     "hooks": hooks,
                     "unreachable": unreachable,
                     "missing_inputs": missing,
@@ -686,7 +686,7 @@ def _workflow_check(selector, as_json):
         print("entry steps: %s" % ", ".join(sorted(entries)))
     else:
         sys.stderr.write(
-            "warning: no entry step (none requires only %s)\n" % ", ".join(sorted(FILE_PROVIDES))
+            "warning: no entry step (none requires only %s)\n" % ", ".join(an["provided"])
         )
     if hooks:
         print("on_* hooks:")

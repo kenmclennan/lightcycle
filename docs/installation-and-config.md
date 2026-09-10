@@ -41,29 +41,30 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 
 `~/.lightcycle/config` is the single boundary to the environment. Values are required and seeded visibly (no hidden defaults). Show or edit with `lc config [--edit]`.
 
-| key | meaning |
-| --- | --- |
-| `projects` | root under which project repos live |
-| `specs` / `specs-remote` | root where spec files live / its git remote |
-| `shortcode` | id prefix for new top-level nodes (e.g. `LC` gives `LC-1`) |
-| `default-origin` | the workflow origin the spawner reads step prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
-| `workflows-remote` | git remote for the built-in workflow origin, pulled by `lc init` |
-| `workflow-retention` | pulled bundles kept per origin (plus any a live item pins) |
-| `max-agents` | worker cap the pool fills to each tick |
-| `poll-seconds` | pool tick interval |
-| `branch-prefix` | prefix for worktree branches |
-| `max-boot-seconds` / `max-session-seconds` | worker boot and session caps |
-| `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step |
-| `probe-cooldown-seconds` | how long the breaker waits before allowing another probe after the previous one stalled |
-| `spin-cap` | consecutive no-work worker deaths, on one step or pool-wide, before the pool parks the step / caps itself to one worker |
-| `retro-interval-reflections` | reflections pending across un-retroed items and un-retroed closed passes of items still open, between engine retro audits |
-| `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
-| `max-title-length` | cap on an item's or step's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description` |
-| `personal-origin` | the workflow origin `lc workflow init` scaffolded and registered, if you made one |
-| `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |
-| `shutdown-grace-seconds` | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping |
-| `tick-failure-cap` | consecutive tick exceptions the pool loop tolerates (logging and continuing) before it re-raises and exits non-gracefully |
-| `personal-origin` | the user's own workflow-origin repo, set by `lc workflow init`. Optional - unset (empty) until one exists |
+| key                                                                       | meaning                                                                                                                                                       |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projects`                                                                | root under which project repos live                                                                                                                           |
+| `specs` / `specs-remote`                                                  | root where spec files live / its git remote                                                                                                                   |
+| `shortcode`                                                               | id prefix for new top-level nodes (e.g. `LC` gives `LC-1`)                                                                                                    |
+| `default-origin`                                                          | the workflow origin the spawner reads step prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
+| `workflows-remote`                                                        | git remote for the built-in workflow origin, pulled by `lc init`                                                                                              |
+| `workflow-retention`                                                      | pulled bundles kept per origin (plus any a live item pins)                                                                                                    |
+| `max-agents`                                                              | worker cap the pool fills to each tick                                                                                                                        |
+| `poll-seconds`                                                            | pool tick interval                                                                                                                                            |
+| `branch-prefix`                                                           | prefix for worktree branches                                                                                                                                  |
+| `max-boot-seconds` / `max-session-seconds`                                | worker boot and session caps                                                                                                                                  |
+| `stall-seconds`                                                           | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step                                                         |
+| `probe-cooldown-seconds`                                                  | how long the breaker waits before allowing another probe after the previous one stalled                                                                       |
+| `spin-cap`                                                                | consecutive no-work worker deaths, on one step or pool-wide, before the pool parks the step / caps itself to one worker                                       |
+| `retro-interval-reflections`                                              | reflections pending across un-retroed items and un-retroed closed passes of items still open, between engine retro audits                                     |
+| `backups-dir` / `backup-interval-minutes` / `backup-retention`            | store snapshot location, cadence, and retention                                                                                                               |
+| `max-title-length`                                                        | cap on an item's or step's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description`                 |
+| `personal-origin`                                                         | the workflow origin `lc workflow init` scaffolded and registered, if you made one                                                                             |
+| `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs                                                                                                                                          |
+| `shutdown-grace-seconds`                                                  | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping                                                                          |
+| `tick-failure-cap`                                                        | consecutive tick exceptions the pool loop tolerates (logging and continuing) before it re-raises and exits non-gracefully                                     |
+| `personal-origin`                                                         | the user's own workflow-origin repo, set by `lc workflow init`. Optional - unset (empty) until one exists                                                     |
+| `context-artifact-types`                                                  | artifact types an agent step resolves to a repo-relative file path (e.g. `spec`). Optional - soft-defaults to `spec` if unset                                 |
 
 ## Workflow sources
 

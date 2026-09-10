@@ -23,7 +23,9 @@ class ReflectUseCase:
     def _spec_hash(self, tid):
         t = self._store.get_node(tid)
         item = t.parent or tid
-        spec = next((a.value for a in self._store.item_artifacts(item) if a.type == "spec"), None)
+        spec = next(
+            (a.value for a in self._store.item_artifacts(item) if a.kind == "filepath"), None
+        )
         data = self._fs.read_bytes(spec)
         return Reflection.spec_hash_of(data) if data is not None else "unknown"
 

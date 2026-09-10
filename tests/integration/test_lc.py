@@ -184,11 +184,11 @@ _AGENT_SPECS = {
 _STEP_SIGNALS = {"review": {"review_rounds": "rejected"}, "open-pr": {"conflicts": "~conflict"}}
 
 
-def write_workflow(root, metas, name="spec-driven", entry=None, disposition=None):
+def write_workflow(root, metas, name="spec-driven", entry=None, provides=None, disposition=None):
     wdir = _workflows_dir(root)
     wdir.mkdir(parents=True, exist_ok=True)
     (wdir / ("%s.md" % name)).write_text(
-        graph_text_from_metas(metas, entry=entry, disposition=disposition)
+        graph_text_from_metas(metas, entry=entry, provides=provides, disposition=disposition)
     )
     _write_origin(root)
 
@@ -265,7 +265,7 @@ def write_contract_steps(root, specs=None):
                 fm += ["  %s: %s" % (k, v) for k, v in d.items()]
         fm += ["---", "# %s" % r, "stub"]
         (adir / ("%s.md" % r)).write_text("\n".join(fm) + "\n")
-    write_workflow(root, specs, entry="build")
+    write_workflow(root, specs, entry="build", provides={"spec"})
 
 
 def call(fn, *args):
@@ -2625,7 +2625,9 @@ class TestReflect(unittest.TestCase):
         spec.write("# spec\ncontent")
         spec.close()
         sid, tid = self._file_story(spec_path=spec.name)
-        self.store.update_metadata(sid, {"artifacts": [{"type": "spec", "value": spec.name}]})
+        self.store.update_metadata(
+            sid, {"artifacts": [{"type": "spec", "value": spec.name, "kind": "filepath"}]}
+        )
         call(_cli_mod.cmd_attach, tid, "feedback", "ok")
         data = json.loads(
             next(a for a in self.store.item_artifacts(tid) if a.type == "reflection").value

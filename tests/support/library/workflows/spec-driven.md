@@ -12,6 +12,8 @@ entry: spec-writer
 
 requires: repo
 
+provides: spec
+
 workspace:
   spec-writer       specs
   spec-open-pr      specs

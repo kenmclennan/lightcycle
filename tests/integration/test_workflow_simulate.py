@@ -151,6 +151,8 @@ _TWO_PHASE_WORKFLOW_TEXT = """entry: spec-writer
 
 requires: brief repo
 
+provides: spec
+
 phase:
   spec-writer       spec
   spec-open-pr      spec
