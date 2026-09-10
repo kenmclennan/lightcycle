@@ -89,6 +89,8 @@ class Config:
 
     def __init__(self, environ=None):
         self._environ = environ if environ is not None else os.environ
+        self._cached = None
+        self._cached_path = None
 
     def _env(self, key):
         v = self._environ.get(key)
@@ -160,10 +162,21 @@ class Config:
 
     def load_config(self):
         p = self.config_path()
+        if self._cached is not None and self._cached_path == p:
+            return self._cached
+        self._cached_path = p
+        self._cached = self._read_config(p)
+        return self._cached
+
+    def _read_config(self, p):
         if not os.path.exists(p):
             return {}
         with open(p) as f:
             return frontmatter.parse_frontmatter(f.read())
+
+    def reload(self):
+        self._cached = None
+        self._cached_path = None
 
     def _default_config_text(self):
         return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)
@@ -181,6 +194,7 @@ class Config:
         with open(p, "a") as f:
             for k, v in missing:
                 f.write("%s: %s\n" % (k, v))
+        self.reload()
         return tuple(k for k, v in missing)
 
     def missing_config_keys(self):
@@ -220,6 +234,7 @@ class Config:
             os.makedirs(os.path.dirname(p), exist_ok=True)
             with open(p, "w") as f:
                 f.write(self._default_config_text())
+            self.reload()
             return True
         return bool(self.reconcile_config())
 
@@ -467,6 +482,7 @@ class Config:
             lines.append("personal-origin: %s\n" % name)
         with open(p, "w") as f:
             f.writelines(lines)
+        self.reload()
 
     def spawn_id(self):
         return self._env("LC_SPAWNID")
