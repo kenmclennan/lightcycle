@@ -1,7 +1,6 @@
 import os
 import unittest
 
-from lightcycle.domain.audit import FINDINGS_STEP
 from lightcycle.domain.pool import SpinLedger
 from pathlib import Path
 
@@ -21,6 +20,7 @@ from lightcycle.application.flow import (
     UnblockInput,
     UnblockStepUseCase,
 )
+from lightcycle.application.flow.engine_steps import FINDINGS_STEP
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State
 from lightcycle.ports.workers import RegistryUnreadable
@@ -391,6 +391,20 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         bid = s.create_step("build: x", step="build", role="agent", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIn(reviewed, [i.id for i in s.closed_unretroed_items()])
+
+    def test_bundle_declared_audit_stage_on_an_ordinary_item_completes_as_a_workflow_step(self):
+        metas = {
+            "auditor": {"model": "sonnet", "step": "audit", "routes": {"done": "next"}},
+            "closer": {"model": "sonnet", "step": "next"},
+        }
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        aid = s.create_step("audit: x", step="audit", role="agent", parent=item)
+        resp = CompleteStepUseCase(s, flow_for(metas, s)).execute(
+            CompleteInput(step=aid, outcome="done")
+        )
+        self.assertIsNotNone(resp.next_step)
+        self.assertEqual(s.get_node(resp.next_step).step, "next")
 
     def test_item_with_no_reflection_is_not_marked_retroed(self):
         s = FakeStore()

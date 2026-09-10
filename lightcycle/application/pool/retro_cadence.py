@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
 from typing import List
 
+from lightcycle.application.flow.engine_steps import AUDIT_STEP, RETRO_ORIGIN_LABEL
 from lightcycle.application.work.pending_reflections import (
     item_reflection_count,
     pass_reflection_count,
     pending_reflection_count,
 )
-from lightcycle.domain.audit import AUDIT_STEP
 from lightcycle.domain.work import State, node_id_key
 
 
@@ -40,7 +40,7 @@ class RetroCadenceUseCase:
         )
         with self._store.transaction():
             item_id = self._store.create_item(title, description)
-            self._store.label_add(item_id, "retro-origin")
+            self._store.label_add(item_id, RETRO_ORIGIN_LABEL)
             tid = self._store.create_step(
                 "%s: %s" % (AUDIT_STEP, title),
                 step=AUDIT_STEP, role="agent", parent=item_id)

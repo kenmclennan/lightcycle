@@ -1,5 +1,6 @@
+from lightcycle.application.flow.engine_steps import StepKind
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
 from lightcycle.domain.work import display_stage, park_resume_command
-from lightcycle.domain.audit import StepKind
 
 
 def node_extra(node, *, show_description=False, description=None, artifacts=None):
@@ -100,10 +101,10 @@ def _mermaid_stages(graph):
         for occ in occs:
             if occ:
                 stages.add(occ[0])
-    for occ in graph.hook_occurrences("pr_feedback"):
+    for occ in graph.hook_occurrences(PR_FEEDBACK):
         if len(occ) > 1:
             stages.add(occ[1])
-    for occ in graph.hook_occurrences("ci_failed_cap"):
+    for occ in graph.hook_occurrences(CI_FAILED_CAP):
         if len(occ) > 3:
             stages.add(occ[3])
     stages.update(graph.signals.keys())

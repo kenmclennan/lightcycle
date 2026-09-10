@@ -1,4 +1,4 @@
-from lightcycle.domain.audit import engine_display_of
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
 from lightcycle.domain.flow.step_def import CiCap, StepDef
 from lightcycle.domain.flow.transition import Transition
 
@@ -35,10 +35,10 @@ class Flow:
             for occ in occs:
                 if occ:
                     stages.add(occ[0])
-        for occ in graph.hook_occurrences("pr_feedback"):
+        for occ in graph.hook_occurrences(PR_FEEDBACK):
             if len(occ) > 1:
                 stages.add(occ[1])
-        for occ in graph.hook_occurrences("ci_failed_cap"):
+        for occ in graph.hook_occurrences(CI_FAILED_CAP):
             if len(occ) > 3:
                 stages.add(occ[3])
         stages.update(graph.nodes.keys())
@@ -57,10 +57,10 @@ class Flow:
         pr_merge, pr_close, pr_feedback = {}, {}, {}
         pr_conflict, pr_conflict_cap, pr_conflict_escalate = {}, {}, {}
         outcome_hooks = {
-            "pr_merge": pr_merge,
+            PR_MERGE: pr_merge,
             "pr_close": pr_close,
-            "pr_feedback": pr_feedback,
-            "pr_conflict": pr_conflict,
+            PR_FEEDBACK: pr_feedback,
+            PR_CONFLICT: pr_conflict,
             "pr_conflict_escalate": pr_conflict_escalate,
         }
         for name, bucket in outcome_hooks.items():
@@ -70,7 +70,7 @@ class Flow:
             pr_conflict_cap[occ[0]] = int(occ[1])
 
         ci_cap = {}
-        for occ in graph.hook_occurrences("ci_failed_cap"):
+        for occ in graph.hook_occurrences(CI_FAILED_CAP):
             ci_cap[occ[0]] = CiCap(occ[1], int(occ[2]), occ[3])
 
         mention_token, review_bot_allowlist = {}, {}
@@ -157,9 +157,6 @@ class Flow:
         return sd.phase if sd else None
 
     def display_of(self, step):
-        phrase = engine_display_of(step)
-        if phrase is not None:
-            return phrase
         sd = self._steps.get(step)
         return sd.display if sd else None
 

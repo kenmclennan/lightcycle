@@ -9,10 +9,11 @@ from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.contracts import FlowContracts, StepContract
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.work.state import State
 
-_ADVANCING_HOOKS = ("pr_merge", "pr_conflict")
+_ADVANCING_HOOKS = (PR_MERGE, PR_CONFLICT)
 _RUN_FIELDS = {"pr": "pr", "branch": "branch"}
 
 
@@ -257,7 +258,7 @@ class WorkflowSimulateUseCase:
                 ]
             return []
         phase_check = (
-            ("ci_failed_cap", planned.stage, planned.expected_phase)
+            (CI_FAILED_CAP, planned.stage, planned.expected_phase)
             if planned.expected_phase is not None else None
         )
         return self._handle_landing(item_id, pin, graph, resp.next_step, trace, walk_index,
@@ -272,7 +273,7 @@ class WorkflowSimulateUseCase:
                 % (walk_index, planned.stage, planned.hook)
             ]
         before = {c.id for c in self._store.children(item_id)}
-        if planned.hook == "pr_merge":
+        if planned.hook == PR_MERGE:
             github.script_merge(pr)
         else:
             github.script_conflict(pr)
@@ -340,7 +341,7 @@ class WorkflowSimulateUseCase:
         feedback_step = new_children[0]
         actual = self._synthesize_produces(item_id, pin, planned.outcome)
         violations = _phase_mismatch(
-            walk_index, "pr_feedback", planned.stage, planned.outcome,
+            walk_index, PR_FEEDBACK, planned.stage, planned.outcome,
             planned.expected_phase, actual,
         )
         try:
@@ -360,7 +361,7 @@ class WorkflowSimulateUseCase:
         for planned in walk.steps:
             if self._item_closed(item_id):
                 break
-            if planned.kind == "hook" and planned.hook == "pr_feedback":
+            if planned.kind == "hook" and planned.hook == PR_FEEDBACK:
                 v = self._drive_feedback(item_id, pin, graph, planned, monitor, github, trace,
                                           walk_index)
                 violations += v

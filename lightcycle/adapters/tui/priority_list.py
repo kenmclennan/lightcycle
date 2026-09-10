@@ -5,6 +5,7 @@ from lightcycle.adapters.tui.design_system import (
 )
 from lightcycle.adapters.tui.hub import COST_NOT_RECORDED
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
+from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import format_elapsed
@@ -35,7 +36,7 @@ def _project(store, node):
 def _resolved_step(node, flow):
     if not node.step:
         return ""
-    phrase = flow.display_of(node.step)
+    phrase = flow.display_of(node.step) or engine_display_of(node.step)
     return truncate_field(phrase, STEP_PHRASE_BUDGET) if phrase else node.step
 
 
