@@ -41,6 +41,8 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 
 `~/.lightcycle/config` is the single boundary to the environment. Values are required and seeded visibly (no hidden defaults). Show or edit with `lc config [--edit]`.
 
+The file is read **once per process**, not per lookup, so a long-running process keeps the values it started with: editing `max-agents` while `lc start` is running changes nothing until the pool is restarted. This is deliberate - a config re-read mid-operation would apply to some of an operation and not the rest, depending on call order. Short-lived commands (`lc show`, `lc done`) pick up an edit on their next invocation.
+
 | key | meaning |
 | --- | --- |
 | `projects` | root under which project repos live |
