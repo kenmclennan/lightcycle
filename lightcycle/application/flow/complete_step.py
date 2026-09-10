@@ -2,13 +2,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.engine_steps import AUDIT_STEP, FINDINGS_STEP, RETRO_ORIGIN_LABEL
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.pending_reflections import pass_reflection_count
-from lightcycle.domain.audit import FINDINGS_STEP, StepKind
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.state import State
@@ -36,11 +36,6 @@ class CompleteStepUseCase:
         self._config = config
         self._resolver = NextStepResolver(store, flow)
         self._passes = PassBook(store, flow)
-        self._completers = {
-            StepKind.WORKFLOW: self._complete_workflow,
-            StepKind.ENGINE_AUDIT: self._complete_engine_audit,
-            StepKind.ENGINE_FINDINGS: self._complete_findings,
-        }
 
     def _expected_assignee(self):
         return self._config.spawn_id() if self._config else None
@@ -49,7 +44,15 @@ class CompleteStepUseCase:
         t = self._store.get_node(input.step)
         if t.state == State.DONE:
             return CompleteResponse(next_step=None)
-        return self._completers[StepKind.of(t)](t, input)
+        if self._is_retro_origin(t):
+            if t.step == AUDIT_STEP:
+                return self._complete_engine_audit(t, input)
+            if t.step == FINDINGS_STEP:
+                return self._complete_findings(t, input)
+        return self._complete_workflow(t, input)
+
+    def _is_retro_origin(self, t):
+        return RETRO_ORIGIN_LABEL in self._store.labels_of(t.parent)
 
     def _complete_workflow(self, t, input: CompleteInput) -> CompleteResponse:
         name = self._flow.workflow_for(t)

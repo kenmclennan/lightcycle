@@ -1,4 +1,4 @@
-from lightcycle.domain.audit import engine_display_of
+from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.pool import ReadyQueue
@@ -184,14 +184,12 @@ class FlowService:
         return graph.ends_pass(stage, outcome)
 
     def display_for(self, node):
-        phrase = engine_display_of(node.step) if getattr(node, "type", None) == "step" else None
-        if phrase is not None:
-            return phrase
-        graph = self._graph_for_node(node)
-        if graph is None:
-            return None
         stage = node.step if getattr(node, "type", None) == "step" else None
-        return graph.display_for(stage) if stage else None
+        graph = self._graph_for_node(node)
+        declared = graph.display_for(stage) if (graph is not None and stage) else None
+        if declared is not None:
+            return declared
+        return engine_display_of(stage) if stage else None
 
     def workspace_for_phase(self, node, phase):
         graph = self._graph_for_node(node)

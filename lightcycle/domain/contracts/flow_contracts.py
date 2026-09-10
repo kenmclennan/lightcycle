@@ -1,5 +1,5 @@
-from lightcycle.domain.audit import engine_display_of
 from lightcycle.domain.contracts.step_contract import StepContract
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
 
 FILE_PROVIDES = {"spec"}
 
@@ -133,10 +133,10 @@ class FlowContracts:
 
     def hook_phase_mismatches(self):
         mismatches = []
-        for occ in self._graph.hook_occurrences("pr_feedback"):
-            self._collect_hook_phase_mismatch(mismatches, "pr_feedback", occ, 1)
-        for occ in self._graph.hook_occurrences("ci_failed_cap"):
-            self._collect_hook_phase_mismatch(mismatches, "ci_failed_cap", occ, 3)
+        for occ in self._graph.hook_occurrences(PR_FEEDBACK):
+            self._collect_hook_phase_mismatch(mismatches, PR_FEEDBACK, occ, 1)
+        for occ in self._graph.hook_occurrences(CI_FAILED_CAP):
+            self._collect_hook_phase_mismatch(mismatches, CI_FAILED_CAP, occ, 3)
         return sorted(mismatches)
 
     def _collect_unresolved_hook_target(self, unresolved, hook, occ, target_index, known):
@@ -150,16 +150,11 @@ class FlowContracts:
         unresolved = []
         owned = set(self._steps)
         known = owned | set(self.terminals())
-        for occ in self._graph.hook_occurrences("pr_feedback"):
-            self._collect_unresolved_hook_target(unresolved, "pr_feedback", occ, 1, owned)
-        for occ in self._graph.hook_occurrences("ci_failed_cap"):
-            self._collect_unresolved_hook_target(unresolved, "ci_failed_cap", occ, 3, known)
+        for occ in self._graph.hook_occurrences(PR_FEEDBACK):
+            self._collect_unresolved_hook_target(unresolved, PR_FEEDBACK, occ, 1, owned)
+        for occ in self._graph.hook_occurrences(CI_FAILED_CAP):
+            self._collect_unresolved_hook_target(unresolved, CI_FAILED_CAP, occ, 3, known)
         return sorted(unresolved)
-
-    def reserved_step_names(self):
-        return sorted(
-            (s, engine_display_of(s)) for s in self._steps if engine_display_of(s) is not None
-        )
 
     def ok(self):
         return (
@@ -169,7 +164,6 @@ class FlowContracts:
             and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
             and not self.hook_phase_mismatches()
             and not self.unresolved_hook_targets()
-            and not self.reserved_step_names()
         )
 
     def as_dict(self):
@@ -191,6 +185,5 @@ class FlowContracts:
             "unreachable_pass_ends": self.unreachable_pass_ends(),
             "hook_phase_mismatches": self.hook_phase_mismatches(),
             "unresolved_hook_targets": self.unresolved_hook_targets(),
-            "reserved_step_names": self.reserved_step_names(),
             "ok": self.ok(),
         }

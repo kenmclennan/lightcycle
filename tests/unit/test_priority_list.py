@@ -11,7 +11,7 @@ from lightcycle.adapters.tui.priority_list import (
     assemble_rows,
 )
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
-from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
+from lightcycle.application.flow.engine_steps import AUDIT_STEP, FINDINGS_STEP
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step

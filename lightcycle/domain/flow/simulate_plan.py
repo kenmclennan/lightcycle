@@ -2,7 +2,9 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-_HOOK_OUTCOME_NAMES = ("pr_merge", "pr_conflict")
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
+
+_HOOK_OUTCOME_NAMES = (PR_MERGE, PR_CONFLICT)
 
 
 @dataclass(frozen=True)
@@ -57,24 +59,24 @@ def _hook_transitions(graph):
 
 def _feedback_occurrences(graph):
     return [
-        (occ[0], occ[1]) for occ in graph.hook_occurrences("pr_feedback") if len(occ) > 1
+        (occ[0], occ[1]) for occ in graph.hook_occurrences(PR_FEEDBACK) if len(occ) > 1
     ]
 
 
 def _cap_occurrences(graph):
     caps = []
-    for occ in graph.hook_occurrences("ci_failed_cap"):
+    for occ in graph.hook_occurrences(CI_FAILED_CAP):
         if len(occ) > 3:
             caps.append(("edge", None, occ[0], occ[1], int(occ[2])))
     conflict_cap = {
         occ[0]: int(occ[1]) for occ in graph.hook_occurrences("pr_conflict_cap") if len(occ) > 1
     }
     conflict_outcome = {
-        occ[0]: occ[1] for occ in graph.hook_occurrences("pr_conflict") if len(occ) > 1
+        occ[0]: occ[1] for occ in graph.hook_occurrences(PR_CONFLICT) if len(occ) > 1
     }
     for stage, n in conflict_cap.items():
         if stage in conflict_outcome:
-            caps.append(("hook", "pr_conflict", stage, conflict_outcome[stage], n))
+            caps.append(("hook", PR_CONFLICT, stage, conflict_outcome[stage], n))
     return caps
 
 
@@ -220,7 +222,7 @@ def _feedback_walk(graph, entry, stage, feedback_step, bound):
     steps = list(entry_path)
     steps.append(
         PlannedStep(
-            stage=stage, kind="hook", hook="pr_feedback", outcome=feedback_step,
+            stage=stage, kind="hook", hook=PR_FEEDBACK, outcome=feedback_step,
             expected_phase=graph.phase_for(stage),
         )
     )

@@ -1,10 +1,10 @@
 import unittest
 
+from lightcycle.application.flow.engine_steps import FINDINGS_STEP
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work import Artifact
-from lightcycle.domain.audit import FINDINGS_STEP
 from lightcycle.render import (
     node_extra, render_backlog, render_inbox, render_queue,
     render_workflow_mermaid,

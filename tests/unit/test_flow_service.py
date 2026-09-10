@@ -1,8 +1,8 @@
 import unittest
 
 from lightcycle.application.flow.flow_check import FlowCheckInput, FlowCheckUseCase
+from lightcycle.application.flow.engine_steps import AUDIT_STEP, FINDINGS_STEP
 from lightcycle.application.services.flow import FlowService
-from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -236,6 +236,14 @@ class TestDisplayFor(unittest.TestCase):
             FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
         step = store.get_node(create_owned_step(store, "findings: x", step=FINDINGS_STEP, role="human"))
         self.assertEqual(service.display_for(step), "Review the findings")
+
+    def test_declared_display_wins_over_the_engine_phrase_for_a_stage_named_audit(self):
+        metas = {"auditor": {"model": "sonnet", "step": "audit", "display": "Custom audit label"}}
+        store = FakeStore()
+        item = store.create_item("st", "a description", workflow="w")
+        step = store.get_node(store.create_step("b", step="audit", role="agent", parent=item))
+        service = FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store)
+        self.assertEqual(service.display_for(step), "Custom audit label")
 
 
 class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):

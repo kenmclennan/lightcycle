@@ -1,6 +1,11 @@
 import unittest
 
-from lightcycle.domain.audit import AUDIT_STEP, FINDINGS_STEP, StepKind, engine_display_of
+from lightcycle.application.flow.engine_steps import (
+    AUDIT_STEP,
+    FINDINGS_STEP,
+    StepKind,
+    engine_display_of,
+)
 
 
 class _Node:
@@ -9,9 +14,6 @@ class _Node:
 
 
 class TestStepKind(unittest.TestCase):
-    def test_audit_step_is_engine_audit(self):
-        self.assertEqual(StepKind.of(_Node(AUDIT_STEP)), StepKind.ENGINE_AUDIT)
-
     def test_findings_step_is_engine_findings(self):
         self.assertEqual(StepKind.of(_Node(FINDINGS_STEP)), StepKind.ENGINE_FINDINGS)
 

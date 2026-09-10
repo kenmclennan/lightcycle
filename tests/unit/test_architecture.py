@@ -164,5 +164,19 @@ class TestStoreFilenameHasOneDefinition(unittest.TestCase):
         self.assertEqual(sites[0].split(":")[0], "adapters/fsio.py")
 
 
+class TestHookLiteralsHaveOneDefinition(unittest.TestCase):
+    def test_hook_literals_appear_only_in_hooks_module(self):
+        tokens = ('"pr_merge"', '"pr_feedback"', '"pr_conflict"', '"ci_failed_cap"')
+        offenders = []
+        for path in sorted(LIGHTCYCLE.rglob("*.py")):
+            for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                for token in tokens:
+                    if token in line:
+                        offenders.append("%s:%d: %s" % (path.relative_to(LIGHTCYCLE), lineno, token))
+        allowed = "domain/flow/hooks.py"
+        offenders = [o for o in offenders if not o.startswith(allowed + ":")]
+        self.assertEqual(offenders, [], "hook literal respelled outside %s: %s" % (allowed, offenders))
+
+
 if __name__ == "__main__":
     unittest.main()
