@@ -116,6 +116,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         return path in self._registered
 
     def has_uncommitted(self, root):
+        self._raise_if("has_uncommitted", root)
         return root in self.dirty
 
     def commit_all(self, root, message):
