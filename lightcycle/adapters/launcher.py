@@ -26,9 +26,17 @@ def open_path(path):
     return result.returncode == 0
 
 
+def edit(editor, path):
+    result = subprocess.run([editor, path], timeout=None)
+    return result.returncode
+
+
 class LauncherAdapter(LauncherPort):
     def open_url(self, url):
         return open_url(url)
 
     def open_path(self, path):
         return open_path(path)
+
+    def edit(self, editor, path):
+        return edit(editor, path)

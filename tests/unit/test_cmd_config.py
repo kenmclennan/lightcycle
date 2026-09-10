@@ -4,7 +4,6 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
-from unittest import mock
 
 from lightcycle import cli
 from lightcycle.config import _SEED_KEYS, Config
@@ -21,8 +20,19 @@ def call(fn, *args):
 
 
 class FakeContainer:
-    def __init__(self, config):
+    def __init__(self, config, launcher=None):
         self.config = config
+        self.launcher = launcher
+
+
+class FakeLauncher:
+    def __init__(self, returncode=0):
+        self.returncode = returncode
+        self.edited = None
+
+    def edit(self, editor, path):
+        self.edited = (editor, path)
+        return self.returncode
 
 
 def _cfg():
@@ -58,12 +68,20 @@ class TestCmdConfig(unittest.TestCase):
         self.assertIn("personal-origin: (not set)", out)
         self.assertNotIn("personal-origin: (not set - run `lc init`)", out)
 
-    def test_edit_execs_configured_editor_on_config_path(self):
+    def test_edit_calls_launcher_edit_with_configured_editor_and_config_path(self):
         c = _cfg()
-        cli.set_container(FakeContainer(c))
-        with mock.patch("lightcycle.cli.os.execvp") as m:
-            call(cli.cmd_config, "--edit")
-        m.assert_called_once_with("vi", ["vi", c.config_path()])
+        launcher = FakeLauncher()
+        cli.set_container(FakeContainer(c, launcher))
+        rc, _out, err = call(cli.cmd_config, "--edit")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(launcher.edited, ("vi", c.config_path()))
+
+    def test_edit_returns_the_editors_exit_code(self):
+        c = _cfg()
+        launcher = FakeLauncher(returncode=1)
+        cli.set_container(FakeContainer(c, launcher))
+        rc, _out, _err = call(cli.cmd_config, "--edit")
+        self.assertEqual(rc, 1)
 
 
 if __name__ == "__main__":

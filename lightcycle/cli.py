@@ -27,7 +27,9 @@ from lightcycle.application.feedback import (
     WorklogInput,
     WorklogUseCase,
 )
-from lightcycle.domain.work import FieldRefusal, State, refuse_fields, refuse_state
+from lightcycle.domain.work import (
+    FieldRefusal, State, refuse_fields, refuse_state, worker_permitted, worker_refusal_message,
+)
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_workflow_selection import (
@@ -285,35 +287,15 @@ def cmd_upgrade(argv):
     return 0
 
 
-_WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search", "peek")
 _SET_FIELDS = (
     "title", "description", "project", "workflow", "label", "backlog",
     "notes", "needs", "reason", "tried", "step", "depends",
 )
 
-_SET_FORBIDDEN_FLAGS = (
-    "--title", "--desc", "--description", "--project",
-    "--workflow", "--backlog", "--label", "--step", "--unset",
-)
 
-
-def _sets_state_waiting(args):
-    for i, a in enumerate(args):
-        if a == "--state":
-            return i + 1 < len(args) and args[i + 1] == "waiting"
-        if a.startswith("--state="):
-            return a.split("=", 1)[1] == "waiting"
-    return False
-
-
-def _worker_permitted(cmd, args):
-    if cmd in _WORKER_VERBS:
-        return True
-    if cmd == "set":
-        if any(a.split("=", 1)[0] in _SET_FORBIDDEN_FLAGS for a in args):
-            return False
-        return _sets_state_waiting(args)
-    return False
+def _set_flags(args):
+    ns, _extras = build_parser(COMMANDS["set"]).parse_known_args(args)
+    return vars(ns)
 
 
 def main(argv=None):
@@ -338,16 +320,11 @@ def main(argv=None):
     if cmd not in VERBS:
         sys.stderr.write("unknown subcommand: %s\n" % cmd)
         return 2
-    if (
-        _container.config.is_worker()
-        and _container.config.is_live_home()
-        and not _worker_permitted(cmd, argv[1:])
-    ):
-        sys.stderr.write(
-            "lc: workers may not run '%s' - permitted: claim, done, show, attach, "
-            "backlog, search, peek, set --state waiting\n" % cmd
-        )
-        return 1
+    if _container.config.is_worker() and _container.config.is_live_home():
+        parsed_flags = _set_flags(argv[1:]) if cmd == "set" else {}
+        if not worker_permitted(cmd, parsed_flags):
+            sys.stderr.write(worker_refusal_message(cmd))
+            return 1
     fn = globals().get("cmd_" + cmd.replace("-", "_"))
     if fn is None:
         sys.stderr.write("not implemented: %s\n" % cmd)
@@ -515,18 +492,22 @@ def cmd_logs(argv):
             print(r, flush=True)
 
     if a.f:
-        with open(path) as f:
-            try:
-                while True:
-                    line = f.readline()
-                    if line:
-                        emit(line)
-                    else:
-                        time.sleep(0.3)
-            except KeyboardInterrupt:
-                pass
+        offset = 0
+        buf = b""
+        try:
+            while True:
+                data, offset = _container.worker_log.read_from(path, offset)
+                if not data:
+                    time.sleep(0.3)
+                    continue
+                buf += data
+                *complete, buf = buf.split(b"\n")
+                for raw in complete:
+                    emit(raw.decode("utf-8", errors="replace"))
+        except KeyboardInterrupt:
+            pass
     else:
-        for line in open(path):
+        for line in _container.worker_log.iter_lines(path):
             emit(line)
     return 0
 
@@ -1611,7 +1592,7 @@ def cmd_config(argv):
     if a.edit:
         _container.config.ensure_config()
         editor = _container.config.editor()
-        os.execvp(editor, [editor, _container.config.config_path()])
+        return _container.launcher.edit(editor, _container.config.config_path())
     p = _container.config.config_path()
     print("config: %s" % p)
     print("exists" if os.path.exists(p) else "not found - run `lc init` to seed it")

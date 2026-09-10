@@ -4,64 +4,71 @@ from contextlib import redirect_stderr
 from unittest import mock
 
 from lightcycle import cli
-from lightcycle.cli import _worker_permitted
 from lightcycle.config import Config
+from lightcycle.domain.work import worker_permitted
 
 
 class TestWorkerPermitted(unittest.TestCase):
     def test_core_verbs_allowed(self):
         for v in ("claim", "done", "show", "attach"):
-            self.assertTrue(_worker_permitted(v, ["ITEM.1"]), v)
+            self.assertTrue(worker_permitted(v, {}), v)
 
     def test_retro_allowed_for_the_audit_worker(self):
-        self.assertTrue(_worker_permitted("retro", ["--pending"]))
+        self.assertTrue(worker_permitted("retro", {}))
 
     def test_backlog_allowed_for_the_audit_worker(self):
-        self.assertTrue(_worker_permitted("backlog", []))
+        self.assertTrue(worker_permitted("backlog", {}))
 
     def test_search_allowed_for_the_audit_worker(self):
-        self.assertTrue(_worker_permitted("search", ["text"]))
+        self.assertTrue(worker_permitted("search", {}))
 
     def test_peek_allowed_for_the_audit_worker(self):
-        self.assertTrue(_worker_permitted("peek", ["ITEM.1", "write-code"]))
+        self.assertTrue(worker_permitted("peek", {}))
 
     def test_destructive_verbs_forbidden(self):
         for v in ("rm", "init", "new", "start", "sweep", "dep", "config",
                   "workflow", "backfill-usage"):
-            self.assertFalse(_worker_permitted(v, ["x"]), v)
+            self.assertFalse(worker_permitted(v, {}), v)
 
     def test_set_state_waiting_allowed(self):
-        self.assertTrue(_worker_permitted(
-            "set", ["ITEM.1", "--state", "waiting", "--needs", "human", "--branch", "b"]))
+        self.assertTrue(worker_permitted(
+            "set", cli._set_flags(["ITEM.1", "--state", "waiting", "--needs", "human", "--branch", "b"])
+        ))
 
     def test_set_state_waiting_equals_form_allowed(self):
-        self.assertTrue(_worker_permitted("set", ["ITEM.1", "--state=waiting"]))
+        self.assertTrue(worker_permitted("set", cli._set_flags(["ITEM.1", "--state=waiting"])))
 
     def test_set_parent_forbidden(self):
-        self.assertFalse(_worker_permitted("set", ["STEP", "--parent", "ITEM"]))
+        self.assertFalse(worker_permitted("set", cli._set_flags(["STEP", "--parent", "ITEM"])))
 
     def test_set_state_active_forbidden(self):
-        self.assertFalse(_worker_permitted("set", ["ITEM", "--state", "active"]))
+        self.assertFalse(worker_permitted("set", cli._set_flags(["ITEM", "--state", "active"])))
 
     def test_set_without_state_forbidden(self):
-        self.assertFalse(_worker_permitted("set", ["ITEM", "--title", "x"]))
+        self.assertFalse(worker_permitted("set", cli._set_flags(["ITEM", "--title", "x"])))
 
     def test_an_edit_flag_alongside_waiting_is_still_forbidden(self):
-        self.assertFalse(
-            _worker_permitted("set", ["ITEM", "--state", "waiting", "--title", "renamed"])
-        )
+        self.assertFalse(worker_permitted(
+            "set", cli._set_flags(["ITEM", "--state", "waiting", "--title", "renamed"])
+        ))
 
     def test_unset_without_state_forbidden(self):
-        self.assertFalse(
-            _worker_permitted("set", ["ITEM", "--unset", "description"])
-        )
+        self.assertFalse(worker_permitted("set", cli._set_flags(["ITEM", "--unset", "description"])))
 
     def test_unset_alongside_waiting_is_still_forbidden(self):
-        self.assertFalse(
-            _worker_permitted(
-                "set", ["ITEM", "--state", "waiting", "--unset", "description"]
-            )
-        )
+        self.assertFalse(worker_permitted(
+            "set", cli._set_flags(["ITEM", "--state", "waiting", "--unset", "description"])
+        ))
+
+    def test_abbreviated_forbidden_flag_no_longer_slips_past_the_check(self):
+        self.assertFalse(worker_permitted(
+            "set", cli._set_flags(["ITEM", "--state", "waiting", "--titl", "foo"])
+        ))
+
+    def test_bare_set_with_no_id_fails_via_argparse_not_the_gate(self):
+        with self.assertRaises(SystemExit) as ctx:
+            cli._set_flags([])
+        self.assertEqual(ctx.exception.code, 2)
 
 
 class TestIsWorker(unittest.TestCase):

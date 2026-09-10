@@ -9,3 +9,7 @@ class LauncherPort(ABC):
     @abstractmethod
     def open_path(self, path):
         pass
+
+    @abstractmethod
+    def edit(self, editor, path):
+        pass

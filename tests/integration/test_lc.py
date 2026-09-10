@@ -2521,6 +2521,15 @@ class TestLogRender(unittest.TestCase):
         self.assertIn("done; banner fixed", out)
         self.assertNotIn('"type"', out)
 
+    def test_logs_follow_reads_from_start_then_stops_on_interrupt(self):
+        with patch.object(
+            _cli_mod._container.worker_log, "read_from",
+            side_effect=[(self.log.read_bytes(), self.log.stat().st_size), (b"", 0)],
+        ), patch("time.sleep", side_effect=KeyboardInterrupt):
+            rc, out, err = call(_cli_mod.cmd_logs, "coder", "-f")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("done; banner fixed", out)
+
     def test_corrupt_registry_exits_one_with_a_clean_message(self):
         (Path(self.root) / "logs" / "workers.json").write_text("{not valid json")
         rc, out, err = call(_cli_mod.cmd_logs, "coder")

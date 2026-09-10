@@ -32,6 +32,9 @@ from lightcycle.domain.work.note_condition import merge_condition_note
 from lightcycle.domain.work.projected_step import ProjectedStep
 from lightcycle.domain.work.timestamp import parse_timestamp
 from lightcycle.domain.work.worker_log import worker_log_filename
+from lightcycle.domain.work.worker_permissions import (
+    WORKER_VERBS, worker_permitted, worker_refusal_message,
+)
 
 __all__ = [
     "item_active_seconds",
@@ -48,4 +51,5 @@ __all__ = [
     "merge_condition_note", "ProjectedStep",
     "parse_timestamp",
     "worker_log_filename",
+    "WORKER_VERBS", "worker_permitted", "worker_refusal_message",
 ]

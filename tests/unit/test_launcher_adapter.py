@@ -49,5 +49,25 @@ class TestOpenPath(unittest.TestCase):
             self.assertFalse(LauncherAdapter().open_path("/specs/x.md"))
 
 
+class TestEdit(unittest.TestCase):
+    def test_runs_the_editor_on_the_given_path_and_returns_its_exit_code(self):
+        with patch(
+            "lightcycle.adapters.launcher.subprocess.run", return_value=MagicMock(returncode=0)
+        ) as mock_run:
+            self.assertEqual(LauncherAdapter().edit("vi", "/x/config"), 0)
+            mock_run.assert_called_once_with(["vi", "/x/config"], timeout=None)
+
+    def test_propagates_a_nonzero_exit_code(self):
+        with patch(
+            "lightcycle.adapters.launcher.subprocess.run", return_value=MagicMock(returncode=1)
+        ):
+            self.assertEqual(LauncherAdapter().edit("vi", "/x/config"), 1)
+
+    def test_does_not_catch_a_missing_editor(self):
+        with patch("lightcycle.adapters.launcher.subprocess.run", side_effect=FileNotFoundError):
+            with self.assertRaises(FileNotFoundError):
+                LauncherAdapter().edit("vi", "/x/config")
+
+
 if __name__ == "__main__":
     unittest.main()
