@@ -1,8 +1,8 @@
 from pathlib import Path
 
+from lightcycle.application.workflows.prompt_commands import json_field_reads, lc_calls
 from lightcycle.domain.contracts.cli_surface import cli_surface
 from lightcycle.domain.contracts.json_surface import json_surface
-from lightcycle.domain.contracts.prompt_commands import json_field_reads, lc_calls
 from lightcycle.domain.work import all_states, missing_for_state
 
 _PLACEHOLDER = "<"

@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from typing import Optional
+
 FIELDS_BY_TYPE = {
     "item": frozenset(
         {"title", "description", "project", "workflow", "label", "backlog", "step", "depends"}
@@ -15,8 +18,19 @@ STATES_BY_TYPE = {
 }
 
 
-def _named(node_type):
-    return "an item" if node_type == "item" else "a step"
+@dataclass(frozen=True)
+class FieldRefusal:
+    fields: tuple
+    requested_type: str
+    owner: Optional[str]
+
+
+@dataclass(frozen=True)
+class StateRefusal:
+    state: str
+    requested_type: str
+    owner: Optional[str]
+    allowed: tuple
 
 
 def owner_of_field(field):
@@ -38,15 +52,10 @@ def all_states():
 
 
 def refuse_fields(node_type, fields):
-    wrong = sorted(f for f in fields if f not in FIELDS_BY_TYPE[node_type])
+    wrong = tuple(sorted(f for f in fields if f not in FIELDS_BY_TYPE[node_type]))
     if not wrong:
         return None
-    named = ", ".join("--%s" % f for f in wrong)
-    verb = "belong" if len(wrong) > 1 else "belongs"
-    owner = owner_of_field(wrong[0])
-    if owner is None:
-        return "%s %s to no structure" % (named, verb)
-    return "%s %s to %s, not %s" % (named, verb, _named(owner), _named(node_type))
+    return FieldRefusal(fields=wrong, requested_type=node_type, owner=owner_of_field(wrong[0]))
 
 
 def refuse_state(node_type, state):
@@ -54,10 +63,13 @@ def refuse_state(node_type, state):
         return None
     owner = owner_of_state(state)
     if owner is None:
-        return "unknown --state %r; use %s" % (state, ", ".join(all_states()))
-    takes = ", ".join("--state %s" % s for s in sorted(STATES_BY_TYPE[node_type]))
-    return "--state %s applies to %s, not %s; %s takes %s" % (
-        state, _named(owner), _named(node_type), _named(node_type), takes)
+        return StateRefusal(
+            state=state, requested_type=node_type, owner=None, allowed=tuple(all_states())
+        )
+    return StateRefusal(
+        state=state, requested_type=node_type, owner=owner,
+        allowed=tuple(sorted(STATES_BY_TYPE[node_type])),
+    )
 
 
 def missing_for_state(state, given):

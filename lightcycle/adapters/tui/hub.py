@@ -61,14 +61,17 @@ from lightcycle.application.work import (
     StepRunUseCase,
 )
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.feedback import Duration, format_elapsed, format_wall_and_active
+from lightcycle.domain.feedback import Duration
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
-    LogKind, State, display_role, display_stage, format_rate, format_tokens, format_usd,
-    is_human_step, item_cost, landing_tab, parse_timestamp, row_bucket, step_cost, type_label,
-    viewable_artifacts,
+    LogKind, State, is_human_step, item_cost, parse_timestamp, row_bucket, step_cost,
+    type_label, viewable_artifacts,
 )
 from lightcycle.domain.workflows.identity import parse_pin
+from lightcycle.render import (
+    display_stage, format_elapsed, format_rate, format_tokens, format_usd,
+    format_wall_and_active,
+)
 
 POLL_INTERVAL_SECONDS = 10
 LOG_TAIL_INTERVAL_SECONDS = 1
@@ -101,6 +104,16 @@ _TAB_LABELS = {
 
 def _tab_order(node):
     return _ITEM_TAB_ORDER if node.type == "item" else _STEP_TAB_ORDER
+
+
+def landing_tab(node):
+    if node.type == "item":
+        return "description"
+    return "log" if node.state == State.RUNNING else "detail"
+
+
+def display_role(role):
+    return role or "human"
 
 
 STACKED_COLUMN_KEY = "row"

@@ -6,8 +6,8 @@ from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.work import Artifact
 from lightcycle.render import (
-    node_extra, render_backlog, render_inbox, render_queue,
-    render_workflow_mermaid,
+    display_stage, format_rate, format_tokens, format_usd, node_extra, render_backlog,
+    render_inbox, render_queue, render_workflow_mermaid,
 )
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
 from tests.support.factories import make_item, make_step
@@ -360,6 +360,32 @@ class TestRenderWorkflowMermaidPhases(unittest.TestCase):
         self.assertIn(terminal_line, self.lines)
         test_end = self.lines.index("end", self.lines.index('subgraph phase_test["test"]'))
         self.assertGreater(self.lines.index(terminal_line), test_end)
+
+
+class TestDisplayStage(unittest.TestCase):
+    def test_a_phrase_and_stage_are_joined(self):
+        self.assertEqual(display_stage("a phrase", "a-stage"), "a phrase · a-stage")
+
+    def test_no_phrase_falls_back_to_the_stage_alone(self):
+        self.assertEqual(display_stage(None, "a-stage"), "a-stage")
+
+
+class TestFormatUsd(unittest.TestCase):
+    def test_formats_to_two_decimal_places(self):
+        self.assertEqual(format_usd(1.5), "$1.50")
+
+
+class TestFormatTokens(unittest.TestCase):
+    def test_formats_with_thousands_separators(self):
+        self.assertEqual(format_tokens(12345), "12,345")
+
+
+class TestFormatRate(unittest.TestCase):
+    def test_formats_a_rate_as_a_percentage(self):
+        self.assertEqual(format_rate(0.5), "50.0%")
+
+    def test_none_is_not_available(self):
+        self.assertEqual(format_rate(None), "n/a")
 
 
 if __name__ == "__main__":

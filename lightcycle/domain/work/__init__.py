@@ -6,9 +6,6 @@ from lightcycle.domain.work.cost import (
     StepCost,
     ToolUsageRow,
     cache_hit_rate,
-    format_rate,
-    format_tokens,
-    format_usd,
     item_cost,
     step_cost,
 )
@@ -17,11 +14,10 @@ from lightcycle.domain.work.state import State, lane_for
 from lightcycle.domain.work.rollup import roll_up
 from lightcycle.domain.work.derive import derive_state
 from lightcycle.domain.work.hierarchy import (
-    HierarchyRow, compose_hierarchy, display_role, display_stage,
-    is_human_step, landing_tab, park_resume_command, row_bucket, viewable_artifacts,
+    HierarchyRow, compose_hierarchy, is_human_step, row_bucket, viewable_artifacts,
 )
 from lightcycle.domain.work.field_owner import (
-    FIELDS_BY_TYPE, REQUIRED_WITH_STATE, STATES_BY_TYPE, all_states,
+    FIELDS_BY_TYPE, FieldRefusal, REQUIRED_WITH_STATE, STATES_BY_TYPE, StateRefusal, all_states,
     missing_for_state, refuse_fields, refuse_state,
 )
 from lightcycle.domain.work.item import Item
@@ -41,12 +37,12 @@ __all__ = [
     "item_active_seconds",
     "Artifact", "default_kind_for", "type_label", "Lane", "State", "lane_for", "roll_up",
     "ItemCost", "StageSubtotal", "StepCost", "ToolUsageRow", "cache_hit_rate",
-    "format_rate", "format_tokens", "format_usd", "item_cost", "step_cost",
+    "item_cost", "step_cost",
     "derive_state",
-    "HierarchyRow", "compose_hierarchy", "display_role", "display_stage",
-    "is_human_step", "landing_tab", "park_resume_command", "row_bucket", "viewable_artifacts",
-    "FIELDS_BY_TYPE", "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "all_states",
-    "missing_for_state", "refuse_fields", "refuse_state",
+    "HierarchyRow", "compose_hierarchy",
+    "is_human_step", "row_bucket", "viewable_artifacts",
+    "FIELDS_BY_TYPE", "FieldRefusal", "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "StateRefusal",
+    "all_states", "missing_for_state", "refuse_fields", "refuse_state",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
     "Step", "node_id_key",
     "merge_condition_note", "ProjectedStep",

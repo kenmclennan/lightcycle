@@ -11,18 +11,6 @@ def cache_hit_rate(cache_read_tokens, cache_creation_tokens, input_tokens) -> Op
     return cache_read_tokens / denominator if denominator > 0 else None
 
 
-def format_usd(amount) -> str:
-    return "$%.2f" % amount
-
-
-def format_tokens(n) -> str:
-    return "{:,}".format(n)
-
-
-def format_rate(rate) -> str:
-    return "n/a" if rate is None else "%.1f%%" % (rate * 100)
-
-
 @dataclass(frozen=True)
 class ToolUsageRow:
     tool: str

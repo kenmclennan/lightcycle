@@ -4,6 +4,7 @@ from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
 from lightcycle.application.flow import BlockInput, BlockStepUseCase
+from lightcycle.domain.work import FieldRefusal
 from tests.support.fake_store import FakeStore
 from tests.support.harness import DEFAULT_WORKFLOW, Harness
 from tests.support.step_factory import create_owned_step
@@ -124,6 +125,28 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("--notes", err)
+
+    def test_several_wrong_fields_are_listed_together_and_agree_in_number(self):
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--needs", "x", "--reason", "y")
+        self.assertEqual(rc, 2)
+        self.assertEqual(err, "--needs, --reason belong to a step, not an item\n")
+
+    def test_a_state_of_the_wrong_type_names_what_the_type_takes(self):
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--state", "waiting")
+        self.assertEqual(rc, 2)
+        self.assertEqual(
+            err,
+            "--state waiting applies to a step, not an item; "
+            "an item takes --state active, --state in_progress\n",
+        )
+
+
+class TestRenderFieldRefusalOfNoStructure(unittest.TestCase):
+    def test_a_field_owned_by_neither_structure_says_so(self):
+        refusal = FieldRefusal(fields=("goal",), requested_type="item", owner=None)
+        self.assertEqual(cli._render_field_refusal(refusal), "--goal belongs to no structure")
 
 
 class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
