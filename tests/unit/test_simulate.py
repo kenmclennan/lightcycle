@@ -5,6 +5,7 @@ from lightcycle.application.workflows.simulate import (
     WorkflowSimulateUseCase, _pass_end_coverage_violations, _phase_mismatch,
 )
 from lightcycle.domain.flow.simulate_plan import CoveragePlan, PlannedStep, PlannedWalk
+from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 
 
@@ -39,14 +40,6 @@ class TestPhaseMismatch(unittest.TestCase):
         )
 
 
-class _FakeGit:
-    def __init__(self, torn_down_branches=()):
-        self._torn_down_branches = tuple(torn_down_branches)
-
-    def torn_down_branches(self):
-        return self._torn_down_branches
-
-
 def _use_case(store, git):
     return WorkflowSimulateUseCase(store, None, None, None, None, None, git, None)
 
@@ -77,7 +70,7 @@ class TestPassBoundaryViolations(unittest.TestCase):
         pid = store.open_pass(item)
         before_pass = store.get_pass(pid)
 
-        violations = _use_case(store, _FakeGit())._pass_boundary_violations(0, item, before_pass)
+        violations = _use_case(store, FakeGit())._pass_boundary_violations(0, item, before_pass)
 
         self.assertEqual(len(violations), 1)
         self.assertIn("did not close", violations[0])
@@ -93,7 +86,7 @@ class TestPassBoundaryViolations(unittest.TestCase):
         store.close_pass(pid)
         store.open_pass(item)
 
-        violations = _use_case(store, _FakeGit(torn_down_branches=[("root", "feat/x")]))\
+        violations = _use_case(store, FakeGit(torn_down_branches=[("root", "feat/x")]))\
             ._pass_boundary_violations(0, item, before_pass)
 
         self.assertEqual(violations, [])
@@ -109,7 +102,7 @@ class TestPassBoundaryViolations(unittest.TestCase):
         store.close_pass(pid)
         store.open_pass(item)
 
-        violations = _use_case(store, _FakeGit())._pass_boundary_violations(0, item, before_pass)
+        violations = _use_case(store, FakeGit())._pass_boundary_violations(0, item, before_pass)
 
         self.assertEqual(len(violations), 1)
         self.assertIn(rid, violations[0])
@@ -123,7 +116,7 @@ class TestPassBoundaryViolations(unittest.TestCase):
         store.close_pass(pid)
         store.complete_node(item, "done")
 
-        violations = _use_case(store, _FakeGit())._pass_boundary_violations(0, item, before_pass)
+        violations = _use_case(store, FakeGit())._pass_boundary_violations(0, item, before_pass)
 
         self.assertEqual(violations, [])
 

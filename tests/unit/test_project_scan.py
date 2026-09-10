@@ -4,24 +4,9 @@ import unittest
 
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.application.setup.project_scan import ScanProjectsUseCase
-from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
-
-
-class _FakeGit:
-    def __init__(self, git_repos=(), remotes=None, unreadable=()):
-        self._git_repos = set(git_repos)
-        self._remotes = remotes or {}
-        self._unreadable = set(unreadable)
-
-    def is_repo_root(self, path):
-        return path in self._git_repos
-
-    def remote_url(self, path):
-        if path in self._unreadable:
-            raise GitReadError("git remote get-url failed in %s: fatal: not a git repository" % path)
-        return self._remotes.get(path)
 
 
 class _Cfg:
@@ -36,12 +21,12 @@ class TestScanProjects(unittest.TestCase):
     def test_no_repos_anywhere_returns_empty(self):
         root = "/tree"
         fs = FakeFs(dirs={root: ["a", "b"]})
-        uc = ScanProjectsUseCase(FakeStore(), _FakeGit(), _Cfg("/nonexistent"), fs)
+        uc = ScanProjectsUseCase(FakeStore(), FakeGit(repos=()), _Cfg("/nonexistent"), fs)
         self.assertEqual(uc.execute(root), [])
 
     def test_repo_with_ssh_remote_is_new(self):
         root = "/tree/x"
-        git = _FakeGit(git_repos={root}, remotes={root: "git@github.com:acme/x.git"})
+        git = FakeGit(repos={root}, origin={root: "git@github.com:acme/x.git"})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
         [cand] = uc.execute(root)
         self.assertEqual(cand.identity, "acme/x")
@@ -51,14 +36,14 @@ class TestScanProjects(unittest.TestCase):
     def test_repo_with_https_remote_with_and_without_git_suffix(self):
         for remote in ("https://github.com/acme/x", "https://github.com/acme/x.git"):
             root = "/tree/x"
-            git = _FakeGit(git_repos={root}, remotes={root: remote})
+            git = FakeGit(repos={root}, origin={root: remote})
             uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
             [cand] = uc.execute(root)
             self.assertEqual(cand.identity, "acme/x")
 
     def test_repo_with_no_origin_is_no_remote(self):
         root = "/tree/x"
-        git = _FakeGit(git_repos={root})
+        git = FakeGit(repos={root})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
         [cand] = uc.execute(root)
         self.assertEqual(cand.status, "no-remote")
@@ -67,7 +52,7 @@ class TestScanProjects(unittest.TestCase):
 
     def test_repo_with_non_github_remote_is_no_remote_but_remote_preserved(self):
         root = "/tree/x"
-        git = _FakeGit(git_repos={root}, remotes={root: "git@gitlab.com:acme/x.git"})
+        git = FakeGit(repos={root}, origin={root: "git@gitlab.com:acme/x.git"})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
         [cand] = uc.execute(root)
         self.assertEqual(cand.status, "no-remote")
@@ -79,9 +64,9 @@ class TestScanProjects(unittest.TestCase):
         broken = os.path.join(root, "broken")
         ok = os.path.join(root, "ok")
         fs = FakeFs(dirs={root: ["broken", "ok"]})
-        git = _FakeGit(
-            git_repos={broken, ok}, remotes={ok: "git@github.com:acme/ok.git"},
-            unreadable={broken},
+        git = FakeGit(
+            repos={broken, ok}, origin={ok: "git@github.com:acme/ok.git"},
+            remote_unreadable={broken},
         )
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
         candidates = uc.execute(root)
@@ -95,7 +80,7 @@ class TestScanProjects(unittest.TestCase):
         root = "/tree/x"
         store = FakeStore()
         store.add_project("acme/x", shortcode="OLD", local_path="/elsewhere")
-        git = _FakeGit(git_repos={root}, remotes={root: "git@github.com:acme/x.git"})
+        git = FakeGit(repos={root}, origin={root: "git@github.com:acme/x.git"})
         uc = ScanProjectsUseCase(store, git, _Cfg("/nonexistent"), FakeFs())
         [cand] = uc.execute(root)
         self.assertEqual(cand.status, "already-registered")
@@ -107,7 +92,7 @@ class TestScanProjects(unittest.TestCase):
         root = "/tree"
         sub = os.path.join(root, "sub")
         fs = FakeFs(dirs={root: ["sub"]})
-        git = _FakeGit(git_repos={root, sub})
+        git = FakeGit(repos={root, sub})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
         candidates = uc.execute(root)
         self.assertEqual(len(candidates), 1)
@@ -118,7 +103,7 @@ class TestScanProjects(unittest.TestCase):
         hidden = os.path.join(root, ".hidden")
         nested = os.path.join(hidden, "repo")
         fs = FakeFs(dirs={root: [".hidden"], hidden: ["repo"]})
-        git = _FakeGit(git_repos={nested})
+        git = FakeGit(repos={nested})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
         self.assertEqual(uc.execute(root), [])
 
@@ -127,7 +112,7 @@ class TestScanProjects(unittest.TestCase):
         nm = os.path.join(root, "node_modules")
         nested = os.path.join(nm, "repo")
         fs = FakeFs(dirs={root: ["node_modules"], nm: ["repo"]})
-        git = _FakeGit(git_repos={nested})
+        git = FakeGit(repos={nested})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
         self.assertEqual(uc.execute(root), [])
 
@@ -137,7 +122,7 @@ class TestScanProjects(unittest.TestCase):
         app = os.path.join(root, "app")
         nested = os.path.join(state, "repo")
         fs = FakeFs(dirs={root: ["state", "app"], app: []})
-        git = _FakeGit(git_repos={nested})
+        git = FakeGit(repos={nested})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg(state), fs)
         self.assertEqual(uc.execute(root), [])
 
@@ -149,9 +134,9 @@ class TestScanProjects(unittest.TestCase):
         fs = FakeFs(dirs={root: ["new", "registered", "noremote"]})
         store = FakeStore()
         store.add_project("acme/registered", shortcode="REG", local_path="/elsewhere")
-        git = _FakeGit(
-            git_repos={new_repo, reg_repo, noremote_repo},
-            remotes={
+        git = FakeGit(
+            repos={new_repo, reg_repo, noremote_repo},
+            origin={
                 new_repo: "git@github.com:acme/new.git",
                 reg_repo: "git@github.com:acme/registered.git",
             },
@@ -168,7 +153,7 @@ class TestScanProjects(unittest.TestCase):
         root = tempfile.mkdtemp()
         os.makedirs(os.path.join(root, "dir"))
         os.symlink(root, os.path.join(root, "dir", "loop"))
-        git = _FakeGit()
+        git = FakeGit(repos=())
         config = _Cfg("/nonexistent")
         fs = FsAdapter(config)
         uc = ScanProjectsUseCase(FakeStore(), git, config, fs)
