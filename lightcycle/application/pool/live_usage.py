@@ -15,7 +15,7 @@ class LiveUsageAccrualUseCase:
     def execute(self, now):
         rates = self._config.usage_pricing()
         try:
-            pool = WorkerPool.from_state(self._workers.workers_state())
+            pool = WorkerPool(self._workers.workers_state())
         except RegistryUnreadable:
             return
         for w in pool.alive(self._workers.pid_alive):

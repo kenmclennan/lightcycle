@@ -3,6 +3,7 @@ from unittest import mock
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.peek_step import PeekStepInput, PeekStepUseCase
+from lightcycle.ports.workflow_bundle import StepPrompt
 from tests.support.fake_store import FakeStore
 
 
@@ -62,7 +63,7 @@ class TestPeekStepUseCase(unittest.TestCase):
         flow = _FakeFlow(pin="acme/build@sha-old", resolved="acme/build@sha-new")
         with mock.patch(
             "lightcycle.application.work.peek_step.resolve_agent_for_pin",
-            return_value={"meta": {}, "body": "step body text", "path": "/x"},
+            return_value=StepPrompt(meta={}, body="step body text"),
         ):
             resp = PeekStepUseCase(store, flow, config=object(), workflow_source=None).execute(
                 PeekStepInput(node_id=item, stage="write-code"))
@@ -78,7 +79,7 @@ class TestPeekStepUseCase(unittest.TestCase):
         )
         with mock.patch(
             "lightcycle.application.work.peek_step.resolve_agent_for_pin",
-            return_value={"meta": {}, "body": "b", "path": "/x"},
+            return_value=StepPrompt(meta={}, body="b"),
         ) as resolve:
             PeekStepUseCase(store, flow, config=object(), workflow_source=None).execute(
                 PeekStepInput(node_id=item, stage="write-code"))

@@ -74,7 +74,7 @@ class TestListSnapshots(unittest.TestCase):
         os.utime(os.path.join(backups_dir, older_name), (2000.0, 2000.0))
         os.utime(os.path.join(backups_dir, newer_name), (1000.0, 1000.0))
         snapshots = backup.list_snapshots()
-        self.assertEqual(snapshots[0][0], older_name)
+        self.assertEqual(snapshots[0].name, older_name)
 
     def test_off_convention_file_is_excluded(self):
         backup, store, backups_dir = _adapter()
@@ -84,7 +84,7 @@ class TestListSnapshots(unittest.TestCase):
             f.write(b"x")
         os.utime(os.path.join(backups_dir, manual_name), (500.0, 500.0))
         snapshots = backup.list_snapshots()
-        self.assertEqual([n for n, _ in snapshots], [real_name])
+        self.assertEqual([s.name for s in snapshots], [real_name])
 
 
 class TestPrune(unittest.TestCase):
@@ -92,7 +92,7 @@ class TestPrune(unittest.TestCase):
         backup, store, backups_dir = _adapter()
         names = [backup.create_snapshot(1000.0 + i) for i in range(5)]
         removed = backup.prune(2)
-        remaining = {n for n, _ in backup.list_snapshots()}
+        remaining = {s.name for s in backup.list_snapshots()}
         self.assertEqual(len(remaining), 2)
         self.assertEqual(set(removed), set(names) - remaining)
 
@@ -104,7 +104,7 @@ class TestPrune(unittest.TestCase):
             f.write(b"x")
         os.utime(os.path.join(backups_dir, manual_name), (1.0, 1.0))
         removed = backup.prune(2)
-        remaining = {n for n, _ in backup.list_snapshots()}
+        remaining = {s.name for s in backup.list_snapshots()}
         self.assertEqual(len(remaining), 2)
         self.assertEqual(set(removed), set(names) - remaining)
         self.assertTrue(os.path.exists(os.path.join(backups_dir, manual_name)))

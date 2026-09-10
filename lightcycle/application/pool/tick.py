@@ -87,7 +87,7 @@ class TickUseCase:
         probe = self._workers.pid_alive
         max_agents = self._config.max_agents()
         try:
-            pool = WorkerPool.from_state(self._workers.workers_state())
+            pool = WorkerPool(self._workers.workers_state())
             covered = pool.covered_steps(probe)
             slots = pool.free_slots(max_agents, probe)
             alive_count = max_agents - slots

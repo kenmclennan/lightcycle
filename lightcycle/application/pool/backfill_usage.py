@@ -79,9 +79,7 @@ class BackfillUsageUseCase:
         root = self._config.data_root()
         files = self._worker_log.list_worker_log_files(root)
         already_ingested = self._store.usage_backfilled_logs()
-        pending_logs = {
-            w.get("log") for w in self._workers.workers_state() if not w.get("checked")
-        }
+        pending_logs = {w.log for w in self._workers.workers_state() if not w.checked}
         rates = self._config.usage_pricing()
 
         reclassified = recovered = 0

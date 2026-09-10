@@ -1,7 +1,7 @@
 import os
 
 from lightcycle.adapters.workers import pid_alive
-from lightcycle.ports.lock import RunLockPort
+from lightcycle.ports.lock import LockAcquisition, RunLockPort
 
 
 def lock_path(root):
@@ -61,7 +61,8 @@ class RunLockAdapter(RunLockPort):
         self._config = config
 
     def acquire(self):
-        return acquire(self._config.data_root())
+        acquired, holder_pid = acquire(self._config.data_root())
+        return LockAcquisition(acquired=acquired, holder_pid=holder_pid)
 
     def release(self):
         release(self._config.data_root())

@@ -1,5 +1,7 @@
 import os
 
+from lightcycle.ports.workflow_bundle import StepPrompt
+
 
 def flow_from_metas(metas, disposition=None):
     from lightcycle.domain.flow import Flow
@@ -73,7 +75,7 @@ def graph_text_from_metas(metas, entry=None, requires=None, disposition=None):
 
 class FakeFs:
     def __init__(self, metas=None, files=None, dirs=None, workflow=None, workflows=None,
-                 bodies=None, store_ready=True):
+                 bodies=None, store_ready=True, log_mtimes=None):
         self._metas = metas or {}
         self._files = dict(files or {})
         self._dirs = dirs or {}
@@ -81,6 +83,7 @@ class FakeFs:
         self._workflows = workflows or {}
         self._bodies = bodies or {}
         self._store_ready = store_ready
+        self._log_mtimes = log_mtimes or {}
         self.workflow_text_calls = []
 
     def workflow_text(self, name, root=None):
@@ -110,7 +113,10 @@ class FakeFs:
     def parse_step(self, role, root=None):
         if role not in self._metas:
             return None
-        return {"meta": self._metas[role] or {}, "body": self._bodies.get(role, ""), "path": role}
+        return StepPrompt(meta=self._metas[role] or {}, body=self._bodies.get(role, ""))
+
+    def log_mtime(self, path):
+        return self._log_mtimes.get(path)
 
     def worktrees_dir(self, root):
         return os.path.join(root, ".worktrees")

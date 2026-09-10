@@ -3,6 +3,7 @@ from pathlib import Path
 
 from lightcycle.adapters.workflow_bundle import parse_step, step_roles, workflow_text
 from lightcycle.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
+from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from tests.support.fake_fs import graph_text_from_metas
@@ -446,7 +447,7 @@ class TestDisplayContracts(unittest.TestCase):
 class TestRealStepsFlowComposition(unittest.TestCase):
     def _graph_flow(self):
         step_metas = {
-            role: (parse_step(_ROOT, role) or {"meta": {}})["meta"]
+            role: (parse_step(_ROOT, role) or StepPrompt(meta={}, body="")).meta
             for role in step_roles(_ROOT)
         }
         graph = parse_graph(workflow_text(_ROOT, "spec-driven"))
@@ -480,7 +481,7 @@ class TestRealStepsFlowComposition(unittest.TestCase):
         self.assertEqual(flow.merge_outcome("code-await-merge"), "merged")
 
     def test_spec_writer_step_accepts_nothing_and_produces_spec(self):
-        meta = (parse_step(_ROOT, "spec-writer") or {"meta": {}})["meta"]
+        meta = (parse_step(_ROOT, "spec-writer") or StepPrompt(meta={}, body="")).meta
         self.assertIsNone(meta.get("accepts"))
         self.assertEqual(meta.get("produces"), {"spec": "required"})
 

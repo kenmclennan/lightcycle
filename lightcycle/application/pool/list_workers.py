@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass
 from typing import List
 
@@ -16,9 +17,9 @@ class ListWorkersUseCase:
         return ListWorkersResponse(
             workers=[
                 dict(
-                    w,
-                    alive=self._workers.pid_alive(w.get("pid", -1), w.get("pid_started")),
-                    stage=self._stage_of(w.get("step")),
+                    dataclasses.asdict(w),
+                    alive=self._workers.pid_alive(w.pid if w.pid is not None else -1, w.pid_started),
+                    stage=self._stage_of(w.step),
                 )
                 for w in self._workers.workers_state()
             ]

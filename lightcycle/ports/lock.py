@@ -1,4 +1,12 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass(frozen=True)
+class LockAcquisition:
+    acquired: bool
+    holder_pid: Optional[int]
 
 
 class RunLockPort(ABC):

@@ -6,6 +6,7 @@ import subprocess
 import sys
 from contextlib import contextmanager
 
+from lightcycle.domain.pool.worker import Worker
 from lightcycle.ports.workers import RegistryUnreadable, WorkersPort
 
 
@@ -47,15 +48,6 @@ def write_workers(root, workers):
     with open(tmp, "w") as f:
         f.write(json.dumps(workers, indent=2))
     os.replace(tmp, p)
-
-
-def log_mtime(path):
-    if not path:
-        return None
-    try:
-        return os.path.getmtime(path)
-    except OSError:
-        return None
 
 
 def pid_alive(pid):
@@ -182,7 +174,7 @@ class WorkersAdapter(WorkersPort):
         self._config = config
 
     def workers_state(self):
-        return workers_state(self._config.data_root())
+        return [Worker.from_state(d) for d in workers_state(self._config.data_root())]
 
     def pid_alive(self, pid, started=None):
         return worker_alive(pid, started)
@@ -205,9 +197,6 @@ class WorkersAdapter(WorkersPort):
 
     def mark_checked(self, spawnid):
         return mark_checked(self._config.data_root(), spawnid)
-
-    def log_mtime(self, path):
-        return log_mtime(path)
 
     def set_pid_started(self, spawnid, pid_started):
         return set_pid_started(self._config.data_root(), spawnid, pid_started)

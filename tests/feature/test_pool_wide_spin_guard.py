@@ -4,6 +4,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
 from lightcycle.domain.pool import SpinLedger
+from lightcycle.domain.pool.worker import Worker
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -32,7 +33,7 @@ class FakeWorkers:
         self._workers = []
 
     def workers_state(self):
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         return False
@@ -44,9 +45,6 @@ class FakeWorkers:
         for w in self._workers:
             if w.get("spawnid") == spawnid:
                 w["checked"] = True
-
-    def log_mtime(self, path):
-        return None
 
     def reap(self):
         pass
@@ -68,6 +66,9 @@ class FakeFs:
             return
         for line in content.decode("utf-8", errors="replace").splitlines():
             yield line
+
+    def log_mtime(self, path):
+        return None
 
 
 class FakeBreakerPort:

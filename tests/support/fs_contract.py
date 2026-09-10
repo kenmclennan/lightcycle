@@ -75,8 +75,8 @@ class WorkflowBundleContractBase:
             bodies={"build": "do the thing"},
         )
         parsed = fs.parse_step("build", self.root())
-        self.assertEqual(parsed["meta"], {"step": "build", "phase": "code"})
-        self.assertEqual(parsed["body"], "do the thing")
+        self.assertEqual(parsed.meta, {"step": "build", "phase": "code"})
+        self.assertEqual(parsed.body, "do the thing")
 
     def test_parse_step_unknown_role_returns_none(self):
         fs = self.make_fs(metas={"build": {"step": "build"}})

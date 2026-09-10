@@ -9,6 +9,7 @@ from lightcycle.domain.workflows.identity import (
     resolve_pin,
 )
 from lightcycle.ports.store import NodeNotFoundError
+from lightcycle.ports.workflow_bundle import StepPrompt
 
 
 class FlowService:
@@ -89,7 +90,7 @@ class FlowService:
 
     def _role_metas_in(self, root):
         return {
-            role: (self._fs.parse_step(role, root) or {"meta": {}})["meta"]
+            role: (self._fs.parse_step(role, root) or StepPrompt(meta={}, body="")).meta
             for role in self._fs.step_roles(root)
         }
 
@@ -112,9 +113,9 @@ class FlowService:
         except ValueError:
             return None
         parsed = self._fs.parse_step(graph.file_for(stage), root)
-        if not parsed or parsed["meta"].get("model"):
+        if not parsed or parsed.meta.get("model"):
             return None
-        return (parsed.get("body") or "").strip() or None
+        return (parsed.body or "").strip() or None
 
     def _owning_item(self, node):
         item_id = getattr(node, "item", None) or node.id
@@ -202,7 +203,7 @@ class FlowService:
     def meta_for_step(self, step, name=None):
         graph, root = self._graph_and_root(name)
         a = self._fs.parse_step(graph.file_for(step), root)
-        return a["meta"] if a else {}
+        return a.meta if a else {}
 
     def file_for_step(self, step, name=None):
         graph, _root = self._graph_and_root(name)

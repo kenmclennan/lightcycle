@@ -27,11 +27,11 @@ class ResolveLogUseCase:
                 path=os.path.join(self._config.data_root(), "logs", "run.log")
             )
         for w in reversed(self._workers.workers_state()):
-            if w.get("step") == input.target or w.get("role") == input.target:
-                return ResolveLogResponse(path=w["log"])
+            if w.step == input.target or w.role == input.target:
+                return ResolveLogResponse(path=w.log)
         for w in reversed(self._workers.workers_state()):
-            if self._stage_of(w.get("step")) == input.target:
-                return ResolveLogResponse(path=w["log"])
+            if self._stage_of(w.step) == input.target:
+                return ResolveLogResponse(path=w.log)
         try:
             node = self._store.get_node(input.target)
         except KeyError:

@@ -18,6 +18,7 @@ from lightcycle.adapters.worker_session import (
     session_cwd,
 )
 from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
+from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.domain.pool.worker_session import (
     CLOSE,
     MAX_NUDGES,
@@ -54,7 +55,7 @@ class TestPlanSession(unittest.TestCase):
 
         def resolve(step_file, pin):
             seen["args"] = (step_file, pin)
-            return {"meta": {"model": "opus"}, "body": "B-body"}
+            return StepPrompt(meta={"model": "opus"}, body="B-body")
 
         plan = plan_session(
             lambda role: self._resp("wfB/x@sha", step_file="write-code.md"),
@@ -65,7 +66,7 @@ class TestPlanSession(unittest.TestCase):
     def test_the_plan_carries_the_claimed_stage_not_the_spawned_role(self):
         plan = plan_session(
             lambda role: self._resp("wfB/x@sha", stage="review-code"),
-            lambda f, pin: {"meta": {"model": "opus"}, "body": "B"},
+            lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B"),
             self._never_reclaim, "agent")
         self.assertEqual(plan.stage, "review-code")
 
@@ -82,21 +83,21 @@ class TestPlanSession(unittest.TestCase):
         with self.assertRaises(SessionError):
             plan_session(
                 lambda role: self._resp("p", "s-9"),
-                lambda f, pin: {"meta": {}, "body": "x"},
+                lambda f, pin: StepPrompt(meta={}, body="x"),
                 reclaimed.append, "agent")
         self.assertEqual(reclaimed, ["s-9"])
 
     def test_carries_workspace_through_when_present(self):
         plan = plan_session(
             lambda role: self._resp("wfB/x@sha", workspace="/work/item-1"),
-            lambda f, pin: {"meta": {"model": "opus"}, "body": "B-body"},
+            lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body"),
             self._never_reclaim, "agent")
         self.assertEqual(plan.workspace, "/work/item-1")
 
     def test_workspace_is_none_when_claim_has_none(self):
         plan = plan_session(
             lambda role: self._resp("wfB/x@sha"),
-            lambda f, pin: {"meta": {"model": "opus"}, "body": "B-body"},
+            lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body"),
             self._never_reclaim, "agent")
         self.assertIsNone(plan.workspace)
 

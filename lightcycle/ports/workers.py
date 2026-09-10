@@ -39,9 +39,5 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
-    def log_mtime(self, path):
-        pass
-
-    @abstractmethod
     def set_pid_started(self, spawnid, pid_started):
         pass

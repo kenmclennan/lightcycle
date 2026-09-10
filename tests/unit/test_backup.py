@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.pool.backup import BackupUseCase
+from lightcycle.ports.backup import Snapshot
 
 
 class FakeBackupPort:
@@ -14,13 +15,13 @@ class FakeBackupPort:
 
     def create_snapshot(self, now):
         name = "store-%d.db.gz" % now
-        self._snapshots.insert(0, (name, now))
+        self._snapshots.insert(0, Snapshot(name, now))
         self.created.append(name)
         return name
 
     def prune(self, keep):
         self.pruned_with = keep
-        removed = [n for n, _ in self._snapshots[keep:]]
+        removed = [s.name for s in self._snapshots[keep:]]
         self._snapshots = self._snapshots[:keep]
         return removed
 
@@ -45,7 +46,7 @@ class TestBackupUseCase(unittest.TestCase):
         self.assertEqual(port.pruned_with, 96)
 
     def test_newest_snapshot_younger_than_interval_is_a_noop(self):
-        port = FakeBackupPort(snapshots=[("store-900.db.gz", 900.0)])
+        port = FakeBackupPort(snapshots=[Snapshot("store-900.db.gz", 900.0)])
         result = BackupUseCase(port, FakeConfig(interval_minutes=15)).execute(now=1000.0)
         self.assertIsNone(result.created)
         self.assertEqual(result.pruned, [])
@@ -53,7 +54,7 @@ class TestBackupUseCase(unittest.TestCase):
 
     def test_newest_snapshot_older_than_interval_creates_and_prunes(self):
         port = FakeBackupPort(
-            snapshots=[("store-%d.db.gz" % i, float(i)) for i in range(5)][::-1]
+            snapshots=[Snapshot("store-%d.db.gz" % i, float(i)) for i in range(5)][::-1]
         )
         result = BackupUseCase(port, FakeConfig(interval_minutes=15, retention=2)).execute(
             now=1000.0

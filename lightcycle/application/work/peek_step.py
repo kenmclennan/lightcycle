@@ -38,4 +38,4 @@ class PeekStepUseCase:
         parsed = resolve_agent_for_pin(self._config, step_file, fresh_pin)
         if parsed is None:
             raise UseCaseError("no step %r in %s" % (input.stage, fresh_pin))
-        return PeekStepResponse(pin=fresh_pin, body=parsed["body"])
+        return PeekStepResponse(pin=fresh_pin, body=parsed.body)

@@ -37,6 +37,6 @@ class TailLogUseCase:
 
     def _worker_alive(self, target):
         for w in reversed(self._workers.workers_state()):
-            if w.get("step") == target or w.get("role") == target:
-                return self._workers.pid_alive(w.get("pid"), w.get("pid_started"))
+            if w.step == target or w.role == target:
+                return self._workers.pid_alive(w.pid, w.pid_started)
         return False

@@ -110,7 +110,7 @@ class BreakerGateUseCase:
             now,
             self._config.max_boot_seconds(),
             self._config.stall_seconds(),
-            self._workers.log_mtime,
+            self._fs.log_mtime,
         ):
             return "stalled"
         return None
@@ -118,7 +118,7 @@ class BreakerGateUseCase:
     def execute(self, now) -> BreakerGateResponse:
         state = Breaker.from_state(self._breaker_port.load())
         try:
-            pool = WorkerPool.from_state(self._workers.workers_state())
+            pool = WorkerPool(self._workers.workers_state())
         except RegistryUnreadable:
             return BreakerGateResponse(breaker=state)
         probe = self._workers.pid_alive

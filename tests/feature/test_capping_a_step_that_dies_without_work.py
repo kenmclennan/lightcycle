@@ -8,6 +8,7 @@ from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUs
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.pool import SpinLedger, StepSpin
+from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.pool.worker_session import saw_session_activity
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs as FlowFakeFs
@@ -60,7 +61,7 @@ class FakeWorkers:
         self._alive.discard(pid)
 
     def workers_state(self):
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         return pid in self._alive
@@ -75,13 +76,11 @@ class FakeWorkers:
     def mark_checked(self, spawnid):
         self.checked.append(spawnid)
 
-    def log_mtime(self, path):
-        return getattr(self, "_log_mtimes", {}).get(path)
-
 
 class FakeFs:
     def __init__(self):
         self.files = {}
+        self._log_mtimes = {}
 
     def read_bytes(self, path):
         return self.files.get(path)
@@ -92,6 +91,9 @@ class FakeFs:
             return
         for line in content.decode("utf-8", errors="replace").splitlines():
             yield line
+
+    def log_mtime(self, path):
+        return self._log_mtimes.get(path)
 
 
 def _run_sweep(ctx):
@@ -197,8 +199,7 @@ def _no_dead_worker(ctx):
 
 @given("the worker's log last grew more than the stall threshold ago")
 def _log_stale(ctx):
-    ctx["workers"]._log_mtimes = getattr(ctx["workers"], "_log_mtimes", {})
-    ctx["workers"]._log_mtimes[ctx["log"]] = ctx["now"] - STALL_SECONDS - 1
+    ctx["fs"]._log_mtimes[ctx["log"]] = ctx["now"] - STALL_SECONDS - 1
 
 
 @given("the worker's log contains no terminal marker")

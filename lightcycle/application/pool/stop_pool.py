@@ -21,7 +21,7 @@ class StopPoolUseCase:
         self._clock = clock
 
     def execute(self, now, max_boot, stall_seconds, shutdown_grace_seconds=0) -> StopPoolResponse:
-        pool = WorkerPool.from_state(self._workers.workers_state())
+        pool = WorkerPool(self._workers.workers_state())
         alive = pool.alive(self._workers.pid_alive)
         for worker in alive:
             self._workers.kill(worker.pid)

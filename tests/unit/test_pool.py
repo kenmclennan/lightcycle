@@ -19,7 +19,7 @@ from lightcycle.application.pool import (
 from lightcycle.application.pool.sweep import SweepResponse
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.domain.pool import Breaker, SpinLedger
+from lightcycle.domain.pool import Breaker, SpinLedger, Worker
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
@@ -29,13 +29,12 @@ from tests.support.step_factory import create_owned_step
 
 
 class FakeWorkers:
-    def __init__(self, workers=None, alive_pids=(), pruned=0, log_mtimes=None,
+    def __init__(self, workers=None, alive_pids=(), pruned=0,
                  raise_workers_state=False, raise_prune_workers=False,
                  workers_state_raise_after=None):
         self._workers = workers or []
         self._alive = set(alive_pids)
         self._pruned = pruned
-        self._log_mtimes = log_mtimes or {}
         self.killed = []
         self.reaped = 0
         self.calls = []
@@ -54,7 +53,7 @@ class FakeWorkers:
             and self._workers_state_calls > self._workers_state_raise_after
         ):
             raise RegistryUnreadable("boom")
-        return self._workers
+        return [Worker.from_state(d) for d in self._workers]
 
     def pid_alive(self, pid, started=None):
         self.calls.append("probe")
@@ -75,9 +74,6 @@ class FakeWorkers:
 
     def mark_checked(self, spawnid):
         self.checked.append(spawnid)
-
-    def log_mtime(self, path):
-        return self._log_mtimes.get(path)
 
 
 class FakeBreakerGate:
@@ -575,9 +571,9 @@ class TestSweep(unittest.TestCase):
                 {"spawnid": "stalled-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
             ],
             alive_pids={999},
-            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
+        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [999])
         self.assertEqual(workers.checked, ["stalled-sp"])
         self.assertIn(step, result.swept)
@@ -593,9 +589,9 @@ class TestSweep(unittest.TestCase):
                 {"spawnid": "busy-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
             ],
             alive_pids={999},
-            log_mtimes={"/l/1.log": 1000 - 1800 + 1},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 + 1})
+        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
         self.assertEqual(s.get_node(step).state, "running")
@@ -605,9 +601,9 @@ class TestSweep(unittest.TestCase):
         workers = FakeWorkers(
             workers=[{"spawnid": "boot-sp", "pid": 999, "step": None, "started": 950, "log": "/l/1.log"}],
             alive_pids={999},
-            log_mtimes={"/l/1.log": 0},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        fs = FakeFs(log_mtimes={"/l/1.log": 0})
+        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
 
@@ -621,7 +617,6 @@ class TestSweep(unittest.TestCase):
                 {"spawnid": "closing-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
             ],
             alive_pids={999},
-            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
         )
         log_line = json.dumps(
             {
@@ -631,7 +626,10 @@ class TestSweep(unittest.TestCase):
                 },
             }
         )
-        fs = FakeFs(files={"/l/1.log": log_line.encode()})
+        fs = FakeFs(
+            files={"/l/1.log": log_line.encode()},
+            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
+        )
         result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
@@ -669,9 +667,9 @@ class TestSweep(unittest.TestCase):
                 {"spawnid": "stalled-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
             ],
             alive_pids={999},
-            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
         )
-        result = SweepUseCase(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
+        result = SweepUseCase(s, workers, fs=fs).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [999])
         self.assertIn(step, result.swept)
         self.assertEqual(s.get_node(step).state, "queued")
@@ -787,9 +785,9 @@ class TestSweep(unittest.TestCase):
                 {"spawnid": "stalled-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
             ],
             alive_pids={999},
-            log_mtimes={"/l/1.log": 1000 - 1800 - 1},
         )
-        result = SweepUseCase(s, workers, spin_port=spin_port, spin_cap=3).execute(
+        fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
+        result = SweepUseCase(s, workers, fs=fs, spin_port=spin_port, spin_cap=3).execute(
             now=1000, max_boot=120, stall_seconds=1800
         )
         self.assertIn(step, result.swept)

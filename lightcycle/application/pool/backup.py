@@ -16,7 +16,7 @@ class BackupUseCase:
     def execute(self, now) -> BackupResponse:
         snapshots = self._backup_port.list_snapshots()
         interval_seconds = self._config.backup_interval_minutes() * 60
-        if snapshots and (now - snapshots[0][1]) < interval_seconds:
+        if snapshots and (now - snapshots[0].taken_at) < interval_seconds:
             return BackupResponse()
         created = self._backup_port.create_snapshot(now)
         pruned = self._backup_port.prune(self._config.backup_retention())
