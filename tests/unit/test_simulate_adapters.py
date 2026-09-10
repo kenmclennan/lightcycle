@@ -96,18 +96,17 @@ class TestNullWorkers(unittest.TestCase):
 class TestSimulateConfig(unittest.TestCase):
     def test_spawn_id_is_none_even_when_env_set(self):
         real = Config(environ={"LC_SPAWNID": "worker-9"})
-        sim = SimulateConfig(real, "/scratch/specs", "/scratch/projects")
+        sim = SimulateConfig(real, "/scratch/projects")
         self.assertIsNone(sim.spawn_id())
 
-    def test_specs_and_projects_root_are_the_scratch_paths(self):
+    def test_projects_root_is_the_scratch_path(self):
         real = Config(environ={"LC_HOME": "/real/home"})
-        sim = SimulateConfig(real, "/scratch/specs", "/scratch/projects")
-        self.assertEqual(sim.specs_root(), "/scratch/specs")
+        sim = SimulateConfig(real, "/scratch/projects")
         self.assertEqual(sim.projects_root(), "/scratch/projects")
 
     def test_other_config_reads_delegate_to_the_real_config(self):
         real = Config(environ={"LC_HOME": "/real/home", "LC_MAX_AGENTS": "7"})
-        sim = SimulateConfig(real, "/scratch/specs", "/scratch/projects")
+        sim = SimulateConfig(real, "/scratch/projects")
         self.assertEqual(sim.max_agents(), 7)
         self.assertEqual(sim.data_root(), "/real/home")
 

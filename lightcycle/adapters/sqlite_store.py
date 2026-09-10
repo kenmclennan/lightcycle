@@ -224,12 +224,6 @@ _RUN_SELECT = (
 )
 
 
-_LEGACY_STEP_NAMES = (
-    "build", "review", "review-plan", "develop", "watch-pr", "ready-merge",
-    "resolve", "conflict-review",
-)
-_LEGACY_ROLE_NAMES = ("coder", "reviewer", "auditor", "watch-pr", "resolve")
-
 _INTERNAL_ARTIFACT_TYPES = (
     "resolves", "resolved-by",
 )
@@ -349,13 +343,7 @@ class SqliteStore(StorePort):
         history_cols = {r[1] for r in self._conn.execute("PRAGMA table_info(history)").fetchall()}
         if "ts" not in history_cols:
             return True
-        if "status" in history_cols and "state" not in history_cols:
-            return True
-        q = "SELECT 1 FROM nodes WHERE step IN (%s) OR role IN (%s) LIMIT 1" % (
-            ",".join("?" * len(_LEGACY_STEP_NAMES)),
-            ",".join("?" * len(_LEGACY_ROLE_NAMES)),
-        )
-        return self._conn.execute(q, _LEGACY_STEP_NAMES + _LEGACY_ROLE_NAMES).fetchone() is not None
+        return "status" in history_cols and "state" not in history_cols
 
     def _migrate_close_reason_to_outcome(self):
         cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}

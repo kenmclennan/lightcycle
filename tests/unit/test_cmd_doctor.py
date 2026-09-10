@@ -58,6 +58,9 @@ class FakeConfig:
     def obsolete_config_keys(self):
         return ()
 
+    def resolved_settings(self):
+        return ()
+
     def default_origin(self):
         return "acme"
 

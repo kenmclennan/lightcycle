@@ -152,8 +152,11 @@ class SimulationContainer:
         with open(cfg_path, "w") as f:
             f.write("shortcode: SIM\n")
 
-        self.config = SimulateConfig(container.config, self.specs_root, self.projects_root)
+        from lightcycle.domain.flow.flow import SPECS_WORKSPACE
+
+        self.config = SimulateConfig(container.config, self.projects_root)
         self.store = SqliteStore(Config(environ={"LC_HOME": self.home, "LC_CONFIG": cfg_path}))
+        self.store.add_project(SPECS_WORKSPACE, local_path=self.specs_root)
         self.git = RecordingGit()
         self.spin = NullSpin()
         self.scaffold = container.scaffold

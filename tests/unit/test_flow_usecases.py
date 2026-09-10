@@ -84,10 +84,11 @@ class FakeWorktrees:
         self.released = getattr(self, "released", [])
         self.released.append(run.id)
 
-    def __init__(self, ensure_error=None, sync_specs_error=None):
+    def __init__(self, ensure_error=None, sync_specs_error=None, specs_path="/specs"):
         self.removed = []
         self._ensure_error = ensure_error
         self._sync_specs_error = sync_specs_error
+        self._specs_path = specs_path
         self.sync_specs_calls = 0
 
     def ensure(self, item):
@@ -102,6 +103,9 @@ class FakeWorktrees:
         self.sync_specs_calls += 1
         if self._sync_specs_error is not None:
             raise self._sync_specs_error
+
+    def specs_path(self):
+        return self._specs_path
 
     def remove(self, item):
         self.removed.append(item)
@@ -132,9 +136,6 @@ class FakeConfig:
 
     def spawn_id(self):
         return self._spawn
-
-    def specs_root(self):
-        return "/specs"
 
     def projects_root(self):
         return "/projects"

@@ -18,6 +18,7 @@ from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
 from lightcycle.config import Config
 from lightcycle.container import Container, make_flow_service, make_worktrees
+from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.runs.phase_run import RunState
 
 _WORKFLOW_TEXT = """entry: write-code
@@ -224,7 +225,8 @@ class SimulateTestCase(unittest.TestCase):
             f.write("shortcode: SIM\n")
         store_config = Config(environ={"LC_HOME": store_home, "LC_CONFIG": cfg_path})
         store = SqliteStore(store_config)
-        sim_config = SimulateConfig(c.config, specs_root, projects_root)
+        store.add_project(SPECS_WORKSPACE, local_path=specs_root)
+        sim_config = SimulateConfig(c.config, projects_root)
         git = RecordingGit()
         flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)
         worktrees = make_worktrees(store, git, c.fs, sim_config, flow, c.scaffold)

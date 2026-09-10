@@ -718,23 +718,15 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         with self.assertRaises(SchemaVersionRefused):
             SqliteStore(self._config(root))
 
-    def test_store_with_legacy_step_value_is_refused(self):
+    def test_store_with_current_shaped_columns_and_legacy_step_value_is_accepted(self):
         root = tempfile.mkdtemp()
         self._legacy(root, rows=[{"id": "GRID-1.1", "type": "step", "title": "old style",
                                   "state": "ready", "step": "build", "role": "agent",
                                   "parent": "GRID-1"}])
 
-        with self.assertRaises(SchemaVersionRefused):
-            SqliteStore(self._config(root))
+        store = SqliteStore(self._config(root))
 
-    def test_store_with_legacy_role_value_is_refused(self):
-        root = tempfile.mkdtemp()
-        self._legacy(root, rows=[{"id": "GRID-1.1", "type": "step", "title": "old style",
-                                  "state": "ready", "step": "write-code", "role": "reviewer",
-                                  "parent": "GRID-1"}])
-
-        with self.assertRaises(SchemaVersionRefused):
-            SqliteStore(self._config(root))
+        self.assertEqual(store.get_node("GRID-1.1").step, "build")
 
     def test_store_stamped_below_the_floor_is_refused(self):
         root = tempfile.mkdtemp()

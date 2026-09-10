@@ -6,6 +6,7 @@ from pathlib import Path
 
 import lightcycle.cli as cli
 from lightcycle.config import _SEED_KEYS
+from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.work import State
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_store import FakeStore
@@ -70,6 +71,7 @@ class Harness:
         self._cfg = _write_config(self.root)
         _write_bundle(self.root, roles, extra_steps=extra_steps, workflow_text=workflow_text)
         self.store = FakeStore()
+        self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
         self._github = github
         inject_container(
             self, store=self.store, home=self.root, config_path=self._cfg, github=github

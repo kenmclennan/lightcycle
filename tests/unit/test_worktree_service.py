@@ -6,27 +6,19 @@ import unittest
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 
 
 class _Cfg:
-    def __init__(self, projects_root, engine_root="lightcycle", specs_root="/specs",
-                 specs_remote=None):
+    def __init__(self, projects_root, engine_root="lightcycle"):
         self._projects_root = projects_root
         self._engine_root = engine_root
-        self._specs_root = specs_root
-        self._specs_remote = specs_remote
 
     def projects_root(self):
         return self._projects_root
-
-    def specs_root(self):
-        return self._specs_root
-
-    def specs_remote(self):
-        return self._specs_remote
 
     def engine_root(self):
         return self._engine_root
@@ -208,6 +200,7 @@ class TestItemRepoNoFallback(unittest.TestCase):
 class TestSpecsWorkspace(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
+        self.store.add_project(SPECS_WORKSPACE, local_path="/specs")
 
     def test_target_repo_is_specs_root_when_workflow_sources_from_specs(self):
         item = self.store.create_item("spec item", "a description")
@@ -304,6 +297,7 @@ class _CloseFlow:
 class TestRemovePhaseScoped(unittest.TestCase):
     def _item(self):
         store = FakeStore()
+        store.add_project(SPECS_WORKSPACE, local_path="/specs")
         item = store.create_item("Login", "a description")
         store.add_project("acme/app", local_path=os.path.join("/projects", "app"))
         store.add_artifact(item, "repo", "app")
@@ -576,11 +570,14 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
 
 
 class TestSyncSpecs(unittest.TestCase):
+    def _store(self):
+        store = FakeStore()
+        store.add_project(SPECS_WORKSPACE, local_path="/specs", remote="git@x:specs.git")
+        return store
+
     def test_clones_when_specs_root_is_not_a_git_repo(self):
         git = FakeGit(repos=(), clone_result=True, sync_default_result=True)
-        svc = WorktreeService(FakeStore(), git=git, fs=None,
-                              config=_Cfg("/proj", specs_root="/specs",
-                                          specs_remote="git@x:specs.git"))
+        svc = WorktreeService(self._store(), git=git, fs=None, config=_Cfg("/proj"))
 
         svc.sync_specs()
 
@@ -588,9 +585,7 @@ class TestSyncSpecs(unittest.TestCase):
 
     def test_does_not_clone_when_specs_root_is_already_a_git_repo(self):
         git = FakeGit(repos={"/specs"}, sync_default_result=True)
-        svc = WorktreeService(FakeStore(), git=git, fs=None,
-                              config=_Cfg("/proj", specs_root="/specs",
-                                          specs_remote="git@x:specs.git"))
+        svc = WorktreeService(self._store(), git=git, fs=None, config=_Cfg("/proj"))
 
         svc.sync_specs()
 
@@ -598,18 +593,21 @@ class TestSyncSpecs(unittest.TestCase):
 
     def test_raises_when_clone_fails(self):
         git = FakeGit(repos=(), clone_result=False)
-        svc = WorktreeService(FakeStore(), git=git, fs=None,
-                              config=_Cfg("/proj", specs_root="/specs",
-                                          specs_remote="git@x:specs.git"))
+        svc = WorktreeService(self._store(), git=git, fs=None, config=_Cfg("/proj"))
 
         with self.assertRaises(UseCaseError):
             svc.sync_specs()
 
     def test_raises_when_sync_to_default_branch_fails(self):
         git = FakeGit(repos={"/specs"}, sync_default_result=False)
-        svc = WorktreeService(FakeStore(), git=git, fs=None,
-                              config=_Cfg("/proj", specs_root="/specs",
-                                          specs_remote="git@x:specs.git"))
+        svc = WorktreeService(self._store(), git=git, fs=None, config=_Cfg("/proj"))
+
+        with self.assertRaises(UseCaseError):
+            svc.sync_specs()
+
+    def test_raises_with_no_specs_project_registered(self):
+        git = FakeGit()
+        svc = WorktreeService(FakeStore(), git=git, fs=None, config=_Cfg("/proj"))
 
         with self.assertRaises(UseCaseError):
             svc.sync_specs()
@@ -744,6 +742,7 @@ class TestNamedWorkspace(unittest.TestCase):
         self.store.add_project(
             "acme/blueprints", local_path=os.path.join(self.projects_root, "blueprints")
         )
+        self.store.add_project(SPECS_WORKSPACE, local_path="/specs")
         self.store.add_artifact(self.item, "repo", "saga")
 
     def _svc(self, workspace):
@@ -762,7 +761,7 @@ class TestNamedWorkspace(unittest.TestCase):
 
         self.assertEqual(target, os.path.join(self.projects_root, "saga"))
 
-    def test_specs_remains_an_alias_for_the_configured_specs_root(self):
+    def test_specs_resolves_through_the_project_registry_like_any_named_workspace(self):
         target = self._svc("specs").target_repo(self.item)
 
         self.assertEqual(target, "/specs")

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from lightcycle.config import _SEED_KEYS, Config, ConfigError
 
-_SEEDED_EMPTY_AND_REQUIRED = ("specs-remote",)
+_SEEDED_EMPTY_AND_REQUIRED = ("workflows-remote",)
 
 HOME = os.path.expanduser("~")
 
@@ -32,24 +32,9 @@ class TestRequiredRoots(unittest.TestCase):
         self.assertIn("projects", msg)
         self.assertIn(c.config_path(), msg)
 
-    def test_specs_missing_fails_fast(self):
-        with self.assertRaises(ConfigError):
-            _cfg().specs_root()
-
-    def test_specs_remote_missing_fails_fast(self):
-        with self.assertRaises(ConfigError):
-            _cfg().specs_remote()
-
-    def test_specs_remote_config_value_read(self):
-        self.assertEqual(
-            _cfg(specs_remote="git@github.com:x/specs.git").specs_remote(),
-            "git@github.com:x/specs.git",
-        )
-
     def test_absolute_roots_kept(self):
-        c = _cfg(projects="/p", specs="/s")
+        c = _cfg(projects="/p")
         self.assertEqual(c.projects_root(), "/p")
-        self.assertEqual(c.specs_root(), "/s")
 
     def test_tilde_expanded_against_home(self):
         self.assertEqual(_cfg(projects="~/p").projects_root(), os.path.join(HOME, "p"))
@@ -183,7 +168,7 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
         self.assertIn("retro-interval-reflections: 20", text)
-        self.assertIn("specs-remote: \n", text)
+        self.assertIn("workflows-remote: \n", text)
         self.assertIn("backups-dir: ~/.lightcycle-backups", text)
         self.assertIn("backup-interval-minutes: 15", text)
         self.assertIn("backup-retention: 96", text)
@@ -295,11 +280,10 @@ class TestObsoleteConfigKeys(unittest.TestCase):
         self.assertEqual(c.obsolete_config_keys(), ())
 
     def test_mixed_known_and_unknown_keys_reports_only_unknown(self):
-        c = _cfg(projects="/p", specs="/s", retro_interval_items="5")
+        c = _cfg(projects="/p", retro_interval_items="5")
         obsolete = c.obsolete_config_keys()
         self.assertEqual(obsolete, ("retro-interval-items",))
         self.assertNotIn("projects", obsolete)
-        self.assertNotIn("specs", obsolete)
 
     def test_only_unknown_keys_reports_all_of_them_and_missing_still_reports_seed_keys(self):
         c = _cfg(retro_interval_items="5", old_flag="x")
@@ -472,11 +456,11 @@ class TestResolvedSettings(unittest.TestCase):
                 continue
             self.assertEqual(s.state, "default", s.key)
 
-    def test_specs_remote_is_seeded_empty_so_it_reports_unset_until_the_user_sets_it(self):
+    def test_workflows_remote_is_seeded_empty_so_it_reports_unset_until_the_user_sets_it(self):
         c = _cfg()
         c.ensure_config()
         settings = {s.key: s for s in c.resolved_settings()}
-        s = settings["specs-remote"]
+        s = settings["workflows-remote"]
         self.assertEqual(s.state, "unset")
         self.assertIsNotNone(s.error)
 
@@ -534,7 +518,7 @@ class TestResolvedSettings(unittest.TestCase):
         c = _cfg()
         c.ensure_config()
         settings = {s.key: s for s in c.resolved_settings()}
-        for key in ("projects", "specs", "backups-dir"):
+        for key in ("projects", "backups-dir"):
             s = settings[key]
             self.assertEqual(s.state, "default", key)
             self.assertTrue(os.path.isabs(s.value), key)
@@ -592,6 +576,11 @@ class TestTuiAutostartPool(unittest.TestCase):
 
     def test_it_is_seeded_false_in_the_default_config(self):
         self.assertEqual(dict(_SEED_KEYS)["tui-autostart-pool"], "false")
+
+
+class TestWorkflowsRemoteSeed(unittest.TestCase):
+    def test_it_is_seeded_blank_in_the_default_config(self):
+        self.assertEqual(dict(_SEED_KEYS)["workflows-remote"], "")
 
 
 class TestVersion(unittest.TestCase):

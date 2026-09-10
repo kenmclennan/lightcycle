@@ -228,16 +228,12 @@ class NullSpin(SpinPort):
 
 
 class SimulateConfig:
-    def __init__(self, real_config, specs_root, projects_root):
+    def __init__(self, real_config, projects_root):
         self._real = real_config
-        self._specs_root = specs_root
         self._projects_root = projects_root
 
     def __getattr__(self, name):
         return getattr(self._real, name)
-
-    def specs_root(self):
-        return self._specs_root
 
     def projects_root(self):
         return self._projects_root

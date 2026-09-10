@@ -8,7 +8,6 @@ from lightcycle import frontmatter
 
 _GETTER_NAME_OVERRIDES = {
     "projects": "projects_root",
-    "specs": "specs_root",
 }
 
 _ENV_OVERRIDE_VARS = {
@@ -46,12 +45,10 @@ class ResolvedSetting:
 
 _SEED_KEYS = [
     ("projects", "~/workspace/projects"),
-    ("specs", "~/workspace/specs"),
-    ("specs-remote", ""),
     ("branch-prefix", "feat"),
     ("shortcode", "PROJ"),
     ("default-origin", "lightcycle"),
-    ("workflows-remote", "https://github.com/kenmclennan/lightcycle-workflows.git"),
+    ("workflows-remote", ""),
     ("max-agents", "5"),
     ("worktree-retries", "6"),
     ("worktree-retry-sleep", "0.25"),
@@ -249,6 +246,9 @@ class Config:
             v = os.path.join(home, v[2:])
         return v if os.path.isabs(v) else os.path.join(home, v)
 
+    def expand_path(self, v):
+        return self._expand(v)
+
     def _required_path(self, key):
         v = self.load_config().get(key)
         if not v:
@@ -314,12 +314,6 @@ class Config:
 
     def projects_root(self):
         return self._required_path("projects")
-
-    def specs_root(self):
-        return self._required_path("specs")
-
-    def specs_remote(self):
-        return self._required_str("specs-remote")
 
     def branch_prefix(self):
         return self._required_str("branch-prefix")

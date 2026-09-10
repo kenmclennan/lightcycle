@@ -27,6 +27,7 @@ from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.workers import process_start_time
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.work import Artifact, State
 
 from tests.support.isolation import inject_container, make_syncable_git_repo
@@ -332,6 +333,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     if contract_steps:
         write_contract_steps(test.root)
     test.store = FakeStore()
+    test.store.add_project(SPECS_WORKSPACE, local_path=test.root)
     inject_container(test, store=test.store, home=test.root, config_path=cfg)
 
 
@@ -1935,6 +1937,7 @@ class TestWorktree(unittest.TestCase):
         os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self.store.add_project("acme/engine", local_path=self.root)
+        self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2028,6 +2031,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         os.environ["LC_HOME"] = engine_root
         write_real_library_bundle(engine_root)
         self.store = FakeStore()
+        self.store.add_project(SPECS_WORKSPACE, local_path=self.specs_repo)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2098,6 +2102,7 @@ class TestNamedRepo(unittest.TestCase):
         os.environ["LC_HOME"] = self.engine
         self.store = FakeStore()
         self.store.add_project("acme/app", local_path=self.app)
+        self.store.add_project(SPECS_WORKSPACE, local_path=self.engine)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2283,6 +2288,7 @@ class TestCloseWorktree(unittest.TestCase):
         os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self.store.add_project("acme/engine", local_path=self.root)
+        self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2395,6 +2401,15 @@ class TestInitPullsWorkflows(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertNotIn("pulled lightcycle", out)
 
+    def test_init_with_no_workflows_remote_does_not_crash(self):
+        Path(self.cfg).write_text(
+            "projects: %s\nspecs: %s\ndefault-workflow: lightcycle/standard\n"
+            "workflows-remote: \n" % (self.root, self.root)
+        )
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("workflows-remote", err)
+
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
@@ -2417,7 +2432,7 @@ class TestConfig(unittest.TestCase):
         self.assertIn(self.cfg, out)
         self.assertIn("not found", out)
         self.assertIn("projects: (not set", out)
-        self.assertIn("specs: (not set", out)
+        self.assertIn("workflows-remote: (not set", out)
 
     def test_init_seeds_config_when_absent_and_is_idempotent(self):
         self.assertFalse(os.path.exists(self.cfg))
@@ -2432,12 +2447,10 @@ class TestConfig(unittest.TestCase):
 
     def test_written_config_overrides_roots(self):
         proj = tempfile.mkdtemp()
-        specs = tempfile.mkdtemp()
-        Path(self.cfg).write_text("projects: %s\nspecs: %s\n" % (proj, specs))
+        Path(self.cfg).write_text("projects: %s\n" % proj)
         rc, out, err = call(_cli_mod.cmd_config)
         self.assertEqual(rc, 0, err)
         self.assertIn("projects: %s" % proj, out)
-        self.assertIn("specs: %s" % specs, out)
 
     def test_init_tops_up_existing_config_with_missing_keys(self):
         Path(self.cfg).write_text("projects: /p\nspecs: /s\n")

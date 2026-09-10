@@ -123,7 +123,7 @@ class ClaimStepUseCase:
         if spec:
             self._worktrees.sync_specs()
             spec_path = (
-                spec if os.path.isabs(spec) else os.path.join(self._config.specs_root(), spec)
+                spec if os.path.isabs(spec) else os.path.join(self._worktrees.specs_path(), spec)
             )
         repo = self._store.get_item(t.item).repo
         repo_path = None
