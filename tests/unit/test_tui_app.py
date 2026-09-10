@@ -10,7 +10,6 @@ from lightcycle import __version__
 from lightcycle.adapters.tui.app import (
     BACKLOG_COLUMNS,
     DATA_COLUMNS,
-    FILTER_DEBOUNCE_SECONDS,
     FILTER_ROW_COUNT_GAP,
     FILTER_ROW_LABEL_WIDTH,
     POLL_INTERVAL_SECONDS,
@@ -1831,7 +1830,7 @@ class TestBacklogSearchInput(unittest.TestCase):
             session.run(_type_without_yielding_to_the_debounce_timer)
             backlog_refresh.assert_not_called()
 
-            session.pause_for(FILTER_DEBOUNCE_SECONDS + 0.05)
+            session.settle_backlog_filter()
 
             backlog_refresh.assert_called_once()
 
@@ -1840,14 +1839,25 @@ class TestBacklogSearchInput(unittest.TestCase):
         app = session.app
 
         session.press("/")
-        session.press("w")
-        first_timer = app._backlog_filter_timer
-        with patch.object(first_timer, "stop", wraps=first_timer.stop) as stop:
-            session.press("i")
-            stop.assert_called_once()
+        search = session.app.query_one(BacklogFilterInput)
+        with patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh:
+            def _type_first_char():
+                search.value = "w"
+                session.app.on_input_changed(Input.Changed(search, search.value))
+
+            session.run(_type_first_char)
+            first_timer = app._backlog_filter_timer
+
+            def _type_second_char():
+                search.value = "wi"
+                session.app.on_input_changed(Input.Changed(search, search.value))
+
+            session.run(_type_second_char)
             self.assertIsNot(app._backlog_filter_timer, first_timer)
-        if app._backlog_filter_timer is not None:
-            app._backlog_filter_timer.stop()
+
+            session.settle_backlog_filter()
+
+            backlog_refresh.assert_called_once()
 
     def test_a_settled_backlog_filter_refreshes_the_backlog_view_only(self):
         session = self._launch(FakeStore())
@@ -1875,13 +1885,11 @@ class TestBacklogSearchInput(unittest.TestCase):
 
         session.press("/")
         session.press("w")
-        timer = app._backlog_filter_timer
-        with patch.object(timer, "stop") as stop:
+        with patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh:
             session.press("escape")
 
-            stop.assert_called_once()
-        self.assertIsNone(app._backlog_filter_timer)
-        timer.stop()
+            self.assertIsNone(app._backlog_filter_timer)
+            backlog_refresh.assert_not_called()
 
     def test_switching_tabs_cancels_a_pending_debounced_backlog_refresh(self):
         session = self._launch(FakeStore())
@@ -1889,13 +1897,11 @@ class TestBacklogSearchInput(unittest.TestCase):
 
         session.press("/")
         session.press("w")
-        timer = app._backlog_filter_timer
-        with patch.object(timer, "stop") as stop:
+        with patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh:
             session.press("tab")
 
-            stop.assert_called_once()
-        self.assertIsNone(app._backlog_filter_timer)
-        timer.stop()
+            self.assertIsNone(app._backlog_filter_timer)
+            backlog_refresh.assert_not_called()
 
 
 class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
@@ -2373,7 +2379,7 @@ class TestDoneSearchInput(unittest.TestCase):
             session.run(_type_without_yielding_to_the_debounce_timer)
             done_refresh.assert_not_called()
 
-            session.pause_for(FILTER_DEBOUNCE_SECONDS + 0.05)
+            session.settle_done_filter()
 
             done_refresh.assert_called_once()
 
@@ -2383,23 +2389,24 @@ class TestDoneSearchInput(unittest.TestCase):
 
         session.press("/")
         search = session.app.query_one(DoneFilterInput)
+        with patch.object(LightcycleApp, "_refresh_done_view") as done_refresh:
+            def _type_first_char():
+                search.value = "w"
+                session.app.on_input_changed(Input.Changed(search, search.value))
 
-        def _type_first_char():
-            search.value = "w"
-            session.app.on_input_changed(Input.Changed(search, search.value))
+            session.run(_type_first_char)
+            first_timer = app._done_filter_timer
 
-        session.run(_type_first_char)
-        first_timer = app._done_filter_timer
-        with patch.object(first_timer, "stop", wraps=first_timer.stop) as stop:
             def _type_second_char():
                 search.value = "wi"
                 session.app.on_input_changed(Input.Changed(search, search.value))
 
             session.run(_type_second_char)
-            stop.assert_called_once()
             self.assertIsNot(app._done_filter_timer, first_timer)
-        if app._done_filter_timer is not None:
-            app._done_filter_timer.stop()
+
+            session.settle_done_filter()
+
+            done_refresh.assert_called_once()
 
     def test_a_settled_done_filter_refreshes_the_done_view_only(self):
         session = self._launch(FakeStore())
@@ -2427,13 +2434,11 @@ class TestDoneSearchInput(unittest.TestCase):
 
         session.press("/")
         session.press("w")
-        timer = app._done_filter_timer
-        with patch.object(timer, "stop") as stop:
+        with patch.object(LightcycleApp, "_refresh_done_view") as done_refresh:
             session.press("escape")
 
-            stop.assert_called_once()
-        self.assertIsNone(app._done_filter_timer)
-        timer.stop()
+            self.assertIsNone(app._done_filter_timer)
+            done_refresh.assert_not_called()
 
     def test_switching_tabs_cancels_a_pending_debounced_done_refresh(self):
         session = self._launch(FakeStore())
@@ -2441,13 +2446,11 @@ class TestDoneSearchInput(unittest.TestCase):
 
         session.press("/")
         session.press("w")
-        timer = app._done_filter_timer
-        with patch.object(timer, "stop") as stop:
+        with patch.object(LightcycleApp, "_refresh_done_view") as done_refresh:
             session.press("tab")
 
-            stop.assert_called_once()
-        self.assertIsNone(app._done_filter_timer)
-        timer.stop()
+            self.assertIsNone(app._done_filter_timer)
+            done_refresh.assert_not_called()
 
 
 class TestPoolControl(unittest.TestCase):
