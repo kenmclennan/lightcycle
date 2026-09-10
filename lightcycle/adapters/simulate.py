@@ -1,20 +1,15 @@
 import os
 
-from lightcycle.ports.git import GitPort
+from lightcycle.ports.git import GitOutcome, GitPort
 from lightcycle.ports.github import Comment, GitHubEventsPort
 from lightcycle.ports.spin import SpinPort
+from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 from lightcycle.ports.workers import WorkersPort
 
 _WORKTREE_BASE = "sim-base"
 
 
-class _GitResult:
-    def __init__(self, returncode=0, stderr=""):
-        self.returncode = returncode
-        self.stderr = stderr
-
-
-class RecordingGit(GitPort):
+class RecordingGit(GitPort, TeardownLedgerPort):
     def __init__(self):
         self.calls = []
         self._worktrees = {}
@@ -25,22 +20,18 @@ class RecordingGit(GitPort):
 
     def created_worktrees(self):
         return [
-            (root, args[2]) for root, method, args in self.calls
-            if method == "git" and len(args) >= 2 and args[0] == "worktree" and args[1] == "add"
+            (root, args[0]) for root, method, args in self.calls
+            if method == "add_worktree"
         ]
 
     def torn_down_worktrees(self):
         return [(root, args[0]) for root, method, args in self.calls if method == "remove_worktree"]
 
     def created_branches(self):
-        out = []
-        for root, method, args in self.calls:
-            if method != "git" or len(args) < 2 or args[0] != "worktree" or args[1] != "add":
-                continue
-            if "-b" in args:
-                idx = args.index("-b")
-                out.append((root, args[idx + 1]))
-        return out
+        return [
+            (root, args[1]) for root, method, args in self.calls
+            if method == "add_worktree" and args[2] is not None
+        ]
 
     def torn_down_branches(self):
         return [(root, args[0]) for root, method, args in self.calls if method == "delete_branch"]
@@ -51,17 +42,24 @@ class RecordingGit(GitPort):
             if method == "delete_remote_branch"
         ]
 
-    def git(self, root, *args):
-        self._record("git", root, *args)
-        if len(args) >= 2 and args[0] == "worktree" and args[1] == "add":
-            path = args[2]
-            branch = args[args.index("-b") + 1] if "-b" in args else args[3]
-            self._worktrees[(root, path)] = branch
+    def add_worktree(self, root, path, branch, base, retries=0, backoff=0):
+        self._record("add_worktree", root, path, branch, base)
+        self._worktrees[(root, path)] = branch
+        if base is not None:
             self._branches.add((root, branch))
-        return _GitResult()
+        return GitOutcome(ok=True)
 
-    def git_ok(self, root, *args):
-        return self.git(root, *args).returncode == 0
+    def prune_worktrees(self, root):
+        self._record("prune_worktrees", root)
+        return GitOutcome(ok=True)
+
+    def set_branch_upstream(self, root, branch, remote="origin"):
+        self._record("set_branch_upstream", root, branch, remote)
+        return GitOutcome(ok=True)
+
+    def init_repo(self, root, branch="main"):
+        self._record("init_repo", root, branch)
+        return GitOutcome(ok=True)
 
     def is_git_repo(self, root):
         self._record("is_git_repo", root)

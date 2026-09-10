@@ -128,8 +128,8 @@ class FakeGit:
     def __init__(self):
         self.calls = []
 
-    def git(self, root, *args):
-        self.calls.append(("git", root, args))
+    def init_repo(self, root, branch="main"):
+        self.calls.append(("init_repo", root, branch))
 
     def commit_all(self, root, message):
         self.calls.append(("commit_all", root, message))
@@ -398,7 +398,7 @@ class TestCmdWorkflowInit(unittest.TestCase):
         self.assertEqual(self.source.read_registry("acme")["current"], "sha1")
         self.assertEqual(self.source.last_ref, "HEAD")
         self.assertEqual(self.container.config.personal_origin_set, "acme")
-        self.assertIn(("git", project_dir, ("init", "-q", "-b", "main")), self.container.git.calls)
+        self.assertIn(("init_repo", project_dir, "main"), self.container.git.calls)
 
     def test_init_refuses_when_project_dir_exists(self):
         project_dir = os.path.join(self.root, "acme")

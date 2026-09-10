@@ -335,6 +335,8 @@ class TestTeardownViolationSurfacesFromAStuckWalk(SimulateTestCase):
         output = err.getvalue()
         self.assertIn("teardown", output)
         self.assertIn("could not claim stage 'review-ci'", output)
+        self.assertIn("was created but never removed", output)
+        self.assertIn("was created but never deleted", output)
 
 
 class TestPlannerIncompleteWalkIsNotADrivingFailure(SimulateTestCase):
@@ -457,7 +459,16 @@ class TestPreExistingSimulateFixturesStillPassUnmodified(SimulateTestCase):
         self.assertEqual(cli._workflow_simulate(selector), 1)
 
     def test_teardown_violation_still_surfaces_from_a_stuck_walk(self):
+        import io
+        from contextlib import redirect_stderr
+
         steps = dict(_STEPS)
         steps["review-ci"] = _MISSING_INPUT_REVIEW_CI
         selector = self._install(_WORKFLOW_TEXT, steps)
-        self.assertEqual(cli._workflow_simulate(selector), 1)
+        err = io.StringIO()
+        with redirect_stderr(err):
+            rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 1)
+        output = err.getvalue()
+        self.assertIn("was created but never removed", output)
+        self.assertIn("was created but never deleted", output)

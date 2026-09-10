@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -223,6 +224,90 @@ class TestGitAdapterCommitAll(unittest.TestCase):
         self.assertNotEqual(before, after)
         self.assertEqual(_git(repo, "status", "--porcelain").stdout.strip(), "")
         self.assertFalse(adapter.has_uncommitted(repo))
+
+
+class TestGitAdapterAddWorktree(unittest.TestCase):
+    def test_creates_a_new_branch_and_worktree_when_base_is_given(self):
+        repo = _make_repo()
+        path = os.path.join(tempfile.mkdtemp(), "wt")
+        adapter = GitAdapter()
+
+        outcome = adapter.add_worktree(repo, path, "feat/x", "main", retries=0, backoff=0)
+
+        self.assertTrue(outcome.ok)
+        self.assertTrue(os.path.isdir(path))
+        self.assertIn("feat/x", _git(repo, "branch", "--list", "feat/x").stdout)
+
+    def test_attaches_to_an_existing_branch_without_creating_a_second_one(self):
+        repo = _make_repo()
+        _git(repo, "branch", "feat/existing")
+        path = os.path.join(tempfile.mkdtemp(), "wt")
+        adapter = GitAdapter()
+
+        outcome = adapter.add_worktree(repo, path, "feat/existing", None, retries=0, backoff=0)
+
+        self.assertTrue(outcome.ok)
+        self.assertTrue(os.path.isdir(path))
+        branches = _git(repo, "branch", "--list", "feat/existing").stdout.strip().splitlines()
+        self.assertEqual(len(branches), 1)
+
+    def test_returns_a_failed_outcome_when_the_target_path_is_not_a_worktree(self):
+        repo = _make_repo()
+        path = os.path.join(tempfile.mkdtemp(), "occupied")
+        os.makedirs(path)
+        (Path(path) / "file").write_text("in the way")
+        adapter = GitAdapter()
+
+        outcome = adapter.add_worktree(repo, path, "feat/x", "main", retries=0, backoff=0)
+
+        self.assertFalse(outcome.ok)
+        self.assertTrue(outcome.detail)
+
+
+class TestGitAdapterPruneWorktrees(unittest.TestCase):
+    def test_prunes_a_stale_worktree_administrative_entry(self):
+        repo = _make_repo()
+        path = os.path.join(tempfile.mkdtemp(), "wt")
+        _git(repo, "worktree", "add", path, "-b", "feat/x")
+        shutil.rmtree(path)
+
+        outcome = GitAdapter().prune_worktrees(repo)
+
+        self.assertTrue(outcome.ok)
+        self.assertNotIn(path, _git(repo, "worktree", "list").stdout)
+
+
+class TestGitAdapterInitRepo(unittest.TestCase):
+    def test_creates_a_fresh_repo_on_the_given_branch(self):
+        project_dir = os.path.join(tempfile.mkdtemp(), "proj")
+        os.makedirs(project_dir)
+
+        outcome = GitAdapter().init_repo(project_dir, "main")
+
+        self.assertTrue(outcome.ok)
+        self.assertTrue(os.path.isdir(os.path.join(project_dir, ".git")))
+        _git(project_dir, "config", "user.email", "t@t")
+        _git(project_dir, "config", "user.name", "t")
+        (Path(project_dir) / "README").write_text("x")
+        _git(project_dir, "add", ".")
+        _git(project_dir, "commit", "-q", "-m", "init")
+        self.assertEqual(
+            _git(project_dir, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip(), "main"
+        )
+
+
+class TestGitAdapterSetBranchUpstream(unittest.TestCase):
+    def test_sets_the_remote_and_merge_config_for_the_branch(self):
+        repo = _make_repo()
+        _git(repo, "branch", "feat/x")
+
+        outcome = GitAdapter().set_branch_upstream(repo, "feat/x")
+
+        self.assertTrue(outcome.ok)
+        self.assertEqual(_git(repo, "config", "branch.feat/x.remote").stdout.strip(), "origin")
+        self.assertEqual(
+            _git(repo, "config", "branch.feat/x.merge").stdout.strip(), "refs/heads/feat/x"
+        )
 
 
 class TestGitAdapterCommitTracked(unittest.TestCase):

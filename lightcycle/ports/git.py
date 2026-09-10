@@ -1,17 +1,32 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 
 class GitReadError(Exception):
     pass
 
 
+@dataclass(frozen=True)
+class GitOutcome:
+    ok: bool
+    detail: str = ""
+
+
 class GitPort(ABC):
     @abstractmethod
-    def git(self, root, *args):
+    def add_worktree(self, root, path, branch, base, retries, backoff):
         pass
 
     @abstractmethod
-    def git_ok(self, root, *args):
+    def prune_worktrees(self, root):
+        pass
+
+    @abstractmethod
+    def set_branch_upstream(self, root, branch, remote="origin"):
+        pass
+
+    @abstractmethod
+    def init_repo(self, root, branch="main"):
         pass
 
     @abstractmethod

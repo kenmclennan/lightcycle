@@ -1,7 +1,9 @@
 import os
 import subprocess
+import time
 
-from lightcycle.ports.git import GitPort, GitReadError
+from lightcycle.domain.workspace import Worktree
+from lightcycle.ports.git import GitOutcome, GitPort, GitReadError
 
 _GIT_TIMEOUT_SECONDS = 30
 
@@ -167,12 +169,51 @@ def common_dir(root):
     return os.path.normpath(path)
 
 
-class GitAdapter(GitPort):
-    def git(self, root, *args):
-        return git(root, *args)
+def prune_worktrees(root):
+    proc = git(root, "worktree", "prune")
+    return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
 
-    def git_ok(self, root, *args):
-        return git_ok(root, *args)
+
+def add_worktree(root, path, branch, base, retries, backoff):
+    args = (
+        ["worktree", "add", path, "--no-track", "-b", branch, base]
+        if base is not None
+        else ["worktree", "add", path, branch]
+    )
+    prune_worktrees(root)
+    proc = git(root, *args)
+    while proc.returncode != 0 and retries > 0 and Worktree.is_lock_contention(proc.stderr):
+        retries -= 1
+        time.sleep(backoff)
+        prune_worktrees(root)
+        proc = git(root, *args)
+    return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
+
+
+def set_branch_upstream(root, branch, remote="origin"):
+    proc1 = git(root, "config", "branch.%s.remote" % branch, remote)
+    proc2 = git(root, "config", "branch.%s.merge" % branch, "refs/heads/%s" % branch)
+    ok = proc1.returncode == 0 and proc2.returncode == 0
+    return GitOutcome(ok=ok, detail="" if ok else (proc1.stderr.strip() or proc2.stderr.strip()))
+
+
+def init_repo(root, branch="main"):
+    proc = git(root, "init", "-q", "-b", branch)
+    return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
+
+
+class GitAdapter(GitPort):
+    def add_worktree(self, root, path, branch, base, retries, backoff):
+        return add_worktree(root, path, branch, base, retries, backoff)
+
+    def prune_worktrees(self, root):
+        return prune_worktrees(root)
+
+    def set_branch_upstream(self, root, branch, remote="origin"):
+        return set_branch_upstream(root, branch, remote)
+
+    def init_repo(self, root, branch="main"):
+        return init_repo(root, branch)
 
     def is_git_repo(self, root):
         return is_git_repo(root)

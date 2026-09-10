@@ -2,13 +2,13 @@ import unittest
 
 from lightcycle.adapters.simulate import NullWorkers, RecordingGit, ScriptedGitHub, SimulateConfig
 from lightcycle.config import Config
+from lightcycle.ports.git import GitOutcome
 
 
 class TestRecordingGit(unittest.TestCase):
     def test_create_then_teardown_round_trips(self):
         git = RecordingGit()
-        git.git("/repo", "worktree", "add", "/repo/.worktrees/LC-1", "--no-track", "-b",
-                "feat/lc-1", "main")
+        git.add_worktree("/repo", "/repo/.worktrees/LC-1", "feat/lc-1", "main")
         self.assertIn(("/repo", "/repo/.worktrees/LC-1"), git.created_worktrees())
         self.assertIn(("/repo", "feat/lc-1"), git.created_branches())
         self.assertTrue(git.worktree_registered("/repo", "/repo/.worktrees/LC-1"))
@@ -26,12 +26,22 @@ class TestRecordingGit(unittest.TestCase):
 
     def test_create_with_no_teardown_is_distinguishable(self):
         git = RecordingGit()
-        git.git("/repo", "worktree", "add", "/repo/.worktrees/LC-2", "--no-track", "-b",
-                "feat/lc-2", "main")
+        git.add_worktree("/repo", "/repo/.worktrees/LC-2", "feat/lc-2", "main")
         self.assertIn(("/repo", "/repo/.worktrees/LC-2"), git.created_worktrees())
         self.assertNotIn(("/repo", "/repo/.worktrees/LC-2"), git.torn_down_worktrees())
         self.assertIn(("/repo", "feat/lc-2"), git.created_branches())
         self.assertNotIn(("/repo", "feat/lc-2"), git.torn_down_branches())
+
+    def test_prune_set_upstream_and_init_repo_record_and_succeed(self):
+        git = RecordingGit()
+
+        self.assertEqual(git.prune_worktrees("/repo"), GitOutcome(ok=True))
+        self.assertEqual(git.set_branch_upstream("/repo", "feat/lc-1"), GitOutcome(ok=True))
+        self.assertEqual(git.init_repo("/repo", "main"), GitOutcome(ok=True))
+
+        self.assertIn(("/repo", "prune_worktrees", ()), git.calls)
+        self.assertIn(("/repo", "set_branch_upstream", ("feat/lc-1", "origin")), git.calls)
+        self.assertIn(("/repo", "init_repo", ("main",)), git.calls)
 
 
 class TestScriptedGitHub(unittest.TestCase):
