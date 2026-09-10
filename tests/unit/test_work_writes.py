@@ -14,7 +14,6 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.domain.pool.worker import Worker
-from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
@@ -110,21 +109,6 @@ class RaisingGitForRemove:
         raise AssertionError("worktree_registered should not be called")
 
     def has_uncommitted(self, path):
-        raise AssertionError("has_uncommitted should not be called")
-
-
-class UnreadableGitForRemove:
-    def __init__(self, fails="worktree_registered"):
-        self._fails = fails
-
-    def worktree_registered(self, root, path):
-        if self._fails == "worktree_registered":
-            raise GitReadError("git worktree list failed in %s: fatal: not a git repository" % root)
-        return True
-
-    def has_uncommitted(self, path):
-        if self._fails == "has_uncommitted":
-            raise GitReadError("git status failed in %s: fatal: not a git repository" % path)
         raise AssertionError("has_uncommitted should not be called")
 
 
@@ -734,7 +718,7 @@ class TestRemoveNode(unittest.TestCase):
         item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = UnreadableGitForRemove(fails="worktree_registered")
+        git = FakeGit(raises={"worktree_registered"})
         with self.assertRaises(UseCaseError) as ctx:
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertIn(item, str(ctx.exception))
@@ -746,7 +730,7 @@ class TestRemoveNode(unittest.TestCase):
         item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = UnreadableGitForRemove(fails="has_uncommitted")
+        git = FakeGit(registered={wt.worktree_path(item)}, raises={"has_uncommitted"})
         with self.assertRaises(UseCaseError) as ctx:
             RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
         self.assertIn(item, str(ctx.exception))
@@ -758,7 +742,7 @@ class TestRemoveNode(unittest.TestCase):
         item = s.create_item("feature", "a description")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
-        git = UnreadableGitForRemove(fails="worktree_registered")
+        git = FakeGit(raises={"worktree_registered"})
         resp = RemoveNodeUseCase(s, workers, wt, git).execute(
             RemoveNodeInput(id=item, force=True)
         )
