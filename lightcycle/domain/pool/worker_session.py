@@ -1,4 +1,3 @@
-import json
 import re
 
 _TERMINAL = re.compile(r"\blc\s+(?:done|block)\b")
@@ -11,39 +10,6 @@ MAX_NUDGES = 5
 
 def is_terminal_command(command):
     return bool(command) and _TERMINAL.search(command) is not None
-
-
-def saw_terminal_command(lines):
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            data = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(data, dict) or data.get("type") != "assistant":
-            continue
-        for c in data.get("message", {}).get("content", []) or []:
-            if c.get("type") == "tool_use":
-                cmd = str((c.get("input") or {}).get("command", ""))
-                if is_terminal_command(cmd):
-                    return True
-    return False
-
-
-def saw_session_activity(lines):
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            data = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(data, dict) and data.get("type") in ("assistant", "result"):
-            return True
-    return False
 
 
 class SessionPolicy:

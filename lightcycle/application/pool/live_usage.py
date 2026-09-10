@@ -1,4 +1,4 @@
-from lightcycle.domain.pool import WorkerPool, parse_attribution_chunk, price_tokens
+from lightcycle.domain.pool import WorkerPool, price_tokens
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 
@@ -6,11 +6,12 @@ MAX_ACCRUAL_READ_BYTES = 5_000_000
 
 
 class LiveUsageAccrualUseCase:
-    def __init__(self, store, fs, workers, config):
+    def __init__(self, store, fs, workers, config, stream):
         self._store = store
         self._fs = fs
         self._workers = workers
         self._config = config
+        self._stream = stream
 
     def execute(self, now):
         rates = self._config.usage_pricing()
@@ -37,7 +38,7 @@ class LiveUsageAccrualUseCase:
         lines = complete.decode("utf-8", errors="replace").splitlines(keepends=True)
         seen_message_ids = set(resume.get("message_ids") or [])
         pending_tool_use = dict(resume.get("pending_tool_use") or {})
-        delta, message_ids, pending_tool_use = parse_attribution_chunk(
+        delta, message_ids, pending_tool_use = self._stream.parse_attribution_chunk(
             lines, seen_message_ids, pending_tool_use
         )
 

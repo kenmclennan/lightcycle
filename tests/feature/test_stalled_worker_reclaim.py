@@ -3,6 +3,7 @@ import json
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.work import State
@@ -124,7 +125,8 @@ def ctx():
 
 def _run_sweep(ctx):
     use_case = SweepUseCase(
-        ctx["store"], ctx["workers"], worktrees=ctx["worktrees"], git=ctx["git"], fs=ctx["fs"]
+        ctx["store"], ctx["workers"], worktrees=ctx["worktrees"], git=ctx["git"], fs=ctx["fs"],
+        stream=ClaudeStreamAdapter(),
     )
     ctx["result"] = use_case.execute(ctx["now"], MAX_BOOT, STALL_SECONDS)
 

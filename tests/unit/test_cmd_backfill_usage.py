@@ -4,6 +4,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from lightcycle import cli
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -52,6 +53,7 @@ class FakeContainer:
         self.workers = workers or FakeWorkers()
         self.config = config or FakeConfig()
         self.worker_log = worker_log if worker_log is not None else self.fs
+        self.claude_stream = ClaudeStreamAdapter()
 
 
 class TestCmdBackfillUsage(unittest.TestCase):

@@ -1,6 +1,7 @@
 import json
 import unittest
 
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.backfill_usage import BackfillUsageUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import ToolUsage
@@ -104,7 +105,7 @@ class TestBackfillUsageUseCase(unittest.TestCase):
         })
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.total, 3)
         self.assertEqual(resp.matched, 2)
@@ -147,8 +148,7 @@ class TestBackfillUsageUseCase(unittest.TestCase):
         workers = FakeWorkers()
 
         resp = BackfillUsageUseCase(
-            store, _ExistsOnlyFs(), workers, FakeConfig(), _WorkerLogOnly()
-        ).execute()
+            store, _ExistsOnlyFs(), workers, FakeConfig(), _WorkerLogOnly(), stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.total, 1)
         self.assertEqual(resp.matched, 1)
@@ -159,7 +159,7 @@ class TestBackfillUsageUseCase(unittest.TestCase):
         fs = FakeFs(files={"/home/logs/worker-a.log": _claim_result_log("gone-step")})
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.matched, 1)
         self.assertEqual(resp.orphaned, 1)
@@ -176,9 +176,9 @@ class TestBackfillUsageUseCase(unittest.TestCase):
             "/home/logs/worker-c.log": _no_claim_log(),
         })
         workers = FakeWorkers()
-        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.matched, 0)
         self.assertEqual(resp.total, 0)
@@ -191,7 +191,7 @@ class TestBackfillUsageUseCase(unittest.TestCase):
             {"spawnid": "sp-1", "log": "/home/logs/worker-a.log", "checked": False},
         ])
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.total, 1)
         self.assertEqual(resp.matched, 0)
@@ -227,7 +227,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         store._backfill_log[log_file] = (tid, None)
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.reclassified, 1)
         self.assertEqual(resp.recovered, 1)
@@ -244,7 +244,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         store._backfill_log[log_file] = (tid, None)
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.reclassified, 1)
         self.assertEqual(resp.recovered, 0)
@@ -258,7 +258,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         fs = FakeFs(files={"/home/logs/worker-a.log": _claim_result_log(tid)})
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.reclassified, 0)
         self.assertEqual(resp.recovered, 0)
@@ -306,7 +306,7 @@ class TestBackfillUsageDoesNotDoubleALiveCapturedLog(unittest.TestCase):
         workers = ReapAndBackfillWorkers(workers_state)
         config = FakeConfig()
 
-        BreakerGateUseCase(workers, fs, FakeBreakerPort(), config, store=store).execute(now=100)
+        BreakerGateUseCase(workers, fs, FakeBreakerPort(), config, store=store, stream=ClaudeStreamAdapter()).execute(now=100)
 
         after_reap = store.get_node(tid)
         single_ingest_usage = after_reap.usage_input_tokens
@@ -314,7 +314,7 @@ class TestBackfillUsageDoesNotDoubleALiveCapturedLog(unittest.TestCase):
         single_ingest_tools = store.tool_usage_for(tid)
         self.assertIn(log_file, store.usage_backfilled_logs())
 
-        resp = BackfillUsageUseCase(store, fs, workers, config, fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, config, fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.total, 0)
         self.assertEqual(store.get_node(tid).usage_input_tokens, single_ingest_usage)
@@ -342,9 +342,9 @@ class TestBackfillUsageRepair(unittest.TestCase):
             log_b: _claim_result_log_with_usage(tid, 20, 0.2),
         })
         workers = FakeWorkers()
-        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute(repair=True)
 
         self.assertEqual(resp.repair_examined, 1)
         self.assertEqual(resp.repair_corrected, 0)
@@ -362,7 +362,7 @@ class TestBackfillUsageRepair(unittest.TestCase):
         store._backfill_log[log_file] = (tid, True)
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute(repair=True)
 
         self.assertEqual(resp.repair_examined, 1)
         self.assertEqual(resp.repair_corrected, 1)
@@ -379,10 +379,10 @@ class TestBackfillUsageRepair(unittest.TestCase):
         missing_log = "/home/logs/worker-b.log"
         fs = FakeFs(files={present_log: _claim_result_log_with_usage(tid, 68, 0.5)})
         workers = FakeWorkers()
-        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
         store._backfill_log[missing_log] = (tid, True)
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute(repair=True)
 
         self.assertEqual(resp.repair_examined, 1)
         self.assertEqual(resp.repair_missing_logs, 1)
@@ -401,12 +401,12 @@ class TestBackfillUsageTransitionWindowHazard(unittest.TestCase):
         store.record_attribution(tid, 1, _bash_tool_usage(tid))
         workers = FakeWorkers()
 
-        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute()
+        resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
 
         self.assertEqual(resp.stored, 1)
         self.assertEqual(store.get_node(tid).usage_input_tokens, 136)
 
-        repair_resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs).execute(repair=True)
+        repair_resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute(repair=True)
 
         self.assertEqual(repair_resp.repair_corrected, 1)
         self.assertEqual(store.get_node(tid).usage_input_tokens, 68)

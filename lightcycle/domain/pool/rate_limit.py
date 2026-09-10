@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -11,23 +10,3 @@ class RateLimitEvent:
     @property
     def is_rejected(self):
         return self.status == "rejected"
-
-
-def parse_rate_limit_event(lines) -> Optional[RateLimitEvent]:
-    found = None
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            data = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(data, dict) or data.get("type") != "rate_limit_event":
-            continue
-        info = data.get("rate_limit_info") or {}
-        status = info.get("status")
-        if not status:
-            continue
-        found = RateLimitEvent(status=status, reset_at=info.get("resetsAt"))
-    return found

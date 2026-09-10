@@ -2,48 +2,35 @@ import unittest
 
 from lightcycle.application.workflows.prompt_check import check_prompt_commands
 from lightcycle.application.workflows.prompt_commands import json_field_reads, lc_calls
-from lightcycle.domain.contracts.cli_surface import cli_surface
+from lightcycle.cli_commands import Arg, CommandSpec, flags_by_verb
 from lightcycle.domain.contracts.json_surface import json_surface
 
-_CLI = '''
-def cmd_set(argv):
-    ap = argparse.ArgumentParser(prog="lc set")
-    for opt in ("title", "state", "needs", "reason"):
-        ap.add_argument("--%s" % opt)
-    ap.add_argument("--backlog", action="append")
+_COMMANDS = {
+    "set": CommandSpec(prog="lc set", args=(
+        Arg("--title"), Arg("--state"), Arg("--needs"), Arg("--reason"),
+        Arg("--backlog", action="append"),
+    )),
+    "specs-dir": CommandSpec(prog="lc specs-dir"),
+}
 
-
-def cmd_specs_dir(argv):
-    ap = argparse.ArgumentParser(prog="lc specs-dir")
-'''
-
-_DOMAIN = '''
-class Step:
-    def as_dict(self):
-        return {"id": self.id, "item": self.item, "stage": self.stage}
-
-
-class NodeView:
-    def as_dict(self):
-        d = self.step.as_dict()
-        d["item_artifacts"] = []
-        return d
-'''
+_SURFACE = flags_by_verb(_COMMANDS)
+_JSON_KEYS = {"id", "item", "stage", "item_artifacts"}
 
 
 class TestCliSurface(unittest.TestCase):
-    def test_flags_come_from_argparse_including_loop_built_ones(self):
-        s = cli_surface(_CLI)
-        self.assertEqual(s["set"], {"title", "state", "needs", "reason", "backlog"})
+    def test_flags_come_from_declared_args(self):
+        self.assertEqual(_SURFACE["set"], {"title", "state", "needs", "reason", "backlog"})
 
     def test_a_hyphenated_verb_keeps_its_hyphen(self):
-        self.assertIn("specs-dir", cli_surface(_CLI))
+        self.assertIn("specs-dir", _SURFACE)
 
 
 class TestJsonSurface(unittest.TestCase):
-    def test_keys_come_from_the_read_surface_classes(self):
-        keys = json_surface([_DOMAIN])
-        self.assertEqual(keys, {"id", "item", "stage", "item_artifacts"})
+    def test_keys_come_from_the_real_read_surface_classes(self):
+        keys = json_surface()
+        self.assertIn("id", keys)
+        self.assertIn("item", keys)
+        self.assertIn("item_artifacts", keys)
 
 
 class TestExtractingCallsFromProse(unittest.TestCase):
@@ -67,7 +54,7 @@ class TestExtractingCallsFromProse(unittest.TestCase):
 
 class TestCheckRefusals(unittest.TestCase):
     def _check(self, text):
-        return check_prompt_commands({"s.md": text}, _CLI, [_DOMAIN]).get("s.md", [])
+        return check_prompt_commands({"s.md": text}, _SURFACE, _JSON_KEYS).get("s.md", [])
 
     def test_an_unknown_flag_is_refused(self):
         self.assertIn("does not accept --branch", self._check("`lc set X --branch b`")[0])

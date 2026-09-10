@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from lightcycle.domain.pool import parse_attribution_chunk, parse_attribution_event
+from lightcycle.adapters.claude_stream import parse_attribution_chunk, parse_attribution_event
 
 
 def _assistant(message_id, blocks, usage=None):

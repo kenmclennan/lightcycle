@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.pool import parse_rate_limit_event
+from lightcycle.adapters.claude_stream import parse_rate_limit_event
 
 
 class TestParseRateLimitEvent(unittest.TestCase):

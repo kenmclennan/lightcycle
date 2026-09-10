@@ -2,7 +2,7 @@ import pathlib
 import re
 import unittest
 
-from lightcycle.domain.contracts.cli_surface import cli_surface
+from lightcycle.cli_commands import flags_by_verb
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 PKG = REPO / "lightcycle"
@@ -41,7 +41,7 @@ class TestDocsNameThingsThatExist(unittest.TestCase):
 
 class TestDocsNameCommandsThatExist(unittest.TestCase):
     def test_every_lc_invocation_in_the_docs_is_a_real_command(self):
-        surface = cli_surface((PKG / "cli.py").read_text())
+        surface = flags_by_verb()
         bad = []
         for doc in CORPUS:
             for m in LC_CALL.finditer(doc.read_text()):

@@ -1,6 +1,7 @@
 import json
 import unittest
 
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
@@ -70,7 +71,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         store = RecordingFakeStore()
         create_owned_step(store, "build: t", step="build", role="agent")
         workers = RaisingFakeWorkers()
-        LiveUsageAccrualUseCase(store, FakeFs(files={}), workers, FakeConfig()).execute(now=100)
+        LiveUsageAccrualUseCase(store, FakeFs(files={}), workers, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
         self.assertEqual(store.record_usage_calls, [])
         self.assertEqual(store.record_attribution_calls, [])
 
@@ -91,7 +92,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         content = ("\n".join(lines) + "\n").encode()
         fs = FakeFs(files={"/l/1.log": content})
         workers = FakeWorkers(workers=[self._worker(tid)], alive_pids={1})
-        LiveUsageAccrualUseCase(store, fs, workers, FakeConfig()).execute(now=100)
+        LiveUsageAccrualUseCase(store, fs, workers, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
 
         self.assertEqual(len(store.record_usage_calls), 1)
         recorded = store.record_usage_calls[0]
@@ -126,7 +127,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         first_content = ("\n".join(first_lines) + "\n").encode()
         fs = RecordingFakeFs(files={"/l/1.log": first_content})
         workers = FakeWorkers(workers=[self._worker(tid)], alive_pids={1})
-        use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig())
+        use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig(), stream=ClaudeStreamAdapter())
         use_case.execute(now=100)
         first_offset = store.usage_accrual_state("sp-1")["offset"]
         self.assertEqual(fs.read_from_calls, [("/l/1.log", 0)])
@@ -158,7 +159,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         content = ("\n".join(lines) + "\n").encode()
         fs = FakeFs(files={"/l/1.log": content})
         workers = FakeWorkers(workers=[self._worker(tid)], alive_pids={1})
-        use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig())
+        use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig(), stream=ClaudeStreamAdapter())
         use_case.execute(now=100)
         self.assertEqual(len(store.record_usage_calls), 1)
 
@@ -173,7 +174,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         partial = '{"type":"assistant","message":{"id":"msg-1"'
         fs = FakeFs(files={"/l/1.log": partial.encode()})
         workers = FakeWorkers(workers=[self._worker(tid)], alive_pids={1})
-        use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig())
+        use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig(), stream=ClaudeStreamAdapter())
         use_case.execute(now=100)
 
         self.assertEqual(store.record_attribution_calls, [])

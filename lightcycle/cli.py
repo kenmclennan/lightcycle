@@ -1,4 +1,3 @@
-import argparse
 import json
 import os
 import shutil
@@ -12,6 +11,7 @@ from lightcycle import __version__
 from lightcycle.adapters.simulate import (
     ScriptedGitHub,
 )
+from lightcycle.cli_commands import COMMANDS, build_parser
 from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.logrender import render_log_line
 from lightcycle.render import (
@@ -246,15 +246,13 @@ def print_help():
 
 
 def cmd_version(argv):
-    argparse.ArgumentParser(prog="lc version").parse_args(argv)
+    build_parser(COMMANDS["version"]).parse_args(argv)
     print("lightcycle %s" % __version__)
     return 0
 
 
 def cmd_upgrade(argv):
-    ap = argparse.ArgumentParser(prog="lc upgrade")
-    ap.add_argument("--check", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["upgrade"]).parse_args(argv)
     port = _container.upgrade if _container is not None else UpgradeAdapter(Config())
     try:
         resp = upgrade(
@@ -357,30 +355,10 @@ def main(argv=None):
 
 
 def cmd_workflow(argv):
-    ap = argparse.ArgumentParser(prog="lc workflow")
-    sub = ap.add_subparsers(dest="sub")
-    p_add = sub.add_parser("add")
-    p_add.add_argument("url")
-    p_add.add_argument("--ref")
-    p_add.add_argument("--name")
-    p_init = sub.add_parser("init")
-    p_init.add_argument("name")
-    p_upgrade = sub.add_parser("upgrade")
-    p_upgrade.add_argument("origin", nargs="?")
-    sub.add_parser("list")
-    p_check = sub.add_parser("check")
-    p_check.add_argument("workflow")
-    p_check.add_argument("--json", action="store_true")
-    p_describe = sub.add_parser("describe")
-    p_describe.add_argument("workflow")
-    p_describe.add_argument("--mermaid", action="store_true")
-    p_simulate = sub.add_parser("simulate")
-    p_simulate.add_argument("workflow")
-    p_rm = sub.add_parser("rm")
-    p_rm.add_argument("origin")
-    a = ap.parse_args(argv)
+    parser = build_parser(COMMANDS["workflow"])
+    a = parser.parse_args(argv)
     if a.sub is None:
-        ap.print_help()
+        parser.print_help()
         return 2
     if a.sub == "check":
         return _workflow_check(a.workflow, a.json)
@@ -391,7 +369,7 @@ def cmd_workflow(argv):
     c = _container
     try:
         if a.sub == "add":
-            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config).execute(
+            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.fs).execute(
                 url=a.url, ref=a.ref, name=a.name)
             msg = "added %s @ %s" % (resp.origin, resp.sha)
             if resp.pruned:
@@ -400,14 +378,14 @@ def cmd_workflow(argv):
             return 0
         if a.sub == "init":
             resp = InitWorkflowOriginUseCase(
-                c.config, c.git, c.workflow_source, c.store, c.scaffold
+                c.config, c.git, c.workflow_source, c.store, c.scaffold, c.fs
             ).execute(a.name)
             print("created %s, registered as %s @ %s, personal-origin set" % (
                 resp.project_dir, resp.origin, resp.sha))
             return 0
         if a.sub == "upgrade":
             resp = UpgradeWorkflowSourcesUseCase(
-                c.workflow_source, c.store, c.config
+                c.workflow_source, c.store, c.config, c.fs
             ).execute(a.origin)
             if not resp.results and not resp.failures:
                 print("no workflow sources registered")
@@ -445,19 +423,14 @@ def cmd_workflow(argv):
 
 
 def cmd_show(argv):
-    ap = argparse.ArgumentParser(prog="lc show")
-    ap.add_argument("id")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["show"]).parse_args(argv)
     resp = ShowNodeUseCase(_container.store, _flow()).execute(ShowNodeInput(step=a.id))
     print(json.dumps(resp.as_dict(), indent=2))
     return 0
 
 
 def cmd_peek(argv):
-    ap = argparse.ArgumentParser(prog="lc peek")
-    ap.add_argument("id")
-    ap.add_argument("stage")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["peek"]).parse_args(argv)
     try:
         resp = PeekStepUseCase(
             _container.store, _flow(), _container.workflow_source
@@ -473,9 +446,7 @@ def cmd_peek(argv):
 
 
 def cmd_claim(argv):
-    ap = argparse.ArgumentParser(prog="lc claim")
-    ap.add_argument("role")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["claim"]).parse_args(argv)
     try:
         resp = ClaimStepUseCase(
             _container.store, _flow(), _worktrees(), _container.workers, _container.config
@@ -493,17 +464,12 @@ def cmd_claim(argv):
 
 
 def cmd_spawn(argv):
-    ap = argparse.ArgumentParser(prog="lc spawn")
-    ap.add_argument("role")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["spawn"]).parse_args(argv)
     return 0 if _container.spawner.spawn_worker(a.role) else 1
 
 
 def cmd_ps(argv):
-    ap = argparse.ArgumentParser(prog="lc ps")
-    ap.add_argument("--all", action="store_true")
-    ap.add_argument("--json", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["ps"]).parse_args(argv)
     try:
         rows = ListWorkersUseCase(_container.workers, _container.store).execute().workers
     except RegistryUnreadable as e:
@@ -524,10 +490,7 @@ def cmd_ps(argv):
 
 
 def cmd_logs(argv):
-    ap = argparse.ArgumentParser(prog="lc logs")
-    ap.add_argument("target")
-    ap.add_argument("-f", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["logs"]).parse_args(argv)
     try:
         path = (
             ResolveLogUseCase(_container.store, _container.workers, _container.config)
@@ -564,10 +527,7 @@ def cmd_logs(argv):
 
 
 def cmd_advance(argv):
-    ap = argparse.ArgumentParser(prog="lc advance")
-    ap.add_argument("id")
-    ap.add_argument("outcome")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["advance"]).parse_args(argv)
     resp = AdvanceStepUseCase(_container.store, _flow()).execute(
         AdvanceInput(step=a.id, outcome=a.outcome)
     )
@@ -577,14 +537,13 @@ def cmd_advance(argv):
 
 
 def cmd_ready_roles(argv):
+    build_parser(COMMANDS["ready-roles"]).parse_args(argv)
     print(" ".join(ready_roles()))
     return 0
 
 
 def cmd_specs_dir(argv):
-    ap = argparse.ArgumentParser(prog="lc specs-dir")
-    ap.add_argument("--check", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["specs-dir"]).parse_args(argv)
     project = _container.store.get_project(SPECS_WORKSPACE)
     if project is None or not project.local_path:
         sys.stderr.write("no '%s' project registered - run `lc init`\n" % SPECS_WORKSPACE)
@@ -789,14 +748,7 @@ def _workflow_simulate(selector):
 
 
 def cmd_done(argv):
-    ap = argparse.ArgumentParser(prog="lc done")
-    ap.add_argument("id")
-    ap.add_argument("outcome")
-    ap.add_argument(
-        "--note", nargs="+", help="a note to forward to the next step; unquoted multi-word is fine"
-    )
-    ap.add_argument("--disposition", choices=("completed", "aborted"))
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["done"]).parse_args(argv)
     note = " ".join(a.note) if a.note else None
     node_type = _container.store.type_of(a.id)
     if node_type is None:
@@ -837,10 +789,7 @@ def cmd_done(argv):
 
 
 def cmd_trace(argv):
-    ap = argparse.ArgumentParser(prog="lc trace")
-    ap.add_argument("item")
-    ap.add_argument("--json", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["trace"]).parse_args(argv)
     try:
         resp = TraceUseCase(_container.store, _container.workers, _container.config).execute(
             TraceInput(item=a.item)
@@ -864,6 +813,7 @@ def cmd_trace(argv):
 
 
 def cmd_sweep(argv):
+    build_parser(COMMANDS["sweep"]).parse_args(argv)
     result = _container.sweep().execute(
         time.time(), _container.config.max_boot_seconds(), _container.config.stall_seconds()
     )
@@ -885,11 +835,7 @@ def cmd_sweep(argv):
 
 
 def cmd_restore(argv):
-    ap = argparse.ArgumentParser(prog="lc restore")
-    ap.add_argument("snapshot", nargs="?")
-    ap.add_argument("--force", action="store_true")
-    ap.add_argument("--list", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["restore"]).parse_args(argv)
     snapshots = _container.backup.list_snapshots()
     if a.list:
         now = time.time()
@@ -928,9 +874,7 @@ def cmd_restore(argv):
 
 
 def cmd_doctor(argv):
-    ap = argparse.ArgumentParser(prog="lc doctor")
-    ap.add_argument("--json", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["doctor"]).parse_args(argv)
     report = DoctorUseCase(
         _container.store, _container.workflow_source, _container.config
     ).execute(DoctorInput())
@@ -953,13 +897,11 @@ def cmd_doctor(argv):
 
 
 def cmd_backfill_usage(argv):
-    ap = argparse.ArgumentParser(prog="lc backfill-usage")
-    ap.add_argument("--repair", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["backfill-usage"]).parse_args(argv)
     try:
         resp = BackfillUsageUseCase(
             _container.store, _container.fs, _container.workers, _container.config,
-            _container.worker_log,
+            _container.worker_log, _container.claude_stream,
         ).execute(repair=a.repair)
     except RegistryUnreadable as e:
         sys.stderr.write("%s\n" % e)
@@ -981,9 +923,7 @@ def cmd_backfill_usage(argv):
 
 
 def cmd_inbox(argv):
-    ap = argparse.ArgumentParser(prog="lc inbox")
-    ap.add_argument("n", nargs="?", type=int)
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["inbox"]).parse_args(argv)
     flow_service = _flow()
     resp = InboxUseCase(_container.store, flow_service).execute(InboxInput(n=a.n))
     for line in render_inbox(resp.rows, _container.config.max_title_length(), flow_service):
@@ -992,10 +932,7 @@ def cmd_inbox(argv):
 
 
 def cmd_backlog(argv):
-    ap = argparse.ArgumentParser(prog="lc backlog")
-    ap.add_argument("n", nargs="?", type=int)
-    ap.add_argument("--project")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["backlog"]).parse_args(argv)
     resp = BacklogUseCase(_container.store, _flow()).execute(
         BacklogInput(n=a.n, project=a.project))
     for line in render_backlog(resp.rows, _container.config.max_title_length()):
@@ -1004,9 +941,7 @@ def cmd_backlog(argv):
 
 
 def cmd_search(argv):
-    ap = argparse.ArgumentParser(prog="lc search")
-    ap.add_argument("text")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["search"]).parse_args(argv)
     resp = SearchUseCase(_container.store).execute(SearchInput(text=a.text))
     for line in render_search(resp.matches, _container.config.max_title_length()):
         print(line)
@@ -1014,15 +949,14 @@ def cmd_search(argv):
 
 
 def cmd_active(argv):
+    build_parser(COMMANDS["active"]).parse_args(argv)
     for t in ActiveStepsUseCase(_container.store).execute().steps:
         print("  %s  %s" % (t.id, t.title))
     return 0
 
 
 def cmd_queue(argv):
-    ap = argparse.ArgumentParser(prog="lc queue")
-    ap.add_argument("n", nargs="?", type=int, default=10)
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["queue"]).parse_args(argv)
     steps = QueueUseCase(_container.store).execute(QueueInput(n=a.n)).steps
     for line in render_queue(steps, _container.config.max_title_length()):
         print(line)
@@ -1030,7 +964,7 @@ def cmd_queue(argv):
 
 
 def cmd_tui(argv):
-    argparse.ArgumentParser(prog="lc tui").parse_args(argv)
+    build_parser(COMMANDS["tui"]).parse_args(argv)
     from lightcycle.adapters.tui.app import run
     run(_container)
     return 0
@@ -1040,20 +974,7 @@ _NODE_TYPES = ("item", "step")
 
 
 def cmd_new(argv):
-    ap = argparse.ArgumentParser(prog="lc new")
-    ap.add_argument("type")
-    ap.add_argument("title")
-    ap.add_argument("--parent", help="owning item, for 'lc new step'")
-    ap.add_argument("--workflow")
-    ap.add_argument("--project")
-    ap.add_argument("--repo")
-    ap.add_argument("--description")
-    ap.add_argument(
-        "--note", nargs="+", help="an observation for whoever picks the step up"
-    )
-    ap.add_argument("--backlog", action="append")
-    ap.add_argument("--step")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["new"]).parse_args(argv)
     if a.type not in _NODE_TYPES:
         sys.stderr.write(
             "unknown type '%s'; expected item | step (item > step)\n" % a.type
@@ -1251,15 +1172,7 @@ def _render_state_refusal(r):
 
 
 def cmd_set(argv):
-    ap = argparse.ArgumentParser(prog="lc set")
-    for opt in ("title", "description", "project", "workflow", "state", "label",
-                "needs", "reason", "tried", "step", "notes"):
-        ap.add_argument("--%s" % opt)
-    ap.add_argument("--backlog", action="append")
-    ap.add_argument("--depends", action="append")
-    ap.add_argument("--unset", action="append")
-    ap.add_argument("id")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["set"]).parse_args(argv)
     node_type = _container.store.type_of(a.id)
     if node_type is None:
         sys.stderr.write("unknown node '%s'\n" % a.id)
@@ -1374,17 +1287,7 @@ _REFLECTION_TYPES = ("reflection", "feedback")
 
 
 def cmd_attach(argv):
-    ap = argparse.ArgumentParser(prog="lc attach")
-    ap.add_argument("id")
-    ap.add_argument("type")
-    group = ap.add_mutually_exclusive_group(required=True)
-    group.add_argument("value", nargs="?")
-    group.add_argument("--file")
-    ap.add_argument("--label")
-    ap.add_argument("--replace", action="store_true")
-    ap.add_argument("--internal", action="store_true")
-    ap.add_argument("--kind")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["attach"]).parse_args(argv)
     value = a.value
     if a.file:
         data = _container.fs.read_bytes(a.file)
@@ -1414,12 +1317,7 @@ def cmd_attach(argv):
 
 
 def cmd_dep(argv):
-    ap = argparse.ArgumentParser(prog="lc dep")
-    ap.add_argument("id")
-    group = ap.add_mutually_exclusive_group(required=True)
-    group.add_argument("--needs")
-    group.add_argument("--remove")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["dep"]).parse_args(argv)
     if a.remove:
         removed = _container.store.dep_remove(a.id, a.remove)
         if removed:
@@ -1448,10 +1346,7 @@ def cmd_dep(argv):
 
 
 def cmd_rm(argv):
-    ap = argparse.ArgumentParser(prog="lc rm")
-    ap.add_argument("id")
-    ap.add_argument("--force", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["rm"]).parse_args(argv)
     try:
         resp = RemoveNodeUseCase(
             _container.store, _container.workers, _worktrees(), _container.git
@@ -1596,10 +1491,7 @@ def _stop_pool():
 
 
 def cmd_start(argv):
-    ap = argparse.ArgumentParser(prog="lc start")
-    ap.add_argument("--once", action="store_true")
-    ap.add_argument("--detach", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["start"]).parse_args(argv)
     if not require_store():
         return 1
     if a.detach:
@@ -1673,8 +1565,7 @@ def cmd_start(argv):
 
 
 def cmd_init(argv):
-    ap = argparse.ArgumentParser(prog="lc init")
-    ap.parse_args(argv)
+    build_parser(COMMANDS["init"]).parse_args(argv)
     r = InitGridUseCase(_container.store, _container.fs, _container.config).execute()
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
@@ -1683,21 +1574,10 @@ def cmd_init(argv):
 
 
 def cmd_project(argv):
-    ap = argparse.ArgumentParser(prog="lc project")
-    sub = ap.add_subparsers(dest="sub")
-    p_add = sub.add_parser("add")
-    p_add.add_argument("identity")
-    p_add.add_argument("--shortcode")
-    p_add.add_argument("--path")
-    sub.add_parser("list")
-    p_rm = sub.add_parser("rm")
-    p_rm.add_argument("identity")
-    p_scan = sub.add_parser("scan")
-    p_scan.add_argument("dir", nargs="?", default=".")
-    p_scan.add_argument("--json", action="store_true")
-    a = ap.parse_args(argv)
+    parser = build_parser(COMMANDS["project"])
+    a = parser.parse_args(argv)
     if a.sub is None:
-        ap.print_help()
+        parser.print_help()
         return 2
     c = _container
     try:
@@ -1760,7 +1640,7 @@ def _init_pull_default_origin():
         return
     try:
         resp = AddWorkflowSourceUseCase(
-            _container.workflow_source, _container.store, _container.config
+            _container.workflow_source, _container.store, _container.config, _container.fs
         ).execute(url=url, ref="main", name=origin)
         print("pulled %s workflows @ %s" % (resp.origin, resp.sha))
     except WorkflowSourceError as e:
@@ -1770,9 +1650,7 @@ def _init_pull_default_origin():
 
 
 def cmd_config(argv):
-    ap = argparse.ArgumentParser(prog="lc config")
-    ap.add_argument("--edit", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["config"]).parse_args(argv)
     if a.edit:
         _container.config.ensure_config()
         editor = _container.config.editor()
@@ -1795,9 +1673,7 @@ def cmd_config(argv):
 
 
 def cmd_status(argv):
-    ap = argparse.ArgumentParser(prog="lc status")
-    ap.add_argument("--json", action="store_true")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["status"]).parse_args(argv)
     lanes = StatusUseCase(_container.store).execute().lanes
     if a.json:
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
@@ -1815,10 +1691,7 @@ def cmd_status(argv):
 
 
 def cmd_worklog(argv):
-    ap = argparse.ArgumentParser(prog="lc worklog")
-    ap.add_argument("start", nargs="?")
-    ap.add_argument("end", nargs="?")
-    a = ap.parse_args(argv)
+    a = build_parser(COMMANDS["worklog"]).parse_args(argv)
     import datetime as _dt
 
     now = _dt.datetime.now().astimezone()
@@ -1875,19 +1748,13 @@ def _fmt_signal(name, by_model):
 
 
 def cmd_retro(argv):
-    ap = argparse.ArgumentParser(prog="lc retro")
-    ap.add_argument("id", nargs="?", default=None, help="item id")
-    ap.add_argument("--since", metavar="YYYY-MM-DD", help="aggregate steps closed on/after date")
-    ap.add_argument("--last", type=int, metavar="N", help="aggregate last N closed items")
-    ap.add_argument("--project", metavar="REPO", help="aggregate a project's closed unretroed items")
-    ap.add_argument("--pending", action="store_true",
-                     help="aggregate all closed unretroed items that carry feedback")
-    a = ap.parse_args(argv)
+    parser = build_parser(COMMANDS["retro"])
+    a = parser.parse_args(argv)
 
     flags = [a.id is not None, a.since is not None, a.last is not None, a.project is not None,
              a.pending]
     if sum(flags) != 1:
-        ap.error("provide exactly one of: <id>, --since, --last, --project, --pending")
+        parser.error("provide exactly one of: <id>, --since, --last, --project, --pending")
 
     inp = RetroInput(subject=a.id, since=a.since, last=a.last, project=a.project,
                       pending=a.pending)

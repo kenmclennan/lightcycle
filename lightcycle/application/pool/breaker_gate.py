@@ -3,10 +3,8 @@ from typing import List
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import (
-    AttributionEvent, Breaker, ToolUsage, UsageEvent, WorkerPool, parse_attribution_event,
-    parse_rate_limit_event, parse_usage_event, resolve_usage,
+    AttributionEvent, Breaker, ToolUsage, UsageEvent, WorkerPool, resolve_usage,
 )
-from lightcycle.domain.pool.worker_session import saw_session_activity
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 
@@ -63,11 +61,12 @@ class BreakerGateResponse:
 
 
 class BreakerGateUseCase:
-    def __init__(self, workers, fs, breaker_port, config, spin_port=None, store=None):
+    def __init__(self, workers, fs, breaker_port, config, stream, spin_port=None, store=None):
         self._workers = workers
         self._fs = fs
         self._breaker_port = breaker_port
         self._config = config
+        self._stream = stream
         self._spin_port = spin_port
         self._store = store
 
@@ -101,10 +100,10 @@ class BreakerGateUseCase:
         return outcome["tripped"], outcome["spin_opened"]
 
     def _probe_signal(self, w, now):
-        event = parse_rate_limit_event(self._fs.iter_lines(w.log))
+        event = self._stream.parse_rate_limit_event(self._fs.iter_lines(w.log))
         if event and event.is_rejected:
             return "rejected"
-        if saw_session_activity(self._fs.iter_lines(w.log)):
+        if self._stream.saw_session_activity(self._fs.iter_lines(w.log)):
             return "success"
         if w.is_stalled(
             now,
@@ -132,11 +131,11 @@ class BreakerGateUseCase:
         saw_real_activity_with_step = False
         rep_step = None
         for w in pool.dead_unchecked(probe):
-            event = parse_rate_limit_event(self._fs.iter_lines(w.log))
-            no_work = not saw_session_activity(self._fs.iter_lines(w.log))
+            event = self._stream.parse_rate_limit_event(self._fs.iter_lines(w.log))
+            no_work = not self._stream.saw_session_activity(self._fs.iter_lines(w.log))
             if self._store is not None and w.step is not None:
-                usage = parse_usage_event(self._fs.iter_lines(w.log))
-                attribution = parse_attribution_event(self._fs.iter_lines(w.log))
+                usage = self._stream.parse_usage_event(self._fs.iter_lines(w.log))
+                attribution = self._stream.parse_attribution_event(self._fs.iter_lines(w.log))
                 if not usage.has_result_line and (
                     attribution.recovered_input_tokens or attribution.recovered_output_tokens
                     or attribution.recovered_cache_read_tokens

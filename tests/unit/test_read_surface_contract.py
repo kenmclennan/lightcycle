@@ -1,17 +1,17 @@
 import pathlib
 import unittest
 
+from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.application.workflows.prompt_check import engine_sources
 from lightcycle.application.workflows.prompt_commands import json_field_reads
-from lightcycle.domain.contracts.json_surface import json_surface
+from lightcycle.config import Config
 
 LIBRARY = pathlib.Path(__file__).resolve().parents[1] / "support" / "library" / "steps"
 
 
 class TestStepPromptReadsResolveAgainstTheEngineSurface(unittest.TestCase):
     def test_every_field_a_library_step_reads_is_emitted(self):
-        cli, domain, flat = engine_sources()
-        emitted = json_surface(domain, flat)
+        _, emitted = engine_sources(FsAdapter(Config()))
         unresolved = []
         for path in sorted(LIBRARY.glob("*.md")):
             for read in json_field_reads(path.read_text()):

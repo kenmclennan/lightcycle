@@ -1,6 +1,7 @@
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
 from lightcycle.domain.pool import SpinLedger
@@ -140,8 +141,7 @@ def _create_two_steps_with_no_work_deaths(ctx):
 def _run_gate(ctx):
     use_case = BreakerGateUseCase(
         ctx["workers"], ctx["fs"], ctx["breaker_port"], ctx["config"],
-        spin_port=ctx["spin_port"], store=ctx["store"],
-    )
+        spin_port=ctx["spin_port"], store=ctx["store"], stream=ClaudeStreamAdapter())
     ctx["result"] = use_case.execute(now=ctx["now"])
 
 
@@ -265,8 +265,7 @@ def _later_check_real_activity(ctx):
 def _pool_ticks(ctx):
     breaker_gate = BreakerGateUseCase(
         ctx["workers"], ctx["fs"], ctx["breaker_port"], ctx["config"],
-        spin_port=ctx["spin_port"], store=ctx["store"],
-    )
+        spin_port=ctx["spin_port"], store=ctx["store"], stream=ClaudeStreamAdapter())
     spawner = FakeSpawner()
     tick = TickUseCase(
         ctx["store"], ctx["workers"], spawner, ctx["config"], breaker_gate=breaker_gate,

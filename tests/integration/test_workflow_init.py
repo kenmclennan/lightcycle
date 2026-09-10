@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
@@ -46,7 +47,8 @@ def _use_case():
     config = FakeConfig(projects_root, tempfile.mkdtemp())
     source = WorkflowSourceAdapter(config, WorkflowBundleAdapter())
     return (
-        InitWorkflowOriginUseCase(config, GitAdapter(), source, FakeStore(), ScaffoldAdapter()),
+        InitWorkflowOriginUseCase(
+            config, GitAdapter(), source, FakeStore(), ScaffoldAdapter(), FsAdapter(config)),
         config, source,
     )
 
@@ -109,7 +111,7 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         config_before_init = _real_config()
         add_before_init = AddWorkflowSourceUseCase(
             WorkflowSourceAdapter(config_before_init, WorkflowBundleAdapter()),
-            FakeStore(), config_before_init)
+            FakeStore(), config_before_init, FsAdapter(config_before_init))
         with self.assertRaises(ConfigError) as cm:
             add_before_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertIn("workflow-retention", str(cm.exception))
@@ -118,7 +120,7 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         config_after_init.ensure_config()
         add_after_init = AddWorkflowSourceUseCase(
             WorkflowSourceAdapter(config_after_init, WorkflowBundleAdapter()),
-            FakeStore(), config_after_init)
+            FakeStore(), config_after_init, FsAdapter(config_after_init))
         resp = add_after_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertEqual(resp.origin, "ci-bundle")
 

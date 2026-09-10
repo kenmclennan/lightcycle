@@ -1,9 +1,6 @@
 from dataclasses import dataclass
 
-from lightcycle.domain.pool import (
-    extract_claimed_step, parse_attribution_event, parse_usage_event, resolve_usage,
-    sum_attribution_events, sum_usage_events,
-)
+from lightcycle.domain.pool import resolve_usage, sum_attribution_events, sum_usage_events
 from lightcycle.ports.store import NodeNotFoundError
 
 
@@ -23,12 +20,13 @@ class BackfillUsageResponse:
 
 
 class BackfillUsageUseCase:
-    def __init__(self, store, fs, workers, config, worker_log):
+    def __init__(self, store, fs, workers, config, worker_log, stream):
         self._store = store
         self._fs = fs
         self._workers = workers
         self._config = config
         self._worker_log = worker_log
+        self._stream = stream
 
     def _model_for(self, step_id):
         try:
@@ -49,8 +47,8 @@ class BackfillUsageUseCase:
                 if not self._fs.exists(log_file):
                     missing_logs += 1
                     continue
-                usage = parse_usage_event(self._worker_log.iter_lines(log_file))
-                attribution = parse_attribution_event(self._worker_log.iter_lines(log_file))
+                usage = self._stream.parse_usage_event(self._worker_log.iter_lines(log_file))
+                attribution = self._stream.parse_attribution_event(self._worker_log.iter_lines(log_file))
                 if not usage.has_result_line:
                     usage = resolve_usage(usage, attribution, step.model, rates)
                 usage_events.append(usage)
@@ -85,8 +83,8 @@ class BackfillUsageUseCase:
         reclassified = recovered = 0
         for log_file, step_id in self._store.unclassified_backfill_logs():
             reclassified += 1
-            usage = parse_usage_event(self._worker_log.iter_lines(log_file))
-            attribution = parse_attribution_event(self._worker_log.iter_lines(log_file))
+            usage = self._stream.parse_usage_event(self._worker_log.iter_lines(log_file))
+            attribution = self._stream.parse_attribution_event(self._worker_log.iter_lines(log_file))
             if step_id is not None and not usage.has_result_line:
                 model = self._model_for(step_id)
                 usage = resolve_usage(usage, attribution, model, rates)
@@ -101,13 +99,13 @@ class BackfillUsageUseCase:
             if log_file in pending_logs:
                 skipped_pending += 1
                 continue
-            step_id = extract_claimed_step(self._worker_log.iter_lines(log_file))
+            step_id = self._stream.extract_claimed_step(self._worker_log.iter_lines(log_file))
             if step_id is not None:
                 matched += 1
             else:
                 unmatched += 1
-            usage = parse_usage_event(self._worker_log.iter_lines(log_file))
-            attribution = parse_attribution_event(self._worker_log.iter_lines(log_file))
+            usage = self._stream.parse_usage_event(self._worker_log.iter_lines(log_file))
+            attribution = self._stream.parse_attribution_event(self._worker_log.iter_lines(log_file))
             if step_id is not None and not usage.has_result_line:
                 model = self._model_for(step_id)
                 usage = resolve_usage(usage, attribution, model, rates)

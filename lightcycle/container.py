@@ -2,6 +2,7 @@ import os
 
 from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
@@ -24,6 +25,7 @@ class Container:
         self, *, config=None, store=None, git=None, spawner=None, workers=None, fs=None,
         github=None, lock=None, breaker=None, backup=None, workflow_source=None, launcher=None,
         spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
+        claude_stream=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -47,6 +49,7 @@ class Container:
         )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)
+        self.claude_stream = claude_stream if claude_stream is not None else ClaudeStreamAdapter()
 
     def flow_service(self):
         return make_flow_service(self.workflow_bundle, self.store, self.config, self.workflow_source)
@@ -77,7 +80,7 @@ class Container:
             ),
             cadence_gate=RetroCadenceUseCase(self.store, self.config),
             breaker_gate=BreakerGateUseCase(
-                self.workers, self.worker_log, self.breaker, self.config,
+                self.workers, self.worker_log, self.breaker, self.config, self.claude_stream,
                 spin_port=self.spin, store=self.store,
             ),
             hook_completions=HookCompletionsUseCase(self.store, flow),
@@ -88,8 +91,9 @@ class Container:
             flow_service=flow,
             spin_port=self.spin,
             usage_gate=LiveUsageAccrualUseCase(
-                self.store, self.worker_log, self.workers, self.config,
+                self.store, self.worker_log, self.workers, self.config, self.claude_stream,
             ),
+            stream=self.claude_stream,
         )
 
     def sweep(self, flow=None):
@@ -101,6 +105,7 @@ class Container:
             worktrees=worktrees_for(self, flow=flow),
             git=self.git, fs=self.worker_log,
             spin_port=self.spin, spin_cap=self.config.spin_cap(),
+            stream=self.claude_stream,
         )
 
     def unblock_step_use_case(self, flow=None):

@@ -7,9 +7,9 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.services.flow import FlowService
+from lightcycle.adapters.claude_stream import ClaudeStreamAdapter, saw_session_activity
 from lightcycle.domain.pool import SpinLedger, StepSpin
 from lightcycle.domain.pool.worker import Worker
-from lightcycle.domain.pool.worker_session import saw_session_activity
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs as FlowFakeFs
 from tests.support.fake_spin import FakeSpinPort
@@ -99,7 +99,7 @@ class FakeFs:
 def _run_sweep(ctx):
     use_case = SweepUseCase(
         ctx["store"], ctx["workers"], fs=ctx["fs"],
-        spin_port=ctx["spin_port"], spin_cap=ctx["spin_cap"],
+        spin_port=ctx["spin_port"], spin_cap=ctx["spin_cap"], stream=ClaudeStreamAdapter(),
     )
     ctx["result"] = use_case.execute(ctx["now"], MAX_BOOT, STALL_SECONDS)
 

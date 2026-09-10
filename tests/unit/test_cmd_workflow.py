@@ -11,6 +11,7 @@ from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.ports.workflow_source import FetchedBundle, OriginRegistration, WorkflowSourceError
 from lightcycle.render import display_stage, render_workflow_mermaid
+from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
@@ -127,8 +128,8 @@ class FakeContainer:
         self.workflow_source = source
         self.store = store
         self.config = FakeConfig()
-        self.fs = FakeFs()
-        self.workflow_bundle = self.fs
+        self.fs = FsAdapter(self.config)
+        self.workflow_bundle = FakeFs()
         self.scaffold = ScaffoldAdapter()
         self.git = FakeGit()
 
