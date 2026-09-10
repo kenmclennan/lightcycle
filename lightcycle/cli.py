@@ -10,11 +10,7 @@ import traceback
 
 from lightcycle import __version__
 from lightcycle.adapters.simulate import (
-    NullSpin,
-    NullWorkers,
-    RecordingGit,
     ScriptedGitHub,
-    SimulateConfig,
 )
 from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.logrender import render_log_line
@@ -93,21 +89,13 @@ from lightcycle.application.flow import (
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     BackfillUsageUseCase,
-    BackupUseCase,
-    BreakerGateUseCase,
-    HookCompletionsUseCase,
     ListWorkersUseCase,
-    LiveUsageAccrualUseCase,
-    MonitorPrsUseCase,
     ReleaseRunLockUseCase,
     StartPoolUseCase,
     ResolveLogInput,
     ResolveLogUseCase,
-    RetroCadenceUseCase,
     StopPoolUseCase,
-    SweepUseCase,
     TickInput,
-    TickUseCase,
 )
 from lightcycle.application.setup import (
     AddProjectInput,
@@ -123,9 +111,14 @@ from lightcycle.application.setup import (
     upgrade,
 )
 from lightcycle.application.setup.upgrade import scan_venv_holders
-from lightcycle.adapters.sqlite_store import LiveStoreRefused, SqliteStore
+from lightcycle.adapters.sqlite_store import LiveStoreRefused
 from lightcycle.config import Config, ConfigError
-from lightcycle.container import Container, make_flow_service, make_worktrees, worktrees_for
+from lightcycle.container import (
+    Container,
+    SimulationContainer,
+    make_flow_service,
+    worktrees_for,
+)
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 from lightcycle.ports.workflow_source import WorkflowSourceError
@@ -770,29 +763,12 @@ def _workflow_describe(selector, as_mermaid=False):
 
 
 def _workflow_simulate(selector):
-    c = _container
     scratch = tempfile.mkdtemp(prefix="lc-simulate-")
     try:
-        store_home = os.path.join(scratch, "home")
-        specs_root = os.path.join(scratch, "specs")
-        projects_root = os.path.join(scratch, "projects")
-        os.makedirs(store_home, exist_ok=True)
-        os.makedirs(specs_root, exist_ok=True)
-        os.makedirs(projects_root, exist_ok=True)
-        cfg_path = os.path.join(store_home, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: SIM\n")
-        store_config = Config(environ={"LC_HOME": store_home, "LC_CONFIG": cfg_path})
-        store = SqliteStore(store_config)
-        sim_config = SimulateConfig(c.config, specs_root, projects_root)
-        git = RecordingGit()
-        flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)
-        worktrees = make_worktrees(store, git, c.fs, sim_config, flow, c.scaffold)
-        claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
-        complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
+        sim = SimulationContainer(_container, scratch)
         use_case = WorkflowSimulateUseCase(
-            store, flow, worktrees, claim, complete, projects_root, git, NullSpin(),
-            scaffold=c.scaffold, github_factory=ScriptedGitHub,
+            sim.store, sim.flow, sim.worktrees, sim.claim, sim.complete, sim.projects_root,
+            sim.git, sim.spin, scaffold=sim.scaffold, github_factory=ScriptedGitHub,
         )
         try:
             resp = use_case.execute(SimulateInput(workflow=selector))
@@ -885,10 +861,9 @@ def cmd_trace(argv):
 
 
 def cmd_sweep(argv):
-    result = SweepUseCase(
-        _container.store, _container.workers, _worktrees(), _container.git, _container.worker_log,
-        spin_port=_container.spin, spin_cap=_container.config.spin_cap(),
-    ).execute(time.time(), _container.config.max_boot_seconds(), _container.config.stall_seconds())
+    result = _container.sweep().execute(
+        time.time(), _container.config.max_boot_seconds(), _container.config.stall_seconds()
+    )
     for bid in result.swept:
         print("swept %s" % bid)
     for bid in result.preserved:
@@ -1573,13 +1548,7 @@ def _upgrade_notice_lines(resp):
 
 
 def _stop_pool():
-    sweep = SweepUseCase(
-        _container.store, _container.workers,
-        worktrees=worktrees_for(_container, flow=_flow()),
-        git=_container.git, fs=_container.worker_log,
-        spin_port=_container.spin, spin_cap=_container.config.spin_cap(),
-    )
-    resp = StopPoolUseCase(_container.workers, sweep).execute(
+    resp = StopPoolUseCase(_container.workers, _container.sweep(flow=_flow())).execute(
         time.time(), _container.config.max_boot_seconds(),
         _container.config.stall_seconds(),
         shutdown_grace_seconds=_container.config.shutdown_grace_seconds(),
@@ -1624,41 +1593,7 @@ def cmd_start(argv):
 
     signal.signal(signal.SIGTERM, _stop)
     try:
-        flow_service = _flow()
-        worktrees = worktrees_for(_container, flow=flow_service)
-        complete = CompleteStepUseCase(
-            _container.store, flow_service, worktrees, _container.config)
-        monitor = MonitorPrsUseCase(
-            _container.store, _container.github, worktrees, flow_service, complete,
-            spin_port=_container.spin,
-        )
-        cadence_gate = RetroCadenceUseCase(_container.store, _container.config)
-        breaker_gate = BreakerGateUseCase(
-            _container.workers, _container.worker_log, _container.breaker, _container.config,
-            spin_port=_container.spin, store=_container.store,
-        )
-        hook_completions = HookCompletionsUseCase(_container.store, flow_service)
-        backup_gate = BackupUseCase(_container.backup, _container.config)
-        usage_gate = LiveUsageAccrualUseCase(
-            _container.store, _container.worker_log, _container.workers, _container.config,
-        )
-        tick = TickUseCase(
-            _container.store,
-            _container.workers,
-            _container.spawner,
-            _container.config,
-            monitor=monitor,
-            cadence_gate=cadence_gate,
-            breaker_gate=breaker_gate,
-            hook_completions=hook_completions,
-            worktrees=worktrees,
-            git=_container.git,
-            backup_gate=backup_gate,
-            fs=_container.worker_log,
-            flow_service=flow_service,
-            spin_port=_container.spin,
-            usage_gate=usage_gate,
-        )
+        tick = _container.tick(flow=_flow())
         if a.once:
             now = time.time()
             result = _run_tick(tick, _container.worker_log, TickInput(now=now), now)
