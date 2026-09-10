@@ -23,12 +23,9 @@ DOMAIN_BANNED_IMPORTS = (
 )
 APPLICATION_BANNED_IMPORTS = ("lightcycle.adapters", "lightcycle.container")
 PORTS_BANNED_IMPORTS = ("lightcycle.application", "lightcycle.adapters")
-DRIVEN_ADAPTER_BANNED_IMPORTS = ("lightcycle.application",)
+DRIVEN_ADAPTER_BANNED_IMPORTS = ("lightcycle.application", "lightcycle.container")
 
 DRIVEN_ADAPTER_IMPORT_EXEMPT = {
-    ADAPTERS / "worker_session.py":
-        "imports the application layer directly because it is a second composition root; "
-        "LC-584 (F-22) gives it its own entry point and removes this need",
     ADAPTERS / "upgrade.py":
         "imports plain exception types and a pure helper from application/setup/upgrade.py; "
         "LC-594 scoped this deliberately, per F-32's convention - lc show LC-594 or read its "

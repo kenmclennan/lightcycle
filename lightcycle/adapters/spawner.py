@@ -36,7 +36,7 @@ def spawn_worker(config, role):
         cmd = ["bash", "-c", override.format(log=shlex.quote(log), role=role)]
         proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env, start_new_session=True)
     else:
-        cmd = [sys.executable, "-m", "lightcycle.adapters.worker_session"]
+        cmd = [sys.executable, "-m", "lightcycle.worker_main"]
         proc = subprocess.Popen(
             cmd, stdout=logf, stderr=logf, cwd=root, env=env, start_new_session=True
         )

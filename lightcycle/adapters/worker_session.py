@@ -1,6 +1,5 @@
 import contextlib
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -10,8 +9,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.adapters.workers import workers_state
-from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
-from lightcycle.container import Container
 from lightcycle.domain.pool.rate_limit import parse_rate_limit_event
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 from lightcycle.ports.workers import RegistryUnreadable
@@ -175,42 +172,3 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clo
     rc = proc.wait()
     reader_thread.join(timeout=5)
     return rc
-
-
-def main():
-    role = os.environ.get("LC_ROLE")
-    spawnid = os.environ.get("LC_SPAWNID")
-    if not (role and spawnid):
-        sys.stderr.write("worker_session: LC_ROLE, LC_SPAWNID required\n")
-        return 1
-    container = Container()
-    config = container.config
-    claim = ClaimStepUseCase(
-        container.store, container.flow_service(), container.worktrees(),
-        container.workers, config,
-    )
-    try:
-        plan = plan_session(
-            lambda r: claim.execute(ClaimInput(role=r)),
-            lambda r, pin: container.workflow_source.resolve_agent(r, pin),
-            container.store.reclaim,
-            role,
-        )
-    except Exception as e:
-        sys.stderr.write("worker_session: %s\n" % e)
-        return 1
-    if plan is None:
-        return 0
-    with session_cwd(plan.workspace) as cwd:
-        return run(config.data_root(), cwd, plan.stage, spawnid,
-                   plan.model, plan.sysprompt, config.max_session_seconds())
-
-
-if __name__ == "__main__":
-    _rc = main()
-    try:
-        sys.stdout.flush()
-        sys.stderr.flush()
-    except (ValueError, OSError):
-        pass
-    os._exit(_rc if isinstance(_rc, int) else 0)
