@@ -2382,10 +2382,20 @@ class TestDoneSearchInput(unittest.TestCase):
         app = session.app
 
         session.press("/")
-        session.press("w")
+        search = session.app.query_one(DoneFilterInput)
+
+        def _type_first_char():
+            search.value = "w"
+            session.app.on_input_changed(Input.Changed(search, search.value))
+
+        session.run(_type_first_char)
         first_timer = app._done_filter_timer
         with patch.object(first_timer, "stop", wraps=first_timer.stop) as stop:
-            session.press("i")
+            def _type_second_char():
+                search.value = "wi"
+                session.app.on_input_changed(Input.Changed(search, search.value))
+
+            session.run(_type_second_char)
             stop.assert_called_once()
             self.assertIsNot(app._done_filter_timer, first_timer)
         if app._done_filter_timer is not None:
