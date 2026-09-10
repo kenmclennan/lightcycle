@@ -73,6 +73,8 @@ class SmokeTest(unittest.TestCase):
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
             "worker-history: 20\neditor: vi\n" % (ws, ws)
         )
+        r = _tg("init", root=cls.root)
+        assert r.returncode == 0, r.stderr
 
     def test_add_with_description_and_edit(self):
         r = _tg("new", "item", "my step", "--description", "detail here", root=self.root)

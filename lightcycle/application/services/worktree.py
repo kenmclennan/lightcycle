@@ -46,8 +46,6 @@ class WorktreeService:
         return self._workspace_of(item) == PROJECT_WORKSPACE
 
     def _repo_for_workspace(self, item, workspace):
-        if workspace == SPECS_WORKSPACE:
-            return self._config.specs_root()
         if workspace == PROJECT_WORKSPACE:
             return self._resolve_repo(self.item_repo(item))
         return self._resolve_repo(workspace)
@@ -184,13 +182,22 @@ class WorktreeService:
             self._git.set_branch_upstream(target, branch)
         return path
 
+    def specs_path(self):
+        return self._resolve_repo(SPECS_WORKSPACE)
+
     def sync_specs(self):
-        root = self._config.specs_root()
+        project = self._store.get_project(SPECS_WORKSPACE)
+        if project is None or not project.local_path:
+            raise UseCaseError(
+                "cannot read spec: no '%s' project registered - run `lc init`"
+                % SPECS_WORKSPACE
+            )
+        root = project.local_path
         if not self._git.is_git_repo(root):
-            if not self._git.clone(self._config.specs_remote(), root):
+            if not project.remote or not self._git.clone(project.remote, root):
                 raise UseCaseError(
                     "cannot read spec: failed to clone specs repo '%s' into '%s'"
-                    % (self._config.specs_remote(), root)
+                    % (project.remote, root)
                 )
         if not self._git.sync_to_default_branch(root):
             raise UseCaseError(

@@ -22,6 +22,7 @@ from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.config import Config, _SEED_KEYS
 from lightcycle.container import Container
+from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.git import GitPort
@@ -235,10 +236,17 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
                          launcher=None, git=None, spawner=None, github=None, backup=None,
                          workflow_bundle=None, worker_log=None, autostart_pool=False):
     fs_double = fs or FakeFs()
+    config = HermeticTuiConfig(autostart_pool=autostart_pool)
+    store_double = store
+    if store_double is None:
+        store_double = FakeStore()
+        store_double.add_project(
+            SPECS_WORKSPACE, local_path=config.load_config().get("specs")
+        )
     container = Container(
-        store=store or FakeStore(),
+        store=store_double,
         lock=lock or FakeLock(running=False),
-        config=HermeticTuiConfig(autostart_pool=autostart_pool),
+        config=config,
         workflow_source=FakeWorkflowSource(),
         breaker=breaker or FakeBreakerPort(),
         fs=fs_double,

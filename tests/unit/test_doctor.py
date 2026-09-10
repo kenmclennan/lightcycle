@@ -16,7 +16,7 @@ def _cfg(**filevals):
 
 
 _ALL_KEYS = dict(
-    projects="/p", specs="/s", specs_remote="git@x", branch_prefix="feat", shortcode="PROJ",
+    projects="/p", branch_prefix="feat", shortcode="PROJ",
     default_origin="acme", workflows_remote="git@y", max_agents="5", worktree_retries="6",
     worktree_retry_sleep="0.25", max_boot_seconds="120", max_session_seconds="1800",
     stall_seconds="1800", probe_cooldown_seconds="1800", spin_cap="3",
@@ -216,6 +216,20 @@ class TestDoctorUseCase(unittest.TestCase):
         self.assertEqual(config.obsolete_config_keys(), ())
         report = DoctorUseCase(store, source, config).execute(DoctorInput())
         self.assertEqual(report.problems["config"], [])
+
+    def test_blank_required_key_reports_config_problem_distinct_from_missing_and_obsolete(self):
+        keys = dict(_ALL_KEYS)
+        keys["workflows_remote"] = ""
+        store = FakeStore()
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        config = _cfg(**keys)
+        report = DoctorUseCase(store, source, config).execute(DoctorInput())
+        self.assertFalse(report.healthy())
+        problems = report.problems["config"]
+        self.assertEqual(len(problems), 1)
+        self.assertIn("workflows-remote", problems[0].message)
+        self.assertIn("blank", problems[0].message)
 
     def test_store_integrity_violation_surfaces_under_store(self):
         store = FakeStore()

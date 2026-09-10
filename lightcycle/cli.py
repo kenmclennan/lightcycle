@@ -86,6 +86,7 @@ from lightcycle.application.flow import (
     FlowCheckUseCase,
     UnblockInput,
 )
+from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     BackfillUsageUseCase,
@@ -585,14 +586,17 @@ def cmd_specs_dir(argv):
     ap = argparse.ArgumentParser(prog="lc specs-dir")
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
-    root = _container.config.specs_root()
+    project = _container.store.get_project(SPECS_WORKSPACE)
+    if project is None or not project.local_path:
+        sys.stderr.write("no '%s' project registered - run `lc init`\n" % SPECS_WORKSPACE)
+        return 1
+    root = project.local_path
     if not a.check:
         print(root)
         return 0
-    try:
-        expected = _container.config.specs_remote()
-    except ConfigError as e:
-        sys.stderr.write("%s\n" % e)
+    expected = project.remote
+    if not expected:
+        sys.stderr.write("'%s' project has no remote registered\n" % SPECS_WORKSPACE)
         return 1
     if not _container.git.is_git_repo(root):
         sys.stderr.write("specs dir %s is not a git repo\n" % root)
@@ -1720,7 +1724,14 @@ def _init_pull_default_origin():
     origin = _container.config.default_origin()
     if _container.workflow_source.read_registry(origin) is not None:
         return
-    url = _container.config.workflows_remote()
+    try:
+        url = _container.config.workflows_remote()
+    except ConfigError:
+        sys.stderr.write(
+            "workflows-remote is not set; run `lc config --edit` to set it, then "
+            "`lc workflow add <url> --name %s`\n" % origin
+        )
+        return
     try:
         resp = AddWorkflowSourceUseCase(
             _container.workflow_source, _container.store, _container.config

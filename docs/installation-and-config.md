@@ -33,7 +33,7 @@ graph TD
 
 - **Engine** (`~/.local/pipx/venvs/lightcycle`) - the code plus `prompts/` (the engine-owned agent prompts it spawns directly: `prompts/steps/audit.md`). This is the only thing an upgrade changes; the engine ships no workflow library.
 - **Data** (`~/.lightcycle`, the `data_root`) - `store.db`, the `config` file, `logs/`, `.worktrees/` (isolated per-item checkouts), `backups/`, the `.lc-run.pid` singleton lock, and `workflows/<origin>/<sha>/` (the immutable, sha-pinned workflow bundles pulled from origins).
-- **Projects** - your repos, wherever they live. Each is named to lightcycle by registering it (`lc project add <owner/name> [--shortcode X] [--path P]`); the registry holds the identity, the shortcode ids are minted from, and the local path. A project carries no lightcycle config of its own, and there is no step or workflow override.
+- **Projects** - your repos, wherever they live. Each is named to lightcycle by registering it (`lc project add <owner/name> [--shortcode X] [--path P]`); the registry holds the identity, the shortcode ids are minted from, and the local path. A project carries no lightcycle config of its own, and there is no step or workflow override. `lc init` registers one project automatically, under the identity `specs` (defaulting to `~/workspace/specs`) - the `workspace: specs` value a spec-driven workflow declares resolves through this same registry entry, not a dedicated config key.
 
 Workflows are not shadowed or resolved through a chain: each item pins one sha-pinned bundle (`<origin>/<name>@<sha>`) and the loader reads the flow and steps from that pin. `LC_HOME` names the data home (the store); the integration tests point it at a throwaway store. Never run against the live store by hand.
 
@@ -44,10 +44,9 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 | key | meaning |
 | --- | --- |
 | `projects` | root under which project repos live |
-| `specs` / `specs-remote` | root where spec files live / its git remote |
 | `shortcode` | id prefix for new top-level nodes (e.g. `LC` gives `LC-1`) |
 | `default-origin` | the workflow origin the spawner reads step prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
-| `workflows-remote` | git remote for the built-in workflow origin, pulled by `lc init` |
+| `workflows-remote` | git remote for the built-in workflow origin. Seeded blank; `lc init` only pulls it once set (`lc config --edit`, then `lc workflow add <url> --name <origin>`) |
 | `workflow-retention` | pulled bundles kept per origin (plus any a live item pins) |
 | `max-agents` | worker cap the pool fills to each tick |
 | `poll-seconds` | pool tick interval |
