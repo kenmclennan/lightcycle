@@ -767,6 +767,23 @@ class TestRemoveNode(unittest.TestCase):
         with self.assertRaises(KeyError):
             s.get_node(item)
 
+    def test_refuses_a_step_claimed_by_a_live_worker_still_mid_claim(self):
+        s = FakeStore()
+        item = s.create_item("feature", "a description")
+        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        s.update_state(step, "in_progress")
+        s.assign(step, "worker-sp")
+        workers = FakeWorkersForRemove(
+            workers=[{"spawnid": "worker-sp", "pid": 111, "step": None, "started": 100}],
+            alive_pids={111},
+        )
+        wt = FakeWorktreesForRemove()
+        git = FakeGit()
+        with self.assertRaises(UseCaseError) as ctx:
+            RemoveNodeUseCase(s, workers, wt, git).execute(RemoveNodeInput(id=item))
+        self.assertIn(step, str(ctx.exception))
+        self.assertEqual(s.get_node(item).id, item)
+
     def test_stale_claim_does_not_block(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
