@@ -5,7 +5,7 @@ import unittest
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
-from lightcycle.ports.git import GitReadError
+from lightcycle.ports.git import GitOutcome, GitReadError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
@@ -88,12 +88,6 @@ class _Graph:
         self.workspace = workspace
 
 
-class _GitResult:
-    def __init__(self, returncode=0, stderr=""):
-        self.returncode = returncode
-        self.stderr = stderr
-
-
 class _FakeGit:
     def __init__(self, git_repos=(), sync_result=True, base=None, registered=(), branches=(),
                  clone_result=True, sync_default_result=True, raises=(), worktree_add_fails=False):
@@ -142,11 +136,15 @@ class _FakeGit:
             )
         return path in self._registered
 
-    def git(self, root, *args):
-        self.calls.append(("git", root) + args)
-        if self._worktree_add_fails and "worktree" in args and "add" in args:
-            return _GitResult(returncode=1, stderr="boom")
-        return _GitResult()
+    def add_worktree(self, root, path, branch, base, retries=0, backoff=0):
+        self.calls.append(("add_worktree", root, path, branch, base))
+        if self._worktree_add_fails:
+            return GitOutcome(ok=False, detail="boom")
+        return GitOutcome(ok=True)
+
+    def set_branch_upstream(self, root, branch, remote="origin"):
+        self.calls.append(("set_branch_upstream", root, branch, remote))
+        return GitOutcome(ok=True)
 
     def common_dir(self, root):
         self.calls.append(("common_dir", root))
@@ -581,7 +579,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
 
         kinds = [c[0] for c in git.calls]
         self.assertNotIn("worktree_base", kinds)
-        self.assertNotIn("git", kinds)
+        self.assertNotIn("add_worktree", kinds)
 
     def test_sync_is_keyed_on_the_resolved_target_not_a_hardcoded_workspace_name(self):
         item = self._item_with_repo()
@@ -611,7 +609,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
 
         kinds = [c[0] for c in git.calls]
         self.assertIn("worktree_registered", kinds)
-        self.assertIn("git", kinds)
+        self.assertIn("add_worktree", kinds)
 
     def test_ensure_treats_an_unreadable_branch_exists_as_a_new_branch(self):
         item = self._item_with_repo()

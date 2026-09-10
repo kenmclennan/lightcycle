@@ -152,7 +152,7 @@ class InitWorkflowOriginUseCase:
                 "%s already exists; choose a different name or remove it first" % project_dir)
         os.makedirs(project_dir)
         _write_scaffold(project_dir, name)
-        self._git.git(project_dir, "init", "-q", "-b", "main")
+        self._git.init_repo(project_dir, "main")
         self._git.commit_all(project_dir, "scaffold workflow-origin repo")
         add_resp = AddWorkflowSourceUseCase(self._source, self._store, self._config, self._fs).execute(
             url=project_dir, ref="HEAD", name=name)

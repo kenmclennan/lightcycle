@@ -96,8 +96,8 @@ class FakeGit:
     def __init__(self):
         self.calls = []
 
-    def git(self, root, *args):
-        self.calls.append(("git", root, args))
+    def init_repo(self, root, branch="main"):
+        self.calls.append(("init_repo", root, branch))
 
     def commit_all(self, root, message):
         self.calls.append(("commit_all", root, message))
@@ -336,7 +336,7 @@ class TestInit(unittest.TestCase):
         self.assertEqual(source.last_ref, "HEAD")
         self.assertEqual(source.read_registry("acme")["current"], "sha1")
         self.assertEqual(cfg.personal_origin_set, "acme")
-        self.assertIn(("git", project_dir, ("init", "-q", "-b", "main")), git.calls)
+        self.assertIn(("init_repo", project_dir, "main"), git.calls)
         self.assertIn(("commit_all", project_dir, "scaffold workflow-origin repo"), git.calls)
 
     def test_scaffold_writes_canonical_simulate_yml(self):

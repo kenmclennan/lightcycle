@@ -1,5 +1,4 @@
 import os
-import time
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
@@ -169,9 +168,8 @@ class WorktreeService:
                 raise UseCaseError(
                     "cannot set up workspace for %s: no base branch found in %s" % (item, target)
                 )
-            add_args = ["worktree", "add", path, "--no-track", "-b", branch, base]
         else:
-            add_args = ["worktree", "add", path, branch]
+            base = None
         os.makedirs(self._fs.worktrees_dir(target), exist_ok=True)
         try:
             common = self._git.common_dir(target)
@@ -180,21 +178,11 @@ class WorktreeService:
         self._fs.ensure_worktrees_ignored(common)
         retries = self._config.worktree_retries()
         backoff = self._config.worktree_retry_sleep()
-        self._git.git(target, "worktree", "prune")
-        res = self._git.git(target, *add_args)
-        while res.returncode != 0 and retries > 0 and Worktree.is_lock_contention(res.stderr):
-            retries -= 1
-            time.sleep(backoff)
-            self._git.git(target, "worktree", "prune")
-            res = self._git.git(target, *add_args)
-        if res.returncode != 0:
-            raise UseCaseError(
-                "cannot set up workspace for %s: %s" % (item, res.stderr.strip())
-            )
+        outcome = self._git.add_worktree(target, path, branch, base, retries, backoff)
+        if not outcome.ok:
+            raise UseCaseError("cannot set up workspace for %s: %s" % (item, outcome.detail))
         if is_new_branch:
-            self._git.git(target, "config", "branch.%s.remote" % branch, "origin")
-            self._git.git(target, "config", "branch.%s.merge" % branch,
-                          "refs/heads/%s" % branch)
+            self._git.set_branch_upstream(target, branch)
         return path
 
     def sync_specs(self):
