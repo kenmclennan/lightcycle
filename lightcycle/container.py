@@ -77,6 +77,7 @@ class Container:
             self.config,
             monitor=MonitorPrsUseCase(
                 self.store, self.github, worktrees, flow, complete, spin_port=self.spin,
+                config=self.config,
             ),
             cadence_gate=RetroCadenceUseCase(self.store, self.config),
             breaker_gate=BreakerGateUseCase(

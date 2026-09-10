@@ -26,6 +26,7 @@ _ENV_OVERRIDE_VARS = {
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
+    "ci-release-cap": "LC_CI_RELEASE_CAP",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -75,6 +76,7 @@ _SEED_KEYS = [
     ("shutdown-grace-seconds", "10"),
     ("tick-failure-cap", "5"),
     ("context-artifact-types", "spec"),
+    ("ci-release-cap", "3"),
 ]
 
 
@@ -374,6 +376,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("spin-cap")
+
+    def ci_release_cap(self):
+        env = self._env_int("LC_CI_RELEASE_CAP", None)
+        if env is not None:
+            return env
+        return self._required_int("ci-release-cap")
 
     def poll_seconds(self):
         env = self._env_int("LC_POLL_SECONDS", None)

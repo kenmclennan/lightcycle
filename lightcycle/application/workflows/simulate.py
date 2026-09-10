@@ -58,7 +58,7 @@ def _named_workspaces(graph):
 
 class WorkflowSimulateUseCase:
     def __init__(self, store, flow, worktrees, claim, complete, projects_root, git, spin_port,
-                 scaffold=None, github_factory=None):
+                 scaffold=None, github_factory=None, config=None):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
@@ -69,6 +69,7 @@ class WorkflowSimulateUseCase:
         self._spin_port = spin_port
         self._scaffold = scaffold
         self._github_factory = github_factory
+        self._config = config
 
     def execute(self, input: SimulateInput) -> SimulateResponse:
         pin = self._flow.resolve_selection(input.workflow)
@@ -99,7 +100,7 @@ class WorkflowSimulateUseCase:
             github = self._github_factory()
             monitor = MonitorPrsUseCase(
                 self._store, github, self._worktrees, self._flow, self._complete,
-                spin_port=self._spin_port,
+                spin_port=self._spin_port, config=self._config,
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
         violations += self._check_teardown_invariant()

@@ -717,6 +717,7 @@ def _workflow_simulate(selector):
         use_case = WorkflowSimulateUseCase(
             sim.store, sim.flow, sim.worktrees, sim.claim, sim.complete, sim.projects_root,
             sim.git, sim.spin, scaffold=sim.scaffold, github_factory=ScriptedGitHub,
+            config=sim.config,
         )
         try:
             resp = use_case.execute(SimulateInput(workflow=selector))
