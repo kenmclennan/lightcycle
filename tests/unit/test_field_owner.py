@@ -1,6 +1,8 @@
 import unittest
 
-from lightcycle.domain.work import FieldRefusal, StateRefusal, refuse_fields, refuse_state
+from lightcycle.domain.work import (
+    FieldRefusal, StateRefusal, refuse_fields, refuse_state, render_field_refusal,
+)
 
 
 class TestRefuseFields(unittest.TestCase):
@@ -37,6 +39,24 @@ class TestRefuseFields(unittest.TestCase):
 
     def test_no_fields_at_all_is_accepted(self):
         self.assertIsNone(refuse_fields("step", set()))
+
+
+class TestRenderFieldRefusal(unittest.TestCase):
+    def test_a_single_wrong_field_names_both_structures(self):
+        refusal = FieldRefusal(fields=("description",), requested_type="step", owner="item")
+        self.assertEqual(
+            render_field_refusal(refusal), "--description belongs to an item, not a step"
+        )
+
+    def test_several_wrong_fields_agree_in_number(self):
+        refusal = FieldRefusal(fields=("needs", "reason"), requested_type="item", owner="step")
+        self.assertEqual(
+            render_field_refusal(refusal), "--needs, --reason belong to a step, not an item"
+        )
+
+    def test_a_field_owned_by_neither_structure_says_so(self):
+        refusal = FieldRefusal(fields=("goal",), requested_type="item", owner=None)
+        self.assertEqual(render_field_refusal(refusal), "--goal belongs to no structure")
 
 
 class TestRefuseState(unittest.TestCase):

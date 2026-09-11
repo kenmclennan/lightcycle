@@ -17,9 +17,15 @@ def call(fn, *args):
     return rc, out.getvalue(), err.getvalue()
 
 
+class _FakeConfig:
+    def max_title_length(self):
+        return 200
+
+
 class _Container:
     def __init__(self, store):
         self.store = store
+        self.config = _FakeConfig()
 
 
 class TestUnknownIdIsRefusedNotRaised(unittest.TestCase):

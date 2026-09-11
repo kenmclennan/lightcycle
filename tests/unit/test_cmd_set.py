@@ -20,9 +20,15 @@ def call(fn, *args):
     return rc, out.getvalue(), err.getvalue()
 
 
+class FakeConfig:
+    def max_title_length(self):
+        return 200
+
+
 class FakeContainer:
     def __init__(self, store):
         self.store = store
+        self.config = FakeConfig()
 
 
 class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
