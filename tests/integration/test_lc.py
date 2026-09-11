@@ -813,7 +813,7 @@ class TestRun(unittest.TestCase):
         )
         self.assertEqual(len(self._workers()), 1)
 
-    def test_run_pool_wide_spin_guard_trips_and_logs_reason(self):
+    def test_run_pool_wide_spin_guard_trips_and_parks_both_never_claimed_steps(self):
         step1 = create_owned_step(self.store, "build: a", step="build", role="agent")
         step2 = create_owned_step(self.store, "build: b", step="build", role="agent")
         no_work_text = (
@@ -846,14 +846,14 @@ class TestRun(unittest.TestCase):
             )
             rc, _, err = self._run_once()
             self.assertEqual(rc, 0, err)
-        self.assertIn("reason=spin-open", self._run_log())
+        self.assertIn("opened - workers died with no observed work", self._run_log())
         spin_state = json.loads((Path(self.root) / "logs" / "spin.json").read_text())
         self.assertTrue(spin_state["pool"]["tripped"])
         parked = [
             n for n in (self.store.get_node(step1), self.store.get_node(step2))
             if n.role == "human"
         ]
-        self.assertEqual(len(parked), 1)
+        self.assertEqual(len(parked), 2)
 
     def test_run_spawns_nothing_while_breaker_open_pre_reset(self):
         create_owned_step(self.store, "build: t", step="build", role="agent")

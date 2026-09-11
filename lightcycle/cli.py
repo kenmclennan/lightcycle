@@ -1604,6 +1604,7 @@ def cmd_status(argv):
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
     else:
         flow_service = _flow()
+        spin_ledger = _container.spin.load()
         for key in ("inbox", "active", "queue"):
             print("== %s (%d) ==" % (key, len(lanes[key])))
             for t in lanes[key]:
@@ -1611,7 +1612,12 @@ def cmd_status(argv):
                 step_suffix = (
                     "  %s" % display_stage(flow_service.display_for(t), t.stage) if t.stage else ""
                 )
-                print("  %s  %s%s%s" % (t.id, t.title, suffix, step_suffix))
+                spin_entry = spin_ledger.entry(t.id)
+                spin_suffix = (
+                    "  [worker died %d times, no observed work]" % spin_entry.count
+                    if spin_entry and spin_entry.count > 0 else ""
+                )
+                print("  %s  %s%s%s%s" % (t.id, t.title, suffix, step_suffix, spin_suffix))
     return 0
 
 

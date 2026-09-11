@@ -113,6 +113,22 @@ class TestWorkerPool(unittest.TestCase):
         dead = pool.dead_for_step(probe(set()), "b-1")
         self.assertEqual(dead.spawnid, "newer")
 
+    def test_dead_steps_outside_returns_a_step_whose_dead_worker_is_not_claimed(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1"}])
+        self.assertEqual(pool.dead_steps_outside(probe(set()), claimed_ids=set()), {"b-1"})
+
+    def test_dead_steps_outside_excludes_a_step_whose_dead_worker_id_is_claimed(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1"}])
+        self.assertEqual(pool.dead_steps_outside(probe(set()), claimed_ids={"b-1"}), set())
+
+    def test_dead_steps_outside_excludes_a_step_whose_worker_is_still_alive(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1"}])
+        self.assertEqual(pool.dead_steps_outside(probe({1}), claimed_ids=set()), set())
+
+    def test_dead_steps_outside_excludes_a_worker_with_no_step_assigned_yet(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": None}])
+        self.assertEqual(pool.dead_steps_outside(probe(set()), claimed_ids=set()), set())
+
 
 if __name__ == "__main__":
     unittest.main()

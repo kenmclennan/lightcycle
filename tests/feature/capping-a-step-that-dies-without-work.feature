@@ -78,3 +78,24 @@ Feature: A step whose worker keeps dying without doing any work is capped and ha
     When I unblock the step
     And the step's worker later dies again having done no work
     Then the step is reclaimed to ready, not parked
+
+  Scenario: A worker that dies before its step is ever claimed still counts against that step
+    Given a step was never claimed
+    And its worker died having done no work
+    When the pool sweeps
+    Then the step's no-work streak count is 1
+    And the step is not reclaimed and not parked, and stays queued
+
+    Given the same dead worker is still on record
+    When the pool sweeps
+    Then the step's no-work streak count is 1
+
+    Given a different worker for the step died having done no work
+    When the pool sweeps
+    Then the step's no-work streak count is 2
+    And the step is not reclaimed and not parked, and stays queued
+
+    Given a different worker for the step died having done no work
+    When the pool sweeps
+    Then the step is parked for a human, not reclaimed
+    And the step's role is human
