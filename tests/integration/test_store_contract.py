@@ -555,6 +555,39 @@ class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
         self.assertIsNone(s.get_node(item).disposition)
 
 
+class TestSqliteStoreAddsNoteToItems(unittest.TestCase):
+    def _store_without_note(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description")
+        s.complete_node(item, "done")
+        s._conn.execute("ALTER TABLE items RENAME TO items_old")
+        s._conn.execute(
+            "CREATE TABLE items ("
+            "  id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', description TEXT,"
+            "  state TEXT NOT NULL DEFAULT 'backlogged', repo TEXT, workflow TEXT,"
+            "  outcome TEXT, disposition TEXT, project TEXT, created_at TEXT, closed_at TEXT)"
+        )
+        s._conn.execute(
+            "INSERT INTO items (id, title, description, state, repo, workflow, outcome, "
+            "disposition, project, created_at, closed_at) "
+            "SELECT id, title, description, state, repo, workflow, outcome, disposition, "
+            "project, created_at, closed_at FROM items_old"
+        )
+        s._conn.execute("DROP TABLE items_old")
+        s._conn.commit()
+        s.release()
+        return item, SqliteStore(s._config)
+
+    def test_a_pre_note_items_table_gains_the_column(self):
+        _, s = self._store_without_note()
+        cols = {r[1] for r in s._conn.execute("PRAGMA table_info(items)").fetchall()}
+        self.assertIn("note", cols)
+
+    def test_the_column_is_null_for_an_existing_closed_item(self):
+        item, s = self._store_without_note()
+        self.assertIsNone(s.get_node(item).note)
+
+
 class TestSqliteStoreAddsClaimEpochToSteps(unittest.TestCase):
     def _store_without_claim_epoch(self):
         s = make_sqlite_store()

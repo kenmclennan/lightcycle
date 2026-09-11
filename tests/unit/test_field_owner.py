@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.cli_commands import flags_by_verb
 from lightcycle.domain.work import (
-    FIELDS_BY_TYPE, FieldRefusal, StateRefusal, refuse_fields, refuse_state,
+    DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal, StateRefusal, refuse_fields, refuse_state,
     render_field_refusal,
 )
 
@@ -101,6 +101,24 @@ class TestFieldsByTypeCoversEverySettableFlag(unittest.TestCase):
     def test_every_lc_set_flag_except_state_and_unset_is_owned_by_a_type(self):
         settable = flags_by_verb()["set"] - {"state", "unset"}
         self.assertEqual(FIELDS_BY_TYPE["item"] | FIELDS_BY_TYPE["step"], settable)
+
+
+class TestRefuseFieldsWithADifferentTable(unittest.TestCase):
+    def test_a_field_owned_under_the_given_table_is_accepted(self):
+        self.assertIsNone(refuse_fields("item", {"note"}, table=DONE_FIELDS_BY_TYPE))
+
+    def test_a_field_owned_by_the_other_type_under_the_given_table_is_refused(self):
+        self.assertEqual(
+            refuse_fields("step", {"disposition"}, table=DONE_FIELDS_BY_TYPE),
+            FieldRefusal(fields=("disposition",), requested_type="step", owner="item"),
+        )
+
+
+class TestDoneFieldsByTypeCoversEveryDoneFlag(unittest.TestCase):
+    def test_every_lc_done_flag_is_owned_by_a_type(self):
+        self.assertEqual(
+            DONE_FIELDS_BY_TYPE["item"] | DONE_FIELDS_BY_TYPE["step"], flags_by_verb()["done"]
+        )
 
 
 if __name__ == "__main__":

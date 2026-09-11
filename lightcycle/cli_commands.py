@@ -123,7 +123,11 @@ COMMANDS = {
     )),
     "done": CommandSpec(prog="lc done", args=(
         Arg("id"), Arg("outcome"),
-        Arg("--note", nargs="+", help="a note to forward to the next step; unquoted multi-word is fine"),
+        Arg(
+            "--note", nargs="+",
+            help="a note to forward to the next step, or to record on an item being closed; "
+            "unquoted multi-word is fine",
+        ),
         Arg("--disposition", choices=("completed", "aborted")),
     )),
     "trace": CommandSpec(prog="lc trace", args=(

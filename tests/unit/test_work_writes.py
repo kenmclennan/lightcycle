@@ -587,9 +587,9 @@ class TestCloseItem(unittest.TestCase):
         calls = []
         original_close = s.complete_node
 
-        def spy_close(tid, reason, disposition=None):
+        def spy_close(tid, reason, disposition=None, note=None):
             calls.append((tid, disposition))
-            return original_close(tid, reason, disposition)
+            return original_close(tid, reason, disposition, note)
 
         s.complete_node = spy_close
         wt = FakeWorktrees()

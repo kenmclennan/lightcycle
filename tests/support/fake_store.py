@@ -113,6 +113,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
         workflow=record.get("workflow"),
         outcome=record.get("outcome"),
         disposition=record.get("disposition"),
+        note=record.get("note"),
         deps=record.get("dep_count") or 0,
         blocked_by=list(blocked_by or []),
         created_at=record.get("created_at"),
@@ -387,7 +388,7 @@ class FakeStore(StorePort):
         b["outcome"] = None
         b["closed_at"] = None
 
-    def complete_node(self, tid, reason, disposition=None):
+    def complete_node(self, tid, reason, disposition=None, note=None):
         b = self._get(tid)
         if b.get("state") == "done":
             return
@@ -395,6 +396,8 @@ class FakeStore(StorePort):
         b["outcome"] = reason
         if b.get("type") == "item" and disposition is not None:
             b["disposition"] = disposition
+            if note is not None:
+                b["note"] = note
         b["closed_at"] = self._now()
         self._record_history(tid, State.DONE)
         for other_id, blockers in self._deps.items():

@@ -5,7 +5,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 ## The model (nouns)
 
 - **item** and **step** are the two structures work is made of, in their own tables, with no shared shape. "Node" survives only as a loose word for "an item or a step" in a few command names; nothing in the model is one.
-- **item** - a unit of deliverable work, and the top of the tree. Carries the `description` (the brief), the artifacts, the `repo` and the workflow pin. Has no parent.
+- **item** - a unit of deliverable work, and the top of the tree. Carries the `description` (the brief), the artifacts, the `repo` and the workflow pin. Has no parent. Once closed, carries an optional `note` explaining why - write-once via `lc done --note`, distinct from a step's own accumulated `notes`.
 - **step** - a single action performed at one workflow **stage**, filed from the workflow. Its `item` is required and fixed at creation. Carries the `role`, the claim, the `notes`, its `reflection`, and its `park`. It has no description, no artifacts and no workflow of its own.
 - **planned step** - a not-yet-filed future step, derived by walking an item's pinned workflow graph forward from its current step along the normal-completion edge. Display-only: never a real node, never claimed or advanced. Represented in code as `ProjectedStep`.
 - **artifact** - a workflow-defined value attached to an item: `spec`, `design`, `findings`, and whatever a personal origin invents. The engine reads none of them by name. What it does know is a field: the brief is the item's `description`, the target repo its `repo`, an agent's feedback the step's `reflection`, and the branch, PR and comment ledger belong to the phase run.

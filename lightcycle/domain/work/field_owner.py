@@ -10,6 +10,11 @@ FIELDS_BY_TYPE = {
     "step": frozenset({"title", "notes", "needs", "reason", "tried", "label"}),
 }
 
+DONE_FIELDS_BY_TYPE = {
+    "step": frozenset({"note"}),
+    "item": frozenset({"note", "disposition"}),
+}
+
 REQUIRED_WITH_STATE = {
     "waiting": ("needs", "reason"),
 }
@@ -58,8 +63,8 @@ class StateRefusal:
     allowed: tuple
 
 
-def owner_of_field(field):
-    for node_type, fields in FIELDS_BY_TYPE.items():
+def owner_of_field(field, table=FIELDS_BY_TYPE):
+    for node_type, fields in table.items():
         if field in fields:
             return node_type
     return None
@@ -76,11 +81,13 @@ def all_states():
     return sorted(s for states in STATES_BY_TYPE.values() for s in states)
 
 
-def refuse_fields(node_type, fields):
-    wrong = tuple(sorted(f for f in fields if f not in FIELDS_BY_TYPE[node_type]))
+def refuse_fields(node_type, fields, table=FIELDS_BY_TYPE):
+    wrong = tuple(sorted(f for f in fields if f not in table[node_type]))
     if not wrong:
         return None
-    return FieldRefusal(fields=wrong, requested_type=node_type, owner=owner_of_field(wrong[0]))
+    return FieldRefusal(
+        fields=wrong, requested_type=node_type, owner=owner_of_field(wrong[0], table)
+    )
 
 
 def refuse_state(node_type, state):
