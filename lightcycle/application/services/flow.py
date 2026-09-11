@@ -19,9 +19,13 @@ class FlowService:
         self._config = config
         self._workflow_source = workflow_source
         self._graph_cache = {}
+        self._graph_for_cache = {}
+        self._flow_for_cache = {}
 
     def clear_cache(self):
         self._graph_cache = {}
+        self._graph_for_cache = {}
+        self._flow_for_cache = {}
 
     def _default_pin(self):
         origin = self._config.default_origin()
@@ -145,31 +149,35 @@ class FlowService:
         graph, root = self._graph_and_root(name)
         return Flow.from_graph(graph, self._role_metas_in(root))
 
-    def _pin_for_node(self, node):
+    def graph_for(self, node):
         selection = self.workflow_for(node)
-        return self.resolve_selection(selection) if selection is not None else None
-
-    def _graph_for_node(self, node):
-        try:
-            return self.load_graph(self._pin_for_node(node))
-        except ValueError:
-            return None
+        if selection not in self._graph_for_cache:
+            try:
+                pin = self.resolve_selection(selection) if selection is not None else None
+                self._graph_for_cache[selection] = self.load_graph(pin)
+            except ValueError:
+                self._graph_for_cache[selection] = None
+        return self._graph_for_cache[selection]
 
     def flow_for(self, node):
-        try:
-            return self.load_flow(self._pin_for_node(node))
-        except ValueError:
-            return Flow({})
+        selection = self.workflow_for(node)
+        if selection not in self._flow_for_cache:
+            try:
+                pin = self.resolve_selection(selection) if selection is not None else None
+                self._flow_for_cache[selection] = self.load_flow(pin)
+            except ValueError:
+                self._flow_for_cache[selection] = Flow({})
+        return self._flow_for_cache[selection]
 
     def workspace_for_node(self, node):
-        graph = self._graph_for_node(node)
+        graph = self.graph_for(node)
         if graph is None:
             return None
         stage = node.stage if getattr(node, "type", None) == "step" else None
         return graph.workspace_for(stage) if stage else graph.workspace
 
     def phase_for(self, node):
-        graph = self._graph_for_node(node)
+        graph = self.graph_for(node)
         if graph is None:
             return None
         stage = node.stage if getattr(node, "type", None) == "step" else None
@@ -185,14 +193,14 @@ class FlowService:
 
     def display_for(self, node):
         stage = node.stage if getattr(node, "type", None) == "step" else None
-        graph = self._graph_for_node(node)
+        graph = self.graph_for(node)
         declared = graph.display_for(stage) if (graph is not None and stage) else None
         if declared is not None:
             return declared
         return engine_display_of(stage) if stage else None
 
     def workspace_for_phase(self, node, phase):
-        graph = self._graph_for_node(node)
+        graph = self.graph_for(node)
         return graph.workspace_for_phase(phase) if graph is not None else None
 
     def flow_next(self, step, outcome, name=None):

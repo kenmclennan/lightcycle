@@ -3,6 +3,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
+from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work import State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
 from lightcycle.ports.store import ProjectResolutionError
@@ -19,13 +20,6 @@ class LinkArtifactInput:
     internal: bool = False
 
 
-_RUN_FIELDS = {
-    "pr": "pr",
-    "branch": "branch",
-    "comments-handled": "comments_handled_through",
-}
-
-
 class LinkArtifactUseCase:
     def __init__(self, store, flow=None):
         self._store = store
@@ -39,7 +33,7 @@ class LinkArtifactUseCase:
             )
         if self._store.default_kind_for(input.atype) == "filepath":
             self._validate_spec(input.item, input.value)
-        if input.atype in _RUN_FIELDS:
+        if input.atype in RUN_FIELDS:
             self._route_to_run(input)
             return
         if input.replace:

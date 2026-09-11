@@ -11,10 +11,11 @@ from lightcycle.domain.contracts import FlowContracts, StepContract
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
+from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work.state import State
 
 _ADVANCING_HOOKS = (PR_MERGE, PR_CONFLICT)
-_RUN_FIELDS = {"pr": "pr", "branch": "branch"}
+_SIMULATABLE_RUN_FIELDS = ("pr", "branch")
 
 
 def _phase_mismatch(walk_index, hook, gate, target, expected, actual):
@@ -166,13 +167,13 @@ class WorkflowSimulateUseCase:
         phase = self._flow.load_graph(pin).phase_for(stage)
         present = {a.type for a in self._store.item_artifacts(item_id)}
         for req in contract.produces:
-            if req.type in _RUN_FIELDS:
+            if req.type in _SIMULATABLE_RUN_FIELDS:
                 run = self._store.current_run(item_id, phase)
                 if run is None:
                     current = self._store.current_pass(item_id)
                     pid = current.id if current else self._store.open_pass(item_id)
                     run = self._store.get_run(self._store.open_run(item_id, pid, phase))
-                if getattr(run, _RUN_FIELDS[req.type]) is None:
+                if getattr(run, RUN_FIELDS[req.type]) is None:
                     value = "<simulated-%s-%s>" % (req.type, phase or "-")
                     if req.type == "pr":
                         self._store.set_pr(run.id, value)

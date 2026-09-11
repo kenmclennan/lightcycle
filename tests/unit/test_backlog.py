@@ -4,8 +4,8 @@ from lightcycle.application.work.backlog import (
     BacklogCountsResponse,
     BacklogInput,
     BacklogUseCase,
-    ProjectCount,
 )
+from lightcycle.application.work.project_counts import ProjectCount
 from tests.support.fake_store import FakeStore
 
 
