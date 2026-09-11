@@ -1,8 +1,10 @@
-from lightcycle.domain.work import ProjectIdentity
+from lightcycle.domain.work import Item, ProjectIdentity
 from lightcycle.ports.store import NodeNotFoundError
 
 
 def project_of(store, node):
+    if isinstance(node, Item):
+        return node.repo
     if isinstance(node, str):
         item_id = node
     else:
