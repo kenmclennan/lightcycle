@@ -214,6 +214,15 @@ class TestDoneCounts(unittest.TestCase):
         resp = DoneUseCase(s).counts()
         self.assertEqual(resp.projects, [ProjectCount(project="proj-c", count=0)])
 
+    def test_a_bare_registered_identity_is_counted_without_raising(self):
+        s = FakeStore()
+        s.add_project("specs")
+        item = s.create_item("item", "a description")
+        s.add_artifact(item, "repo", "specs")
+        s.complete_node(item, "merged")
+        resp = DoneUseCase(s).counts()
+        self.assertEqual(resp.projects, [ProjectCount(project="specs", count=1)])
+
 
 if __name__ == "__main__":
     unittest.main()

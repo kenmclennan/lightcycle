@@ -1,7 +1,7 @@
 import os
-import re
 from collections import namedtuple
 
+from lightcycle.domain.work import ProjectIdentity
 from lightcycle.ports.git import GitReadError
 
 
@@ -11,19 +11,6 @@ ScanCandidate = namedtuple(
 )
 
 _NOISE_DIRS = {"node_modules"}
-
-_SSH_RE = re.compile(r"^git@github\.com:([^/]+)/(.+?)(?:\.git)?/?$")
-_HTTPS_RE = re.compile(r"^https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$")
-
-
-def _identity_from_remote(remote):
-    if not remote:
-        return None
-    for pattern in (_SSH_RE, _HTTPS_RE):
-        m = pattern.match(remote.strip())
-        if m:
-            return "%s/%s" % (m.group(1), m.group(2))
-    return None
 
 
 class ScanProjectsUseCase:
@@ -60,13 +47,14 @@ class ScanProjectsUseCase:
                 identity=None, path=path, shortcode=None, status="unreadable", remote=None,
                 registered_path=None, registered_shortcode=None,
             )
-        identity = _identity_from_remote(remote)
-        if identity is None:
+        parsed = ProjectIdentity.from_remote_url(remote)
+        if parsed is None:
             return ScanCandidate(
                 identity=None, path=path, shortcode=None, status="no-remote", remote=remote,
                 registered_path=None, registered_shortcode=None,
             )
-        shortcode = identity.split("/")[-1].upper()
+        identity = parsed.full
+        shortcode = parsed.default_shortcode
         existing = self._store.get_project(identity)
         if existing:
             return ScanCandidate(

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List
 
 from lightcycle.domain.flow import planned_path
-from lightcycle.domain.work import ProjectedStep, State
+from lightcycle.domain.work import ProjectedStep, State, format_step_id
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class PlannedStepsUseCase:
         already_filed = len(self._store.children(input.item_id))
         return [
             ProjectedStep(
-                id="%s.%d" % (input.item_id, already_filed + i + 1),
+                id=format_step_id(input.item_id, already_filed + i + 1),
                 step=stage,
                 role=role,
             )

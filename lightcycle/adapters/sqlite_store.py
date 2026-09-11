@@ -10,7 +10,7 @@ from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
-    merge_condition_note, role_state,
+    format_step_id, merge_condition_note, role_state,
 )
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
@@ -734,7 +734,7 @@ class SqliteStore(StorePort):
         n = row[0]
         if parent is None:
             return "%s-%d" % (prefix, n)
-        return "%s.%d" % (parent, n)
+        return format_step_id(parent, n)
 
     def _mint_or_adopt(self, explicit_id, parent, shortcode=None):
         if explicit_id is None:

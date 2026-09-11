@@ -1,11 +1,12 @@
 from lightcycle.application.work.project_of import project_of, short_project_label
+from lightcycle.domain.work import ProjectIdentity
 
 
 def project_matches(store, item, short_ref):
     if short_ref is None:
         return True
     raw = project_of(store, item)
-    return raw is not None and raw.rsplit("/", 1)[-1] == short_ref
+    return raw is not None and ProjectIdentity.short_name(raw) == short_ref
 
 
 def text_matches(store, item, needle):

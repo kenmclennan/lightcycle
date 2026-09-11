@@ -14,3 +14,7 @@ def node_id_key(node_id):
         prefix, item_n = m.groups()
         return (prefix, int(item_n), -1)
     return (node_id, -1, -1)
+
+
+def format_step_id(item_id, n):
+    return "%s.%d" % (item_id, n)
