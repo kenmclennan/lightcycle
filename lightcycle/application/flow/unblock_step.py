@@ -21,10 +21,10 @@ class UnblockStepUseCase:
 
     def execute(self, input: UnblockInput) -> UnblockResponse:
         t = self._store.get_node(input.step)
-        role = self._flow.flow_for(t).step_def(t.step).owner
+        role = self._flow.flow_for(t).step_def(t.stage).owner
         if not role or role == "human":
             raise UseCaseError(
-                "nothing to unblock: step '%s' has no agent owner" % (t.step or "(none)")
+                "nothing to unblock: step '%s' has no agent owner" % (t.stage or "(none)")
             )
         kept = [l for l in (t.notes or "").splitlines() if not l.startswith("BLOCKED:")]
         history = t.park.as_history_note()

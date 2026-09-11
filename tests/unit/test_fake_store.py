@@ -19,7 +19,7 @@ class TestLabels(unittest.TestCase):
     def test_step_and_role_split_into_separate_labels(self):
         step = self.s.get_node(self.tid)
         self.assertEqual(step.role, "agent")
-        self.assertEqual(step.step, "build")
+        self.assertEqual(step.stage, "build")
 
     def test_label_add_roundtrip(self):
         self.s.label_add(self.tid, "priority:high")
@@ -102,7 +102,7 @@ class TestParentChildren(unittest.TestCase):
         self.step = self.s.create_step("build: foo", parent=self.item)
 
     def test_child_has_parent(self):
-        self.assertEqual(self.s.get_node(self.step).parent, self.item)
+        self.assertEqual(self.s.get_node(self.step).item, self.item)
 
     def test_children_returns_child_task(self):
         kids = self.s.children(self.item)

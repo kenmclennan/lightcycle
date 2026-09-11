@@ -60,5 +60,5 @@ class ReleaseCiPendingUseCase:
                 self._store.label_add(
                     step.id, "%s%d" % (CI_RELEASED_PREFIX, released_so_far + 1)
                 )
-            released.append(step.parent)
+            released.append(step.item)
         return ReleaseCiPendingResponse(released=released)

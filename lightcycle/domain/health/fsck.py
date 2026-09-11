@@ -8,8 +8,8 @@ def fsck(nodes):
     by_id = {n.id: n for n in nodes}
     steps_by_parent = {}
     for n in nodes:
-        if n.parent:
-            steps_by_parent.setdefault(n.parent, []).append(n)
+        if n.type == "step" and n.item:
+            steps_by_parent.setdefault(n.item, []).append(n)
     problems = []
     for n in nodes:
         problems.extend(_orphan(n, by_id))
@@ -21,13 +21,13 @@ def fsck(nodes):
 
 
 def _orphan(n, by_id):
-    if not n.parent:
+    if n.type != "step" or not n.item:
         return []
-    parent = by_id.get(n.parent)
+    parent = by_id.get(n.item)
     if parent is None:
-        return [Problem("store", "parent %r does not exist" % n.parent, n.id)]
+        return [Problem("store", "parent %r does not exist" % n.item, n.id)]
     if parent.state == State.DONE and n.state != State.DONE:
-        return [Problem("store", "open under closed parent %s" % n.parent, n.id)]
+        return [Problem("store", "open under closed parent %s" % n.item, n.id)]
     return []
 
 

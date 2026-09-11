@@ -30,7 +30,7 @@ class FlowCheckUseCase:
         owner = {s: flow.step_def(s).owner for s in steps}
         routes = {
             s: {
-                o: transition.to_step
+                o: transition.to_stage
                 for o in sorted(flow.step_def(s).routes.keys())
                 if (transition := flow.next(s, o)) is not None
             }

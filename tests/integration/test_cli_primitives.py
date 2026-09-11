@@ -36,7 +36,7 @@ class TestCliPrimitives(unittest.TestCase):
         rc, step, _ = self._run("set", item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc, 0)
         self.assertEqual(self.h.store.get_node(item).state, State.QUEUED)
-        self.assertEqual(self.h.store.get_node(step).step, "build")
+        self.assertEqual(self.h.store.get_node(step).stage, "build")
 
     def test_an_item_has_no_parent_to_set(self):
         _, item, _ = self._run("new", "item", "refunds", "--description", "a description")

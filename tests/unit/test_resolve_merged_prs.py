@@ -70,7 +70,7 @@ class _FlowAdapter:
         return self._flow.effective_transition(transition, outcome, prior_count)
 
     def phase_for(self, node):
-        return self._flow.step_def(getattr(node, "step", None)).phase
+        return self._flow.step_def(getattr(node, "stage", None)).phase
 
     def phase_for_stage(self, stage, name=None):
         return "code"
@@ -309,7 +309,7 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
         self.assertEqual(store.get_node(step).state, "done")
         self.assertEqual(store.get_node(step).outcome, "merged")
         self.assertEqual(store.get_node(item).state, State.WAITING)
-        created = [n for n in store.all_steps() if n.step == "cleanup" and n.parent == item]
+        created = [n for n in store.all_steps() if n.stage == "cleanup" and n.item == item]
         self.assertEqual(len(created), 1)
         self.assertEqual(created[0].role, "human")
 
@@ -357,7 +357,7 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         all_items = [n for n in store.all_nodes() if n.type == "item"]
         self.assertEqual([n.id for n in all_items], [spec_item])
         steps = [s for s in store.children(spec_item) if s.state != "done"]
-        self.assertEqual([s.step for s in steps], ["write-code"])
+        self.assertEqual([s.stage for s in steps], ["write-code"])
 
     def test_crossing_the_phase_boundary_releases_only_the_spec_run(self):
         store, spec_item, uc, spec_url, worktrees, github = self._setup()
@@ -767,7 +767,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertEqual(store.get_node(item).state, State.WAITING)
         self.assertEqual(store.get_node(step).state, "done")
         live_steps = [s for s in store.children(item) if s.state != "done"]
-        self.assertEqual([s.step for s in live_steps], ["confirm-abandon"])
+        self.assertEqual([s.stage for s in live_steps], ["confirm-abandon"])
         self.assertEqual(worktrees.removed, [])
 
     def test_closed_unmerged_pr_closes_story_whose_live_task_is_at_watch_pr(self):

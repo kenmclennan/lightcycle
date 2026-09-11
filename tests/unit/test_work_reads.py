@@ -153,7 +153,7 @@ class TestStatus(unittest.TestCase):
         s = FakeStore()
         watched = create_owned_step(s, "await-merge: thing", step="await-merge", role="human")
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
-                           parent=s.get_node(watched).parent)
+                           parent=s.get_node(watched).item)
         s.set_watched_step(fb, watched)
 
         lanes = StatusUseCase(s).execute().lanes
@@ -164,7 +164,7 @@ class TestStatus(unittest.TestCase):
         s = FakeStore()
         watched = create_owned_step(s, "await-merge: thing", step="await-merge", role="human")
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
-                           parent=s.get_node(watched).parent)
+                           parent=s.get_node(watched).item)
         s.set_watched_step(fb, watched)
         s.complete_node(fb, "done")
 
@@ -382,7 +382,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
     def test_watched_step_excluded_while_its_feedback_step_is_open(self):
         s = FakeStore()
         _, watched = self._item_with_step(s, step_name="await-merge")
-        item = s.get_node(watched).parent
+        item = s.get_node(watched).item
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                             parent=item)
         s.set_watched_step(fb, watched)
@@ -392,7 +392,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
     def test_watched_step_returns_once_its_feedback_step_closes(self):
         s = FakeStore()
         _, watched = self._item_with_step(s, step_name="await-merge")
-        item = s.get_node(watched).parent
+        item = s.get_node(watched).item
         fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
                             parent=item)
         s.set_watched_step(fb, watched)

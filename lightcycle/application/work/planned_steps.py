@@ -26,7 +26,7 @@ class PlannedStepsUseCase:
         if current is None:
             return []
         flow = self._flow_service.flow_for(current)
-        path = planned_path(flow, current.step)
+        path = planned_path(flow, current.stage)
         already_filed = len(self._store.children(input.item_id))
         return [
             ProjectedStep(

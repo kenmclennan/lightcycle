@@ -256,7 +256,7 @@ def _then_id_position(ctx, position, filed):
 def _then_no_id_collision(ctx, step_a, step_b):
     item = _item(ctx)
     filed_ids = {
-        c.id for c in _store(ctx).children(item) if c.step in (step_a, step_b)
+        c.id for c in _store(ctx).children(item) if c.stage in (step_a, step_b)
     }
     projected_ids = {p.id for p in ctx["result"]}
     assert not (filed_ids & projected_ids)

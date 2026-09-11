@@ -223,7 +223,7 @@ class _FixedFlowService:
         self._phrases = phrases
 
     def display_for(self, node):
-        return self._phrases.get(node.step)
+        return self._phrases.get(node.stage)
 
 
 class TestRenderInboxDisplayPhrase(unittest.TestCase):

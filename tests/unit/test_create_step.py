@@ -21,9 +21,9 @@ class TestCreateStepUseCase(unittest.TestCase):
             CreateStepInput(title="build it", step="build", parent=parent)
         )
         step = s.get_node(resp.id)
-        self.assertEqual(step.step, "build")
+        self.assertEqual(step.stage, "build")
         self.assertEqual(step.role, "agent")
-        self.assertEqual(step.parent, parent)
+        self.assertEqual(step.item, parent)
 
     def test_role_resolves_from_an_explicit_workflow(self):
         s = FakeStore()

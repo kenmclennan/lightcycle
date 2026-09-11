@@ -29,6 +29,6 @@ class ListWorkersUseCase:
         if not (step_id and self._store):
             return None
         try:
-            return self._store.get_node(step_id).step
+            return self._store.get_node(step_id).stage
         except KeyError:
             return None

@@ -228,7 +228,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         )
 
         self.assertEqual(s.get_node(item).state, State.QUEUED)
-        self.assertEqual(s.get_node(resp.step).parent, item)
+        self.assertEqual(s.get_node(resp.step).item, item)
 
     def test_cmd_set_backlog_links_the_resolved_backlog_to_the_item(self):
         s = self._store()
@@ -718,7 +718,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
 
         store = SqliteStore(self._config(root))
 
-        self.assertEqual(store.get_node("GRID-1.1").step, "build")
+        self.assertEqual(store.get_node("GRID-1.1").stage, "build")
 
     def test_store_stamped_below_the_floor_is_refused(self):
         root = tempfile.mkdtemp()

@@ -228,7 +228,7 @@ def _cost_rows_for_item(cost):
 
 
 def _owning_id(node):
-    return node.parent if node.type == "step" else node.id
+    return node.item if node.type == "step" else node.id
 
 
 def project_label(store, node):
@@ -377,7 +377,7 @@ def _stat_line_item(store, item, children, flow_service, now, pool_halted=False)
         cur = current_step(store, item.id)
         if cur is None or cur.state == State.BLOCKED:
             return None
-        lead = display_stage(flow_service.display_for(cur), cur.step)
+        lead = display_stage(flow_service.display_for(cur), cur.stage)
     segments = [lead, _step_count_text(children)]
     wall_active = _item_wall_active(store, item, children, now)
     if wall_active is not None:
@@ -409,7 +409,7 @@ def _step_wall_active(store, node, now):
 
 
 def _stat_line_step(store, node, flow_service, now, pool_halted=False):
-    phrase = display_stage(flow_service.display_for(node), node.step)
+    phrase = display_stage(flow_service.display_for(node), node.stage)
     if display_role(getattr(node, "role", None)) == "human":
         wait = _gate_wait_seconds(store, node, now)
         if wait is None:
@@ -460,7 +460,7 @@ def _step_header(store, node, now, project, flow_service, pool_halted=False):
     if escalation_text is None and getattr(node, "role", None) == "human" and getattr(node, "needs", None):
         escalation_text = _park_escalation_text(node)
 
-    item = store.get_node(node.parent)
+    item = store.get_node(node.item)
     flow = flow_service.flow_for(node)
     stat_line = _stat_line_step(store, node, flow_service, now, pool_halted)
     return HeaderData(
@@ -538,9 +538,9 @@ def _hierarchy_label(node, flow_service, multi_pass):
     if node.type != "step":
         return node.title
     if flow_service is None:
-        base, phase = node.step, None
+        base, phase = node.stage, None
     else:
-        base, phase = flow_service.display_for(node) or node.step, flow_service.phase_for(node)
+        base, phase = flow_service.display_for(node) or node.stage, flow_service.phase_for(node)
     n = pass_number(node.pass_id)
     parts = (["pass %d" % n] if multi_pass else []) + ([phase] if phase else [])
     return " · ".join(parts + [base]) if parts else base

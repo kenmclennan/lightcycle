@@ -38,7 +38,7 @@ def _new_item(ctx, workflow=None, title="some item"):
 def _step_node(ctx, step_name):
     return next(
         n for n in ctx["h"].store.all_nodes_including_done()
-        if n.parent == ctx["item"] and n.step == step_name
+        if n.type == "step" and n.item == ctx["item"] and n.stage == step_name
     )
 
 

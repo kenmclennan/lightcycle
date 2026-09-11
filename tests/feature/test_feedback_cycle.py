@@ -158,7 +158,7 @@ def _watched_in_inbox(ctx):
 def _fresh_await_merge_in_inbox(ctx):
     fresh = next(
         n for n in ctx["h"].store.all_nodes()
-        if n.type == "step" and n.step == ctx["watched_step_name"]
+        if n.type == "step" and n.stage == ctx["watched_step_name"]
         and n.state == State.WAITING and n.id != ctx["watched_step"]
     )
     rc, out, err = ctx["h"].run("inbox")

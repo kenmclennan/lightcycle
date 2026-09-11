@@ -50,7 +50,7 @@ class InboxUseCase:
         return resolve
 
     def _row(self, kind, outcomes, t, resolver):
-        item = self._item(t.parent) if t.parent else None
+        item = self._item(t.item) if t.item else None
         return HumanNodeRow(
             kind=kind, outcomes=outcomes, step=t,
             project=item.repo if item else None,
@@ -60,9 +60,9 @@ class InboxUseCase:
         )
 
     def _pr_for(self, t, resolver):
-        if not t.parent:
+        if not t.item:
             return None
-        run = self._store.current_run(t.parent, resolver(t).step_def(t.step).phase)
+        run = self._store.current_run(t.item, resolver(t).step_def(t.stage).phase)
         return run.pr if run else None
 
     def _item(self, item_id):

@@ -150,7 +150,7 @@ class TestAdvanceTask(unittest.TestCase):
             AdvanceInput(step=bid, outcome="done")
         )
         nt = s.get_node(resp.next_step)
-        self.assertEqual(nt.step, "review")
+        self.assertEqual(nt.stage, "review")
         self.assertEqual(nt.role, "agent")
 
     def test_unknown_outcome_returns_none(self):
@@ -171,7 +171,7 @@ class TestCompleteTask(unittest.TestCase):
             CompleteInput(step=bid, outcome="done")
         )
         self.assertEqual(s.get_node(bid).state, "done")
-        self.assertEqual(s.get_node(resp.next_step).step, "review")
+        self.assertEqual(s.get_node(resp.next_step).stage, "review")
 
     def test_completion_notes_the_outcome_on_the_step(self):
         s = FakeStore()
@@ -405,7 +405,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
             CompleteInput(step=aid, outcome="done")
         )
         self.assertIsNotNone(resp.next_step)
-        self.assertEqual(s.get_node(resp.next_step).step, "next")
+        self.assertEqual(s.get_node(resp.next_step).stage, "next")
 
     def test_item_with_no_reflection_is_not_marked_retroed(self):
         s = FakeStore()
@@ -492,7 +492,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
             CompleteInput(step=aid, outcome="sideways")
         )
         self.assertEqual(s.get_node(aid).state, "done")
-        self.assertEqual(s.get_node(resp.next_step).step, "gamma")
+        self.assertEqual(s.get_node(resp.next_step).stage, "gamma")
 
 
 class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
@@ -505,7 +505,7 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
         tid = s.create_step("code-open-pr: x", step="code-open-pr", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=tid, outcome="conflicted"))
         self.assertEqual(s.get_node(tid).state, "done")
-        self.assertEqual(s.get_node(resp.next_step).step, "resolve-conflict")
+        self.assertEqual(s.get_node(resp.next_step).stage, "resolve-conflict")
 
     def test_done_outcome_still_requires_a_pr(self):
         s = FakeStore()
@@ -553,7 +553,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(wid).outcome, "ci-failed")
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_at_cap_escalates_instead_of_looping(self):
         s = FakeStore()
@@ -562,7 +562,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(wid).outcome, "ci-failed")
-        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
         self.assertEqual(s.get_node(resp.next_step).role, "human")
 
     def test_cap_counts_only_this_item(self):
@@ -572,7 +572,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_cap_counts_only_the_matching_outcome(self):
         s = FakeStore()
@@ -580,7 +580,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         self._fail_n_times(s, item, 3)
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
-        self.assertEqual(s.get_node(resp.next_step).step, "ship")
+        self.assertEqual(s.get_node(resp.next_step).stage, "ship")
 
     def test_repeated_done_never_escalates_even_past_cap(self):
         s = FakeStore()
@@ -590,7 +590,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
             s.complete_node(old, "done")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
-        self.assertEqual(s.get_node(resp.next_step).step, "ship")
+        self.assertEqual(s.get_node(resp.next_step).stage, "ship")
 
     def test_note_still_forwards_to_the_escalated_step(self):
         s = FakeStore()
@@ -616,7 +616,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
             s.complete_node(old, "ci-failed")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_cap_counting_orders_mixed_utc_offsets_chronologically_not_as_raw_strings(self):
         s = FakeStore()
@@ -634,7 +634,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
 
-        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
 
     def test_reset_prevents_escalation_despite_total_rejections_exceeding_cap(self):
         s = FakeStore()
@@ -644,7 +644,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s.complete_node(passed, "done")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_boundary_exactly_n_rejections_since_last_pass_still_escalates(self):
         s = FakeStore()
@@ -655,7 +655,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         self._fail_n_times(s, item, 2)
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
 
     def test_one_rejection_short_of_cap_since_last_pass_routes_normally(self):
         s = FakeStore()
@@ -665,7 +665,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s.complete_node(passed, "done")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_tie_broken_by_numeric_suffix_not_insertion_order(self):
         s = FakeStore(now=lambda: "2026-01-01T00:00:00")
@@ -684,7 +684,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s.complete_node(reject_b, "ci-failed")
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
 
 class TestCiFailedCapAdvancePath(unittest.TestCase):
@@ -703,7 +703,7 @@ class TestCiFailedCapAdvancePath(unittest.TestCase):
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_advance_at_cap_escalates_instead_of_looping(self):
         s = FakeStore()
@@ -712,7 +712,7 @@ class TestCiFailedCapAdvancePath(unittest.TestCase):
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
         self.assertEqual(s.get_node(resp.next_step).role, "human")
 
 
@@ -741,7 +741,7 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
             CompleteInput(step=wid2, outcome="ci-failed")
         )
         self.assertEqual(
-            s.get_node(advanced.next_step).step, s2.get_node(completed.next_step).step
+            s.get_node(advanced.next_step).stage, s2.get_node(completed.next_step).stage
         )
 
     def test_at_cap_same_next_step_both_paths(self):
@@ -751,9 +751,9 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         completed = CompleteStepUseCase(s2, flow2).execute(
             CompleteInput(step=wid2, outcome="ci-failed")
         )
-        self.assertEqual(s.get_node(advanced.next_step).step, "escalate-step")
+        self.assertEqual(s.get_node(advanced.next_step).stage, "escalate-step")
         self.assertEqual(
-            s.get_node(advanced.next_step).step, s2.get_node(completed.next_step).step
+            s.get_node(advanced.next_step).stage, s2.get_node(completed.next_step).stage
         )
 
     def test_advance_step_observes_the_same_reset_on_pass(self):
@@ -765,7 +765,7 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "build")
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
 
 class TestCiFailedCapWithRealSteps(unittest.TestCase):
@@ -778,7 +778,7 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
         wid = s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(wid).outcome, "ci-failed")
-        self.assertEqual(s.get_node(resp.next_step).step, "write-code")
+        self.assertEqual(s.get_node(resp.next_step).stage, "write-code")
 
     def test_cap_reached_escalates_to_review_ci(self):
         s = FakeStore()
@@ -788,7 +788,7 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
             s.complete_node(old, "ci-failed")
         wid = s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
-        self.assertEqual(s.get_node(resp.next_step).step, "review-ci")
+        self.assertEqual(s.get_node(resp.next_step).stage, "review-ci")
         self.assertEqual(s.get_node(resp.next_step).role, "human")
 
 
@@ -842,7 +842,7 @@ class TestClaimTask(unittest.TestCase):
         review = s.create_step("review: x", step="review", role="agent", parent=item)
         claimed = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(claimed.view.step.id, review)
-        self.assertEqual(claimed.view.step.step, "review")
+        self.assertEqual(claimed.view.step.stage, "review")
 
     def test_the_claim_resolves_the_step_file_from_the_stage_not_the_role(self):
         s = FakeStore()

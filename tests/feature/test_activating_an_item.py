@@ -158,7 +158,7 @@ def _claim(ctx):
 def _entry_stage_owned_by_agent(ctx, stage):
     assert ctx["rc"] == 0, ctx["err"]
     node = ctx["h"].store.get_node(ctx["filed_step"])
-    assert node.step == stage
+    assert node.stage == stage
     assert node.role == "agent"
 
 
@@ -166,8 +166,8 @@ def _entry_stage_owned_by_agent(ctx, stage):
 def _entry_stage_not_other(ctx, stage, other_stage):
     assert ctx["rc"] == 0, ctx["err"]
     node = ctx["h"].store.get_node(ctx["filed_step"])
-    assert node.step == stage
-    assert node.step != other_stage
+    assert node.stage == stage
+    assert node.stage != other_stage
 
 
 @then("it is ready")
@@ -192,7 +192,7 @@ def _still_backlogged(ctx):
     assert node.state == "backlogged"
     steps = [
         n for n in ctx["h"].store.all_nodes()
-        if n.parent == ctx["item"] and n.type == "step"
+        if n.type == "step" and n.item == ctx["item"]
     ]
     assert steps == []
 
@@ -201,7 +201,7 @@ def _still_backlogged(ctx):
 def _exactly_one_step(ctx):
     steps = [
         n for n in ctx["h"].store.all_nodes()
-        if n.parent == ctx["item"] and n.type == "step"
+        if n.type == "step" and n.item == ctx["item"]
     ]
     assert len(steps) == 1
 

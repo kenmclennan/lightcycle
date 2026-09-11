@@ -72,7 +72,7 @@ class _FlowAdapter:
         return self._flow.effective_transition(transition, outcome, prior_count)
 
     def phase_for(self, node):
-        return self._flow.step_def(getattr(node, "step", None)).phase
+        return self._flow.step_def(getattr(node, "stage", None)).phase
 
     def phase_for_stage(self, stage, name=None):
         return "code"
@@ -196,7 +196,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
     def _spawned_feedback_steps(self, store, watched_step):
         return [
             t for t in store.all_nodes()
-            if t.id != watched_step and t.type == "step" and t.step == "handle-feedback"
+            if t.id != watched_step and t.type == "step" and t.stage == "handle-feedback"
         ]
 
     def _mention_comment(self, ts, body="@lc fix the tests", author="reviewer", cid=None):
@@ -236,7 +236,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         spawned = self._spawned_feedback_steps(store, step)
         self.assertEqual(len(spawned), 1)
         self.assertEqual(spawned[0].role, "agent")
-        self.assertEqual(spawned[0].parent, item)
+        self.assertEqual(spawned[0].item, item)
         self.assertEqual(spawned[0].state, State.QUEUED)
         self.assertNotEqual(store.get_node(step).state, "done")
         self.assertEqual(store.get_step(spawned[0].id).watched_step, step)
@@ -653,7 +653,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         steps = [t for t in store.all_nodes() if t.id != step and t.type == "step"
                  and t.state != "done"]
         self.assertEqual(len(steps), 1)
-        self.assertEqual(steps[0].step, "fix-step")
+        self.assertEqual(steps[0].stage, "fix-step")
 
     def test_unknown_mergeable_state_does_not_trigger_conflict(self):
         url = "https://github.com/x/y/pull/52"
@@ -759,7 +759,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                  and t.state != "done"]
         self.assertEqual(len(steps), 1)
         self.assertEqual(steps[0].role, "human")
-        self.assertEqual(steps[0].step, "escalate-step")
+        self.assertEqual(steps[0].stage, "escalate-step")
 
     def test_conflict_fires_when_step_also_declares_feedback(self):
         url = "https://github.com/x/y/pull/59"
@@ -800,10 +800,10 @@ class TestMonitorPrsConflict(unittest.TestCase):
         self.assertNotEqual(store.get_node(step).state, "done")
         spawned = [
             t for t in store.all_nodes()
-            if t.id != step and t.type == "step" and t.step == "handle-feedback"
+            if t.id != step and t.type == "step" and t.stage == "handle-feedback"
         ]
         self.assertEqual(len(spawned), 1)
-        self.assertEqual(spawned[0].parent, item)
+        self.assertEqual(spawned[0].item, item)
 
     def test_no_cap_declared_never_escalates(self):
         url = "https://github.com/x/y/pull/58"

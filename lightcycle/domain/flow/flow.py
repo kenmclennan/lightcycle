@@ -79,16 +79,16 @@ class Flow:
     def effective_transition(self, transition, outcome, prior_count):
         if transition is None:
             return None
-        step = transition.from_step
+        step = transition.from_stage
         cap = self.step_def(step).ci_cap
         if cap is None or outcome != cap.outcome:
             return transition
         if prior_count < cap.n:
             return transition
         return Transition(
-            from_step=step,
+            from_stage=step,
             outcome=outcome,
-            to_step=cap.target,
+            to_stage=cap.target,
             to_role=self.step_def(cap.target).owner or "human",
             to_terminal=self.step_def(cap.target).owner is None,
         )
@@ -117,9 +117,9 @@ class Flow:
         if not target:
             return None
         return Transition(
-            from_step=step,
+            from_stage=step,
             outcome=outcome,
-            to_step=target,
+            to_stage=target,
             to_role=self.step_def(target).owner or "human",
             to_terminal=self.step_def(target).owner is None,
         )

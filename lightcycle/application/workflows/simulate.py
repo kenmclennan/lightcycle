@@ -150,7 +150,7 @@ class WorkflowSimulateUseCase:
         if resp is None:
             node = None
             for n in self._store.all_nodes():
-                if n.type == "step" and n.step == stage and n.state != State.DONE:
+                if n.type == "step" and n.stage == stage and n.state != State.DONE:
                     node = n
                     break
             reason = node.notes if node is not None else "no ready step"
@@ -194,14 +194,14 @@ class WorkflowSimulateUseCase:
     def _handle_landing(self, item_id, pin, graph, next_step_id, trace, walk_index,
                         phase_check=None):
         node = self._store.get_node(next_step_id)
-        trace.append("walk %d: -> %s" % (walk_index, node.step))
-        if not self._flow.owner_of(node.step, pin):
-            self._close_item(item_id, node.step)
+        trace.append("walk %d: -> %s" % (walk_index, node.stage))
+        if not self._flow.owner_of(node.stage, pin):
+            self._close_item(item_id, node.stage)
             trace.append(
-                "walk %d: %s (unowned terminal, item closed)" % (walk_index, node.step)
+                "walk %d: %s (unowned terminal, item closed)" % (walk_index, node.stage)
             )
             return []
-        if not self._is_walk_terminal(graph, node.step):
+        if not self._is_walk_terminal(graph, node.stage):
             return []
         return self._complete_terminal(item_id, pin, node, trace, walk_index,
                                         phase_check=phase_check)
@@ -218,23 +218,23 @@ class WorkflowSimulateUseCase:
             reason = fresh.notes or "no ready step"
             return [
                 "walk %d: could not claim stage '%s': %s"
-                % (walk_index, node.step, reason)
+                % (walk_index, node.stage, reason)
             ]
-        actual = self._synthesize_produces(item_id, pin, node.step)
+        actual = self._synthesize_produces(item_id, pin, node.stage)
         violations = []
         if phase_check is not None:
             hook, gate, expected = phase_check
-            violations += _phase_mismatch(walk_index, hook, gate, node.step, expected, actual)
+            violations += _phase_mismatch(walk_index, hook, gate, node.stage, expected, actual)
         try:
             self._complete.execute(CompleteInput(step=node.id, outcome="done"))
         except UseCaseError as e:
-            return violations + ["walk %d: %s[done] raised: %s" % (walk_index, node.step, e)]
+            return violations + ["walk %d: %s[done] raised: %s" % (walk_index, node.stage, e)]
         if not self._item_closed(item_id):
             return violations + [
                 "walk %d: terminal stage '%s' completed but the item did not close"
-                % (walk_index, node.step)
+                % (walk_index, node.stage)
             ]
-        trace.append("walk %d: %s[done] (terminal, item closed)" % (walk_index, node.step))
+        trace.append("walk %d: %s[done] (terminal, item closed)" % (walk_index, node.stage))
         return violations
 
     def _advance_edge(self, item_id, pin, graph, step_id, planned, trace, walk_index):
@@ -332,7 +332,7 @@ class WorkflowSimulateUseCase:
             ]
         new_children = [
             c for c in self._store.children(item_id)
-            if c.id not in before and c.step == planned.outcome and c.state != State.DONE
+            if c.id not in before and c.stage == planned.outcome and c.state != State.DONE
         ]
         if not new_children:
             return [

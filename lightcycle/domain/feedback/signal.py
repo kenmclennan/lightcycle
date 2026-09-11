@@ -4,19 +4,19 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class SignalSpec:
     name: str
-    step: str
+    stage: str
     outcome: str
     match: str = "exact"
 
     @classmethod
-    def parse(cls, name, step, decl) -> "SignalSpec":
+    def parse(cls, name, stage, decl) -> "SignalSpec":
         decl = str(decl)
         if decl.startswith("~"):
-            return cls(name=name, step=step, outcome=decl[1:], match="contains")
-        return cls(name=name, step=step, outcome=decl)
+            return cls(name=name, stage=stage, outcome=decl[1:], match="contains")
+        return cls(name=name, stage=stage, outcome=decl)
 
     def matches(self, step) -> bool:
-        if step.step != self.step:
+        if step.stage != self.stage:
             return False
         outcome = step.outcome or ""
         if self.match == "contains":
@@ -34,9 +34,9 @@ class Signals:
     @classmethod
     def from_graph(cls, graph) -> "Signals":
         specs = []
-        for step, decls in graph.signals.items():
+        for stage, decls in graph.signals.items():
             for name, decl in decls.items():
-                specs.append(SignalSpec.parse(name, step, decl))
+                specs.append(SignalSpec.parse(name, stage, decl))
         return cls(specs)
 
     def tally(self, steps):

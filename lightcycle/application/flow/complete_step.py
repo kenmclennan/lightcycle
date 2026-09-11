@@ -45,80 +45,80 @@ class CompleteStepUseCase:
         if t.state == State.DONE:
             return CompleteResponse(next_step=None)
         if self._is_retro_origin(t):
-            if t.step == AUDIT_STEP:
+            if t.stage == AUDIT_STEP:
                 return self._complete_engine_audit(t, input)
-            if t.step == FINDINGS_STEP:
+            if t.stage == FINDINGS_STEP:
                 return self._complete_findings(t, input)
         return self._complete_workflow(t, input)
 
     def _is_retro_origin(self, t):
-        return RETRO_ORIGIN_LABEL in self._store.labels_of(t.parent)
+        return RETRO_ORIGIN_LABEL in self._store.labels_of(t.item)
 
     def _complete_workflow(self, t, input: CompleteInput) -> CompleteResponse:
         name = self._flow.workflow_for(t)
         transition = self._resolver.resolve(t, input.outcome, name)
-        declared = self._flow.outcomes_for(t.step, name)
+        declared = self._flow.outcomes_for(t.stage, name)
         if transition is None and declared and input.outcome not in declared:
             raise UseCaseError(
                 "no transition for step=%s outcome=%s; not closing. "
-                "Fix the flow or use a defined outcome." % (t.step, input.outcome)
+                "Fix the flow or use a defined outcome." % (t.stage, input.outcome)
             )
-        if transition is None and not self._flow.is_known_step(t.step, name):
+        if transition is None and not self._flow.is_known_step(t.stage, name):
             decision = (
                 "no transition for step=%s outcome=%s; the workflow does not define %s"
-                % (t.step, input.outcome, t.step)
+                % (t.stage, input.outcome, t.stage)
             )
             observation = (
                 "step '%s' completed with outcome '%s', but workflow '%s' has no route "
-                "defined for it" % (t.step, input.outcome, name)
+                "defined for it" % (t.stage, input.outcome, name)
             )
             ParkStepUseCase(self._store).execute(
                 ParkInput(step=input.step, observation=observation, decision=decision)
             )
             return CompleteResponse(next_step=None)
         target = (
-            StepContract.from_meta(self._flow.meta_for_step(transition.to_step, name))
+            StepContract.from_meta(self._flow.meta_for_step(transition.to_stage, name))
             if transition
             else None
         )
         missing = StepContract.from_meta(
-            self._flow.meta_for_step(t.step, name)
+            self._flow.meta_for_step(t.stage, name)
         ).missing_outputs(
             self._store.present_types(t), target
         )
         if missing:
             raise UseCaseError(
                 "cannot close %s: step '%s' must produce %s; none on the item. "
-                "lc link the artifact first." % (input.step, t.step, ", ".join(sorted(missing)))
+                "lc link the artifact first." % (input.step, t.stage, ", ".join(sorted(missing)))
             )
         spec = (
-            transition.next_step_spec(t, self._store.get_node(t.parent).title)
+            transition.next_step_spec(t, self._store.get_node(t.item).title)
             if transition else None
         )
         won, new = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)
         if not won:
             return CompleteResponse(next_step=None)
-        if self._passes.ends_pass(t.step, input.outcome, name):
-            self._passes.close(t.parent, self._worktrees)
+        if self._passes.ends_pass(t.stage, input.outcome, name):
+            self._passes.close(t.item, self._worktrees)
         if new and transition:
-            self._passes.enrol(t.parent, new, transition.to_step, name)
+            self._passes.enrol(t.item, new, transition.to_stage, name)
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
             if transition:
                 self._store.note(new if new else input.step, transition.forward_note(input.note))
             else:
                 self._store.note(input.step, input.note)
-        self._cascade_close(t.parent)
+        self._cascade_close(t.item)
         return CompleteResponse(next_step=new)
 
     def _complete_engine_audit(self, t, input: CompleteInput) -> CompleteResponse:
         spec = None
         if input.outcome == "findings" and input.note:
-            item_title = self._store.get_node(t.parent).title
+            item_title = self._store.get_node(t.item).title
             spec = NodeSpec(
                 title="%s: %s" % (FINDINGS_STEP, item_title), step=FINDINGS_STEP,
-                role="human", parent=t.parent)
+                role="human", parent=t.item)
         won, fid = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)
         if not won:
@@ -127,7 +127,7 @@ class CompleteStepUseCase:
         self._mark_retroed()
         if fid is not None:
             self._store.note(fid, input.note)
-        self._cascade_close(t.parent)
+        self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 
     def _complete_findings(self, t, input: CompleteInput) -> CompleteResponse:
@@ -136,7 +136,7 @@ class CompleteStepUseCase:
         if not won:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
-        self._cascade_close(t.parent)
+        self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 
     def _mark_retroed(self):

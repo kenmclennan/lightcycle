@@ -46,7 +46,7 @@ class TestPlanSession(unittest.TestCase):
     def _resp(self, pin, step_id="s-1", workspace=None, step_file="write-code", stage="write-code"):
         return types.SimpleNamespace(
             pin=pin,
-            view=types.SimpleNamespace(step=types.SimpleNamespace(id=step_id, step=stage)),
+            view=types.SimpleNamespace(step=types.SimpleNamespace(id=step_id, stage=stage)),
             workspace=workspace, step_file=step_file)
 
     def _never_reclaim(self, step_id):

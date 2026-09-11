@@ -48,6 +48,6 @@ class ResolveLogUseCase:
         if not step_id:
             return None
         try:
-            return self._store.get_node(step_id).step
+            return self._store.get_node(step_id).stage
         except KeyError:
             return None

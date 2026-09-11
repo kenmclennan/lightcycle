@@ -66,9 +66,9 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_routing_carries_target_and_role(self):
         t = self.flow.next("build", "done")
-        self.assertEqual(t.to_step, "review")
+        self.assertEqual(t.to_stage, "review")
         self.assertEqual(t.to_role, "agent")
-        self.assertEqual(self.flow.next("review", "rejected").to_step, "build")
+        self.assertEqual(self.flow.next("review", "rejected").to_stage, "build")
 
     def test_terminal_and_conflict_outcomes(self):
         self.assertEqual(self.flow.step_def("ready-merge").pr_merge, "merged")
@@ -100,7 +100,7 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_audit_findings_routes_to_review_findings(self):
         t = self.flow.next("audit", "findings")
-        self.assertEqual(t.to_step, "review-findings")
+        self.assertEqual(t.to_stage, "review-findings")
         self.assertEqual(t.to_role, "human")
 
     def test_audit_clean_is_a_declared_terminal_outcome(self):

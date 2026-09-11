@@ -84,7 +84,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
-        self.assertEqual(step.step, "audit")
+        self.assertEqual(step.stage, "audit")
         self.assertEqual(step.role, "agent")
 
     def test_fired_audit_has_a_real_item_parent_carrying_retro_origin_and_no_repo(self):
@@ -93,12 +93,12 @@ class TestRetroCadenceFires(unittest.TestCase):
             _close_item(s, "item %d" % i, reflections=1)
         result = _gate(s, interval_reflections=3).execute(0.0)
         step = s.get_node(result.fired[0])
-        self.assertIsNotNone(step.parent)
-        parent = s.get_node(step.parent)
+        self.assertIsNotNone(step.item)
+        parent = s.get_node(step.item)
         self.assertEqual(parent.type, "item")
         self.assertEqual(s.item_artifacts(parent.id), [])
-        s.complete_node(step.parent, "done")
-        self.assertNotIn(step.parent, [i.id for i in s.closed_unretroed_items()])
+        s.complete_node(step.item, "done")
+        self.assertNotIn(step.item, [i.id for i in s.closed_unretroed_items()])
 
     def test_fired_audit_title(self):
         s = FakeStore()
@@ -143,7 +143,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
-        parent = s.get_node(step.parent)
+        parent = s.get_node(step.item)
         self.assertEqual(parent.state, State.QUEUED)
 
     def test_fired_audit_title_and_description_count_only_the_feedback_carrying_batch(self):
@@ -151,7 +151,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         feedback_ids = [_close_item(s, "item %d" % i, reflections=1) for i in range(3)]
         no_feedback_id = _close_item(s, "no feedback item")
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
-        parent = s.get_node(step.parent)
+        parent = s.get_node(step.item)
         self.assertEqual(parent.title, "Audit of 3 closed items, 0 closed passes")
         self.assertEqual(
             parent.description,
@@ -164,7 +164,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         _close_item(s, "ten", reflections=1, id="proj-10")
         _close_item(s, "nine", reflections=1, id="proj-9")
         step = s.get_node(_gate(s, interval_reflections=2).execute(0.0).fired[0])
-        parent = s.get_node(step.parent)
+        parent = s.get_node(step.item)
         self.assertEqual(parent.description, "batch: proj-9, proj-10")
 
     def test_parent_item_reads_running_once_audit_is_claimed(self):
@@ -174,7 +174,7 @@ class TestRetroCadenceFires(unittest.TestCase):
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
         s.assign(step.id, "audit")
         s.update_state(step.id, State.RUNNING)
-        parent = s.get_node(step.parent)
+        parent = s.get_node(step.item)
         self.assertEqual(parent.state, State.RUNNING)
 
 
@@ -246,7 +246,7 @@ class TestRetroCadenceFiresForOpenItemPasses(unittest.TestCase):
         item_id = _close_item(s, "closed item", reflections=2)
         looping_item, pid = _open_item_with_closed_pass(s, "looping item", reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
-        parent = s.get_node(step.parent)
+        parent = s.get_node(step.item)
         self.assertEqual(parent.title, "Audit of 1 closed items, 1 closed passes")
         self.assertEqual(
             parent.description, "batch: %s" % ", ".join(sorted([item_id, pid]))

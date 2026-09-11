@@ -34,7 +34,7 @@ def select_priority_rows(store, lanes, flow_service):
          + [(n, flow_service.flow_for(n)) for n in held]),
     ):
         for node, flow in nodes_and_flow:
-            owning_id = node.parent or node.id
+            owning_id = node.item or node.id
             if owning_id in claimed:
                 continue
             claimed.add(owning_id)
