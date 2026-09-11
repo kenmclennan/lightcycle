@@ -1,3 +1,4 @@
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import WorkerPool, price_tokens
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
@@ -46,11 +47,11 @@ class LiveUsageAccrualUseCase:
         posted_output = resume.get("posted_output_tokens", 0)
         posted_cache_read = resume.get("posted_cache_read_tokens", 0)
         posted_cache_creation = resume.get("posted_cache_creation_tokens", 0)
-        posted_cost = resume.get("posted_cost_usd", 0.0)
+        posted_cost = Cost.from_usd(resume.get("posted_cost_usd", 0.0))
         posted_turn_count = resume.get("posted_turn_count", 0)
         posted_tool_usage = dict(resume.get("posted_tool_usage") or {})
 
-        cost_usd = 0.0
+        cost_usd = Cost()
         cost_basis = None
         if (
             delta.recovered_input_tokens or delta.recovered_output_tokens
@@ -68,7 +69,7 @@ class LiveUsageAccrualUseCase:
             posted_output += delta.recovered_output_tokens
             posted_cache_read += delta.recovered_cache_read_tokens
             posted_cache_creation += delta.recovered_cache_creation_tokens
-            posted_cost += cost_usd
+            posted_cost = posted_cost + cost_usd
 
         if delta.turn_count or delta.tool_usage:
             posted_turn_count += delta.turn_count
@@ -91,13 +92,13 @@ class LiveUsageAccrualUseCase:
             posted_output_tokens=posted_output,
             posted_cache_read_tokens=posted_cache_read,
             posted_cache_creation_tokens=posted_cache_creation,
-            posted_cost_usd=posted_cost,
+            posted_cost_usd=posted_cost.to_usd(),
             tid=w.step,
             input_tokens=delta.recovered_input_tokens,
             output_tokens=delta.recovered_output_tokens,
             cache_read_tokens=delta.recovered_cache_read_tokens,
             cache_creation_tokens=delta.recovered_cache_creation_tokens,
-            cost_usd=cost_usd,
+            cost_usd=cost_usd.to_usd(),
             cost_basis=cost_basis,
             thinking_tokens=None,
             turn_count=delta.turn_count,

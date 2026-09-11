@@ -22,10 +22,10 @@ class TestExportSnapshot(unittest.TestCase):
 
         self.assertEqual(set(rows), {item, step, blocker})
 
-        story_row = rows[item]
-        self.assertEqual(story_row["type"], "item")
+        item_row = rows[item]
+        self.assertEqual(item_row["type"], "item")
         self.assertEqual(
-            story_row["artifacts"],
+            item_row["artifacts"],
             [{"type": "spec", "value": "/specs/GRID-059.md", "kind": "filepath"}],
         )
 

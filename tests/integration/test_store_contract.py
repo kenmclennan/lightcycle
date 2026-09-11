@@ -7,6 +7,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
 import lightcycle.cli as cli
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
@@ -955,7 +956,7 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         self.assertEqual(t.usage_output_tokens, 0)
         self.assertEqual(t.usage_cache_read_tokens, 0)
         self.assertEqual(t.usage_cache_creation_tokens, 0)
-        self.assertEqual(t.usage_cost_usd, 0.0)
+        self.assertEqual(t.usage_cost_usd, Cost())
         self.assertIsNone(t.usage_cost_basis)
         self.assertIsNone(t.usage_thinking_tokens)
         self.assertEqual(t.turn_count, 0)

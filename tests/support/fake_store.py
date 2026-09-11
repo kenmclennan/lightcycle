@@ -10,6 +10,7 @@ from lightcycle.ports.store import (
     ProjectEntry,
     StorePort,
 )
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work import (
@@ -88,7 +89,7 @@ def record_to_step(record, blocked_by=None):
         usage_output_tokens=meta.get("usage_output_tokens") or 0,
         usage_cache_read_tokens=meta.get("usage_cache_read_tokens") or 0,
         usage_cache_creation_tokens=meta.get("usage_cache_creation_tokens") or 0,
-        usage_cost_usd=meta.get("usage_cost_usd") or 0.0,
+        usage_cost_usd=Cost.from_usd(meta.get("usage_cost_usd") or 0.0),
         usage_cost_basis=meta.get("usage_cost_basis"),
         usage_thinking_tokens=meta.get("usage_thinking_tokens"),
         turn_count=meta.get("turn_count") or 0,
@@ -342,23 +343,8 @@ class FakeStore(StorePort):
         self.assign(tid, "")
 
     def closed_items(self):
-        result = []
-        for b in self._records.values():
-            if b.get("type") != "item" or b.get("state") != "done":
-                continue
-            result.append(
-                {
-                    "id": b["id"],
-                    "title": b.get("title", ""),
-                    "closed_at": b.get("closed_at"),
-                    "outcome": b.get("outcome"),
-                    "artifacts": [
-                        Artifact.from_dict(a)
-                        for a in ((b.get("metadata") or {}).get("artifacts") or [])
-                    ],
-                }
-            )
-        return result
+        return [self._to_item(b) for b in self._records.values()
+                if b.get("type") == "item" and b.get("state") == "done"]
 
     def snapshot_nodes(self):
         result = []
@@ -582,7 +568,7 @@ class FakeStore(StorePort):
         if stored:
             self.record_usage(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
-                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
                 usage.thinking_tokens,
             )
             self.record_attribution(step_id, attribution.turn_count, attribution.tool_usage)
@@ -639,7 +625,7 @@ class FakeStore(StorePort):
         if not usage.has_result_line and step_id is not None and step_id in self._records:
             self.record_usage(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
-                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
                 usage.thinking_tokens,
             )
             recovered = True
@@ -658,7 +644,7 @@ class FakeStore(StorePort):
         meta["usage_output_tokens"] = usage_totals.output_tokens
         meta["usage_cache_read_tokens"] = usage_totals.cache_read_tokens
         meta["usage_cache_creation_tokens"] = usage_totals.cache_creation_tokens
-        meta["usage_cost_usd"] = usage_totals.cost_usd
+        meta["usage_cost_usd"] = usage_totals.cost_usd.to_usd()
         meta["usage_cost_basis"] = usage_totals.cost_basis
         meta["usage_thinking_tokens"] = usage_totals.thinking_tokens
         meta["turn_count"] = turn_count

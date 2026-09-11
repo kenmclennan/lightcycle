@@ -2,8 +2,8 @@ from lightcycle.application.flow.engine_steps import StepKind
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
 
 
-def format_usd(amount) -> str:
-    return "$%.2f" % amount
+def format_usd(cost) -> str:
+    return "$%.2f" % cost.to_usd()
 
 
 def format_tokens(n) -> str:

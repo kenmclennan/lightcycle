@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.work import CostInput, CostUseCase
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.work.cost import ToolUsageRow
 from tests.support.fake_store import FakeStore
@@ -18,7 +19,7 @@ class TestCostUseCase(unittest.TestCase):
 
         self.assertTrue(cost.applicable)
         self.assertEqual(cost.turn_count, 4)
-        self.assertEqual(cost.cost_usd, 1.5)
+        self.assertEqual(cost.cost_usd, Cost.from_usd(1.5))
         self.assertEqual(cost.tools, (ToolUsageRow("Read", 2, 40),))
 
     def test_item_node_rolls_up_every_step_across_passes(self):
@@ -34,7 +35,7 @@ class TestCostUseCase(unittest.TestCase):
         cost = CostUseCase(store).execute(CostInput(node=item))
 
         self.assertEqual(cost.turn_count, 8)
-        self.assertAlmostEqual(cost.cost_usd, 3.0)
+        self.assertEqual(cost.cost_usd, Cost.from_usd(3.0))
 
     def test_item_node_excludes_human_steps_from_the_rollup(self):
         store = FakeStore()

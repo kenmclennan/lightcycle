@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from lightcycle.domain.money import Cost
 from lightcycle.domain.work.park import Park
 from lightcycle.domain.work.state import State
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class Step:
     id: str
     item: str
@@ -31,7 +32,7 @@ class Step:
     usage_output_tokens: int = 0
     usage_cache_read_tokens: int = 0
     usage_cache_creation_tokens: int = 0
-    usage_cost_usd: float = 0.0
+    usage_cost_usd: Cost = field(default_factory=Cost)
     usage_cost_basis: Optional[str] = None
     usage_thinking_tokens: Optional[int] = None
     turn_count: int = 0
@@ -86,7 +87,7 @@ class Step:
             "usage_output_tokens": self.usage_output_tokens,
             "usage_cache_read_tokens": self.usage_cache_read_tokens,
             "usage_cache_creation_tokens": self.usage_cache_creation_tokens,
-            "usage_cost_usd": self.usage_cost_usd,
+            "usage_cost_usd": self.usage_cost_usd.to_usd(),
             "usage_cost_basis": self.usage_cost_basis,
             "usage_thinking_tokens": self.usage_thinking_tokens,
             "turn_count": self.turn_count,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 
 _SECTIONS = ("nodes", "edges", "hooks", "signals", "display", "pass-end", "disposition")
@@ -20,6 +21,24 @@ class WorkflowGraph:
     display: dict = field(default_factory=dict)
     pass_ends: frozenset = field(default_factory=frozenset)
     disposition: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        object.__setattr__(self, "nodes", MappingProxyType(dict(self.nodes)))
+        object.__setattr__(
+            self, "edges", MappingProxyType({k: MappingProxyType(dict(v)) for k, v in self.edges.items()})
+        )
+        object.__setattr__(
+            self, "hooks",
+            MappingProxyType({k: tuple(tuple(occ) for occ in v) for k, v in self.hooks.items()}),
+        )
+        object.__setattr__(
+            self, "signals", MappingProxyType({k: MappingProxyType(dict(v)) for k, v in self.signals.items()})
+        )
+        object.__setattr__(self, "workspaces", MappingProxyType(dict(self.workspaces)))
+        object.__setattr__(self, "phases", MappingProxyType(dict(self.phases)))
+        object.__setattr__(self, "primary", MappingProxyType(dict(self.primary)))
+        object.__setattr__(self, "display", MappingProxyType(dict(self.display)))
+        object.__setattr__(self, "disposition", MappingProxyType(dict(self.disposition)))
 
     def file_for(self, stage):
         return self.nodes.get(stage, stage)
@@ -49,7 +68,7 @@ class WorkflowGraph:
         return (self.edges.get(stage) or {}).get(outcome)
 
     def hook_occurrences(self, name):
-        return self.hooks.get(name, [])
+        return self.hooks.get(name, ())
 
     def disposition_for(self, outcome):
         return self.disposition.get(outcome)

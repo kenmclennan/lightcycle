@@ -62,6 +62,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration
+from lightcycle.domain.money import Cost
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, is_human_step, item_cost, parse_timestamp, row_bucket, step_cost,
@@ -166,7 +167,7 @@ def step_cost_fields(cost):
 
 
 def item_cost_fields(cost):
-    fields = [("cost", format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED)]
+    fields = [("cost", format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED)]
     fields.append(("turns", format_tokens(cost.turn_count)))
     fields.append(("input_tokens", format_tokens(cost.input_tokens)))
     fields.append(("output_tokens", format_tokens(cost.output_tokens)))
@@ -179,11 +180,11 @@ def item_cost_fields(cost):
 
 
 def _stage_cost_text(row):
-    if row.cost_usd > 0:
+    if row.cost_usd:
         return format_usd(row.cost_usd)
     if row.turn_count > 0:
         return COST_NOT_RECORDED
-    return format_usd(0.0)
+    return format_usd(Cost())
 
 
 def _cost_tool_atomic_text(row):
@@ -333,9 +334,9 @@ def _step_count_text(children):
 
 def _item_cost_text(children):
     cost = item_cost(children)
-    if cost.turn_count == 0 and cost.cost_usd == 0:
+    if cost.turn_count == 0 and not cost.cost_usd:
         return ""
-    return format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
+    return format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
 
 
 def _item_wall_active(store, item, children, now):
@@ -507,7 +508,7 @@ def hierarchy_usage_text(node):
         return "", ""
     n = cost.turn_count
     turns_text = "%s turn%s" % (format_tokens(n), "" if n == 1 else "s")
-    cost_text = format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
+    cost_text = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
     return turns_text, cost_text
 
 

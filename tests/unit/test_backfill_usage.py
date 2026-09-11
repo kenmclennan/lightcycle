@@ -4,7 +4,8 @@ import unittest
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.backfill_usage import BackfillUsageUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
-from lightcycle.domain.pool import ToolUsage
+from lightcycle.domain.money import Cost
+from lightcycle.domain.pool import ModelRates, ToolUsage
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.ports.breaker import BreakerPort
 from tests.support.fake_fs import FakeFs
@@ -51,7 +52,7 @@ class FakeConfig:
         return self._root
 
     def usage_pricing(self):
-        return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
+        return {"sonnet": ModelRates(input=2.0, output=10.0, cache_write=2.5, cache_read=0.2)}
 
     def max_boot_seconds(self):
         return 120
@@ -233,7 +234,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         self.assertEqual(resp.recovered, 1)
         t = store.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 1_000_000)
-        self.assertAlmostEqual(t.usage_cost_usd, 2.0)
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(2.0))
         self.assertEqual(t.usage_cost_basis, "derived")
 
     def test_an_unclassified_row_that_turns_out_to_have_a_result_line_only_flips_classification(self):
@@ -250,7 +251,7 @@ class TestBackfillUsageReclassification(unittest.TestCase):
         self.assertEqual(resp.recovered, 0)
         t = store.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 0)
-        self.assertEqual(t.usage_cost_usd, 0.0)
+        self.assertEqual(t.usage_cost_usd, Cost())
 
     def test_an_empty_unclassified_set_leaves_the_main_loop_behavior_unchanged(self):
         store = FakeStore()
@@ -368,7 +369,7 @@ class TestBackfillUsageRepair(unittest.TestCase):
         self.assertEqual(resp.repair_corrected, 1)
         t = store.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 68)
-        self.assertEqual(t.usage_cost_usd, 0.5)
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(0.5))
         self.assertEqual(t.turn_count, 1)
         self.assertEqual(store.tool_usage_for(tid), _bash_tool_usage(tid))
 

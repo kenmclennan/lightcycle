@@ -3,6 +3,7 @@ import unittest
 
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.domain.pool import ModelRates
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.workers import RegistryUnreadable
@@ -116,7 +117,7 @@ class FakeConfig:
         return self._spin_cap
 
     def usage_pricing(self):
-        return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
+        return {"sonnet": ModelRates(input=2.0, output=10.0, cache_write=2.5, cache_read=0.2)}
 
 
 class TestBreakerGateUseCase(unittest.TestCase):
@@ -497,7 +498,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
         self.assertEqual(
             store.record_usage_calls,
-            [(tid, 68, 16478, 2190437, 72581, 0.8933274, "list", 9899)],
+            [(tid, 68, 16478, 2190437, 72581, 0.893327, "list", 9899)],
         )
 
     def test_a_dead_worker_with_no_step_causes_no_record_usage_call(self):

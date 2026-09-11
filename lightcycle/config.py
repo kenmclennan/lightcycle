@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from lightcycle import frontmatter
+from lightcycle.domain.pool import ModelRates
 
 
 _GETTER_NAME_OVERRIDES = {
@@ -454,12 +455,12 @@ class Config:
 
     def usage_pricing(self):
         return {
-            "sonnet": {
-                "input": self.price_sonnet_input_per_mtok(),
-                "output": self.price_sonnet_output_per_mtok(),
-                "cache_write": self.price_sonnet_cache_write_per_mtok(),
-                "cache_read": self.price_sonnet_cache_read_per_mtok(),
-            },
+            "sonnet": ModelRates(
+                input=self.price_sonnet_input_per_mtok(),
+                output=self.price_sonnet_output_per_mtok(),
+                cache_write=self.price_sonnet_cache_write_per_mtok(),
+                cache_read=self.price_sonnet_cache_read_per_mtok(),
+            ),
         }
 
     def personal_origin(self):

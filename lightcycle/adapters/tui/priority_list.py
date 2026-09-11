@@ -114,9 +114,9 @@ def _queued_row(store, node, flow):
 
 def _rolled_up_cost_text(store, item_id):
     cost = CostUseCase(store).execute(CostInput(node=item_id))
-    if cost.turn_count == 0 and cost.cost_usd == 0:
+    if cost.turn_count == 0 and not cost.cost_usd:
         return ""
-    return format_usd(cost.cost_usd) if cost.cost_usd > 0 else COST_NOT_RECORDED
+    return format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
 
 
 def _rolled_up_time_text(store, item_id):

@@ -40,10 +40,10 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "  pr_conflict_cap  ready-merge  3\n"
             "  deploy_green    audit\n"
         )
-        self.assertEqual(graph.hook_occurrences("pr_merge"), [["ready-merge", "merged"]])
-        self.assertEqual(graph.hook_occurrences("pr_conflict_cap"), [["ready-merge", "3"]])
-        self.assertEqual(graph.hook_occurrences("deploy_green"), [["audit"]])
-        self.assertEqual(graph.hook_occurrences("pr_close"), [])
+        self.assertEqual(graph.hook_occurrences("pr_merge"), (("ready-merge", "merged"),))
+        self.assertEqual(graph.hook_occurrences("pr_conflict_cap"), (("ready-merge", "3"),))
+        self.assertEqual(graph.hook_occurrences("deploy_green"), (("audit",),))
+        self.assertEqual(graph.hook_occurrences("pr_close"), ())
 
     def test_a_hook_can_fire_on_multiple_stages(self):
         graph = parse_graph(
@@ -55,7 +55,7 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         )
         self.assertEqual(
             graph.hook_occurrences("pr_merge"),
-            [["spec-await-merge", "spec-merged"], ["code-await-merge", "merged"]],
+            (("spec-await-merge", "spec-merged"), ("code-await-merge", "merged")),
         )
 
     def test_hook_extra_carries_a_third_token(self):
@@ -67,7 +67,7 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "  pr_merge       ready-merge  merged\n"
         )
         self.assertEqual(graph.hook_occurrences("ci_failed_cap"),
-                         [["watch-ci", "3", "review-ci"]])
+                         (("watch-ci", "3", "review-ci"),))
 
     def test_parses_signals_by_stage(self):
         graph = parse_graph(

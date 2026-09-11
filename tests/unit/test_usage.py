@@ -2,8 +2,9 @@ import json
 import unittest
 
 from lightcycle.adapters.claude_stream import parse_usage_event
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import AttributionEvent
-from lightcycle.domain.pool.usage import UsageEvent, price_tokens, resolve_usage
+from lightcycle.domain.pool.usage import ModelRates, UsageEvent, price_tokens, resolve_usage
 
 
 def _result_line(model_usage):
@@ -11,7 +12,7 @@ def _result_line(model_usage):
 
 
 _RATES = {
-    "sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2},
+    "sonnet": ModelRates(input=2.0, output=10.0, cache_write=2.5, cache_read=0.2),
 }
 
 
@@ -29,7 +30,7 @@ class TestParseUsageEvent(unittest.TestCase):
         self.assertEqual(event.output_tokens, 16478)
         self.assertEqual(event.cache_read_tokens, 2190437)
         self.assertEqual(event.cache_creation_tokens, 72581)
-        self.assertEqual(event.cost_usd, 0.8933274)
+        self.assertEqual(event.cost_usd, Cost.from_usd(0.8933274))
         self.assertEqual(event.cost_basis, "list")
         self.assertEqual(event.thinking_tokens, 9899)
 
@@ -39,14 +40,14 @@ class TestParseUsageEvent(unittest.TestCase):
         self.assertEqual(event.output_tokens, 0)
         self.assertEqual(event.cache_read_tokens, 0)
         self.assertEqual(event.cache_creation_tokens, 0)
-        self.assertEqual(event.cost_usd, 0.0)
+        self.assertEqual(event.cost_usd, Cost())
         self.assertIsNone(event.cost_basis)
         self.assertIsNone(event.thinking_tokens)
 
     def test_no_result_line_returns_zeroed_event_not_none(self):
         event = parse_usage_event(['{"type":"assistant","message":"hi"}'])
         self.assertEqual(event.input_tokens, 0)
-        self.assertEqual(event.cost_usd, 0.0)
+        self.assertEqual(event.cost_usd, Cost())
         self.assertIsNone(event.cost_basis)
         self.assertIsNone(event.thinking_tokens)
 
@@ -66,7 +67,7 @@ class TestParseUsageEvent(unittest.TestCase):
         event = parse_usage_event([line])
         self.assertEqual(event.input_tokens, 15)
         self.assertEqual(event.output_tokens, 23)
-        self.assertAlmostEqual(event.cost_usd, 0.12)
+        self.assertEqual(event.cost_usd, Cost.from_usd(0.12))
 
     def test_missing_cost_basis_and_thinking_tokens_keys_are_none(self):
         line = _result_line({
@@ -85,7 +86,7 @@ class TestParseUsageEvent(unittest.TestCase):
         ]
         event = parse_usage_event(lines)
         self.assertEqual(event.input_tokens, 68)
-        self.assertAlmostEqual(event.cost_usd, 1.01)
+        self.assertEqual(event.cost_usd, Cost.from_usd(1.01))
 
 
 class TestPriceTokens(unittest.TestCase):
@@ -93,17 +94,17 @@ class TestPriceTokens(unittest.TestCase):
         cost, basis = price_tokens(
             "sonnet", 1_000_000, 1_000_000, 1_000_000, 1_000_000, _RATES
         )
-        self.assertAlmostEqual(cost, 2.0 + 10.0 + 0.2 + 2.5)
+        self.assertEqual(cost, Cost.from_usd(2.0 + 10.0 + 0.2 + 2.5))
         self.assertEqual(basis, "derived")
 
     def test_unknown_model_returns_zero_cost_and_no_basis(self):
         cost, basis = price_tokens("haiku", 1_000_000, 0, 0, 0, _RATES)
-        self.assertEqual(cost, 0.0)
+        self.assertEqual(cost, Cost())
         self.assertIsNone(basis)
 
     def test_only_cache_read_tokens_prices_at_just_the_cache_read_rate(self):
         cost, basis = price_tokens("sonnet", 0, 0, 1_000_000, 0, _RATES)
-        self.assertAlmostEqual(cost, 0.2)
+        self.assertEqual(cost, Cost.from_usd(0.2))
         self.assertEqual(basis, "derived")
 
 
@@ -136,7 +137,7 @@ class TestResolveUsage(unittest.TestCase):
         self.assertEqual(result.output_tokens, 1_000_000)
         self.assertEqual(result.cache_read_tokens, 1_000_000)
         self.assertEqual(result.cache_creation_tokens, 1_000_000)
-        self.assertAlmostEqual(result.cost_usd, 2.0 + 10.0 + 0.2 + 2.5)
+        self.assertEqual(result.cost_usd, Cost.from_usd(2.0 + 10.0 + 0.2 + 2.5))
         self.assertEqual(result.cost_basis, "derived")
 
     def test_no_result_line_with_recovered_tokens_and_an_unpriced_model_records_tokens_only(self):
@@ -144,7 +145,7 @@ class TestResolveUsage(unittest.TestCase):
         attribution = _attribution(recovered_input_tokens=1_000_000)
         result = resolve_usage(usage, attribution, "haiku", _RATES)
         self.assertEqual(result.input_tokens, 1_000_000)
-        self.assertEqual(result.cost_usd, 0.0)
+        self.assertEqual(result.cost_usd, Cost())
         self.assertIsNone(result.cost_basis)
 
 

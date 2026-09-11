@@ -3,6 +3,7 @@ import unittest
 
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
+from lightcycle.domain.pool import ModelRates
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -44,7 +45,7 @@ class RecordingFakeStore(FakeStore):
 
 class FakeConfig:
     def usage_pricing(self):
-        return {"sonnet": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.2}}
+        return {"sonnet": ModelRates(input=2.0, output=10.0, cache_write=2.5, cache_read=0.2)}
 
 
 def _assistant(message_id, tool_use=None, usage=None):
