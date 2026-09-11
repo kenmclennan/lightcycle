@@ -132,10 +132,10 @@ class TestReviews(unittest.TestCase):
 
         self.assertEqual(reviews, ReadFailure(1, "gh: bad jq filter"))
 
-    def test_non_pr_url_returns_empty_list(self):
+    def test_non_pr_url_returns_read_failure(self):
         reviews = self.adapter.reviews("not-a-pr-url", since=0.0)
 
-        self.assertEqual(reviews, [])
+        self.assertIsInstance(reviews, ReadFailure)
 
 
 class TestPullComments(unittest.TestCase):
@@ -257,10 +257,10 @@ class TestPullComments(unittest.TestCase):
 
         self.assertEqual(comments, ReadFailure(1, "gh: bad jq filter"))
 
-    def test_non_pr_url_returns_empty_list(self):
+    def test_non_pr_url_returns_read_failure(self):
         comments = self.adapter.pull_comments("not-a-pr-url", since=0.0)
 
-        self.assertEqual(comments, [])
+        self.assertIsInstance(comments, ReadFailure)
 
 
 class TestComments(unittest.TestCase):
@@ -353,10 +353,10 @@ class TestComments(unittest.TestCase):
 
         self.assertEqual(comments, ReadFailure(1, "gh: bad jq filter"))
 
-    def test_non_pr_url_returns_empty_list(self):
+    def test_non_pr_url_returns_read_failure(self):
         comments = self.adapter.comments_since("not-a-pr-url", since=0.0)
 
-        self.assertEqual(comments, [])
+        self.assertIsInstance(comments, ReadFailure)
 
 
 class TestLastPushTime(unittest.TestCase):
@@ -383,13 +383,22 @@ class TestLastPushTime(unittest.TestCase):
 
         self.assertGreater(result, 0.0)
 
-    def test_no_commits_returns_zero(self):
+    def test_no_commits_returns_read_failure(self):
         with patch(
             "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
         ):
             result = self.adapter.last_push_time(_PR)
 
-        self.assertEqual(result, 0.0)
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_unparseable_date_returns_read_failure(self):
+        with patch(
+            "lightcycle.adapters.github.subprocess.run",
+            return_value=_proc("not-a-date\n"),
+        ):
+            result = self.adapter.last_push_time(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
 
     def test_command_failure_returns_a_distinguishable_read_failure(self):
         with patch(
@@ -400,10 +409,10 @@ class TestLastPushTime(unittest.TestCase):
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
 
-    def test_non_pr_url_returns_zero(self):
+    def test_non_pr_url_returns_read_failure(self):
         result = self.adapter.last_push_time("not-a-pr-url")
 
-        self.assertEqual(result, 0.0)
+        self.assertIsInstance(result, ReadFailure)
 
 
 class TestChangedFiles(unittest.TestCase):

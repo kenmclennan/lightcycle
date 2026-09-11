@@ -69,7 +69,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
     def last_push_time(self, pr: str) -> Union[float, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
-            return 0.0
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         try:
             result = subprocess.run(
@@ -87,16 +87,16 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(result.returncode, result.stderr)
         date_str = result.stdout.strip()
         if not date_str:
-            return 0.0
+            return ReadFailure(-1, "gh returned no commit date for %r" % pr)
         try:
             return _parse_iso(date_str)
         except (ValueError, KeyError):
-            return 0.0
+            return ReadFailure(-1, "could not parse commit date %r for %r" % (date_str, pr))
 
     def comments_since(self, pr: str, since: float):
         parts = _repo_parts(pr)
         if not parts:
-            return []
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         result = []
 
@@ -143,7 +143,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
     def pull_comments(self, pr: str, since: float):
         parts = _repo_parts(pr)
         if not parts:
-            return []
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         result = []
 
@@ -274,7 +274,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
     def reviews(self, pr: str, since: float):
         parts = _repo_parts(pr)
         if not parts:
-            return []
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         result = []
 
