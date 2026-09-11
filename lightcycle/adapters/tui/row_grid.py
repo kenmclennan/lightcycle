@@ -66,19 +66,8 @@ def compute_layout(row_budget, glyph_columns, atomic_values, indent):
     return GridLayout(atomic_widths, remaining, False, False, floor_width)
 
 
-def row_budget_for(table, num_columns):
-    padding = 2 * table.cell_padding * num_columns
-    return table.size.width - table.scrollbar_gutter.width - padding
-
-
 def scrollbar_reservation_width(table_cls):
     return table_cls().styles.scrollbar_size_vertical
-
-
-def render_row_budget(table, layout, num_columns):
-    if layout.stacked:
-        return row_budget_for(table, 1)
-    return row_budget_for(table, num_columns)
 
 
 def screen_row_budget_for(table, num_columns):

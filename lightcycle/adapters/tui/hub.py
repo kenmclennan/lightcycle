@@ -36,8 +36,8 @@ from lightcycle.adapters.tui.row_grid import (
     pad_atomic_field,
     pad_field,
     pad_field_right,
-    render_row_budget,
-    row_budget_for,
+    render_screen_row_budget,
+    screen_row_budget_for,
     stacked_cell,
     truncate_field,
     wrap_continuation,
@@ -607,8 +607,8 @@ def detail_row_cells(field, layout=None, row_budget=None):
     )
 
 
-def _cost_pane_row_budget(pane, columns):
-    return pane.size.width - pane.scrollbar_gutter.width - COST_COLUMN_GAP * (columns - 1)
+def _cost_pane_screen_row_budget(pane, columns):
+    return pane.screen.size.width - pane.scrollbar_gutter.width - COST_COLUMN_GAP * (columns - 1)
 
 
 def _cost_row_text(label, value, layout, row_budget):
@@ -1298,6 +1298,15 @@ class NodeHubScreen(Screen):
         self.call_after_refresh(self._initial_refresh)
         self._poll_timer = self.set_interval(POLL_INTERVAL_SECONDS, self.poll_refresh)
 
+    def on_resize(self, event: events.Resize) -> None:
+        self.call_after_refresh(self._on_terminal_resized)
+
+    def _on_terminal_resized(self) -> None:
+        self.refresh_hierarchy_width()
+        self.refresh_artifacts_width()
+        self.refresh_detail_width()
+        self.refresh_cost_width()
+
     def on_screen_suspend(self) -> None:
         if self._poll_timer is not None:
             self._poll_timer.pause()
@@ -1472,7 +1481,7 @@ class NodeHubScreen(Screen):
             "time": [hierarchy_time_text(store, r.node, now) for r in step_rows],
             "cost": [cost_text for _turns_text, cost_text in usage],
         }
-        row_budget = row_budget_for(table, len(COLUMN_GRIDS["workflow"]))
+        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["workflow"]))
         max_depth = max((r.depth for r in rows), default=0)
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + max_depth
         return compute_layout(row_budget, ["icon"], atomic_values, indent)
@@ -1557,9 +1566,6 @@ class NodeHubScreen(Screen):
         ):
             self._update_hierarchy_cells(table, rows, multi_pass)
             return
-        if table.size.width == 0:
-            self._hierarchy_needs_rebuild = True
-            return
 
         self._hierarchy_floor = bool(rows) and layout.floor
         self._hierarchy_stacked = layout.stacked
@@ -1573,7 +1579,7 @@ class NodeHubScreen(Screen):
 
         selected_id = self._selected_id(table) or self._hierarchy_target_id
         table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["workflow"]))
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["workflow"]))
         self._hierarchy_layout_cache = layout
         self._hierarchy_row_budget_cache = row_budget
         store = self._container.store
@@ -1613,7 +1619,7 @@ class NodeHubScreen(Screen):
     def _update_hierarchy_cells(self, table, rows, multi_pass) -> None:
         table_ = self.query_one(HierarchyPagingTable)
         layout = self._hierarchy_layout(table_, rows)
-        row_budget = render_row_budget(table_, layout, len(COLUMN_GRIDS["workflow"]))
+        row_budget = render_screen_row_budget(table_, layout, len(COLUMN_GRIDS["workflow"]))
         self._hierarchy_layout_cache = layout
         self._hierarchy_row_budget_cache = row_budget
         store = self._container.store
@@ -1687,12 +1693,12 @@ class NodeHubScreen(Screen):
 
     def _artifacts_layout(self, table, artifacts):
         atomic_values = {"type": [type_label(a) for a in artifacts]}
-        row_budget = row_budget_for(table, len(COLUMN_GRIDS["artifacts"]))
+        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["artifacts"]))
         return compute_layout(row_budget, [], atomic_values, indent=ARTIFACTS_CONTINUATION_INDENT)
 
     def _detail_layout(self, table, fields):
         atomic_values = {"key": [DETAIL_FIELD_LABELS[key] for key, _value in fields]}
-        row_budget = row_budget_for(table, len(COLUMN_GRIDS["detail"]))
+        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["detail"]))
         return compute_layout(row_budget, [], atomic_values, indent=DETAIL_CONTINUATION_INDENT)
 
     def _selected_artifact_index(self, table):
@@ -1720,9 +1726,6 @@ class NodeHubScreen(Screen):
             self._last_artifacts_shape = shape
             self._update_artifact_cells(table, artifacts)
             return
-        if table.size.width == 0:
-            self._artifacts_needs_rebuild = True
-            return
 
         self._artifacts_floor = bool(artifacts) and layout.floor
         self._artifacts_stacked = layout.stacked
@@ -1736,7 +1739,7 @@ class NodeHubScreen(Screen):
 
         selected_index = self._selected_artifact_index(table)
         table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -1756,7 +1759,7 @@ class NodeHubScreen(Screen):
 
     def _update_artifact_cells(self, table, artifacts) -> None:
         layout = self._artifacts_layout(table, artifacts)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
         for index, artifact in enumerate(artifacts):
             cells = artifact_row_cells(artifact, layout, row_budget)
             if layout.stacked:
@@ -1783,9 +1786,6 @@ class NodeHubScreen(Screen):
             self._last_detail_shape = shape
             self._update_detail_cells(table, fields)
             return
-        if table.size.width == 0:
-            self._detail_needs_rebuild = True
-            return
 
         self._detail_floor = bool(fields) and layout.floor
         self._detail_stacked = layout.stacked
@@ -1799,7 +1799,7 @@ class NodeHubScreen(Screen):
 
         selected_key = self._selected_detail_key(table)
         table.clear(columns=True)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -1829,7 +1829,7 @@ class NodeHubScreen(Screen):
 
     def _update_detail_cells(self, table, fields) -> None:
         layout = self._detail_layout(table, fields)
-        row_budget = render_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
         for field in fields:
             cells = detail_row_cells(field, layout, row_budget)
             if layout.stacked:
@@ -1840,7 +1840,7 @@ class NodeHubScreen(Screen):
 
     def _cost_layout(self, pane, rows):
         atomic_values = {"key": [label for _key, label, _value in rows if label]}
-        row_budget = _cost_pane_row_budget(pane, 2)
+        row_budget = _cost_pane_screen_row_budget(pane, 2)
         return compute_layout(row_budget, [], atomic_values, indent=COST_CONTINUATION_INDENT)
 
     def _cost_floor_message(self, layout, pane):
@@ -1887,8 +1887,6 @@ class NodeHubScreen(Screen):
         shape = tuple(rows)
         if shape == self._last_cost_shape and not initial:
             return
-        if pane.size.width == 0:
-            return
 
         layout = self._cost_layout(pane, rows)
         self._cost_floor = layout.floor
@@ -1901,7 +1899,9 @@ class NodeHubScreen(Screen):
             self._last_cost_shape = shape
             return
 
-        row_budget = _cost_pane_row_budget(pane, 1) if layout.stacked else _cost_pane_row_budget(pane, 2)
+        row_budget = (
+            _cost_pane_screen_row_budget(pane, 1) if layout.stacked else _cost_pane_screen_row_budget(pane, 2)
+        )
         for _key, label, value in rows:
             pane.write(_cost_row_text(label, value, layout, row_budget))
         self._last_cost_shape = shape

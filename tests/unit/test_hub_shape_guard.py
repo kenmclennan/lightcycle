@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from lightcycle.adapters.tui.hub import ArtifactsTable, DetailTable, HierarchyPagingTable, NodeHubScreen
+from lightcycle.adapters.tui.hub import ArtifactsTable, CostPane, DetailTable, HierarchyPagingTable, NodeHubScreen
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -33,7 +33,7 @@ class TestHierarchyShapeGuard(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def test_hidden_then_polled_with_unchanged_rows_rebuilds_not_updates(self):
+    def test_hidden_then_polled_with_unchanged_rows_still_updates_cells(self):
         session = self._launch(self._STACKED_WIDTH)
         screen = _push_hub(session, self._STEP, "workflow")
         table = screen.query_one(HierarchyPagingTable)
@@ -46,7 +46,7 @@ class TestHierarchyShapeGuard(unittest.TestCase):
         with patch.object(NodeHubScreen, "_update_hierarchy_cells") as update:
             session.run(screen.poll_refresh)
             session.pause()
-            update.assert_not_called()
+            update.assert_called_once()
 
         session.run(screen.action_prev_tab)
         session.pause()
@@ -54,6 +54,19 @@ class TestHierarchyShapeGuard(unittest.TestCase):
         session.pause()
         self.assertGreater(table.row_count, 0)
         self.assertTrue(screen._hierarchy_stacked)
+
+    def test_resize_wide_clears_the_floor_and_renders_the_table(self):
+        session = self._launch(self._FLOOR_WIDTH)
+        screen = _push_hub(session, self._STEP, "workflow")
+        table = screen.query_one(HierarchyPagingTable)
+        self.assertTrue(screen._hierarchy_floor)
+        self.assertEqual(table.row_count, 0)
+
+        session.resize(200, 24)
+
+        self.assertFalse(screen._hierarchy_floor)
+        self.assertTrue(table.display)
+        self.assertGreater(table.row_count, 0)
 
     def test_floor_entered_then_polled_again_stays_at_floor_without_raising(self):
         session = self._launch(self._FLOOR_WIDTH)
@@ -100,7 +113,7 @@ class TestArtifactsShapeGuard(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def test_hidden_then_polled_with_unchanged_rows_rebuilds_not_updates(self):
+    def test_hidden_then_polled_with_unchanged_rows_still_updates_cells(self):
         session = self._launch(self._STACKED_WIDTH)
         screen = _push_hub(session, self._ITEM, "artifacts")
         table = screen.query_one(ArtifactsTable)
@@ -113,7 +126,7 @@ class TestArtifactsShapeGuard(unittest.TestCase):
         with patch.object(NodeHubScreen, "_update_artifact_cells") as update:
             session.run(screen.poll_refresh)
             session.pause()
-            update.assert_not_called()
+            update.assert_called_once()
 
         session.run(screen.action_prev_tab)
         session.pause()
@@ -121,6 +134,19 @@ class TestArtifactsShapeGuard(unittest.TestCase):
         session.pause()
         self.assertGreater(table.row_count, 0)
         self.assertTrue(screen._artifacts_stacked)
+
+    def test_resize_wide_clears_the_floor_and_renders_the_table(self):
+        session = self._launch(self._FLOOR_WIDTH)
+        screen = _push_hub(session, self._ITEM, "artifacts")
+        table = screen.query_one(ArtifactsTable)
+        self.assertTrue(screen._artifacts_floor)
+        self.assertEqual(table.row_count, 0)
+
+        session.resize(200, 24)
+
+        self.assertFalse(screen._artifacts_floor)
+        self.assertTrue(table.display)
+        self.assertGreater(table.row_count, 0)
 
     def test_floor_entered_then_polled_again_stays_at_floor_without_raising(self):
         session = self._launch(self._FLOOR_WIDTH)
@@ -168,7 +194,7 @@ class TestDetailShapeGuard(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def test_hidden_then_polled_with_unchanged_rows_rebuilds_not_updates(self):
+    def test_hidden_then_polled_with_unchanged_rows_still_updates_cells(self):
         session = self._launch(self._STACKED_WIDTH)
         screen = _push_hub(session, self._STEP, "detail")
         table = screen.query_one(DetailTable)
@@ -181,7 +207,7 @@ class TestDetailShapeGuard(unittest.TestCase):
         with patch.object(NodeHubScreen, "_update_detail_cells") as update:
             session.run(screen.poll_refresh)
             session.pause()
-            update.assert_not_called()
+            update.assert_called_once()
 
         session.run(screen.action_prev_tab)
         session.pause()
@@ -189,6 +215,19 @@ class TestDetailShapeGuard(unittest.TestCase):
         session.pause()
         self.assertGreater(table.row_count, 0)
         self.assertTrue(screen._detail_stacked)
+
+    def test_resize_wide_clears_the_floor_and_renders_the_table(self):
+        session = self._launch(self._FLOOR_WIDTH)
+        screen = _push_hub(session, self._STEP, "detail")
+        table = screen.query_one(DetailTable)
+        self.assertTrue(screen._detail_floor)
+        self.assertEqual(table.row_count, 0)
+
+        session.resize(200, 24)
+
+        self.assertFalse(screen._detail_floor)
+        self.assertTrue(table.display)
+        self.assertGreater(table.row_count, 0)
 
     def test_floor_entered_then_polled_again_stays_at_floor_without_raising(self):
         session = self._launch(self._FLOOR_WIDTH)
@@ -217,6 +256,37 @@ class TestDetailShapeGuard(unittest.TestCase):
             session.pause()
             update.assert_not_called()
         self.assertFalse(screen._detail_stacked)
+
+
+class TestCostShapeGuard(unittest.TestCase):
+    _ITEM = "LC-1"
+    _STEP = "LC-1.1"
+    _FLOOR_WIDTH = 15
+
+    def _store(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description", id=self._ITEM)
+        step = store.create_step("s", step="write-code", role="agent", parent=item, id=self._STEP)
+        store.record_usage(step, 100, 50, 0, 0, 1.0, "list", None)
+        store.record_attribution(step, 5, {})
+        return store
+
+    def _launch(self, width):
+        session = launch(make_test_container(store=self._store()), size=(width, 24))
+        self.addCleanup(session.close)
+        return session
+
+    def test_resize_wide_clears_the_floor_and_renders_the_pane(self):
+        session = self._launch(self._FLOOR_WIDTH)
+        screen = _push_hub(session, self._ITEM, "cost")
+        pane = screen.query_one(CostPane)
+        self.assertTrue(screen._cost_floor)
+
+        session.resize(200, 24)
+
+        self.assertFalse(screen._cost_floor)
+        self.assertTrue(pane.display)
+        self.assertTrue(screen._last_cost_rows)
 
 
 if __name__ == "__main__":
