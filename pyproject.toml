@@ -56,8 +56,6 @@ ignore = ["E501", "E741", "E702", "E402"]
 "lightcycle/__main__.py" = ["BLE001"]
 "tests/**" = ["BLE001", "RUF013", "DTZ", "SIM115"]
 
-# Baseline (temporary, shrinks as findings get fixed - see the CLAUDE.md ratchet paragraph).
-"lightcycle/adapters/spawner.py" = ["SIM115"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
