@@ -3,6 +3,10 @@ from abc import ABC, abstractmethod
 
 class ScaffoldPort(ABC):
     @abstractmethod
+    def read_template(self, name):
+        pass
+
+    @abstractmethod
     def write_text(self, path, content):
         pass
 
