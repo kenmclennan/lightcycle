@@ -20,6 +20,6 @@ class StepKind(Enum):
 
     @staticmethod
     def of(node):
-        if node.step == FINDINGS_STEP:
+        if node.stage == FINDINGS_STEP:
             return StepKind.ENGINE_FINDINGS
         return StepKind.WORKFLOW

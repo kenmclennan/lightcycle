@@ -67,7 +67,7 @@ class _FlowAdapter:
         return self._flow.effective_transition(transition, outcome, prior_count)
 
     def phase_for(self, node):
-        return self._flow.step_def(getattr(node, "step", None)).phase
+        return self._flow.step_def(getattr(node, "stage", None)).phase
 
     def phase_for_stage(self, stage, name=None):
         return "code"

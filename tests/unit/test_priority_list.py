@@ -110,7 +110,7 @@ class TestAttentionRow(unittest.TestCase):
 
         self.assertEqual(row.icon, "●")
         self.assertEqual(row.icon_colour, "amber")
-        self.assertEqual(row.step, node.step)
+        self.assertEqual(row.step, node.stage)
 
     def test_a_step_unknown_to_the_flow_is_a_gate(self):
         store = FakeStore()
@@ -121,7 +121,7 @@ class TestAttentionRow(unittest.TestCase):
 
         self.assertEqual(row.icon, "●")
         self.assertEqual(row.icon_colour, "amber")
-        self.assertEqual(row.step, node.step)
+        self.assertEqual(row.step, node.stage)
 
     def test_an_agent_owned_step_is_an_escalation(self):
         store = FakeStore()
@@ -132,7 +132,7 @@ class TestAttentionRow(unittest.TestCase):
 
         self.assertEqual(row.icon, "▲")
         self.assertEqual(row.icon_colour, "red")
-        self.assertEqual(row.step, "stuck · %s" % node.step)
+        self.assertEqual(row.step, "stuck · %s" % node.stage)
 
 
 _FLOW_WITH_DISPLAY = flow_from_metas(

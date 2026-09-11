@@ -41,7 +41,7 @@ def plan_session(claim, resolve, reclaim, role):
         reclaim(resp.view.step.id)
         raise SessionError("step %r has no 'model' in frontmatter" % step_file)
     return SessionPlan(
-        model=model, sysprompt=agent.body, workspace=resp.workspace, stage=resp.view.step.step
+        model=model, sysprompt=agent.body, workspace=resp.workspace, stage=resp.view.step.stage
     )
 
 

@@ -57,13 +57,13 @@ class DispatchPrFeedbackUseCase:
             self._note_gh_read_failure(step.id, failure)
             return []
 
-        allowlist = flow.step_def(step.step).review_bot_allowlist
+        allowlist = flow.step_def(step.stage).review_bot_allowlist
         items = [c for c in outstanding_threads(inline) if eligible(c.author, allowlist)]
         items += [
             r for r in outstanding_reviews(reviews, top_level + inline) if r.author in allowlist
         ]
 
-        mention_token = flow.step_def(step.step).mention_token
+        mention_token = flow.step_def(step.stage).mention_token
         if mention_token:
             feedback_run = run_of(self._store, self._flow_service, step)
             watermark = _epoch(feedback_run.comments_handled_through) if feedback_run else 0.0
@@ -80,11 +80,11 @@ class DispatchPrFeedbackUseCase:
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE:
                 continue
-            if not step.parent:
+            if not step.item:
                 continue
             flow = flow_for(self._flow_service, step)
-            feedback_step = flow.step_def(step.step).pr_feedback
-            conflict_outcome = flow.step_def(step.step).pr_conflict
+            feedback_step = flow.step_def(step.stage).pr_feedback
+            conflict_outcome = flow.step_def(step.stage).pr_conflict
             if feedback_step is None and conflict_outcome is None:
                 continue
             run = run_of(self._store, self._flow_service, step)
@@ -98,28 +98,28 @@ class DispatchPrFeedbackUseCase:
                     advanced = True
                     newest = max(o.created_at for o in outstanding)
                     open_now = any(
-                        n.type == "step" and n.step == feedback_step and n.parent == step.parent
+                        n.type == "step" and n.stage == feedback_step and n.item == step.item
                         for n in self._store.all_nodes()
                     )
                     spawned_through = _epoch(run.comments_dispatched_through) if run else 0.0
                     if not open_now and newest > spawned_through:
                         role = flow.step_def(feedback_step).owner
-                        title = self._store.get_node(step.parent).title
+                        title = self._store.get_node(step.item).title
                         tid = self._store.create_step(
                             "%s: %s" % (feedback_step, title), step=feedback_step,
-                            role=role, parent=step.parent,
+                            role=role, parent=step.item,
                         )
                         self._store.set_watched_step(tid, step.id)
                         if run is not None:
                             self._store.set_comments_dispatched_through(run.id, str(newest))
-                        reworked.append(step.parent)
+                        reworked.append(step.item)
             if not advanced and conflict_outcome and false_on_failure(
                 self._github.is_conflicted(pr_value)
             ):
-                history = [t for t in self._store.steps_at_step(step.step)
-                           if t.parent == step.parent and t.state == State.DONE]
+                history = [t for t in self._store.steps_at_step(step.stage)
+                           if t.item == step.item and t.state == State.DONE]
                 prior = total_outcome_count(history, conflict_outcome)
-                outcome = flow.pr_conflict_transition(step.step, conflict_outcome, prior)
+                outcome = flow.pr_conflict_transition(step.stage, conflict_outcome, prior)
                 self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
-                conflicted.append(step.parent)
+                conflicted.append(step.item)
         return DispatchPrFeedbackResponse(reworked=reworked, conflicted=conflicted)

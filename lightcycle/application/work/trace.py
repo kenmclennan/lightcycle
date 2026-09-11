@@ -62,7 +62,7 @@ class TraceUseCase:
         artifacts = self._store.item_artifacts(input.item)
         steps = [
             TraceNode(
-                id=kt.id, step=kt.step, state=kt.state, log=self._log_for_step(kt),
+                id=kt.id, step=kt.stage, state=kt.state, log=self._log_for_step(kt),
                 role=kt.role,
             )
             for kt in self._store.children(input.item)

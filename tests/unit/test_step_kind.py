@@ -9,8 +9,8 @@ from lightcycle.application.flow.engine_steps import (
 
 
 class _Node:
-    def __init__(self, step):
-        self.step = step
+    def __init__(self, stage):
+        self.stage = stage
 
 
 class TestStepKind(unittest.TestCase):

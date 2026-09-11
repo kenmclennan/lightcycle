@@ -153,13 +153,13 @@ class TestFlowService(unittest.TestCase):
         flow = svc().load_flow()
         self.assertEqual(flow.step_def("build").owner, "agent")
         self.assertEqual(flow.step_def("review").owner, "agent")
-        self.assertEqual(flow.next("build", "done").to_step, "review")
+        self.assertEqual(flow.next("build", "done").to_stage, "review")
 
     def test_flow_next_derives_owner_of_target(self):
         t = svc().flow_next("build", "done")
-        self.assertEqual((t.to_step, t.to_role), ("review", "agent"))
+        self.assertEqual((t.to_stage, t.to_role), ("review", "agent"))
         t2 = svc().flow_next("review", "rejected")
-        self.assertEqual((t2.to_step, t2.to_role), ("build", "agent"))
+        self.assertEqual((t2.to_stage, t2.to_role), ("build", "agent"))
 
     def test_flow_next_unknown_outcome_is_none(self):
         self.assertIsNone(svc().flow_next("build", "nope"))

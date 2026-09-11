@@ -1455,10 +1455,10 @@ class TestNewStep(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         node = self.store.get_node(sid)
-        self.assertEqual(node.step, "build")
+        self.assertEqual(node.stage, "build")
         self.assertEqual(node.role, "agent")
         self.assertEqual(node.title, "rework it")
-        self.assertEqual(node.parent, item)
+        self.assertEqual(node.item, item)
         claimed = self.store.claim_ready("agent")
         self.assertEqual(claimed.id, sid)
 
@@ -1505,7 +1505,7 @@ class TestNewStep(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         sid = out.strip()
         node = store.get_node(sid)
-        self.assertEqual(node.step, "approve")
+        self.assertEqual(node.stage, "approve")
         self.assertEqual(node.role, "human")
 
 
@@ -1650,13 +1650,13 @@ class TestFlowFromAgents(unittest.TestCase):
 
     def test_flow_next_derives_role_from_owner(self):
         t = self._flow().flow_next("build", "done")
-        self.assertEqual((t.to_step, t.to_role), ("review", "agent"))
+        self.assertEqual((t.to_stage, t.to_role), ("review", "agent"))
         t2 = self._flow().flow_next("review", "rejected")
-        self.assertEqual((t2.to_step, t2.to_role), ("build", "agent"))
+        self.assertEqual((t2.to_stage, t2.to_role), ("build", "agent"))
 
     def test_flow_next_unowned_target_routes_to_human(self):
         t = self._flow().flow_next("open-pr", "done")
-        self.assertEqual((t.to_step, t.to_role), ("ready-merge", "human"))
+        self.assertEqual((t.to_stage, t.to_role), ("ready-merge", "human"))
 
     def test_flow_next_unknown_outcome_is_none(self):
         self.assertIsNone(self._flow().flow_next("build", "banana"))
@@ -1682,7 +1682,7 @@ class TestFileStep(unittest.TestCase):
     def test_file_starts_at_given_step(self):
         _, out, _ = call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
         kid = self.store.get_node(self.store.children(out.strip())[0].id)
-        self.assertEqual(kid.step, "build")
+        self.assertEqual(kid.stage, "build")
         self.assertEqual(kid.role, "agent")
 
 class TestArtifactContracts(unittest.TestCase):
@@ -1791,7 +1791,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         rc, step_id, err = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc, 0, err)
         step = self.store.get_node(step_id.strip())
-        self.assertEqual(step.step, "spec-writer")
+        self.assertEqual(step.stage, "spec-writer")
         self.assertEqual(step.role, "agent")
 
     def test_spec_writer_advances_to_the_spec_pr(self):
@@ -1800,7 +1800,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         call(_cli_mod.cmd_attach, item, "spec", "widget/X.md")
         rc, out, err = call(_cli_mod.cmd_done, step_id.strip(), "done")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store.get_node(out.strip()).step, "spec-open-pr")
+        self.assertEqual(self.store.get_node(out.strip()).stage, "spec-open-pr")
 
     def test_arming_without_repo_fails_fast_with_no_step_created(self):
         rc, item, err = call(
@@ -3305,11 +3305,15 @@ class TestWorkflowSelection(unittest.TestCase):
 
     def _build_task(self, item):
         return next(
-            t for t in self.store.all_nodes() if t.parent == item and t.step == "build"
+            t for t in self.store.all_nodes()
+            if t.type == "step" and t.item == item and t.stage == "build"
         )
 
     def _open_successor_steps(self, item):
-        return {t.step for t in self.store.all_nodes() if t.parent == item and t.step != "build"}
+        return {
+            t.stage for t in self.store.all_nodes()
+            if t.type == "step" and t.item == item and t.stage != "build"
+        }
 
     def test_two_items_route_by_their_own_workflow(self):
         std_item = self._file("A.md", "lightcycle/spec-driven")
@@ -3323,7 +3327,7 @@ class TestWorkflowSelection(unittest.TestCase):
 
     def test_file_derives_entry_step_from_the_workflow(self):
         item = self._file("A.md", "lightcycle/spec-driven")
-        self.assertEqual(self._build_task(item).step, "build")
+        self.assertEqual(self._build_task(item).stage, "build")
 
     def test_activation_pins_the_resolved_workflow_onto_the_item(self):
         item = self._file("A.md", "lightcycle/solo")
@@ -3397,7 +3401,10 @@ class TestSetWorkflow(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_done, step_id, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(
-            any(t.step == "review" for t in self.store.all_nodes() if t.parent == item)
+            any(
+                t.stage == "review" for t in self.store.all_nodes()
+                if t.type == "step" and t.item == item
+            )
         )
 
     def test_set_workflow_rejects_an_unqualified_name(self):

@@ -510,7 +510,7 @@ class StoreContractBase:
         tid = self._step(s, "a step", parent=item)
         s.edit_node(tid, title="renamed")
         t = s.get_node(tid)
-        self.assertEqual(t.parent, item)
+        self.assertEqual(t.item, item)
 
     def test_set_model_roundtrip(self):
         s = self.make_store()

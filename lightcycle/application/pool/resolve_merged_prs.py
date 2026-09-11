@@ -77,7 +77,7 @@ class ResolveMergedPrsUseCase:
                 close_outcome = sd.pr_close
                 if merge_outcome and false_on_failure(self._github.is_merged(pr_value)):
                     nxt = flow.next(stage, merge_outcome)
-                    if nxt and nxt.to_step and not nxt.to_terminal:
+                    if nxt and nxt.to_stage and not nxt.to_terminal:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
@@ -97,7 +97,7 @@ class ResolveMergedPrsUseCase:
                         merged.append(item.id)
                 elif close_outcome and false_on_failure(self._github.is_closed_unmerged(pr_value)):
                     nxt = flow.next(stage, close_outcome)
-                    if nxt and nxt.to_step and not nxt.to_terminal:
+                    if nxt and nxt.to_stage and not nxt.to_terminal:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue

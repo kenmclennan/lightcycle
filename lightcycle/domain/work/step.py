@@ -38,14 +38,6 @@ class Step:
     turn_count: int = 0
 
     @property
-    def parent(self):
-        return self.item
-
-    @property
-    def step(self):
-        return self.stage
-
-    @property
     def type(self):
         return "step"
 

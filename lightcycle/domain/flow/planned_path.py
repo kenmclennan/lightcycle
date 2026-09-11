@@ -1,17 +1,17 @@
-def planned_path(flow, from_step):
+def planned_path(flow, from_stage):
     path = []
-    stage = from_step
+    stage = from_stage
     visited = {stage}
     while True:
         outcome = _normal_outcome(flow, stage)
         if outcome is None:
             break
         transition = flow.next(stage, outcome)
-        if transition is None or transition.to_step in visited:
+        if transition is None or transition.to_stage in visited:
             break
-        path.append((transition.to_step, transition.to_role))
-        visited.add(transition.to_step)
-        stage = transition.to_step
+        path.append((transition.to_stage, transition.to_role))
+        visited.add(transition.to_stage)
+        stage = transition.to_stage
     return path
 
 

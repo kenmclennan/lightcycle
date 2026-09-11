@@ -30,8 +30,8 @@ class HookCompletionsUseCase:
                 continue
             if since_iso is not None and parse_timestamp(node.closed_at) <= parse_timestamp(since_iso):
                 continue
-            if node.step in self._hook_steps_for(node, cache):
-                completed.append((node.step, node.id, node.notes or node.outcome or ""))
+            if node.stage in self._hook_steps_for(node, cache):
+                completed.append((node.stage, node.id, node.notes or node.outcome or ""))
         return HookCompletionsResponse(completed=completed)
 
     def _hook_steps_for(self, node, cache):

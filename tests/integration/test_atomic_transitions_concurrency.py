@@ -113,8 +113,8 @@ class TestAtomicComplete(unittest.TestCase):
         self.assertEqual(len(wins), 1, "expected one winner, got %r" % results)
 
         after = _store_for(root)
-        parent = after.get_node(step_id).parent
-        successors = [s for s in after.steps_at_step("review") if s.parent == parent]
+        parent = after.get_node(step_id).item
+        successors = [s for s in after.steps_at_step("review") if s.item == parent]
         self.assertEqual(len(successors), 1)
         self.assertEqual(after.get_node(step_id).state, "done")
 

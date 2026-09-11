@@ -110,5 +110,5 @@ class Harness:
     def ready_agent_steps(self, stage=None):
         return [
             t for t in self.store.all_steps()
-            if t.state == State.QUEUED and t.role == "agent" and (stage is None or t.step == stage)
+            if t.state == State.QUEUED and t.role == "agent" and (stage is None or t.stage == stage)
         ]

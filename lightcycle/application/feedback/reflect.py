@@ -22,7 +22,7 @@ class ReflectUseCase:
 
     def _spec_hash(self, tid):
         t = self._store.get_node(tid)
-        item = t.parent or tid
+        item = t.item or tid
         spec = next(
             (a.value for a in self._store.item_artifacts(item) if a.kind == "filepath"), None
         )

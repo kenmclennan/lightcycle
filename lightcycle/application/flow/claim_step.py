@@ -86,13 +86,13 @@ class ClaimStepUseCase:
             return None
         selection = self._flow.workflow_for(t)
         pin = self._flow.resolve_selection(selection) if selection else None
-        meta = self._flow.meta_for_step(t.step, pin) if pin else {}
+        meta = self._flow.meta_for_step(t.stage, pin) if pin else {}
         missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:
             decision = "missing required input(s): %s" % ", ".join(sorted(missing))
             observation = (
                 "step '%s' was claimed for role '%s' but the item is missing the input(s) "
-                "this step requires before it can start" % (t.step, role)
+                "this step requires before it can start" % (t.stage, role)
             )
             ParkStepUseCase(self._store).execute(
                 ParkInput(step=t.id, observation=observation, decision=decision)
@@ -113,10 +113,10 @@ class ClaimStepUseCase:
         if pin is None:
             pin = self._flow.workflow_for(t)
         if meta is None:
-            meta = self._flow.meta_for_step(t.step, pin) if pin else {}
+            meta = self._flow.meta_for_step(t.stage, pin) if pin else {}
         view = self._store.node_view(t.id)
         surface = node_read_surface(self._store, self._flow, view)
-        item = t.parent or t.id
+        item = t.item or t.id
         ws = self._worktrees.ensure(item)
         branch = self._worktrees.item_branch(item)
         spec = next((a.value for a in view.item_artifacts if a.kind == "filepath"), None)
@@ -134,7 +134,7 @@ class ClaimStepUseCase:
             except ProjectResolutionError as e:
                 raise UseCaseError(str(e))
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
-        step_file = self._flow.file_for_step(t.step, pin) if pin else t.step
+        step_file = self._flow.file_for_step(t.stage, pin) if pin else t.stage
         return ClaimResponse(
             view=view, surface=surface, workspace=ws, branch=branch,
             pr=surface.get("pr"), spec_path=spec_path,

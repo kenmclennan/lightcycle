@@ -39,9 +39,9 @@ class TestActivateItem(unittest.TestCase):
         self.assertEqual(s.get_node(item).state, "queued")
         step = s.get_node(resp.step)
         self.assertEqual(step.type, "step")
-        self.assertEqual(step.step, "build")
+        self.assertEqual(step.stage, "build")
         self.assertEqual(step.role, "agent")
-        self.assertEqual(step.parent, item)
+        self.assertEqual(step.item, item)
 
     def test_refuses_when_no_workflow_is_selected_or_inherited(self):
         s = FakeStore()
@@ -106,7 +106,7 @@ class TestActivateItem(unittest.TestCase):
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "queued")
-        self.assertEqual(s.get_node(resp.step).step, "build")
+        self.assertEqual(s.get_node(resp.step).stage, "build")
 
     def test_an_unresolvable_workflow_raises_a_use_case_error_not_the_bare_value_error(self):
         s = FakeStore()
@@ -132,7 +132,7 @@ class TestActivateItem(unittest.TestCase):
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "queued")
-        self.assertEqual(s.get_node(resp.step).step, "build")
+        self.assertEqual(s.get_node(resp.step).stage, "build")
 
     def test_deps_are_recorded_on_the_entry_step_and_block_it_from_ready(self):
         s = FakeStore()

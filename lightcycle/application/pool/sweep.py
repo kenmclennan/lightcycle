@@ -30,7 +30,7 @@ class SweepUseCase:
         self._stream = stream
 
     def _capture(self, t):
-        item = t.parent or t.id
+        item = t.item or t.id
         if not self._worktrees.has_repo(item):
             return "not_checked"
         path = self._worktrees.worktree_path(item)

@@ -15,7 +15,7 @@ class TestSignalSpec(unittest.TestCase):
     def test_parse_exact(self):
         spec = SignalSpec.parse("review_rounds", "review", "rejected")
         self.assertEqual(
-            (spec.name, spec.step, spec.outcome, spec.match),
+            (spec.name, spec.stage, spec.outcome, spec.match),
             ("review_rounds", "review", "rejected", "exact"),
         )
 

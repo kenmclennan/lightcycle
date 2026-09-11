@@ -42,7 +42,7 @@ class TestFlowAssembly(unittest.TestCase):
         self.assertEqual(flow.step_def("build").owner, "agent")
         self.assertEqual(flow.step_def("review").owner, "agent")
         self.assertEqual(sorted(flow.step_def("build").routes.keys()), ["done"])
-        self.assertEqual(flow.next("build", "done").to_step, "review")
+        self.assertEqual(flow.next("build", "done").to_stage, "review")
 
     def test_every_owned_stage_collapses_to_the_one_agent_role(self):
         flow = mkflow(METAS)
@@ -61,7 +61,7 @@ class TestHumanSteps(unittest.TestCase):
 
     def test_routes_to_human_step(self):
         t = mkflow(HUMAN_METAS).next("watch-pr", "done")
-        self.assertEqual((t.to_step, t.to_role), ("ready-merge", "human"))
+        self.assertEqual((t.to_stage, t.to_role), ("ready-merge", "human"))
 
 
 class TestNext(unittest.TestCase):
@@ -71,14 +71,14 @@ class TestNext(unittest.TestCase):
     def test_owned_target_derives_role(self):
         t = self.flow.next("build", "done")
         self.assertEqual(
-            (t.from_step, t.outcome, t.to_step, t.to_role), ("build", "done", "review", "agent")
+            (t.from_stage, t.outcome, t.to_stage, t.to_role), ("build", "done", "review", "agent")
         )
         t2 = self.flow.next("review", "rejected")
-        self.assertEqual((t2.to_step, t2.to_role), ("build", "agent"))
+        self.assertEqual((t2.to_stage, t2.to_role), ("build", "agent"))
 
     def test_unowned_target_is_human(self):
         t = self.flow.next("open-pr", "done")
-        self.assertEqual((t.to_step, t.to_role), ("ready-merge", "human"))
+        self.assertEqual((t.to_stage, t.to_role), ("ready-merge", "human"))
 
     def test_unknown_outcome_is_none(self):
         self.assertIsNone(self.flow.next("build", "banana"))
@@ -88,8 +88,8 @@ class TestNext(unittest.TestCase):
 
 
 class TestTransition(unittest.TestCase):
-    def _t(self, from_step="build", outcome="done", to_step="review", to_role="agent"):
-        return Transition(from_step=from_step, outcome=outcome, to_step=to_step, to_role=to_role)
+    def _t(self, from_stage="build", outcome="done", to_stage="review", to_role="agent"):
+        return Transition(from_stage=from_stage, outcome=outcome, to_stage=to_stage, to_role=to_role)
 
     def test_next_task_spec_uses_the_given_item_title_and_keeps_deps(self):
         spec = self._t().next_step_spec(make_step(id="t-1", title="build: some stale title"), "make the thing")
@@ -128,7 +128,7 @@ class TestTransition(unittest.TestCase):
         )
 
     def test_forward_note_preserves_text_verbatim(self):
-        t = self._t(from_step="review", outcome="rejected", to_step="build", to_role="agent")
+        t = self._t(from_stage="review", outcome="rejected", to_stage="build", to_role="agent")
         self.assertEqual(
             t.forward_note("add missing coverage"), "from review (rejected): add missing coverage"
         )

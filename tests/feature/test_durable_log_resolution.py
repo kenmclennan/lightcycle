@@ -111,7 +111,7 @@ def _log_missing(ctx, spawnid):
 @given("the build step has never been claimed by a worker")
 def _never_claimed(ctx):
     h = ctx["h"]
-    step = next(t for t in h.store.all_nodes() if t.step == "build")
+    step = next(t for t in h.store.all_nodes() if t.stage == "build")
     ctx["step_id"] = step.id
 
 

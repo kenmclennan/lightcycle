@@ -15,13 +15,13 @@ def flow_for(flow_service, node):
 
 
 def run_of(store, flow_service, node):
-    phase = flow_for(flow_service, node).step_def(getattr(node, "step", None)).phase
+    phase = flow_for(flow_service, node).step_def(getattr(node, "stage", None)).phase
     return store.current_run(node.item, phase)
 
 
 def active_step_at(store, item_id, stage):
     for child in store.children(item_id):
-        if child.type == "step" and child.state != State.DONE and child.step == stage:
+        if child.type == "step" and child.state != State.DONE and child.stage == stage:
             return child
     return None
 

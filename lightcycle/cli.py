@@ -1628,7 +1628,7 @@ def cmd_status(argv):
             for t in lanes[key]:
                 suffix = "  [blocked by %s]" % ", ".join(sorted(t.blocked_by)) if t.blocked_by else ""
                 step_suffix = (
-                    "  %s" % display_stage(flow_service.display_for(t), t.step) if t.step else ""
+                    "  %s" % display_stage(flow_service.display_for(t), t.stage) if t.stage else ""
                 )
                 print("  %s  %s%s%s" % (t.id, t.title, suffix, step_suffix))
     return 0

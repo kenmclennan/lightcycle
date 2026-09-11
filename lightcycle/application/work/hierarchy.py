@@ -32,4 +32,4 @@ class HierarchyUseCase:
         return HierarchyResponse(rows=compose_hierarchy(root, steps_by_item), multi_pass=multi_pass)
 
     def _resolve_root(self, node):
-        return node if node.type == "item" else self._store.get_node(node.parent)
+        return node if node.type == "item" else self._store.get_node(node.item)

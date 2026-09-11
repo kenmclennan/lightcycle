@@ -7,7 +7,7 @@ from lightcycle.domain.flow.graph import parse_graph
 
 @dataclass
 class FakeNode:
-    step: str
+    stage: str
     outcome: str
     model: str = "sonnet"
 

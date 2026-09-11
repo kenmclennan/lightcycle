@@ -631,7 +631,7 @@ class _LoopFlow:
         return "project"
 
     def phase_for(self, node):
-        return self._phase_by_step.get(getattr(node, "step", None))
+        return self._phase_by_step.get(getattr(node, "stage", None))
 
     def workspace_for_phase(self, node, phase):
         return "project"

@@ -97,8 +97,8 @@ class SinceScope(RetroScope):
         item_groups = {}
         orphan_steps = []
         for step in steps:
-            if step.parent:
-                item_groups.setdefault(step.parent, []).append(step)
+            if step.item:
+                item_groups.setdefault(step.item, []).append(step)
             else:
                 orphan_steps.append(step)
         all_refs = []

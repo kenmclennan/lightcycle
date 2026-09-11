@@ -14,16 +14,16 @@ class NextStepResolver:
         self._flow = flow
 
     def resolve(self, t, outcome, name):
-        transition = self._flow.flow_next(t.step, outcome, name)
+        transition = self._flow.flow_next(t.stage, outcome, name)
         if transition is None:
             return None
-        cap_outcome = self._flow.ci_failed_cap_outcome(t.step, name)
+        cap_outcome = self._flow.ci_failed_cap_outcome(t.stage, name)
         prior = 0
         if cap_outcome is not None and outcome == cap_outcome:
             history = sorted(
                 (
-                    s for s in self._store.steps_at_step(t.step)
-                    if s.parent == t.parent and s.state == State.DONE
+                    s for s in self._store.steps_at_step(t.stage)
+                    if s.item == t.item and s.state == State.DONE
                 ),
                 key=lambda s: (parse_timestamp(s.created_at) or _MIN_TIMESTAMP, node_id_key(s.id)),
             )
@@ -31,5 +31,5 @@ class NextStepResolver:
         return self._flow.effective_transition(transition, outcome, prior, name)
 
     def create(self, t, transition):
-        spec = transition.next_step_spec(t, self._store.get_node(t.parent).title)
+        spec = transition.next_step_spec(t, self._store.get_node(t.item).title)
         return self._store.create_step(**spec.as_kwargs())

@@ -102,7 +102,7 @@ class FlowService:
         return self._fs.workflow_meta(wfname, root)
 
     def step_skill(self, node):
-        stage = node.step if getattr(node, "type", None) == "step" else None
+        stage = node.stage if getattr(node, "type", None) == "step" else None
         if not stage:
             return None
         selection = self.inherited_selection(node)
@@ -165,14 +165,14 @@ class FlowService:
         graph = self._graph_for_node(node)
         if graph is None:
             return None
-        stage = node.step if getattr(node, "type", None) == "step" else None
+        stage = node.stage if getattr(node, "type", None) == "step" else None
         return graph.workspace_for(stage) if stage else graph.workspace
 
     def phase_for(self, node):
         graph = self._graph_for_node(node)
         if graph is None:
             return None
-        stage = node.step if getattr(node, "type", None) == "step" else None
+        stage = node.stage if getattr(node, "type", None) == "step" else None
         return graph.phase_for(stage) if stage else None
 
     def phase_for_stage(self, stage, name=None):
@@ -184,7 +184,7 @@ class FlowService:
         return graph.ends_pass(stage, outcome)
 
     def display_for(self, node):
-        stage = node.step if getattr(node, "type", None) == "step" else None
+        stage = node.stage if getattr(node, "type", None) == "step" else None
         graph = self._graph_for_node(node)
         declared = graph.display_for(stage) if (graph is not None and stage) else None
         if declared is not None:
@@ -198,34 +198,34 @@ class FlowService:
     def flow_next(self, step, outcome, name=None):
         return self.load_flow(name).next(step, outcome)
 
-    def meta_for_step(self, step, name=None):
+    def meta_for_step(self, stage, name=None):
         graph, root = self._graph_and_root(name)
-        a = self._fs.parse_step(graph.file_for(step), root)
+        a = self._fs.parse_step(graph.file_for(stage), root)
         return a.meta if a else {}
 
-    def file_for_step(self, step, name=None):
+    def file_for_step(self, stage, name=None):
         graph, _root = self._graph_and_root(name)
-        return graph.file_for(step)
+        return graph.file_for(stage)
 
-    def outcomes_for(self, step, name=None):
-        return sorted(self.load_flow(name).step_def(step).routes.keys())
+    def outcomes_for(self, stage, name=None):
+        return sorted(self.load_flow(name).step_def(stage).routes.keys())
 
-    def is_known_step(self, step, name=None):
-        return bool(self.load_flow(name).step_def(step).owner)
+    def is_known_step(self, stage, name=None):
+        return bool(self.load_flow(name).step_def(stage).owner)
 
-    def owner_of(self, step, name=None):
-        return self.load_flow(name).step_def(step).owner
+    def owner_of(self, stage, name=None):
+        return self.load_flow(name).step_def(stage).owner
 
-    def ci_failed_cap_outcome(self, step, name=None):
-        cap = self.load_flow(name).step_def(step).ci_cap
+    def ci_failed_cap_outcome(self, stage, name=None):
+        cap = self.load_flow(name).step_def(stage).ci_cap
         return cap.outcome if cap else None
 
-    def ci_failed_cap_n(self, step, name=None):
-        cap = self.load_flow(name).step_def(step).ci_cap
+    def ci_failed_cap_n(self, stage, name=None):
+        cap = self.load_flow(name).step_def(stage).ci_cap
         return cap.n if cap else None
 
-    def ci_failed_cap_target(self, step, name=None):
-        cap = self.load_flow(name).step_def(step).ci_cap
+    def ci_failed_cap_target(self, stage, name=None):
+        cap = self.load_flow(name).step_def(stage).ci_cap
         return cap.target if cap else None
 
     def effective_transition(self, transition, outcome, prior_count, name=None):

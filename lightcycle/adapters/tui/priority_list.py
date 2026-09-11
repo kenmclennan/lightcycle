@@ -30,15 +30,15 @@ class PriorityRow:
 
 
 def _project(store, node):
-    owning_id = node.parent or node.id
+    owning_id = getattr(node, "item", None) or node.id
     return short_project_label(project_of(store, owning_id))
 
 
 def _resolved_step(node, flow):
-    if not node.step:
+    if not node.stage:
         return ""
-    phrase = flow.step_def(node.step).display or engine_display_of(node.step)
-    return truncate_field(phrase, STEP_PHRASE_BUDGET) if phrase else node.step
+    phrase = flow.step_def(node.stage).display or engine_display_of(node.stage)
+    return truncate_field(phrase, STEP_PHRASE_BUDGET) if phrase else node.stage
 
 
 def _attention_row(store, node, flow):
