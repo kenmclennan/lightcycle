@@ -17,6 +17,7 @@ class Item:
     workflow: Optional[str] = None
     outcome: Optional[str] = None
     disposition: Optional[str] = None
+    note: Optional[str] = None
     deps: int = 0
     blocked_by: List[str] = field(default_factory=list)
     created_at: Optional[str] = None
@@ -59,6 +60,7 @@ class Item:
             "workflow": self.workflow,
             "outcome": self.outcome,
             "disposition": self.disposition,
+            "note": self.note,
             "artifacts": [a.as_dict() for a in self.artifacts],
             "deps": self.deps,
             "blocked_by": self.blocked_by,

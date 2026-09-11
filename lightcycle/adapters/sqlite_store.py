@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS items (
     workflow TEXT,
     outcome TEXT,
     disposition TEXT,
+    note TEXT,
     project TEXT,
     created_at TEXT,
     closed_at TEXT
@@ -199,7 +200,7 @@ CREATE TABLE IF NOT EXISTS projects (
 
 _ITEM_COLUMNS = (
     "id", "title", "description", "state", "repo", "workflow", "outcome", "disposition",
-    "project", "created_at", "closed_at",
+    "note", "project", "created_at", "closed_at",
 )
 
 _STEP_COLUMNS = (
@@ -406,6 +407,7 @@ class SqliteStore(StorePort):
     _ADDED_COLUMNS = {
         "items": (
             ("disposition", "TEXT"),
+            ("note", "TEXT"),
         ),
         "phase_runs": (
             ("comments_dispatched_through", "TEXT"),
@@ -638,6 +640,7 @@ class SqliteStore(StorePort):
             workflow=d["workflow"],
             outcome=d["outcome"],
             disposition=d["disposition"],
+            note=d["note"],
             deps=len(blocked_by),
             blocked_by=blocked_by,
             created_at=d["created_at"],
@@ -988,13 +991,13 @@ class SqliteStore(StorePort):
         )
         self._commit()
 
-    def complete_node(self, tid, reason, disposition=None):
+    def complete_node(self, tid, reason, disposition=None, note=None):
         table = self._table_of(tid)
         if table == "items" and disposition is not None:
             self._conn.execute(
-                "UPDATE items SET state = 'done', outcome = ?, disposition = ?, closed_at = ? "
-                "WHERE id = ? AND state != 'done'",
-                (reason, disposition, self._now(), tid),
+                "UPDATE items SET state = 'done', outcome = ?, disposition = ?, note = ?, "
+                "closed_at = ? WHERE id = ? AND state != 'done'",
+                (reason, disposition, note, self._now(), tid),
             )
         else:
             self._conn.execute(

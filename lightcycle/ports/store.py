@@ -119,7 +119,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def complete_node(self, tid, reason, disposition=None):
+    def complete_node(self, tid, reason, disposition=None, note=None):
         pass
 
     @abstractmethod

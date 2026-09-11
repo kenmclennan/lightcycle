@@ -28,9 +28,9 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.domain.work import (
-    ALLOWED_STATES_BY_FLAG, FIELDS_BY_TYPE, FieldRefusal, State, UNSETTABLE_FIELDS,
-    UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state,
-    render_field_refusal, worker_permitted, worker_refusal_message,
+    ALLOWED_STATES_BY_FLAG, DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal, State,
+    UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields,
+    refuse_state, render_field_refusal, worker_permitted, worker_refusal_message,
 )
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
@@ -737,11 +737,14 @@ def cmd_done(argv):
     if node_type is None:
         sys.stderr.write("unknown node '%s'\n" % a.id)
         return 1
-    if node_type == "item" and note:
-        sys.stderr.write("--note belongs to a step, not an item\n")
-        return 2
-    if node_type == "step" and a.disposition:
-        sys.stderr.write("--disposition belongs to an item, not a step\n")
+    given = set()
+    if note:
+        given.add("note")
+    if a.disposition:
+        given.add("disposition")
+    refusal = refuse_fields(node_type, given, table=DONE_FIELDS_BY_TYPE)
+    if refusal is not None:
+        sys.stderr.write("%s\n" % render_field_refusal(refusal))
         return 2
     try:
         if node_type == "step":
@@ -763,7 +766,7 @@ def cmd_done(argv):
                 )
                 return 2
             CloseItemUseCase(_container.store, _worktrees()).execute(
-                CloseItemInput(item=a.id, reason=a.outcome, disposition=disposition)
+                CloseItemInput(item=a.id, reason=a.outcome, disposition=disposition, note=note)
             )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)

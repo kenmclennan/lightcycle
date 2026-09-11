@@ -26,6 +26,11 @@ class _Container:
     def __init__(self, store):
         self.store = store
         self.config = _FakeConfig()
+        self.git = None
+        self.fs = None
+        self.workflow_source = None
+        self.workflow_bundle = None
+        self.scaffold = None
 
 
 class TestUnknownIdIsRefusedNotRaised(unittest.TestCase):
@@ -73,11 +78,19 @@ class TestANoteHasSomewhereToGo(unittest.TestCase):
         self.store.note(step, "the human decided X")
         self.assertIn("the human decided X", self.store.get_step(step).notes)
 
-    def test_a_note_on_an_item_is_refused_rather_than_discarded(self):
+    def test_a_note_on_an_item_close_is_accepted_and_stored(self):
         item = self.store.create_item("an item", "a description")
-        rc, out, err = call(cli.cmd_done, item, "done", "--note", "worth keeping")
+        rc, out, err = call(
+            cli.cmd_done, item, "done", "--note", "worth keeping", "--disposition", "completed"
+        )
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store.get_node(item).note, "worth keeping")
+
+    def test_a_disposition_on_a_step_is_still_refused(self):
+        step = create_owned_step(self.store, "build: x", step="build", role="agent")
+        rc, out, err = call(cli.cmd_done, step, "done", "--disposition", "completed")
         self.assertEqual(rc, 2)
-        self.assertIn("--note", err)
+        self.assertIn("--disposition", err)
 
 
 if __name__ == "__main__":
