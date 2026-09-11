@@ -26,20 +26,20 @@ def spawn_worker(config, role):
     spawnid = uuid.uuid4().hex[:8]
     log = os.path.join(root, "logs", worker_log_filename(role, spawnid))
     os.makedirs(os.path.dirname(log), exist_ok=True)
-    logf = open(log, "a")
     env = dict(config.base_env(), LC_HOME=root,
                LC_SPAWNID=spawnid, LC_ROLE=role, LC_WORKER="1")
     pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
     override = config.spawn_cmd()
-    if override:
-        cmd = ["bash", "-c", override.format(log=shlex.quote(log), role=role)]
-        proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env, start_new_session=True)
-    else:
-        cmd = [sys.executable, "-m", "lightcycle.worker_main"]
-        proc = subprocess.Popen(
-            cmd, stdout=logf, stderr=logf, cwd=root, env=env, start_new_session=True
-        )
+    with open(log, "a") as logf:
+        if override:
+            cmd = ["bash", "-c", override.format(log=shlex.quote(log), role=role)]
+            proc = subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env, start_new_session=True)
+        else:
+            cmd = [sys.executable, "-m", "lightcycle.worker_main"]
+            proc = subprocess.Popen(
+                cmd, stdout=logf, stderr=logf, cwd=root, env=env, start_new_session=True
+            )
     try:
         register_worker(
             root,
@@ -58,7 +58,6 @@ def spawn_worker(config, role):
             proc.terminate()
         except OSError:
             pass
-        logf.close()
         return None
     pid_started = capture_pid_started(proc)
     if pid_started is None and proc.poll() is not None:
@@ -71,15 +70,15 @@ def spawn_pool(config):
     root = config.data_root()
     log = os.path.join(root, "logs", "run.log")
     os.makedirs(os.path.dirname(log), exist_ok=True)
-    logf = open(log, "a")
     env = dict(config.base_env(), LC_HOME=root)
     pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "lightcycle", "start"],
-        stdout=logf, stderr=logf, stdin=subprocess.DEVNULL,
-        cwd=root, env=env, start_new_session=True,
-    )
+    with open(log, "a") as logf:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "lightcycle", "start"],
+            stdout=logf, stderr=logf, stdin=subprocess.DEVNULL,
+            cwd=root, env=env, start_new_session=True,
+        )
     return proc.pid
 
 
