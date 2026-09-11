@@ -28,7 +28,8 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.domain.work import (
-    FieldRefusal, State, refuse_fields, refuse_state, worker_permitted, worker_refusal_message,
+    FieldRefusal, State, refuse_fields, refuse_state, render_field_refusal, worker_permitted,
+    worker_refusal_message,
 )
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
@@ -1096,11 +1097,7 @@ def _render_refusal(refusal):
 
 
 def _render_field_refusal(r):
-    named = ", ".join("--%s" % f for f in r.fields)
-    verb = "belong" if len(r.fields) > 1 else "belongs"
-    if r.owner is None:
-        return "%s %s to no structure" % (named, verb)
-    return "%s %s to %s, not %s" % (named, verb, _named(r.owner), _named(r.requested_type))
+    return render_field_refusal(r)
 
 
 def _render_state_refusal(r):
@@ -1141,8 +1138,6 @@ def cmd_set(argv):
         sys.stderr.write(msg)
         return 2
     try:
-        if a.title:
-            validate_title(_container.config, a.title)
         if a.state == "active":
             depends_ids = a.depends or []
             for node_id in depends_ids:
@@ -1205,7 +1200,7 @@ def cmd_set(argv):
     effective_project = "" if "project" in unset_fields else a.project
     effective_notes = "" if "notes" in unset_fields else a.notes
     try:
-        tid = EditNodeUseCase(_container.store).execute(
+        tid = EditNodeUseCase(_container.store, _container.config).execute(
             EditNodeInput(step=a.id, title=a.title, description=effective_description,
                           project=effective_project, workflow=workflow_pin,
                           label=a.label, notes=effective_notes)

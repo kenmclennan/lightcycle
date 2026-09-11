@@ -31,8 +31,9 @@ def _add_reflection(store, node_id, feedback):
 
 
 class FakeConfig:
-    def __init__(self, projects="/projects"):
+    def __init__(self, projects="/projects", title_cap=200):
         self._projects = projects
+        self._title_cap = title_cap
 
     def projects_root(self):
         return self._projects
@@ -42,6 +43,9 @@ class FakeConfig:
 
     def branch_prefix(self):
         return "feat"
+
+    def max_title_length(self):
+        return self._title_cap
 
 
 class _RaisingFlow:
@@ -116,7 +120,9 @@ class TestEditNode(unittest.TestCase):
     def test_edits_an_items_title_and_description(self):
         s = FakeStore()
         tid = s.create_item("old title", "old")
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title", description="new"))
+        EditNodeUseCase(s, FakeConfig()).execute(
+            EditNodeInput(step=tid, title="new title", description="new")
+        )
         t = s.get_item(tid)
         self.assertEqual(t.title, "new title")
         self.assertEqual(t.description, "new")
@@ -124,27 +130,29 @@ class TestEditNode(unittest.TestCase):
     def test_edits_a_steps_title(self):
         s = FakeStore()
         tid = create_owned_step(s, "old title", role="human")
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, title="new title"))
+        EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, title="new title"))
         self.assertEqual(s.get_step(tid).title, "new title")
 
     def test_unspecified_fields_unchanged(self):
         s = FakeStore()
         tid = s.create_item("keep title", "keep desc")
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, project="p1"))
+        EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, project="p1"))
         t = s.get_item(tid)
         self.assertEqual(t.title, "keep title")
         self.assertEqual(t.description, "keep desc")
 
-    def test_a_description_does_not_land_on_a_step(self):
+    def test_a_description_on_a_step_is_refused_before_any_write(self):
         s = FakeStore()
         tid = create_owned_step(s, "a step", role="human")
-        EditNodeUseCase(s).execute(EditNodeInput(step=tid, description="nope"))
+        with self.assertRaises(UseCaseError):
+            EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, description="nope"))
+        self.assertEqual(s.get_node(tid).title, "a step")
         self.assertFalse(hasattr(s.get_step(tid), "description"))
 
     def test_writes_label_and_notes_itself(self):
         s = FakeStore()
         tid = create_owned_step(s, "a step", role="human")
-        EditNodeUseCase(s).execute(
+        EditNodeUseCase(s, FakeConfig()).execute(
             EditNodeInput(step=tid, label="some-label", notes="some notes")
         )
         self.assertIn("some-label", s.labels_of(tid))
@@ -159,10 +167,21 @@ class TestEditNode(unittest.TestCase):
 
         s.set_notes = raising_set_notes
         with self.assertRaises(RuntimeError):
-            EditNodeUseCase(s).execute(EditNodeInput(step=tid, label="l", notes="n"))
+            EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, label="l", notes="n"))
         self.assertNotIn("l", s.labels_of(tid))
         self.assertEqual(s.get_node(tid).title, "a step")
         self.assertFalse(hasattr(s.get_node(tid), "description"))
+
+    def test_title_cap_refusal_leaves_the_label_unwritten(self):
+        s = FakeStore()
+        tid = create_owned_step(s, "original", role="human")
+        with self.assertRaises(UseCaseError):
+            EditNodeUseCase(s, FakeConfig(title_cap=5)).execute(
+                EditNodeInput(step=tid, title="way too long", label="some-label")
+            )
+        self.assertEqual(s.get_node(tid).title, "original")
+        self.assertNotIn("some-label", s.labels_of(tid))
+
 
 class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):

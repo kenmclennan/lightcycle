@@ -74,3 +74,17 @@ def refuse_state(node_type, state):
 
 def missing_for_state(state, given):
     return [f for f in REQUIRED_WITH_STATE.get(state, ()) if f not in given]
+
+
+def _named_type(node_type):
+    return "an item" if node_type == "item" else "a step"
+
+
+def render_field_refusal(refusal):
+    named = ", ".join("--%s" % f for f in refusal.fields)
+    verb = "belong" if len(refusal.fields) > 1 else "belongs"
+    if refusal.owner is None:
+        return "%s %s to no structure" % (named, verb)
+    return "%s %s to %s, not %s" % (
+        named, verb, _named_type(refusal.owner), _named_type(refusal.requested_type),
+    )
