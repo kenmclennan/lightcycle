@@ -60,13 +60,14 @@ from lightcycle.application.work import (
     StepRunInput,
     StepRunUseCase,
 )
+from lightcycle.application.work.current_step import current_step
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration
 from lightcycle.domain.money import Cost
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
-    LogKind, State, is_human_step, item_cost, parse_timestamp, row_bucket, step_cost,
-    type_label, viewable_artifacts,
+    LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
+    row_bucket, step_cost, type_label, viewable_artifacts,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.render import (
@@ -234,13 +235,6 @@ def project_label(store, node):
     return short_project_label(project_of(store, _owning_id(node)))
 
 
-def current_step(store, item_id):
-    for child in store.children(item_id):
-        if child.state != State.DONE:
-            return child
-    return None
-
-
 def _hierarchy_default_row_id(store, node):
     if node.type != "item" or node.blocked_by or node.state == State.DONE:
         return node.id
@@ -340,19 +334,14 @@ def _item_cost_text(children):
 
 
 def _item_wall_active(store, item, children, now):
-    claims = [
-        ts for child in children
-        for state, ts in store.history(child.id)
-        if state in (State.RUNNING, "in_progress") and ts
-    ]
-    if not claims:
+    start = Duration.earliest_claim(store.history(child.id) for child in children)
+    if start is None:
         return None
-    start = min(claims)
     end = item.closed_at if item.state == State.DONE else now
     wall = (
         parse_timestamp(end) - parse_timestamp(start)
     ).total_seconds()
-    active = sum(child.active_seconds or 0 for child in children)
+    active = item_active_seconds(children)
     return wall, active
 
 

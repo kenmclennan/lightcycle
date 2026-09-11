@@ -33,6 +33,15 @@ class Duration:
     def last_release(self):
         return self._last(State.WAITING)
 
+    @classmethod
+    def earliest_claim(cls, histories):
+        claims = [
+            ts for transitions in histories
+            for state, ts in transitions
+            if (state == State.RUNNING or state == _LEGACY[State.RUNNING]) and ts
+        ]
+        return min(claims) if claims else None
+
     def _first(self, status):
         legacy = _LEGACY.get(status)
         for s, ts in self._transitions:
