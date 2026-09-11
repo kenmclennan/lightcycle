@@ -85,7 +85,18 @@ class ClaimStepUseCase:
         if t is None:
             return None
         selection = self._flow.workflow_for(t)
-        pin = self._flow.resolve_selection(selection) if selection else None
+        try:
+            pin = self._flow.resolve_selection(selection) if selection else None
+        except ValueError as e:
+            decision = "workflow selector could not be resolved: %s" % e
+            observation = (
+                "step '%s' was claimed for role '%s' but the item's workflow selector %r "
+                "could not be resolved" % (t.stage, role, selection)
+            )
+            ParkStepUseCase(self._store).execute(
+                ParkInput(step=t.id, observation=observation, decision=decision)
+            )
+            return None
         meta = self._flow.meta_for_step(t.stage, pin) if pin else {}
         missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:

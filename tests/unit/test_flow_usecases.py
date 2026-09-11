@@ -80,6 +80,14 @@ def flow_for(metas, store):
     return FlowService(FakeFs(metas), store)
 
 
+class _BrokenSelectorFlow:
+    def workflow_for(self, node):
+        return "ghost/whatever"
+
+    def resolve_selection(self, selection):
+        raise ValueError("origin 'ghost' has no pulled version; run `lc workflow add`/`upgrade`")
+
+
 class FakeWorktrees:
     def release_run(self, run, delete_remote=True):
         self.released = getattr(self, "released", [])
@@ -1021,6 +1029,21 @@ class TestClaimTask(unittest.TestCase):
         node = s.get_node(bid)
         self.assertEqual(node.role, "human")
         self.assertIn("missing required input(s): spec", node.park.needs or "")
+        self.assertTrue((node.park.reason or "").strip())
+        self.assertNotEqual(node.park.needs, node.park.reason)
+
+    def test_unresolvable_workflow_selector_routes_to_human(self):
+        s = FakeStore()
+        bid = s.create_step("build: x", step="build", role="agent",
+                            parent=s.create_item("i", "a description", workflow="ghost/whatever"))
+        resp = ClaimStepUseCase(
+            s, _BrokenSelectorFlow(), FakeWorktrees(), FakeWorkers(), FakeConfig()
+        ).execute(ClaimInput(role="agent"))
+        self.assertIsNone(resp)
+        node = s.get_node(bid)
+        self.assertEqual(node.role, "human")
+        self.assertIn("ghost/whatever", node.park.reason or "")
+        self.assertIn("could not be resolved", node.park.needs or "")
         self.assertTrue((node.park.reason or "").strip())
         self.assertNotEqual(node.park.needs, node.park.reason)
 

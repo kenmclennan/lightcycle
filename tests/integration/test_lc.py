@@ -453,6 +453,15 @@ class TestClaim(unittest.TestCase):
         self.assertIn("warning: could not read worker registry", err)
         self.assertLessEqual(len(err.strip().splitlines()), 2)
 
+    def test_unresolvable_workflow_selector_parks_instead_of_crashing(self):
+        item = self.store.create_item("item", "a description", workflow="ghost/whatever")
+        step = self.store.create_step("build: x", step="build", role="agent", parent=item)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("Traceback", err)
+        node = self.store.get_node(step)
+        self.assertEqual(node.role, "human")
+
 
 class TestFlow(unittest.TestCase):
     def setUp(self):
