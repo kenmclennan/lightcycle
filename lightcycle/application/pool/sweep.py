@@ -76,14 +76,14 @@ class SweepUseCase:
             ParkInput(step=step_id, observation=observation, decision=decision, tried=tried)
         )
 
-    def _advance_spin(self, step_id, now, no_work, last_line):
+    def _advance_spin(self, step_id, now, no_work, last_line, spawnid):
         if not no_work:
             self._spin_port.update(lambda ledger: ledger.record_activity(step_id))
             return False
         parked_entry = []
 
         def _mutate(ledger):
-            ledger = ledger.record_death(step_id, now, last_line)
+            ledger = ledger.record_death(step_id, now, last_line, spawnid)
             if ledger.should_park(step_id, self._spin_cap):
                 parked_entry.append(ledger.entry(step_id))
                 return ledger.clear(step_id)
@@ -104,6 +104,7 @@ class SweepUseCase:
             return SweepResponse(swept=[], killed=[], pruned=0)
         claimed = self._store.claimed_steps()
         claimed_ids = {t.id for t in claimed}
+        pre_claim_dead = pool.dead_steps_outside(probe, claimed_ids)
         covered = pool.covered_steps(probe)
         live_spawnids = pool.live_spawnids(probe)
         booting = pool.any_booting(probe, now, max_boot)
@@ -139,11 +140,20 @@ class SweepUseCase:
                     lines = list(self._fs.iter_lines(dead.log))
                     no_work = not self._stream.saw_session_activity(lines)
                     last_line = self._last_nonempty_line(lines)
-                    if self._advance_spin(t.id, now, no_work, last_line):
+                    if self._advance_spin(t.id, now, no_work, last_line, dead.spawnid):
                         parked.append(t.id)
                         continue
             self._store.reclaim(t.id)
             swept.append(t.id)
+        for step_id in pre_claim_dead:
+            dead = pool.dead_for_step(probe, step_id)
+            if dead is None:
+                continue
+            lines = list(self._fs.iter_lines(dead.log))
+            no_work = not self._stream.saw_session_activity(lines)
+            last_line = self._last_nonempty_line(lines)
+            if self._advance_spin(step_id, now, no_work, last_line, dead.spawnid):
+                parked.append(step_id)
         orphans = pool.orphans(probe, now, max_boot, claimed_ids)
         for w in orphans:
             self._workers.kill(w.pid)

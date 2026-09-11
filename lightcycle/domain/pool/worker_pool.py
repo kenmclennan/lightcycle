@@ -51,3 +51,9 @@ class WorkerPool:
     def dead_for_step(self, probe, step_id):
         matches = [w for w in self._workers if w.step == step_id and not w.is_alive(probe)]
         return max(matches, key=lambda w: w.started, default=None)
+
+    def dead_steps_outside(self, probe, claimed_ids):
+        return {
+            w.step for w in self._workers
+            if w.step and w.step not in claimed_ids and not w.is_alive(probe)
+        }

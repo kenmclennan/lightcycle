@@ -191,6 +191,44 @@ def _prior_streak_no_work(ctx, prior_count):
     ctx["expected_elapsed_marker"] = "~42s"
 
 
+@given("a step was never claimed")
+def _never_claimed(ctx):
+    step = create_owned_step(ctx["store"], "build: t", step="build", role="agent")
+    ctx["step"] = step
+    ctx["pre_claim_spawn_counter"] = 0
+
+
+def _register_pre_claim_death(ctx):
+    ctx["pre_claim_spawn_counter"] += 1
+    n = ctx["pre_claim_spawn_counter"]
+    spawnid = "pre-sp-%d" % n
+    pid = 9000 + n
+    log = "/logs/%s-%s.log" % (ctx["step"], spawnid)
+    ctx["fs"].files[log] = _NO_WORK_LOG
+    ctx["workers"].register(
+        {
+            "spawnid": spawnid, "pid": pid, "step": ctx["step"], "started": ctx["now"] + n,
+            "log": log,
+        },
+        alive=False,
+    )
+
+
+@given("its worker died having done no work")
+def _pre_claim_death(ctx):
+    _register_pre_claim_death(ctx)
+
+
+@given("a different worker for the step died having done no work")
+def _pre_claim_death_again(ctx):
+    _register_pre_claim_death(ctx)
+
+
+@given("the same dead worker is still on record")
+def _same_dead_worker_still_on_record(ctx):
+    pass
+
+
 @given("no dead worker is on record for the step")
 def _no_dead_worker(ctx):
     ctx["workers"]._workers = [
@@ -347,5 +385,19 @@ def _blocked_note(ctx):
 @then("the step is reclaimed to ready, not parked")
 def _reclaimed_not_parked(ctx):
     assert ctx["step"] in ctx["result"].swept
+    assert ctx["step"] not in ctx["result"].parked
+    assert ctx["store"].get_node(ctx["step"]).state == State.QUEUED
+
+
+@then(parsers.parse("the step's no-work streak count is {count:d}"))
+def _streak_count(ctx, count):
+    entry = ctx["spin_port"].load().entry(ctx["step"])
+    assert entry is not None
+    assert entry.count == count
+
+
+@then("the step is not reclaimed and not parked, and stays queued")
+def _not_reclaimed_not_parked_stays_queued(ctx):
+    assert ctx["step"] not in ctx["result"].swept
     assert ctx["step"] not in ctx["result"].parked
     assert ctx["store"].get_node(ctx["step"]).state == State.QUEUED

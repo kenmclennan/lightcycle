@@ -7,6 +7,7 @@ class StepSpin:
     count: int
     since: float
     last_line: Optional[str] = None
+    last_spawnid: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,7 @@ class SpinLedger:
         steps = {
             step_id: StepSpin(
                 count=entry.get("count", 0), since=entry.get("since"),
-                last_line=entry.get("last_line"),
+                last_line=entry.get("last_line"), last_spawnid=entry.get("last_spawnid"),
             )
             for step_id, entry in raw_steps.items()
         }
@@ -35,7 +36,10 @@ class SpinLedger:
     def as_dict(self) -> dict:
         return {
             "steps": {
-                step_id: {"count": e.count, "since": e.since, "last_line": e.last_line}
+                step_id: {
+                    "count": e.count, "since": e.since, "last_line": e.last_line,
+                    "last_spawnid": e.last_spawnid,
+                }
                 for step_id, e in self.steps.items()
             },
             "pool": {"streak": self.pool_streak, "tripped": self.pool_tripped},
@@ -54,12 +58,14 @@ class SpinLedger:
     def clear(self, step) -> "SpinLedger":
         return self.record_activity(step)
 
-    def record_death(self, step, now, last_line) -> "SpinLedger":
+    def record_death(self, step, now, last_line, spawnid=None) -> "SpinLedger":
         prior = self.steps.get(step)
+        if prior is not None and prior.last_spawnid == spawnid:
+            return self
         count = (prior.count if prior else 0) + 1
         since = prior.since if prior else now
         steps = dict(self.steps)
-        steps[step] = StepSpin(count=count, since=since, last_line=last_line)
+        steps[step] = StepSpin(count=count, since=since, last_line=last_line, last_spawnid=spawnid)
         return SpinLedger(steps=steps, pool_streak=self.pool_streak, pool_tripped=self.pool_tripped)
 
     def should_park(self, step, cap) -> bool:
