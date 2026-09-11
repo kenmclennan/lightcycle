@@ -14,6 +14,15 @@ def _in_group(pgid):
     return out.stdout.split()
 
 
+def _wait_until_group_empty(pgid, timeout=5.0, interval=0.1):
+    deadline = time.monotonic() + timeout
+    while _in_group(pgid):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)
+    return True
+
+
 def _spawn_leader_with_child():
     leader = subprocess.Popen(["python3", "-c", LEADER], start_new_session=True)
     time.sleep(0.6)
@@ -47,8 +56,9 @@ class TestWorkerGroupReap(unittest.TestCase):
 
         wk.prune_workers(self.root, keep_dead=0)
 
-        time.sleep(0.4)
-        self.assertEqual(_in_group(pid), [], "orphaned child survived prune_workers")
+        self.assertTrue(
+            _wait_until_group_empty(pid), "orphaned child survived prune_workers"
+        )
 
     def test_a_live_pid_is_never_signalled(self):
         live = subprocess.Popen(["sleep", "300"], start_new_session=True)
@@ -75,5 +85,8 @@ class TestWorkerGroupReap(unittest.TestCase):
         pid = _spawn_leader_with_child()
         self.strays.append(pid)
         self.assertTrue(wk.reap_worker_group(pid))
-        time.sleep(0.4)
+        self.assertTrue(
+            _wait_until_group_empty(pid),
+            "orphaned child was not reaped by the OS within the deadline",
+        )
         self.assertFalse(wk.reap_worker_group(pid))

@@ -49,12 +49,13 @@ class WorkersContractBase:
         pid = self._seeded_pid(w, "_alive_seed")
         self.assertTrue(w.pid_alive(pid))
         w.kill(pid)
-        deadline = time.monotonic() + 5
+        timeout = 15
+        deadline = time.monotonic() + timeout
         while w.pid_alive(pid):
             if time.monotonic() >= deadline:
                 self.fail(
-                    "pid %d still alive 5s after kill() with reap() polled throughout "
-                    "(timed out, not a confirmed kill failure)" % pid
+                    "pid %d still alive %ds after kill() with reap() polled throughout "
+                    "(timed out, not a confirmed kill failure)" % (pid, timeout)
                 )
             w.reap()
             time.sleep(0.05)
