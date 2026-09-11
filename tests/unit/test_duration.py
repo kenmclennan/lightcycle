@@ -200,6 +200,25 @@ class TestDuration(unittest.TestCase):
         transitions = [("ready", "2026-01-01T10:20:00")]
         self.assertEqual(Duration(transitions).last_release(), "2026-01-01T10:20:00")
 
+    def test_earliest_claim_is_the_minimum_running_transition_across_several_histories(self):
+        histories = [
+            [(State.QUEUED, "2026-01-01T09:00:00"), (State.RUNNING, "2026-01-01T10:00:00")],
+            [(State.RUNNING, "2026-01-01T09:30:00")],
+        ]
+        self.assertEqual(Duration.earliest_claim(histories), "2026-01-01T09:30:00")
+
+    def test_earliest_claim_finds_the_legacy_spelling(self):
+        histories = [[("in_progress", "2026-01-01T09:00:00")]]
+        self.assertEqual(Duration.earliest_claim(histories), "2026-01-01T09:00:00")
+
+    def test_earliest_claim_skips_a_falsy_timestamp(self):
+        histories = [[(State.RUNNING, None)], [(State.RUNNING, "2026-01-01T09:00:00")]]
+        self.assertEqual(Duration.earliest_claim(histories), "2026-01-01T09:00:00")
+
+    def test_earliest_claim_is_none_with_no_running_transition_anywhere(self):
+        histories = [[(State.QUEUED, "2026-01-01T09:00:00")], []]
+        self.assertIsNone(Duration.earliest_claim(histories))
+
 
 if __name__ == "__main__":
     unittest.main()
