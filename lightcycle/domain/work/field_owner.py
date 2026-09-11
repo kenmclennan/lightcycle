@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from lightcycle.domain.work.state import ALIASES, State
+
 FIELDS_BY_TYPE = {
     "item": frozenset(
         {"title", "description", "project", "workflow", "label", "backlog", "step", "depends"}
@@ -13,8 +15,31 @@ REQUIRED_WITH_STATE = {
 }
 
 STATES_BY_TYPE = {
-    "item": frozenset({"active", "in_progress"}),
-    "step": frozenset({"ready", "waiting"}),
+    "item": frozenset({"active", ALIASES[State.RUNNING]}),
+    "step": frozenset({ALIASES[State.WAITING], State.WAITING.value}),
+}
+
+ALLOWED_STATES_BY_FLAG = {
+    "title": (None,), "description": (None,), "project": (None,),
+    "label": (None,), "backlog": (None,), "notes": (None,),
+    "workflow": (None, "active"),
+    "step": ("active",),
+    "depends": ("active",),
+    "needs": (State.WAITING.value,), "reason": (State.WAITING.value,),
+    "tried": (State.WAITING.value,),
+    "unset": (None,),
+}
+
+UNSETTABLE_FIELDS = ("description", "project", "workflow", "notes")
+
+UNSET_REFUSAL_REASONS = {
+    "title": "a title must not be blank; there is nothing to clear, only to replace",
+    "label": "there is no way to clear a label this way",
+    "needs": "a park's fields are cleared as a whole, via --state ready",
+    "reason": "a park's fields are cleared as a whole, via --state ready",
+    "tried": "a park's fields are cleared as a whole, via --state ready",
+    "backlog": "backlog is a list of ids to resolve, not a value to clear",
+    "step": "step is a one-shot input to activation, not a persisted field",
 }
 
 

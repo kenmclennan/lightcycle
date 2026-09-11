@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.domain.work import Lane, State, lane_for, roll_up
+from lightcycle.domain.work.state import ALIASES
 
 
 class TestLaneFor(unittest.TestCase):
@@ -65,6 +66,13 @@ class TestRollUp(unittest.TestCase):
 
     def test_precedence_picks_blocked_when_only_blocked_and_done_remain(self):
         self.assertEqual(roll_up([State.BLOCKED, State.DONE]), State.BLOCKED)
+
+
+class TestAliases(unittest.TestCase):
+    def test_running_and_waiting_have_their_known_alternate_spellings(self):
+        self.assertEqual(
+            ALIASES, {State.RUNNING: "in_progress", State.WAITING: "ready"}
+        )
 
 
 if __name__ == "__main__":

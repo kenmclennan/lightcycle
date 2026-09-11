@@ -30,7 +30,7 @@ Business logic stranded in `cli.py` or an adapter is the most common defect here
 
 Next-step resolution has one home: a use case must not inline `flow_next` -> `create_step` or reimplement the transition / ci-failed-cap logic; it routes through the shared resolver (`application/flow/next_step.py`).
 
-**A command refuses or does what it says.** Every `lc` verb validates at the boundary, before the store is touched: an unknown id refuses rather than raising, a field belonging to the other structure refuses naming both, and a command with nothing to do refuses rather than exiting 0. The type signature lives in `domain/work/field_owner.py` and is derived from the structures, not hand-maintained per command.
+**A command refuses or does what it says.** Every `lc` verb validates at the boundary, before the store is touched: an unknown id refuses rather than raising, a field belonging to the other structure refuses naming both, and a command with nothing to do refuses rather than exiting 0. The type signature lives in `domain/work/field_owner.py`, hand-maintained; `tests/unit/test_field_owner.py` fails if a field `lc set` accepts (per `cli_commands.flags_by_verb()["set"]`) is not declared there.
 
 Item/step invariant: a step's `item` is required and fixed at creation; an item has no parent and nothing nests below a step. `Pass` and `PhaseRun` are records against an item, not levels of the tree. Every other relationship between nodes - backlog resolution, dependencies, lineage - is an artifact or edge, never an overloaded `parent`.
 
