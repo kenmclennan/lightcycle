@@ -83,9 +83,9 @@ If a change does not touch (1)-(3), it ships with a unit test, not an integratio
 
 ## Stack-specific gate and review risks
 
-Read by `write-code` (before classifying a gate result) and by `review-code` (when judging a diff). Each is a risk this repo's own toolchain has and a stack-generic step prompt cannot enumerate. Apply them with the same rigor as that step's own bullets: run it, do not infer.
+Read by `write-code` and `review-code` when they run against this repo.
 
-- **A removed test or step definition is identified by its qualified name, not by a grep for its declaration.** A test's qualified name is its pytest nodeid shape: `ClassName::test_name` when the function sits inside a `class Test*`/`class *Test` body, bare `test_name` otherwise. A pytest-bdd step definition's identity is its step-text string argument - including one wrapped in `parsers.parse(...)` or `parsers.re(...)` - never its enclosing Python function name, which is arbitrary and frequently duplicated. Count per-file, per-name occurrences rather than set membership: two identically-named units in different classes or modules collapse into one count under a bare textual grep, which masks one of them dropping to zero.
+- **Test identity is the pytest nodeid; a pytest-bdd step definition's is its step-text string** - including a `parsers.parse(...)`/`parsers.re(...)`-wrapped one - never the enclosing function name, which is arbitrary and often duplicated.
 
 ## Preferred skills (invoke before the work)
 
