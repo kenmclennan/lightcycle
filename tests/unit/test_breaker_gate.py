@@ -163,7 +163,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         self.assertTrue(result.breaker.is_open)
         self.assertEqual(result.breaker.reset_at, 500)
         self.assertEqual(workers.killed, [2])
-        self.assertEqual(breaker_port.load(), {"open": True, "reset_at": 500})
+        self.assertEqual(breaker_port.load(), {"open": True, "reset_at": 500, "trips": 1})
 
     def test_probe_success_closes_the_breaker(self):
         workers = FakeWorkers(
@@ -174,7 +174,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=500)
         self.assertTrue(result.closed)
         self.assertFalse(result.breaker.is_open)
-        self.assertEqual(breaker_port.load(), {"open": False, "reset_at": None})
+        self.assertEqual(breaker_port.load(), {"open": False, "reset_at": None, "trips": 0})
 
     def test_probe_failure_reopens_with_new_reset_at(self):
         workers = FakeWorkers(

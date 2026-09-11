@@ -564,7 +564,7 @@ def _workflow_check(selector, as_json):
     owner, routes, an = resp.owner, resp.routes, resp.analysis
     steps, req, opt, prod = an["steps"], an["req"], an["opt"], an["prod"]
     entries, terminals = an["entries"], an["terminals"]
-    unreachable, missing, dups, ok = an["unreachable"], an["missing"], an["dups"], an["ok"]
+    unreachable, missing, ok = an["unreachable"], an["missing"], an["ok"]
     phase_gaps = an["phase_gaps"]
     unknown_phases = an["unknown_phases"]
     phase_conflicts = an["phase_conflicts"]
@@ -591,7 +591,6 @@ def _workflow_check(selector, as_json):
                     "hooks": hooks,
                     "unreachable": unreachable,
                     "missing_inputs": missing,
-                    "conflicts": dups,
                     "phase_gaps": phase_gaps,
                     "unknown_phases": unknown_phases,
                     "phase_conflicts": phase_conflicts,
@@ -636,8 +635,6 @@ def _workflow_check(selector, as_json):
         )
     for s in unreachable:
         sys.stderr.write("warning: step '%s' is unreachable from any entry\n" % s)
-    for d in dups:
-        sys.stderr.write("conflict: %s\n" % d)
     if phase_gaps:
         sys.stderr.write("phase: stages missing a phase: %s\n" % ", ".join(phase_gaps))
     if unknown_phases:

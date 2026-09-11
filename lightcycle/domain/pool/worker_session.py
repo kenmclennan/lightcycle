@@ -1,6 +1,6 @@
 import re
 
-_TERMINAL = re.compile(r"\blc\s+(?:done|block)\b")
+_TERMINAL = re.compile(r"\blc\s+done\b|\blc\s+set\b[^\n]*--state[= ]waiting\b")
 
 KEEP = "keep"
 NUDGE = "nudge"

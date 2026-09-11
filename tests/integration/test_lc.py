@@ -799,7 +799,9 @@ class TestRun(unittest.TestCase):
         )
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self._breaker_state(), {"open": True, "reset_at": 9999999999})
+        self.assertEqual(
+            self._breaker_state(), {"open": True, "reset_at": 9999999999, "trips": 1}
+        )
         self.assertEqual(len(self._workers()), 1)
 
     def test_run_pool_wide_spin_guard_trips_and_logs_reason(self):
