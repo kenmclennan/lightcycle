@@ -1,8 +1,9 @@
 import datetime
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 from lightcycle.domain import feedback as cfeedback
+from lightcycle.domain.feedback import WorklogEntry
 
 
 @dataclass(frozen=True)
@@ -10,14 +11,6 @@ class WorklogInput:
     period_args: List[str]
     today: datetime.date
     tz: datetime.tzinfo
-
-
-@dataclass(frozen=True)
-class WorklogEntry:
-    id: str
-    title: str
-    outcome: Optional[str]
-    pr: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -31,10 +24,5 @@ class WorklogUseCase:
 
     def execute(self, input: WorklogInput) -> WorklogResponse:
         period = cfeedback.Period.resolve(input.period_args, input.today)
-        rows = cfeedback.Worklog(self._store.closed_items()).entries(period, input.tz)
-        return WorklogResponse(
-            entries=[
-                WorklogEntry(id=r["id"], title=r["title"], outcome=r["outcome"], pr=r["pr"])
-                for r in rows
-            ]
-        )
+        entries = cfeedback.Worklog(self._store.closed_items()).entries(period, input.tz)
+        return WorklogResponse(entries=list(entries))

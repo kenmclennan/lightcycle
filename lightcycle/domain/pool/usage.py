@@ -1,5 +1,15 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
+
+from lightcycle.domain.money import Cost
+
+
+@dataclass(frozen=True)
+class ModelRates:
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
 
 
 @dataclass(frozen=True)
@@ -8,7 +18,7 @@ class UsageEvent:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
-    cost_usd: float = 0.0
+    cost_usd: Cost = field(default_factory=Cost)
     cost_basis: Optional[str] = None
     thinking_tokens: Optional[int] = None
     has_result_line: bool = False
@@ -17,19 +27,19 @@ class UsageEvent:
 def price_tokens(model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, rates):
     model_rates = rates.get(model)
     if model_rates is None:
-        return 0.0, None
-    cost = (
-        input_tokens / 1_000_000 * model_rates["input"]
-        + output_tokens / 1_000_000 * model_rates["output"]
-        + cache_read_tokens / 1_000_000 * model_rates["cache_read"]
-        + cache_creation_tokens / 1_000_000 * model_rates["cache_write"]
+        return Cost(), None
+    cost_dollars = (
+        input_tokens / 1_000_000 * model_rates.input
+        + output_tokens / 1_000_000 * model_rates.output
+        + cache_read_tokens / 1_000_000 * model_rates.cache_read
+        + cache_creation_tokens / 1_000_000 * model_rates.cache_write
     )
-    return cost, "derived"
+    return Cost.from_usd(cost_dollars), "derived"
 
 
 def sum_usage_events(events) -> UsageEvent:
     input_tokens = output_tokens = cache_read_tokens = cache_creation_tokens = 0
-    cost_usd = 0.0
+    cost_usd = Cost()
     cost_basis = None
     thinking_tokens = None
     for event in events:
@@ -37,7 +47,7 @@ def sum_usage_events(events) -> UsageEvent:
         output_tokens += event.output_tokens
         cache_read_tokens += event.cache_read_tokens
         cache_creation_tokens += event.cache_creation_tokens
-        cost_usd += event.cost_usd
+        cost_usd = cost_usd + event.cost_usd
         if cost_basis is None and event.cost_basis is not None:
             cost_basis = event.cost_basis
         if event.thinking_tokens is not None:

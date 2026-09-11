@@ -96,17 +96,6 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
         self.assertEqual(got[0].claimed_by, "sp-x")
         self.assertNotIn(ready, [t.id for t in got])
 
-    def test_closed_stories_roundtrip(self):
-        s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
-        s.add_artifact(sid, "spec", "specs/foo.md")
-        s.complete_node(sid, "done")
-        items = s.closed_items()
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["id"], sid)
-        self.assertEqual(items[0]["outcome"], "done")
-        self.assertEqual(len(items[0]["artifacts"]), 1)
-
     def test_disconnect_is_a_noop(self):
         s = self.make_store()
         s.release()

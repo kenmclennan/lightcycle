@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from lightcycle.config import _SEED_KEYS, Config, ConfigError
+from lightcycle.domain.pool import ModelRates
 
 _SEEDED_EMPTY_AND_REQUIRED = ("workflows-remote",)
 
@@ -534,9 +535,7 @@ class TestUsagePricing(unittest.TestCase):
         )
         rates = c.usage_pricing()
         self.assertEqual(rates, {
-            "sonnet": {
-                "input": 3.00, "output": 15.00, "cache_write": 3.75, "cache_read": 0.30,
-            },
+            "sonnet": ModelRates(input=3.00, output=15.00, cache_write=3.75, cache_read=0.30),
         })
 
     def test_a_missing_price_key_raises_config_error(self):

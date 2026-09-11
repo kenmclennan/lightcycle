@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import (
     AttributionEvent, Breaker, ToolUsage, UsageEvent, WorkerPool, resolve_usage,
 )
@@ -23,7 +24,7 @@ def _corrected_usage(usage, resume):
         cache_creation_tokens=(
             usage.cache_creation_tokens - (resume.get("posted_cache_creation_tokens", 0) or 0)
         ),
-        cost_usd=usage.cost_usd - (resume.get("posted_cost_usd", 0.0) or 0.0),
+        cost_usd=usage.cost_usd - Cost.from_usd(resume.get("posted_cost_usd", 0.0) or 0.0),
         cost_basis=usage.cost_basis,
         thinking_tokens=thinking_tokens,
         has_result_line=usage.has_result_line,

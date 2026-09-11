@@ -3,6 +3,7 @@ import re
 from itertools import islice
 from typing import Optional
 
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool.attribution import AttributionEvent, ToolUsage
 from lightcycle.domain.pool.rate_limit import RateLimitEvent
 from lightcycle.domain.pool.usage import UsageEvent
@@ -53,7 +54,7 @@ def _from_model_usage(model_usage) -> UsageEvent:
         output_tokens=output_tokens,
         cache_read_tokens=cache_read_tokens,
         cache_creation_tokens=cache_creation_tokens,
-        cost_usd=cost_usd,
+        cost_usd=Cost.from_usd(cost_usd),
         cost_basis=cost_basis,
         thinking_tokens=thinking_tokens,
         has_result_line=True,

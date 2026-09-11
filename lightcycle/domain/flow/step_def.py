@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Optional
 
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
@@ -29,6 +30,9 @@ class StepDef:
     hooks: frozenset = frozenset()
     primary: Optional[str] = None
     display: Optional[str] = None
+
+    def __post_init__(self):
+        object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))
 
     @classmethod
     def from_graph(cls, graph, stage) -> "StepDef":

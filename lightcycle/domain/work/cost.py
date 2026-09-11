@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
+from lightcycle.domain.money import Cost
+
 
 def _is_human(step) -> bool:
     return step.role is None or step.role == "human"
@@ -30,9 +32,9 @@ class StepCost:
     cache_creation_tokens: int
     thinking_tokens: Optional[int]
     cache_hit_rate: Optional[float]
-    cost_usd: float
+    cost_usd: Cost
     cost_basis: Optional[str]
-    cost_per_turn: Optional[float]
+    cost_per_turn: Optional[Cost]
     tools: Tuple[ToolUsageRow, ...] = ()
 
 
@@ -41,12 +43,12 @@ def step_cost(step, tool_usage) -> StepCost:
         return StepCost(
             applicable=False, has_run=False, recorded=False, turn_count=0,
             input_tokens=0, output_tokens=0, cache_read_tokens=0, cache_creation_tokens=0,
-            thinking_tokens=None, cache_hit_rate=None, cost_usd=0.0, cost_basis=None,
+            thinking_tokens=None, cache_hit_rate=None, cost_usd=Cost(), cost_basis=None,
             cost_per_turn=None, tools=(),
         )
     has_run = step.turn_count > 0
     recorded = step.usage_cost_basis is not None
-    cost_per_turn_value = step.usage_cost_usd / step.turn_count if recorded and has_run else None
+    cost_per_turn_value = step.usage_cost_usd.per(step.turn_count) if recorded and has_run else None
     tools = tuple(sorted(
         (ToolUsageRow(tool, usage.calls, usage.bytes) for tool, usage in tool_usage.items()),
         key=lambda row: (-row.calls, row.tool),
@@ -70,7 +72,7 @@ class StageSubtotal:
     stage: str
     step_count: int
     turn_count: int
-    cost_usd: float
+    cost_usd: Cost
     not_recorded_count: int
 
 
@@ -83,8 +85,8 @@ class ItemCost:
     cache_creation_tokens: int
     thinking_tokens: Optional[int]
     cache_hit_rate: Optional[float]
-    cost_usd: float
-    cost_per_turn: Optional[float]
+    cost_usd: Cost
+    cost_per_turn: Optional[Cost]
     recorded_turn_count: int
     list_count: int
     derived_count: int
@@ -102,7 +104,7 @@ def item_cost(steps) -> ItemCost:
     thinking_values = [
         s.usage_thinking_tokens for s in agent_steps if s.usage_thinking_tokens is not None
     ]
-    cost_usd = sum(s.usage_cost_usd for s in agent_steps)
+    cost_usd = sum((s.usage_cost_usd for s in agent_steps), Cost())
     recorded_steps = [s for s in agent_steps if s.usage_cost_basis is not None]
     recorded_turn_count = sum(s.turn_count for s in recorded_steps)
     return ItemCost(
@@ -111,7 +113,7 @@ def item_cost(steps) -> ItemCost:
         thinking_tokens=sum(thinking_values) if thinking_values else None,
         cache_hit_rate=cache_hit_rate(cache_read_tokens, cache_creation_tokens, input_tokens),
         cost_usd=cost_usd,
-        cost_per_turn=cost_usd / recorded_turn_count if recorded_turn_count > 0 else None,
+        cost_per_turn=cost_usd.per(recorded_turn_count) if recorded_turn_count > 0 else None,
         recorded_turn_count=recorded_turn_count,
         list_count=sum(1 for s in agent_steps if s.usage_cost_basis == "list"),
         derived_count=sum(1 for s in agent_steps if s.usage_cost_basis == "derived"),
@@ -123,7 +125,7 @@ def item_cost(steps) -> ItemCost:
 def _stage_subtotals(agent_steps):
     buckets = {}
     for s in agent_steps:
-        bucket = buckets.setdefault(s.stage, {"steps": 0, "turns": 0, "cost": 0.0, "not_recorded": 0})
+        bucket = buckets.setdefault(s.stage, {"steps": 0, "turns": 0, "cost": Cost(), "not_recorded": 0})
         bucket["steps"] += 1
         bucket["turns"] += s.turn_count
         bucket["cost"] += s.usage_cost_usd
@@ -136,4 +138,4 @@ def _stage_subtotals(agent_steps):
         )
         for stage, bucket in buckets.items()
     ]
-    return tuple(sorted(rows, key=lambda r: (-r.cost_usd, r.stage)))
+    return tuple(sorted(rows, key=lambda r: (-r.cost_usd.micros, r.stage)))

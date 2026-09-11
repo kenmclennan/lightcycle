@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import contextmanager
 
 from lightcycle.adapters.fsio import DB_FILENAME
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
@@ -616,7 +617,7 @@ class SqliteStore(StorePort):
             usage_output_tokens=d["usage_output_tokens"],
             usage_cache_read_tokens=d["usage_cache_read_tokens"],
             usage_cache_creation_tokens=d["usage_cache_creation_tokens"],
-            usage_cost_usd=d["usage_cost_usd"],
+            usage_cost_usd=Cost.from_usd(d["usage_cost_usd"]),
             usage_cost_basis=d["usage_cost_basis"],
             usage_thinking_tokens=d["usage_thinking_tokens"],
             turn_count=d["turn_count"],
@@ -904,19 +905,7 @@ class SqliteStore(StorePort):
         self.assign(tid, "")
 
     def closed_items(self):
-        rows = self._conn.execute(
-            "SELECT id, title, closed_at, outcome FROM items WHERE state = 'done'"
-        ).fetchall()
-        return [
-            {
-                "id": r[0],
-                "title": r[1],
-                "closed_at": r[2],
-                "outcome": r[3],
-                "artifacts": self.item_artifacts(r[0]),
-            }
-            for r in rows
-        ]
+        return self._select_items("state = 'done'")
 
     def shortcode(self):
         return self._config.shortcode()
@@ -1222,7 +1211,7 @@ class SqliteStore(StorePort):
             if step_id is not None:
                 rowcount = self._record_usage_nocommit(
                     step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
-                    usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                    usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
                     usage.thinking_tokens,
                 )
                 stored = rowcount > 0
@@ -1328,7 +1317,7 @@ class SqliteStore(StorePort):
         if not usage.has_result_line and step_id is not None:
             rowcount = self._record_usage_nocommit(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
-                usage.cache_creation_tokens, usage.cost_usd, usage.cost_basis,
+                usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
                 usage.thinking_tokens,
             )
             recovered = rowcount > 0
@@ -1353,7 +1342,7 @@ class SqliteStore(StorePort):
             "usage_thinking_tokens = ?, turn_count = ? WHERE id = ?",
             (usage_totals.input_tokens, usage_totals.output_tokens,
              usage_totals.cache_read_tokens, usage_totals.cache_creation_tokens,
-             usage_totals.cost_usd, usage_totals.cost_basis, usage_totals.thinking_tokens,
+             usage_totals.cost_usd.to_usd(), usage_totals.cost_basis, usage_totals.thinking_tokens,
              turn_count, step_id),
         )
         self._conn.execute("DELETE FROM step_tool_usage WHERE step = ?", (step_id,))

@@ -1,3 +1,4 @@
+from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import AttributionEvent, ToolUsage, UsageEvent
 from lightcycle.domain.work import NodeSpec
 from lightcycle.ports.store import NodeNotFoundError
@@ -580,7 +581,7 @@ class StoreContractBase:
         self.assertEqual(t.usage_output_tokens, 0)
         self.assertEqual(t.usage_cache_read_tokens, 0)
         self.assertEqual(t.usage_cache_creation_tokens, 0)
-        self.assertEqual(t.usage_cost_usd, 0.0)
+        self.assertEqual(t.usage_cost_usd, Cost())
         self.assertIsNone(t.usage_cost_basis)
         self.assertIsNone(t.usage_thinking_tokens)
 
@@ -593,7 +594,7 @@ class StoreContractBase:
         self.assertEqual(t.usage_output_tokens, 20)
         self.assertEqual(t.usage_cache_read_tokens, 30)
         self.assertEqual(t.usage_cache_creation_tokens, 40)
-        self.assertEqual(t.usage_cost_usd, 1.5)
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(1.5))
         self.assertEqual(t.usage_cost_basis, "list")
         self.assertEqual(t.usage_thinking_tokens, 5)
 
@@ -607,7 +608,7 @@ class StoreContractBase:
         self.assertEqual(t.usage_output_tokens, 22)
         self.assertEqual(t.usage_cache_read_tokens, 33)
         self.assertEqual(t.usage_cache_creation_tokens, 44)
-        self.assertEqual(t.usage_cost_usd, 2.0)
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(2.0))
 
     def test_record_usage_none_cost_basis_and_thinking_tokens_leave_prior_values_untouched(self):
         s = self.make_store()
@@ -656,7 +657,7 @@ class StoreContractBase:
     def test_record_backfilled_usage_with_step_id_writes_usage_attribution_and_ledger(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="list")
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=Cost.from_usd(1.0), cost_basis="list")
         attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
         stored = s.record_backfilled_usage("/l/x.log", tid, usage, attribution)
         self.assertTrue(stored)
@@ -676,7 +677,7 @@ class StoreContractBase:
 
     def test_record_backfilled_usage_with_orphaned_step_id_reports_unstored_and_writes_only_the_ledger_row(self):
         s = self.make_store()
-        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="list")
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=Cost.from_usd(1.0), cost_basis="list")
         attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
         stored = s.record_backfilled_usage("/l/orphaned.log", "does-not-exist", usage, attribution)
         self.assertFalse(stored)
@@ -686,7 +687,7 @@ class StoreContractBase:
     def test_record_backfilled_usage_replayed_log_file_is_a_noop(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="list")
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=Cost.from_usd(1.0), cost_basis="list")
         attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
         s.record_backfilled_usage("/l/x.log", tid, usage, attribution)
         stored = s.record_backfilled_usage("/l/x.log", tid, usage, attribution)
@@ -811,7 +812,7 @@ class StoreContractBase:
         s = self.make_store()
         tid = self._step(s, "t")
         s._seed_unclassified_backfill_row("/l/x.log", tid)
-        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="derived")
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=Cost.from_usd(1.0), cost_basis="derived")
         attribution = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
 
         recovered = s.reclassify_backfilled_log("/l/x.log", tid, usage, attribution)
@@ -843,7 +844,7 @@ class StoreContractBase:
         s.record_attribution(tid, 9, {"Read": ToolUsage(calls=9, bytes=90)})
         usage_totals = UsageEvent(
             input_tokens=1, output_tokens=2, cache_read_tokens=3, cache_creation_tokens=4,
-            cost_usd=0.5, cost_basis="derived", thinking_tokens=6,
+            cost_usd=Cost.from_usd(0.5), cost_basis="derived", thinking_tokens=6,
         )
         s.overwrite_usage_and_attribution(tid, usage_totals, 1, {"Bash": ToolUsage(calls=1, bytes=10)})
         t = s.get_node(tid)
@@ -851,7 +852,7 @@ class StoreContractBase:
         self.assertEqual(t.usage_output_tokens, 2)
         self.assertEqual(t.usage_cache_read_tokens, 3)
         self.assertEqual(t.usage_cache_creation_tokens, 4)
-        self.assertEqual(t.usage_cost_usd, 0.5)
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(0.5))
         self.assertEqual(t.usage_cost_basis, "derived")
         self.assertEqual(t.usage_thinking_tokens, 6)
         self.assertEqual(t.turn_count, 1)
@@ -871,7 +872,7 @@ class StoreContractBase:
         tid = self._step(s, "t")
         s.record_attribution(tid, 246, {"Read": ToolUsage(calls=3, bytes=100)})
         s._seed_unclassified_backfill_row("/l/x.log", tid)
-        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=1.0, cost_basis="derived")
+        usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=Cost.from_usd(1.0), cost_basis="derived")
         attribution = AttributionEvent(
             turn_count=246, tool_usage={"Read": ToolUsage(calls=3, bytes=100)}
         )
@@ -883,6 +884,17 @@ class StoreContractBase:
         self.assertEqual(t.usage_input_tokens, 5)
         self.assertEqual(t.turn_count, 246)
         self.assertEqual(s.tool_usage_for(tid), {"Read": ToolUsage(calls=3, bytes=100)})
+
+    def test_closed_stories_roundtrip(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", "a description")
+        s.add_artifact(sid, "spec", "specs/foo.md")
+        s.complete_node(sid, "done")
+        items = s.closed_items()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].id, sid)
+        self.assertEqual(items[0].outcome, "done")
+        self.assertEqual(len(items[0].artifacts), 1)
 
     def test_all_tasks_excludes_closed(self):
         s = self.make_store()

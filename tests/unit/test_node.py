@@ -1,3 +1,4 @@
+import dataclasses
 import unittest
 
 from lightcycle.domain.work import State
@@ -7,13 +8,13 @@ from tests.support.factories import make_step
 class TestNodeSlots(unittest.TestCase):
     def test_unknown_attribute_raises_attribute_error(self):
         node = make_step(id="x")
-        with self.assertRaises(AttributeError):
+        with self.assertRaises((AttributeError, TypeError)):
             node.not_a_real_field = "oops"
 
-    def test_state_can_still_be_mutated(self):
+    def test_state_cannot_be_mutated(self):
         node = make_step(id="x", state=None)
-        node.state = State.DONE
-        self.assertEqual(node.state, State.DONE)
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            node.state = State.DONE
 
 
 class TestNodeAsDictWorkflow(unittest.TestCase):

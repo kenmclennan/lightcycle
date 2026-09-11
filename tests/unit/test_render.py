@@ -4,6 +4,7 @@ from lightcycle.application.flow.engine_steps import FINDINGS_STEP
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
+from lightcycle.domain.money import Cost
 from lightcycle.domain.work import Artifact
 from lightcycle.render import (
     display_stage, format_rate, format_tokens, format_usd, node_extra, render_backlog,
@@ -372,7 +373,7 @@ class TestDisplayStage(unittest.TestCase):
 
 class TestFormatUsd(unittest.TestCase):
     def test_formats_to_two_decimal_places(self):
-        self.assertEqual(format_usd(1.5), "$1.50")
+        self.assertEqual(format_usd(Cost.from_usd(1.5)), "$1.50")
 
 
 class TestFormatTokens(unittest.TestCase):

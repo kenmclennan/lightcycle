@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Dict
 
 
@@ -16,6 +17,9 @@ class AttributionEvent:
     recovered_output_tokens: int = 0
     recovered_cache_read_tokens: int = 0
     recovered_cache_creation_tokens: int = 0
+
+    def __post_init__(self):
+        object.__setattr__(self, "tool_usage", MappingProxyType(dict(self.tool_usage)))
 
 
 def sum_attribution_events(events):

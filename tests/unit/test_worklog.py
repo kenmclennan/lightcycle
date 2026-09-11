@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from lightcycle.domain.feedback import Period, Worklog
-from lightcycle.domain.work import Artifact
+from lightcycle.domain.work import Artifact, Item
 
 TODAY = datetime.date(2026, 6, 27)
 YESTERDAY = datetime.date(2026, 6, 26)
@@ -16,13 +16,13 @@ def item(
     outcome="merged",
     artifacts=None,
 ):
-    return {
-        "id": id,
-        "title": title,
-        "closed_at": closed_at,
-        "outcome": outcome,
-        "artifacts": artifacts or [],
-    }
+    return Item(
+        id=id,
+        title=title,
+        closed_at=closed_at,
+        outcome=outcome,
+        artifacts=tuple(artifacts or ()),
+    )
 
 
 def entries(items, start, end):
@@ -64,9 +64,9 @@ class TestWorklog(unittest.TestCase):
     def test_story_in_range_is_included(self):
         result = entries([item(closed_at="2026-06-27T12:00:00Z")], TODAY, TODAY)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["id"], "s-1")
-        self.assertEqual(result[0]["title"], "Thing shipped")
-        self.assertEqual(result[0]["outcome"], "merged")
+        self.assertEqual(result[0].id, "s-1")
+        self.assertEqual(result[0].title, "Thing shipped")
+        self.assertEqual(result[0].outcome, "merged")
 
     def test_story_before_range_excluded(self):
         self.assertEqual(entries([item(closed_at="2026-06-25T12:00:00Z")], TODAY, TODAY), [])
@@ -83,28 +83,28 @@ class TestWorklog(unittest.TestCase):
             item(id="e", closed_at="2026-06-24T12:00:00Z"),
         ]
         ids = [
-            e["id"]
+            e.id
             for e in entries(items, datetime.date(2026, 6, 25), datetime.date(2026, 6, 27))
         ]
         self.assertEqual(ids, ["a", "b", "c"])
 
     def test_pr_artifact_surfaced(self):
         s = item(artifacts=[Artifact(type="pr", value="https://github.com/x/y/pull/1")])
-        self.assertEqual(entries([s], TODAY, TODAY)[0]["pr"], "https://github.com/x/y/pull/1")
+        self.assertEqual(entries([s], TODAY, TODAY)[0].pr, "https://github.com/x/y/pull/1")
 
     def test_no_pr_artifact_gives_none(self):
         s = item(artifacts=[Artifact(type="spec", value="specs/x.md")])
-        self.assertIsNone(entries([s], TODAY, TODAY)[0]["pr"])
+        self.assertIsNone(entries([s], TODAY, TODAY)[0].pr)
 
     def test_empty_artifacts_gives_none_pr(self):
-        self.assertIsNone(entries([item(artifacts=[])], TODAY, TODAY)[0]["pr"])
+        self.assertIsNone(entries([item(artifacts=[])], TODAY, TODAY)[0].pr)
 
     def test_story_without_closed_at_skipped(self):
-        s = {"id": "s-1", "title": "x", "closed_at": None, "outcome": "merged", "artifacts": []}
+        s = Item(id="s-1", title="x", outcome="merged", closed_at=None)
         self.assertEqual(entries([s], TODAY, TODAY), [])
 
     def test_story_missing_closed_at_key_skipped(self):
-        s = {"id": "s-1", "title": "x", "outcome": "merged", "artifacts": []}
+        s = Item(id="s-1", title="x", outcome="merged")
         self.assertEqual(entries([s], TODAY, TODAY), [])
 
     def test_multiple_stories_in_range(self):

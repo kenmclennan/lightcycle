@@ -245,9 +245,9 @@ class TestListNodes(unittest.TestCase):
         self.s.complete_node(sid, "done")
         items = self.s.closed_items()
         self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["id"], sid)
-        self.assertEqual(items[0]["outcome"], "done")
-        self.assertEqual(len(items[0]["artifacts"]), 1)
+        self.assertEqual(items[0].id, sid)
+        self.assertEqual(items[0].outcome, "done")
+        self.assertEqual(len(items[0].artifacts), 1)
 
     def test_closed_stories_excludes_tasks(self):
         tid = create_owned_step(self.s, "build: thing")
