@@ -1,6 +1,11 @@
+import importlib.resources
 import os
 
 from lightcycle.ports.scaffold import ScaffoldPort
+
+
+def read_template(name):
+    return importlib.resources.files("lightcycle").joinpath("templates", "origin", name).read_text()
 
 
 def write_text(path, content):
@@ -17,6 +22,9 @@ def is_dir(path):
 
 
 class ScaffoldAdapter(ScaffoldPort):
+    def read_template(self, name):
+        return read_template(name)
+
     def write_text(self, path, content):
         return write_text(path, content)
 
