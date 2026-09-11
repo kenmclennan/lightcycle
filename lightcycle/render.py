@@ -41,6 +41,8 @@ def node_extra(node, *, show_description=False, description=None, artifacts=None
     pool = artifacts if artifacts else getattr(node, "artifacts", ())
     plan = next((a.value for a in pool if a.type == "plan-doc"), None)
     extra = "  plan:%s" % plan if plan else ""
+    if getattr(node, "blocked_by", None):
+        extra += "  [blocked by %s]" % ", ".join(sorted(node.blocked_by))
     text = description if description is not None else getattr(node, "description", None)
     if show_description and text:
         extra += "  desc:%s" % _truncate(text)

@@ -60,6 +60,14 @@ class TestNodeExtra(unittest.TestCase):
         )
         self.assertEqual(node_extra(node, show_description=True), "  plan:plans/x.md  desc:short desc")
 
+    def test_blocked_by_suffix(self):
+        node = tk(blocked_by=["LC-1", "LC-2"])
+        self.assertEqual(node_extra(node), "  [blocked by LC-1, LC-2]")
+
+    def test_no_blocked_by_suffix_when_empty(self):
+        node = tk(blocked_by=[])
+        self.assertEqual(node_extra(node), "")
+
 
 def _flat(id_, project, title, extra=""):
     return "%-10s  %-12s  %s%s" % (id_, project, title, extra)
@@ -93,6 +101,15 @@ class TestRenderBacklog(unittest.TestCase):
         node = tk(id="t1", title="one", artifacts=[Artifact(type="plan-doc", value="plans/x.md")])
         lines = render_backlog([row(project="proj-a", step=node)], TITLE_CAP)
         self.assertIn("plan:plans/x.md", lines[0])
+
+    def test_blocked_by_suffix_preserved(self):
+        node = tk(id="t1", title="one", blocked_by=["LC-1"])
+        lines = render_backlog([row(project="proj-a", step=node)], TITLE_CAP)
+        self.assertIn("[blocked by LC-1]", lines[0])
+
+    def test_no_blocked_by_suffix_when_absent(self):
+        lines = render_backlog([row(project="proj-a", step=tk(id="t1", title="one"))], TITLE_CAP)
+        self.assertNotIn("blocked by", lines[0])
 
     def test_title_over_cap_is_truncated_with_ellipsis(self):
         title = "x" * (TITLE_CAP + 20)
