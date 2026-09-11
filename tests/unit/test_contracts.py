@@ -85,7 +85,6 @@ class TestFlowContracts(unittest.TestCase):
         self.assertEqual(a.entries(), ["build"])
         self.assertIn("ready-merge", a.terminals())
         self.assertEqual(a.missing(), {})
-        self.assertEqual(a.duplicates(), [])
 
     def test_entry_guarantee_satisfies_downstream_required_input(self):
         a = contracts(CONTRACT_METAS)

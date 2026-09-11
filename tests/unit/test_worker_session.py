@@ -112,12 +112,18 @@ class TestTerminalCommand(unittest.TestCase):
     def test_tg_done_is_terminal(self):
         self.assertTrue(is_terminal_command("lc done abc.1 done"))
         self.assertTrue(is_terminal_command("bin/lc done abc.1 rejected"))
-        self.assertTrue(is_terminal_command("./bin/lc block xyz --needs foo"))
+
+    def test_park_command_is_terminal(self):
+        self.assertTrue(
+            is_terminal_command("lc set abc.1 --state waiting --needs x --reason y"))
+        self.assertTrue(
+            is_terminal_command("./bin/lc set abc.1 --needs x --reason y --state waiting"))
 
     def test_non_terminal_tg_commands(self):
         self.assertFalse(is_terminal_command("lc claim coder"))
         self.assertFalse(is_terminal_command("lc reflect abc.1 --feedback ok"))
         self.assertFalse(is_terminal_command("lc show abc.1"))
+        self.assertFalse(is_terminal_command("lc set abc.1 --state active"))
 
     def test_empty(self):
         self.assertFalse(is_terminal_command(""))
@@ -169,7 +175,7 @@ class TestSessionPolicy(unittest.TestCase):
         p = SessionPolicy()
         p.observe_claimed(True)
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
-        p.observe_command("lc block abc.1 --needs x")
+        p.observe_command("lc set abc.1 --state waiting --needs x --reason y")
         self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
     def test_rejected_rate_limit_closes_even_with_open_step_and_claimed(self):

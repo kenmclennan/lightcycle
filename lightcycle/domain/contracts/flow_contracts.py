@@ -11,7 +11,6 @@ class FlowContracts:
             s: StepContract.from_meta(step_metas.get(graph.file_for(s))) for s in self._steps
         }
         self._provided = set(graph.requires) | set(graph.provides)
-        self._dups = []
 
     def _required(self):
         return {s: self._contract[s].required_inputs() for s in self._steps}
@@ -70,9 +69,6 @@ class FlowContracts:
         for s in self._steps:
             targets.update(t for t in self._flow.step_def(s).routes.values() if t)
         return sorted(t for t in targets if not self._flow.step_def(t).owner)
-
-    def duplicates(self):
-        return list(self._dups)
 
     def _source_stages(self):
         g = self._graph
@@ -162,7 +158,7 @@ class FlowContracts:
 
     def ok(self):
         return (
-            not self.missing() and not self._dups
+            not self.missing()
             and not self.phase_gaps() and not self.unknown_phases() and not self.phase_conflicts()
             and not self.unknown_display()
             and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
@@ -181,7 +177,6 @@ class FlowContracts:
             "unreachable": self.unreachable(),
             "missing": self.missing(),
             "terminals": self.terminals(),
-            "dups": self.duplicates(),
             "phase_gaps": self.phase_gaps(),
             "unknown_phases": self.unknown_phases(),
             "phase_conflicts": self.phase_conflicts(),

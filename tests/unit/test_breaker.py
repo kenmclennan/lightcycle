@@ -13,7 +13,7 @@ class TestBreaker(unittest.TestCase):
         b = Breaker.from_state({"open": True, "reset_at": 500})
         self.assertTrue(b.is_open)
         self.assertEqual(b.reset_at, 500)
-        self.assertEqual(b.as_dict(), {"open": True, "reset_at": 500})
+        self.assertEqual(b.as_dict(), {"open": True, "reset_at": 500, "trips": 0})
 
     def test_trip_opens_with_reset_at(self):
         b = Breaker().trip(500)
@@ -49,6 +49,19 @@ class TestBreaker(unittest.TestCase):
         b = Breaker().rearm(900)
         self.assertTrue(b.is_open)
         self.assertEqual(b.reset_at, 900)
+        self.assertEqual(b.trips, 1)
+
+    def test_trip_sets_trips_to_one(self):
+        b = Breaker().trip(500).rearm(600).trip(700)
+        self.assertEqual(b.trips, 1)
+
+    def test_rearm_increments_trips(self):
+        b = Breaker().trip(500).rearm(600).rearm(700)
+        self.assertEqual(b.trips, 3)
+
+    def test_close_resets_trips(self):
+        b = Breaker().trip(500).rearm(600).close()
+        self.assertEqual(b.trips, 0)
 
 
 if __name__ == "__main__":
