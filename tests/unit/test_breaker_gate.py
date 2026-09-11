@@ -3,7 +3,7 @@ import unittest
 
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
-from lightcycle.domain.pool import ModelRates
+from lightcycle.domain.pool import ModelRates, UsageResume
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.workers import RegistryUnreadable
@@ -834,11 +834,14 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
         store.record_live_usage(
-            spawnid="sp-1", log_file="/l/1.log", offset=0, message_ids=["msg-1"],
-            pending_tool_use={}, posted_turn_count=1,
-            posted_tool_usage={"Read": {"calls": 1, "bytes": len(b"hello")}},
-            posted_input_tokens=40, posted_output_tokens=20, posted_cache_read_tokens=4,
-            posted_cache_creation_tokens=2, posted_cost_usd=0.4,
+            spawnid="sp-1",
+            resume=UsageResume(
+                log_file="/l/1.log", offset=0, message_ids=["msg-1"],
+                pending_tool_use={}, posted_turn_count=1,
+                posted_tool_usage={"Read": {"calls": 1, "bytes": len(b"hello")}},
+                posted_input_tokens=40, posted_output_tokens=20, posted_cache_read_tokens=4,
+                posted_cache_creation_tokens=2, posted_cost_usd=0.4,
+            ),
             tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
             turn_count=0, tool_usage={},
@@ -874,10 +877,13 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
         store.record_live_usage(
-            spawnid="sp-1", log_file="/l/1.log", offset=0, message_ids=[],
-            pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
-            posted_input_tokens=150, posted_output_tokens=0, posted_cache_read_tokens=0,
-            posted_cache_creation_tokens=0, posted_cost_usd=0.9,
+            spawnid="sp-1",
+            resume=UsageResume(
+                log_file="/l/1.log", offset=0, message_ids=[],
+                pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
+                posted_input_tokens=150, posted_output_tokens=0, posted_cache_read_tokens=0,
+                posted_cache_creation_tokens=0, posted_cost_usd=0.9,
+            ),
             tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
             turn_count=0, tool_usage={},

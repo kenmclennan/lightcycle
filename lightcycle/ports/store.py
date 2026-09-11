@@ -205,9 +205,7 @@ class StorePort(ABC):
 
     @abstractmethod
     def record_live_usage(
-        self, spawnid, log_file, offset, message_ids, pending_tool_use,
-        posted_turn_count, posted_tool_usage, posted_input_tokens, posted_output_tokens,
-        posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd,
+        self, spawnid, resume,
         tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
         cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
     ):

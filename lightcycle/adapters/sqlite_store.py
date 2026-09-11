@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 from lightcycle.adapters.fsio import DB_FILENAME
 from lightcycle.domain.money import Cost
-from lightcycle.domain.pool import ToolUsage
+from lightcycle.domain.pool import ToolUsage, UsageResume
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
 from lightcycle.domain.work import (
     Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
@@ -1226,9 +1226,7 @@ class SqliteStore(StorePort):
             raise
 
     def record_live_usage(
-        self, spawnid, log_file, offset, message_ids, pending_tool_use,
-        posted_turn_count, posted_tool_usage, posted_input_tokens, posted_output_tokens,
-        posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd,
+        self, spawnid, resume,
         tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
         cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
     ):
@@ -1252,10 +1250,11 @@ class SqliteStore(StorePort):
                 "posted_cache_creation_tokens = excluded.posted_cache_creation_tokens, "
                 "posted_cost_usd = excluded.posted_cost_usd",
                 (
-                    spawnid, log_file, offset, json.dumps(message_ids),
-                    json.dumps(pending_tool_use), posted_turn_count,
-                    json.dumps(posted_tool_usage), posted_input_tokens, posted_output_tokens,
-                    posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd,
+                    spawnid, resume.log_file, resume.offset, json.dumps(resume.message_ids),
+                    json.dumps(resume.pending_tool_use), resume.posted_turn_count,
+                    json.dumps(resume.posted_tool_usage), resume.posted_input_tokens,
+                    resume.posted_output_tokens, resume.posted_cache_read_tokens,
+                    resume.posted_cache_creation_tokens, resume.posted_cost_usd,
                 ),
             )
             if input_tokens or output_tokens or cache_read_tokens or cache_creation_tokens:
@@ -1280,19 +1279,19 @@ class SqliteStore(StorePort):
         ).fetchone()
         if row is None:
             return None
-        return {
-            "log_file": row[0],
-            "offset": row[1],
-            "message_ids": json.loads(row[2]),
-            "pending_tool_use": json.loads(row[3]),
-            "posted_turn_count": row[4],
-            "posted_tool_usage": json.loads(row[5]),
-            "posted_input_tokens": row[6],
-            "posted_output_tokens": row[7],
-            "posted_cache_read_tokens": row[8],
-            "posted_cache_creation_tokens": row[9],
-            "posted_cost_usd": row[10],
-        }
+        return UsageResume(
+            log_file=row[0],
+            offset=row[1],
+            message_ids=json.loads(row[2]),
+            pending_tool_use=json.loads(row[3]),
+            posted_turn_count=row[4],
+            posted_tool_usage=json.loads(row[5]),
+            posted_input_tokens=row[6],
+            posted_output_tokens=row[7],
+            posted_cache_read_tokens=row[8],
+            posted_cache_creation_tokens=row[9],
+            posted_cost_usd=row[10],
+        )
 
     def clear_usage_accrual_state(self, spawnid):
         self._conn.execute("DELETE FROM usage_accrual_state WHERE spawnid = ?", (spawnid,))

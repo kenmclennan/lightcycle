@@ -576,25 +576,11 @@ class FakeStore(StorePort):
         return stored
 
     def record_live_usage(
-        self, spawnid, log_file, offset, message_ids, pending_tool_use,
-        posted_turn_count, posted_tool_usage, posted_input_tokens, posted_output_tokens,
-        posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd,
+        self, spawnid, resume,
         tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
         cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
     ):
-        self._usage_accrual_state[spawnid] = {
-            "log_file": log_file,
-            "offset": offset,
-            "message_ids": list(message_ids),
-            "pending_tool_use": dict(pending_tool_use),
-            "posted_turn_count": posted_turn_count,
-            "posted_tool_usage": dict(posted_tool_usage),
-            "posted_input_tokens": posted_input_tokens,
-            "posted_output_tokens": posted_output_tokens,
-            "posted_cache_read_tokens": posted_cache_read_tokens,
-            "posted_cache_creation_tokens": posted_cache_creation_tokens,
-            "posted_cost_usd": posted_cost_usd,
-        }
+        self._usage_accrual_state[spawnid] = resume
         if input_tokens or output_tokens or cache_read_tokens or cache_creation_tokens:
             self.record_usage(
                 tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
@@ -604,8 +590,7 @@ class FakeStore(StorePort):
             self.record_attribution(tid, turn_count, tool_usage)
 
     def usage_accrual_state(self, spawnid):
-        state = self._usage_accrual_state.get(spawnid)
-        return dict(state) if state is not None else None
+        return self._usage_accrual_state.get(spawnid)
 
     def clear_usage_accrual_state(self, spawnid):
         self._usage_accrual_state.pop(spawnid, None)

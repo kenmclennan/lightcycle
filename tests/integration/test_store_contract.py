@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import lightcycle.cli as cli
 from lightcycle.domain.money import Cost
-from lightcycle.domain.pool import ToolUsage
+from lightcycle.domain.pool import ToolUsage, UsageResume
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.sqlite_store_factory import (
@@ -1029,11 +1029,14 @@ class TestSqliteStoreAtomicity(unittest.TestCase):
         ):
             with self.assertRaises(RuntimeError):
                 s.record_live_usage(
-                    spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=[],
-                    pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
-                    posted_input_tokens=5, posted_output_tokens=0,
-                    posted_cache_read_tokens=0, posted_cache_creation_tokens=0,
-                    posted_cost_usd=0.0,
+                    spawnid="sp1",
+                    resume=UsageResume(
+                        log_file="/l/x.log", offset=100, message_ids=[],
+                        pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
+                        posted_input_tokens=5, posted_output_tokens=0,
+                        posted_cache_read_tokens=0, posted_cache_creation_tokens=0,
+                        posted_cost_usd=0.0,
+                    ),
                     tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
                     cache_creation_tokens=0, cost_usd=0.0, cost_basis=None,
                     thinking_tokens=None, turn_count=1,

@@ -109,11 +109,11 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         self.assertEqual(tool_usage["Bash"].bytes, len(b"hello"))
 
         resume = store.usage_accrual_state("sp-1")
-        self.assertEqual(resume["offset"], len(content))
-        self.assertEqual(resume["message_ids"], ["msg-1"])
-        self.assertEqual(resume["pending_tool_use"], {})
-        self.assertEqual(resume["posted_turn_count"], 1)
-        self.assertEqual(resume["posted_input_tokens"], 100)
+        self.assertEqual(resume.offset, len(content))
+        self.assertEqual(resume.message_ids, ["msg-1"])
+        self.assertEqual(resume.pending_tool_use, {})
+        self.assertEqual(resume.posted_turn_count, 1)
+        self.assertEqual(resume.posted_input_tokens, 100)
 
     def test_a_second_tick_against_a_longer_log_posts_only_the_new_delta(self):
         store = RecordingFakeStore()
@@ -130,7 +130,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         workers = FakeWorkers(workers=[self._worker(tid)], alive_pids={1})
         use_case = LiveUsageAccrualUseCase(store, fs, workers, FakeConfig(), stream=ClaudeStreamAdapter())
         use_case.execute(now=100)
-        first_offset = store.usage_accrual_state("sp-1")["offset"]
+        first_offset = store.usage_accrual_state("sp-1").offset
         self.assertEqual(fs.read_from_calls, [("/l/1.log", 0)])
 
         second_lines = [
@@ -188,7 +188,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         self.assertEqual(len(store.record_attribution_calls), 1)
         recorded_tid, turn_count, _ = store.record_attribution_calls[0]
         self.assertEqual(turn_count, 1)
-        self.assertEqual(store.usage_accrual_state("sp-1")["offset"], len(full_line.encode()))
+        self.assertEqual(store.usage_accrual_state("sp-1").offset, len(full_line.encode()))
 
 
 if __name__ == "__main__":

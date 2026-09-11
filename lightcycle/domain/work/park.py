@@ -20,3 +20,10 @@ class Park:
             "%s=%s" % (name, " ".join(value.split())) for name, value in fields if value
         ]
         return "PARK RESOLVED: %s" % " | ".join(parts) if parts else None
+
+    def as_blocked_note(self):
+        return "BLOCKED: %s" % self.needs
+
+    @staticmethod
+    def strip_blocked_notes(text):
+        return [l for l in (text or "").splitlines() if not l.startswith("BLOCKED:")]

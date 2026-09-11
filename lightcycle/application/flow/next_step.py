@@ -30,6 +30,11 @@ class NextStepResolver:
             prior = consecutive_outcome_count(history, outcome)
         return self._flow.effective_transition(transition, outcome, prior, name)
 
+    def spec_for(self, t, transition):
+        if transition is None:
+            return None
+        return transition.next_step_spec(t, self._store.get_node(t.item).title)
+
     def create(self, t, transition):
-        spec = transition.next_step_spec(t, self._store.get_node(t.item).title)
+        spec = self.spec_for(t, transition)
         return self._store.create_step(**spec.as_kwargs())
