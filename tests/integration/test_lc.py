@@ -2493,7 +2493,17 @@ class TestLogRender(unittest.TestCase):
                             },
                         }
                     ),
-                    json.dumps({"type": "result", "result": "done; banner fixed"}),
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [{"type": "text", "text": "done; banner fixed"}]
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {"type": "result", "result": "done; banner fixed", "stop_reason": "end_turn"}
+                    ),
                 ]
             )
             + "\n"
@@ -2519,7 +2529,23 @@ class TestLogRender(unittest.TestCase):
         self.assertIn("Claiming the step.", out)
         self.assertIn("$ lc claim coder", out)
         self.assertIn("done; banner fixed", out)
+        self.assertIn("session started", out)
         self.assertNotIn('"type"', out)
+
+    def test_logs_renders_a_final_line_with_no_trailing_newline(self):
+        self.log.write_text(
+            self.log.read_text().rstrip("\n")
+            + "\n"
+            + json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {"content": [{"type": "text", "text": "no trailing newline"}]},
+                }
+            )
+        )
+        rc, out, err = call(_cli_mod.cmd_logs, "coder")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("no trailing newline", out)
 
     def test_logs_follow_reads_from_start_then_stops_on_interrupt(self):
         with patch.object(

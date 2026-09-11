@@ -23,7 +23,6 @@ LAYER_POLICY_EXEMPTIONS = {
     ("lightcycle/cli.py", "BLE001"),
     ("lightcycle/container.py", "BLE001"),
     ("lightcycle/config.py", "BLE001"),
-    ("lightcycle/logrender.py", "BLE001"),
     ("lightcycle/render.py", "BLE001"),
     ("lightcycle/ports/**", "BLE001"),
     ("lightcycle/__main__.py", "BLE001"),

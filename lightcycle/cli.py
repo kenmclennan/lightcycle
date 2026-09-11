@@ -13,7 +13,7 @@ from lightcycle.adapters.simulate import (
 )
 from lightcycle.cli_commands import COMMANDS, build_parser
 from lightcycle.adapters.upgrade import UpgradeAdapter
-from lightcycle.logrender import render_log_line
+from lightcycle.adapters.log_parser import LogLineParser
 from lightcycle.render import (
     display_stage, format_elapsed, render_backlog, render_inbox, render_queue, render_search,
     render_workflow_mermaid,
@@ -483,29 +483,29 @@ def cmd_logs(argv):
         sys.stderr.write("no log for %s\n" % a.target)
         return 1
 
-    def emit(line):
-        r = render_log_line(line)
-        if r is not None:
-            print(r, flush=True)
+    def emit(ll):
+        if ll.text:
+            print(ll.text, flush=True)
 
     if a.f:
+        parser = LogLineParser()
         offset = 0
-        buf = b""
         try:
             while True:
                 data, offset = _container.worker_log.read_from(path, offset)
                 if not data:
                     time.sleep(0.3)
                     continue
-                buf += data
-                *complete, buf = buf.split(b"\n")
-                for raw in complete:
-                    emit(raw.decode("utf-8", errors="replace"))
+                for ll in parser.feed(data):
+                    emit(ll)
         except KeyboardInterrupt:
             pass
     else:
-        for line in _container.worker_log.iter_lines(path):
-            emit(line)
+        data, _ = _container.worker_log.read_from(path, 0)
+        if data and not data.endswith(b"\n"):
+            data += b"\n"
+        for ll in LogLineParser().feed(data):
+            emit(ll)
     return 0
 
 
