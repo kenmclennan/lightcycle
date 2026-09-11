@@ -504,6 +504,25 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(self.store.get_node(b).state, State.QUEUED)
 
+    def test_done_on_a_fileless_terminal_closes_it(self):
+        write_workflow(
+            self.root,
+            {"scope-and-code": {"model": "sonnet", "step": "scope-and-code",
+                                 "routes": {"too-big": "review-scope"}}},
+            name="small-change",
+        )
+        item = self.store.create_item(
+            "st", "a description", workflow="lightcycle/small-change@%s" % _SHA)
+        sac = self.store.create_step("scope-and-code: x", step="scope-and-code", role="agent", parent=item)
+        rc, out, err = call(_cli_mod.cmd_done, sac, "too-big")
+        self.assertEqual(rc, 0, err)
+        rs = out.strip()
+        rc2, out2, err2 = call(_cli_mod.cmd_done, rs, "rescoped")
+        self.assertEqual(rc2, 0, err2)
+        node = self.store.get_node(rs)
+        self.assertEqual(node.state, "done")
+        self.assertEqual(node.outcome, "rescoped")
+
     def test_block_writes_metadata_and_routes_human(self):
         b = create_owned_step(self.store, "build: t", step="build", role="agent")
         rc, out, err = call(

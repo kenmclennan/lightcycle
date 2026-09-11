@@ -63,6 +63,9 @@ class Flow:
     def step_def(self, stage) -> StepDef:
         return self._steps.get(stage) or StepDef()
 
+    def declared(self, stage):
+        return stage in self._steps
+
     def steps(self):
         return sorted(s for s, sd in self._steps.items() if sd.owner is not None)
 

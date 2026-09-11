@@ -218,8 +218,8 @@ class FlowService:
     def outcomes_for(self, stage, name=None):
         return sorted(self.load_flow(name).step_def(stage).routes.keys())
 
-    def is_known_step(self, stage, name=None):
-        return bool(self.load_flow(name).step_def(stage).owner)
+    def step_declared(self, stage, name=None):
+        return self.load_flow(name).declared(stage)
 
     def owner_of(self, stage, name=None):
         return self.load_flow(name).step_def(stage).owner

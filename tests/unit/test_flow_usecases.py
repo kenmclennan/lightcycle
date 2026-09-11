@@ -308,6 +308,31 @@ class TestCompleteTask(unittest.TestCase):
         self.assertTrue((node.park.reason or "").strip())
         self.assertNotEqual(node.park.needs, node.park.reason)
 
+    def test_fileless_declared_terminal_closes_instead_of_parking(self):
+        metas = {
+            "scope-and-code": {
+                "model": "sonnet", "step": "scope-and-code",
+                "routes": {"too-big": "review-scope"},
+            },
+        }
+        s = FakeStore()
+        flow_svc = FlowService(FakeFs(metas), s)
+        item = s.create_item("st", "a description", workflow="small-change")
+        sac = s.create_step("scope-and-code: x", step="scope-and-code", role="agent", parent=item)
+        resp = CompleteStepUseCase(s, flow_svc).execute(
+            CompleteInput(step=sac, outcome="too-big")
+        )
+        rs = resp.next_step
+        resp2 = CompleteStepUseCase(s, flow_svc).execute(
+            CompleteInput(step=rs, outcome="rescoped")
+        )
+        self.assertIsNone(resp2.next_step)
+        node = s.get_node(rs)
+        self.assertEqual(node.state, "done")
+        self.assertEqual(node.outcome, "rescoped")
+        self.assertIsNone(node.park.reason)
+        self.assertIsNone(node.park.needs)
+
     def test_terminal_step_with_required_produce_does_not_demand_it(self):
         terminal_metas = {
             "finaliser": {
