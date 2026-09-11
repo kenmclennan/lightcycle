@@ -36,6 +36,44 @@ class TestBacklogDefault(unittest.TestCase):
         self.assertIsNone(resp.rows[0].project)
 
 
+class TestBacklogBlockedItems(unittest.TestCase):
+    def test_unactivated_item_with_unresolved_dep_still_appears(self):
+        s = FakeStore()
+        blocker = s.create_item("blocker", "a description")
+        held = s.create_item("held", "a description")
+        s.dep_add(held, blocker)
+        resp = BacklogUseCase(s, None).execute(BacklogInput())
+        self.assertIn(held, [r.step.id for r in resp.rows])
+
+    def test_row_for_a_blocked_item_shows_what_it_is_waiting_on(self):
+        s = FakeStore()
+        blocker = s.create_item("blocker", "a description")
+        held = s.create_item("held", "a description")
+        s.dep_add(held, blocker)
+        resp = BacklogUseCase(s, None).execute(BacklogInput())
+        row = next(r for r in resp.rows if r.step.id == held)
+        self.assertEqual(row.step.blocked_by, [blocker])
+
+    def test_activated_item_with_unresolved_dep_stays_excluded(self):
+        s = FakeStore()
+        blocker = s.create_item("blocker", "a description")
+        item = s.create_item("in flight", "a description")
+        s.create_step("entry", parent=item, role="agent")
+        s.dep_add(item, blocker)
+        resp = BacklogUseCase(s, None).execute(BacklogInput())
+        self.assertNotIn(item, [r.step.id for r in resp.rows])
+
+    def test_removing_the_dependency_leaves_it_a_plain_backlogged_row(self):
+        s = FakeStore()
+        blocker = s.create_item("blocker", "a description")
+        held = s.create_item("held", "a description")
+        s.dep_add(held, blocker)
+        s.dep_remove(held, blocker)
+        resp = BacklogUseCase(s, None).execute(BacklogInput())
+        row = next(r for r in resp.rows if r.step.id == held)
+        self.assertEqual(row.step.blocked_by, [])
+
+
 class TestBacklogProjectFilter(unittest.TestCase):
     def test_filters_to_matching_project(self):
         s = FakeStore()
