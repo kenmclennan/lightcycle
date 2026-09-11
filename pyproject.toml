@@ -48,7 +48,7 @@ ignore = ["E501", "E741", "E702", "E402"]
 # Layer policy (permanent, never part of the ratchet): BLE001 only applies to the
 # business-logic layers (application/, domain/) - see CLAUDE.md's architecture section.
 "lightcycle/adapters/**" = ["BLE001"]
-"lightcycle/cli.py" = ["BLE001", "SIM115"]
+"lightcycle/cli.py" = ["BLE001"]
 "lightcycle/container.py" = ["BLE001"]
 "lightcycle/config.py" = ["BLE001"]
 "lightcycle/render.py" = ["BLE001"]

@@ -14,7 +14,8 @@ def load(root):
     if not os.path.exists(p):
         return {}
     try:
-        return json.loads(open(p).read())
+        with open(p) as f:
+            return json.loads(f.read())
     except Exception as e:
         sys.stderr.write("warning: could not read breaker state %s: %s\n" % (p, e))
         return {"open": True, "reset_at": 0}
