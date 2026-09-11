@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.work import ProjectIdentity
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
 
@@ -37,14 +38,14 @@ class AddProjectUseCase:
 
     def execute(self, input: AddProjectInput) -> AddProjectResponse:
         self._require_global()
-        if input.identity.count("/") != 1 or not all(input.identity.split("/")):
-            raise UseCaseError(
-                "project identity must be 'owner/name' (got %r)" % input.identity
-            )
+        try:
+            identity = ProjectIdentity.parse(input.identity)
+        except ValueError as e:
+            raise UseCaseError(str(e))
         existing = self._store.get_project(input.identity)
         shortcode = (
             input.shortcode or (existing.shortcode if existing else None)
-            or input.identity.split("/")[-1].upper()
+            or identity.default_shortcode
         )
         remote = None
         if input.path:
@@ -122,4 +123,4 @@ class ProjectRegistry:
         rows = self._store.list_projects()
         if "/" in ref:
             return [p for p in rows if p.identity == ref]
-        return [p for p in rows if p.identity.rsplit("/", 1)[-1] == ref]
+        return [p for p in rows if ProjectIdentity.short_name(p.identity) == ref]

@@ -27,6 +27,12 @@ class TestProjectMatches(unittest.TestCase):
         item = s.create_item("item", "a description")
         self.assertFalse(project_matches(s, s.get_item(item), "lightcycle"))
 
+    def test_matches_a_bare_repo_with_no_slash(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        s.add_artifact(item, "repo", "specs")
+        self.assertTrue(project_matches(s, s.get_item(item), "specs"))
+
 
 class TestTextMatches(unittest.TestCase):
     def test_falsy_needle_matches_everything(self):

@@ -152,6 +152,14 @@ class TestBacklogCounts(unittest.TestCase):
         resp = BacklogUseCase(s, None).counts()
         self.assertEqual(resp.projects, [ProjectCount(project="proj-a", count=1)])
 
+    def test_a_bare_registered_identity_is_counted_without_raising(self):
+        s = FakeStore()
+        s.add_project("specs")
+        item = s.create_item("item", "a description")
+        s.add_artifact(item, "repo", "specs")
+        resp = BacklogUseCase(s, None).counts()
+        self.assertEqual(resp.projects, [ProjectCount(project="specs", count=1)])
+
     def test_project_value_round_trips_into_execute_filter(self):
         s = FakeStore()
         s.add_project("org-a/proj-a")

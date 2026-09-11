@@ -25,11 +25,12 @@ from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.park import Park
 from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.log_line import LogKind, LogLine
-from lightcycle.domain.work.node_id import node_id_key
+from lightcycle.domain.work.node_id import format_step_id, node_id_key
 from lightcycle.domain.work.node_queue import NodeQueue
 from lightcycle.domain.work.node_spec import NodeSpec
 from lightcycle.domain.work.node_view import NodeView
 from lightcycle.domain.work.note_condition import merge_condition_note
+from lightcycle.domain.work.project_identity import ProjectIdentity
 from lightcycle.domain.work.projected_step import ProjectedStep
 from lightcycle.domain.work.timestamp import parse_timestamp
 from lightcycle.domain.work.worker_log import worker_log_filename
@@ -49,8 +50,8 @@ __all__ = [
     "STATES_BY_TYPE", "StateRefusal", "UNSETTABLE_FIELDS", "UNSET_REFUSAL_REASONS",
     "all_states", "missing_for_state", "refuse_fields", "refuse_state", "render_field_refusal",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
-    "Step", "node_id_key",
-    "merge_condition_note", "ProjectedStep",
+    "Step", "format_step_id", "node_id_key",
+    "merge_condition_note", "ProjectIdentity", "ProjectedStep",
     "parse_timestamp",
     "worker_log_filename",
     "WORKER_VERBS", "worker_permitted", "worker_refusal_message",

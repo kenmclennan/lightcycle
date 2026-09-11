@@ -1,3 +1,4 @@
+from lightcycle.domain.work import ProjectIdentity
 from lightcycle.ports.store import NodeNotFoundError
 
 
@@ -13,4 +14,4 @@ def project_of(store, node):
 
 
 def short_project_label(raw):
-    return raw.rsplit("/", 1)[-1] if raw else ""
+    return ProjectIdentity.short_name(raw) if raw else ""
