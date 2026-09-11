@@ -21,6 +21,7 @@ from lightcycle.application.flow import (
     UnblockStepUseCase,
 )
 from lightcycle.application.flow.engine_steps import FINDINGS_STEP
+from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State
 from lightcycle.ports.workers import RegistryUnreadable
@@ -766,6 +767,29 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
+
+
+class TestNextStepResolverSpecFor(unittest.TestCase):
+    def test_spec_for_returns_none_without_a_transition(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        t = s.get_node(bid)
+        resolver = NextStepResolver(s, flow_for(METAS, s))
+        self.assertIsNone(resolver.spec_for(t, None))
+
+    def test_spec_for_matches_transition_next_step_spec(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        t = s.get_node(bid)
+        flow = flow_for(METAS, s)
+        resolver = NextStepResolver(s, flow)
+        transition = resolver.resolve(t, "done", flow.workflow_for(t))
+        self.assertEqual(
+            resolver.spec_for(t, transition),
+            transition.next_step_spec(t, s.get_node(t.item).title),
+        )
 
 
 class TestCiFailedCapWithRealSteps(unittest.TestCase):

@@ -2,52 +2,9 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
-from lightcycle.domain.money import Cost
-from lightcycle.domain.pool import (
-    AttributionEvent, Breaker, ToolUsage, UsageEvent, WorkerPool, resolve_usage,
-)
+from lightcycle.domain.pool import Breaker, WorkerPool, resolve_usage
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
-
-
-def _corrected_usage(usage, resume):
-    posted_thinking = resume.get("posted_thinking_tokens")
-    thinking_tokens = None
-    if usage.thinking_tokens is not None:
-        thinking_tokens = usage.thinking_tokens - (posted_thinking or 0)
-    return UsageEvent(
-        input_tokens=usage.input_tokens - (resume.get("posted_input_tokens", 0) or 0),
-        output_tokens=usage.output_tokens - (resume.get("posted_output_tokens", 0) or 0),
-        cache_read_tokens=(
-            usage.cache_read_tokens - (resume.get("posted_cache_read_tokens", 0) or 0)
-        ),
-        cache_creation_tokens=(
-            usage.cache_creation_tokens - (resume.get("posted_cache_creation_tokens", 0) or 0)
-        ),
-        cost_usd=usage.cost_usd - Cost.from_usd(resume.get("posted_cost_usd", 0.0) or 0.0),
-        cost_basis=usage.cost_basis,
-        thinking_tokens=thinking_tokens,
-        has_result_line=usage.has_result_line,
-    )
-
-
-def _corrected_attribution(attribution, resume):
-    posted_tool_usage = resume.get("posted_tool_usage") or {}
-    tool_usage = {}
-    for tool, usage in attribution.tool_usage.items():
-        posted = posted_tool_usage.get(tool) or {}
-        tool_usage[tool] = ToolUsage(
-            calls=usage.calls - (posted.get("calls", 0) or 0),
-            bytes=usage.bytes - (posted.get("bytes", 0) or 0),
-        )
-    return AttributionEvent(
-        turn_count=attribution.turn_count - (resume.get("posted_turn_count", 0) or 0),
-        tool_usage=tool_usage,
-        recovered_input_tokens=attribution.recovered_input_tokens,
-        recovered_output_tokens=attribution.recovered_output_tokens,
-        recovered_cache_read_tokens=attribution.recovered_cache_read_tokens,
-        recovered_cache_creation_tokens=attribution.recovered_cache_creation_tokens,
-    )
 
 
 @dataclass(frozen=True)
@@ -149,8 +106,8 @@ class BreakerGateUseCase:
                     usage = resolve_usage(usage, attribution, model, rates)
                 resume = self._store.usage_accrual_state(w.spawnid)
                 if resume is not None:
-                    usage = _corrected_usage(usage, resume)
-                    attribution = _corrected_attribution(attribution, resume)
+                    usage = resume.subtract_from(usage)
+                    attribution = resume.subtract_attribution_from(attribution)
                 self._store.record_backfilled_usage(w.log, w.step, usage, attribution)
                 self._store.clear_usage_accrual_state(w.spawnid)
             self._workers.mark_checked(w.spawnid)

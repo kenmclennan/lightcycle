@@ -3,8 +3,10 @@ import unittest
 
 from lightcycle.adapters.claude_stream import parse_usage_event
 from lightcycle.domain.money import Cost
-from lightcycle.domain.pool import AttributionEvent
-from lightcycle.domain.pool.usage import ModelRates, UsageEvent, price_tokens, resolve_usage
+from lightcycle.domain.pool import AttributionEvent, ToolUsage
+from lightcycle.domain.pool.usage import (
+    ModelRates, UsageEvent, UsageResume, price_tokens, resolve_usage,
+)
 
 
 def _result_line(model_usage):
@@ -147,6 +149,93 @@ class TestResolveUsage(unittest.TestCase):
         self.assertEqual(result.input_tokens, 1_000_000)
         self.assertEqual(result.cost_usd, Cost())
         self.assertIsNone(result.cost_basis)
+
+
+class TestUsageResumeSubtractFrom(unittest.TestCase):
+    def test_subtracts_posted_fields_from_usage(self):
+        resume = UsageResume(
+            posted_input_tokens=40, posted_output_tokens=20, posted_cache_read_tokens=4,
+            posted_cache_creation_tokens=2, posted_cost_usd=0.4,
+        )
+        usage = UsageEvent(
+            input_tokens=100, output_tokens=50, cache_read_tokens=10,
+            cache_creation_tokens=5, cost_usd=Cost.from_usd(1.0), cost_basis="list",
+            thinking_tokens=9, has_result_line=True,
+        )
+        result = resume.subtract_from(usage)
+        self.assertEqual(result.input_tokens, 60)
+        self.assertEqual(result.output_tokens, 30)
+        self.assertEqual(result.cache_read_tokens, 6)
+        self.assertEqual(result.cache_creation_tokens, 3)
+        self.assertEqual(result.cost_usd, Cost.from_usd(0.6))
+        self.assertEqual(result.cost_basis, "list")
+        self.assertEqual(result.thinking_tokens, 9)
+        self.assertTrue(result.has_result_line)
+
+
+class TestUsageResumeSubtractAttributionFrom(unittest.TestCase):
+    def test_subtracts_posted_turn_count_and_tool_usage(self):
+        resume = UsageResume(
+            posted_turn_count=1, posted_tool_usage={"Read": {"calls": 1, "bytes": 5}},
+        )
+        attribution = AttributionEvent(
+            turn_count=2, tool_usage={"Read": ToolUsage(calls=2, bytes=15)},
+            recovered_input_tokens=1, recovered_output_tokens=2,
+            recovered_cache_read_tokens=3, recovered_cache_creation_tokens=4,
+        )
+        result = resume.subtract_attribution_from(attribution)
+        self.assertEqual(result.turn_count, 1)
+        self.assertEqual(result.tool_usage["Read"].calls, 1)
+        self.assertEqual(result.tool_usage["Read"].bytes, 10)
+        self.assertEqual(result.recovered_input_tokens, 1)
+        self.assertEqual(result.recovered_output_tokens, 2)
+        self.assertEqual(result.recovered_cache_read_tokens, 3)
+        self.assertEqual(result.recovered_cache_creation_tokens, 4)
+
+
+class TestUsageResumePlus(unittest.TestCase):
+    def test_an_all_zero_delta_leaves_posted_fields_unchanged(self):
+        resume = UsageResume(
+            posted_input_tokens=40, posted_output_tokens=20, posted_turn_count=1,
+            posted_tool_usage={"Read": {"calls": 1, "bytes": 5}},
+        )
+        result = resume.plus(
+            AttributionEvent(), Cost(), log_file="x", offset=0,
+            message_ids=[], pending_tool_use={},
+        )
+        self.assertEqual(result.posted_input_tokens, 40)
+        self.assertEqual(result.posted_output_tokens, 20)
+        self.assertEqual(result.posted_turn_count, 1)
+        self.assertEqual(result.posted_tool_usage, {"Read": {"calls": 1, "bytes": 5}})
+        self.assertEqual(result.log_file, "x")
+        self.assertEqual(result.offset, 0)
+
+    def test_a_recovered_token_delta_advances_the_usage_fields_and_cost(self):
+        resume = UsageResume(posted_input_tokens=40, posted_cost_usd=0.4)
+        delta = AttributionEvent(
+            recovered_input_tokens=10, recovered_output_tokens=5,
+            recovered_cache_read_tokens=1, recovered_cache_creation_tokens=2,
+        )
+        result = resume.plus(
+            delta, Cost.from_usd(0.1), log_file="x", offset=0,
+            message_ids=[], pending_tool_use={},
+        )
+        self.assertEqual(result.posted_input_tokens, 50)
+        self.assertEqual(result.posted_output_tokens, 5)
+        self.assertEqual(result.posted_cache_read_tokens, 1)
+        self.assertEqual(result.posted_cache_creation_tokens, 2)
+        self.assertEqual(result.posted_cost_usd, 0.5)
+        self.assertEqual(result.posted_turn_count, 0)
+
+    def test_a_turn_or_tool_usage_delta_advances_only_those_fields(self):
+        resume = UsageResume(posted_turn_count=1, posted_tool_usage={"Read": {"calls": 1, "bytes": 5}})
+        delta = AttributionEvent(turn_count=2, tool_usage={"Read": ToolUsage(calls=1, bytes=15)})
+        result = resume.plus(
+            delta, Cost(), log_file="x", offset=0, message_ids=[], pending_tool_use={},
+        )
+        self.assertEqual(result.posted_turn_count, 3)
+        self.assertEqual(result.posted_tool_usage["Read"], {"calls": 2, "bytes": 20})
+        self.assertEqual(result.posted_input_tokens, 0)
 
 
 if __name__ == "__main__":

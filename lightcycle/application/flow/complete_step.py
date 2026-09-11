@@ -91,10 +91,7 @@ class CompleteStepUseCase:
                 "cannot close %s: step '%s' must produce %s; none on the item. "
                 "lc link the artifact first." % (input.step, t.stage, ", ".join(sorted(missing)))
             )
-        spec = (
-            transition.next_step_spec(t, self._store.get_node(t.item).title)
-            if transition else None
-        )
+        spec = self._resolver.spec_for(t, transition)
         won, new = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)
         if not won:

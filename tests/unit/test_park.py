@@ -31,5 +31,24 @@ class TestParkAsHistoryNote(unittest.TestCase):
         )
 
 
+class TestParkAsBlockedNote(unittest.TestCase):
+    def test_formats_the_needs_field(self):
+        self.assertEqual(Park(needs="decide X").as_blocked_note(), "BLOCKED: decide X")
+
+
+class TestParkStripBlockedNotes(unittest.TestCase):
+    def test_empty_text_returns_empty_list(self):
+        self.assertEqual(Park.strip_blocked_notes(None), [])
+        self.assertEqual(Park.strip_blocked_notes(""), [])
+
+    def test_drops_only_lines_starting_with_the_prefix(self):
+        text = "keep this\nBLOCKED: drop this\nkeep this too"
+        self.assertEqual(Park.strip_blocked_notes(text), ["keep this", "keep this too"])
+
+    def test_strips_a_note_written_by_the_old_code(self):
+        old_note = "BLOCKED: CLU landing GRID-059 by-hand; do not pool-spawn"
+        self.assertEqual(Park.strip_blocked_notes(old_note), [])
+
+
 if __name__ == "__main__":
     unittest.main()

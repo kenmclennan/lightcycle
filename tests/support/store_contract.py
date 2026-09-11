@@ -1,5 +1,5 @@
 from lightcycle.domain.money import Cost
-from lightcycle.domain.pool import AttributionEvent, ToolUsage, UsageEvent
+from lightcycle.domain.pool import AttributionEvent, ToolUsage, UsageEvent, UsageResume
 from lightcycle.domain.work import NodeSpec
 from lightcycle.ports.store import NodeNotFoundError
 from tests.support.step_factory import create_owned_step
@@ -704,19 +704,22 @@ class StoreContractBase:
         s = self.make_store()
         tid = self._step(s, "t")
         s.record_live_usage(
-            spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=["m1"],
-            pending_tool_use={}, posted_turn_count=1,
-            posted_tool_usage={"Read": {"calls": 1, "bytes": 10}},
-            posted_input_tokens=5, posted_output_tokens=6, posted_cache_read_tokens=0,
-            posted_cache_creation_tokens=0, posted_cost_usd=1.0,
+            spawnid="sp1",
+            resume=UsageResume(
+                log_file="/l/x.log", offset=100, message_ids=["m1"],
+                pending_tool_use={}, posted_turn_count=1,
+                posted_tool_usage={"Read": {"calls": 1, "bytes": 10}},
+                posted_input_tokens=5, posted_output_tokens=6, posted_cache_read_tokens=0,
+                posted_cache_creation_tokens=0, posted_cost_usd=1.0,
+            ),
             tid=tid, input_tokens=5, output_tokens=6, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=1.0, cost_basis="list", thinking_tokens=None,
             turn_count=1, tool_usage={"Read": ToolUsage(calls=1, bytes=10)},
         )
         state = s.usage_accrual_state("sp1")
-        self.assertEqual(state["offset"], 100)
-        self.assertEqual(state["message_ids"], ["m1"])
-        self.assertEqual(state["posted_input_tokens"], 5)
+        self.assertEqual(state.offset, 100)
+        self.assertEqual(state.message_ids, ["m1"])
+        self.assertEqual(state.posted_input_tokens, 5)
         t = s.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 5)
         self.assertEqual(t.turn_count, 1)
@@ -725,26 +728,32 @@ class StoreContractBase:
         s = self.make_store()
         tid = self._step(s, "t")
         s.record_live_usage(
-            spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=["m1"],
-            pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
-            posted_input_tokens=5, posted_output_tokens=0, posted_cache_read_tokens=0,
-            posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            spawnid="sp1",
+            resume=UsageResume(
+                log_file="/l/x.log", offset=100, message_ids=["m1"],
+                pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
+                posted_input_tokens=5, posted_output_tokens=0, posted_cache_read_tokens=0,
+                posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            ),
             tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
             turn_count=0, tool_usage={},
         )
         s.record_live_usage(
-            spawnid="sp1", log_file="/l/x.log", offset=200, message_ids=["m1", "m2"],
-            pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
-            posted_input_tokens=10, posted_output_tokens=0, posted_cache_read_tokens=0,
-            posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            spawnid="sp1",
+            resume=UsageResume(
+                log_file="/l/x.log", offset=200, message_ids=["m1", "m2"],
+                pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
+                posted_input_tokens=10, posted_output_tokens=0, posted_cache_read_tokens=0,
+                posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            ),
             tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
             turn_count=0, tool_usage={},
         )
         state = s.usage_accrual_state("sp1")
-        self.assertEqual(state["offset"], 200)
-        self.assertEqual(state["message_ids"], ["m1", "m2"])
+        self.assertEqual(state.offset, 200)
+        self.assertEqual(state.message_ids, ["m1", "m2"])
         t = s.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 10)
 
@@ -752,10 +761,13 @@ class StoreContractBase:
         s = self.make_store()
         tid = self._step(s, "t")
         s.record_live_usage(
-            spawnid="sp1", log_file="/l/x.log", offset=100, message_ids=[],
-            pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
-            posted_input_tokens=0, posted_output_tokens=0, posted_cache_read_tokens=0,
-            posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            spawnid="sp1",
+            resume=UsageResume(
+                log_file="/l/x.log", offset=100, message_ids=[],
+                pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
+                posted_input_tokens=0, posted_output_tokens=0, posted_cache_read_tokens=0,
+                posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+            ),
             tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
             turn_count=0, tool_usage={},

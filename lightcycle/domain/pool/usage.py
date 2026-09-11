@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Dict, List, Optional
 
 from lightcycle.domain.money import Cost
+from lightcycle.domain.pool.attribution import AttributionEvent, ToolUsage
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,83 @@ class UsageEvent:
     cost_basis: Optional[str] = None
     thinking_tokens: Optional[int] = None
     has_result_line: bool = False
+
+
+@dataclass(frozen=True)
+class UsageResume:
+    log_file: Optional[str] = None
+    offset: int = 0
+    message_ids: List[str] = field(default_factory=list)
+    pending_tool_use: Dict[str, str] = field(default_factory=dict)
+    posted_turn_count: int = 0
+    posted_tool_usage: Dict[str, dict] = field(default_factory=dict)
+    posted_input_tokens: int = 0
+    posted_output_tokens: int = 0
+    posted_cache_read_tokens: int = 0
+    posted_cache_creation_tokens: int = 0
+    posted_cost_usd: float = 0.0
+
+    def subtract_from(self, usage):
+        return UsageEvent(
+            input_tokens=usage.input_tokens - self.posted_input_tokens,
+            output_tokens=usage.output_tokens - self.posted_output_tokens,
+            cache_read_tokens=usage.cache_read_tokens - self.posted_cache_read_tokens,
+            cache_creation_tokens=usage.cache_creation_tokens - self.posted_cache_creation_tokens,
+            cost_usd=usage.cost_usd - Cost.from_usd(self.posted_cost_usd),
+            cost_basis=usage.cost_basis,
+            thinking_tokens=usage.thinking_tokens,
+            has_result_line=usage.has_result_line,
+        )
+
+    def subtract_attribution_from(self, attribution):
+        tool_usage = {}
+        for tool, usage in attribution.tool_usage.items():
+            posted = self.posted_tool_usage.get(tool) or {}
+            tool_usage[tool] = ToolUsage(
+                calls=usage.calls - (posted.get("calls", 0) or 0),
+                bytes=usage.bytes - (posted.get("bytes", 0) or 0),
+            )
+        return AttributionEvent(
+            turn_count=attribution.turn_count - self.posted_turn_count,
+            tool_usage=tool_usage,
+            recovered_input_tokens=attribution.recovered_input_tokens,
+            recovered_output_tokens=attribution.recovered_output_tokens,
+            recovered_cache_read_tokens=attribution.recovered_cache_read_tokens,
+            recovered_cache_creation_tokens=attribution.recovered_cache_creation_tokens,
+        )
+
+    def plus(self, delta, recovered_cost, *, log_file, offset, message_ids, pending_tool_use):
+        posted_input_tokens = self.posted_input_tokens
+        posted_output_tokens = self.posted_output_tokens
+        posted_cache_read_tokens = self.posted_cache_read_tokens
+        posted_cache_creation_tokens = self.posted_cache_creation_tokens
+        posted_cost = Cost.from_usd(self.posted_cost_usd)
+        posted_turn_count = self.posted_turn_count
+        posted_tool_usage = dict(self.posted_tool_usage)
+        if (delta.recovered_input_tokens or delta.recovered_output_tokens
+                or delta.recovered_cache_read_tokens or delta.recovered_cache_creation_tokens):
+            posted_input_tokens += delta.recovered_input_tokens
+            posted_output_tokens += delta.recovered_output_tokens
+            posted_cache_read_tokens += delta.recovered_cache_read_tokens
+            posted_cache_creation_tokens += delta.recovered_cache_creation_tokens
+            posted_cost = posted_cost + recovered_cost
+        if delta.turn_count or delta.tool_usage:
+            posted_turn_count += delta.turn_count
+            for tool, usage in delta.tool_usage.items():
+                existing = posted_tool_usage.get(tool) or {"calls": 0, "bytes": 0}
+                posted_tool_usage[tool] = {
+                    "calls": existing["calls"] + usage.calls,
+                    "bytes": existing["bytes"] + usage.bytes,
+                }
+        return UsageResume(
+            log_file=log_file, offset=offset, message_ids=message_ids,
+            pending_tool_use=pending_tool_use, posted_turn_count=posted_turn_count,
+            posted_tool_usage=posted_tool_usage, posted_input_tokens=posted_input_tokens,
+            posted_output_tokens=posted_output_tokens,
+            posted_cache_read_tokens=posted_cache_read_tokens,
+            posted_cache_creation_tokens=posted_cache_creation_tokens,
+            posted_cost_usd=posted_cost.to_usd(),
+        )
 
 
 def price_tokens(model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, rates):

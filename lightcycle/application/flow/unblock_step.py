@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.work.park import Park
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,7 @@ class UnblockStepUseCase:
             raise UseCaseError(
                 "nothing to unblock: step '%s' has no agent owner" % (t.stage or "(none)")
             )
-        kept = [l for l in (t.notes or "").splitlines() if not l.startswith("BLOCKED:")]
+        kept = Park.strip_blocked_notes(t.notes)
         history = t.park.as_history_note()
         if history:
             kept.append(history)
