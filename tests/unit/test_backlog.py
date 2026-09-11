@@ -209,6 +209,23 @@ class TestBacklogCounts(unittest.TestCase):
         filtered = BacklogUseCase(s, None).execute(BacklogInput(project="proj"))
         self.assertEqual([r.step.id for r in filtered.rows], [item])
 
+    def test_counts_does_not_call_get_item(self):
+        s = FakeStore()
+        s.add_project("org-a/proj-a")
+        s.add_project("org-b/proj-b")
+        item = s.create_item("item", "a description")
+        s.add_artifact(item, "repo", "proj-a")
+        calls = {"n": 0}
+        original = s.get_item
+
+        def counted(tid):
+            calls["n"] += 1
+            return original(tid)
+
+        s.get_item = counted
+        BacklogUseCase(s, None).counts()
+        self.assertEqual(calls["n"], 0)
+
 
 class TestBacklogUseCaseMemoization(unittest.TestCase):
     def _counting_store(self):

@@ -223,6 +223,24 @@ class TestDoneCounts(unittest.TestCase):
         resp = DoneUseCase(s).counts()
         self.assertEqual(resp.projects, [ProjectCount(project="specs", count=1)])
 
+    def test_counts_does_not_call_get_item(self):
+        s = FakeStore()
+        s.add_project("org-a/proj-a")
+        s.add_project("org-b/proj-b")
+        item = s.create_item("item", "a description")
+        s.add_artifact(item, "repo", "proj-a")
+        s.complete_node(item, "merged")
+        calls = {"n": 0}
+        original = s.get_item
+
+        def counted(tid):
+            calls["n"] += 1
+            return original(tid)
+
+        s.get_item = counted
+        DoneUseCase(s).counts()
+        self.assertEqual(calls["n"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
