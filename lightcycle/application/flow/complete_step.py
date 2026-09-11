@@ -63,7 +63,7 @@ class CompleteStepUseCase:
                 "no transition for step=%s outcome=%s; not closing. "
                 "Fix the flow or use a defined outcome." % (t.stage, input.outcome)
             )
-        if transition is None and not self._flow.is_known_step(t.stage, name):
+        if transition is None and not self._flow.step_declared(t.stage, name):
             decision = (
                 "no transition for step=%s outcome=%s; the workflow does not define %s"
                 % (t.stage, input.outcome, t.stage)
