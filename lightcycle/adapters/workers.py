@@ -35,7 +35,8 @@ def workers_state(root):
     if not os.path.exists(p):
         return []
     try:
-        return json.loads(open(p).read())
+        with open(p) as f:
+            return json.loads(f.read())
     except Exception as e:
         sys.stderr.write("warning: could not read worker registry %s: %s\n" % (p, e))
         raise RegistryUnreadable(str(e)) from e

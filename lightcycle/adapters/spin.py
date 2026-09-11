@@ -33,7 +33,8 @@ def load(root):
     if not os.path.exists(p):
         return SpinLedger()
     try:
-        return SpinLedger.from_state(json.loads(open(p).read()))
+        with open(p) as f:
+            return SpinLedger.from_state(json.loads(f.read()))
     except Exception as e:
         sys.stderr.write("warning: could not read spin state %s: %s\n" % (p, e))
         return SpinLedger()
