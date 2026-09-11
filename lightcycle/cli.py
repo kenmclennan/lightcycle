@@ -28,9 +28,11 @@ from lightcycle.application.feedback import (
     WorklogUseCase,
 )
 from lightcycle.domain.work import (
-    FieldRefusal, State, refuse_fields, refuse_state, render_field_refusal, worker_permitted,
-    worker_refusal_message,
+    ALLOWED_STATES_BY_FLAG, FIELDS_BY_TYPE, FieldRefusal, State, UNSETTABLE_FIELDS,
+    UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state,
+    render_field_refusal, worker_permitted, worker_refusal_message,
 )
+from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_workflow_selection import (
@@ -286,12 +288,6 @@ def cmd_upgrade(argv):
     else:
         print("upgraded: %s -> %s" % (resp.current, resp.remote))
     return 0
-
-
-_SET_FIELDS = (
-    "title", "description", "project", "workflow", "label", "backlog",
-    "notes", "needs", "reason", "tried", "step", "depends",
-)
 
 
 def _set_flags(args):
@@ -1011,45 +1007,22 @@ def cmd_new(argv):
     return 0
 
 
-_SET_FLAG_OWNERS = {
-    "title": (None,), "description": (None,), "project": (None,),
-    "label": (None,), "backlog": (None,), "notes": (None,),
-    "workflow": (None, "active"),
-    "step": ("active",),
-    "depends": ("active",),
-    "needs": ("waiting",), "reason": ("waiting",), "tried": ("waiting",),
-    "unset": (None,),
-}
-_SET_KNOWN_STATES = (None, "active", "waiting", "ready", "in_progress")
-
-_SET_UNSETTABLE_FIELDS = ("description", "project", "workflow", "notes")
-
-_SET_UNSET_REFUSAL_REASONS = {
-    "title": "a title must not be blank; there is nothing to clear, only to replace",
-    "label": "there is no way to clear a label this way",
-    "needs": "a park's fields are cleared as a whole, via --state ready",
-    "reason": "a park's fields are cleared as a whole, via --state ready",
-    "tried": "a park's fields are cleared as a whole, via --state ready",
-    "backlog": "backlog is a list of ids to resolve, not a value to clear",
-    "step": "step is a one-shot input to activation, not a persisted field",
-}
-
-
 def _set_state_label(state):
     return "--state %s" % state if state is not None else "no --state"
 
 
 def _reject_flags_ineffective_for_state(a):
-    if a.state not in _SET_KNOWN_STATES:
+    if a.state not in (None,) + tuple(all_states()):
         return None
     offending = [
-        f for f in _SET_FLAG_OWNERS
-        if getattr(a, f) is not None and a.state not in _SET_FLAG_OWNERS[f]
+        f for f in ALLOWED_STATES_BY_FLAG
+        if getattr(a, f) is not None and a.state not in ALLOWED_STATES_BY_FLAG[f]
     ]
     if not offending:
         return None
     parts = [
-        "--%s (needs %s)" % (f, " or ".join(_set_state_label(s) for s in _SET_FLAG_OWNERS[f]))
+        "--%s (needs %s)"
+        % (f, " or ".join(_set_state_label(s) for s in ALLOWED_STATES_BY_FLAG[f]))
         for f in offending
     ]
     return "%s does not accept %s\n" % (_set_state_label(a.state), "; ".join(parts))
@@ -1059,10 +1032,10 @@ def _reject_blank_values(a):
     for f in ("title", "description", "project", "workflow", "label", "notes", "tried"):
         if getattr(a, f, None) != "":
             continue
-        if f in _SET_UNSETTABLE_FIELDS:
+        if f in UNSETTABLE_FIELDS:
             return "--%s \"\" is refused; use --unset %s to clear it\n" % (f, f)
         return "--%s \"\" is refused; %s\n" % (
-            f, _SET_UNSET_REFUSAL_REASONS.get(f, "it may not be blank")
+            f, UNSET_REFUSAL_REASONS.get(f, "it may not be blank")
         )
     return None
 
@@ -1076,11 +1049,11 @@ def _reject_unset_contradiction(given_values, unset_fields):
 
 
 def _reject_unset_targets(unset_fields):
-    bad = sorted(f for f in unset_fields if f not in _SET_UNSETTABLE_FIELDS)
+    bad = sorted(f for f in unset_fields if f not in UNSETTABLE_FIELDS)
     if not bad:
         return None
     parts = [
-        "--unset %s: %s" % (f, _SET_UNSET_REFUSAL_REASONS.get(f, "not a field lc set can clear"))
+        "--unset %s: %s" % (f, UNSET_REFUSAL_REASONS.get(f, "not a field lc set can clear"))
         for f in bad
     ]
     return "; ".join(parts) + "\n"
@@ -1115,7 +1088,8 @@ def cmd_set(argv):
     if node_type is None:
         sys.stderr.write("unknown node '%s'\n" % a.id)
         return 1
-    given_values = {f for f in _SET_FIELDS if getattr(a, f, None) is not None}
+    settable = FIELDS_BY_TYPE["item"] | FIELDS_BY_TYPE["step"]
+    given_values = {f for f in settable if getattr(a, f, None) is not None}
     unset_fields = set(a.unset or [])
     msg = (
         _reject_blank_values(a)
@@ -1155,23 +1129,24 @@ def cmd_set(argv):
             )
             print(resp.step)
             return 0
-        if a.state == "waiting":
-            if not a.needs:
-                sys.stderr.write("--state waiting requires --needs (what the human must decide)\n")
-                return 2
-            if not a.reason:
+        if a.state == State.WAITING.value:
+            truthy_given = {f for f in given_values if getattr(a, f)}
+            missing = missing_for_state(State.WAITING.value, truthy_given)
+            if missing:
+                field = missing[0]
                 sys.stderr.write(
-                    "--state waiting requires --reason (what happened that led to this)\n"
+                    "--state waiting requires --%s (%s)\n"
+                    % (field, _WAITING_FIELD_HINTS[field])
                 )
                 return 2
             BlockStepUseCase(_container.store).execute(
                 BlockInput(step=a.id, needs=a.needs, reason=a.reason, tried=a.tried)
             )
             return 0
-        if a.state == "ready":
+        if a.state == ALIASES[State.WAITING]:
             _container.unblock_step_use_case().execute(UnblockInput(step=a.id))
             return 0
-        if a.state == "in_progress":
+        if a.state == ALIASES[State.RUNNING]:
             ReopenItemUseCase(_container.store).execute(ReopenItemInput(item=a.id))
             return 0
 
@@ -1217,6 +1192,12 @@ def cmd_set(argv):
             sys.stderr.write("%s\n" % e)
             return 1
     return 0
+
+
+_WAITING_FIELD_HINTS = {
+    "needs": "what the human must decide",
+    "reason": "what happened that led to this",
+}
 
 
 _REFLECTION_TYPES = ("reflection", "feedback")

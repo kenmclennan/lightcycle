@@ -12,6 +12,9 @@ class State(StrEnum):
     DONE = "done"
 
 
+ALIASES = {State.RUNNING: "in_progress", State.WAITING: "ready"}
+
+
 def lane_for(state):
     if state == State.DONE:
         return Lane.DONE

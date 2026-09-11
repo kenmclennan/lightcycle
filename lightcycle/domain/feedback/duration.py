@@ -1,7 +1,5 @@
-from lightcycle.domain.work.state import State
+from lightcycle.domain.work.state import ALIASES, State
 from lightcycle.domain.work.timestamp import parse_timestamp
-
-_LEGACY = {State.RUNNING: "in_progress", State.WAITING: "ready"}
 
 
 class Duration:
@@ -38,19 +36,19 @@ class Duration:
         claims = [
             ts for transitions in histories
             for state, ts in transitions
-            if (state == State.RUNNING or state == _LEGACY[State.RUNNING]) and ts
+            if (state == State.RUNNING or state == ALIASES[State.RUNNING]) and ts
         ]
         return min(claims) if claims else None
 
     def _first(self, status):
-        legacy = _LEGACY.get(status)
+        legacy = ALIASES.get(status)
         for s, ts in self._transitions:
             if s == status or s == legacy:
                 return ts
         return None
 
     def _last(self, status):
-        legacy = _LEGACY.get(status)
+        legacy = ALIASES.get(status)
         for s, ts in reversed(self._transitions):
             if s == status or s == legacy:
                 return ts

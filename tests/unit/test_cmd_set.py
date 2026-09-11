@@ -204,6 +204,26 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertEqual(t.role, "agent")
         self.assertFalse(t.park)
 
+    def test_state_waiting_with_blank_needs_is_still_refused(self):
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        rc, out, err = call(
+            cli.cmd_set, bid, "--state", "waiting", "--needs", "", "--reason", "y"
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--needs", err)
+        t = self.store.get_node(bid)
+        self.assertIsNone(t.park.needs)
+
+    def test_state_waiting_with_blank_reason_is_still_refused(self):
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        rc, out, err = call(
+            cli.cmd_set, bid, "--state", "waiting", "--needs", "x", "--reason", ""
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--reason", err)
+        t = self.store.get_node(bid)
+        self.assertIsNone(t.park.needs)
+
     def test_unset_description_clears_description(self):
         iid = self.store.create_item("an item", "original description")
         rc, out, err = call(cli.cmd_set, iid, "--unset", "description")

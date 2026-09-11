@@ -1,7 +1,9 @@
 import unittest
 
+from lightcycle.cli_commands import flags_by_verb
 from lightcycle.domain.work import (
-    FieldRefusal, StateRefusal, refuse_fields, refuse_state, render_field_refusal,
+    FIELDS_BY_TYPE, FieldRefusal, StateRefusal, refuse_fields, refuse_state,
+    render_field_refusal,
 )
 
 
@@ -93,6 +95,12 @@ class TestRefuseState(unittest.TestCase):
 
     def test_no_state_at_all_is_accepted(self):
         self.assertIsNone(refuse_state("item", None))
+
+
+class TestFieldsByTypeCoversEverySettableFlag(unittest.TestCase):
+    def test_every_lc_set_flag_except_state_and_unset_is_owned_by_a_type(self):
+        settable = flags_by_verb()["set"] - {"state", "unset"}
+        self.assertEqual(FIELDS_BY_TYPE["item"] | FIELDS_BY_TYPE["step"], settable)
 
 
 if __name__ == "__main__":
