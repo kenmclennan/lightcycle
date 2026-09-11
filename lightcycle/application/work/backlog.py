@@ -3,8 +3,9 @@ from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.item_filter import project_matches, text_matches
+from lightcycle.application.work.project_counts import ProjectCount, project_counts
 from lightcycle.application.work.project_of import project_of
-from lightcycle.domain.work import ProjectIdentity, State, node_id_key
+from lightcycle.domain.work import State, node_id_key
 
 
 @dataclass(frozen=True)
@@ -17,12 +18,6 @@ class BacklogInput:
 @dataclass(frozen=True)
 class BacklogResponse:
     rows: List[HumanNodeRow]
-
-
-@dataclass(frozen=True)
-class ProjectCount:
-    project: str
-    count: int
 
 
 @dataclass(frozen=True)
@@ -57,17 +52,7 @@ class BacklogUseCase:
 
     def counts(self) -> BacklogCountsResponse:
         items = self._backlogged_items()
-        projects = [
-            ProjectCount(
-                project=ProjectIdentity.short_name(p.identity),
-                count=sum(
-                    1 for t in items
-                    if project_matches(self._store, t, ProjectIdentity.short_name(p.identity))
-                ),
-            )
-            for p in self._store.list_projects()
-        ]
-        unscoped = sum(1 for t in items if project_of(self._store, t) is None)
+        projects, unscoped = project_counts(self._store, items)
         return BacklogCountsResponse(projects=projects, unscoped=unscoped, total=len(items))
 
     def _backlogged_items(self):

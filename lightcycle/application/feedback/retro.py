@@ -48,20 +48,14 @@ class RetroUseCase:
         self._flow = flow
 
     def _signals_resolver(self):
-        cache = {}
         empty = cfeedback.Signals([])
 
         def resolve(item):
             selection = self._flow.inherited_selection(item)
             if selection is None:
                 return empty
-            if selection not in cache:
-                try:
-                    pin = self._flow.resolve_selection(selection)
-                    cache[selection] = cfeedback.Signals.from_graph(self._flow.load_graph(pin))
-                except ValueError:
-                    cache[selection] = empty
-            return cache[selection]
+            graph = self._flow.graph_for(item)
+            return cfeedback.Signals.from_graph(graph) if graph is not None else empty
 
         return resolve
 

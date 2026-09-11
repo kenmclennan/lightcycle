@@ -5,7 +5,7 @@ from lightcycle.application.work.done import (
     DoneInput,
     DoneUseCase,
 )
-from lightcycle.application.work.backlog import ProjectCount
+from lightcycle.application.work.project_counts import ProjectCount
 from tests.support.fake_store import FakeStore
 
 

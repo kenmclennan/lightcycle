@@ -2,11 +2,11 @@ import datetime
 from dataclasses import dataclass
 from typing import List, Optional
 
-from lightcycle.application.work.backlog import ProjectCount
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.item_filter import project_matches, text_matches
+from lightcycle.application.work.project_counts import ProjectCount, project_counts
 from lightcycle.application.work.project_of import project_of
-from lightcycle.domain.work import ProjectIdentity, State, node_id_key, parse_timestamp
+from lightcycle.domain.work import State, node_id_key, parse_timestamp
 
 _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
@@ -54,17 +54,7 @@ class DoneUseCase:
 
     def counts(self) -> DoneCountsResponse:
         items = self._closed_items()
-        projects = [
-            ProjectCount(
-                project=ProjectIdentity.short_name(p.identity),
-                count=sum(
-                    1 for t in items
-                    if project_matches(self._store, t, ProjectIdentity.short_name(p.identity))
-                ),
-            )
-            for p in self._store.list_projects()
-        ]
-        unscoped = sum(1 for t in items if project_of(self._store, t) is None)
+        projects, unscoped = project_counts(self._store, items)
         return DoneCountsResponse(projects=projects, unscoped=unscoped, total=len(items))
 
     def _closed_items(self):

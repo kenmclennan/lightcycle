@@ -34,18 +34,9 @@ class InboxUseCase:
         return InboxResponse(rows=[self._row(k, o, t, resolver) for (k, o), t in rows])
 
     def _resolver(self):
-        cache = {}
-
         def resolve(t):
             selection = self._flow.workflow_for(t)
-            if selection is None:
-                return _NO_FLOW
-            if selection not in cache:
-                try:
-                    cache[selection] = self._flow.load_flow(self._flow.resolve_selection(selection))
-                except ValueError:
-                    cache[selection] = _NO_FLOW
-            return cache[selection]
+            return self._flow.flow_for(t) if selection is not None else _NO_FLOW
 
         return resolve
 
