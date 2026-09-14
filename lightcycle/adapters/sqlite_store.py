@@ -61,7 +61,6 @@ CREATE TABLE IF NOT EXISTS items (
 CREATE TABLE IF NOT EXISTS steps (
     id TEXT PRIMARY KEY,
     item TEXT NOT NULL,
-    title TEXT NOT NULL DEFAULT '',
     stage TEXT,
     pass_id TEXT,
     role TEXT,
@@ -203,7 +202,7 @@ _ITEM_COLUMNS = (
 )
 
 _STEP_COLUMNS = (
-    "id", "item", "title", "stage", "pass_id", "role", "state", "assignee", "model",
+    "id", "item", "stage", "pass_id", "role", "state", "assignee", "model",
     "outcome", "notes", "watched_step",
     "park_reason", "park_needs", "park_tried",
     "created_at", "fired_at", "closed_at", "active_seconds",
@@ -283,6 +282,7 @@ class SqliteStore(StorePort):
             self._migrate_split_nodes()
         self._migrate_add_missing_columns()
         self._migrate_drop_step_reflection_column()
+        self._migrate_drop_step_title_column()
         self._commit()
 
     def _commit(self):
@@ -448,6 +448,12 @@ class SqliteStore(StorePort):
         if "reflection" in cols:
             self._conn.execute("ALTER TABLE steps DROP COLUMN reflection")
 
+    def _migrate_drop_step_title_column(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        if "title" in cols:
+            self._conn.execute("UPDATE steps SET title = ''")
+            self._conn.execute("ALTER TABLE steps DROP COLUMN title")
+
     def _has_table(self, name):
         return self._conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
@@ -475,11 +481,11 @@ class SqliteStore(StorePort):
                 fold = step_folds.get(d["id"], {})
                 owner = d.get("parent") or self._orphan_owner(d)
                 self._conn.execute(
-                    "INSERT OR IGNORE INTO steps (id, item, title, stage, pass_id, role, state, "
+                    "INSERT OR IGNORE INTO steps (id, item, stage, pass_id, role, state, "
                     "assignee, model, outcome, notes, watched_step, "
                     "park_reason, park_needs, park_tried, created_at, fired_at, closed_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (d["id"], owner, d["title"], d.get("step"), d.get("pass_id"),
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (d["id"], owner, d.get("step"), d.get("pass_id"),
                      d.get("role"), d["state"], d.get("assignee"), d.get("model"),
                      d.get("outcome"), d.get("notes"),
                      fold.get("watched-step"), d.get("reason"), d.get("needs"), d.get("tried"),
@@ -602,7 +608,6 @@ class SqliteStore(StorePort):
         return Step(
             id=d["id"],
             item=d["item"],
-            title=d["title"],
             stage=d["stage"],
             pass_id=d["pass_id"],
             role=d["role"],
@@ -1359,32 +1364,32 @@ class SqliteStore(StorePort):
             )
         self._commit()
 
-    def _insert_step_nocommit(self, title, *, step=None, role=None, parent=None, deps=None,
+    def _insert_step_nocommit(self, *, step=None, role=None, parent=None, deps=None,
                               id=None):
         if parent is None:
             raise ValueError("create_step requires a parent")
         tid = self._mint_or_adopt(id, parent)
         self._conn.execute(
-            "INSERT INTO steps (id, item, title, stage, role, state, created_at) "
-            "VALUES (?, ?, ?, ?, ?, 'ready', ?)",
-            (tid, parent, title, step, role, self._now()),
+            "INSERT INTO steps (id, item, stage, role, state, created_at) "
+            "VALUES (?, ?, ?, ?, 'ready', ?)",
+            (tid, parent, step, role, self._now()),
         )
         if deps:
             for dep in deps:
                 self._dep_add_nocommit(tid, dep)
         return tid
 
-    def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
+    def create_step(self, *, step=None, role=None, parent=None, deps=None,
                     id=None):
         tid = self._insert_step_nocommit(
-            title, step=step, role=role, parent=parent, deps=deps, id=id)
+            step=step, role=role, parent=parent, deps=deps, id=id)
         self._commit()
         return tid
 
     def edit_node(self, tid, *, title=None, description=None, project=None,
                   workflow=None):
         table = self._table_of(tid)
-        allowed = ("title",) if table == "steps" else (
+        allowed = () if table == "steps" else (
             "title", "description", "project", "workflow"
         )
         updates = {}

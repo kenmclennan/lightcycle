@@ -58,7 +58,7 @@ class TestCmdRm(unittest.TestCase):
 
     def test_renders_the_refusal_and_leaves_the_node(self):
         item = self.store.create_item("feature", "a description")
-        step = self.store.create_step("build", step="build", role="agent", parent=item)
+        step = self.store.create_step(step="build", role="agent", parent=item)
         self.store.claim_ready("agent")
         container = FakeContainer(self.store)
         container.workers = FakeWorkers([{"step": step, "pid": 1}], alive=True)

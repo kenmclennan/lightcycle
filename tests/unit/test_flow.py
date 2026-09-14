@@ -91,30 +91,22 @@ class TestTransition(unittest.TestCase):
     def _t(self, from_stage="build", outcome="done", to_stage="review", to_role="agent"):
         return Transition(from_stage=from_stage, outcome=outcome, to_stage=to_stage, to_role=to_role)
 
-    def test_next_task_spec_uses_the_given_item_title_and_keeps_deps(self):
-        spec = self._t().next_step_spec(make_step(id="t-1", title="build: some stale title"), "make the thing")
-        self.assertEqual(spec.title, "review: make the thing")
+    def test_next_task_spec_routes_and_keeps_deps(self):
+        spec = self._t().next_step_spec(make_step(id="t-1"))
         self.assertEqual(spec.step, "review")
         self.assertEqual(spec.role, "agent")
         self.assertEqual(spec.parent, "i-1")
         self.assertEqual(spec.deps, ("t-1",))
 
-    def test_next_task_spec_ignores_the_steps_own_title_entirely(self):
-        spec = self._t().next_step_spec(
-            make_step(id="t-1", title="build: consolidated sweep - see PR #349"), "fix the bug"
-        )
-        self.assertEqual(spec.title, "review: fix the bug")
-
     def test_next_task_spec_includes_parent_when_present(self):
-        spec = self._t().next_step_spec(make_step(id="t-1", title="build: x", parent="s-9"), "x")
+        spec = self._t().next_step_spec(make_step(id="t-1", parent="s-9"))
         self.assertEqual(spec.parent, "s-9")
 
     def test_next_task_spec_as_kwargs_matches_create_task(self):
-        kw = self._t().next_step_spec(make_step(id="t-1", title="build: x", parent="s-9"), "x").as_kwargs()
+        kw = self._t().next_step_spec(make_step(id="t-1", parent="s-9")).as_kwargs()
         self.assertEqual(
             kw,
             {
-                "title": "review: x",
                 "step": "review",
                 "role": "agent",
                 "parent": "s-9",

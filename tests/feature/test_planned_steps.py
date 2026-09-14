@@ -78,7 +78,7 @@ def _flow_service(ctx):
 
 def _file_step(ctx, spec, stage):
     item = _item(ctx)
-    _store(ctx).create_step("%s: %s" % (stage, spec), step=stage, parent=item)
+    _store(ctx).create_step(step=stage, parent=item)
 
 
 @given("a flow where the coder builds, the reviewer reviews, and the auditor audits")
@@ -167,7 +167,7 @@ def _filed_with_lead_in(ctx, spec, stage, target):
 ))
 def _completed_then_filed(ctx, spec, done_step, stage):
     item = _item(ctx)
-    done_id = _store(ctx).create_step("%s: %s" % (done_step, spec), step=done_step, parent=item)
+    done_id = _store(ctx).create_step(step=done_step, parent=item)
     _store(ctx).complete_node(done_id, "done")
     _file_step(ctx, spec, stage)
 
@@ -180,7 +180,7 @@ def _not_yet_filed(ctx, spec):
 @given(parsers.parse('the item "{spec}" has completed its last step on a terminal outcome'))
 def _completed_terminal(ctx, spec):
     item = _item(ctx)
-    sid = _store(ctx).create_step("last: %s" % spec, step="last", parent=item)
+    sid = _store(ctx).create_step(step="last", parent=item)
     _store(ctx).complete_node(sid, "done")
 
 

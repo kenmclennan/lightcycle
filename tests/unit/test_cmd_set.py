@@ -66,7 +66,6 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIn("--title", err)
         t = self.store.get_node(bid)
         self.assertEqual(t.role, "agent")
-        self.assertNotEqual(t.title, "renamed")
 
     def test_ready_refuses_any_other_flag(self):
         bid = create_owned_step(self.store, "build: x", step="build", role="human")

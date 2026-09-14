@@ -8,7 +8,7 @@ class TestFakeStoreRequiresParent(unittest.TestCase):
     def test_create_step_without_parent_raises(self):
         s = FakeStore()
         with self.assertRaises(ValueError):
-            s.create_step("t")
+            s.create_step()
 
 
 class TestLabels(unittest.TestCase):
@@ -99,7 +99,7 @@ class TestParentChildren(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
         self.item = self.s.create_item("item: foo", "a description")
-        self.step = self.s.create_step("build: foo", parent=self.item)
+        self.step = self.s.create_step(parent=self.item)
 
     def test_child_has_parent(self):
         self.assertEqual(self.s.get_node(self.step).item, self.item)
@@ -111,7 +111,7 @@ class TestParentChildren(unittest.TestCase):
 
     def test_children_excludes_other_records(self):
         other_story = self.s.create_item("item: bar", "a description")
-        self.s.create_step("build: bar", parent=other_story)
+        self.s.create_step(parent=other_story)
         self.assertEqual(len(self.s.children(self.item)), 1)
 
     def test_story_artifacts_roundtrip(self):

@@ -5,14 +5,13 @@ from lightcycle.domain.work import NodeSpec
 
 class TestNodeSpec(unittest.TestCase):
     def test_defaults_are_empty(self):
-        spec = NodeSpec(title="build: x")
+        spec = NodeSpec()
         self.assertEqual(spec.deps, ())
         self.assertIsNone(spec.step)
         self.assertIsNone(spec.parent)
 
     def test_as_kwargs_names_every_create_task_arg(self):
         spec = NodeSpec(
-            title="review: x",
             step="review",
             role="agent",
             parent="s-1",
@@ -21,7 +20,6 @@ class TestNodeSpec(unittest.TestCase):
         self.assertEqual(
             spec.as_kwargs(),
             {
-                "title": "review: x",
                 "step": "review",
                 "role": "agent",
                 "parent": "s-1",
@@ -30,9 +28,9 @@ class TestNodeSpec(unittest.TestCase):
         )
 
     def test_is_frozen(self):
-        spec = NodeSpec(title="x")
+        spec = NodeSpec(step="x")
         with self.assertRaises(Exception):
-            spec.title = "y"
+            spec.step = "y"
 
 
 if __name__ == "__main__":

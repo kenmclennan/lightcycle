@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.work import refuse_fields, render_field_refusal
 
 
 @dataclass(frozen=True)
@@ -48,9 +49,10 @@ class CreateStepUseCase:
                 "step '%s' is not owned in this workflow; owned steps: %s"
                 % (input.step, ", ".join(flow.steps()) or "(none)")
             )
+        if input.title.strip():
+            raise UseCaseError(render_field_refusal(refuse_fields("step", ("title",))))
         with self._store.transaction():
-            tid = self._store.create_step(
-                input.title, step=input.step, role=role, parent=input.parent)
+            tid = self._store.create_step(step=input.step, role=role, parent=input.parent)
             if input.note:
                 self._store.note(tid, " ".join(input.note))
         return CreateStepResponse(id=tid)

@@ -104,15 +104,11 @@ class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):
         store = FakeStore()
         store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
-            "first title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A,
-        )
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
         store.add_artifact(_PRIORITY_ID_A + "-i", "repo", _PRIORITY_PROJECT)
         store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
-            "second title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B,
-        )
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
         store.add_artifact(_PRIORITY_ID_B + "-i", "repo", _PRIORITY_PROJECT)
         width = _priority_stack_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
@@ -137,15 +133,11 @@ class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
         store = FakeStore()
         store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
-            "first title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A,
-        )
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
         store.add_artifact(_PRIORITY_ID_A + "-i", "repo", _PRIORITY_PROJECT)
         store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
-            "second title long enough for a continuation line",
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B,
-        )
+            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
         store.add_artifact(_PRIORITY_ID_B + "-i", "repo", _PRIORITY_PROJECT)
         for tid in active_ids:
             store.assign(tid, "worker-1")

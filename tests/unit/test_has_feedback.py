@@ -16,13 +16,13 @@ class TestHasFeedback(unittest.TestCase):
     def test_no_reflection_anywhere_is_false(self):
         s = FakeStore()
         item = s.create_item("x", "a description")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         self.assertFalse(has_feedback(s, s.get_node(item)))
 
     def test_step_level_reflection_is_true(self):
         s = FakeStore()
         item = s.create_item("x", "a description")
-        k = s.create_step("build: x", step="build", role="agent", parent=item)
+        k = s.create_step(step="build", role="agent", parent=item)
         _add_reflection(s, k, "fb")
         self.assertTrue(has_feedback(s, s.get_node(item)))
 
@@ -36,7 +36,7 @@ class TestHasFeedback(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("x", "a description")
         pid = s.open_pass(item)
-        k = s.create_step("build: x", step="build", role="agent", parent=item)
+        k = s.create_step(step="build", role="agent", parent=item)
         s.set_step_pass(k, pid)
         _add_reflection(s, k, "fb")
         s.close_pass(pid)

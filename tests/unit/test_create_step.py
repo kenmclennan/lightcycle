@@ -18,7 +18,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
         resp = CreateStepUseCase(s, _flow(s)).execute(
-            CreateStepInput(title="build it", step="build", parent=parent)
+            CreateStepInput(title="", step="build", parent=parent)
         )
         step = s.get_node(resp.id)
         self.assertEqual(step.stage, "build")
@@ -29,7 +29,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description")
         resp = CreateStepUseCase(s, _flow(s)).execute(
-            CreateStepInput(title="build it", step="build", parent=parent, workflow="standard")
+            CreateStepInput(title="", step="build", parent=parent, workflow="standard")
         )
         self.assertEqual(s.get_node(resp.id).role, "agent")
 
@@ -55,7 +55,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         parent = s.create_item("an item", "a description", workflow="standard")
         resp = CreateStepUseCase(s, _flow(s)).execute(
             CreateStepInput(
-                title="build it", step="build", parent=parent, note=["watch", "for", "flakes"]
+                title="", step="build", parent=parent, note=["watch", "for", "flakes"]
             )
         )
         self.assertEqual(s.get_node(resp.id).notes, "watch for flakes")
@@ -71,8 +71,19 @@ class TestCreateStepUseCase(unittest.TestCase):
         s.note = _boom
         with self.assertRaises(RuntimeError):
             CreateStepUseCase(s, _flow(s)).execute(
-                CreateStepInput(title="build it", step="build", parent=parent, note=["x"])
+                CreateStepInput(title="", step="build", parent=parent, note=["x"])
             )
+        self.assertEqual(s._records, before)
+
+    def test_a_title_is_refused_before_any_write(self):
+        s = FakeStore()
+        parent = s.create_item("an item", "a description", workflow="standard")
+        before = dict(s._records)
+        with self.assertRaises(UseCaseError) as ctx:
+            CreateStepUseCase(s, _flow(s)).execute(
+                CreateStepInput(title="build it", step="build", parent=parent)
+            )
+        self.assertIn("title", str(ctx.exception))
         self.assertEqual(s._records, before)
 
 

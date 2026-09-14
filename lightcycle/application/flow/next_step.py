@@ -33,7 +33,7 @@ class NextStepResolver:
     def spec_for(self, t, transition):
         if transition is None:
             return None
-        return transition.next_step_spec(t, self._store.get_node(t.item).title)
+        return transition.next_step_spec(t)
 
     def create(self, t, transition):
         spec = self.spec_for(t, transition)

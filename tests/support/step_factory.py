@@ -1,7 +1,7 @@
 def create_owned_step(store, title, **kw):
     if kw.get("parent") is None:
         kw["parent"] = store.create_item(title, "an owning item")
-    return store.create_step(title, **kw)
+    return store.create_step(**kw)
 
 
 def route_to_human(store, tid, note):

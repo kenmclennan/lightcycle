@@ -11,7 +11,7 @@ class TestCloseItemAtomicity(unittest.TestCase):
         store = make_sqlite_store()
         backlog = create_owned_step(store, "a backlog item", role="human")
         item = store.create_item("my item", "a description")
-        child = store.create_step("build: x", step="build", role="agent", parent=item)
+        child = store.create_step(step="build", role="agent", parent=item)
         store.add_artifact(item, "resolves", backlog, internal=True)
 
         pre_item_state = store.get_node(item).state

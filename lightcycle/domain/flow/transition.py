@@ -11,9 +11,8 @@ class Transition:
     to_role: str
     to_terminal: bool = False
 
-    def next_step_spec(self, step, item_title) -> NodeSpec:
+    def next_step_spec(self, step) -> NodeSpec:
         return NodeSpec(
-            title="%s: %s" % (self.to_stage, item_title),
             step=self.to_stage,
             role=self.to_role,
             parent=step.item,

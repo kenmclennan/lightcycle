@@ -28,7 +28,7 @@ class TestSqliteStoreRequiresParent(unittest.TestCase):
     def test_create_step_without_parent_raises(self):
         s = make_sqlite_store()
         with self.assertRaises(ValueError):
-            s.create_step("t")
+            s.create_step()
 
 
 class TestRemovedMigrationsLeaveNoDanglingReferences(unittest.TestCase):

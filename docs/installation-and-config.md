@@ -59,7 +59,7 @@ The file is read **once per process**, not per lookup, so a long-running process
 | `spin-cap` | consecutive no-work worker deaths, on one step or pool-wide, before the pool parks the step / caps itself to one worker |
 | `retro-interval-reflections` | reflections pending across un-retroed items and un-retroed closed passes of items still open, between engine retro audits |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
-| `max-title-length` | cap on an item's or step's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description` |
+| `max-title-length` | cap on an item's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description`. A step has no title of its own - it is composed at render time from its stage and its item's title - so this cap does not apply to one |
 | `personal-origin` | the workflow origin `lc workflow init` scaffolded and registered, if you made one |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |
 | `shutdown-grace-seconds` | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping |

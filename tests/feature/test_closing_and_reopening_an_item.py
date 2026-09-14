@@ -123,7 +123,7 @@ def _reopen_build_step(ctx):
 @when("a step is filed directly against the item")
 def _file_step(ctx):
     rc, out, err = ctx["h"].run(
-        "new", "step", "resume work", "--step", "build", "--parent", ctx["item"]
+        "new", "step", "", "--step", "build", "--parent", ctx["item"]
     )
     assert rc == 0, err
 

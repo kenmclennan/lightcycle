@@ -319,11 +319,11 @@ def _g_item_active_and_queued_own(ctx):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=14))
     store = FakeStore(now=lambda: clock.now().isoformat())
     item = store.create_item("An item with two open steps", "a description")
-    active = store.create_step("write the code", step="write-code", role="agent", parent=item)
+    active = store.create_step(step="write-code", role="agent", parent=item)
     store.assign(active, "worker-1")
     store.update_state(active, State.RUNNING)
     store.accrue_active_seconds([active], 14 * 60)
-    store.create_step("open the pr", step="code-open-pr", role="agent", parent=item)
+    store.create_step(step="code-open-pr", role="agent", parent=item)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
@@ -335,8 +335,8 @@ def _g_item_active_and_queued_own(ctx):
 def _g_item_inbox_and_active_own(ctx):
     store = FakeStore()
     item = store.create_item("An item with an inbox step and an active step", "a description")
-    store.create_step("await merge", step="code-await-merge", role="human", parent=item)
-    active = store.create_step("write the code", step="write-code", role="agent", parent=item)
+    store.create_step(step="code-await-merge", role="human", parent=item)
+    active = store.create_step(step="write-code", role="agent", parent=item)
     store.assign(active, "worker-1")
     ctx["store"] = store
     ctx["item_id"] = item
@@ -400,18 +400,17 @@ def _g_three_steps_with_project(ctx, project):
     blocked_item = store.create_item("blocked item", "a description")
     store.add_artifact(blocked_item, "repo", project)
     blocker = create_owned_step(store, "blocker", step="build", role="agent")
-    store.create_step(
-        "blocked step", step="build", role="agent", deps=[blocker], parent=blocked_item
+    store.create_step(step="build", role="agent", deps=[blocker], parent=blocked_item
     )
 
     active_item = store.create_item("active item", "a description")
     store.add_artifact(active_item, "repo", project)
-    active = store.create_step("active step", step="build", role="agent", parent=active_item)
+    active = store.create_step(step="build", role="agent", parent=active_item)
     store.assign(active, "worker-1")
 
     queued_item = store.create_item("queued item", "a description")
     store.add_artifact(queued_item, "repo", project)
-    store.create_step("queued step", step="build", role="agent", parent=queued_item)
+    store.create_step(step="build", role="agent", parent=queued_item)
 
     ctx["store"] = store
     ctx["row_ids"] = [blocked_item, active_item, queued_item]
@@ -478,8 +477,7 @@ def _g_more_than_one_screen(ctx):
 def _g_queued_step_with_id(ctx, id, source):
     store = FakeStore()
     item = store.create_item("queued item", "a description", id=id)
-    ctx["target_id"] = store.create_step(
-        "queued item", step="build", role="agent", parent=item)
+    ctx["target_id"] = store.create_step(step="build", role="agent", parent=item)
     ctx["store"] = store
 
 
@@ -493,8 +491,7 @@ def _g_more_than_screen_with_deep_long_id(ctx):
         create_owned_step(store, "q%d" % i, step="build", role="agent")
     ctx["long_id"] = "LIGHTCYCLE-999.10.10"
     item = store.create_item("deep item", "a description", id=ctx["long_id"])
-    ctx["target_id"] = store.create_step(
-        "deep item", step="build", role="agent", parent=item
+    ctx["target_id"] = store.create_step(step="build", role="agent", parent=item
     )
     ctx["store"] = store
 
@@ -533,7 +530,7 @@ def _g_row_forces_stacked(ctx, mode):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=_STACK_TIME_MINUTES))
     store = FakeStore(now=lambda: clock.now().isoformat())
     item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID)
-    tid = store.create_step(_STACK_TITLE, step=_STACK_STEP, role="agent", parent=item)
+    tid = store.create_step(step=_STACK_STEP, role="agent", parent=item)
     store.add_artifact(item, "repo", _STACK_PROJECT)
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)

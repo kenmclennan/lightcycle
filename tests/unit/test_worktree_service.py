@@ -654,7 +654,7 @@ class TestPhaseReEntry(unittest.TestCase):
         self.store.add_artifact(self.item, "repo", "saga")
 
     def _step(self, step):
-        return self.store.create_step("%s: work" % step, step=step, parent=self.item)
+        return self.store.create_step(step=step, parent=self.item)
 
     def test_a_first_pass_keeps_the_bare_phase_key(self):
         self._step("spec-writer")

@@ -22,14 +22,14 @@ class TestProject(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "lightcycle")
-        step = store.create_step("build", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
 
     def test_blank_when_its_item_has_no_repo(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step("build", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "")
 
@@ -43,7 +43,7 @@ class TestProject(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
-        step = store.create_step("build", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
 
@@ -279,7 +279,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
     def test_attention_row_step_id_is_the_step_not_the_owning_item(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step("await merge", step="ready-merge", role="human", parent=item)
+        step = store.create_step(step="ready-merge", role="human", parent=item)
         lanes = {"inbox": [store.get_node(step)], "queue": [], "active": []}
 
         attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
@@ -290,7 +290,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
     def test_active_row_step_id_is_the_step_not_the_owning_item(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step("building", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
         _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
@@ -301,7 +301,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
     def test_queued_row_step_id_is_the_step_not_the_owning_item(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step("queued build", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 
         _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
@@ -313,8 +313,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story", "a description")
         blocker = create_owned_step(store, "blocker", step="ready-merge", role="human")
-        step = store.create_step(
-            "blocked build", step="build", role="agent", parent=item, deps=[blocker]
+        step = store.create_step(step="build", role="agent", parent=item, deps=[blocker]
         )
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 
@@ -328,10 +327,10 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
     def test_active_row_shows_the_items_rolled_up_cost_across_all_its_steps(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
+        done = store.create_step(step="spec-writer", role="agent", parent=item)
         store.record_usage(done, 100, 10, 0, 0, 2.50, "list", None)
         store.complete_node(done, "done")
-        step = store.create_step("building", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.record_usage(step, 100, 10, 0, 0, 1.25, "list", None)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
@@ -342,7 +341,7 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
     def test_a_row_with_turns_but_no_recorded_cost_shows_the_not_recorded_placeholder(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step("building", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.record_attribution(step, 50, {})
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
@@ -353,7 +352,7 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
     def test_a_row_that_has_never_run_anything_is_blank_not_zero_dollars(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step("building", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
         _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
@@ -365,7 +364,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
     def test_a_row_that_has_never_accrued_active_time_is_blank(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step("building", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
         _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
@@ -375,10 +374,10 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
     def test_active_row_shows_the_items_summed_active_time_across_all_its_steps(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
+        done = store.create_step(step="spec-writer", role="agent", parent=item)
         store.accrue_active_seconds([done], 300)
         store.complete_node(done, "done")
-        step = store.create_step("building", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.accrue_active_seconds([step], 540)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
@@ -389,11 +388,10 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
     def test_an_attention_row_shows_accumulated_time_from_an_earlier_done_agent_step(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
+        done = store.create_step(step="spec-writer", role="agent", parent=item)
         store.accrue_active_seconds([done], 540)
         store.complete_node(done, "done")
-        gate = store.create_step(
-            "await merge", step="ready-merge", role="human", parent=item
+        gate = store.create_step(step="ready-merge", role="human", parent=item
         )
         lanes = {"inbox": [store.get_node(gate)], "queue": [], "active": []}
 
@@ -404,10 +402,10 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
     def test_a_queued_row_shows_the_same_rolled_up_total_as_active_or_attention(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        done = store.create_step("spec", step="spec-writer", role="agent", parent=item)
+        done = store.create_step(step="spec-writer", role="agent", parent=item)
         store.accrue_active_seconds([done], 540)
         store.complete_node(done, "done")
-        step = store.create_step("queued build", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 
         _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW))

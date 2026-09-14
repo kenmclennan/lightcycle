@@ -72,7 +72,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
     def test_children_returns_child_records(self):
         s = self.make_store()
         sid = s.create_item("item: foo", "a description")
-        tid = s.create_step("step: t", parent=sid)
+        tid = s.create_step(parent=sid)
         kids = s.children(sid)
         self.assertEqual(len(kids), 1)
         self.assertEqual(kids[0].id, tid)
@@ -80,7 +80,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
     def test_task_view_inherits_story_artifacts(self):
         s = self.make_store()
         sid = s.create_item("item: foo", "a description")
-        tid = s.create_step("step: t", parent=sid)
+        tid = s.create_step(parent=sid)
         s.add_artifact(sid, "branch", "feat/foo")
         view = s.node_view(tid)
         self.assertTrue(any(a.type == "branch" for a in view.item_artifacts))

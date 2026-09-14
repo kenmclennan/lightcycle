@@ -12,7 +12,7 @@ class TestPinnedShas(unittest.TestCase):
 
     def test_collects_the_pin_of_an_item_that_has_a_live_step(self):
         item = self.store.create_item("build the thing", "a description", workflow=PIN)
-        self.store.create_step("write the code", step="write-code", role="agent", parent=item)
+        self.store.create_step(step="write-code", role="agent", parent=item)
         self.assertEqual({"abc123"}, pinned_shas(self.store, "acme"))
 
     def test_ignores_an_origin_it_was_not_asked_about(self):

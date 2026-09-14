@@ -5,7 +5,7 @@ from lightcycle.application.feedback.retro import RetroInput, RetroUseCase
 from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.pending_reflections import pending_reflection_count
-from lightcycle.domain.work import NodeQueue, State, node_id_key
+from lightcycle.domain.work import NodeQueue, State, compose_step_title, node_id_key
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.factories import make_step
@@ -35,7 +35,7 @@ def _close_item(store, title, repo=None, reflections=0, id=None):
     if repo is not None:
         store.add_artifact(eid, "repo", repo)
     if reflections:
-        k = store.create_step("build: x", step="build", role="agent", parent=eid)
+        k = store.create_step(step="build", role="agent", parent=eid)
         store.complete_node(k, "done")
         for i in range(reflections):
             _add_reflection(store, k, "fb %d" % i)
@@ -46,7 +46,7 @@ def _open_item_with_closed_pass(store, title, reflections=0):
     eid = store.create_item(title, "a description")
     pid = store.open_pass(eid)
     if reflections:
-        k = store.create_step("build: x", step="build", role="agent", parent=eid)
+        k = store.create_step(step="build", role="agent", parent=eid)
         store.set_step_pass(k, pid)
         store.complete_node(k, "done")
         for i in range(reflections):
@@ -105,7 +105,11 @@ class TestRetroCadenceFires(unittest.TestCase):
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
         step = s.get_node(_gate(s, interval_reflections=3).execute(0.0).fired[0])
-        self.assertEqual(step.title, "audit: Audit of 3 closed items, 0 closed passes")
+        item_title = s.get_node(step.item).title
+        self.assertEqual(
+            compose_step_title(step.stage, item_title),
+            "audit: Audit of 3 closed items, 0 closed passes",
+        )
 
     def test_items_without_feedback_do_not_count(self):
         s = FakeStore()

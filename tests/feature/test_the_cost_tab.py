@@ -67,7 +67,7 @@ def _open_cost_tab(ctx):
 def _human_step_hub_open(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="await-merge", role="human", parent=item)
+    step = store.create_step(step="await-merge", role="human", parent=item)
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -79,7 +79,7 @@ def _human_step_hub_open(ctx):
 def _step_hub_open(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    step = store.create_step(step="write-code", role="agent", parent=item)
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -101,7 +101,7 @@ def _item_hub_open(ctx):
 def _agent_step_with_cost(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    step = store.create_step(step="write-code", role="agent", parent=item)
     store.record_usage(step, 204_321, 2, 21_685_338, 555, 5.70, "list", None)
     store.record_attribution(step, 42, {})
     ctx["store"] = store
@@ -115,7 +115,7 @@ def _agent_step_with_cost(ctx):
 def _agent_step_with_cost_and_tools(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    step = store.create_step(step="write-code", role="agent", parent=item)
     store.record_usage(step, 1000, 200, 0, 0, 1.5, "list", None)
     store.record_attribution(
         step, 10, {"Read": ToolUsage(calls=12, bytes=4300), "Bash": ToolUsage(calls=3, bytes=512)},
@@ -131,7 +131,7 @@ def _agent_step_with_cost_and_tools(ctx):
 def _agent_step_with_cost_and_no_tools(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    step = store.create_step(step="write-code", role="agent", parent=item)
     store.record_usage(step, 1000, 200, 0, 0, 1.5, "list", None)
     store.record_attribution(step, 10, {})
     ctx["store"] = store
@@ -145,7 +145,7 @@ def _agent_step_with_cost_and_no_tools(ctx):
 def _agent_step_turns_no_cost(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="handle-feedback", role="agent", parent=item)
+    step = store.create_step(step="handle-feedback", role="agent", parent=item)
     store.record_attribution(step, 246, {})
     ctx["store"] = store
     ctx["item_id"] = item
@@ -158,7 +158,7 @@ def _agent_step_turns_no_cost(ctx):
 def _agent_step_never_ran(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    step = store.create_step(step="write-code", role="agent", parent=item)
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -171,18 +171,18 @@ def _item_two_passes(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     pass_1 = store.open_pass(item)
-    spec_1 = store.create_step("spec1", step="spec-writer", role="agent", parent=item)
+    spec_1 = store.create_step(step="spec-writer", role="agent", parent=item)
     store.set_step_pass(spec_1, pass_1)
     store.record_usage(spec_1, 1000, 200, 0, 0, 2.0, "list", None)
     store.record_attribution(spec_1, 10, {})
-    code_1 = store.create_step("code1", step="write-code", role="agent", parent=item)
+    code_1 = store.create_step(step="write-code", role="agent", parent=item)
     store.set_step_pass(code_1, pass_1)
     store.record_usage(code_1, 500, 100, 0, 0, 0.5, "list", None)
     store.record_attribution(code_1, 5, {})
     store.close_pass(pass_1)
 
     pass_2 = store.open_pass(item)
-    spec_2 = store.create_step("spec2", step="spec-writer", role="agent", parent=item)
+    spec_2 = store.create_step(step="spec-writer", role="agent", parent=item)
     store.set_step_pass(spec_2, pass_2)
     store.record_usage(spec_2, 800, 150, 0, 0, 1.5, "list", None)
     store.record_attribution(spec_2, 8, {})
@@ -197,7 +197,7 @@ def _item_two_passes(ctx):
 def _item_with_no_cost_stage(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="review-code", role="agent", parent=item)
+    step = store.create_step(step="review-code", role="agent", parent=item)
     store.record_attribution(step, 60, {})
     ctx["store"] = store
     ctx["item_id"] = item
@@ -210,8 +210,8 @@ def _item_with_no_cost_stage(ctx):
 def _item_with_human_gate_and_agent_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step("gate", step="await-merge", role="human", parent=item)
-    step = store.create_step("s", step="write-code", role="agent", parent=item)
+    store.create_step(step="await-merge", role="human", parent=item)
+    step = store.create_step(step="write-code", role="agent", parent=item)
     store.record_usage(step, 1000, 200, 0, 0, 1.0, "list", None)
     store.record_attribution(step, 10, {})
     ctx["store"] = store

@@ -22,8 +22,8 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
     def test_a_node_already_selected_in_attention_is_not_selected_again_in_active_or_queued(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        gate = store.create_step("await merge", step="ready-merge", role="human", parent=item)
-        active_sibling = store.create_step("building", step="build", role="agent", parent=item)
+        gate = store.create_step(step="ready-merge", role="human", parent=item)
+        active_sibling = store.create_step(step="build", role="agent", parent=item)
         lanes = {
             "inbox": [store.get_node(gate)],
             "active": [store.get_node(active_sibling)],
@@ -56,9 +56,9 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
         store = FakeStore()
         item_a = store.create_item("a", "a description")
         item_b = store.create_item("b", "a description")
-        step_a = store.create_step("building", step="build", role="agent", parent=item_a)
-        step_b1 = store.create_step("s1", step="build", role="agent", parent=item_b)
-        step_b2 = store.create_step("s2", step="build", role="agent", parent=item_b)
+        step_a = store.create_step(step="build", role="agent", parent=item_a)
+        step_b1 = store.create_step(step="build", role="agent", parent=item_b)
+        step_b2 = store.create_step(step="build", role="agent", parent=item_b)
         lanes = {
             "inbox": [],
             "active": [store.get_node(step_a), store.get_node(step_b1), store.get_node(step_b2)],

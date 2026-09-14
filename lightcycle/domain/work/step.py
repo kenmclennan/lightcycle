@@ -10,7 +10,6 @@ from lightcycle.domain.work.state import State
 class Step:
     id: str
     item: str
-    title: str = ""
     stage: Optional[str] = None
     pass_id: Optional[str] = None
     role: Optional[str] = None
@@ -56,7 +55,6 @@ class Step:
         return {
             "id": self.id,
             "item": self.item,
-            "title": self.title,
             "stage": self.stage,
             "pass": self.pass_id,
             "role": self.role,

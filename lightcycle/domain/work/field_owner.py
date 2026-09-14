@@ -7,7 +7,7 @@ FIELDS_BY_TYPE = {
     "item": frozenset(
         {"title", "description", "project", "workflow", "label", "backlog", "step", "depends"}
     ),
-    "step": frozenset({"title", "notes", "needs", "reason", "tried", "label"}),
+    "step": frozenset({"notes", "needs", "reason", "tried", "label"}),
 }
 
 DONE_FIELDS_BY_TYPE = {

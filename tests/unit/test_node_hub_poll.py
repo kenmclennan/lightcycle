@@ -14,7 +14,7 @@ WORKER_PID = 111
 def _running_step():
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="coder", role="agent", parent=item)
+    step = store.create_step(step="coder", role="agent", parent=item)
     store.claim_ready("agent")
     workers = FakeWorkers(
         workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],

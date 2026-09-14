@@ -41,9 +41,7 @@ class RetroCadenceUseCase:
         with self._store.transaction():
             item_id = self._store.create_item(title, description)
             self._store.label_add(item_id, RETRO_ORIGIN_LABEL)
-            tid = self._store.create_step(
-                "%s: %s" % (AUDIT_STEP, title),
-                step=AUDIT_STEP, role="agent", parent=item_id)
+            tid = self._store.create_step(step=AUDIT_STEP, role="agent", parent=item_id)
         return RetroCadenceResponse(fired=[tid])
 
     def _open_audit(self):

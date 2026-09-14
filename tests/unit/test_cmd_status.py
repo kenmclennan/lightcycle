@@ -6,6 +6,7 @@ from unittest import mock
 import lightcycle.cli as cli_mod
 from lightcycle.cli import cmd_status
 from tests.support.fake_spin import FakeSpinPort
+from tests.support.fake_store import FakeStore
 from tests.support.factories import make_step
 
 
@@ -30,7 +31,9 @@ class TestCmdStatusDisplayPhrase(unittest.TestCase):
         cli_mod.set_container(FakeContainer())
 
     def _run(self, lanes, flow_service, spin=None):
-        cli_mod.set_container(FakeContainer(spin=spin))
+        store = FakeStore()
+        store.create_item("an item", "a description", id="i-1")
+        cli_mod.set_container(FakeContainer(store=store, spin=spin))
         fake_resp = mock.Mock(lanes=lanes)
         with mock.patch.object(cli_mod, "StatusUseCase") as UseCase, \
                 mock.patch.object(cli_mod, "_flow", lambda: flow_service):

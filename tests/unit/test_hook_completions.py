@@ -29,7 +29,7 @@ class TestHookCompletionsDetection(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         result = HookCompletionsUseCase(s, flow_svc).execute(None)
@@ -39,7 +39,7 @@ class TestHookCompletionsDetection(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
@@ -58,7 +58,7 @@ class TestHookCompletionsDetection(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         result = HookCompletionsUseCase(s, flow_svc).execute(None)
         self.assertEqual(result.completed, [])
 
@@ -66,7 +66,7 @@ class TestHookCompletionsDetection(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"deployer": {"model": "sonnet", "step": "deploy",
                                                       "on_deploy_green": True}}), s)
-        tid = s.create_step("deploy: x", step="deploy", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="deploy", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         result = HookCompletionsUseCase(s, flow_svc).execute(None)
@@ -84,7 +84,7 @@ class TestHookCompletionsPerItem(unittest.TestCase):
 
     def _done_audit(self, s, workflow):
         item = s.create_item("i-%s" % workflow, "a description", workflow=workflow)
-        tid = s.create_step("audit: %s" % workflow, step="audit", role="agent", parent=item)
+        tid = s.create_step(step="audit", role="agent", parent=item)
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         return tid
@@ -104,7 +104,7 @@ class TestHookCompletionsPerItem(unittest.TestCase):
         fs = FakeFs(role, workflows={"wfX": graph_text_from_metas(hooked)})
         flow_svc = FlowService(fs, s)
         item = s.create_item("i", "a description", workflow="wfX")
-        tid = s.create_step("audit: X", step="audit", role="agent", parent=item)
+        tid = s.create_step(step="audit", role="agent", parent=item)
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         s.complete_node(item, "done")
@@ -117,7 +117,7 @@ class TestHookCompletionsSinceThreshold(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         result = HookCompletionsUseCase(s, flow_svc).execute(_ts("2026-01-02T00:00:00"))
@@ -127,7 +127,7 @@ class TestHookCompletionsSinceThreshold(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-03T00:00:00")
         result = HookCompletionsUseCase(s, flow_svc).execute(_ts("2026-01-02T00:00:00"))
@@ -137,7 +137,7 @@ class TestHookCompletionsSinceThreshold(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         use_case = HookCompletionsUseCase(s, flow_svc)
@@ -152,7 +152,7 @@ class TestHookCompletionsNaiveClosedAtAgainstAwareSince(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-01T12:00:00")
         since = _ts("2026-01-02T00:00:00")
@@ -164,7 +164,7 @@ class TestHookCompletionsNaiveClosedAtAgainstAwareSince(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
                                                      "on_deploy_green": True}}), s)
-        tid = s.create_step("audit: release", step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
         s.complete_node(tid, "done")
         _set_closed_at(s, tid, "2026-01-03T00:00:00")
         since = _ts("2026-01-02T00:00:00")

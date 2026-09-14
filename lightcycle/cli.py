@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import traceback
+from collections import namedtuple
 
 from lightcycle import __version__
 from lightcycle.adapters.simulate import (
@@ -29,8 +30,9 @@ from lightcycle.application.feedback import (
 )
 from lightcycle.domain.work import (
     ALLOWED_STATES_BY_FLAG, DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal, State,
-    UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields,
-    refuse_state, render_field_refusal, worker_permitted, worker_refusal_message,
+    UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, compose_step_title,
+    missing_for_state, refuse_fields, refuse_state, render_field_refusal, worker_permitted,
+    worker_refusal_message,
 )
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
@@ -913,17 +915,29 @@ def cmd_search(argv):
     return 0
 
 
+def _step_title(t):
+    try:
+        item_title = _container.store.get_node(t.item).title
+    except NodeNotFoundError:
+        item_title = None
+    return compose_step_title(t.stage, item_title)
+
+
 def cmd_active(argv):
     build_parser(COMMANDS["active"]).parse_args(argv)
     for t in ActiveStepsUseCase(_container.store).execute().steps:
-        print("  %s  %s" % (t.id, t.title))
+        print("  %s  %s" % (t.id, _step_title(t)))
     return 0
+
+
+_QueueRow = namedtuple("_QueueRow", ("state", "id", "title"))
 
 
 def cmd_queue(argv):
     a = build_parser(COMMANDS["queue"]).parse_args(argv)
     steps = QueueUseCase(_container.store).execute(QueueInput(n=a.n)).steps
-    for line in render_queue(steps, _container.config.max_title_length()):
+    rows = [_QueueRow(t.state, t.id, _step_title(t)) for t in steps]
+    for line in render_queue(rows, _container.config.max_title_length()):
         print(line)
     return 0
 
@@ -1617,7 +1631,10 @@ def cmd_status(argv):
                     "  [worker died %d times, no observed work]" % spin_entry.count
                     if spin_entry and spin_entry.count > 0 else ""
                 )
-                print("  %s  %s%s%s%s" % (t.id, t.title, suffix, step_suffix, spin_suffix))
+                print(
+                    "  %s  %s%s%s%s"
+                    % (t.id, _step_title(t), suffix, step_suffix, spin_suffix)
+                )
     return 0
 
 

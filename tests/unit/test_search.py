@@ -55,7 +55,7 @@ class TestSearchUseCase(unittest.TestCase):
     def test_step_nodes_are_excluded(self):
         s = FakeStore()
         item = s.create_item("an unrelated item", "an unrelated description")
-        s.create_step("gh pr checks --json rejects conclusion", role="human", parent=item)
+        s.create_step(role="human", parent=item)
         resp = SearchUseCase(s).execute(SearchInput(text="gh pr checks"))
         self.assertEqual(resp.matches, [])
 

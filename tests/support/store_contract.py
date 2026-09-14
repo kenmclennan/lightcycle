@@ -20,7 +20,7 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
-            tid, "done", "w1", NodeSpec(title="next", step="review", role="agent",
+            tid, "done", "w1", NodeSpec(step="review", role="agent",
                      parent=s.get_step(tid).item))
         self.assertTrue(won)
         self.assertIsNotNone(new)
@@ -32,7 +32,7 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         s.complete_step_atomic(tid, "done", "w1", None)
-        won, new = s.complete_step_atomic(tid, "done", "w1", NodeSpec(title="next", step="review"))
+        won, new = s.complete_step_atomic(tid, "done", "w1", NodeSpec(step="review"))
         self.assertFalse(won)
         self.assertIsNone(new)
 
@@ -41,7 +41,7 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
-            tid, "done", "w2", NodeSpec(title="next", step="review"))
+            tid, "done", "w2", NodeSpec(step="review"))
         self.assertFalse(won)
         self.assertIsNone(new)
         self.assertEqual(s.get_node(tid).state, "running")
@@ -59,7 +59,7 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         won, new = s.complete_step_atomic(
             tid, "done", "handle-feedback-worker",
-            NodeSpec(title="next", step="review", role="agent",
+            NodeSpec(step="review", role="agent",
                      parent=s.get_step(tid).item))
         self.assertTrue(won)
         self.assertIsNotNone(new)
@@ -495,7 +495,7 @@ class StoreContractBase:
         s = self.make_store()
         item = s.create_item("owning item", "a description")
         tid = self._step(s, "a step", parent=item)
-        s.edit_node(tid, title="renamed")
+        s.edit_node(tid)
         self.assertEqual(s.get_step(tid).item, item)
 
     def test_delete_removes_task(self):
@@ -508,7 +508,7 @@ class StoreContractBase:
         s = self.make_store()
         item = s.create_item("owning item", "a description")
         tid = self._step(s, "a step", parent=item)
-        s.edit_node(tid, title="renamed")
+        s.edit_node(tid)
         t = s.get_node(tid)
         self.assertEqual(t.item, item)
 
@@ -960,7 +960,7 @@ class StoreContractBase:
         item = s.create_item("t", "a description")
         self.assertEqual(s.get_node(item).created_at, sentinel)
 
-        tid = s.create_step("s", step="build", role="agent", parent=item)
+        tid = s.create_step(step="build", role="agent", parent=item)
         self.assertEqual(s.get_node(tid).created_at, sentinel)
 
         pid = s.open_pass(item)
@@ -990,8 +990,8 @@ class StoreContractBase:
     def test_steps_at_step_created_at_set_and_orders_by_creation(self):
         s = self.make_store()
         item = s.create_item("owner", "an owning item")
-        first = s.create_step("first", step="build", role="agent", parent=item)
-        second = s.create_step("second", step="build", role="agent", parent=item)
+        first = s.create_step(step="build", role="agent", parent=item)
+        second = s.create_step(step="build", role="agent", parent=item)
         steps = {t.id: t for t in s.steps_at_step("build")}
         self.assertTrue(steps[first].created_at)
         self.assertTrue(steps[second].created_at)

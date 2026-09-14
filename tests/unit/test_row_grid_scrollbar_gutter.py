@@ -48,9 +48,7 @@ def _hierarchy_step_store(count):
     item = store.create_item("Item", "a description", id="LC-3000")
     steps = []
     for i in range(count):
-        step = store.create_step(
-            "step %d" % i, step="build", role="agent", parent=item, id="LC-3000.%d" % (i + 1),
-        )
+        step = store.create_step(step="build", role="agent", parent=item, id="LC-3000.%d" % (i + 1))
         store.assign(step, "worker-%d" % i)
         store.update_state(step, State.RUNNING)
         steps.append(step)

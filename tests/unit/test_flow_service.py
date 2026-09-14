@@ -114,19 +114,19 @@ class TestStepSkill(unittest.TestCase):
     def test_human_gate_step_returns_its_skill_body(self):
         svc, store = self._svc_store()
         item = store.create_item("i", "a description", workflow="wf")
-        step = store.create_step("gate: i", step="gate", role="human", parent=item)
+        step = store.create_step(step="gate", role="human", parent=item)
         self.assertEqual(svc.step_skill(store.get_node(step)), "GATE SKILL BODY")
 
     def test_agent_step_has_no_skill(self):
         svc, store = self._svc_store()
         item = store.create_item("i", "a description", workflow="wf")
-        step = store.create_step("review: i", step="review", role="agent", parent=item)
+        step = store.create_step(step="review", role="agent", parent=item)
         self.assertIsNone(svc.step_skill(store.get_node(step)))
 
     def test_workflow_less_node_has_no_skill(self):
         svc, store = self._svc_store()
         item = store.create_item("i", "a description")
-        step = store.create_step("gate: i", step="gate", role="human", parent=item)
+        step = store.create_step(step="gate", role="human", parent=item)
         self.assertIsNone(svc.step_skill(store.get_node(step)))
 
 
@@ -194,7 +194,7 @@ class TestPhaseFor(unittest.TestCase):
     def _step(self, metas):
         store = FakeStore()
         item = store.create_item("st", "a description", workflow="w")
-        step = store.get_node(store.create_step("b", step="build", role="agent", parent=item))
+        step = store.get_node(store.create_step(step="build", role="agent", parent=item))
         return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
 
     def test_returns_the_steps_declared_phase(self):
@@ -211,7 +211,7 @@ class TestDisplayFor(unittest.TestCase):
     def _step(self, metas):
         store = FakeStore()
         item = store.create_item("st", "a description", workflow="w")
-        step = store.get_node(store.create_step("b", step="build", role="agent", parent=item))
+        step = store.get_node(store.create_step(step="build", role="agent", parent=item))
         return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
 
     def test_returns_the_steps_declared_display_phrase(self):
@@ -241,7 +241,7 @@ class TestDisplayFor(unittest.TestCase):
         metas = {"auditor": {"model": "sonnet", "step": "audit", "display": "Custom audit label"}}
         store = FakeStore()
         item = store.create_item("st", "a description", workflow="w")
-        step = store.get_node(store.create_step("b", step="audit", role="agent", parent=item))
+        step = store.get_node(store.create_step(step="audit", role="agent", parent=item))
         service = FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store)
         self.assertEqual(service.display_for(step), "Custom audit label")
 

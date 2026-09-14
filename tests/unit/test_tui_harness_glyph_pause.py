@@ -33,7 +33,7 @@ class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
     def test_screen_level_timer_does_not_tick_between_pause_and_the_next_stimulus(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        tid = store.create_step("active item", step="build", role="agent", parent=item)
+        tid = store.create_step(step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
 

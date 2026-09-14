@@ -26,8 +26,7 @@ def _store_for(root, spawn_id=None):
 
 
 def _successor_spec(step_id, item=None):
-    return NodeSpec(title="review: x", step="review", role="agent",
-                    parent=item, deps=(step_id,))
+    return NodeSpec(step="review", role="agent", parent=item, deps=(step_id,))
 
 
 def _seed_claimed(root, spawn_id):
