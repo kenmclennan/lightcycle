@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.adapters.tui.hub import _stat_line_item, _stat_line_step
+from lightcycle.adapters.tui.hub import _stat_line_item, _stat_line_step, log_tab_mode
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import route_to_human
@@ -290,6 +290,83 @@ class TestStatLineStepHuman(unittest.TestCase):
         self.assertEqual(
             _stat_line_step(store, node, _StubFlow(), now), "write-code · waiting 10m"
         )
+
+
+class TestStatLineStepEngine(unittest.TestCase):
+    def test_queued_engine_step_shows_wait_since_creation(self):
+        clock = {"now": "2026-01-01T09:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        node = store.get_node(step)
+
+        now = "2026-01-01T09:12:00"
+        self.assertEqual(
+            _stat_line_step(store, node, _StubFlow(), now), "poll-ci · waiting 12m"
+        )
+
+    def test_done_engine_step_shows_done_and_wait(self):
+        clock = {"now": "2026-01-01T09:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        store.complete_node(step, "succeeded")
+        store._records[step]["closed_at"] = "2026-01-01T09:15:00"
+        node = store.get_node(step)
+
+        self.assertEqual(
+            _stat_line_step(store, node, _StubFlow(), "irrelevant-now"),
+            "poll-ci · done 15m",
+        )
+
+    def test_no_cost_or_pool_halted_shown_for_an_engine_step(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        node = store.get_node(step)
+
+        line = _stat_line_step(store, node, _StubFlow(), NOW, pool_halted=True)
+        self.assertNotIn("$", line)
+        self.assertNotIn("pool halted", line)
+
+
+class TestLogTabMode(unittest.TestCase):
+    def test_human_step_has_no_log(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="await-merge", role="human", parent=item)
+        self.assertEqual(log_tab_mode(store.get_node(step)), "no-log")
+
+    def test_queued_engine_step_has_no_log(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        self.assertEqual(log_tab_mode(store.get_node(step)), "no-log")
+
+    def test_done_engine_step_has_no_log_not_historical(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        store.complete_node(step, "succeeded")
+        self.assertEqual(log_tab_mode(store.get_node(step)), "no-log")
+
+    def test_running_agent_step_is_live(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="build", role="agent", parent=item)
+        store.claim_ready("agent")
+        self.assertEqual(log_tab_mode(store.get_node(step)), "live")
+
+    def test_done_agent_step_is_historical(self):
+        store = FakeStore()
+        item = store.create_item("Item", "a description")
+        step = store.create_step(step="build", role="agent", parent=item)
+        store.claim_ready("agent")
+        store.complete_node(step, "done")
+        self.assertEqual(log_tab_mode(store.get_node(step)), "historical")
+
+    def test_none_node_has_no_log(self):
+        self.assertEqual(log_tab_mode(None), "no-log")
 
 
 if __name__ == "__main__":

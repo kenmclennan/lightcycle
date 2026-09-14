@@ -1308,8 +1308,8 @@ def _tick_event_lines(result, ts):
         lines.append("%s  %-7s  %s" % (ts, "rework", sid))
     for sid in result.monitor.conflicted:
         lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
-    for sid in result.monitor.ci_released:
-        lines.append("%s  %-7s  %s" % (ts, "ci-release", sid))
+    for sid in result.monitor.ci_resolved:
+        lines.append("%s  %-7s  %s" % (ts, "ci-resolved", sid))
     for bid in result.sweep.swept:
         lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
     for bid in result.sweep.preserved:

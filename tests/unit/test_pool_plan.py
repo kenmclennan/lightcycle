@@ -21,6 +21,12 @@ class TestReadyQueue(unittest.TestCase):
             ["coder", "reviewer"],
         )
 
+    def test_roles_skips_engine_too(self):
+        self.assertEqual(
+            ReadyQueue(steps("coder", "engine", "human", "reviewer")).roles(),
+            ["coder", "reviewer"],
+        )
+
 
 class TestPoolPlan(unittest.TestCase):
     def test_fills_up_to_slots_in_queue_order(self):

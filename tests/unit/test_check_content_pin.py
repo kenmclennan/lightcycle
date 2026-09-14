@@ -2,7 +2,6 @@ import unittest
 
 from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
-from lightcycle.application.pool.release_ci_pending import CI_PENDING_LABEL
 from lightcycle.domain.feedback import LC_MARKER
 from lightcycle.domain.work import State
 from tests.support.fake_fs import flow_from_metas
@@ -293,12 +292,10 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(store.get_node(step).role, "human")
 
-        gh._ci_pending_by_sha[(self._URL, "sha2")] = False
-
         uc.execute()
 
         self.assertEqual(store.get_node(step).role, "human")
-        self.assertNotIn(CI_PENDING_LABEL, store.labels_of(step))
+        self.assertNotIn("ci-pending", store.labels_of(step))
 
     def test_running_again_after_escalation_does_not_refire(self):
         gh = FakeGitHub(

@@ -14,7 +14,7 @@ _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 def _result(**kw):
     defaults = dict(
         swept=[], killed=[], pruned=0, spawned=[], merged=[], abandoned=[], reworked=[],
-        conflicted=[], ci_released=[], hook_completed=[], cadence_fired=[], backed_up=None,
+        conflicted=[], ci_resolved=[], hook_completed=[], cadence_fired=[], backed_up=None,
         backup_pruned=[], alive=0, max_agents=4, ready=0, inflight_count=0, free_slots=0,
         breaker_open=False, breaker_reset_at=None, breaker_opened=False, breaker_closed=False,
         breaker_rearmed=False, spin_open=False, spin_opened=False,
@@ -28,7 +28,7 @@ def _result(**kw):
         monitor=MonitorPrsResponse(
             merged=defaults["merged"], abandoned=defaults["abandoned"],
             reworked=defaults["reworked"], conflicted=defaults["conflicted"],
-            ci_released=defaults["ci_released"],
+            ci_resolved=defaults["ci_resolved"],
         ),
         cadence=RetroCadenceResponse(fired=defaults["cadence_fired"]),
         hooks=HookCompletionsResponse(completed=defaults["hook_completed"]),
@@ -112,12 +112,12 @@ class TestFormatTick(unittest.TestCase):
         self.assertTrue(any("merge" in l and "abc.1" in l for l in lines))
         self.assertTrue(any("sweep" in l and "xyz.2" in l for l in lines))
 
-    def test_ci_released_rendered_as_ci_release_line(self):
-        result = _result(ci_released=["LC-1"])
+    def test_ci_resolved_rendered_as_ci_resolved_line(self):
+        result = _result(ci_resolved=["LC-1"])
         lines, _ = _format_tick(result, None, _NOW)
-        release_lines = [l for l in lines if "ci-release" in l]
-        self.assertEqual(len(release_lines), 1)
-        self.assertIn("LC-1", release_lines[0])
+        resolved_lines = [l for l in lines if "ci-resolved" in l]
+        self.assertEqual(len(resolved_lines), 1)
+        self.assertIn("LC-1", resolved_lines[0])
 
     def test_event_order_spawn_before_merge_before_sweep(self):
         result = _result(spawned=["coder"], merged=["m.1"], swept=["s.1"],

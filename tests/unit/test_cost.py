@@ -49,6 +49,14 @@ class TestStepCost(unittest.TestCase):
         cost = step_cost(step, {})
         self.assertFalse(cost.applicable)
 
+    def test_engine_role_short_circuits_like_human(self):
+        step = _FakeStep(role="engine", turn_count=5, usage_cost_usd=Cost.from_usd(5.0), usage_cost_basis="list")
+        cost = step_cost(step, {})
+        self.assertFalse(cost.applicable)
+        self.assertFalse(cost.has_run)
+        self.assertFalse(cost.recorded)
+        self.assertEqual(cost.turn_count, 0)
+
     def test_agent_not_yet_run_has_no_figures(self):
         step = _FakeStep(role="agent", turn_count=0)
         cost = step_cost(step, {})
@@ -96,6 +104,12 @@ class TestStepCost(unittest.TestCase):
 class TestItemCost(unittest.TestCase):
     def test_human_step_contributes_nothing(self):
         steps = [_FakeStep(role="human", turn_count=1, usage_cost_usd=Cost.from_usd(5.0), usage_cost_basis="list")]
+        result = item_cost(steps)
+        self.assertEqual(result.turn_count, 0)
+        self.assertEqual(result.stages, ())
+
+    def test_engine_step_contributes_nothing(self):
+        steps = [_FakeStep(role="engine", turn_count=1, usage_cost_usd=Cost.from_usd(5.0), usage_cost_basis="list")]
         result = item_cost(steps)
         self.assertEqual(result.turn_count, 0)
         self.assertEqual(result.stages, ())

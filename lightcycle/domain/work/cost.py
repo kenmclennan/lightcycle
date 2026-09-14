@@ -4,8 +4,8 @@ from typing import Optional, Tuple
 from lightcycle.domain.money import Cost
 
 
-def _is_human(step) -> bool:
-    return step.role is None or step.role == "human"
+def _not_agent(step) -> bool:
+    return step.role in (None, "human", "engine")
 
 
 def cache_hit_rate(cache_read_tokens, cache_creation_tokens, input_tokens) -> Optional[float]:
@@ -39,7 +39,7 @@ class StepCost:
 
 
 def step_cost(step, tool_usage) -> StepCost:
-    if _is_human(step):
+    if _not_agent(step):
         return StepCost(
             applicable=False, has_run=False, recorded=False, turn_count=0,
             input_tokens=0, output_tokens=0, cache_read_tokens=0, cache_creation_tokens=0,
@@ -95,7 +95,7 @@ class ItemCost:
 
 
 def item_cost(steps) -> ItemCost:
-    agent_steps = [s for s in steps if not _is_human(s)]
+    agent_steps = [s for s in steps if not _not_agent(s)]
     turn_count = sum(s.turn_count for s in agent_steps)
     input_tokens = sum(s.usage_input_tokens for s in agent_steps)
     output_tokens = sum(s.usage_output_tokens for s in agent_steps)

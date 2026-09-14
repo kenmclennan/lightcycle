@@ -27,6 +27,7 @@ def _captured_argvs():
         adapter.reviews(_PR, 0.0)
         adapter.head_sha(_PR)
         adapter.changed_files(_PR, "deadbeef")
+        adapter.check_runs(_PR, "deadbeef")
 
     return [c for c in calls if c and c[0] == "gh"]
 

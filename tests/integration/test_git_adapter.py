@@ -359,5 +359,53 @@ class TestGitAdapterCommitTracked(unittest.TestCase):
         self.assertNotIn("scratch.txt", stat)
 
 
+class TestGitAdapterRemoteHeadSha(unittest.TestCase):
+    def test_returns_the_true_tip_even_when_the_local_clone_is_stale(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+        _git(publisher, "checkout", "-b", "feat/x")
+        _git(publisher, "push", "-q", "origin", "feat/x")
+
+        consumer = _clone(origin)
+
+        (Path(publisher) / "NEW.md").write_text("a later push")
+        _git(publisher, "add", "NEW.md")
+        _git(publisher, "commit", "-q", "-m", "later push")
+        _git(publisher, "push", "-q", "origin", "feat/x")
+        true_tip = _git(publisher, "rev-parse", "feat/x").stdout.strip()
+
+        sha = GitAdapter().remote_head_sha(consumer, "feat/x")
+
+        self.assertEqual(sha, true_tip)
+
+    def test_returns_none_when_the_branch_does_not_exist_on_the_remote(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+        consumer = _clone(origin)
+
+        sha = GitAdapter().remote_head_sha(consumer, "no-such-branch")
+
+        self.assertIsNone(sha)
+
+    def test_touches_no_tracked_file_or_index_entry(self):
+        origin = _bare_origin()
+        publisher = _make_repo()
+        _git(publisher, "remote", "add", "origin", origin)
+        _git(publisher, "push", "-q", "origin", "HEAD:main")
+        _git(publisher, "checkout", "-b", "feat/x")
+        _git(publisher, "push", "-q", "origin", "feat/x")
+
+        consumer = _clone(origin)
+        before_status = _git(consumer, "status", "--porcelain").stdout
+
+        GitAdapter().remote_head_sha(consumer, "feat/x")
+
+        self.assertEqual(_git(consumer, "status", "--porcelain").stdout, before_status)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -279,7 +279,7 @@ def detail_fields(step, run, reflections):
 
 
 def log_tab_mode(node):
-    if node is None or getattr(node, "role", None) == "human":
+    if node is None or getattr(node, "role", None) in ("human", "engine"):
         return "no-log"
     if node.state == State.RUNNING:
         return "live"
@@ -414,10 +414,24 @@ def _step_wall_active(store, node, now):
     return delta.total_seconds(), node.active_seconds or 0
 
 
+def _engine_wait_seconds(node, now):
+    if not node.created_at:
+        return None
+    end = node.closed_at if node.state == State.DONE else now
+    return (parse_timestamp(end) - parse_timestamp(node.created_at)).total_seconds()
+
+
 def _stat_line_step(store, node, flow_service, now, pool_halted=False):
     phrase = display_stage(flow_service.display_for(node), node.stage)
-    if display_role(getattr(node, "role", None)) == "human":
+    role = display_role(getattr(node, "role", None))
+    if role == "human":
         wait = _gate_wait_seconds(store, node, now)
+        if wait is None:
+            return phrase
+        label = "done" if node.state == State.DONE else "waiting"
+        return "%s · %s %s" % (phrase, label, format_elapsed(wait))
+    if role == "engine":
+        wait = _engine_wait_seconds(node, now)
         if wait is None:
             return phrase
         label = "done" if node.state == State.DONE else "waiting"

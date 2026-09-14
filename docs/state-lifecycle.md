@@ -5,10 +5,10 @@ An item and a step each have one `state`. Six labels, one per **what the node is
 ```mermaid
 stateDiagram-v2
   [*] --> backlogged: created with unmet deps
-  [*] --> queued: created with no deps, agent role
+  [*] --> queued: created with no deps, non-human role
   [*] --> waiting: created with no deps, human role
   backlogged --> blocked: activated with unmet deps
-  blocked --> queued: every blocker closed, agent role
+  blocked --> queued: every blocker closed, non-human role
   blocked --> waiting: every blocker closed, human role
   queued --> running: a worker claims it
   running --> done: lc done with an outcome

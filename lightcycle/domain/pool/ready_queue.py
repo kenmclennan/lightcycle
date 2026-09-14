@@ -3,7 +3,7 @@ class ReadyQueue:
         self._steps = list(steps)
 
     def roles(self):
-        return [t.role for t in self._steps if t.role and t.role != "human"]
+        return [t.role for t in self._steps if t.role and t.role not in ("human", "engine")]
 
     def distinct_roles(self):
         out = []
