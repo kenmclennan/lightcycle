@@ -130,18 +130,26 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("common_dir", root)
         return os.path.join(root, ".git")
 
+    def remote_head_sha(self, root, branch):
+        self._record("remote_head_sha", root, branch)
+        return "sim-sha"
+
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self):
         self._merged = set()
         self._conflicted = set()
         self._feedback = {}
+        self._check_runs = {}
 
     def script_merge(self, pr):
         self._merged.add(pr)
 
     def script_conflict(self, pr):
         self._conflicted.add(pr)
+
+    def script_ci_result(self, pr, checks):
+        self._check_runs[pr] = tuple(checks)
 
     def script_feedback(self, pr, body, author="reviewer"):
         self._feedback.setdefault(pr, []).append(
@@ -180,8 +188,8 @@ class ScriptedGitHub(GitHubEventsPort):
     def changed_files(self, pr, sha):
         return frozenset()
 
-    def ci_pending(self, pr, sha):
-        return True
+    def check_runs(self, pr, sha):
+        return self._check_runs.get(pr, ())
 
 
 class NullWorkers(WorkersPort):

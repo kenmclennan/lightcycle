@@ -2,7 +2,14 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Optional
 
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
+from lightcycle.domain.flow.hooks import (
+    CI_FAILED_CAP,
+    CI_FAILURE,
+    CI_SUCCESS,
+    PR_CONFLICT,
+    PR_FEEDBACK,
+    PR_MERGE,
+)
 
 
 @dataclass(frozen=True)
@@ -22,6 +29,8 @@ class StepDef:
     pr_conflict: Optional[str] = None
     pr_conflict_cap: Optional[int] = None
     pr_conflict_escalate: Optional[str] = None
+    ci_success: Optional[str] = None
+    ci_failure: Optional[str] = None
     mention_token: Optional[str] = None
     review_bot_allowlist: frozenset = frozenset()
     ci_cap: Optional[CiCap] = None
@@ -72,6 +81,8 @@ class StepDef:
             pr_conflict=first(PR_CONFLICT),
             pr_conflict_cap=pr_conflict_cap,
             pr_conflict_escalate=first("pr_conflict_escalate"),
+            ci_success=first(CI_SUCCESS),
+            ci_failure=first(CI_FAILURE),
             mention_token=first("mention_token"),
             review_bot_allowlist=review_bot_allowlist,
             ci_cap=ci_cap,

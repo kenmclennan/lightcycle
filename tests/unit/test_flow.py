@@ -50,6 +50,16 @@ class TestFlowAssembly(unittest.TestCase):
         self.assertEqual(flow.steps(), ["build", "open-pr", "review"])
 
 
+class TestEngineSteps(unittest.TestCase):
+    def test_engine_marker_resolves_owner_to_engine(self):
+        metas = {"poller": {"engine": True, "step": "poll-ci"}}
+        self.assertEqual(mkflow(metas).step_def("poll-ci").owner, "engine")
+
+    def test_engine_marker_wins_over_model_when_both_present(self):
+        metas = {"poller": {"engine": True, "model": "sonnet", "step": "poll-ci"}}
+        self.assertEqual(mkflow(metas).step_def("poll-ci").owner, "engine")
+
+
 class TestHumanSteps(unittest.TestCase):
     def test_a_stage_with_a_model_is_owned_by_the_agent_role_not_its_step_file(self):
         self.assertEqual(mkflow(HUMAN_METAS).step_def("watch-pr").owner, "agent")

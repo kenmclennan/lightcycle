@@ -9,7 +9,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **step** - a single action performed at one workflow **stage**, filed from the workflow. Its `item` is required and fixed at creation. Carries the `role`, the claim, the `notes`, its `reflection`, and its `park`. It has no description, no artifacts and no workflow of its own.
 - **planned step** - a not-yet-filed future step, derived by walking an item's pinned workflow graph forward from its current step along the normal-completion edge. Display-only: never a real node, never claimed or advanced. Represented in code as `ProjectedStep`.
 - **artifact** - a workflow-defined value attached to an item: `spec`, `design`, `findings`, and whatever a personal origin invents. The engine reads none of them by name. What it does know is a field: the brief is the item's `description`, the target repo its `repo`, an agent's feedback the step's `reflection`, and the branch, PR and comment ledger belong to the phase run.
-- **role** - who performs a step: `agent` or `human`, and nothing else. It decides only whether the pool may claim the step. **Which** work a step is is its `stage`, resolved through the workflow graph when it is needed - never copied onto the step.
+- **role** - who performs a step: `agent`, `human`, or `engine`, and nothing else. It decides only whether the pool may claim the step - an `engine`-owned step is never claimed by a worker; the engine completes it directly on its own per-tick poll. **Which** work a step is is its `stage`, resolved through the workflow graph when it is needed - never copied onto the step.
 - **outcome** - how a step ended, and what drives the next transition: `done`, `approved`, `changes`, `rejected`, `drafted`, `merged`, `abandoned`, `conflicted`, `resolved`, `escalate`, `ci-failed`, `gave-up`, `findings`, `clean`, `reviewed`.
 - **disposition** - an engine-owned classification of how a closed **item** ended: `completed` or `aborted`. Rides beside `outcome` rather than splitting it - `outcome` is the workflow's own routing word, `disposition` answers only "did this item's run of work succeed." A workflow bundle declares the mapping per outcome name (its `disposition:` section); `lc done <item> <outcome>` refuses to close, asking for `--disposition` explicitly, when the outcome isn't bundle-declared. Steps carry no disposition - `outcome` alone already answers everything a step needs to.
 - **state** - a node's single lifecycle position, one label per what the node is waiting on: `backlogged` (nothing - not activated), `blocked` (another item or step's unresolved dependency), `queued` (a worker slot), `running` (a worker, right now), `waiting` (the human - a gate or an escalation, undifferentiated at item level), `done` (nothing - terminal). One state machine (there is no separate `status`). See [state-lifecycle.md](state-lifecycle.md) for the precedence an item's steps resolve through when they disagree.
@@ -54,13 +54,14 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 
 ## The spec-driven pipeline (steps)
 
-Every stage name is an **action**. The stage and its markdown file are the same word by default; the `nodes:` block maps a stage to a differently named file. The role is not one of these names - it is `agent` or `human`. The built-in `spec-driven` workflow is one arc: a brief becomes a formal spec on a spec PR, and once that PR merges the same item continues into the code build. `open-pr` and `await-merge` each appear twice (the spec phase and the code phase).
+Every stage name is an **action**. The stage and its markdown file are the same word by default; the `nodes:` block maps a stage to a differently named file. The role is not one of these names - it is `agent`, `human`, or `engine`. The built-in `spec-driven` workflow is one arc: a brief becomes a formal spec on a spec PR, and once that PR merges the same item continues into the code build. `open-pr` and `await-merge` each appear twice (the spec phase and the code phase).
 
 - **spec-writer** (agent) - author the formal spec from the item's description, on a branch in the specs repo.
 - **open-pr** (agent) - push the branch and open the PR (used at both the spec and code phases).
 - **await-merge** (human) - you review and merge the PR; lightcycle never merges for you. The spec-phase `await-merge` is the review gate; merging it advances the SAME item into the code phase (no workflow flip).
 - **write-code** (agent) - implement the merged spec on a branch in the project repo.
-- **watch-ci** (agent) - wait for CI to go green.
+- **poll-ci** (engine) - the engine reads the PR's head SHA and check-runs itself, every tick, until CI concludes; no worker is ever spawned for it.
+- **watch-ci** (agent) - investigate a CI conclusion the engine already read: comment handling always, plus log-fetching and judgement on failure.
 - **review-code** (agent) - review the code on the PR.
 - **handle-feedback** (agent) - interpret PR feedback (`@lc` mention or a review bot) and decide rework / answer / ignore.
 - **cleanup** (human) - remove the worktree and branch; terminal.

@@ -361,6 +361,50 @@ class TestRenderWorkflowMermaid(unittest.TestCase):
             self.assertNotIn("subgraph", line)
 
 
+ENGINE_GRAPH_TEXT = """
+entry: build
+
+nodes:
+  build     coder
+  poll-ci   poller
+  ship      shipper
+
+edges:
+  build     done        poll-ci
+  poll-ci   succeeded   ship
+  poll-ci   failed      build
+
+hooks:
+  ci_success   poll-ci   succeeded
+  ci_failure   poll-ci   failed
+"""
+
+ENGINE_STEP_METAS = {
+    "coder": {"model": "sonnet"},
+    "poller": {"engine": True},
+    "shipper": {"model": "sonnet"},
+}
+
+
+class TestRenderWorkflowMermaidEngineStage(unittest.TestCase):
+    def setUp(self):
+        self.graph = parse_graph(ENGINE_GRAPH_TEXT)
+        self.flow = Flow.from_graph(self.graph, ENGINE_STEP_METAS)
+        self.lines = render_workflow_mermaid(self.graph, self.flow)
+
+    def test_engine_stage_declared_as_a_hexagon(self):
+        self.assertIn('poll_ci{{"poll-ci"}}', self.lines)
+
+    def test_engine_stage_classed_distinctly_from_agent_and_human(self):
+        self.assertIn("class poll_ci engine", self.lines)
+
+    def test_ci_success_and_ci_failure_rendered_as_dashed_hook_edges(self):
+        self.assertIn("poll_ci -.->|ci_success: succeeded| ship", self.lines)
+        self.assertIn("poll_ci -.->|ci_failure: failed| build", self.lines)
+        self.assertNotIn("poll_ci -->|succeeded| ship", self.lines)
+        self.assertNotIn("poll_ci -->|failed| build", self.lines)
+
+
 class TestRenderWorkflowMermaidPhases(unittest.TestCase):
     def setUp(self):
         self.graph = parse_graph(PHASE_GRAPH_TEXT)

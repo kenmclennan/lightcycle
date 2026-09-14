@@ -1,5 +1,6 @@
 import unittest
 
+from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
 from lightcycle.application.pool.no_op_gates import (
     NoOpBackupGate,
@@ -16,7 +17,8 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpWorktrees,
 )
 from tests.support.fake_fs import flow_from_metas
-from lightcycle.ports.github import Comment
+from lightcycle.ports.github import CheckRun, Comment
+from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
@@ -111,9 +113,13 @@ class FakeWorktrees:
 
     def __init__(self):
         self.removed = []
+        self.paths = {}
 
     def remove(self, item):
         self.removed.append(item)
+
+    def worktree_path(self, item):
+        return self.paths.get(item)
 
 
 class FakeWorkers:
@@ -159,9 +165,6 @@ class FakeConfig:
 
     def engine_root(self):
         return "/grid"
-
-    def ci_release_cap(self):
-        return 3
 
     def spin_cap(self):
         return 3
@@ -227,7 +230,7 @@ class TestTickWithMonitor(unittest.TestCase):
 
 
 class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
-    def test_execute_reflects_a_merge_a_feedback_dispatch_and_a_ci_release_in_one_call(self):
+    def test_execute_reflects_a_merge_a_feedback_dispatch_and_a_ci_resolution_in_one_call(self):
         flow = flow_from_metas(
             {
                 "reviewer": {
@@ -245,10 +248,16 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
                     "routes": {"changes": "build"},
                     "on_pr_feedback": "handle-feedback",
                 },
+                "poller": {
+                    "engine": True,
+                    "step": "poll-ci",
+                    "routes": {"succeeded": "watch-ci", "failed": "watch-ci"},
+                    "on_ci_success": "succeeded",
+                    "on_ci_failure": "failed",
+                },
                 "review-features": {
                     "model": "sonnet",
-                    "step": "review-features",
-                    "routes": {"done": "await-merge"},
+                    "step": "watch-ci",
                 },
             },
             disposition={"merged": "completed"},
@@ -269,10 +278,10 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
 
         ci_item = store.create_item("ci pending", "a description")
         ci_url = "https://github.com/x/y/pull/502"
-        plant_pr(store, ci_item, ci_url)
-        ci_step = store.create_step(step="review-features", role="human", parent=ci_item
-        )
-        store.label_add(ci_step, "ci-pending")
+        ci_branch = "feat/ci-item"
+        ci_root = "/repo/ci-item"
+        plant_pr(store, ci_item, ci_url, branch=ci_branch)
+        store.create_step(step="poll-ci", role="engine", parent=ci_item)
 
         comment = Comment(
             author="reviewer", body="please rename this", is_top_level=False,
@@ -282,18 +291,23 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
             merged_prs={merge_url},
             push_time=1000.0,
             timed_comments=[(1500.0, comment)],
-            head_shas={ci_url: "sha1"},
-            ci_pending_by_sha={(ci_url, "sha1"): False},
+            check_runs_by_sha={
+                (ci_url, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)
+            },
         )
+        git = FakeGit(head_shas={(ci_root, ci_branch): "sha1"})
+        worktrees = FakeWorktrees()
+        worktrees.paths[ci_item] = ci_root
+        complete = CompleteStepUseCase(store, _FlowAdapter(flow))
 
         uc = MonitorPrsUseCase(
-            store, gh, FakeWorktrees(), _FlowAdapter(flow), spin_port=FakeSpinPort(),
-            config=FakeConfig(),
+            store, gh, worktrees, _FlowAdapter(flow), complete, spin_port=FakeSpinPort(),
+            git=git,
         )
 
         result = uc.execute()
 
         self.assertEqual(result.merged, [merge_item])
         self.assertEqual(result.reworked, [feedback_item])
-        self.assertEqual(result.ci_released, [ci_item])
+        self.assertEqual(result.ci_resolved, [ci_item])
 

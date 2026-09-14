@@ -51,7 +51,12 @@ class Flow:
             meta = step_metas.get(graph.file_for(stage))
             if meta is None:
                 continue
-            owner[stage] = "agent" if meta.get("model") else "human"
+            if meta.get("engine"):
+                owner[stage] = "engine"
+            elif meta.get("model"):
+                owner[stage] = "agent"
+            else:
+                owner[stage] = "human"
 
         step_stages = stages | set(graph.workspaces) | set(graph.phases) | set(graph.display)
         steps = {

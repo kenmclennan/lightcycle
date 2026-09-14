@@ -233,7 +233,10 @@ class TestCliDoesNoRawFileIoOrProcessReplace(unittest.TestCase):
 
 class TestHookLiteralsHaveOneDefinition(unittest.TestCase):
     def test_hook_literals_appear_only_in_hooks_module(self):
-        tokens = ('"pr_merge"', '"pr_feedback"', '"pr_conflict"', '"ci_failed_cap"')
+        tokens = (
+            '"pr_merge"', '"pr_feedback"', '"pr_conflict"', '"ci_failed_cap"',
+            '"ci_success"', '"ci_failure"',
+        )
         offenders = []
         for path in sorted(LIGHTCYCLE.rglob("*.py")):
             for lineno, line in enumerate(path.read_text().splitlines(), start=1):

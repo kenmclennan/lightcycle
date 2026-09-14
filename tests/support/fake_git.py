@@ -9,7 +9,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  dirty=(), events=None, branches=(), base=None, raises=(),
                  remote_unreadable=(), sync_result=True, clone_result=True,
                  sync_default_result=True, worktree_add_fails=False,
-                 torn_down_branches=()):
+                 torn_down_branches=(), head_shas=None):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -25,6 +25,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._sync_default_result = sync_default_result
         self._worktree_add_fails = worktree_add_fails
         self._torn_down_branches = tuple(torn_down_branches)
+        self._head_shas = head_shas or {}
         self.calls = []
         self.commits = []
         self.remote_deletes = []
@@ -135,6 +136,10 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("common_dir", root))
         self._raise_if("common_dir", root)
         return os.path.join(root, ".git")
+
+    def remote_head_sha(self, root, branch):
+        self.calls.append(("remote_head_sha", root, branch))
+        return self._head_shas.get((root, branch))
 
     def created_worktrees(self):
         return [

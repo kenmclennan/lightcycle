@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lightcycle.adapters.github import GitHubEventsAdapter
-from lightcycle.ports.github import ReadFailure
+from lightcycle.ports.github import CheckRun, ReadFailure
 
 _PR = "https://github.com/x/y/pull/7"
 
@@ -496,69 +496,54 @@ class TestChangedFiles(unittest.TestCase):
         self.assertIsInstance(files, ReadFailure)
 
 
-class TestCiPending(unittest.TestCase):
+class TestCheckRuns(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()
 
     def _run(self, payload):
         return MagicMock(return_value=_proc(json.dumps(payload)))
 
-    def test_matching_sha_all_completed_is_not_pending(self):
-        mock_run = self._run({
-            "headRefOid": "sha1",
-            "statusCheckRollup": [
-                {"status": "COMPLETED", "conclusion": "SUCCESS"},
-                {"status": "COMPLETED", "conclusion": "FAILURE"},
-            ],
-        })
+    def test_parses_check_runs_into_tuples(self):
+        mock_run = self._run([
+            {"name": "build", "status": "completed", "conclusion": "success"},
+            {"name": "test", "status": "completed", "conclusion": "failure"},
+        ])
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            pending = self.adapter.ci_pending(_PR, "sha1")
+            runs = self.adapter.check_runs(_PR, "sha1")
 
-        self.assertFalse(pending)
+        self.assertEqual(
+            runs,
+            (
+                CheckRun(name="build", status="completed", conclusion="success"),
+                CheckRun(name="test", status="completed", conclusion="failure"),
+            ),
+        )
 
-    def test_matching_sha_with_in_progress_check_is_pending(self):
-        mock_run = self._run({
-            "headRefOid": "sha1",
-            "statusCheckRollup": [
-                {"status": "COMPLETED", "conclusion": "SUCCESS"},
-                {"status": "IN_PROGRESS"},
-            ],
-        })
+    def test_empty_check_runs_list(self):
+        mock_run = self._run([])
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            pending = self.adapter.ci_pending(_PR, "sha1")
+            runs = self.adapter.check_runs(_PR, "sha1")
 
-        self.assertTrue(pending)
-
-    def test_empty_rollup_is_pending(self):
-        mock_run = self._run({"headRefOid": "sha1", "statusCheckRollup": []})
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            pending = self.adapter.ci_pending(_PR, "sha1")
-
-        self.assertTrue(pending)
-
-    def test_mismatched_head_sha_is_pending(self):
-        mock_run = self._run({
-            "headRefOid": "sha2",
-            "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}],
-        })
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            pending = self.adapter.ci_pending(_PR, "sha1")
-
-        self.assertTrue(pending)
+        self.assertEqual(runs, ())
 
     def test_non_zero_exit_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            pending = self.adapter.ci_pending(_PR, "sha1")
+            runs = self.adapter.check_runs(_PR, "sha1")
 
-        self.assertEqual(pending, ReadFailure(1, "gh: auth error"))
+        self.assertEqual(runs, ReadFailure(1, "gh: auth error"))
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("not json", returncode=0))
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            pending = self.adapter.ci_pending(_PR, "sha1")
+            runs = self.adapter.check_runs(_PR, "sha1")
 
-        self.assertIsInstance(pending, ReadFailure)
+        self.assertIsInstance(runs, ReadFailure)
+
+    def test_unparseable_pr_url_returns_read_failure(self):
+        runs = self.adapter.check_runs("not-a-pr-url", "sha1")
+
+        self.assertIsInstance(runs, ReadFailure)
 
 
 def _timeout():
@@ -593,9 +578,9 @@ class TestReadFailureMethodsTimeOutCleanly(unittest.TestCase):
 
         self.assertIsInstance(result, ReadFailure)
 
-    def test_ci_pending_returns_read_failure_on_timeout(self):
+    def test_check_runs_returns_read_failure_on_timeout(self):
         with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
-            result = self.adapter.ci_pending(_PR, "sha1")
+            result = self.adapter.check_runs(_PR, "sha1")
 
         self.assertIsInstance(result, ReadFailure)
 

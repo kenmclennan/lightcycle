@@ -152,6 +152,8 @@ def _mermaid_node_id(stage):
 
 
 def _mermaid_kind(owner):
+    if owner == "engine":
+        return "engine"
     if owner == "human":
         return "human"
     if owner:
@@ -165,13 +167,15 @@ def _mermaid_declare(stage, kind):
         return '%s["%s"]' % (sid, stage)
     if kind == "human":
         return '%s("%s")' % (sid, stage)
+    if kind == "engine":
+        return '%s{{"%s"}}' % (sid, stage)
     return '%s(["%s"])' % (sid, stage)
 
 
 def _mermaid_consumed_outcomes(graph, flow, stage):
     sd = flow.step_def(stage)
     consumed = set()
-    for outcome in (sd.pr_merge, sd.pr_close, sd.pr_conflict):
+    for outcome in (sd.pr_merge, sd.pr_close, sd.pr_conflict, sd.ci_success, sd.ci_failure):
         if outcome and graph.target(stage, outcome):
             consumed.add(outcome)
     return consumed
@@ -210,6 +214,16 @@ def _mermaid_hook_edges(graph, flow, stage):
     feedback = sd.pr_feedback
     if feedback:
         edges.append("%s -.->|pr_feedback| %s" % (sid, _mermaid_node_id(feedback)))
+    success_o = sd.ci_success
+    if success_o:
+        target = graph.target(stage, success_o)
+        if target:
+            edges.append("%s -.->|ci_success: %s| %s" % (sid, success_o, _mermaid_node_id(target)))
+    failure_o = sd.ci_failure
+    if failure_o:
+        target = graph.target(stage, failure_o)
+        if target:
+            edges.append("%s -.->|ci_failure: %s| %s" % (sid, failure_o, _mermaid_node_id(target)))
     ci_target = sd.ci_cap.target if sd.ci_cap else None
     if ci_target:
         edges.append(
@@ -242,7 +256,8 @@ def render_workflow_mermaid(graph, flow):
     lines.append("classDef agent fill:#e8f0fe,stroke:#4285f4,color:#202124")
     lines.append("classDef human fill:#fef7e0,stroke:#f9ab00,color:#202124")
     lines.append("classDef terminal fill:#f1f3f4,stroke:#5f6368,color:#202124,stroke-dasharray: 3 3")
-    for kind in ("agent", "human", "terminal"):
+    lines.append("classDef engine fill:#e6f4ea,stroke:#34a853,color:#202124")
+    for kind in ("agent", "human", "terminal", "engine"):
         ids = sorted(_mermaid_node_id(s) for s in stages if kinds[s] == kind)
         if ids:
             lines.append("class %s %s" % (",".join(ids), kind))

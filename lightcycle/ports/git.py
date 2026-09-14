@@ -100,3 +100,7 @@ class GitPort(ABC):
     @abstractmethod
     def common_dir(self, root):
         pass
+
+    @abstractmethod
+    def remote_head_sha(self, root, branch):
+        pass

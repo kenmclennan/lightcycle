@@ -2,9 +2,9 @@ import datetime
 import json
 import re
 import subprocess
-from typing import Union
+from typing import Tuple, Union
 
-from lightcycle.ports.github import Comment, GitHubEventsPort, ReadFailure, Review
+from lightcycle.ports.github import CheckRun, Comment, GitHubEventsPort, ReadFailure, Review
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 _GH_TIMEOUT_SECONDS = 30
@@ -249,10 +249,17 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "could not parse gh api compare JSON for changed filenames")
         return frozenset(f for f in filenames if f)
 
-    def ci_pending(self, pr: str, sha: str) -> Union[bool, ReadFailure]:
+    def check_runs(self, pr: str, sha: str) -> Union[Tuple[CheckRun, ...], ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, _number = parts
         try:
             result = subprocess.run(
-                ["gh", "pr", "view", pr, "--json", "headRefOid,statusCheckRollup"],
+                [
+                    "gh", "api", "/repos/%s/%s/commits/%s/check-runs" % (owner, repo, sha),
+                    "--jq", "[.check_runs[]|{name,status,conclusion}]",
+                ],
                 capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
             )
@@ -263,13 +270,11 @@ class GitHubEventsAdapter(GitHubEventsPort):
         try:
             data = json.loads(result.stdout)
         except (json.JSONDecodeError, ValueError):
-            return ReadFailure(result.returncode, result.stdout)
-        if data.get("headRefOid") != sha:
-            return True
-        rollup = data.get("statusCheckRollup") or []
-        if not rollup:
-            return True
-        return any((c.get("status") or "").upper() != "COMPLETED" for c in rollup)
+            return ReadFailure(-1, "could not parse gh api check-runs JSON")
+        return tuple(
+            CheckRun(name=c.get("name") or "", status=c.get("status") or "", conclusion=c.get("conclusion"))
+            for c in data
+        )
 
     def reviews(self, pr: str, since: float):
         parts = _repo_parts(pr)

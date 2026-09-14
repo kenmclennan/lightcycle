@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,13 @@ class Review:
 class ReadFailure:
     returncode: int
     stderr: str
+
+
+@dataclass(frozen=True)
+class CheckRun:
+    name: str
+    status: str
+    conclusion: Optional[str]
 
 
 class GitHubEventsPort(ABC):
@@ -68,5 +75,5 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
-    def ci_pending(self, pr: str, sha: str) -> Union[bool, ReadFailure]:
+    def check_runs(self, pr: str, sha: str) -> Union[Tuple[CheckRun, ...], ReadFailure]:
         pass
