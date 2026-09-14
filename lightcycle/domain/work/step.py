@@ -19,7 +19,6 @@ class Step:
     model: Optional[str] = None
     outcome: Optional[str] = None
     notes: Optional[str] = None
-    reflection: Optional[str] = None
     watched_step: Optional[str] = None
     park: Park = field(default_factory=Park)
     deps: int = 0
@@ -66,7 +65,6 @@ class Step:
             "model": self.model,
             "outcome": self.outcome,
             "notes": self.notes,
-            "reflection": self.reflection,
             "watched_step": self.watched_step,
             "park": self.park.as_dict(),
             "deps": self.deps,

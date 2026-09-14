@@ -312,7 +312,7 @@ class TestSqliteStoreNodeSplitMigration(unittest.TestCase):
         self.assertEqual((step.item, step.stage, step.notes), ("GRID-1", "build", "a note"))
         self.assertFalse(hasattr(step, "description"))
 
-    def test_a_reflection_artifact_becomes_the_steps_reflection(self):
+    def test_a_reflection_artifact_is_preserved_not_folded(self):
         s = make_legacy_sqlite_store([
             {"id": "GRID-1", "type": "item", "title": "an item", "state": "backlogged",
              "description": "d"},
@@ -321,7 +321,10 @@ class TestSqliteStoreNodeSplitMigration(unittest.TestCase):
         ], [{"item_id": "GRID-1.1", "atype": "reflection", "value": "what got in the way",
              "internal": True}])
 
-        self.assertEqual(s.get_step("GRID-1.1").reflection, "what got in the way")
+        step = s.get_step("GRID-1.1")
+        self.assertFalse(hasattr(step, "reflection"))
+        reflections = [a for a in s.item_artifacts("GRID-1.1") if a.type == "reflection"]
+        self.assertEqual([a.value for a in reflections], ["what got in the way"])
 
     def test_a_watched_step_artifact_becomes_the_steps_field(self):
         s = make_legacy_sqlite_store([
@@ -1039,6 +1042,50 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         cols = {r[1] for r in store._conn.execute("PRAGMA table_info(usage_backfill_log)").fetchall()}
         self.assertIn("had_result_line", cols)
         self.assertEqual(store.unclassified_backfill_logs(), [("/l/legacy.log", "s-1")])
+
+
+class TestSqliteStoreDropsStepReflectionColumn(unittest.TestCase):
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def _seed_pre_usage_store(self, root):
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.executescript(_PRE_USAGE_STEPS_SCHEMA)
+        conn.execute(
+            "INSERT INTO steps (id, item, state, created_at, reflection) "
+            "VALUES ('s-1', 'i-1', 'ready', '2026-01-01', 'a stale value')"
+        )
+        conn.commit()
+        conn.close()
+
+    def test_existing_store_drops_the_reflection_column(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertNotIn("reflection", cols)
+
+    def test_drop_is_idempotent_on_reopen(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        SqliteStore(self._config(root))
+        store = SqliteStore(self._config(root))
+
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertNotIn("reflection", cols)
+
+    def test_other_step_fields_survive_the_drop(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+
+        t = store.get_step("s-1")
+        self.assertFalse(hasattr(t, "reflection"))
+        self.assertEqual(t.created_at, "2026-01-01")
 
 
 class TestSqliteStoreAtomicity(unittest.TestCase):

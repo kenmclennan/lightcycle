@@ -2,6 +2,7 @@ import datetime
 import json
 import unittest
 
+from lightcycle.application.errors import UseCaseError
 from lightcycle.application.feedback import (
     ReflectInput,
     ReflectUseCase,
@@ -20,12 +21,23 @@ from lightcycle.application.feedback.retro_scope import (
 )
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.pending_reflections import pending_reflection_count
-from lightcycle.domain.feedback import UNLABELED_MODEL
+from lightcycle.domain.feedback import UNLABELED_MODEL, Reflection
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
 _METAS = {"reviewer": {"model": "opus", "step": "review", "signals": {"review_rounds": "rejected"}}}
+
+
+class FakeWorktrees:
+    def __init__(self, specs_path="/specs", specs_path_error=None):
+        self._specs_path = specs_path
+        self._specs_path_error = specs_path_error
+
+    def specs_path(self):
+        if self._specs_path_error is not None:
+            raise self._specs_path_error
+        return self._specs_path
 
 
 def _flow(store):
@@ -45,7 +57,9 @@ class TestReflect(unittest.TestCase):
         s.add_artifact(item, "spec", "/specs/x.md")
         k = s.create_step("build: x", step="build", role="agent", parent=item)
         fs = FakeFs(files={"/specs/x.md": b"spec body"})
-        resp = ReflectUseCase(s, fs).execute(ReflectInput(step=k, feedback="went well"))
+        resp = ReflectUseCase(s, fs, FakeWorktrees()).execute(
+            ReflectInput(step=k, feedback="went well")
+        )
         self.assertEqual(resp.reflection.step, k)
         refl = json.loads(s.item_artifacts(k)[0].value)
         self.assertEqual(refl["step"], k)
@@ -55,16 +69,43 @@ class TestReflect(unittest.TestCase):
     def test_unknown_spec_hash_when_no_spec(self):
         s = FakeStore()
         k = create_owned_step(s, "loose step", role="human")
-        ReflectUseCase(s, FakeFs()).execute(ReflectInput(step=k, feedback="fb"))
+        ReflectUseCase(s, FakeFs(), FakeWorktrees()).execute(ReflectInput(step=k, feedback="fb"))
         refl = json.loads(s.item_artifacts(k)[0].value)
         self.assertEqual(refl["spec_hash"], "unknown")
 
     def test_reflection_artifact_is_internal(self):
         s = FakeStore()
         k = create_owned_step(s, "loose step", role="human")
-        ReflectUseCase(s, FakeFs()).execute(ReflectInput(step=k, feedback="fb"))
+        ReflectUseCase(s, FakeFs(), FakeWorktrees()).execute(ReflectInput(step=k, feedback="fb"))
         arts = [a for a in s.item_artifacts(k) if a.type == "reflection"]
         self.assertTrue(arts[0].internal)
+
+    def test_relative_spec_path_resolves_against_specs_path(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description")
+        s.add_artifact(item, "spec", "lightcycle/x.md")
+        k = s.create_step("build: x", step="build", role="agent", parent=item)
+        fs = FakeFs(files={"/specs-root/lightcycle/x.md": b"spec body"})
+        resp = ReflectUseCase(s, fs, FakeWorktrees(specs_path="/specs-root")).execute(
+            ReflectInput(step=k, feedback="went well")
+        )
+        refl = json.loads(s.item_artifacts(k)[0].value)
+        self.assertNotEqual(refl["spec_hash"], "unknown")
+        self.assertEqual(refl["spec_hash"], Reflection.spec_hash_of(b"spec body"))
+        self.assertEqual(resp.reflection.spec_hash, Reflection.spec_hash_of(b"spec body"))
+
+    def test_specs_path_resolution_failure_falls_back_to_unknown(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description")
+        s.add_artifact(item, "spec", "lightcycle/x.md")
+        k = s.create_step("build: x", step="build", role="agent", parent=item)
+        worktrees = FakeWorktrees(specs_path_error=UseCaseError("not registered"))
+        resp = ReflectUseCase(s, FakeFs(), worktrees).execute(
+            ReflectInput(step=k, feedback="fb")
+        )
+        refl = json.loads(s.item_artifacts(k)[0].value)
+        self.assertEqual(refl["spec_hash"], "unknown")
+        self.assertEqual(resp.reflection.spec_hash, "unknown")
 
 
 class TestRetroItemScope(unittest.TestCase):

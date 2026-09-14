@@ -62,7 +62,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.work.current_step import current_step
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.feedback import Duration
+from lightcycle.domain.feedback import Duration, parse_reflections
 from lightcycle.domain.money import Cost
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
@@ -128,6 +128,10 @@ DETAIL_FIELD_LABELS = {
     "needs": "NEEDS", "reason": "REASON", "tried": "TRIED", "reflection": "REFLECTION",
     "watched_step": "WATCHED_STEP",
 }
+
+
+def _detail_field_label(key):
+    return DETAIL_FIELD_LABELS[key.split(":", 1)[0]]
 
 COST_CONTINUATION_INDENT = 2
 COST_COLUMN_GAP = 2
@@ -242,7 +246,7 @@ def _hierarchy_default_row_id(store, node):
     return cur.id if cur is not None else node.id
 
 
-def detail_fields(step, run):
+def detail_fields(step, run, reflections):
     fields = []
     if run.pr:
         fields.append(("pr", run.pr))
@@ -265,8 +269,10 @@ def detail_fields(step, run):
         fields.append(("reason", step.park.reason))
     if step.park.tried:
         fields.append(("tried", step.park.tried))
-    if step.reflection:
-        fields.append(("reflection", step.reflection))
+    if reflections:
+        for index, text in enumerate(reflections):
+            key = "reflection" if index == 0 else "reflection:%d" % (index + 1)
+            fields.append((key, text))
     if step.watched_step:
         fields.append(("watched_step", step.watched_step))
     return fields
@@ -594,7 +600,7 @@ def artifact_row_cells(artifact, layout=None, row_budget=None):
 
 def detail_row_cells(field, layout=None, row_budget=None):
     key, value = field
-    label = DETAIL_FIELD_LABELS[key]
+    label = _detail_field_label(key)
     style = COLOURS["cyan"] if key == "pr" else COLOURS["text"]
     if layout is not None and layout.stacked:
         key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
@@ -1697,7 +1703,7 @@ class NodeHubScreen(Screen):
         return compute_layout(row_budget, [], atomic_values, indent=ARTIFACTS_CONTINUATION_INDENT)
 
     def _detail_layout(self, table, fields):
-        atomic_values = {"key": [DETAIL_FIELD_LABELS[key] for key, _value in fields]}
+        atomic_values = {"key": [_detail_field_label(key) for key, _value in fields]}
         row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["detail"]))
         return compute_layout(row_budget, [], atomic_values, indent=DETAIL_CONTINUATION_INDENT)
 
@@ -1770,7 +1776,9 @@ class NodeHubScreen(Screen):
 
     def _render_detail(self, store, step, initial) -> None:
         run = StepRunUseCase(store, self._flow_service).execute(StepRunInput(step=step.id))
-        self._render_detail_fields(detail_fields(step, run), initial)
+        reflections, _unreadable = parse_reflections(store.item_artifacts(step.id))
+        fields = detail_fields(step, run, [r.feedback for r in reflections])
+        self._render_detail_fields(fields, initial)
 
     def _render_detail_fields(self, fields, initial) -> None:
         self._last_detail_fields = fields

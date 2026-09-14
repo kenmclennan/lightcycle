@@ -71,7 +71,6 @@ CREATE TABLE IF NOT EXISTS steps (
     model TEXT,
     outcome TEXT,
     notes TEXT,
-    reflection TEXT,
     watched_step TEXT,
     park_reason TEXT,
     park_needs TEXT,
@@ -205,7 +204,7 @@ _ITEM_COLUMNS = (
 
 _STEP_COLUMNS = (
     "id", "item", "title", "stage", "pass_id", "role", "state", "assignee", "model",
-    "outcome", "notes", "reflection", "watched_step",
+    "outcome", "notes", "watched_step",
     "park_reason", "park_needs", "park_tried",
     "created_at", "fired_at", "closed_at", "active_seconds",
     "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
@@ -283,6 +282,7 @@ class SqliteStore(StorePort):
             self._migrate_phase_artifacts_into_runs()
             self._migrate_split_nodes()
         self._migrate_add_missing_columns()
+        self._migrate_drop_step_reflection_column()
         self._commit()
 
     def _commit(self):
@@ -401,7 +401,7 @@ class SqliteStore(StorePort):
         )
         self._conn.execute("DELETE FROM artifacts WHERE atype = 'brief'")
 
-    _STEP_FOLDED_ARTIFACTS = ("reflection", "watched-step")
+    _STEP_FOLDED_ARTIFACTS = ("watched-step",)
     _RUN_FOLDED_ARTIFACTS = ("feedback-watermark", "feedback-spawned-through")
 
     _ADDED_COLUMNS = {
@@ -443,6 +443,11 @@ class SqliteStore(StorePort):
                         "ALTER TABLE %s ADD COLUMN %s %s" % (table, name, decl)
                     )
 
+    def _migrate_drop_step_reflection_column(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        if "reflection" in cols:
+            self._conn.execute("ALTER TABLE steps DROP COLUMN reflection")
+
     def _has_table(self, name):
         return self._conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
@@ -471,12 +476,12 @@ class SqliteStore(StorePort):
                 owner = d.get("parent") or self._orphan_owner(d)
                 self._conn.execute(
                     "INSERT OR IGNORE INTO steps (id, item, title, stage, pass_id, role, state, "
-                    "assignee, model, outcome, notes, reflection, watched_step, "
+                    "assignee, model, outcome, notes, watched_step, "
                     "park_reason, park_needs, park_tried, created_at, fired_at, closed_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (d["id"], owner, d["title"], d.get("step"), d.get("pass_id"),
                      d.get("role"), d["state"], d.get("assignee"), d.get("model"),
-                     d.get("outcome"), d.get("notes"), fold.get("reflection"),
+                     d.get("outcome"), d.get("notes"),
                      fold.get("watched-step"), d.get("reason"), d.get("needs"), d.get("tried"),
                      d.get("created_at"), d.get("fired_at"), d.get("closed_at")),
                 )
@@ -606,7 +611,6 @@ class SqliteStore(StorePort):
             model=d["model"],
             outcome=d["outcome"],
             notes=d["notes"],
-            reflection=d["reflection"],
             watched_step=d["watched_step"],
             park=Park(reason=d["park_reason"], needs=d["park_needs"], tried=d["park_tried"]),
             deps=deps,

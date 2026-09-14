@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
@@ -146,8 +148,25 @@ def _step_claimed_outcome_notes(ctx):
 @given("a step with a reflection and a watched_step recorded")
 def _step_reflection_watched(ctx):
     store, step_id = _launch_step(ctx)
-    store.update_metadata(step_id, {"reflection": "worked well"})
+    store.add_artifact(
+        step_id, "reflection",
+        json.dumps({"step": step_id, "feedback": "worked well", "spec_hash": "unknown"}),
+    )
     store.set_watched_step(step_id, "LC-1.2")
+    _push_hub(ctx, step_id)
+
+
+@given("a step with two reflections recorded")
+def _step_two_reflections(ctx):
+    store, step_id = _launch_step(ctx)
+    store.add_artifact(
+        step_id, "reflection",
+        json.dumps({"step": step_id, "feedback": "first pass friction", "spec_hash": "unknown"}),
+    )
+    store.add_artifact(
+        step_id, "reflection",
+        json.dumps({"step": step_id, "feedback": "second pass friction", "spec_hash": "unknown"}),
+    )
     _push_hub(ctx, step_id)
 
 
@@ -320,6 +339,12 @@ def _no_outcome_field(ctx):
 @then("no notes field is shown")
 def _no_notes_field(ctx):
     assert not _field_present(ctx, "notes")
+
+
+@then("both reflections are shown as separate fields")
+def _both_reflections_shown(ctx):
+    assert _field_value(ctx, "reflection") == "first pass friction"
+    assert _field_value(ctx, "reflection:2") == "second pass friction"
 
 
 @then("no reflection field is shown")
