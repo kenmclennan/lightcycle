@@ -46,7 +46,7 @@ class ActivateItemUseCase:
             self._flow.load_graph(pin)
         except ValueError as e:
             raise UseCaseError(str(e))
-        step_name, role = check_step_filing(self._store, self._flow, item_id, node, pin, input.step)
+        step_name, role = check_step_filing(self._store, self._flow, item_id, pin, input.step)
         repo = self._store.get_item(item_id).repo
         ensure_project_cloned(self._store, self._git, self._config, repo, self._scaffold)
         self._store.edit_node(item_id, workflow=pin)
