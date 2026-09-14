@@ -189,6 +189,7 @@ COMMANDS = {
     "start": CommandSpec(prog="lc start", args=(
         Arg("--once", action="store_true"), Arg("--detach", action="store_true"),
     )),
+    "stop": CommandSpec(prog="lc stop"),
     "init": CommandSpec(prog="lc init"),
     "project": CommandSpec(prog="lc project", subparsers={
         "add": CommandSpec(prog="lc project add", args=(

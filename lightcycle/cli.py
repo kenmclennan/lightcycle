@@ -104,6 +104,7 @@ from lightcycle.application.pool import (
     StartPoolUseCase,
     ResolveLogInput,
     ResolveLogUseCase,
+    StopPoolSignalUseCase,
     StopPoolUseCase,
     TickInput,
 )
@@ -183,7 +184,8 @@ COMMAND_GROUPS = [
          "engine (no LLM/GitHub) to its terminals - separate from `lc upgrade`, which updates the engine"),
     ]),
     ("Start working", [
-        ("start", "[--once]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue"),
+        ("start", "[--once] [--detach]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue; --detach spawns it in the background and returns immediately"),
+        ("stop", "", "signal a detached pool to stop; reports the pid signalled"),
     ]),
     ("See what's happening", [
         ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),
@@ -1441,7 +1443,7 @@ def cmd_start(argv):
         if not resp.started:
             sys.stderr.write("lc start already running, pid %d\n" % resp.pid)
             return 1
-        print("lc start detached, pid %d - output goes to %s"
+        print("lc start detached, pid %d - output goes to %s - `lc stop` ends it"
               % (resp.pid, os.path.join(_container.config.data_root(), "logs", "run.log")))
         return 0
     lock_result = AcquireRunLockUseCase(_container.lock).execute()
@@ -1501,6 +1503,16 @@ def cmd_start(argv):
         return 0
     finally:
         ReleaseRunLockUseCase(_container.lock).execute()
+
+
+def cmd_stop(argv):
+    build_parser(COMMANDS["stop"]).parse_args(argv)
+    resp = StopPoolSignalUseCase(_container.lock, _container.workers).execute()
+    if not resp.signalled:
+        sys.stderr.write("no pool running\n")
+        return 1
+    print("lc stop signalled pid %d" % resp.pid)
+    return 0
 
 
 def cmd_init(argv):

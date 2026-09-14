@@ -953,6 +953,30 @@ class TestRun(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("--detach", err)
 
+    def test_stop_signals_the_running_pool_and_reports_the_pid(self):
+        (Path(self.root) / ".lc-run.pid").write_text(str(os.getpid()))
+        killed = []
+
+        class RecordingWorkers:
+            def kill(self, pid):
+                killed.append(pid)
+
+        _cli_mod._container.workers = RecordingWorkers()
+        rc, out, err = call(_cli_mod.cmd_stop)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(killed, [os.getpid()])
+        self.assertIn(str(os.getpid()), out)
+
+    def test_stop_says_no_pool_running_when_none_is(self):
+        class RefusingWorkers:
+            def kill(self, pid):
+                raise AssertionError("nothing to signal")
+
+        _cli_mod._container.workers = RefusingWorkers()
+        rc, _, err = call(_cli_mod.cmd_stop)
+        self.assertEqual(rc, 1)
+        self.assertIn("no pool running", err)
+
     def test_lc_logs_run_returns_content_after_a_tick(self):
         create_owned_step(self.store, "build: t", step="build", role="agent")
         rc, _, err = self._run_once()
