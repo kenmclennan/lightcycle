@@ -467,6 +467,24 @@ class TestReviewRoundsCap(unittest.TestCase):
             _cfg(review_rounds_cap="lots").review_rounds_cap()
 
 
+class TestInternalShortcode(unittest.TestCase):
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().internal_shortcode()
+
+    def test_seeded_default_resolves(self):
+        self.assertEqual(_cfg(internal_shortcode="AUD").internal_shortcode(), "AUD")
+
+    def test_env_override_wins(self):
+        self.assertEqual(
+            _cfg({"LC_INTERNAL_SHORTCODE": "ENG"}, internal_shortcode="AUD").internal_shortcode(),
+            "ENG",
+        )
+
+    def test_env_override_without_config_key(self):
+        self.assertEqual(_cfg({"LC_INTERNAL_SHORTCODE": "ENG"}).internal_shortcode(), "ENG")
+
+
 class TestResolvedSettings(unittest.TestCase):
     def test_freshly_seeded_config_reports_all_keys_as_default(self):
         c = _cfg()

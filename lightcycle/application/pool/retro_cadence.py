@@ -39,7 +39,8 @@ class RetroCadenceUseCase:
             sorted([i.id for i in item_batch] + [p.id for p in pass_batch], key=node_id_key)
         )
         with self._store.transaction():
-            item_id = self._store.create_item(title, description)
+            item_id = self._store.create_item(
+                title, description, shortcode=self._config.internal_shortcode())
             self._store.label_add(item_id, RETRO_ORIGIN_LABEL)
             tid = self._store.create_step(step=AUDIT_STEP, role="agent", parent=item_id)
         return RetroCadenceResponse(fired=[tid])

@@ -28,6 +28,7 @@ _ENV_OVERRIDE_VARS = {
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
+    "internal-shortcode": "LC_INTERNAL_SHORTCODE",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -78,6 +79,7 @@ _SEED_KEYS = [
     ("tick-failure-cap", "5"),
     ("review-rounds-cap", "5"),
     ("context-artifact-types", "spec"),
+    ("internal-shortcode", "AUD"),
 ]
 
 
@@ -413,6 +415,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("review-rounds-cap")
+
+    def internal_shortcode(self):
+        env = self._env("LC_INTERNAL_SHORTCODE")
+        if env:
+            return env
+        return self._required_str("internal-shortcode")
 
     def editor(self):
         raw = self._env("EDITOR")

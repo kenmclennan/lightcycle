@@ -69,7 +69,7 @@ Every stage name is an **action**. The stage and its markdown file are the same 
 - **review-conflict** (human) - the escalation endpoint when conflicts cannot be resolved.
 - **review-ci** (human) - the escalation endpoint when CI keeps failing past the cap instead of looping write-code forever.
 
-The periodic retro **audit** is no longer a workflow step - it is an **engine service** that runs across all workflows (any item that produces feedback is audited on a cadence), with findings surfaced in `lc inbox`. See the audit under the engine, not the workflow.
+The periodic retro **audit** is no longer a workflow step - it is an **engine service** that runs across all workflows (any item that produces feedback is audited on a cadence), with findings surfaced in `lc inbox`. See the audit under the engine, not the workflow. The audit item it files is engine-internal, not of any project - it is minted under the `internal-shortcode` config value (seeded `AUD`), never a batched item's own project shortcode.
 
 ## Deployment (engine, data home, workflow sources)
 
@@ -81,7 +81,7 @@ The periodic retro **audit** is no longer a workflow step - it is an **engine se
 
 - **project** - a registered codebase lightcycle files work against: an **identity**, a **shortcode**, a local path, and a remote URL. Stored in the project registry, managed with `lc project add|list|rm`.
 - **identity** - the canonical `owner/name` string parsed from a repo's GitHub remote (SSH or HTTPS); the registry's lookup key. A path with no parseable GitHub remote has no identity and cannot be registered.
-- **shortcode** - the id prefix items registered under a project nest beneath (see "Identity" below). Explicit at registration (`--shortcode`) or defaulted from identity's name segment, uppercased. Per-project, not engine-wide. An unresolvable `--project` at node creation (no match, an ambiguous match, or a match with no shortcode) is an error, never a silent fall back to the global shortcode; no `--project` given is not unresolvable and defaults to the global shortcode as before.
+- **shortcode** - the id prefix items registered under a project nest beneath (see "Identity" below). Explicit at registration (`--shortcode`) or defaulted from identity's name segment, uppercased. Per-project, not engine-wide. An unresolvable `--project` at node creation (no match, an ambiguous match, or a match with no shortcode) is an error, never a silent fall back to the global shortcode; no `--project` given is not unresolvable and defaults to the global shortcode as before. The one engine-wide exception is `internal-shortcode` (config), used only for items the engine itself files with no project (the retro audit) - never inherited from the items being batched.
 - **scan** - `lc project scan [dir]`, read-only: walks a directory tree for git repos, classifying each as `new` (identity resolved, not yet registered), `already-registered`, or `no-remote` (no parseable GitHub remote). Registers nothing itself - a human or `lc project add` acts on its output.
 
 ## Identity
