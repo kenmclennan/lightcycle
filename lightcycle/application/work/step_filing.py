@@ -31,9 +31,7 @@ def check_step_filing(store, flow, item_id, node, workflow, step):
     return step_name, role
 
 
-def file_step(store, flow, item_id, node, workflow, step_name, role, deps=None):
-    step_id = store.create_step(
-        "%s: %s" % (step_name, node.title), step=step_name, role=role, parent=item_id, deps=deps
-    )
+def file_step(store, flow, item_id, workflow, step_name, role, deps=None):
+    step_id = store.create_step(step=step_name, role=role, parent=item_id, deps=deps)
     PassBook(store, flow).enrol(item_id, step_id, step_name, workflow)
     return step_id

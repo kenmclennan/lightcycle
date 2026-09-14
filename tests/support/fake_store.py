@@ -63,7 +63,6 @@ def record_to_step(record, blocked_by=None):
     return Step(
         id=record["id"],
         item=record.get("parent"),
-        title=record.get("title", ""),
         stage=_label_value(labels, "step:"),
         pass_id=record.get("pass_id"),
         role=role,
@@ -644,12 +643,11 @@ class FakeStore(StorePort):
     def history(self, tid):
         return list(self._history.get(tid, []))
 
-    def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
+    def create_step(self, *, step=None, role=None, parent=None, deps=None,
                     id=None):
         if parent is None:
             raise ValueError("create_step requires a parent")
         fields = dict(
-            title=title,
             type="step",
             parent=parent,
             labels=labels_for(role=role, step=step),

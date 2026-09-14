@@ -23,7 +23,7 @@ from lightcycle.application.flow import (
 from lightcycle.application.flow.engine_steps import FINDINGS_STEP
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.services.flow import FlowService
-from lightcycle.domain.work import State
+from lightcycle.domain.work import State, compose_step_title
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_spin import FakeSpinPort
@@ -154,7 +154,7 @@ class TestAdvanceTask(unittest.TestCase):
     def test_creates_next_task(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         resp = AdvanceStepUseCase(s, flow_for(METAS, s)).execute(
             AdvanceInput(step=bid, outcome="done")
         )
@@ -175,7 +175,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_closes_and_advances(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
@@ -185,7 +185,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_completion_notes_the_outcome_on_the_step(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
@@ -194,7 +194,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_worker_with_mismatched_spawn_id_is_fenced_at_the_use_case(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         s.assign(bid, "w1")
         resp = CompleteStepUseCase(
             s, flow_for(METAS, s), config=FakeConfig("w2")
@@ -206,7 +206,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_worker_with_matching_spawn_id_completes(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         s.assign(bid, "w1")
         resp = CompleteStepUseCase(
             s, flow_for(METAS, s), config=FakeConfig("w1")
@@ -217,7 +217,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_a_worker_can_route_an_unclaimed_step_it_does_not_own(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         resp = CompleteStepUseCase(
             s, flow_for(METAS, s), config=FakeConfig("handle-feedback-worker")
         ).execute(CompleteInput(step=bid, outcome="done"))
@@ -227,7 +227,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_completing_already_done_step_is_noop(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
@@ -249,7 +249,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_missing_required_output_raises(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        rid = s.create_step("review: x", step="review", role="agent", parent=item)
+        rid = s.create_step(step="review", role="agent", parent=item)
         with self.assertRaises(UseCaseError):
             CompleteStepUseCase(s, flow_for(METAS, s)).execute(
                 CompleteInput(step=rid, outcome="done")
@@ -318,7 +318,7 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs(metas), s)
         item = s.create_item("st", "a description", workflow="small-change")
-        sac = s.create_step("scope-and-code: x", step="scope-and-code", role="agent", parent=item)
+        sac = s.create_step(step="scope-and-code", role="agent", parent=item)
         resp = CompleteStepUseCase(s, flow_svc).execute(
             CompleteInput(step=sac, outcome="too-big")
         )
@@ -365,15 +365,13 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         if repo is not None:
             store.add_artifact(item, "repo", repo)
         if reflection:
-            k = store.create_step("build: x", step="build", role="agent", parent=item)
+            k = store.create_step(step="build", role="agent", parent=item)
             store.complete_node(k, "done")
             store.add_artifact(k, "reflection", "fb")
         return item
 
     def _audit_step(self, store, batch):
-        title = store.get_node(batch).title
-        return store.create_step(
-            "audit: %s" % title, step="audit", role="agent", parent=batch)
+        return store.create_step(step="audit", role="agent", parent=batch)
 
     def test_findings_marks_retroed_and_surfaces_a_human_inbox_step(self):
         s = FakeStore()
@@ -394,7 +392,10 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         aid = self._audit_step(s, batch)
         self._uc(s).execute(CompleteInput(step=aid, outcome="findings", note="the digest"))
         findings = [c for c in s.children(batch) if c.role == "human"][0]
-        self.assertEqual(findings.title, "review-findings: custom batch title")
+        self.assertEqual(
+            compose_step_title(findings.stage, s.get_node(findings.item).title),
+            "review-findings: custom batch title",
+        )
 
     def test_findings_step_closes_terminally_when_reviewed(self):
         s = FakeStore()
@@ -423,7 +424,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         s = FakeStore()
         reviewed = self._reviewed_item(s)
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIn(reviewed, [i.id for i in s.closed_unretroed_items()])
 
@@ -434,7 +435,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         }
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        aid = s.create_step("audit: x", step="audit", role="agent", parent=item)
+        aid = s.create_step(step="audit", role="agent", parent=item)
         resp = CompleteStepUseCase(s, flow_for(metas, s)).execute(
             CompleteInput(step=aid, outcome="done")
         )
@@ -469,7 +470,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
     def test_terminal_step_auto_closes_item_and_removes_worktree(self):
         s = FakeStore()
         item = s.create_item("it", "a description")
-        tid = s.create_step("finalise: x", step="finalise", role="agent", parent=item)
+        tid = s.create_step(step="finalise", role="agent", parent=item)
         wt = FakeWorktrees()
         CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), wt).execute(
             CompleteInput(step=tid, outcome="done")
@@ -480,7 +481,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
     def test_intermediate_step_does_not_close_item(self):
         s = FakeStore()
         item = s.create_item("it", "a description")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=bid, outcome="done")
         )
@@ -489,7 +490,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
     def test_a_closing_item_leaves_a_sibling_item_untouched(self):
         s = FakeStore()
         item = s.create_item("it", "a description")
-        tid = s.create_step("finalise: x", step="finalise", role="agent", parent=item)
+        tid = s.create_step(step="finalise", role="agent", parent=item)
         sibling = s.create_item("still open", "a description")
         CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), FakeWorktrees()).execute(
             CompleteInput(step=tid, outcome="done")
@@ -521,7 +522,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
     def test_allowed_on_outcome_whose_target_does_not_require_the_produce(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        aid = s.create_step("alpha: x", step="alpha", role="agent", parent=item)
+        aid = s.create_step(step="alpha", role="agent", parent=item)
         resp = CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
             CompleteInput(step=aid, outcome="sideways")
         )
@@ -536,7 +537,7 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
     def test_conflicted_outcome_closes_without_a_pr_and_routes_to_resolve(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        tid = s.create_step("code-open-pr: x", step="code-open-pr", role="agent", parent=item)
+        tid = s.create_step(step="code-open-pr", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=tid, outcome="conflicted"))
         self.assertEqual(s.get_node(tid).state, "done")
         self.assertEqual(s.get_node(resp.next_step).stage, "resolve-conflict")
@@ -544,7 +545,7 @@ class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
     def test_done_outcome_still_requires_a_pr(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        tid = s.create_step("code-open-pr: x", step="code-open-pr", role="agent", parent=item)
+        tid = s.create_step(step="code-open-pr", role="agent", parent=item)
         with self.assertRaises(UseCaseError):
             self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
 
@@ -577,14 +578,14 @@ class TestCiFailedCapRouting(unittest.TestCase):
 
     def _fail_n_times(self, store, item, n):
         for _ in range(n):
-            old = store.create_step("watch: x", step="watch", role="agent", parent=item)
+            old = store.create_step(step="watch", role="agent", parent=item)
             store.complete_node(old, "ci-failed")
 
     def test_under_cap_routes_normally(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 1)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(wid).outcome, "ci-failed")
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
@@ -593,7 +594,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(wid).outcome, "ci-failed")
         self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
@@ -604,7 +605,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         other = s.create_item("other", "a description")
         self._fail_n_times(s, other, 2)
         item = s.create_item("st", "a description", workflow="spec-driven")
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
@@ -612,7 +613,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 3)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
         self.assertEqual(s.get_node(resp.next_step).stage, "ship")
 
@@ -620,9 +621,9 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         for _ in range(2):
-            old = s.create_step("watch: x", step="watch", role="agent", parent=item)
+            old = s.create_step(step="watch", role="agent", parent=item)
             s.complete_node(old, "done")
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
         self.assertEqual(s.get_node(resp.next_step).stage, "ship")
 
@@ -630,7 +631,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(
             CompleteInput(step=wid, outcome="ci-failed", note="job X / test Y failed")
         )
@@ -646,26 +647,26 @@ class TestCiFailedCapRouting(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         uc = CompleteStepUseCase(s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s))
         for _ in range(5):
-            old = s.create_step("watch: x", step="watch", role="agent", parent=item)
+            old = s.create_step(step="watch", role="agent", parent=item)
             s.complete_node(old, "ci-failed")
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_cap_counting_orders_mixed_utc_offsets_chronologically_not_as_raw_strings(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        done_step = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        done_step = s.create_step(step="watch", role="agent", parent=item)
         s.complete_node(done_step, "done")
         s._records[done_step]["created_at"] = "2026-01-01T10:00:00+00:00"
-        first_fail = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        first_fail = s.create_step(step="watch", role="agent", parent=item)
         s.complete_node(first_fail, "ci-failed")
         s._records[first_fail]["created_at"] = "2026-01-01T05:00:00-12:00"
-        second_fail = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        second_fail = s.create_step(step="watch", role="agent", parent=item)
         s.complete_node(second_fail, "ci-failed")
         s._records[second_fail]["created_at"] = "2026-01-01T20:00:00+00:00"
 
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
 
         self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
@@ -674,9 +675,9 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
-        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        passed = s.create_step(step="watch", role="agent", parent=item)
         s.complete_node(passed, "done")
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
@@ -684,10 +685,10 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
-        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        passed = s.create_step(step="watch", role="agent", parent=item)
         s.complete_node(passed, "done")
         self._fail_n_times(s, item, 2)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
 
@@ -695,28 +696,25 @@ class TestCiFailedCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
-        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        passed = s.create_step(step="watch", role="agent", parent=item)
         s.complete_node(passed, "done")
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
     def test_tie_broken_by_numeric_suffix_not_insertion_order(self):
         s = FakeStore(now=lambda: "2026-01-01T00:00:00")
         item = s.create_item("st", "a description", workflow="spec-driven")
-        pass_id = s.create_step(
-            "watch: x", step="watch", role="agent", parent=item, id="%s.30" % item
+        pass_id = s.create_step(step="watch", role="agent", parent=item, id="%s.30" % item
         )
         s.complete_node(pass_id, "done")
-        reject_a = s.create_step(
-            "watch: x", step="watch", role="agent", parent=item, id="%s.10" % item
+        reject_a = s.create_step(step="watch", role="agent", parent=item, id="%s.10" % item
         )
         s.complete_node(reject_a, "ci-failed")
-        reject_b = s.create_step(
-            "watch: x", step="watch", role="agent", parent=item, id="%s.20" % item
+        reject_b = s.create_step(step="watch", role="agent", parent=item, id="%s.20" % item
         )
         s.complete_node(reject_b, "ci-failed")
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
@@ -727,14 +725,14 @@ class TestCiFailedCapAdvancePath(unittest.TestCase):
 
     def _fail_n_times(self, store, item, n):
         for _ in range(n):
-            old = store.create_step("watch: x", step="watch", role="agent", parent=item)
+            old = store.create_step(step="watch", role="agent", parent=item)
             store.complete_node(old, "ci-failed")
 
     def test_advance_under_cap_routes_normally(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 1)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
@@ -743,7 +741,7 @@ class TestCiFailedCapAdvancePath(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
@@ -756,14 +754,14 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
 
     def _fail_n_times(self, store, item, n):
         for _ in range(n):
-            old = store.create_step("watch: x", step="watch", role="agent", parent=item)
+            old = store.create_step(step="watch", role="agent", parent=item)
             store.complete_node(old, "ci-failed")
 
     def _setup(self, prior_failures):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, prior_failures)
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         return s, wid, flow
 
@@ -794,9 +792,9 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         self._fail_n_times(s, item, 2)
-        passed = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        passed = s.create_step(step="watch", role="agent", parent=item)
         s.complete_node(passed, "done")
-        wid = s.create_step("watch: x", step="watch", role="agent", parent=item)
+        wid = s.create_step(step="watch", role="agent", parent=item)
         flow = FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), s)
         resp = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
@@ -806,7 +804,7 @@ class TestNextStepResolverSpecFor(unittest.TestCase):
     def test_spec_for_returns_none_without_a_transition(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         t = s.get_node(bid)
         resolver = NextStepResolver(s, flow_for(METAS, s))
         self.assertIsNone(resolver.spec_for(t, None))
@@ -814,14 +812,14 @@ class TestNextStepResolverSpecFor(unittest.TestCase):
     def test_spec_for_matches_transition_next_step_spec(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         t = s.get_node(bid)
         flow = flow_for(METAS, s)
         resolver = NextStepResolver(s, flow)
         transition = resolver.resolve(t, "done", flow.workflow_for(t))
         self.assertEqual(
             resolver.spec_for(t, transition),
-            transition.next_step_spec(t, s.get_node(t.item).title),
+            transition.next_step_spec(t),
         )
 
 
@@ -832,7 +830,7 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
     def test_under_cap_routes_to_write_code(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        wid = s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
+        wid = s.create_step(step="watch-ci", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(wid).outcome, "ci-failed")
         self.assertEqual(s.get_node(resp.next_step).stage, "write-code")
@@ -841,9 +839,9 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         for _ in range(3):
-            old = s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
+            old = s.create_step(step="watch-ci", role="agent", parent=item)
             s.complete_node(old, "ci-failed")
-        wid = s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
+        wid = s.create_step(step="watch-ci", role="agent", parent=item)
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "review-ci")
         self.assertEqual(s.get_node(resp.next_step).role, "human")
@@ -863,22 +861,37 @@ class TestNextStepTitleTracksTheItem(unittest.TestCase):
     def test_title_derives_from_the_item_through_repeated_rework(self):
         s = FakeStore()
         item = s.create_item("fix auth bug", "a description", workflow="spec-driven")
-        bid = s.create_step(
-            "build: consolidated sweep - see PR #349", step="build", role="agent", parent=item
+        bid = s.create_step(step="build", role="agent", parent=item
         )
         uc = CompleteStepUseCase(s, flow_for(self.CHAIN_METAS, s))
 
         rid = uc.execute(CompleteInput(step=bid, outcome="done")).next_step
-        self.assertEqual(s.get_node(rid).title, "review: fix auth bug")
+        self.assertEqual(s.get_node(rid).item, item)
+        self.assertEqual(
+            compose_step_title(s.get_node(rid).stage, s.get_node(item).title),
+            "review: fix auth bug",
+        )
 
         bid2 = uc.execute(CompleteInput(step=rid, outcome="rejected")).next_step
-        self.assertEqual(s.get_node(bid2).title, "build: fix auth bug")
+        self.assertEqual(s.get_node(bid2).item, item)
+        self.assertEqual(
+            compose_step_title(s.get_node(bid2).stage, s.get_node(item).title),
+            "build: fix auth bug",
+        )
 
         rid2 = uc.execute(CompleteInput(step=bid2, outcome="done")).next_step
-        self.assertEqual(s.get_node(rid2).title, "review: fix auth bug")
+        self.assertEqual(s.get_node(rid2).item, item)
+        self.assertEqual(
+            compose_step_title(s.get_node(rid2).stage, s.get_node(item).title),
+            "review: fix auth bug",
+        )
 
         oid = uc.execute(CompleteInput(step=rid2, outcome="done")).next_step
-        self.assertEqual(s.get_node(oid).title, "open-pr: fix auth bug")
+        self.assertEqual(s.get_node(oid).item, item)
+        self.assertEqual(
+            compose_step_title(s.get_node(oid).stage, s.get_node(item).title),
+            "open-pr: fix auth bug",
+        )
 
 
 class TestClaimTask(unittest.TestCase):
@@ -896,7 +909,7 @@ class TestClaimTask(unittest.TestCase):
     def test_one_agent_role_claims_a_ready_step_of_any_stage(self):
         s = FakeStore()
         item = s.create_item("i", "a description", workflow="standard")
-        review = s.create_step("review: x", step="review", role="agent", parent=item)
+        review = s.create_step(step="review", role="agent", parent=item)
         claimed = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(claimed.view.step.id, review)
         self.assertEqual(claimed.view.step.stage, "review")
@@ -904,14 +917,14 @@ class TestClaimTask(unittest.TestCase):
     def test_the_claim_resolves_the_step_file_from_the_stage_not_the_role(self):
         s = FakeStore()
         item = s.create_item("i", "a description", workflow="standard")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         claimed = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(claimed.step_file, "coder")
         self.assertNotEqual(claimed.step_file, claimed.view.step.role)
 
     def test_records_model_from_role_frontmatter(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent",
+        bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="standard"))
         self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(bid).model, "sonnet")
@@ -978,7 +991,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
-        x = s.create_step("build: x", step="build", role="agent", parent=item)
+        x = s.create_step(step="build", role="agent", parent=item)
         self._inprogress(s, x, "sp1")
         uc = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s),
@@ -994,7 +1007,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
-        x = s.create_step("build: x", step="build", role="agent", parent=item)
+        x = s.create_step(step="build", role="agent", parent=item)
         uc = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s),
             FakeWorktrees(sync_specs_error=RuntimeError("net")),
@@ -1007,7 +1020,7 @@ class TestClaimTask(unittest.TestCase):
     def test_carries_the_resolved_pin(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="lightcycle/spec-driven@abc")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.pin, "lightcycle/spec-driven@abc")
 
@@ -1045,7 +1058,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_missing_required_input_routes_to_human(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent",
+        bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="standard"))
         resp = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
@@ -1059,7 +1072,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_unresolvable_workflow_selector_routes_to_human(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent",
+        bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="ghost/whatever"))
         resp = ClaimStepUseCase(
             s, _BrokenSelectorFlow(), FakeWorktrees(), FakeWorkers(), FakeConfig()
@@ -1074,7 +1087,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_missing_required_input_park_can_be_unblocked_symmetrically(self):
         s = FakeStore()
-        bid = s.create_step("build: x", step="build", role="agent",
+        bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="standard"))
         ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
@@ -1098,7 +1111,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.spec_path, os.path.join("/specs", "specs/X.md"))
 
@@ -1106,7 +1119,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "spec", "myproject/LC-1-my-spec.md")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(
             resp.spec_path, os.path.join("/specs", "myproject/LC-1-my-spec.md")
@@ -1115,14 +1128,14 @@ class TestClaimTask(unittest.TestCase):
     def test_hands_over_the_items_description(self):
         s = FakeStore()
         item = s.create_item("st", "the settled design", workflow="spec-driven")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.description, "the settled design")
 
     def test_the_description_is_the_items_not_the_steps(self):
         s = FakeStore()
         item = s.create_item("st", "the item's design", workflow="spec-driven")
-        sid = s.create_step("build: x", step="build", role="agent", parent=item)
+        sid = s.create_step(step="build", role="agent", parent=item)
         s.edit_node(sid, description="the step's own note")
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.description, "the item's design")
@@ -1132,7 +1145,7 @@ class TestClaimTask(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_project("acme/app", local_path=os.path.join("/projects", "app"))
         s.add_artifact(item, "repo", "app")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.repo_path, os.path.join("/projects", "app"))
 
@@ -1140,7 +1153,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "repo", "/elsewhere/app")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.repo_path, "/elsewhere/app")
 
@@ -1152,7 +1165,7 @@ class TestClaimTask(unittest.TestCase):
 
     def test_claim_exposes_the_declared_phase(self):
         s = FakeStore()
-        s.create_step("build: x", step="build", role="agent",
+        s.create_step(step="build", role="agent",
                      parent=s.create_item("i", "a description", workflow="standard"))
         metas = {"coder": {"model": "sonnet", "step": "build", "phase": "spec",
                            "routes": {"done": "review"}}}
@@ -1184,7 +1197,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         worktrees = FakeWorktrees()
 
         ClaimStepUseCase(
@@ -1208,7 +1221,7 @@ class TestClaimTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
-        bid = s.create_step("build: x", step="build", role="agent", parent=item)
+        bid = s.create_step(step="build", role="agent", parent=item)
         uc = ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(sync_specs_error=RuntimeError("boom")),
             FakeWorkers(), FakeConfig()
@@ -1236,7 +1249,7 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
-        s.create_step("watch-ci: x", step="watch-ci", role="agent", parent=item)
+        s.create_step(step="watch-ci", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.config, {"ci-wait": "15m"})
 
@@ -1244,7 +1257,7 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
         s.add_artifact(item, "spec", "specs/X.md")
-        s.create_step("build: x", step="build", role="agent", parent=item)
+        s.create_step(step="build", role="agent", parent=item)
         resp = self._uc(s).execute(ClaimInput(role="agent"))
         self.assertIsNone(resp.config)
 

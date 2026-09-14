@@ -4,7 +4,7 @@ from typing import List, Optional
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.watched_steps import watched_step_ids
 from lightcycle.domain.flow import Flow
-from lightcycle.domain.work import NodeQueue
+from lightcycle.domain.work import NodeQueue, compose_step_title
 from lightcycle.ports.store import NodeNotFoundError
 
 _NO_FLOW = Flow({})
@@ -48,6 +48,7 @@ class InboxUseCase:
             description=item.description if item else None,
             artifacts=item.artifacts if item else (),
             pr=self._pr_for(t, resolver),
+            title=compose_step_title(t.stage, item.title if item else None),
         )
 
     def _pr_for(self, t, resolver):

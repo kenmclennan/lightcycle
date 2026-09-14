@@ -59,7 +59,7 @@ def render_backlog(rows, title_cap):
 
 
 def _flat_line(r, show_kind, title_cap):
-    title = _truncate(r.step.title or r.step.stage, title_cap)
+    title = _truncate(r.title, title_cap)
     project = r.project or "-"
     extra = node_extra(
         r.step, show_description=True,
@@ -75,7 +75,7 @@ def render_inbox(rows, title_cap, flow_service=None):
 
 
 def _inbox_line(r, title_cap, flow_service=None):
-    title = _truncate(r.step.title or r.step.stage, title_cap)
+    title = _truncate(r.title, title_cap)
     project = r.project or "-"
     line = "%-9s  %-10s  %-12s  %s" % ("[%s]" % r.kind, r.step.id, project, title)
     return (

@@ -42,7 +42,7 @@ class TestStopPool(unittest.TestCase):
     def _pool(self, *, dirty=False):
         store = FakeStore()
         item = store.create_item("an item", "a description")
-        step = store.create_step("build: x", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.assign(step, "spawn-1")
         store.update_state(step, State.RUNNING)
         workers = FakeWorkers(
@@ -113,7 +113,7 @@ class TestStopPool(unittest.TestCase):
     def test_a_worker_killed_but_not_yet_reaped_is_still_captured_and_reclaimed(self):
         store = FakeStore()
         item = store.create_item("an item", "a description")
-        step = store.create_step("build: x", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.assign(step, "spawn-1")
         store.update_state(step, State.RUNNING)
         workers = FakeWorkers(

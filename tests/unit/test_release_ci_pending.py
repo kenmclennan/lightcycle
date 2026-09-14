@@ -97,10 +97,8 @@ class TestMonitorPrsCiPendingRelease(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("reviewed feature", "a description")
         plant_pr(store, item, self._URL)
-        step = store.create_step(
-            "review-features: reviewed feature", step="review-features", role="human",
-            parent=item,
-        )
+        step = store.create_step(step="review-features", role="human",
+            parent=item)
         spin_port = FakeSpinPort({"steps": {step: {"count": 2, "since": 0, "last_line": "x"}}})
         uc = ReleaseCiPendingUseCase(
             store, github, _FlowAdapter(_CI_PENDING_FLOW), spin_port, FakeConfig()

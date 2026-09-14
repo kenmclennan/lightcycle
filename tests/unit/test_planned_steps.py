@@ -34,9 +34,9 @@ class TestPlannedStepsUseCase(unittest.TestCase):
     def test_projects_remaining_stages_with_ids_continuing_from_filed_count(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        build = s.create_step("build: x", step="build", role="agent", parent=item)
+        build = s.create_step(step="build", role="agent", parent=item)
         s.complete_node(build, "done")
-        s.create_step("review: x", step="review", role="agent", parent=item)
+        s.create_step(step="review", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
 
@@ -48,7 +48,7 @@ class TestPlannedStepsUseCase(unittest.TestCase):
     def test_terminal_step_projects_nothing(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        s.create_step("audit: x", step="audit", role="agent", parent=item)
+        s.create_step(step="audit", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
 
@@ -57,9 +57,9 @@ class TestPlannedStepsUseCase(unittest.TestCase):
     def test_projected_ids_never_collide_with_a_filed_step_id(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        build = s.create_step("build: x", step="build", role="agent", parent=item)
+        build = s.create_step(step="build", role="agent", parent=item)
         s.complete_node(build, "done")
-        review = s.create_step("review: x", step="review", role="agent", parent=item)
+        review = s.create_step(step="review", role="agent", parent=item)
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))
 
@@ -77,7 +77,7 @@ class TestPlannedStepsUseCase(unittest.TestCase):
     def test_no_live_step_returns_empty_after_terminal_close(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven")
-        audit = s.create_step("audit: x", step="audit", role="agent", parent=item)
+        audit = s.create_step(step="audit", role="agent", parent=item)
         s.complete_node(audit, "clean")
 
         result = _uc(s).execute(PlannedStepsInput(item_id=item))

@@ -128,9 +128,7 @@ class WorkflowSimulateUseCase:
                 continue
             self._store.add_artifact(item_id, req, "<simulated>")
         role = self._flow.owner_of(graph.entry, pin)
-        self._store.create_step(
-            "%s: simulate" % graph.entry, step=graph.entry, role=role, parent=item_id
-        )
+        self._store.create_step(step=graph.entry, role=role, parent=item_id)
         return item_id
 
     def _is_walk_terminal(self, graph, stage):

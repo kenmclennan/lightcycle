@@ -59,17 +59,15 @@ class TestCmdSetTitleCap(unittest.TestCase):
         cli.set_container(FakeContainer(self.store, cap=self.cap))
         self.step_id = create_owned_step(self.store, "original", role="human")
 
-    def test_set_title_over_cap_is_rejected(self):
+    def test_set_title_over_cap_is_refused(self):
         rc, out, err = call(cli.cmd_set, self.step_id, "--title", "x" * (self.cap + 1))
-        self.assertEqual(rc, 1)
-        self.assertIn(str(self.cap), err)
-        self.assertIn("--description", err)
-        self.assertEqual(self.store.get_node(self.step_id).title, "original")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--title", err)
 
-    def test_set_title_at_cap_is_accepted(self):
+    def test_set_title_at_cap_is_also_refused(self):
         rc, out, err = call(cli.cmd_set, self.step_id, "--title", "x" * self.cap)
-        self.assertEqual(rc, 0)
-        self.assertEqual(self.store.get_node(self.step_id).title, "x" * self.cap)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--title", err)
 
     def test_set_without_title_is_unaffected(self):
         item = self.store.create_item("an item", "old")

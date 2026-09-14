@@ -186,8 +186,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("in-review feature", "a description")
         plant_pr(store, item, pr_url)
-        step = store.create_step(
-            "ready-merge: in-review feature", step="ready-merge", role="human", parent=item
+        step = store.create_step(step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
         uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), None)
@@ -597,8 +596,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("in-review feature", "a description")
         plant_pr(store, item, url)
-        store.create_step(
-            "ready-merge: in-review feature", step="ready-merge", role="human", parent=item
+        store.create_step(step="ready-merge", role="human", parent=item
         )
         check_content_pin = CheckContentPinUseCase(store, gh)
         resolve = ResolveMergedPrsUseCase(
@@ -624,10 +622,10 @@ class TestMonitorPrsConflict(unittest.TestCase):
         item = store.create_item("conflicting feature", "a description")
         plant_pr(store, item, pr_url)
         for _ in range(prior_conflicts):
-            old = store.create_step("watch-step: conflicting feature", step="watch-step",
+            old = store.create_step(step="watch-step",
                                     role="agent", parent=item)
             store.complete_node(old, "conflicted")
-        step = store.create_step("watch-step: conflicting feature", step="watch-step",
+        step = store.create_step(step="watch-step",
                                  role="agent", parent=item)
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(f))
@@ -689,7 +687,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("conflicting feature", "a description")
         plant_pr(store, item, url)
-        store.create_step("watch-step: conflicting feature", step="watch-step",
+        store.create_step(step="watch-step",
                            role="agent", parent=item)
         gh = FakeGitHub(merged_prs={url}, conflicted_prs={url})
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
@@ -718,7 +716,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("arbitrary", "a description")
         plant_pr(store, item, url)
-        step = store.create_step("await-green: arbitrary", step="await-green",
+        step = store.create_step(step="await-green",
                                  role="agent", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow))
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(arbitrary_flow), complete)
@@ -766,7 +764,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("quad feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step("watch-pr: quad feature", step="watch-pr", role="agent",
+        step = store.create_step(step="watch-pr", role="agent",
                                  parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete)
@@ -782,7 +780,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("both quad feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step("watch-pr: both quad feature", step="watch-pr", role="agent",
+        step = store.create_step(step="watch-pr", role="agent",
                                  parent=item)
         feedback_comment = (
             1500.0,
@@ -824,10 +822,10 @@ class TestMonitorPrsConflict(unittest.TestCase):
         item = store.create_item("no-cap feature", "a description")
         plant_pr(store, item, url)
         for _ in range(5):
-            old = store.create_step("watch-step: no-cap feature", step="watch-step",
+            old = store.create_step(step="watch-step",
                                     role="agent", parent=item)
             store.complete_node(old, "conflicted")
-        step = store.create_step("watch-step: no-cap feature", step="watch-step",
+        step = store.create_step(step="watch-step",
                                  role="agent", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow))
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(no_cap_flow), complete)

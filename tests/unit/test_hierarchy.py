@@ -18,7 +18,7 @@ class TestHierarchyUseCase(unittest.TestCase):
     def test_opening_from_a_step_roots_at_its_item(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
-        step = s.create_step("step", step="write-code", role="agent", parent=item)
+        step = s.create_step(step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=step)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [(item, 0), (step, 1)])
 
@@ -26,7 +26,7 @@ class TestHierarchyUseCase(unittest.TestCase):
         s = FakeStore()
         other = s.create_item("other", "a description")
         item = s.create_item("item", "a description")
-        step = s.create_step("step", step="write-code", role="agent", parent=item)
+        step = s.create_step(step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([r.node.id for r in rows], [item, step])
         self.assertNotIn(other, [r.node.id for r in rows])
@@ -34,7 +34,7 @@ class TestHierarchyUseCase(unittest.TestCase):
     def test_an_item_is_its_own_root(self):
         s = FakeStore()
         item = s.create_item("solo", "a description")
-        step = s.create_step("step", step="write-code", role="agent", parent=item)
+        step = s.create_step(step="write-code", role="agent", parent=item)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [(item, 0), (step, 1)])
 
@@ -48,11 +48,11 @@ class TestHierarchyUseCase(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "a description")
         pid1 = s.open_pass(item)
-        step1 = s.create_step("s1", step="build", role="agent", parent=item)
+        step1 = s.create_step(step="build", role="agent", parent=item)
         s.set_step_pass(step1, pid1)
         s.close_pass(pid1)
         pid2 = s.open_pass(item)
-        step2 = s.create_step("s2", step="build", role="agent", parent=item)
+        step2 = s.create_step(step="build", role="agent", parent=item)
         s.set_step_pass(step2, pid2)
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [
@@ -65,7 +65,7 @@ class TestHierarchyUseCase(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "a description")
         pid = s.open_pass(item)
-        step = s.create_step("s", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.set_step_pass(step, pid)
         response = HierarchyUseCase(s).execute(HierarchyInput(node=item))
         self.assertFalse(response.multi_pass)
@@ -74,7 +74,7 @@ class TestHierarchyUseCase(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "a description")
         pid1 = s.open_pass(item)
-        step1 = s.create_step("s1", step="build", role="agent", parent=item)
+        step1 = s.create_step(step="build", role="agent", parent=item)
         s.set_step_pass(step1, pid1)
         s.close_pass(pid1)
         s.open_pass(item)
@@ -85,11 +85,11 @@ class TestHierarchyUseCase(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "a description")
         pid1 = s.open_pass(item)
-        step1 = s.create_step("s1", step="build", role="agent", parent=item)
+        step1 = s.create_step(step="build", role="agent", parent=item)
         s.set_step_pass(step1, pid1)
         s.close_pass(pid1)
         pid2 = s.open_pass(item)
-        step2 = s.create_step("s2", step="build", role="agent", parent=item)
+        step2 = s.create_step(step="build", role="agent", parent=item)
         s.set_step_pass(step2, pid2)
         s.close_pass(pid2)
         response = HierarchyUseCase(s).execute(HierarchyInput(node=item))
@@ -157,9 +157,9 @@ class TestRowBucket(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "a description")
         for i in range(11):
-            done = s.create_step("done %d" % i, step="build", role="agent", parent=item)
+            done = s.create_step(step="build", role="agent", parent=item)
             s.complete_node(done, "done")
-        s.create_step("await-merge: item", step="await-merge", role="human", parent=item)
+        s.create_step(step="await-merge", role="human", parent=item)
         self.assertEqual(row_bucket(s.get_node(item), FLOW), "gate")
 
 

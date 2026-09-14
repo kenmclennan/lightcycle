@@ -13,3 +13,4 @@ class HumanNodeRow:
     description: Optional[str] = None
     artifacts: tuple = ()
     pr: Optional[str] = None
+    title: Optional[str] = None

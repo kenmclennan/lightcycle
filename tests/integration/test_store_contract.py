@@ -40,7 +40,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_create_task_roundtrips_structured_attrs(self):
         s = self._store()
         item = s.create_item("an item", "a description")
-        tid = s.create_step("build: x", step="build", role="agent", parent=item)
+        tid = s.create_step(step="build", role="agent", parent=item)
         t = s.get_step(tid)
         self.assertEqual((t.role, t.stage, t.item), ("agent", "build", item))
         self.assertEqual(t.state, State.QUEUED)
@@ -182,7 +182,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_last_n_closed_items_excludes_nested_steps(self):
         s = self._store()
         item = s.create_item("item", "a description")
-        step = s.create_step("build", parent=item)
+        step = s.create_step(parent=item)
         s.complete_node(step, "done")
         s.complete_node(item, "merged")
         result_ids = [t.id for t in s.last_n_closed_items(10)]
@@ -199,12 +199,12 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_edit_keeps_a_steps_id_and_everything_hanging_off_it(self):
         s = self._store()
         item = s.create_item("item", "a description")
-        blocker = s.create_step("blocker", parent=item)
-        step = s.create_step("blocked step", parent=item)
+        blocker = s.create_step(parent=item)
+        step = s.create_step(parent=item)
         s.dep_add(step, blocker)
         s.label_add(step, "retro-origin")
 
-        new_id = s.edit_node(step, title="renamed")
+        new_id = s.edit_node(step)
 
         self.assertEqual(new_id, step)
         self.assertEqual(s.get_step(step).item, item)
@@ -677,7 +677,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         self.assertEqual(version, _SCHEMA_VERSION)
 
         tid = create_owned_step(store, "write-code: x", role="agent")
-        self.assertEqual(store.get_node(tid).title, "write-code: x")
+        self.assertEqual(store.get_item(store.get_node(tid).item).title, "write-code: x")
 
     def test_unstamped_current_store_is_retro_stamped_with_data_intact(self):
         root = tempfile.mkdtemp()
@@ -691,7 +691,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
 
         version = reopened._conn.execute("PRAGMA user_version").fetchone()[0]
         self.assertEqual(version, _SCHEMA_VERSION)
-        self.assertEqual(reopened.get_node(tid).title, "write-code: x")
+        self.assertEqual(reopened.get_item(reopened.get_node(tid).item).title, "write-code: x")
 
     def test_reopening_a_stamped_store_does_not_churn(self):
         root = tempfile.mkdtemp()
@@ -1085,6 +1085,56 @@ class TestSqliteStoreDropsStepReflectionColumn(unittest.TestCase):
 
         t = store.get_step("s-1")
         self.assertFalse(hasattr(t, "reflection"))
+        self.assertEqual(t.created_at, "2026-01-01")
+
+
+class TestSqliteStoreDropsStepTitleColumn(unittest.TestCase):
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def _seed_pre_usage_store(self, root):
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.executescript(_PRE_USAGE_STEPS_SCHEMA)
+        conn.execute(
+            "INSERT INTO steps (id, item, state, created_at, title) "
+            "VALUES ('s-1', 'i-1', 'ready', '2026-01-01', 'build: a stale composite title')"
+        )
+        conn.commit()
+        conn.close()
+
+    def test_fresh_store_has_no_title_column(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertNotIn("title", cols)
+
+    def test_existing_store_drops_the_title_column(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertNotIn("title", cols)
+
+    def test_drop_is_idempotent_on_reopen(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        SqliteStore(self._config(root))
+        store = SqliteStore(self._config(root))
+
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertNotIn("title", cols)
+
+    def test_other_step_fields_survive_the_drop(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+
+        t = store.get_step("s-1")
+        self.assertFalse(hasattr(t, "title"))
         self.assertEqual(t.created_at, "2026-01-01")
 
 

@@ -58,7 +58,7 @@ class TestBacklogBlockedItems(unittest.TestCase):
         s = FakeStore()
         blocker = s.create_item("blocker", "a description")
         item = s.create_item("in flight", "a description")
-        s.create_step("entry", parent=item, role="agent")
+        s.create_step(parent=item, role="agent")
         s.dep_add(item, blocker)
         resp = BacklogUseCase(s, None).execute(BacklogInput())
         self.assertNotIn(item, [r.step.id for r in resp.rows])

@@ -22,7 +22,7 @@ class TestStatLineItem(unittest.TestCase):
         blocker = store.create_item("Blocker", "a description")
         item = store.create_item("Item", "a description")
         store.dep_add(item, blocker)
-        store.create_step("s", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(item)
 
         self.assertIsNone(_stat_line_item(store, node, store.children(item), _StubFlow(), NOW))
@@ -31,7 +31,7 @@ class TestStatLineItem(unittest.TestCase):
         store = FakeStore()
         blocker = store.create_item("Blocker", "a description")
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.dep_add(step, blocker)
         node = store.get_node(item)
 
@@ -42,7 +42,7 @@ class TestStatLineItem(unittest.TestCase):
         store = FakeStore(now=lambda: clock["now"])
         blocker = store.create_item("Blocker", "a description")
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item, deps=[blocker])
+        step = store.create_step(step="build", role="agent", parent=item, deps=[blocker])
         store.assign(step, "worker-1")
         store.update_state(step, State.RUNNING)
         node = store.get_node(item)
@@ -56,7 +56,7 @@ class TestStatLineItem(unittest.TestCase):
     def test_active_item_never_claimed_shows_phrase_and_step_count_only(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        store.create_step("s", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(item)
 
         self.assertEqual(
@@ -66,8 +66,8 @@ class TestStatLineItem(unittest.TestCase):
     def test_active_item_pluralises_the_step_count(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        store.create_step("s1", step="build", role="agent", parent=item)
-        store.create_step("s2", step="test", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
+        store.create_step(step="test", role="agent", parent=item)
         node = store.get_node(item)
 
         self.assertIn(
@@ -78,7 +78,7 @@ class TestStatLineItem(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 300)
         store.record_usage(step, 100, 10, 0, 0, 2.91, "list", None)
@@ -94,7 +94,7 @@ class TestStatLineItem(unittest.TestCase):
     def test_queued_item_shows_pool_halted_when_the_pool_is_halted(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        store.create_step("s", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(item)
 
         self.assertEqual(
@@ -107,7 +107,7 @@ class TestStatLineItem(unittest.TestCase):
     def test_queued_item_omits_pool_halted_when_the_pool_is_not_halted(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        store.create_step("s", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(item)
 
         self.assertEqual(
@@ -118,7 +118,7 @@ class TestStatLineItem(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        store.create_step("s", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
         store.claim_ready("agent")
         node = store.get_node(item)
 
@@ -131,7 +131,7 @@ class TestStatLineItem(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.claim_ready("agent")
         store.complete_node(step, "done")
         store.complete_node(item, "done")
@@ -148,7 +148,7 @@ class TestStatLineStepAgent(unittest.TestCase):
     def test_never_claimed_shows_phrase_only(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
 
         self.assertEqual(_stat_line_step(store, node, _StubFlow(), NOW), "build")
@@ -156,7 +156,7 @@ class TestStatLineStepAgent(unittest.TestCase):
     def test_queued_step_shows_pool_halted_when_the_pool_is_halted(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
 
         self.assertEqual(
@@ -168,7 +168,7 @@ class TestStatLineStepAgent(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.claim_ready("agent")
         node = store.get_node(step)
 
@@ -179,7 +179,7 @@ class TestStatLineStepAgent(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.claim_ready("agent")
         node = store.get_node(step)
 
@@ -190,7 +190,7 @@ class TestStatLineStepAgent(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 600)
         store.record_usage(step, 100, 10, 0, 0, 1.5, "list", None)
@@ -206,7 +206,7 @@ class TestStatLineStepAgent(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="build", role="agent", parent=item)
+        step = store.create_step(step="build", role="agent", parent=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 300)
         store.record_usage(step, 100, 10, 0, 0, 2.0, "list", None)
@@ -225,7 +225,7 @@ class TestStatLineStepAgent(unittest.TestCase):
         clock = {"now": "2026-01-01T10:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="write-code", role="agent", parent=item)
+        step = store.create_step(step="write-code", role="agent", parent=item)
         store.claim_ready("agent")
         clock["now"] = "2026-01-01T10:20:00"
         store.reclaim(step)
@@ -244,7 +244,7 @@ class TestStatLineStepHuman(unittest.TestCase):
         clock = {"now": "2026-01-01T09:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("await-merge", step="await-merge", role="human", parent=item)
+        step = store.create_step(step="await-merge", role="human", parent=item)
         node = store.get_node(step)
 
         now = "2026-01-01T09:12:00"
@@ -256,7 +256,7 @@ class TestStatLineStepHuman(unittest.TestCase):
         clock = {"now": "2026-01-01T09:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("await-merge", step="await-merge", role="human", parent=item)
+        step = store.create_step(step="await-merge", role="human", parent=item)
         store.complete_node(step, "merged")
         store._records[step]["closed_at"] = "2026-01-01T09:15:00"
         node = store.get_node(step)
@@ -270,7 +270,7 @@ class TestStatLineStepHuman(unittest.TestCase):
         clock = {"now": "2026-01-01T09:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("await-merge", step="await-merge", role="human", parent=item)
+        step = store.create_step(step="await-merge", role="human", parent=item)
         node = store.get_node(step)
 
         self.assertNotIn("$", _stat_line_step(store, node, _StubFlow(), "2026-01-01T09:12:00"))
@@ -279,7 +279,7 @@ class TestStatLineStepHuman(unittest.TestCase):
         clock = {"now": "2026-01-01T09:00:00"}
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("Item", "a description")
-        step = store.create_step("s", step="write-code", role="agent", parent=item)
+        step = store.create_step(step="write-code", role="agent", parent=item)
         clock["now"] = "2026-01-01T09:05:00"
         store.claim_ready("agent")
         clock["now"] = "2026-01-01T11:00:00"

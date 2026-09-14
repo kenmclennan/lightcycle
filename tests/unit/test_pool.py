@@ -424,7 +424,7 @@ class TestSweep(unittest.TestCase):
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
         item = s.create_item("merged feature", "a description")
-        step = s.create_step("build: merged feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         s.assign(step, "live-sp")
         workers = FakeWorkers(
@@ -466,7 +466,7 @@ class TestSweep(unittest.TestCase):
     def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -484,7 +484,7 @@ class TestSweep(unittest.TestCase):
     def test_reclaiming_a_clean_worktree_does_not_commit(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -502,7 +502,7 @@ class TestSweep(unittest.TestCase):
     def test_reclaiming_a_non_git_worktree_does_not_commit(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -565,7 +565,7 @@ class TestSweep(unittest.TestCase):
     def test_a_checked_clean_repo_is_distinguishable_from_not_checked(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -582,7 +582,7 @@ class TestSweep(unittest.TestCase):
     def test_a_failed_commit_still_reclaims_and_is_reported(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -600,7 +600,7 @@ class TestSweep(unittest.TestCase):
     def test_an_unreadable_worktree_is_reported_as_a_capture_failure_not_a_silent_skip(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -630,7 +630,7 @@ class TestSweep(unittest.TestCase):
 
         s = OrderTrackingStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -1016,7 +1016,7 @@ class TestTick(unittest.TestCase):
         flow_svc = FlowService(
             FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}}), s
         )
-        tid = s.create_step("audit: release", step="audit", role="agent",
+        tid = s.create_step(step="audit", role="agent",
                             parent=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
         s.complete_node(tid, "done")
@@ -1031,7 +1031,7 @@ class TestTick(unittest.TestCase):
         s = FakeStore()
         fs = FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}})
         flow_svc = FlowService(fs, s)
-        tid = s.create_step("audit: release", step="audit", role="agent",
+        tid = s.create_step(step="audit", role="agent",
                             parent=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
         s.complete_node(tid, "done")
@@ -1187,7 +1187,7 @@ class TestTick(unittest.TestCase):
     def test_lc_start_tick_loop_surfaces_preserved_uncommitted_work_on_reclaim(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})

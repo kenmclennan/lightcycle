@@ -15,14 +15,14 @@ class TestSqliteStoreIds(unittest.TestCase):
     def test_child_id_nests_under_parent(self):
         s = make_sqlite_store(shortcode="GRID")
         item = s.create_item("item", "a description")
-        child = s.create_step("child", parent=item)
+        child = s.create_step(parent=item)
         self.assertEqual(child, "%s.1" % item)
 
     def test_second_child_of_same_parent_increments(self):
         s = make_sqlite_store(shortcode="GRID")
         item = s.create_item("item", "a description")
-        first = s.create_step("first", parent=item)
-        second = s.create_step("second", parent=item)
+        first = s.create_step(parent=item)
+        second = s.create_step(parent=item)
         self.assertEqual(first, "%s.1" % item)
         self.assertEqual(second, "%s.2" % item)
 

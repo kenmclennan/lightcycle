@@ -184,7 +184,7 @@ class TestTickWithMonitor(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("merge me", "a description")
         plant_pr(store, item, url)
-        store.create_step("ready-merge: merge me", step="ready-merge", role="human", parent=item)
+        store.create_step(step="ready-merge", role="human", parent=item)
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
@@ -202,8 +202,7 @@ class TestTickWithMonitor(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("abandoned me", "a description")
         plant_pr(store, item, url)
-        store.create_step(
-            "ready-merge: abandoned me", step="ready-merge", role="human", parent=item
+        store.create_step(step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
@@ -259,22 +258,19 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         merge_item = store.create_item("merge me", "a description")
         merge_url = "https://github.com/x/y/pull/500"
         plant_pr(store, merge_item, merge_url)
-        store.create_step(
-            "ready-merge: merge me", step="ready-merge", role="human", parent=merge_item
+        store.create_step(step="ready-merge", role="human", parent=merge_item
         )
 
         feedback_item = store.create_item("in review", "a description")
         feedback_url = "https://github.com/x/y/pull/501"
         plant_pr(store, feedback_item, feedback_url)
-        store.create_step(
-            "watch-pr: in review", step="watch-pr", role="agent", parent=feedback_item
+        store.create_step(step="watch-pr", role="agent", parent=feedback_item
         )
 
         ci_item = store.create_item("ci pending", "a description")
         ci_url = "https://github.com/x/y/pull/502"
         plant_pr(store, ci_item, ci_url)
-        ci_step = store.create_step(
-            "review-features: ci pending", step="review-features", role="human", parent=ci_item
+        ci_step = store.create_step(step="review-features", role="human", parent=ci_item
         )
         store.label_add(ci_step, "ci-pending")
 

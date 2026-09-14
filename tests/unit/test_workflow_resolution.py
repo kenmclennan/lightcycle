@@ -20,7 +20,7 @@ def svc(store):
 class TestWorkflowFor(unittest.TestCase):
     def _task_under(self, store, *, item_workflow=None, step_workflow=None):
         item = store.create_item("st", "a description", workflow=item_workflow)
-        tid = store.create_step("build: x", step="build", parent=item)
+        tid = store.create_step(step="build", parent=item)
         if step_workflow is not None:
             store.edit_node(tid, workflow=step_workflow)
         return store.get_node(tid)
@@ -44,7 +44,7 @@ class TestWorkflowFor(unittest.TestCase):
 class TestWorkflowOwner(unittest.TestCase):
     def _task_under(self, store, *, item_workflow=None, step_workflow=None):
         item = store.create_item("st", "a description", workflow=item_workflow)
-        tid = store.create_step("build: x", step="build", parent=item)
+        tid = store.create_step(step="build", parent=item)
         if step_workflow is not None:
             store.edit_node(tid, workflow=step_workflow)
         return store.get_node(tid), item

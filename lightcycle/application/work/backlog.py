@@ -45,6 +45,7 @@ class BacklogUseCase:
                 kind="todo", outcomes=[], step=t,
                 project=project_of(self._store, t),
                 description=t.description, artifacts=t.artifacts,
+                title=t.title,
             )
             for t in items
         ]

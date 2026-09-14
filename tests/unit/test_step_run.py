@@ -16,7 +16,7 @@ class TestStepRunUseCase(unittest.TestCase):
     def test_returns_branch_and_pr_from_the_steps_own_run(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
-        step = s.create_step("s", step="write-code", role="agent", parent=item)
+        step = s.create_step(step="write-code", role="agent", parent=item)
         pid = s.open_pass(item)
         s.set_step_pass(step, pid)
         rid = s.open_run(item, pid, "code")
@@ -31,7 +31,7 @@ class TestStepRunUseCase(unittest.TestCase):
     def test_no_open_run_yields_no_branch_and_no_pr(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
-        step = s.create_step("s", step="write-code", role="agent", parent=item)
+        step = s.create_step(step="write-code", role="agent", parent=item)
 
         result = StepRunUseCase(s, _PhaseFlow("code")).execute(StepRunInput(step=step))
 

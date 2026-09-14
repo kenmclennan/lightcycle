@@ -74,7 +74,7 @@ class TestANoteHasSomewhereToGo(unittest.TestCase):
 
     def test_new_step_takes_a_note(self):
         item = self.store.create_item("an item", "a description")
-        step = self.store.create_step("build: x", step="build", role="agent", parent=item)
+        step = self.store.create_step(step="build", role="agent", parent=item)
         self.store.note(step, "the human decided X")
         self.assertIn("the human decided X", self.store.get_step(step).notes)
 

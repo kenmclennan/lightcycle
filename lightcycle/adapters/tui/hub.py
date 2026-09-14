@@ -1957,7 +1957,8 @@ class NodeHubScreen(Screen):
             ancestor.node, self._active_glyph_char(), _flow_for_bucket(ancestor.node, self._flow_service)
         )
         text = Text(glyph.glyph + "  ", style=COLOURS[glyph.colour])
-        text.append("%s  %s" % (ancestor.node.id, ancestor.node.title), style=COLOURS["dim"])
+        label = _hierarchy_label(ancestor.node, self._flow_service, self._last_multi_pass)
+        text.append("%s  %s" % (ancestor.node.id, label), style=COLOURS["dim"])
         banner.update(text)
         banner.display = True
 

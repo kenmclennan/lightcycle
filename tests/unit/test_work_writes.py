@@ -127,11 +127,12 @@ class TestEditNode(unittest.TestCase):
         self.assertEqual(t.title, "new title")
         self.assertEqual(t.description, "new")
 
-    def test_edits_a_steps_title(self):
+    def test_a_title_on_a_step_is_refused_before_any_write(self):
         s = FakeStore()
         tid = create_owned_step(s, "old title", role="human")
-        EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, title="new title"))
-        self.assertEqual(s.get_step(tid).title, "new title")
+        with self.assertRaises(UseCaseError):
+            EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, title="new title"))
+        self.assertEqual(s.get_node(tid).role, "human")
 
     def test_unspecified_fields_unchanged(self):
         s = FakeStore()
@@ -146,7 +147,6 @@ class TestEditNode(unittest.TestCase):
         tid = create_owned_step(s, "a step", role="human")
         with self.assertRaises(UseCaseError):
             EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, description="nope"))
-        self.assertEqual(s.get_node(tid).title, "a step")
         self.assertFalse(hasattr(s.get_step(tid), "description"))
 
     def test_writes_label_and_notes_itself(self):
@@ -169,7 +169,6 @@ class TestEditNode(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             EditNodeUseCase(s, FakeConfig()).execute(EditNodeInput(step=tid, label="l", notes="n"))
         self.assertNotIn("l", s.labels_of(tid))
-        self.assertEqual(s.get_node(tid).title, "a step")
         self.assertFalse(hasattr(s.get_node(tid), "description"))
 
     def test_title_cap_refusal_leaves_the_label_unwritten(self):
@@ -179,7 +178,6 @@ class TestEditNode(unittest.TestCase):
             EditNodeUseCase(s, FakeConfig(title_cap=5)).execute(
                 EditNodeInput(step=tid, title="way too long", label="some-label")
             )
-        self.assertEqual(s.get_node(tid).title, "original")
         self.assertNotIn("some-label", s.labels_of(tid))
 
 
@@ -474,7 +472,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_run_field_on_a_step_id_raises_and_writes_no_orphan(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        tid = s.create_step("t", parent=sid)
+        tid = s.create_step(parent=sid)
         with self.assertRaises(UseCaseError):
             LinkArtifactUseCase(s).execute(
                 LinkArtifactInput(item=tid, atype="pr", value="http://x/1")
@@ -571,7 +569,7 @@ class TestCloseItem(unittest.TestCase):
     def test_closes_story_open_children_and_removes_worktree(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        k = s.create_step("build: x", step="build", role="agent", parent=sid)
+        k = s.create_step(step="build", role="agent", parent=sid)
         wt = FakeWorktrees()
         CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="merged", disposition="completed"))
         self.assertEqual(s.get_node(sid).state, "done")
@@ -583,7 +581,7 @@ class TestCloseItem(unittest.TestCase):
     def test_disposition_is_passed_explicitly_only_for_the_item_being_closed(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        k = s.create_step("build: x", step="build", role="agent", parent=sid)
+        k = s.create_step(step="build", role="agent", parent=sid)
         calls = []
         original_close = s.complete_node
 
@@ -727,7 +725,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_refuses_when_a_claimed_step_is_covered_by_a_live_worker(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove(
             workers=[{"spawnid": "live-sp", "pid": 111, "step": step, "started": 100}],
@@ -743,7 +741,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_refuses_when_worker_registry_is_unreadable(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         workers = UnreadableWorkersForRemove()
         wt = FakeWorktreesForRemove()
         git = FakeGit()
@@ -808,7 +806,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_refuses_a_step_claimed_by_a_live_worker_still_mid_claim(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         s.assign(step, "worker-sp")
         workers = FakeWorkersForRemove(
@@ -825,7 +823,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_stale_claim_does_not_block(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
@@ -839,7 +837,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_success_path_removes_worktree_and_step_rows(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         git = FakeGit()
@@ -870,7 +868,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_force_still_refuses_a_genuinely_live_worker(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkersForRemove(
             workers=[{"spawnid": "live-sp", "pid": 111, "step": step, "started": 100}],
@@ -915,7 +913,7 @@ class TestRemoveNode(unittest.TestCase):
     def test_a_failing_final_delete_leaves_the_children_and_worktree_unremoved(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step("build: feature", step="build", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
         workers = FakeWorkersForRemove()
         wt = FakeWorktreesForRemove()
         git = FakeGit()

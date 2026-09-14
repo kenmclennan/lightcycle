@@ -59,7 +59,7 @@ def ctx():
 def _running_step(lines=b""):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="coder", role="agent", parent=item)
+    step = store.create_step(step="coder", role="agent", parent=item)
     store.claim_ready("agent")
     workers = FakeWorkers(
         workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
@@ -72,7 +72,7 @@ def _running_step(lines=b""):
 def _running_step_worker_already_dead(lines):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="coder", role="agent", parent=item)
+    step = store.create_step(step="coder", role="agent", parent=item)
     store.claim_ready("agent")
     workers = FakeWorkers(
         workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
@@ -85,7 +85,7 @@ def _running_step_worker_already_dead(lines):
 def _done_step(lines):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="coder", role="agent", parent=item)
+    step = store.create_step(step="coder", role="agent", parent=item)
     store.claim_ready("agent")
     store.complete_node(step, "done")
     workers = FakeWorkers(
@@ -252,7 +252,7 @@ def _given_live_open_following(ctx):
 def _given_human_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="await-merge", role="human", parent=item)
+    step = store.create_step(step="await-merge", role="human", parent=item)
     _prepare(ctx, store, item, step, FakeFs(), FakeWorkers())
 
 
@@ -260,7 +260,7 @@ def _given_human_step(ctx):
 def _given_queued_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="coder", role="agent", parent=item)
+    step = store.create_step(step="coder", role="agent", parent=item)
     _prepare(ctx, store, item, step, FakeFs(), FakeWorkers())
 
 
@@ -617,7 +617,7 @@ def _then_cursor_still_marks_previous(ctx):
 def test_left_closes_the_hub_from_the_no_log_state(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="await-merge", role="human", parent=item)
+    step = store.create_step(step="await-merge", role="human", parent=item)
     _prepare(ctx, store, item, step, FakeFs(), FakeWorkers())
     session = _open(ctx)
     assert session.app.screen._active_tab == "log"
@@ -631,7 +631,7 @@ def test_left_closes_the_hub_from_the_no_log_state(ctx):
 def test_escape_closes_the_hub_from_the_no_log_state(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step("s", step="await-merge", role="human", parent=item)
+    step = store.create_step(step="await-merge", role="human", parent=item)
     _prepare(ctx, store, item, step, FakeFs(), FakeWorkers())
     session = _open(ctx)
     assert session.app.screen._active_tab == "log"

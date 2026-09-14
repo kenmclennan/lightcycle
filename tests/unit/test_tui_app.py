@@ -454,7 +454,7 @@ class TestActiveGroup(unittest.TestCase):
 
         store = FakeStore()
         item = store.create_item("active item", "a description")
-        tid = store.create_step("build it", step="build", role="agent", parent=item)
+        tid = store.create_step(step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
 
@@ -475,7 +475,7 @@ class TestActiveGroup(unittest.TestCase):
 
         store = FakeStore()
         item = store.create_item("active item", "a description")
-        tid = store.create_step("build it", step="build", role="agent", parent=item)
+        tid = store.create_step(step="build", role="agent", parent=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
 
@@ -611,7 +611,7 @@ class TestProjectColumn(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "lightcycle")
-        store.create_step("build", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
 
         session = self._launch(store)
 
@@ -632,7 +632,7 @@ class TestProjectColumn(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story", "a description")
         store.add_artifact(item, "repo", "kenmclennan/lightcycle")
-        store.create_step("build", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
 
         session = self._launch(store)
 
@@ -1173,7 +1173,7 @@ class TestBacklogRows(unittest.TestCase):
         session = self._launch(store)
         self.assertIn(item, session.app.query_one(BacklogTable).rows)
 
-        store.create_step("first step", step="build", role="agent", parent=item)
+        store.create_step(step="build", role="agent", parent=item)
         session.poll_tick()
 
         self.assertNotIn(item, session.app.query_one(BacklogTable).rows)
@@ -1960,7 +1960,7 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
     def _launch(self):
         store = FakeStore()
         store.create_item("queued item", "a description", id=self._ITEM)
-        store.create_step("queued item", step=self._STEP, role="agent",
+        store.create_step(step=self._STEP, role="agent",
                           parent=self._ITEM, id=self._ID)
         store.add_artifact(self._ITEM, "repo", self._PROJECT)
         width = self._floor_terminal_width()

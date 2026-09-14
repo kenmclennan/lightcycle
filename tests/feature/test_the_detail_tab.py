@@ -57,7 +57,7 @@ def _launch_step(ctx, *, step="write-code", role="agent", metas=None, launcher=N
     fs = FakeFs(metas=metas) if metas else None
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step_id = store.create_step("s", step=step, role=role, parent=item)
+    step_id = store.create_step(step=step, role=role, parent=item)
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step_id

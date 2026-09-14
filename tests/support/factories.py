@@ -5,6 +5,7 @@ _PARK_KEYS = ("reason", "needs", "tried")
 
 def make_step(**kw):
     kw.pop("type", None)
+    kw.pop("title", None)
     kw.pop("artifacts", None)
     kw.pop("description", None)
     kw.pop("project", None)

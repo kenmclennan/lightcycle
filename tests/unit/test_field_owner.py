@@ -34,7 +34,7 @@ class TestRefuseFields(unittest.TestCase):
 
     def test_fields_the_type_owns_are_accepted(self):
         self.assertIsNone(refuse_fields("item", {"title", "description"}))
-        self.assertIsNone(refuse_fields("step", {"title", "notes"}))
+        self.assertIsNone(refuse_fields("step", {"notes", "needs"}))
 
     def test_depends_is_owned_by_item(self):
         self.assertIsNone(refuse_fields("item", {"depends"}))

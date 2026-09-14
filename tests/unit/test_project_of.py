@@ -21,7 +21,7 @@ class TestProjectOf(unittest.TestCase):
         s = FakeStore()
         item_id = s.create_item("item", "a description")
         s.add_artifact(item_id, "repo", "org/proj")
-        step_id = s.create_step("step", step="write-code", parent=item_id)
+        step_id = s.create_step(step="write-code", parent=item_id)
         step = s.get_step(step_id)
         self.assertEqual(project_of(s, step), "org/proj")
 

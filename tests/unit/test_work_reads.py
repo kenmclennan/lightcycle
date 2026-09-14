@@ -63,7 +63,6 @@ class TestShowNode(unittest.TestCase):
         tid = create_owned_step(s, "build: x", step="build", role="agent")
         resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=tid))
         self.assertEqual(resp.view.step.id, tid)
-        self.assertEqual(resp.view.step.title, "build: x")
         self.assertIn("item_artifacts", resp.as_dict())
 
 
@@ -72,7 +71,7 @@ class TestTrace(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         s.add_artifact(sid, "spec", "specs/x.md")
-        k = s.create_step("build: x", step="build", role="agent", parent=sid)
+        k = s.create_step(step="build", role="agent", parent=sid)
         workers = _Workers([{"role": "agent", "step": k, "log": "/l/k.log"}])
         resp = TraceUseCase(s, workers, _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.item.id, sid)
@@ -83,21 +82,21 @@ class TestTrace(unittest.TestCase):
     def test_step_role_survives_to_the_trace(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        s.create_step("build: x", step="build", role="agent", parent=sid)
+        s.create_step(step="build", role="agent", parent=sid)
         resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "agent")
 
     def test_human_role_survives_to_the_trace_unchanged(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        s.create_step("ready-merge: x", step="ready-merge", role="human", parent=sid)
+        s.create_step(step="ready-merge", role="human", parent=sid)
         resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "human")
 
     def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        k = s.create_step("build: x", step="build", role="agent", parent=sid)
+        k = s.create_step(step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
         os.makedirs(os.path.join(root, "logs"))
@@ -110,7 +109,7 @@ class TestTrace(unittest.TestCase):
     def test_resolves_no_log_when_pruned_and_nothing_on_disk(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        k = s.create_step("build: x", step="build", role="agent", parent=sid)
+        k = s.create_step(step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
         root = tempfile.mkdtemp()
         resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
@@ -119,7 +118,7 @@ class TestTrace(unittest.TestCase):
     def test_resolves_no_log_for_a_step_never_claimed(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        s.create_step("build: x", step="build", role="agent", parent=sid)
+        s.create_step(step="build", role="agent", parent=sid)
         root = tempfile.mkdtemp()
         resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
         self.assertIsNone(resp.steps[0].log)
@@ -152,7 +151,7 @@ class TestStatus(unittest.TestCase):
     def test_watched_step_leaves_the_inbox_lane_while_its_feedback_step_is_open(self):
         s = FakeStore()
         watched = create_owned_step(s, "await-merge: thing", step="await-merge", role="human")
-        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
+        fb = s.create_step(step="handle-feedback", role="agent",
                            parent=s.get_node(watched).item)
         s.set_watched_step(fb, watched)
 
@@ -163,7 +162,7 @@ class TestStatus(unittest.TestCase):
     def test_watched_step_returns_to_the_inbox_lane_once_its_feedback_step_closes(self):
         s = FakeStore()
         watched = create_owned_step(s, "await-merge: thing", step="await-merge", role="human")
-        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
+        fb = s.create_step(step="handle-feedback", role="agent",
                            parent=s.get_node(watched).item)
         s.set_watched_step(fb, watched)
         s.complete_node(fb, "done")
@@ -240,9 +239,9 @@ class TestInboxPerItemWorkflow(unittest.TestCase):
         })
         flow_svc = FlowService(fs, s)
         item_a = s.create_item("iA", "a description", workflow="wfA")
-        a = s.create_step("gate: A", step="gate", role="human", parent=item_a)
+        a = s.create_step(step="gate", role="human", parent=item_a)
         item_b = s.create_item("iB", "a description", workflow="wfB")
-        b = s.create_step("gate: B", step="gate", role="human", parent=item_b)
+        b = s.create_step(step="gate", role="human", parent=item_b)
         rows = InboxUseCase(s, flow_svc).execute(InboxInput()).rows
         outcomes = {row.step.id: row.outcomes for row in rows}
         self.assertEqual(outcomes[a], ["approve", "reject"])
@@ -289,7 +288,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
             s.add_artifact(item, "repo", repo)
         if pr:
             plant_pr(s, item, pr)
-        tid = s.create_step("a gate", step=step_name, role="human", parent=item)
+        tid = s.create_step(step=step_name, role="human", parent=item)
         return item, tid
 
     def test_service_step_with_human_role_is_an_action_not_blocked(self):
@@ -351,7 +350,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         item = s.create_item("an item", "a description", workflow="wf")
         plant_pr(s, item, "https://example.com/pr/spec", "spec")
         plant_pr(s, item, "https://example.com/pr/code", "code")
-        tid = s.create_step("await merge", step="code-await-merge", role="human", parent=item)
+        tid = s.create_step(step="code-await-merge", role="human", parent=item)
         flow = FlowService(FakeFs({"some-role": {"step": "code-await-merge", "phase": "code"}}), s)
         resp = InboxUseCase(s, flow).execute(InboxInput())
         row = next(r for r in resp.rows if r.step.id == tid)
@@ -362,7 +361,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         item = s.create_item("an item", "a description", workflow="wf")
         plant_pr(s, item, "https://example.com/pr/code", "code")
         plant_pr(s, item, "https://example.com/pr/spec", "spec")
-        tid = s.create_step("await merge", step="spec-await-merge", role="human", parent=item)
+        tid = s.create_step(step="spec-await-merge", role="human", parent=item)
         fs = FakeFs(
             metas={"await-merge": {"step": "spec-await-merge"}},
             workflow=(
@@ -383,7 +382,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         s = FakeStore()
         _, watched = self._item_with_step(s, step_name="await-merge")
         item = s.get_node(watched).item
-        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
+        fb = s.create_step(step="handle-feedback", role="agent",
                             parent=item)
         s.set_watched_step(fb, watched)
         resp = InboxUseCase(s, _flow_with_step(s, "await-merge")).execute(InboxInput())
@@ -393,7 +392,7 @@ class TestInboxProjectAndPr(unittest.TestCase):
         s = FakeStore()
         _, watched = self._item_with_step(s, step_name="await-merge")
         item = s.get_node(watched).item
-        fb = s.create_step("handle feedback", step="handle-feedback", role="agent",
+        fb = s.create_step(step="handle-feedback", role="agent",
                             parent=item)
         s.set_watched_step(fb, watched)
         s.complete_node(fb, "done")
