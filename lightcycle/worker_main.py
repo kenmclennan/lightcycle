@@ -32,8 +32,13 @@ def main():
     if plan is None:
         return 0
     with session_cwd(plan.workspace) as cwd:
-        return run(config.data_root(), cwd, plan.stage, spawnid,
-                   plan.model, plan.sysprompt, config.max_session_seconds())
+        return run(
+            config.data_root(), cwd, plan.stage, spawnid, plan.model, plan.sysprompt,
+            config.max_session_seconds(),
+            record_session_id=lambda sid: container.store.replace_artifact(
+                plan.step_id, "session-id", sid, internal=True
+            ),
+        )
 
 
 if __name__ == "__main__":

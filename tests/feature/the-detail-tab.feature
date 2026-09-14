@@ -4,8 +4,8 @@ Feature: The Detail tab
   lead, since that is what a human opening a step for review came for; both
   live on the step's phase run in storage, but the view shows them as
   unambiguously the step's own, never naming "phase run" or "pass". After
-  them follow stage, state, role, model, claimed_by, outcome, notes, park
-  (needs / reason / tried), reflection, and watched_step. `tried` has never
+  them follow stage, state, role, model, claimed_by, session_id, outcome,
+  notes, park (needs / reason / tried), reflection, and watched_step. `tried` has never
   been shown anywhere in the TUI before this tab. A field with nothing
   recorded is omitted rather than shown blank. An item has no step record of
   its own, so it has no Detail tab. A parked step can also be resumed from
@@ -17,7 +17,7 @@ Feature: The Detail tab
   Scenario: A step's PR and branch are shown first, ahead of every other field
     Given a step whose phase run has a branch and a PR
     When I open its Detail tab
-    Then its PR and branch are shown before stage, state, role, model, claimed_by, outcome, notes, park, reflection, and watched_step
+    Then its PR and branch are shown before stage, state, role, model, claimed_by, session_id, outcome, notes, park, reflection, and watched_step
 
   Scenario: A step's branch and PR are shown as unambiguously its own
     Given a step whose phase run has a branch and a PR
@@ -57,6 +57,11 @@ Feature: The Detail tab
     When I open its Detail tab
     Then its claimed_by, its outcome, and its notes are all shown
 
+  Scenario: The Detail tab shows the step's session id
+    Given a step with a session id recorded
+    When I open its Detail tab
+    Then its session id is shown
+
   Scenario: The Detail tab shows the step's reflection and watched_step
     Given a step with a reflection and a watched_step recorded
     When I open its Detail tab
@@ -78,12 +83,13 @@ Feature: The Detail tab
     Then the recorded tried text is shown
 
   Scenario: A field with nothing recorded is omitted, not shown blank
-    Given a step with no outcome, no notes, no reflection, and no watched_step recorded
+    Given a step with no outcome, no notes, no reflection, no watched_step, and no session_id recorded
     When I open its Detail tab
     Then no outcome field is shown
     And no notes field is shown
     And no reflection field is shown
     And no watched_step field is shown
+    And no session_id field is shown
 
   Scenario: Resuming a parked step whose stage the workflow declares agent-owned succeeds and shows a confirmation toast
     Given a step parked at a stage the workflow declares agent-owned, its hub open

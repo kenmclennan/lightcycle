@@ -25,6 +25,7 @@ class SessionPlan:
     sysprompt: str
     workspace: Optional[str] = None
     stage: Optional[str] = None
+    step_id: Optional[str] = None
 
 
 def plan_session(claim, resolve, reclaim, role):
@@ -41,7 +42,8 @@ def plan_session(claim, resolve, reclaim, role):
         reclaim(resp.view.step.id)
         raise SessionError("step %r has no 'model' in frontmatter" % step_file)
     return SessionPlan(
-        model=model, sysprompt=agent.body, workspace=resp.workspace, stage=resp.view.step.stage
+        model=model, sysprompt=agent.body, workspace=resp.workspace, stage=resp.view.step.stage,
+        step_id=resp.view.step.id,
     )
 
 
@@ -66,6 +68,7 @@ def user_message(text):
 COMMAND = "command"
 RESULT = "result"
 RATE_LIMIT = "rate-limit"
+SESSION_ID = "session-id"
 
 
 def dispatch_event(d, line, events):
@@ -79,6 +82,8 @@ def dispatch_event(d, line, events):
         events.put((RESULT, None))
     elif t == "rate_limit_event":
         events.put((RATE_LIMIT, parse_rate_limit_event([line])))
+    elif t == "system" and d.get("subtype") == "init":
+        events.put((SESSION_ID, d.get("session_id")))
 
 
 def has_open_step(root, spawnid):
@@ -114,6 +119,8 @@ def drain(events, policy):
             policy.observe_command(payload)
         elif kind == RATE_LIMIT:
             policy.observe_rate_limit(payload)
+        elif kind == SESSION_ID:
+            policy.observe_session_id(payload)
         elif kind == RESULT:
             results += 1
 
@@ -126,12 +133,14 @@ def poll_decision(add_dir, spawnid, policy, events):
     return policy.on_result(open_step)
 
 
-def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clock=time.monotonic):
+def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clock=time.monotonic,
+        record_session_id=lambda session_id: None):
     proc = subprocess.Popen(build_command(model, sysprompt, add_dir), cwd=cwd,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1)
     policy = SessionPolicy()
     events = queue.Queue()
+    session_recorded = False
 
     def send(text):
         try:
@@ -166,6 +175,9 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clo
             proc.terminate()
             break
         decision = poll_decision(add_dir, spawnid, policy, events)
+        if not session_recorded and policy.session_id:
+            record_session_id(policy.session_id)
+            session_recorded = True
         if decision == CLOSE:
             try:
                 proc.stdin.close()
