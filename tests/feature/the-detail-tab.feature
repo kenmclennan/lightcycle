@@ -62,6 +62,11 @@ Feature: The Detail tab
     When I open its Detail tab
     Then its reflection and its watched_step are both shown
 
+  Scenario: A step with more than one reflection shows each of them
+    Given a step with two reflections recorded
+    When I open its Detail tab
+    Then both reflections are shown as separate fields
+
   Scenario: The Detail tab shows the step's park fields - needs, reason, and tried
     Given a step parked with a needs, a reason, and a tried all recorded
     When I open its Detail tab

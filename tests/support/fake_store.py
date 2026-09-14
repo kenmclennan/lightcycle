@@ -74,7 +74,6 @@ def record_to_step(record, blocked_by=None):
         model=meta.get("model"),
         outcome=record.get("outcome"),
         notes=record.get("notes"),
-        reflection=meta.get("reflection"),
         watched_step=meta.get("watched_step"),
         park=Park(
             reason=meta.get("reason"), needs=meta.get("needs"), tried=meta.get("tried")

@@ -1216,7 +1216,7 @@ def cmd_attach(argv):
             sys.stderr.write("file '%s' is empty; pass a file with content\n" % a.file)
             return 1
     if a.type in _REFLECTION_TYPES:
-        ReflectUseCase(_container.store, _container.fs).execute(
+        ReflectUseCase(_container.store, _container.fs, _worktrees()).execute(
             ReflectInput(step=a.id, feedback=value)
         )
         return 0

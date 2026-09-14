@@ -3033,7 +3033,7 @@ class TestShowAndClaimAgreeOnSharedFields(unittest.TestCase):
 
 class TestNodeDTOReadSurface(unittest.TestCase):
     AGENT_CONSUMED_FIELDS = (
-        "id", "item", "stage", "state", "notes", "reflection", "watched_step",
+        "id", "item", "stage", "state", "notes", "watched_step",
         "park", "fired_at", "closed_at",
     )
 
