@@ -130,6 +130,20 @@ COMMANDS = {
         ),
         Arg("--disposition", choices=("completed", "aborted")),
     )),
+    "close": CommandSpec(prog="lc close", args=(
+        Arg("id"),
+        Arg(
+            "--outcome", default="closed",
+            help="free-form text recorded as the closing reason; not validated against a "
+            "fixed set (default: \"closed\")",
+        ),
+        Arg(
+            "--disposition", choices=("completed", "aborted"), default="completed",
+            help="default: completed",
+        ),
+        Arg("--note", nargs="+", help="a note to record on the closed item; unquoted "
+            "multi-word is fine"),
+    )),
     "trace": CommandSpec(prog="lc trace", args=(
         Arg("item"), Arg("--json", action="store_true"),
     )),
