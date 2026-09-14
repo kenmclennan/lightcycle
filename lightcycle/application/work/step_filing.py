@@ -3,7 +3,7 @@ from lightcycle.application.flow.passes import PassBook
 from lightcycle.domain.contracts import StepContract
 
 
-def check_step_filing(store, flow, item_id, node, workflow, step):
+def check_step_filing(store, flow, item_id, workflow, step):
     graph = flow.load_graph(workflow)
     present = store.present_types(store.get_item(item_id))
     missing_inputs = graph.requires - present
