@@ -145,6 +145,13 @@ def _step_claimed_outcome_notes(ctx):
     _push_hub(ctx, step_id)
 
 
+@given("a step with a session id recorded")
+def _step_session_id(ctx):
+    store, step_id = _launch_step(ctx)
+    store.add_artifact(step_id, "session-id", "sess-49d8ac0f-6398", internal=True)
+    _push_hub(ctx, step_id)
+
+
 @given("a step with a reflection and a watched_step recorded")
 def _step_reflection_watched(ctx):
     store, step_id = _launch_step(ctx)
@@ -188,7 +195,7 @@ def _step_parked_tried(ctx):
     _push_hub(ctx, step_id)
 
 
-@given("a step with no outcome, no notes, no reflection, and no watched_step recorded")
+@given("a step with no outcome, no notes, no reflection, no watched_step, and no session_id recorded")
 def _step_missing_optional_fields(ctx):
     _, step_id = _launch_step(ctx)
     _push_hub(ctx, step_id)
@@ -250,7 +257,7 @@ def _key_pressed(ctx, key):
 
 
 @then("its PR and branch are shown before stage, state, role, model, claimed_by, "
-      "outcome, notes, park, reflection, and watched_step")
+      "session_id, outcome, notes, park, reflection, and watched_step")
 def _pr_and_branch_first(ctx):
     keys = _field_keys(ctx)
     assert keys[0] == "pr"
@@ -313,6 +320,11 @@ def _claimed_outcome_notes_shown(ctx):
     assert _field_value(ctx, "notes") == "reviewed and merged"
 
 
+@then("its session id is shown")
+def _session_id_shown(ctx):
+    assert _field_value(ctx, "session_id") == "sess-49d8ac0f-6398"
+
+
 @then("its reflection and its watched_step are both shown")
 def _reflection_watched_shown(ctx):
     assert _field_value(ctx, "reflection") == "worked well"
@@ -355,6 +367,11 @@ def _no_reflection_field(ctx):
 @then("no watched_step field is shown")
 def _no_watched_step_field(ctx):
     assert not _field_present(ctx, "watched_step")
+
+
+@then("no session_id field is shown")
+def _no_session_id_field(ctx):
+    assert not _field_present(ctx, "session_id")
 
 
 @then("a brief confirmation toast is shown")

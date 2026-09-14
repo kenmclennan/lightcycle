@@ -16,6 +16,7 @@ from lightcycle.adapters.worker_session import (
     SessionError,
     COMMAND,
     RESULT,
+    SESSION_ID,
     dispatch_event,
     drain,
     has_open_step,
@@ -106,6 +107,13 @@ class TestPlanSession(unittest.TestCase):
             lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body"),
             self._never_reclaim, "agent")
         self.assertIsNone(plan.workspace)
+
+    def test_carries_the_step_id_through(self):
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha", step_id="s-42"),
+            lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body"),
+            self._never_reclaim, "agent")
+        self.assertEqual(plan.step_id, "s-42")
 
 
 class TestTerminalCommand(unittest.TestCase):
@@ -198,6 +206,19 @@ class TestSessionPolicy(unittest.TestCase):
         p.observe_claimed(True)
         p.observe_rate_limit(None)
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
+
+    def test_fresh_policy_has_no_session_id(self):
+        self.assertIsNone(SessionPolicy().session_id)
+
+    def test_observe_session_id_sets_it(self):
+        p = SessionPolicy()
+        p.observe_session_id("sess-abc")
+        self.assertEqual(p.session_id, "sess-abc")
+
+    def test_observe_session_id_with_none_leaves_it_unset(self):
+        p = SessionPolicy()
+        p.observe_session_id(None)
+        self.assertIsNone(p.session_id)
 
 
 class TestSessionCwd(unittest.TestCase):
@@ -395,6 +416,38 @@ class TestRun(unittest.TestCase):
             run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
         faketime.assert_not_called()
 
+    class _TwoTicksThenExitProc:
+        def __init__(self, stdout_text):
+            self.stdout = _FakeStdout(stdout_text)
+            self.stdin = MagicMock()
+            self._polls = 0
+
+        def poll(self):
+            self._polls += 1
+            return None if self._polls <= 2 else 0
+
+        def wait(self):
+            return 0
+
+        def terminate(self):
+            pass
+
+    def test_the_session_id_is_recorded_exactly_once(self):
+        stdout_text = (
+            '{"type":"system","subtype":"init","session_id":"sess-49d8ac0f-6398"}\n'
+            '{"type":"result"}\n'
+        )
+        proc = self._TwoTicksThenExitProc(stdout_text)
+
+        def popen(cmd, cwd, **kwargs):
+            return proc
+
+        recorded = []
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen):
+            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5,
+                record_session_id=recorded.append)
+        self.assertEqual(recorded, ["sess-49d8ac0f-6398"])
+
 
 class TestDispatchEvent(unittest.TestCase):
     def test_rejected_rate_limit_line_forwards_to_policy_and_closes(self):
@@ -417,6 +470,26 @@ class TestDispatchEvent(unittest.TestCase):
         dispatch_event(json.loads(line), line, events)
         dispatch_event(json.loads(REJECTED_LINE), REJECTED_LINE, events)
         self.assertEqual(events.qsize(), 2)
+
+    def test_system_init_line_queues_a_session_id_event(self):
+        events = queue.Queue()
+        line = '{"type":"system","subtype":"init","session_id":"sess-abc"}'
+        dispatch_event(json.loads(line), line, events)
+        self.assertEqual(events.get_nowait(), (SESSION_ID, "sess-abc"))
+
+    def test_non_init_system_line_queues_nothing(self):
+        events = queue.Queue()
+        line = '{"type":"system","subtype":"hook_started","session_id":"sess-abc"}'
+        dispatch_event(json.loads(line), line, events)
+        self.assertEqual(events.qsize(), 0)
+
+    def test_system_init_line_drains_into_the_policy(self):
+        policy = SessionPolicy()
+        events = queue.Queue()
+        line = '{"type":"system","subtype":"init","session_id":"sess-abc"}'
+        dispatch_event(json.loads(line), line, events)
+        drain(events, policy)
+        self.assertEqual(policy.session_id, "sess-abc")
 
 
 class TestHasOpenStep(unittest.TestCase):

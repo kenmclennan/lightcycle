@@ -3042,6 +3042,51 @@ class TestRunReadSurface(unittest.TestCase):
         self.assertEqual(run["comments_handled_through"], "1500.0")
 
 
+class TestShowSurfacesSessionId(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_show_surfaces_a_recorded_session_id(self):
+        item = self.store.create_item("an item", "a description")
+        step = self.store.create_step(step="build", role="agent", parent=item)
+        self.store.add_artifact(step, "session-id", "sess-abc-123", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["session_id"], "sess-abc-123")
+
+    def test_show_omits_session_id_when_none_recorded(self):
+        item = self.store.create_item("an item", "a description")
+        step = self.store.create_step(step="build", role="agent", parent=item)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("session_id", json.loads(out))
+
+    def test_show_on_an_item_never_surfaces_session_id(self):
+        item = self.store.create_item("an item", "a description")
+        self.store.create_step(step="build", role="agent", parent=item)
+        self.store.add_artifact(item, "session-id", "sess-on-item", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("session_id", json.loads(out))
+
+    def test_replace_artifact_overwrites_the_prior_session_id(self):
+        item = self.store.create_item("an item", "a description")
+        step = self.store.create_step(step="build", role="agent", parent=item)
+        self.store.add_artifact(step, "session-id", "sess-old", internal=True)
+        self.store.replace_artifact(step, "session-id", "sess-new", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["session_id"], "sess-new")
+
+    def test_claim_also_surfaces_a_prior_session_id(self):
+        item = self.store.create_item("an item", "a description")
+        step = self.store.create_step(step="build", role="agent", parent=item)
+        self.store.add_artifact(step, "session-id", "sess-prior", internal=True)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["session_id"], "sess-prior")
+
+
 class TestShowAndClaimAgreeOnSharedFields(unittest.TestCase):
     SHARED_KEYS = (
         "id", "item", "title", "stage", "pass", "role", "state", "claimed_by",

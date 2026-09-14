@@ -124,7 +124,8 @@ ARTIFACTS_CONTINUATION_INDENT = 2
 DETAIL_CONTINUATION_INDENT = 2
 DETAIL_FIELD_LABELS = {
     "pr": "PR", "branch": "BRANCH", "stage": "STAGE", "state": "STATE", "role": "ROLE",
-    "model": "MODEL", "claimed_by": "CLAIMED_BY", "outcome": "OUTCOME", "notes": "NOTES",
+    "model": "MODEL", "claimed_by": "CLAIMED_BY", "session_id": "SESSION_ID",
+    "outcome": "OUTCOME", "notes": "NOTES",
     "needs": "NEEDS", "reason": "REASON", "tried": "TRIED", "reflection": "REFLECTION",
     "watched_step": "WATCHED_STEP",
 }
@@ -246,7 +247,7 @@ def _hierarchy_default_row_id(store, node):
     return cur.id if cur is not None else node.id
 
 
-def detail_fields(step, run, reflections):
+def detail_fields(step, run, session_id, reflections):
     fields = []
     if run.pr:
         fields.append(("pr", run.pr))
@@ -259,6 +260,8 @@ def detail_fields(step, run, reflections):
         fields.append(("model", step.model))
     if step.claimed_by:
         fields.append(("claimed_by", step.claimed_by))
+    if session_id:
+        fields.append(("session_id", session_id))
     if step.outcome:
         fields.append(("outcome", step.outcome))
     if step.notes:
@@ -1790,8 +1793,10 @@ class NodeHubScreen(Screen):
 
     def _render_detail(self, store, step, initial) -> None:
         run = StepRunUseCase(store, self._flow_service).execute(StepRunInput(step=step.id))
-        reflections, _unreadable = parse_reflections(store.item_artifacts(step.id))
-        fields = detail_fields(step, run, [r.feedback for r in reflections])
+        artifacts = store.item_artifacts(step.id)
+        reflections, _unreadable = parse_reflections(artifacts)
+        session_id = next((a.value for a in artifacts if a.type == "session-id"), None)
+        fields = detail_fields(step, run, session_id, [r.feedback for r in reflections])
         self._render_detail_fields(fields, initial)
 
     def _render_detail_fields(self, fields, initial) -> None:
