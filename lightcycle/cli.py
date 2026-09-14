@@ -214,6 +214,10 @@ COMMAND_GROUPS = [
          "- --force overrides the dirty worktree and stale claims"),
         ("attach", "<id> <type> <value> [--label] [--internal] [--kind K]", "attach an artifact"),
         ("dep", "<id> --needs <id> | --remove <id>", "add or remove a blocker on a node"),
+        ("close", "<item> [--outcome \"<text>\"] [--disposition completed|aborted] "
+         "[--note \"<text>\"]",
+         "end an item outright; --outcome is free-form (default \"closed\"), --disposition "
+         "defaults to completed - refuses a step, use `done` for that"),
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
@@ -778,6 +782,28 @@ def cmd_done(argv):
     return 0
 
 
+def cmd_close(argv):
+    a = build_parser(COMMANDS["close"]).parse_args(argv)
+    node_type = _container.store.type_of(a.id)
+    if node_type is None:
+        sys.stderr.write("unknown node '%s'\n" % a.id)
+        return 1
+    if node_type == "step":
+        sys.stderr.write(
+            "lc close ends an item; a step is closed with `lc done <step> <outcome>`\n"
+        )
+        return 2
+    note = " ".join(a.note) if a.note else None
+    try:
+        CloseItemUseCase(_container.store, _worktrees()).execute(
+            CloseItemInput(item=a.id, reason=a.outcome, disposition=a.disposition, note=note)
+        )
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    return 0
+
+
 def cmd_trace(argv):
     a = build_parser(COMMANDS["trace"]).parse_args(argv)
     try:
@@ -1091,7 +1117,10 @@ def _render_field_refusal(r):
 
 def _render_state_refusal(r):
     if r.owner is None:
-        return "unknown --state %r; use %s" % (r.state, ", ".join(r.allowed))
+        return (
+            "unknown --state %r; use %s - to end a node instead, use `lc close <item>` "
+            "or `lc done <step> <outcome>`"
+        ) % (r.state, ", ".join(r.allowed))
     takes = ", ".join("--state %s" % s for s in r.allowed)
     return "--state %s applies to %s, not %s; %s takes %s" % (
         r.state, _named(r.owner), _named(r.requested_type), _named(r.requested_type), takes,

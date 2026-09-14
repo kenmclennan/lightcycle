@@ -91,6 +91,13 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertNotEqual(rc, 0)
         self.assertIn("unknown --state", err)
 
+    def test_unknown_state_points_to_close_and_done_for_ending_a_node(self):
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        rc, out, err = call(cli.cmd_set, bid, "--state", "bogus")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("lc close", err)
+        self.assertIn("lc done", err)
+
     def test_generic_edit_with_allowed_flags_succeeds(self):
         iid = self.store.create_item("an item", "old")
         rc, out, err = call(cli.cmd_set, iid, "--description", "d")

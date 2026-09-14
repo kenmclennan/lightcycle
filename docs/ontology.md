@@ -5,7 +5,7 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 ## The model (nouns)
 
 - **item** and **step** are the two structures work is made of, in their own tables, with no shared shape. "Node" survives only as a loose word for "an item or a step" in a few command names; nothing in the model is one.
-- **item** - a unit of deliverable work, and the top of the tree. Carries the `description` (the brief), the artifacts, the `repo` and the workflow pin. Has no parent. Once closed, carries an optional `note` explaining why - write-once via `lc done --note`, distinct from a step's own accumulated `notes`.
+- **item** - a unit of deliverable work, and the top of the tree. Carries the `description` (the brief), the artifacts, the `repo` and the workflow pin. Has no parent. Once closed, carries an optional `note` explaining why - write-once via `lc done --note` or `lc close --note`, distinct from a step's own accumulated `notes`.
 - **step** - a single action performed at one workflow **stage**, filed from the workflow. Its `item` is required and fixed at creation. Carries the `role`, the claim, the `notes`, its `reflection`, and its `park`. It has no description, no artifacts and no workflow of its own.
 - **planned step** - a not-yet-filed future step, derived by walking an item's pinned workflow graph forward from its current step along the normal-completion edge. Display-only: never a real node, never claimed or advanced. Represented in code as `ProjectedStep`.
 - **artifact** - a workflow-defined value attached to an item: `spec`, `design`, `findings`, and whatever a personal origin invents. The engine reads none of them by name. What it does know is a field: the brief is the item's `description`, the target repo its `repo`, an agent's feedback the step's `reflection`, and the branch, PR and comment ledger belong to the phase run.
@@ -24,7 +24,8 @@ The single source of truth for lightcycle's vocabulary. Every term used in the c
 - **attach** - add an artifact to an item (`lc attach`); `--replace` swaps a same-type artifact.
 - **dep** - declare one node blocks another (`lc dep <id> --needs <id>`). A dependency is a gate checked once, at the instant a step is claimed - not a continuously-enforced invariant. `--needs` refuses, naming the current claim, when the target is a step that is currently claimed (`claimed_by` set and not yet `done`); there is no way to stop or release that running step other than the pool operator killing the worker. `--remove` is unaffected by a claim either way.
 - **claim** - a worker atomically takes the next queued step for a role (`lc claim agent`). With one agent role, any worker takes any queued agent step, whatever its stage.
-- **done** / **close** - close a node with an outcome (`lc done <id> <outcome>`); a step's outcome advances the flow.
+- **done** - close a node with an outcome (`lc done <id> <outcome>`); a step's outcome advances the flow.
+- **close** - a driver-facing verb to end an **item** outright (`lc close <item> [--outcome] [--disposition] [--note]`), a thinner front over the same close-item path `lc done` uses for an item. `--outcome` is free-form text, not validated against a fixed set (default `closed`); `--disposition` defaults to `completed`. Refuses a **step**, naming `lc done <step> <outcome>` as the verb for one - a step's outcome drives routing, so it is never "closed" outright.
 - **advance** - file the next step for an outcome without closing (plumbing).
 - **sweep** - reclaim orphaned or stalled step claims and prune dead worker records.
 - **reclaim** - return a stalled or dead worker's step to `queued`.
