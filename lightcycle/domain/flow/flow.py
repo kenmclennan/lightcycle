@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK, REVIEW_ROUNDS_CAP
 from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.flow.transition import Transition
 
@@ -43,6 +43,9 @@ class Flow:
         for occ in graph.hook_occurrences(CI_FAILED_CAP):
             if len(occ) > 3:
                 stages.add(occ[3])
+        for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
+            if len(occ) > 2:
+                stages.add(occ[2])
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())
 
@@ -92,6 +95,23 @@ class Flow:
         if cap is None or outcome != cap.outcome:
             return transition
         if prior_count < cap.n:
+            return transition
+        return Transition(
+            from_stage=step,
+            outcome=outcome,
+            to_stage=cap.target,
+            to_role=self.step_def(cap.target).owner or "human",
+            to_terminal=self.step_def(cap.target).owner is None,
+        )
+
+    def review_rounds_transition(self, transition, outcome, prior_count, cap_n):
+        if transition is None or cap_n is None:
+            return transition
+        step = transition.from_stage
+        cap = self.step_def(step).review_rounds_cap
+        if cap is None or outcome != cap.outcome:
+            return transition
+        if prior_count < cap_n:
             return transition
         return Transition(
             from_stage=step,

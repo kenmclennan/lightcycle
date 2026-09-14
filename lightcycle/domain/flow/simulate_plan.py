@@ -2,7 +2,13 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
+from lightcycle.domain.flow.hooks import (
+    CI_FAILED_CAP,
+    PR_CONFLICT,
+    PR_FEEDBACK,
+    PR_MERGE,
+    REVIEW_ROUNDS_CAP,
+)
 
 _HOOK_OUTCOME_NAMES = (PR_MERGE, PR_CONFLICT)
 
@@ -63,7 +69,7 @@ def _feedback_occurrences(graph):
     ]
 
 
-def _cap_occurrences(graph):
+def _cap_occurrences(graph, review_rounds_cap_n=None):
     caps = []
     for occ in graph.hook_occurrences(CI_FAILED_CAP):
         if len(occ) > 3:
@@ -77,6 +83,10 @@ def _cap_occurrences(graph):
     for stage, n in conflict_cap.items():
         if stage in conflict_outcome:
             caps.append(("hook", PR_CONFLICT, stage, conflict_outcome[stage], n))
+    if review_rounds_cap_n is not None:
+        for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
+            if len(occ) > 2:
+                caps.append(("edge", None, occ[0], occ[1], review_rounds_cap_n))
     return caps
 
 
@@ -259,7 +269,7 @@ def _pass_boundary_walk(graph, entry, stage, outcome, bound):
     return PlannedWalk(tuple(steps), incomplete=resume.incomplete, stuck_at=resume.stuck_at)
 
 
-def build_coverage_plan(graph, flow):
+def build_coverage_plan(graph, flow, review_rounds_cap_n=None):
     entry = graph.entry
     remaining = set(_edge_transitions(graph)) | set(_hook_transitions(graph))
 
@@ -274,7 +284,7 @@ def build_coverage_plan(graph, flow):
         if len(remaining) == before:
             break
 
-    for kind, hook, stage, outcome, n in _cap_occurrences(graph):
+    for kind, hook, stage, outcome, n in _cap_occurrences(graph, review_rounds_cap_n):
         walks.append(_forced_repeat_walk(graph, entry, stage, outcome, n + 1, kind, hook=hook))
 
     for stage, feedback_step in _feedback_occurrences(graph):

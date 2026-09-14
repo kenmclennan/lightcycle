@@ -128,6 +128,7 @@ def _seed_config(home):
         "backup-interval-minutes: 15",
         "backup-retention: 96",
         "max-title-length: 72",
+        "review-rounds-cap: 5",
     ]
     cfg_path = os.path.join(home, "config")
     Path(cfg_path).write_text("".join(l + "\n" for l in lines))

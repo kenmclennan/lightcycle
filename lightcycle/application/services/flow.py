@@ -239,5 +239,20 @@ class FlowService:
     def effective_transition(self, transition, outcome, prior_count, name=None):
         return self.load_flow(name).effective_transition(transition, outcome, prior_count)
 
+    def review_rounds_cap_outcome(self, stage, name=None):
+        cap = self.load_flow(name).step_def(stage).review_rounds_cap
+        return cap.outcome if cap else None
+
+    def review_rounds_transition(self, transition, outcome, prior_count, name=None):
+        flow = self.load_flow(name)
+        if transition is None:
+            return transition
+        cap = flow.step_def(transition.from_stage).review_rounds_cap
+        if cap is None or outcome != cap.outcome:
+            return transition
+        return flow.review_rounds_transition(
+            transition, outcome, prior_count, self._config.review_rounds_cap(),
+        )
+
     def ready_roles(self):
         return ReadyQueue(self._store.ready_steps()).distinct_roles()

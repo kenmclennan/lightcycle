@@ -356,6 +356,11 @@ class TestRenderWorkflowMermaid(unittest.TestCase):
     def test_ci_failed_cap_edge_carries_count_and_outcome(self):
         self.assertIn("watch_pr -.->|ci_failed_cap x3: ci-failed| review_ci", self.lines)
 
+    def test_review_rounds_cap_edge_carries_outcome_with_no_count(self):
+        self.assertIn(
+            "review -.->|review_rounds_cap: rejected| review_rounds_exceeded", self.lines
+        )
+
     def test_no_phases_means_no_subgraphs(self):
         for line in self.lines:
             self.assertNotIn("subgraph", line)
