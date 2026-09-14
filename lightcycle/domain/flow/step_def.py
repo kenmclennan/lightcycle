@@ -9,6 +9,7 @@ from lightcycle.domain.flow.hooks import (
     PR_CONFLICT,
     PR_FEEDBACK,
     PR_MERGE,
+    REVIEW_ROUNDS_CAP,
 )
 
 
@@ -16,6 +17,12 @@ from lightcycle.domain.flow.hooks import (
 class CiCap:
     outcome: str
     n: int
+    target: str
+
+
+@dataclass(frozen=True)
+class ReviewRoundsCap:
+    outcome: str
     target: str
 
 
@@ -34,6 +41,7 @@ class StepDef:
     mention_token: Optional[str] = None
     review_bot_allowlist: frozenset = frozenset()
     ci_cap: Optional[CiCap] = None
+    review_rounds_cap: Optional[ReviewRoundsCap] = None
     workspace: Optional[str] = None
     phase: Optional[str] = None
     hooks: frozenset = frozenset()
@@ -61,6 +69,11 @@ class StepDef:
             if occ[0] == stage and len(occ) > 1:
                 pr_conflict_cap = int(occ[1])
 
+        review_rounds_cap = None
+        for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
+            if occ[0] == stage and len(occ) > 2:
+                review_rounds_cap = ReviewRoundsCap(occ[1], occ[2])
+
         review_bot_allowlist = frozenset()
         for occ in graph.hook_occurrences("review_bot_allowlist"):
             if occ[0] == stage:
@@ -86,6 +99,7 @@ class StepDef:
             mention_token=first("mention_token"),
             review_bot_allowlist=review_bot_allowlist,
             ci_cap=ci_cap,
+            review_rounds_cap=review_rounds_cap,
             workspace=graph.workspaces.get(stage),
             phase=graph.phases.get(stage),
             hooks=hooks,

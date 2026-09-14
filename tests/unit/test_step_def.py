@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.domain.flow.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.flow.step_def import CiCap, StepDef
+from lightcycle.domain.flow.step_def import CiCap, ReviewRoundsCap, StepDef
 
 
 class TestStepDef(unittest.TestCase):
@@ -11,6 +11,7 @@ class TestStepDef(unittest.TestCase):
         self.assertIsNone(sd.owner)
         self.assertEqual(sd.routes, {})
         self.assertIsNone(sd.ci_cap)
+        self.assertIsNone(sd.review_rounds_cap)
         self.assertEqual(sd.hooks, frozenset())
         self.assertIsNone(sd.primary)
         self.assertIsNone(sd.display)
@@ -18,6 +19,10 @@ class TestStepDef(unittest.TestCase):
     def test_ci_cap_holds_outcome_n_target(self):
         cap = CiCap("ci-failed", 3, "review-ci")
         self.assertEqual((cap.outcome, cap.n, cap.target), ("ci-failed", 3, "review-ci"))
+
+    def test_review_rounds_cap_holds_outcome_target(self):
+        cap = ReviewRoundsCap("rejected", "review-rounds-exceeded")
+        self.assertEqual((cap.outcome, cap.target), ("rejected", "review-rounds-exceeded"))
 
 
 _EVERY_HOOK_TEXT = """
@@ -38,6 +43,7 @@ hooks:
   mention_token         review  @lc
   review_bot_allowlist  review  bot-a  bot-b
   ci_failed_cap         review  ci-failed  3  review-ci
+  review_rounds_cap     review  rejected  review-rounds-exceeded
   deploy_green          review  true
 
 workspace:
@@ -67,6 +73,9 @@ class TestStepDefFromGraph(unittest.TestCase):
         self.assertEqual(sd.mention_token, "@lc")
         self.assertEqual(sd.review_bot_allowlist, frozenset({"bot-a", "bot-b"}))
         self.assertEqual(sd.ci_cap, CiCap("ci-failed", 3, "review-ci"))
+        self.assertEqual(
+            sd.review_rounds_cap, ReviewRoundsCap("rejected", "review-rounds-exceeded")
+        )
         self.assertEqual(sd.workspace, "specs")
         self.assertEqual(sd.phase, "code")
         self.assertEqual(
@@ -74,7 +83,8 @@ class TestStepDefFromGraph(unittest.TestCase):
             frozenset({
                 "on_pr_merge", "on_pr_close", "on_pr_feedback", "on_pr_conflict",
                 "on_pr_conflict_cap", "on_pr_conflict_escalate", "on_mention_token",
-                "on_review_bot_allowlist", "on_ci_failed_cap", "on_deploy_green",
+                "on_review_bot_allowlist", "on_ci_failed_cap", "on_review_rounds_cap",
+                "on_deploy_green",
             }),
         )
         self.assertEqual(sd.display, "Review the PR")
@@ -97,6 +107,7 @@ class TestStepDefFromGraph(unittest.TestCase):
         self.assertIsNone(sd.mention_token)
         self.assertEqual(sd.review_bot_allowlist, frozenset())
         self.assertIsNone(sd.ci_cap)
+        self.assertIsNone(sd.review_rounds_cap)
         self.assertIsNone(sd.workspace)
         self.assertIsNone(sd.phase)
         self.assertEqual(sd.hooks, frozenset())

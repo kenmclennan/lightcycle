@@ -27,6 +27,7 @@ _ENV_OVERRIDE_VARS = {
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
+    "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -75,6 +76,7 @@ _SEED_KEYS = [
     ("price-sonnet-cache-read-per-mtok", "0.20"),
     ("shutdown-grace-seconds", "10"),
     ("tick-failure-cap", "5"),
+    ("review-rounds-cap", "5"),
     ("context-artifact-types", "spec"),
 ]
 
@@ -405,6 +407,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("tick-failure-cap")
+
+    def review_rounds_cap(self):
+        env = self._env_int("LC_REVIEW_ROUNDS_CAP", None)
+        if env is not None:
+            return env
+        return self._required_int("review-rounds-cap")
 
     def editor(self):
         raw = self._env("EDITOR")

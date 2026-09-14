@@ -1,5 +1,5 @@
 from lightcycle.domain.contracts.step_contract import StepContract
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK, REVIEW_ROUNDS_CAP
 
 
 class FlowContracts:
@@ -137,6 +137,8 @@ class FlowContracts:
             self._collect_hook_phase_mismatch(mismatches, PR_FEEDBACK, occ, 1)
         for occ in self._graph.hook_occurrences(CI_FAILED_CAP):
             self._collect_hook_phase_mismatch(mismatches, CI_FAILED_CAP, occ, 3)
+        for occ in self._graph.hook_occurrences(REVIEW_ROUNDS_CAP):
+            self._collect_hook_phase_mismatch(mismatches, REVIEW_ROUNDS_CAP, occ, 2)
         return sorted(mismatches)
 
     def _collect_unresolved_hook_target(self, unresolved, hook, occ, target_index, known):
@@ -154,6 +156,8 @@ class FlowContracts:
             self._collect_unresolved_hook_target(unresolved, PR_FEEDBACK, occ, 1, owned)
         for occ in self._graph.hook_occurrences(CI_FAILED_CAP):
             self._collect_unresolved_hook_target(unresolved, CI_FAILED_CAP, occ, 3, known)
+        for occ in self._graph.hook_occurrences(REVIEW_ROUNDS_CAP):
+            self._collect_unresolved_hook_target(unresolved, REVIEW_ROUNDS_CAP, occ, 2, known)
         return sorted(unresolved)
 
     def ok(self):

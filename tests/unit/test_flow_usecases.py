@@ -719,6 +719,120 @@ class TestCiFailedCapRouting(unittest.TestCase):
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
 
+class _ReviewRoundsCapConfig:
+    def __init__(self, n):
+        self._n = n
+
+    def review_rounds_cap(self):
+        return self._n
+
+
+class TestReviewRoundsCapRouting(unittest.TestCase):
+    GRAPH_TEXT = (
+        "entry: build\n"
+        "\n"
+        "nodes:\n"
+        "  build   coder\n"
+        "  review  reviewer\n"
+        "\n"
+        "edges:\n"
+        "  build   done      review\n"
+        "  review  rejected  build\n"
+        "  review  done      ship\n"
+        "\n"
+        "hooks:\n"
+        "  review_rounds_cap  review  rejected  escalate-step\n"
+    )
+    METAS = {
+        "coder": {"model": "sonnet"},
+        "reviewer": {"model": "sonnet"},
+    }
+
+    def _uc(self, store, cap_n=2):
+        return CompleteStepUseCase(
+            store,
+            FlowService(
+                FakeFs(self.METAS, workflow=self.GRAPH_TEXT), store,
+                _ReviewRoundsCapConfig(cap_n),
+            ),
+        )
+
+    def _reject_n_times(self, store, item, n):
+        for _ in range(n):
+            old = store.create_step(step="review", role="agent", parent=item)
+            store.complete_node(old, "rejected")
+
+    def test_under_cap_routes_normally(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._reject_n_times(s, item, 1)
+        wid = s.create_step(step="review", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="rejected"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
+
+    def test_at_cap_escalates_instead_of_looping(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._reject_n_times(s, item, 2)
+        wid = s.create_step(step="review", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="rejected"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).role, "human")
+
+    def test_cap_counts_only_the_matching_outcome(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._reject_n_times(s, item, 3)
+        wid = s.create_step(step="review", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "ship")
+
+    def test_reset_prevents_escalation_despite_total_rejections_exceeding_cap(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        self._reject_n_times(s, item, 2)
+        passed = s.create_step(step="review", role="agent", parent=item)
+        s.complete_node(passed, "done")
+        wid = s.create_step(step="review", role="agent", parent=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="rejected"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
+
+    def test_no_cap_declared_never_escalates(self):
+        no_cap_metas = {"coder": {"model": "sonnet"}, "reviewer": {"model": "sonnet"}}
+        no_cap_graph = (
+            "entry: build\n\nnodes:\n  build  coder\n  review  reviewer\n\n"
+            "edges:\n  build  done      review\n  review  rejected  build\n"
+        )
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        uc = CompleteStepUseCase(
+            s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s)
+        )
+        for _ in range(5):
+            old = s.create_step(step="review", role="agent", parent=item)
+            s.complete_node(old, "rejected")
+        wid = s.create_step(step="review", role="agent", parent=item)
+        resp = uc.execute(CompleteInput(step=wid, outcome="rejected"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
+
+    def test_a_ci_failed_cap_declaring_stage_is_unaffected_by_review_rounds_cap(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven")
+        uc = CompleteStepUseCase(
+            s, FlowService(
+                FakeFs(TestCiFailedCapRouting.METAS, workflow=TestCiFailedCapRouting.GRAPH_TEXT),
+                s,
+            ),
+        )
+        for _ in range(2):
+            old = s.create_step(step="watch", role="agent", parent=item)
+            s.complete_node(old, "ci-failed")
+        wid = s.create_step(step="watch", role="agent", parent=item)
+        resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
+        self.assertEqual(s.get_node(resp.next_step).role, "human")
+
+
 class TestCiFailedCapAdvancePath(unittest.TestCase):
     GRAPH_TEXT = TestCiFailedCapRouting.GRAPH_TEXT
     METAS = TestCiFailedCapRouting.METAS

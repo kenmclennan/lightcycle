@@ -29,6 +29,7 @@ hooks:
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
   ci_failed_cap         watch-pr     ci-failed  3  review-ci
+  review_rounds_cap     review       rejected   review-rounds-exceeded
   mention_token         ready-merge  @lc
   review_bot_allowlist  ready-merge  copilot-pull-request-reviewer[bot]  another-bot[bot]
 """
@@ -44,6 +45,7 @@ STEP_METAS = {
     "handle-feedback": {"model": "sonnet"},
     "review-findings": {},
     "review-ci": {},
+    "review-rounds-exceeded": {},
 }
 
 
@@ -120,6 +122,18 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertEqual(self.flow.step_def("review-ci").owner, "human")
         self.assertEqual(sorted(self.flow.step_def("review-ci").routes.keys()), [])
 
+    def test_review_rounds_cap_and_target(self):
+        cap = self.flow.step_def("review").review_rounds_cap
+        self.assertEqual(cap.outcome, "rejected")
+        self.assertEqual(cap.target, "review-rounds-exceeded")
+
+    def test_review_rounds_cap_absent_by_default(self):
+        self.assertIsNone(self.flow.step_def("build").review_rounds_cap)
+
+    def test_review_rounds_cap_escalation_target_declared_only_via_the_hook_still_resolves(self):
+        self.assertEqual(self.flow.step_def("review-rounds-exceeded").owner, "human")
+        self.assertEqual(sorted(self.flow.step_def("review-rounds-exceeded").routes.keys()), [])
+
     def test_effective_transition_non_matching_outcome_is_never_redirected(self):
         raw = self.flow.next("watch-pr", "done")
         self.assertIs(self.flow.effective_transition(raw, "done", 100), raw)
@@ -130,6 +144,32 @@ class TestFlowFromGraph(unittest.TestCase):
 
     def test_effective_transition_none_transition_stays_none(self):
         self.assertIsNone(self.flow.effective_transition(None, "ci-failed", 5))
+
+    def test_review_rounds_transition_below_cap_is_a_no_op(self):
+        raw = self.flow.next("review", "rejected")
+        self.assertIs(self.flow.review_rounds_transition(raw, "rejected", 2, 3), raw)
+
+    def test_review_rounds_transition_at_cap_reroutes_to_target(self):
+        raw = self.flow.next("review", "rejected")
+        t = self.flow.review_rounds_transition(raw, "rejected", 3, 3)
+        self.assertEqual(t.to_stage, "review-rounds-exceeded")
+        self.assertEqual(t.to_role, "human")
+        self.assertFalse(t.to_terminal)
+
+    def test_review_rounds_transition_non_matching_outcome_is_never_redirected(self):
+        raw = self.flow.next("review", "done")
+        self.assertIs(self.flow.review_rounds_transition(raw, "done", 100, 3), raw)
+
+    def test_review_rounds_transition_no_cap_configured_is_a_no_op(self):
+        raw = self.flow.next("build", "done")
+        self.assertIs(self.flow.review_rounds_transition(raw, "done", 100, 3), raw)
+
+    def test_review_rounds_transition_none_transition_stays_none(self):
+        self.assertIsNone(self.flow.review_rounds_transition(None, "rejected", 5, 3))
+
+    def test_review_rounds_transition_cap_n_none_is_a_no_op(self):
+        raw = self.flow.next("review", "rejected")
+        self.assertIs(self.flow.review_rounds_transition(raw, "rejected", 100, None), raw)
 
     def test_primary_outcome_returns_the_marked_outcome(self):
         self.assertEqual(self.flow.step_def("open-pr").primary, "done")

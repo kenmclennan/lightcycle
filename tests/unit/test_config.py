@@ -446,6 +446,27 @@ class TestContextArtifactTypes(unittest.TestCase):
         self.assertEqual(c.context_artifact_types(), frozenset({"spec", "brief"}))
 
 
+class TestReviewRoundsCap(unittest.TestCase):
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().review_rounds_cap()
+
+    def test_seeded_default_resolves(self):
+        self.assertEqual(_cfg(review_rounds_cap="5").review_rounds_cap(), 5)
+
+    def test_env_override_wins(self):
+        self.assertEqual(
+            _cfg({"LC_REVIEW_ROUNDS_CAP": "8"}, review_rounds_cap="5").review_rounds_cap(), 8
+        )
+
+    def test_env_override_without_config_key(self):
+        self.assertEqual(_cfg({"LC_REVIEW_ROUNDS_CAP": "3"}).review_rounds_cap(), 3)
+
+    def test_malformed_config_fails_fast(self):
+        with self.assertRaises(ConfigError):
+            _cfg(review_rounds_cap="lots").review_rounds_cap()
+
+
 class TestResolvedSettings(unittest.TestCase):
     def test_freshly_seeded_config_reports_all_keys_as_default(self):
         c = _cfg()

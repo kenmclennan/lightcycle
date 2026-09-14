@@ -230,6 +230,12 @@ def _mermaid_hook_edges(graph, flow, stage):
             "%s -.->|ci_failed_cap x%d: %s| %s"
             % (sid, sd.ci_cap.n, sd.ci_cap.outcome, _mermaid_node_id(ci_target))
         )
+    rr_cap = sd.review_rounds_cap
+    if rr_cap:
+        edges.append(
+            "%s -.->|review_rounds_cap: %s| %s"
+            % (sid, rr_cap.outcome, _mermaid_node_id(rr_cap.target))
+        )
     return edges
 
 

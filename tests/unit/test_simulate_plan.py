@@ -32,10 +32,10 @@ edges:
 """
 
 
-def _plan(text, metas=CONTRACT_METAS):
+def _plan(text, metas=CONTRACT_METAS, review_rounds_cap_n=None):
     graph = parse_graph(text)
     flow = Flow.from_graph(graph, metas)
-    return build_coverage_plan(graph, flow), graph, flow
+    return build_coverage_plan(graph, flow, review_rounds_cap_n), graph, flow
 
 
 class TestBranchCoverage(unittest.TestCase):
@@ -83,6 +83,54 @@ class TestCiFailedCapCoverage(unittest.TestCase):
         self.assertEqual(len(repeats), 3)
         self.assertEqual([s.repeat_index for s in repeats], [1, 2, 3])
         self.assertTrue(repeats[-1].repeat_index == repeats[-1].repeat_total)
+
+
+_RR_CAP_GRAPH = """
+entry: build
+
+edges:
+  build      done      review
+  review     done      merged
+  review     rejected  build
+
+hooks:
+  review_rounds_cap    review   rejected   review-rounds-exceeded
+"""
+
+_RR_CAP_METAS = {
+    "coder": {"step": "build"},
+    "reviewer": {"step": "review"},
+    "escalation-reviewer": {"step": "review-rounds-exceeded"},
+}
+
+
+class TestReviewRoundsCapCoverage(unittest.TestCase):
+    def test_forced_repeat_walk_hits_the_cap_n_plus_one_times(self):
+        plan, _, _ = _plan(_RR_CAP_GRAPH, _RR_CAP_METAS, review_rounds_cap_n=2)
+        repeat_walks = [
+            w for w in plan.walks
+            if any(s.repeat_total == 3 for s in w.steps)
+        ]
+        self.assertEqual(len(repeat_walks), 1)
+        walk = repeat_walks[0]
+        repeats = [s for s in walk.steps if s.stage == "review" and s.outcome == "rejected"]
+        self.assertEqual(len(repeats), 3)
+        self.assertEqual([s.repeat_index for s in repeats], [1, 2, 3])
+        self.assertTrue(repeats[-1].repeat_index == repeats[-1].repeat_total)
+
+    def test_no_walk_generated_when_n_is_not_supplied(self):
+        plan, _, _ = _plan(_RR_CAP_GRAPH, _RR_CAP_METAS)
+        self.assertFalse(any(s.repeat_total for w in plan.walks for s in w.steps))
+
+    def test_existing_ci_failed_cap_and_pr_conflict_cap_walks_are_unaffected(self):
+        plan, _, _ = _plan(_CI_CAP_GRAPH, _CI_CAP_METAS, review_rounds_cap_n=2)
+        repeat_walks = [
+            w for w in plan.walks
+            if any(s.repeat_total == 3 for s in w.steps)
+        ]
+        self.assertEqual(len(repeat_walks), 1)
+        repeats = [s for s in repeat_walks[0].steps if s.stage == "watch" and s.outcome == "ci-failed"]
+        self.assertEqual(len(repeats), 3)
 
 
 _PR_CONFLICT_GRAPH = """

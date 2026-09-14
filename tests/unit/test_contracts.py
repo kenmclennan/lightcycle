@@ -228,6 +228,34 @@ class TestHookPhaseMismatches(unittest.TestCase):
         self.assertEqual(a.hook_phase_mismatches(), [])
         self.assertTrue(a.ok())
 
+    def test_review_rounds_cap_across_phases_is_flagged(self):
+        text = (
+            "entry: gate\n\n"
+            "hooks:\n  review_rounds_cap  gate  rejected  target\n\n"
+            "phase:\n  gate  spec\n  target  code\n"
+        )
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(
+            a.hook_phase_mismatches(), [("review_rounds_cap", "gate", "spec", "target", "code")]
+        )
+        self.assertFalse(a.ok())
+
+    def test_review_rounds_cap_same_phase_is_not_flagged(self):
+        text = (
+            "entry: gate\n\n"
+            "hooks:\n  review_rounds_cap  gate  rejected  target\n\n"
+            "phase:\n  gate  spec\n  target  spec\n"
+        )
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.hook_phase_mismatches(), [])
+        self.assertTrue(a.ok())
+
     def test_mixed_gates_flags_only_the_mismatched_pair(self):
         metas = {
             "gate1": {"step": "gate1", "phase": "spec", "on_pr_feedback": "target1"},
@@ -332,6 +360,37 @@ class TestUnresolvedHookTargets(unittest.TestCase):
             "entry: gate\n\n"
             "edges:\n  other  done  target\n\n"
             "hooks:\n  ci_failed_cap  gate  ci-failed  3  target\n"
+        )
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "other": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unresolved_hook_targets(), [])
+        self.assertTrue(a.ok())
+
+    def test_review_rounds_cap_target_with_no_meta_at_all_is_flagged(self):
+        text = "entry: gate\n\nhooks:\n  review_rounds_cap  gate  rejected  target\n"
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unresolved_hook_targets(), [("review_rounds_cap", "gate", "target")])
+        self.assertFalse(a.ok())
+
+    def test_review_rounds_cap_target_that_is_owned_is_not_flagged(self):
+        text = "entry: gate\n\nhooks:\n  review_rounds_cap  gate  rejected  target\n"
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(a.unresolved_hook_targets(), [])
+        self.assertTrue(a.ok())
+
+    def test_review_rounds_cap_target_reachable_only_via_edges_is_exempt(self):
+        text = (
+            "entry: gate\n\n"
+            "edges:\n  other  done  target\n\n"
+            "hooks:\n  review_rounds_cap  gate  rejected  target\n"
         )
         graph = parse_graph(text)
         metas = {"gate": {"model": "x"}, "other": {"model": "x"}}

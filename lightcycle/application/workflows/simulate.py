@@ -87,7 +87,7 @@ class WorkflowSimulateUseCase:
                 ],
             )
         self._seed_named_workspaces(graph)
-        plan = build_coverage_plan(graph, dom_flow)
+        plan = build_coverage_plan(graph, dom_flow, self._config.review_rounds_cap())
         trace = []
         violations = list(_pass_end_coverage_violations(graph, plan))
         for index, walk in enumerate(plan.walks):

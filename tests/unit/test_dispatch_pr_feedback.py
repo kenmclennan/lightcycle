@@ -71,6 +71,13 @@ class _FlowAdapter:
     def effective_transition(self, transition, outcome, prior_count, name=None, project=None):
         return self._flow.effective_transition(transition, outcome, prior_count)
 
+    def review_rounds_cap_outcome(self, step, name=None, project=None):
+        cap = self._flow.step_def(step).review_rounds_cap
+        return cap.outcome if cap else None
+
+    def review_rounds_transition(self, transition, outcome, prior_count, name=None, project=None):
+        return self._flow.review_rounds_transition(transition, outcome, prior_count, None)
+
     def phase_for(self, node):
         return self._flow.step_def(getattr(node, "stage", None)).phase
 
