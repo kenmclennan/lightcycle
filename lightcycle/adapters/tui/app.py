@@ -1,4 +1,5 @@
 import datetime
+import time
 
 from rich.text import Text
 from textual import events
@@ -862,6 +863,12 @@ def pool_prompt_body(worker_count):
         "its" if worker_count == 1 else "their")
 
 
+def _tui_metric_line(wall_seconds, rss_kb, now):
+    ts = time.strftime("%H:%M:%S", time.localtime(now))
+    rss = str(rss_kb) if rss_kb is not None else "?"
+    return "%s  %-7s  wall_ms=%d rss_kb=%s\n" % (ts, "tui", round(wall_seconds * 1000), rss)
+
+
 class PickerOption(Horizontal):
     def __init__(self, label, count, count_width, *, id=None):
         super().__init__(id=id, classes="picker-option")
@@ -1238,6 +1245,9 @@ class LightcycleApp(App):
         return response.remote, response.error
 
     def _refresh(self) -> None:
+        metrics_enabled = self._container.config.tui_metrics()
+        tick_start = time.perf_counter() if metrics_enabled else None
+
         lanes = StatusUseCase(self._container.store).execute().lanes
         try:
             suspended_steps = {
@@ -1299,6 +1309,13 @@ class LightcycleApp(App):
             upgrade_error=self._upgrade_error,
             hold=hold,
         )
+
+        if tick_start is not None:
+            wall_seconds = time.perf_counter() - tick_start
+            rss_kb = self._container.machine.self_rss()
+            self._container.worker_log.append_run_log(
+                _tui_metric_line(wall_seconds, rss_kb, self._now().timestamp())
+            )
 
     def _refresh_backlog_view(self) -> None:
         backlog_uc = BacklogUseCase(self._container.store, None)

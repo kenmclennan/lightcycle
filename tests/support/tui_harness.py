@@ -162,13 +162,14 @@ def _sweep_temp_roots():
 
 
 class HermeticTuiConfig(Config):
-    def __init__(self, autostart_pool=False):
+    def __init__(self, autostart_pool=False, tui_metrics=False):
         root = _tracked_mkdtemp()
         home = os.path.join(root, "home")
         os.makedirs(home)
         cfg_path = os.path.join(home, "config")
         seeded = dict(_SEED_KEYS)
         seeded["tui-autostart-pool"] = "true" if autostart_pool else "false"
+        seeded["tui-metrics"] = "true" if tui_metrics else "false"
         seeded["projects"] = os.path.join(root, "projects")
         seeded["specs"] = os.path.join(root, "specs")
         seeded["backups-dir"] = os.path.join(root, "backups-dir")
@@ -244,9 +245,9 @@ def assert_hermetic(container):
 def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None,
                          launcher=None, git=None, spawner=None, github=None, backup=None,
                          workflow_bundle=None, worker_log=None, autostart_pool=False,
-                         machine=None):
+                         machine=None, tui_metrics=False):
     fs_double = fs or FakeFs()
-    config = HermeticTuiConfig(autostart_pool=autostart_pool)
+    config = HermeticTuiConfig(autostart_pool=autostart_pool, tui_metrics=tui_metrics)
     store_double = store
     if store_double is None:
         store_double = FakeStore()
