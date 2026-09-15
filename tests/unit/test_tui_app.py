@@ -1,4 +1,5 @@
 import datetime
+import os
 import time
 import unittest
 from unittest.mock import patch
@@ -27,6 +28,7 @@ from lightcycle.adapters.tui.app import (
     ProjectFilterPicker,
     ShortcutBar,
     StatusBar,
+    _tui_metric_line,
 )
 from lightcycle.adapters.tui.design_system import (
     BACKLOG_EMPTY_SHORTCUTS,
@@ -51,6 +53,7 @@ from lightcycle.adapters.tui.row_grid import (
 )
 from lightcycle.application.setup import UpgradeResponse
 from lightcycle.domain.work import State
+from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.tui_harness import (
@@ -2575,3 +2578,48 @@ class TestPoolControl(unittest.TestCase):
         _, spawner, _ = self._launch(running=True, autostart=True)
 
         self.assertEqual(spawner.pool_spawns, 0)
+
+
+class TestTuiMetricLine(unittest.TestCase):
+    def test_wall_ms_and_rss_kb_fields_are_present(self):
+        line = _tui_metric_line(0.123, 4242, 1700000000.0)
+
+        self.assertIn("wall_ms=123", line)
+        self.assertIn("rss_kb=4242", line)
+
+    def test_none_rss_renders_as_a_question_mark_not_the_word_none(self):
+        line = _tui_metric_line(0.05, None, 1700000000.0)
+
+        self.assertIn("rss_kb=?", line)
+        self.assertNotIn("rss_kb=None", line)
+
+
+class TestTuiMetricsRecording(unittest.TestCase):
+    def _run_log_lines(self, container):
+        content = container.worker_log._files.get(os.path.join("logs", "run.log"), b"")
+        return content.decode("utf-8").splitlines()
+
+    def test_enabled_records_one_metric_line_per_refresh(self):
+        container = make_test_container(machine=FakeMachine(rss=4242), tui_metrics=True)
+        session = launch(container)
+        self.addCleanup(session.close)
+        before = len(self._run_log_lines(container))
+
+        session.run(session.app._refresh)
+        session.pause()
+
+        after = self._run_log_lines(container)
+        self.assertEqual(len(after), before + 1)
+        self.assertIn("wall_ms=", after[-1])
+        self.assertIn("rss_kb=4242", after[-1])
+
+    def test_disabled_records_no_metric_line(self):
+        container = make_test_container(machine=FakeMachine(rss=4242), tui_metrics=False)
+        session = launch(container)
+        self.addCleanup(session.close)
+        before = self._run_log_lines(container)
+
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(self._run_log_lines(container), before)

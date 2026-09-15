@@ -122,3 +122,12 @@ class MachineAdapter(MachinePort):
         if sys.platform == "linux":
             return _headroom_linux(workers)
         return MachineHeadroom(system_pressure=None, pool_share=None)
+
+    def self_rss(self):
+        out = _run(["ps", "-o", "rss=", "-p", str(os.getpid())])
+        if out is None:
+            return None
+        try:
+            return int(out.strip())
+        except ValueError:
+            return None
