@@ -31,14 +31,21 @@ class WorkerPool:
     def any_booting(self, probe, now, max_boot):
         return any(w.is_booting(now, max_boot) for w in self.alive(probe))
 
-    def orphans(self, probe, now, max_boot, claimed_ids):
+    def orphans(self, probe, now, max_boot, claimed_owner):
         return [
             w
             for w in self.alive(probe)
             if w.spawnid
             and not w.is_booting(now, max_boot)
-            and (w.step is None or w.step not in claimed_ids)
+            and self._claim_mismatch(w.step, w.spawnid, claimed_owner)
         ]
+
+    @staticmethod
+    def _claim_mismatch(step, spawnid, claimed_owner):
+        if step not in claimed_owner:
+            return True
+        owner = claimed_owner[step]
+        return owner is not None and owner != spawnid
 
     def stalled(self, probe, now, max_boot, stall_seconds, mtime_probe):
         return [

@@ -104,6 +104,7 @@ class SweepUseCase:
             return SweepResponse(swept=[], killed=[], pruned=0)
         claimed = self._store.claimed_steps()
         claimed_ids = {t.id for t in claimed}
+        claimed_owner = {t.id: t.claimed_by for t in claimed}
         pre_claim_dead = pool.dead_steps_outside(probe, claimed_ids)
         covered = pool.covered_steps(probe)
         live_spawnids = pool.live_spawnids(probe)
@@ -154,7 +155,7 @@ class SweepUseCase:
             last_line = self._last_nonempty_line(lines)
             if self._advance_spin(step_id, now, no_work, last_line, dead.spawnid):
                 parked.append(step_id)
-        orphans = pool.orphans(probe, now, max_boot, claimed_ids)
+        orphans = pool.orphans(probe, now, max_boot, claimed_owner)
         for w in orphans:
             self._workers.kill(w.pid)
         try:

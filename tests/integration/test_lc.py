@@ -900,7 +900,7 @@ class TestRun(unittest.TestCase):
     def test_run_no_free_slots_logs_reason(self):
         create_owned_step(self.store, "build: t", step="build", role="agent")
         create_owned_step(self.store, "review: t", step="review", role="agent")
-        claimed = self.store.claim_ready("agent")
+        claimed = self.store.claim_ready("agent", "boot")
         self._preset_worker(
             spawnid="boot",
             role="agent",
