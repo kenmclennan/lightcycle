@@ -78,6 +78,14 @@ _SEED_KEYS = [
     ("price-sonnet-output-per-mtok", "10.00"),
     ("price-sonnet-cache-write-per-mtok", "2.50"),
     ("price-sonnet-cache-read-per-mtok", "0.20"),
+    ("price-opus-input-per-mtok", "5.00"),
+    ("price-opus-output-per-mtok", "25.00"),
+    ("price-opus-cache-write-per-mtok", "6.25"),
+    ("price-opus-cache-read-per-mtok", "0.50"),
+    ("price-haiku-input-per-mtok", "1.00"),
+    ("price-haiku-output-per-mtok", "5.00"),
+    ("price-haiku-cache-write-per-mtok", "1.25"),
+    ("price-haiku-cache-read-per-mtok", "0.10"),
     ("shutdown-grace-seconds", "10"),
     ("tick-failure-cap", "5"),
     ("review-rounds-cap", "5"),
@@ -485,6 +493,30 @@ class Config:
     def price_sonnet_cache_read_per_mtok(self):
         return self._required_float("price-sonnet-cache-read-per-mtok")
 
+    def price_opus_input_per_mtok(self):
+        return self._required_float("price-opus-input-per-mtok")
+
+    def price_opus_output_per_mtok(self):
+        return self._required_float("price-opus-output-per-mtok")
+
+    def price_opus_cache_write_per_mtok(self):
+        return self._required_float("price-opus-cache-write-per-mtok")
+
+    def price_opus_cache_read_per_mtok(self):
+        return self._required_float("price-opus-cache-read-per-mtok")
+
+    def price_haiku_input_per_mtok(self):
+        return self._required_float("price-haiku-input-per-mtok")
+
+    def price_haiku_output_per_mtok(self):
+        return self._required_float("price-haiku-output-per-mtok")
+
+    def price_haiku_cache_write_per_mtok(self):
+        return self._required_float("price-haiku-cache-write-per-mtok")
+
+    def price_haiku_cache_read_per_mtok(self):
+        return self._required_float("price-haiku-cache-read-per-mtok")
+
     def usage_pricing(self):
         return {
             "sonnet": ModelRates(
@@ -492,6 +524,18 @@ class Config:
                 output=self.price_sonnet_output_per_mtok(),
                 cache_write=self.price_sonnet_cache_write_per_mtok(),
                 cache_read=self.price_sonnet_cache_read_per_mtok(),
+            ),
+            "opus": ModelRates(
+                input=self.price_opus_input_per_mtok(),
+                output=self.price_opus_output_per_mtok(),
+                cache_write=self.price_opus_cache_write_per_mtok(),
+                cache_read=self.price_opus_cache_read_per_mtok(),
+            ),
+            "haiku": ModelRates(
+                input=self.price_haiku_input_per_mtok(),
+                output=self.price_haiku_output_per_mtok(),
+                cache_write=self.price_haiku_cache_write_per_mtok(),
+                cache_read=self.price_haiku_cache_read_per_mtok(),
             ),
         }
 

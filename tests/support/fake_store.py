@@ -1,8 +1,9 @@
 import copy
 import datetime
+import json
 import uuid
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 from lightcycle.ports.store import (
     ItemText,
@@ -89,6 +90,7 @@ def record_to_step(record, blocked_by=None):
         usage_cache_creation_tokens=meta.get("usage_cache_creation_tokens") or 0,
         usage_cost_usd=Cost.from_usd(meta.get("usage_cost_usd") or 0.0),
         usage_cost_basis=meta.get("usage_cost_basis"),
+        usage_rates_used=meta.get("usage_rates_used"),
         usage_thinking_tokens=meta.get("usage_thinking_tokens"),
         turn_count=meta.get("turn_count") or 0,
     )
@@ -523,7 +525,8 @@ class FakeStore(StorePort):
             b["metadata"] = meta
 
     def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                      rates_used=None):
         b = self._get(tid)
         meta = dict(b.get("metadata") or {})
         meta["usage_input_tokens"] = (meta.get("usage_input_tokens") or 0) + input_tokens
@@ -537,6 +540,8 @@ class FakeStore(StorePort):
         meta["usage_cost_usd"] = (meta.get("usage_cost_usd") or 0.0) + cost_usd
         if cost_basis is not None:
             meta["usage_cost_basis"] = cost_basis
+        if rates_used is not None:
+            meta["usage_rates_used"] = json.dumps(asdict(rates_used))
         if thinking_tokens is not None:
             meta["usage_thinking_tokens"] = (
                 (meta.get("usage_thinking_tokens") or 0) + thinking_tokens
@@ -570,7 +575,7 @@ class FakeStore(StorePort):
             self.record_usage(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
                 usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
-                usage.thinking_tokens,
+                usage.thinking_tokens, rates_used=usage.rates_used,
             )
             self.record_attribution(step_id, attribution.turn_count, attribution.tool_usage)
         self._backfill_log[log_file] = (step_id, usage.has_result_line)
@@ -580,12 +585,13 @@ class FakeStore(StorePort):
         self, spawnid, resume,
         tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
         cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
+        rates_used=None,
     ):
         self._usage_accrual_state[spawnid] = resume
         if input_tokens or output_tokens or cache_read_tokens or cache_creation_tokens:
             self.record_usage(
                 tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-                cost_usd, cost_basis, thinking_tokens,
+                cost_usd, cost_basis, thinking_tokens, rates_used=rates_used,
             )
         if turn_count or tool_usage:
             self.record_attribution(tid, turn_count, tool_usage)
@@ -612,7 +618,7 @@ class FakeStore(StorePort):
             self.record_usage(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
                 usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
-                usage.thinking_tokens,
+                usage.thinking_tokens, rates_used=usage.rates_used,
             )
             recovered = True
         self._backfill_log[log_file] = (step_id, usage.has_result_line)
@@ -632,6 +638,9 @@ class FakeStore(StorePort):
         meta["usage_cache_creation_tokens"] = usage_totals.cache_creation_tokens
         meta["usage_cost_usd"] = usage_totals.cost_usd.to_usd()
         meta["usage_cost_basis"] = usage_totals.cost_basis
+        meta["usage_rates_used"] = (
+            json.dumps(asdict(usage_totals.rates_used)) if usage_totals.rates_used is not None else None
+        )
         meta["usage_thinking_tokens"] = usage_totals.thinking_tokens
         meta["turn_count"] = turn_count
         b["metadata"] = meta

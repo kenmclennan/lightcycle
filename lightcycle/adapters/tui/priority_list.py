@@ -4,7 +4,7 @@ from functools import partial
 from lightcycle.adapters.tui.design_system import (
     DEPENDENCY_BLOCKED_EXTRA_GLYPH, HUMAN_STEP_GLYPH, STATE_GLYPHS,
 )
-from lightcycle.adapters.tui.hub import COST_NOT_RECORDED
+from lightcycle.adapters.tui.hub import COST_NOT_RECORDED, _unpriced_suffix
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.application.work.cost import CostInput, CostUseCase
@@ -120,7 +120,8 @@ def _rolled_up_cost_text(store, item_id):
     cost = CostUseCase(store).execute(CostInput(node=item_id))
     if cost.turn_count == 0 and not cost.cost_usd:
         return ""
-    return format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
+    base = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
+    return base + _unpriced_suffix(cost.unpriced_count)
 
 
 def _rolled_up_time_text(store, item_id):

@@ -983,7 +983,7 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         for col in (
             "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
             "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis",
-            "usage_thinking_tokens", "turn_count",
+            "usage_rates_used", "usage_thinking_tokens", "turn_count",
         ):
             self.assertIn(col, cols)
 
@@ -994,6 +994,7 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         self.assertEqual(t.usage_cache_creation_tokens, 0)
         self.assertEqual(t.usage_cost_usd, Cost())
         self.assertIsNone(t.usage_cost_basis)
+        self.assertIsNone(t.usage_rates_used)
         self.assertIsNone(t.usage_thinking_tokens)
         self.assertEqual(t.turn_count, 0)
 

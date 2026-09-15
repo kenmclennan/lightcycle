@@ -33,10 +33,11 @@ class RecordingFakeStore(FakeStore):
         self.record_attribution_calls = []
 
     def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                      rates_used=None):
         self.record_usage_calls.append(
             (tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-             cost_usd, cost_basis, thinking_tokens)
+             cost_usd, cost_basis, thinking_tokens, rates_used)
         )
 
     def record_attribution(self, tid, turn_count, tool_usage):
@@ -100,6 +101,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         self.assertEqual(recorded[:5], (tid, 100, 50, 0, 0))
         self.assertEqual(recorded[6], "derived")
         self.assertIsNone(recorded[7])
+        self.assertEqual(recorded[8], ModelRates(input=2.0, output=10.0, cache_write=2.5, cache_read=0.2))
 
         self.assertEqual(len(store.record_attribution_calls), 1)
         recorded_tid, turn_count, tool_usage = store.record_attribution_calls[0]

@@ -994,6 +994,21 @@ def _hub_cost_step_not_recorded(size):
     return _open_hub(_launch(store, size=size), step, tab="cost")
 
 
+def _cost_step_unpriced_store():
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-522", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step(
+        "LC-522.4", step="write-code", role="agent", parent=item)
+    store.record_usage(step, 100, 20, 0, 0, 0.0, "unpriced", None)
+    store.record_attribution(step, 12, {})
+    return store, step
+
+
+def _hub_cost_step_unpriced(size):
+    store, step = _cost_step_unpriced_store()
+    return _open_hub(_launch(store, size=size), step, tab="cost")
+
+
 def _cost_item_store():
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
@@ -1010,6 +1025,10 @@ def _cost_item_store():
     review = store.step("LC-143.3.8", step="review-code", role="agent", parent=item)
     store.set_step_pass(review, pass_1)
     store.record_attribution(review, 60, {})
+    unpriced = store.step("LC-143.3.10", step="review-code", role="agent", parent=item)
+    store.set_step_pass(unpriced, pass_1)
+    store.record_usage(unpriced, 50, 10, 0, 0, 0.0, "unpriced", None)
+    store.record_attribution(unpriced, 8, {})
     gate = store.step(
         "LC-143.3.6", step="code-await-merge", role="human", parent=item)
     store.set_step_pass(gate, pass_1)
@@ -1092,6 +1111,7 @@ SCREENS = {
     "hub#cost-human": _hub_cost_human,
     "hub#cost-step-recorded": _hub_cost_step_recorded,
     "hub#cost-step-not-recorded": _hub_cost_step_not_recorded,
+    "hub#cost-step-unpriced": _hub_cost_step_unpriced,
     "hub#cost-item": _hub_cost_item,
 }
 

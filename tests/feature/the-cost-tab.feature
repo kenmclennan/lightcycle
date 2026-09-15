@@ -3,19 +3,24 @@ Feature: The Cost tab
   none of it was visible anywhere in the TUI before this tab. A step's Cost
   tab and an item's Cost tab are both appended last in their tab strip, after
   Artifacts and after Log respectively, so the existing Workflow-is-one-press
-  invariant is unaffected. A step's rendering discriminates on four states,
-  not three: a human step has no cost fields at all, since the concept
+  invariant is unaffected. A step's rendering discriminates on five states,
+  not four: a human step has no cost fields at all, since the concept
   doesn't apply to a human gate; an agent step that hasn't produced a turn
   yet shows its own "hasn't run yet" empty state, distinct from the human
   case; an agent step that ran but has no recorded cost shows its turns,
   tokens, and cache hit rate - real attribution data, independent of pricing
   - with an explicit "not recorded" for cost and cost basis, never $0.00; an
+  agent step that ran, was priced, but whose model has no configured rate
+  shows the same "not recorded" cost with "unpriced" as its cost basis -
+  a pricing attempt happened, distinct from never having attempted one; an
   agent step that ran with a recorded cost shows every figure. An item's Cost
   tab sums the same figures across every one of its steps, every pass
   included, excluding human steps entirely, plus a per-stage subtotal
   ordered by spend so an item's spend is legible at a glance; its
-  cost-per-turn divides only by the turns belonging to steps with a known
-  cost basis.
+  cost-per-turn divides only by the turns belonging to steps with a known,
+  priced cost basis, and any rollup including an unpriced step's turns notes
+  how many of those steps are unpriced so an incomplete total is never read
+  as a complete one.
 
   Scenario: A human step's Cost tab shows no cost fields at all
     Given a human step, its hub open
@@ -56,6 +61,13 @@ Feature: The Cost tab
     And its cost reads "not recorded"
     And no "$0.00" is shown anywhere on the tab
 
+  Scenario: An agent step whose model has no configured price shows "unpriced" as its basis, never a dollar figure
+    Given an agent step with an unpriced cost basis, its hub open
+    When I open its Cost tab
+    Then its cost reads "not recorded"
+    And its cost basis reads "unpriced"
+    And no "$0.00" is shown anywhere on the tab
+
   Scenario: An item's Cost tab sums every step's usage across every pass, with a per-stage subtotal ordered by spend
     Given an item whose steps span two passes with recorded costs at different stages, its hub open
     When I open its Cost tab
@@ -67,6 +79,11 @@ Feature: The Cost tab
     When I open its Cost tab
     Then that stage's row reads "not recorded"
     And no "$0.00" is shown anywhere on the tab
+
+  Scenario: An item's rollup notes how many of its steps are unpriced
+    Given an item with a priced step and an unpriced step, its hub open
+    When I open its Cost tab
+    Then its cost includes the suffix "(1 unpriced)"
 
   Scenario: An item's Cost tab excludes human steps from the rollup entirely
     Given an item with a human gate step and an agent step with a recorded cost, its hub open

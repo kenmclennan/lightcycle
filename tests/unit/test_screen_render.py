@@ -66,6 +66,20 @@ def test_a_pool_holding_state_renders_the_hold_segment_in_the_footer():
     assert "holding · 2/5 · memory" in frame
 
 
+def test_an_unpriced_step_shows_not_recorded_and_unpriced_basis_never_a_dollar_figure():
+    frame = render("hub#cost-step-unpriced", size=(100, 30))
+
+    assert "$0.00" not in frame
+    assert "not recorded" in frame
+    assert "unpriced" in frame
+
+
+def test_an_item_rollup_including_an_unpriced_step_notes_the_unpriced_count():
+    frame = render("hub#cost-item", size=(100, 30))
+
+    assert "(1 unpriced)" in frame
+
+
 def _icon_style(session, row_key, glyph):
     table = session.app.query_one(PriorityTable)
     y = 0

@@ -154,6 +154,36 @@ def _agent_step_turns_no_cost(ctx):
     _push_hub(ctx, step)
 
 
+@given("an agent step with an unpriced cost basis, its hub open")
+def _agent_step_unpriced(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    step = store.create_step(step="write-code", role="agent", parent=item)
+    store.record_usage(step, 100, 20, 0, 0, 0.0, "unpriced", None)
+    store.record_attribution(step, 12, {})
+    ctx["store"] = store
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    ctx["session"] = launch(make_test_container(store=store), size=WIDE_SIZE)
+    _push_hub(ctx, step)
+
+
+@given("an item with a priced step and an unpriced step, its hub open")
+def _item_with_priced_and_unpriced_steps(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    priced = store.create_step(step="write-code", role="agent", parent=item)
+    store.record_usage(priced, 1000, 200, 0, 0, 1.0, "list", None)
+    store.record_attribution(priced, 10, {})
+    unpriced = store.create_step(step="review-code", role="agent", parent=item)
+    store.record_usage(unpriced, 100, 20, 0, 0, 0.0, "unpriced", None)
+    store.record_attribution(unpriced, 5, {})
+    ctx["store"] = store
+    ctx["item_id"] = item
+    ctx["session"] = launch(make_test_container(store=store), size=WIDE_SIZE)
+    _push_hub(ctx, item)
+
+
 @given("an agent step that never ran, its hub open")
 def _agent_step_never_ran(ctx):
     store = FakeStore()
@@ -310,6 +340,16 @@ def _cost_reads(ctx, text):
 def _no_zero_dollar_shown(ctx):
     pane = ctx["session"].app.screen.query_one(CostPane)
     assert "$0.00" not in _widget_text(pane)
+
+
+@then(parsers.parse('its cost basis reads "{text}"'))
+def _cost_basis_reads(ctx, text):
+    assert _field_value(ctx, "cost_basis") == text
+
+
+@then(parsers.parse('its cost includes the suffix "{suffix}"'))
+def _cost_includes_suffix(ctx, suffix):
+    assert suffix in _field_value(ctx, "cost")
 
 
 @then("its total turns and cost sum every step across both passes")

@@ -1,6 +1,7 @@
 from lightcycle.domain.money import Cost
-from lightcycle.domain.pool import AttributionEvent, ToolUsage, UsageEvent, UsageResume
+from lightcycle.domain.pool import AttributionEvent, ModelRates, ToolUsage, UsageEvent, UsageResume
 from lightcycle.domain.work import NodeSpec
+from lightcycle.domain.work.cost import step_cost
 from lightcycle.ports.store import NodeNotFoundError
 from tests.support.step_factory import create_owned_step
 
@@ -583,6 +584,7 @@ class StoreContractBase:
         self.assertEqual(t.usage_cache_creation_tokens, 0)
         self.assertEqual(t.usage_cost_usd, Cost())
         self.assertIsNone(t.usage_cost_basis)
+        self.assertIsNone(t.usage_rates_used)
         self.assertIsNone(t.usage_thinking_tokens)
 
     def test_record_usage_roundtrips_all_seven_fields(self):
@@ -627,6 +629,38 @@ class StoreContractBase:
         t = s.get_node(tid)
         self.assertEqual(t.usage_cost_basis, "list")
         self.assertEqual(t.usage_thinking_tokens, 5)
+
+    def test_record_usage_unpriced_basis_and_no_rates_roundtrips(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_usage(tid, 10, 0, 0, 0, 0.0, "unpriced", None, rates_used=None)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_cost_basis, "unpriced")
+        self.assertIsNone(t.usage_rates_used)
+
+    def test_record_usage_derived_basis_persists_and_roundtrips_rates_used(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        rates = ModelRates(input=2.0, output=10.0, cache_read=0.2, cache_write=2.5)
+        s.record_usage(tid, 10, 20, 30, 40, 1.5, "derived", None, rates_used=rates)
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_cost_basis, "derived")
+        self.assertEqual(
+            step_cost(t, {}).rates_used,
+            {"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write": 2.5},
+        )
+
+    def test_record_usage_none_rates_used_leaves_prior_value_untouched(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        rates = ModelRates(input=2.0, output=10.0, cache_read=0.2, cache_write=2.5)
+        s.record_usage(tid, 1, 1, 1, 1, 1.0, "derived", None, rates_used=rates)
+        s.record_usage(tid, 1, 1, 1, 1, 1.0, None, None, rates_used=None)
+        t = s.get_node(tid)
+        self.assertEqual(
+            step_cost(t, {}).rates_used,
+            {"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write": 2.5},
+        )
 
     def test_record_attribution_roundtrips_turn_count_and_tool_usage(self):
         s = self.make_store()

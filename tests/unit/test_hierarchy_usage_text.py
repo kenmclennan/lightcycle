@@ -57,6 +57,15 @@ class TestHierarchyUsageText(unittest.TestCase):
 
         self.assertEqual(hierarchy_usage_text(node), ("50 turns", COST_NOT_RECORDED))
 
+    def test_an_agent_step_with_an_unpriced_basis_shows_the_not_recorded_placeholder(self):
+        store = FakeStore()
+        step = create_owned_step(store, "building", step="build", role="agent")
+        store.record_usage(step, 100, 10, 0, 0, 0.0, "unpriced", None)
+        store.record_attribution(step, 50, {})
+        node = store.get_node(step)
+
+        self.assertEqual(hierarchy_usage_text(node), ("50 turns", COST_NOT_RECORDED))
+
     def test_a_single_turn_is_singular(self):
         store = FakeStore()
         step = create_owned_step(store, "building", step="build", role="agent")
