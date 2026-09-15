@@ -4,7 +4,7 @@ from typing import List, Optional
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.item_filter import project_matches, text_matches
 from lightcycle.application.work.project_counts import ProjectCount, project_counts
-from lightcycle.application.work.project_of import project_of
+from lightcycle.application.work.project_of import project_of, repo_of
 from lightcycle.domain.work import State, node_id_key
 
 
@@ -35,8 +35,8 @@ class BacklogUseCase:
 
     def execute(self, input: BacklogInput) -> BacklogResponse:
         items = self._backlogged_items()
-        items = [t for t in items if project_matches(self._store, t, input.project)]
-        items = [t for t in items if text_matches(self._store, t, input.text)]
+        items = [t for t in items if project_matches(t, input.project)]
+        items = [t for t in items if text_matches(t, input.text)]
         items.sort(key=lambda t: node_id_key(t.id))
         if input.n is not None:
             items = items[:input.n]
@@ -44,6 +44,7 @@ class BacklogUseCase:
             HumanNodeRow(
                 kind="todo", outcomes=[], step=t,
                 project=project_of(self._store, t),
+                repo=repo_of(self._store, t),
                 description=t.description, artifacts=t.artifacts,
                 title=t.title,
             )

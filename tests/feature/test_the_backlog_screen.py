@@ -122,8 +122,7 @@ def _backlog_shown_many(ctx):
 def _backlog_shown_tagged_item(ctx, repo, project):
     store = FakeStore()
     store.add_project(project)
-    item = store.create_item("tagged item", "a description")
-    store.add_artifact(item, "repo", repo)
+    item = store.create_item("tagged item", "a description", project=repo)
     ctx["item_id"] = item
     _launch_and_switch(ctx, store)
 
@@ -175,8 +174,7 @@ def _backlog_stack_terminal_width(mode):
 ))
 def _backlog_row_forces_stacked(ctx, mode):
     store = FakeStore()
-    item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID)
-    store.add_artifact(item, "repo", _STACK_PROJECT)
+    item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID, project=_STACK_PROJECT)
     ctx["item_id"] = item
     _launch_and_switch(ctx, store, size=(_backlog_stack_terminal_width(mode), 24))
 
@@ -198,10 +196,8 @@ def _backlog_shown_two_projects(ctx, project_a, project_b):
     store = FakeStore()
     store.add_project(project_a)
     store.add_project(project_b)
-    item_a = store.create_item("item a", "a description")
-    store.add_artifact(item_a, "repo", project_a)
-    item_b = store.create_item("item b", "a description")
-    store.add_artifact(item_b, "repo", project_b)
+    store.create_item("item a", "a description", project=project_a)
+    store.create_item("item b", "a description", project=project_b)
     short_a = project_a.rsplit("/", 1)[-1]
     short_b = project_b.rsplit("/", 1)[-1]
     ctx["expected_counts"] = {short_a: 1, short_b: 1}
@@ -213,8 +209,7 @@ def _backlog_shown_two_projects(ctx, project_a, project_b):
 def _backlog_shown_one_project(ctx, project):
     store = FakeStore()
     store.add_project(project)
-    item = store.create_item("item", "a description")
-    store.add_artifact(item, "repo", project)
+    store.create_item("item", "a description", project=project)
     short = project.rsplit("/", 1)[-1]
     ctx["expected_counts"] = {short: 1}
     ctx["expected_total"] = 1
@@ -230,8 +225,7 @@ def _backlog_shown_project_with_totals(ctx, project, total, count):
     store = FakeStore()
     store.add_project(project)
     for _ in range(count):
-        item = store.create_item("under item", "a description")
-        store.add_artifact(item, "repo", project)
+        store.create_item("under item", "a description", project=project)
     for i in range(total - count):
         store.create_item("other item %d" % i, "a description")
     short = project.rsplit("/", 1)[-1]
@@ -270,8 +264,7 @@ def _store_items_other_project(ctx, project):
     store = FakeStore()
     store.add_project("other-project")
     for i in range(2):
-        item = store.create_item("item %d" % i, "a description")
-        store.add_artifact(item, "repo", "other-project")
+        store.create_item("item %d" % i, "a description", project="other-project")
     ctx["store"] = store
 
 
@@ -280,8 +273,7 @@ def _backlog_shown_filtered_empty(ctx, project):
     store = FakeStore()
     store.add_project(project)
     store.add_project("other-project")
-    other = store.create_item("other item", "a description")
-    store.add_artifact(other, "repo", "other-project")
+    store.create_item("other item", "a description", project="other-project")
     ctx["filter_project"] = project
     _launch_and_switch(ctx, store)
     session = ctx["session"]
@@ -361,8 +353,7 @@ def _when_backlog_filtered(ctx, project):
 
 @when(parsers.parse('a todo item under "{project}" is created'))
 def _create_item_under_project(ctx, project):
-    item = ctx["store"].create_item("new item", "a description")
-    ctx["store"].add_artifact(item, "repo", project)
+    item = ctx["store"].create_item("new item", "a description", project=project)
     ctx["new_item_id"] = item
 
 
@@ -769,10 +760,8 @@ def _backlog_shown_two_projects_shared_title(ctx, project_a, project_b, title):
     store = FakeStore()
     store.add_project(project_a)
     store.add_project(project_b)
-    item_a = store.create_item(title, "a description")
-    store.add_artifact(item_a, "repo", project_a)
-    item_b = store.create_item(title, "a description")
-    store.add_artifact(item_b, "repo", project_b)
+    store.create_item(title, "a description", project=project_a)
+    store.create_item(title, "a description", project=project_b)
     _launch_and_switch(ctx, store)
 
 

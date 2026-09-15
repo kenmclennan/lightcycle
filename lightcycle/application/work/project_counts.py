@@ -18,7 +18,7 @@ def project_counts(store, items) -> Tuple[List[ProjectCount], int]:
             project=ProjectIdentity.short_name(p.identity),
             count=sum(
                 1 for t in items
-                if project_matches(store, t, ProjectIdentity.short_name(p.identity))
+                if project_matches(t, ProjectIdentity.short_name(p.identity))
             ),
         )
         for p in store.list_projects()

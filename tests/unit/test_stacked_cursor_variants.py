@@ -31,9 +31,9 @@ class TestBacklogStackedRebuildRendersEachRowOnce(unittest.TestCase):
     def _launch(self):
         store = FakeStore()
         a = store.create_item("first title long enough for a continuation line", "a description", id=_BACKLOG_ID_A)
-        store.add_artifact(a, "repo", _BACKLOG_PROJECT)
+        store.edit_node(a, project=_BACKLOG_PROJECT)
         b = store.create_item("second title long enough for a continuation line", "a description", id=_BACKLOG_ID_B)
-        store.add_artifact(b, "repo", _BACKLOG_PROJECT)
+        store.edit_node(b, project=_BACKLOG_PROJECT)
         width = _backlog_stack_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)
@@ -105,11 +105,11 @@ class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):
         store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
             step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
-        store.add_artifact(_PRIORITY_ID_A + "-i", "repo", _PRIORITY_PROJECT)
+        store.edit_node(_PRIORITY_ID_A + "-i", project=_PRIORITY_PROJECT)
         store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
             step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
-        store.add_artifact(_PRIORITY_ID_B + "-i", "repo", _PRIORITY_PROJECT)
+        store.edit_node(_PRIORITY_ID_B + "-i", project=_PRIORITY_PROJECT)
         width = _priority_stack_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)
@@ -134,11 +134,11 @@ class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
         store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
             step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
-        store.add_artifact(_PRIORITY_ID_A + "-i", "repo", _PRIORITY_PROJECT)
+        store.edit_node(_PRIORITY_ID_A + "-i", project=_PRIORITY_PROJECT)
         store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
             step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
-        store.add_artifact(_PRIORITY_ID_B + "-i", "repo", _PRIORITY_PROJECT)
+        store.edit_node(_PRIORITY_ID_B + "-i", project=_PRIORITY_PROJECT)
         for tid in active_ids:
             store.assign(tid, "worker-1")
             store.update_state(tid, State.RUNNING)

@@ -19,8 +19,7 @@ def ctx():
 def _project_with_items(ctx, identity, count, repo):
     ctx["store"].add_project(identity)
     for _ in range(int(count)):
-        item = ctx["store"].create_item("item", "a description")
-        ctx["store"].add_artifact(item, "repo", repo)
+        ctx["store"].create_item("item", "a description", project=repo)
 
 
 @given(parsers.parse('the registered project "{identity}" with no backlogged items'))
@@ -40,8 +39,7 @@ def _unscoped_items(ctx, count):
 ))
 def _unmatched_repo_items(ctx, count, repo):
     for _ in range(int(count)):
-        item = ctx["store"].create_item("unmatched item", "a description")
-        ctx["store"].add_artifact(item, "repo", repo)
+        ctx["store"].create_item("unmatched item", "a description", project=repo)
 
 
 @given("no registered projects")

@@ -397,19 +397,16 @@ def _g_long_title_step(ctx, group):
 def _g_three_steps_with_project(ctx, project):
     store = FakeStore()
 
-    blocked_item = store.create_item("blocked item", "a description")
-    store.add_artifact(blocked_item, "repo", project)
+    blocked_item = store.create_item("blocked item", "a description", project=project)
     blocker = create_owned_step(store, "blocker", step="build", role="agent")
     store.create_step(step="build", role="agent", deps=[blocker], parent=blocked_item
     )
 
-    active_item = store.create_item("active item", "a description")
-    store.add_artifact(active_item, "repo", project)
+    active_item = store.create_item("active item", "a description", project=project)
     active = store.create_step(step="build", role="agent", parent=active_item)
     store.assign(active, "worker-1")
 
-    queued_item = store.create_item("queued item", "a description")
-    store.add_artifact(queued_item, "repo", project)
+    queued_item = store.create_item("queued item", "a description", project=project)
     store.create_step(step="build", role="agent", parent=queued_item)
 
     ctx["store"] = store
@@ -529,9 +526,8 @@ def _priority_stack_terminal_width(mode):
 def _g_row_forces_stacked(ctx, mode):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=_STACK_TIME_MINUTES))
     store = FakeStore(now=lambda: clock.now().isoformat())
-    item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID)
+    item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID, project=_STACK_PROJECT)
     tid = store.create_step(step=_STACK_STEP, role="agent", parent=item)
-    store.add_artifact(item, "repo", _STACK_PROJECT)
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)
     store.accrue_active_seconds([tid], _STACK_TIME_MINUTES * 60)

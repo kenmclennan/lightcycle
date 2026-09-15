@@ -10,6 +10,7 @@ class HumanNodeRow:
     outcomes: List[str]
     step: Step
     project: Optional[str] = None
+    repo: Optional[str] = None
     description: Optional[str] = None
     artifacts: tuple = ()
     pr: Optional[str] = None

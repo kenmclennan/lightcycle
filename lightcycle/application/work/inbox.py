@@ -44,7 +44,8 @@ class InboxUseCase:
         item = self._item(t.item) if t.item else None
         return HumanNodeRow(
             kind=kind, outcomes=outcomes, step=t,
-            project=item.repo if item else None,
+            project=item.project if item else None,
+            repo=item.repo if item else None,
             description=item.description if item else None,
             artifacts=item.artifacts if item else (),
             pr=self._pr_for(t, resolver),

@@ -12,8 +12,8 @@ from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
 
-def _row(id, project="", title="title"):
-    return BacklogRow(id=id, project=project, title=title)
+def _row(id, project="", repo="", title="title"):
+    return BacklogRow(id=id, project=project, repo=repo, title=title)
 
 
 class TestBacklogViewCheapPathOnUnchangedShape(unittest.TestCase):

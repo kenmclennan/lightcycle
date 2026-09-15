@@ -7,7 +7,7 @@ graph TD
   item[item - a unit of work, holds the spec] --> step[step - one workflow stage instance]
 ```
 
-- **item** - the unit of work, and the top of the tree. It carries the `description` (the brief), the workflow-defined artifacts, the `repo` and the workflow pin, and moves through the workflow via its steps. An item has no parent, no role and no notes.
+- **item** - the unit of work, and the top of the tree. It carries the `description` (the brief), the workflow-defined artifacts, the `repo`, the `project` (a separate grouping label - see [ontology.md](ontology.md)), and the workflow pin, and moves through the workflow via its steps. An item has no parent, no role and no notes.
 - **step** - one instance of a workflow stage (write-code, review-code, open-pr, ...). Steps are what agents actually claim and execute. A step's `item` is required and fixed at creation; it has no description, no artifacts and no workflow of its own. The branch, the PR and the comment ledger belong to the **phase run**, not to the step.
 - **pass** - one traversal of the workflow for an item. A flow that loops runs several; a stage's `pass-end:` grammar declares where a traversal ends, which is why the boundary is stated and not derived (a rework back-edge and a delivery back-edge are the same shape in the graph).
 - **phase run** - one phase within one pass. A phase is one PR gate, so a run owns exactly one branch and one PR, plus the comment ledger for that PR: `comments_dispatched_through` (written by the engine at spawn) and `comments_handled_through` (written by the agent at completion). Pass and phase are orthogonal - a second pass through the same phase is a different run, which is why a run can never resolve to an earlier pass's already-merged PR.

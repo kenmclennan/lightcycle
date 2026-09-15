@@ -18,15 +18,14 @@ from tests.support.step_factory import create_owned_step
 
 
 class TestProject(unittest.TestCase):
-    def test_resolves_via_its_items_repo(self):
+    def test_resolves_via_its_items_project(self):
         store = FakeStore()
-        item = store.create_item("story", "a description")
-        store.add_artifact(item, "repo", "lightcycle")
+        item = store.create_item("story", "a description", project="lightcycle")
         step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
 
-    def test_blank_when_its_item_has_no_repo(self):
+    def test_blank_when_its_item_has_no_project(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
         step = store.create_step(step="build", role="agent", parent=item)
@@ -35,14 +34,12 @@ class TestProject(unittest.TestCase):
 
     def test_resolves_from_the_item_when_given_an_item(self):
         store = FakeStore()
-        item = store.create_item("story", "a description")
-        store.add_artifact(item, "repo", "lightcycle")
+        item = store.create_item("story", "a description", project="lightcycle")
         self.assertEqual(_project(store, store.get_item(item)), "lightcycle")
 
-    def test_derives_the_short_label_from_a_slash_qualified_repo_artifact(self):
+    def test_derives_the_short_label_from_a_slash_qualified_project(self):
         store = FakeStore()
-        item = store.create_item("story", "a description")
-        store.add_artifact(item, "repo", "kenmclennan/lightcycle")
+        item = store.create_item("story", "a description", project="kenmclennan/lightcycle")
         step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")

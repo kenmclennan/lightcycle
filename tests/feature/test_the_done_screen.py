@@ -112,8 +112,7 @@ def _store_closed_items_other_project(ctx, project):
     store = FakeStore()
     store.add_project("other-project")
     for i in range(2):
-        item = store.create_item("item %d" % i, "a description")
-        store.add_artifact(item, "repo", "other-project")
+        item = store.create_item("item %d" % i, "a description", project="other-project")
         store.complete_node(item, "merged")
     ctx["store"] = store
 
@@ -126,11 +125,9 @@ def _done_shown_two_projects(ctx, project_a, project_b):
     store = FakeStore()
     store.add_project(project_a)
     store.add_project(project_b)
-    item_a = store.create_item("item a", "a description")
-    store.add_artifact(item_a, "repo", project_a)
+    item_a = store.create_item("item a", "a description", project=project_a)
     store.complete_node(item_a, "merged")
-    item_b = store.create_item("item b", "a description")
-    store.add_artifact(item_b, "repo", project_b)
+    item_b = store.create_item("item b", "a description", project=project_b)
     store.complete_node(item_b, "merged")
     short_a = project_a.rsplit("/", 1)[-1]
     short_b = project_b.rsplit("/", 1)[-1]
@@ -147,11 +144,9 @@ def _done_shown_two_projects_shared_title(ctx, project_a, project_b, title):
     store = FakeStore()
     store.add_project(project_a)
     store.add_project(project_b)
-    item_a = store.create_item(title, "a description")
-    store.add_artifact(item_a, "repo", project_a)
+    item_a = store.create_item(title, "a description", project=project_a)
     store.complete_node(item_a, "merged")
-    item_b = store.create_item(title, "a description")
-    store.add_artifact(item_b, "repo", project_b)
+    item_b = store.create_item(title, "a description", project=project_b)
     store.complete_node(item_b, "merged")
     _launch_and_switch_to_done(ctx, store)
 

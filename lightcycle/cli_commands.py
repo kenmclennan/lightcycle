@@ -230,7 +230,7 @@ COMMANDS = {
         Arg("id", nargs="?", default=None, help="item id"),
         Arg("--since", metavar="YYYY-MM-DD", help="aggregate steps closed on/after date"),
         Arg("--last", type=int, metavar="N", help="aggregate last N closed items"),
-        Arg("--project", metavar="REPO", help="aggregate a project's closed unretroed items"),
+        Arg("--project", help="aggregate a project's closed unretroed items"),
         Arg("--pending", action="store_true",
             help="aggregate all closed unretroed items that carry feedback"),
     )),

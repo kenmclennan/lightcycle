@@ -192,8 +192,9 @@ STACKED_BACKLOG_PROJECT_REPO = "kenmclennan/an-extremely-long-project-name-for-t
 
 def _stacked_backlog_store():
     store = DemoStore()
-    item = store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
-    store.add_artifact(item, "repo", STACKED_BACKLOG_PROJECT_REPO)
+    store.item(
+        "LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project=STACKED_BACKLOG_PROJECT_REPO,
+    )
     return store
 
 
@@ -558,8 +559,9 @@ def _done_empty_filtered(size):
 
 def _stacked_done_store():
     store = DemoStore()
-    item = store.item("LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project="lightcycle")
-    store.add_artifact(item, "repo", STACKED_BACKLOG_PROJECT_REPO)
+    item = store.item(
+        "LIGHTCYCLE-3900.100.100.100", STACKED_TITLE, project=STACKED_BACKLOG_PROJECT_REPO,
+    )
     store.complete_node(item, "merged")
     return store
 

@@ -59,6 +59,14 @@ class TestSearchUseCase(unittest.TestCase):
         resp = SearchUseCase(s).execute(SearchInput(text="gh pr checks"))
         self.assertEqual(resp.matches, [])
 
+    def test_match_repo_is_populated_independent_of_project(self):
+        s = FakeStore()
+        tid = s.create_item("pytest-bdd step precedence", "a description", project="proj-a")
+        s.add_artifact(tid, "repo", "org/repo-a")
+        resp = SearchUseCase(s).execute(SearchInput(text="pytest-bdd step"))
+        self.assertEqual(resp.matches[0].repo, "org/repo-a")
+        self.assertEqual(resp.matches[0].project, "proj-a")
+
 
 class TestRenderSearch(unittest.TestCase):
     def test_line_contains_id_state_and_snippet(self):

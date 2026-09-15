@@ -1,17 +1,17 @@
-from lightcycle.application.work.project_of import project_of, short_project_label
+from lightcycle.application.work.project_of import short_project_label, short_repo_label
 from lightcycle.domain.work import ProjectIdentity
 
 
-def project_matches(store, item, short_ref):
+def project_matches(item, short_ref):
     if short_ref is None:
         return True
-    raw = project_of(store, item)
-    return raw is not None and ProjectIdentity.short_name(raw) == short_ref
+    return item.project is not None and ProjectIdentity.short_name(item.project) == short_ref
 
 
-def text_matches(store, item, needle):
+def text_matches(item, needle):
     if not needle:
         return True
-    project = short_project_label(project_of(store, item))
-    haystack = "%s %s %s" % (item.id, item.title, project)
+    haystack = "%s %s %s %s" % (
+        item.id, item.title, short_project_label(item.project), short_repo_label(item.repo),
+    )
     return needle.lower() in haystack.lower()
