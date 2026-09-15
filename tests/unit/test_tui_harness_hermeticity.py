@@ -19,6 +19,7 @@ from tests.support.tui_harness import (
     FakeBreakerPort,
     FakeLauncher,
     FakeLock,
+    FakeMemoryGateStatus,
     FakeWorkflowSource,
     HermeticTuiConfig,
     NonHermeticContainerError,
@@ -46,6 +47,7 @@ def _fully_faked_container(**overrides):
         github=FakeGitHub(),
         backup=_poisoned(BackupPort, "backup"),
         machine=FakeMachine(),
+        memory_gate_status=FakeMemoryGateStatus(),
     )
     kwargs.update(overrides)
     return Container(**kwargs)

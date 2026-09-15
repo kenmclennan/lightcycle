@@ -1106,7 +1106,7 @@ class ArtifactViewerScreen(Screen):
             self.app._now().timestamp()
         )
         hold = PoolHoldStatusUseCase(
-            container.machine, container.workers, container.config,
+            container.memory_gate_status, container.workers, container.config,
         ).execute(container.workers.pid_alive)
         self.query_one(StatusBar).report(
             pool_running=running,
@@ -1511,7 +1511,7 @@ class NodeHubScreen(Screen):
             self._now().timestamp()
         )
         hold = PoolHoldStatusUseCase(
-            self._container.machine, self._container.workers, self._container.config,
+            self._container.memory_gate_status, self._container.workers, self._container.config,
         ).execute(self._container.workers.pid_alive)
         self.query_one(StatusBar).report(
             pool_running=running,

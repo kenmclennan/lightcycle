@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.adapters.machine import MachineAdapter
+from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.container import Container, worktrees_for
 
 
@@ -45,6 +46,17 @@ class TestContainerMachineDefault(unittest.TestCase):
         sentinel = object()
         c = Container(store=object(), machine=sentinel)
         self.assertIs(c.machine, sentinel)
+
+
+class TestContainerMemoryGateStatusDefault(unittest.TestCase):
+    def test_defaults_to_a_memory_gate_status_adapter(self):
+        c = Container(store=object())
+        self.assertIsInstance(c.memory_gate_status, MemoryGateStatusAdapter)
+
+    def test_memory_gate_status_override_is_honoured(self):
+        sentinel = object()
+        c = Container(store=object(), memory_gate_status=sentinel)
+        self.assertIs(c.memory_gate_status, sentinel)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from typing import Optional
 
-from lightcycle.domain.pool import WorkerPool, admission_cap
+from lightcycle.domain.pool import WorkerPool
 from lightcycle.ports.workers import RegistryUnreadable
 
 
@@ -10,11 +11,12 @@ class PoolHoldResponse:
     alive: int
     max_agents: int
     reason: str = "memory"
+    system_pressure: Optional[float] = None
 
 
 class PoolHoldStatusUseCase:
-    def __init__(self, machine, workers, config):
-        self._machine = machine
+    def __init__(self, memory_gate_status, workers, config):
+        self._memory_gate_status = memory_gate_status
         self._workers = workers
         self._config = config
 
@@ -24,8 +26,10 @@ class PoolHoldStatusUseCase:
             pool = WorkerPool(self._workers.workers_state())
         except RegistryUnreadable:
             return PoolHoldResponse(holding=False, alive=0, max_agents=max_agents)
-        alive = pool.alive(probe)
-        headroom = self._machine.headroom(alive)
-        cap = admission_cap(headroom, len(alive), self._config.memory_reserve_fraction())
-        holding = cap == 0 and len(alive) < max_agents
-        return PoolHoldResponse(holding=holding, alive=len(alive), max_agents=max_agents)
+        alive = len(pool.alive(probe))
+        state = self._memory_gate_status.load()
+        cap = state.get("cap")
+        return PoolHoldResponse(
+            holding=cap == 0, alive=alive, max_agents=max_agents,
+            system_pressure=state.get("system_pressure"),
+        )

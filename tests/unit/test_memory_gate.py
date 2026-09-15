@@ -3,9 +3,21 @@ import unittest
 from lightcycle.application.pool.memory_gate import MemoryGateUseCase
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
+from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_workers import FakeWorkers
+
+
+class FakeMemoryGateStatus(MemoryGateStatusPort):
+    def __init__(self, state=None):
+        self._state = state if state is not None else {}
+
+    def load(self):
+        return dict(self._state)
+
+    def save(self, state):
+        self._state = dict(state)
 
 
 class FakeConfig:
@@ -24,9 +36,11 @@ class FakeConfig:
         return self._rp
 
 
-def _gate(workers, machine, config=None, worker_log=None):
-    return MemoryGateUseCase(machine, workers, worker_log if worker_log is not None else FakeFs(),
-                              config or FakeConfig())
+def _gate(workers, machine, config=None, worker_log=None, memory_gate_status=None):
+    return MemoryGateUseCase(
+        machine, workers, worker_log if worker_log is not None else FakeFs(),
+        config or FakeConfig(), memory_gate_status or FakeMemoryGateStatus(),
+    )
 
 
 def _execute(workers, machine, **kwargs):
@@ -43,7 +57,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1, 2),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.1))
+        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.9))
         result = _execute(workers, machine)
 
         self.assertEqual(result.suspended, "b")
@@ -74,7 +88,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.8, pool_share=0.0))
+        machine = FakeMachine(MachineHeadroom(system_pressure=0.8, pool_share=0.8))
         result = _execute(workers, machine)
 
         self.assertIsNone(result.suspended)
@@ -103,8 +117,23 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1, 2),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.1))
+        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.9))
         result = _execute(workers, machine)
 
         self.assertEqual(result.suspended, "a")
         self.assertIsNone(result.resumed)
+
+    def test_persists_the_tick_decision_to_the_memory_gate_status(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
+            alive_pids=(1,),
+        )
+        machine = FakeMachine(MachineHeadroom(system_pressure=0.8, pool_share=0.8))
+        status = FakeMemoryGateStatus()
+        result = _execute(workers, machine, memory_gate_status=status)
+
+        self.assertEqual(
+            status.load(),
+            {"cap": result.cap, "pool_share": result.pool_share,
+             "system_pressure": result.system_pressure},
+        )

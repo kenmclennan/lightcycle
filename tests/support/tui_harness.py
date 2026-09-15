@@ -14,6 +14,7 @@ from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
+from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.sqlite_store import SqliteStore
@@ -29,6 +30,7 @@ from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.launcher import LauncherPort
 from lightcycle.ports.lock import LockAcquisition, RunLockPort
+from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 from lightcycle.ports.scaffold import ScaffoldPort
 from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.ports.workflow_source import WorkflowSourcePort
@@ -70,6 +72,17 @@ class FakeLock(RunLockPort):
 class FakeBreakerPort(BreakerPort):
     def __init__(self, is_open=False, reset_at=None):
         self._state = {"open": is_open, "reset_at": reset_at}
+
+    def load(self):
+        return dict(self._state)
+
+    def save(self, state):
+        self._state = dict(state)
+
+
+class FakeMemoryGateStatus(MemoryGateStatusPort):
+    def __init__(self, state=None):
+        self._state = state if state is not None else {}
 
     def load(self):
         return dict(self._state)
@@ -230,6 +243,7 @@ _LIVE_ADAPTER_TYPES = {
     "worker_log": WorkerLogAdapter,
     "scaffold": ScaffoldAdapter,
     "machine": MachineAdapter,
+    "memory_gate_status": MemoryGateStatusAdapter,
 }
 
 
@@ -245,7 +259,7 @@ def assert_hermetic(container):
 def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None,
                          launcher=None, git=None, spawner=None, github=None, backup=None,
                          workflow_bundle=None, worker_log=None, autostart_pool=False,
-                         machine=None, tui_metrics=False):
+                         machine=None, memory_gate_status=None, tui_metrics=False):
     fs_double = fs or FakeFs()
     config = HermeticTuiConfig(autostart_pool=autostart_pool, tui_metrics=tui_metrics)
     store_double = store
@@ -271,6 +285,9 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
         github=github or FakeGitHub(),
         backup=backup or _poisoned(BackupPort, "backup"),
         machine=machine if machine is not None else FakeMachine(),
+        memory_gate_status=(
+            memory_gate_status if memory_gate_status is not None else FakeMemoryGateStatus()
+        ),
     )
     assert_hermetic(container)
     return container
