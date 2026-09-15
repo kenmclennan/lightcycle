@@ -1802,7 +1802,7 @@ class TestBacklogSearchInput(unittest.TestCase):
 
         self.assertIs(app.screen, default_screen)
 
-    def test_tab_advances_the_view_without_disturbing_the_focused_search_input(self):
+    def test_tab_leaves_the_search_input_without_discarding_the_term_or_changing_the_view(self):
         store = FakeStore()
         store.create_item("widget one", "a description")
         session = self._launch(store)
@@ -1815,9 +1815,9 @@ class TestBacklogSearchInput(unittest.TestCase):
 
         session.press("tab")
 
-        self.assertEqual(app._view, "done")
+        self.assertEqual(app._view, "backlog")
         self.assertEqual(search.value, "widget")
-        self.assertIs(app.focused, app.query_one(DoneTable))
+        self.assertIs(app.focused, app.query_one(BacklogTable))
 
     def test_typing_rapidly_produces_exactly_one_scoped_refresh_after_settling(self):
         session = self._launch(FakeStore())
@@ -2315,6 +2315,24 @@ class TestDoneSearchInput(unittest.TestCase):
         self.assertIs(app.focused, app.query_one(DoneTable))
         self.assertEqual(search.value, "widget")
         self.assertEqual(app.query_one(DoneTable).row_count, 1)
+
+    def test_tab_leaves_the_search_input_without_discarding_the_term_or_changing_the_view(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.complete_node(item, "merged")
+        session = self._launch(store)
+        app = session.app
+
+        session.press("/")
+        search = app.query_one(DoneFilterInput)
+        search.value = "term"
+        session.pause()
+
+        session.press("tab")
+
+        self.assertEqual(app._view, "done")
+        self.assertEqual(search.value, "term")
+        self.assertIs(app.focused, app.query_one(DoneTable))
 
     def test_enter_opens_the_narrowed_result_and_restores_focus_to_the_search_box_after_closing(self):
         from lightcycle.adapters.tui.hub import NodeHubScreen

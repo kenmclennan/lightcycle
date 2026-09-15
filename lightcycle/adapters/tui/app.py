@@ -7,7 +7,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.screen import ModalScreen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Input, Static
 from textual.widgets.data_table import CellDoesNotExist
 
@@ -262,6 +262,7 @@ def _backlog_stacked_cell_builder(row, layout, row_budget, cursor, icon_override
 class BacklogFilterInput(Input):
     BINDINGS = [
         Binding("escape", "leave_filter", "Back", show=False),
+        Binding("tab", "leave_filter", "Back", show=False),
         Binding("down", "leave_filter", "Results", show=False),
         Binding("up", "leave_filter", "Results", show=False),
         Binding("enter", "open_result", "Open", show=False),
@@ -465,6 +466,7 @@ class BacklogView(Vertical):
 class DoneFilterInput(Input):
     BINDINGS = [
         Binding("escape", "leave_filter", "Back", show=False),
+        Binding("tab", "leave_filter", "Back", show=False),
         Binding("down", "leave_filter", "Results", show=False),
         Binding("up", "leave_filter", "Results", show=False),
         Binding("enter", "open_result", "Open", show=False),
@@ -892,6 +894,10 @@ class PickerOption(Horizontal):
         self.set_class(highlighted, "picker-option-selected")
 
 
+class MainScreen(Screen, inherit_bindings=False):
+    BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"]
+
+
 class LightcycleApp(App):
     CSS = f"""
     Screen {{
@@ -1154,7 +1160,7 @@ class LightcycleApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit", show=False, priority=True),
         Binding("ctrl+c", "quit", "Quit", show=False, priority=True),
-        Binding("tab", "toggle_view", "Toggle view", show=False, priority=True),
+        Binding("tab", "toggle_view", "Toggle view", show=False),
         Binding("[", "prev_strip", "Prev tab", show=False),
         Binding("]", "next_strip", "Next tab", show=False),
         Binding("f", "open_picker", "Filter", show=False),
@@ -1210,6 +1216,9 @@ class LightcycleApp(App):
     @property
     def upgrade_error(self):
         return self._upgrade_error
+
+    def get_default_screen(self) -> Screen:
+        return MainScreen(id="_default")
 
     def compose(self) -> ComposeResult:
         yield TabStrip(id="tab-strip")
