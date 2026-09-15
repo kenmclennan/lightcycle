@@ -94,13 +94,12 @@ Feature: The dashboard adopts the design system's visual vocabulary
     And its action is "<action>"
 
     Examples:
-      | position | key           | action      |
-      | 1        | ↑↓            | move        |
-      | 2        | enter/→       | open        |
-      | 3        | [/]           | switch tab  |
-      | 4        | tab           | backlog     |
-      | 5        | ctrl-u/ctrl-d | scroll      |
-      | 6        | q             | quit        |
+      | position | key           | action        |
+      | 1        | ↑↓            | move          |
+      | 2        | enter/→       | open          |
+      | 3        | [/tab]        | prev/next tab |
+      | 4        | ctrl-u/ctrl-d | scroll        |
+      | 5        | q             | quit          |
 
   Scenario: Every shortcut's key text is bold and in the text colour, and its action label is in the dim colour
     Given the dashboard has launched

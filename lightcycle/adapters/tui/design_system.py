@@ -63,8 +63,7 @@ COLUMN_GRIDS = {
 GLOBAL_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter/→", "open"),
-    ("[/]", "switch tab"),
-    ("tab", "backlog"),
+    ("[/tab]", "prev/next tab"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
@@ -74,23 +73,20 @@ BACKLOG_SHORTCUTS = (
     ("enter/→", "explore in tree"),
     ("f", "filter"),
     ("/", "search"),
-    ("[/]", "switch tab"),
-    ("tab", "done"),
+    ("[/tab]", "prev/next tab"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 BACKLOG_EMPTY_SHORTCUTS = (
-    ("[/]", "switch tab"),
-    ("tab", "done"),
+    ("[/tab]", "prev/next tab"),
     ("q", "quit"),
 )
 
 BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("/", "search"),
-    ("[/]", "switch tab"),
-    ("tab", "done"),
+    ("[/tab]", "prev/next tab"),
     ("q", "quit"),
 )
 
@@ -99,55 +95,48 @@ DONE_SHORTCUTS = (
     ("enter/→", "open"),
     ("f", "filter"),
     ("/", "search"),
-    ("[/]", "switch tab"),
-    ("tab", "current work"),
+    ("[/tab]", "prev/next tab"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 DONE_EMPTY_SHORTCUTS = (
-    ("[/]", "switch tab"),
-    ("tab", "current work"),
+    ("[/tab]", "prev/next tab"),
     ("q", "quit"),
 )
 
 DONE_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("/", "search"),
-    ("[/]", "switch tab"),
-    ("tab", "current work"),
+    ("[/tab]", "prev/next tab"),
     ("q", "quit"),
 )
 
 BACKLOG_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "explore in tree"),
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
-    ("tab", "done"),
     ("q", "quit"),
 )
 
 BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
-    ("tab", "done"),
     ("q", "quit"),
 )
 
 DONE_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "open"),
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
-    ("tab", "current work"),
     ("q", "quit"),
 )
 
 DONE_SEARCH_EMPTY_SHORTCUTS = (
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
-    ("tab", "current work"),
     ("q", "quit"),
 )
 
@@ -156,7 +145,7 @@ HUB_SHORTCUTS = (
     ("↑↓", "scroll"),
     ("enter/→", "open"),
     ("esc/←", "back"),
-    ("tab", "backlog"),
+    ("tab", "next tab"),
     ("q", "quit"),
 )
 
@@ -164,13 +153,13 @@ TEXT_ARTIFACT_SHORTCUTS = (
     ("↑↓", "scroll"),
     ("ctrl-u/ctrl-d", "page"),
     ("esc/←", "back to artifacts"),
-    ("tab", "backlog"),
+    ("tab", "next tab"),
     ("q", "quit"),
 )
 
 LIST_ARTIFACT_SHORTCUTS = (
     ("↑↓", "scroll"),
     ("esc/←", "back to artifacts"),
-    ("tab", "backlog"),
+    ("tab", "next tab"),
     ("q", "quit"),
 )

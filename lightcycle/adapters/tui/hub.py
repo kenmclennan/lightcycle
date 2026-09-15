@@ -1067,8 +1067,8 @@ class ArtifactViewerHeader(Horizontal):
         )
 
 
-class ArtifactViewerScreen(Screen):
-    BINDINGS = [
+class ArtifactViewerScreen(Screen, inherit_bindings=False):
+    BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
         Binding("escape", "close", "Back", show=False),
         Binding("left", "close", "Back", show=False),
     ]
@@ -1180,8 +1180,8 @@ class ListArtifactViewerScreen(ArtifactViewerScreen):
             self.set_focus(table)
 
 
-class NodeHubScreen(Screen):
-    BINDINGS = [
+class NodeHubScreen(Screen, inherit_bindings=False):
+    BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
         Binding("escape", "close_hub", "Back", show=False),
         Binding("left", "close_hub", "Back", show=False),
         Binding("t", "toggle_thinking", "Thinking", show=False),
