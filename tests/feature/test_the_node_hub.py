@@ -212,8 +212,9 @@ def _priority_with_queued_step(ctx):
 @given("an item with a project and a workflow, its hub open")
 def _item_full_identity(ctx):
     store = FakeStore()
-    item = store.create_item("Full item", "a description", workflow="lightcycle/spec-driven@abc123")
-    store.add_artifact(item, "repo", "org/repo")
+    item = store.create_item(
+        "Full item", "a description", workflow="lightcycle/spec-driven@abc123", project="org/repo",
+    )
     store.create_step(step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     session = _launch(ctx, store)
@@ -223,8 +224,9 @@ def _item_full_identity(ctx):
 @given("a step of an item with a project and a workflow, its hub open")
 def _step_of_item_full_identity(ctx):
     store = FakeStore()
-    item = store.create_item("Full item", "a description", workflow="lightcycle/spec-driven@abc123")
-    store.add_artifact(item, "repo", "org/repo")
+    item = store.create_item(
+        "Full item", "a description", workflow="lightcycle/spec-driven@abc123", project="org/repo",
+    )
     step = store.create_step(step="write-code", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = step

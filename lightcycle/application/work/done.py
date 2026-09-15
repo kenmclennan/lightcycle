@@ -5,7 +5,7 @@ from typing import List, Optional
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.item_filter import project_matches, text_matches
 from lightcycle.application.work.project_counts import ProjectCount, project_counts
-from lightcycle.application.work.project_of import project_of
+from lightcycle.application.work.project_of import project_of, repo_of
 from lightcycle.domain.work import State, node_id_key, parse_timestamp
 
 _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
@@ -36,8 +36,8 @@ class DoneUseCase:
 
     def execute(self, input: DoneInput) -> DoneResponse:
         items = self._closed_items()
-        items = [t for t in items if project_matches(self._store, t, input.project)]
-        items = [t for t in items if text_matches(self._store, t, input.text)]
+        items = [t for t in items if project_matches(t, input.project)]
+        items = [t for t in items if text_matches(t, input.text)]
         items.sort(
             key=lambda t: (parse_timestamp(t.closed_at) or _MIN_TIMESTAMP, node_id_key(t.id)),
             reverse=True,
@@ -46,6 +46,7 @@ class DoneUseCase:
             HumanNodeRow(
                 kind="done", outcomes=[], step=t,
                 project=project_of(self._store, t),
+                repo=repo_of(self._store, t),
                 description=t.description, artifacts=t.artifacts,
                 title=t.title,
             )

@@ -282,8 +282,8 @@ class TestInboxBacklog(unittest.TestCase):
 
 
 class TestInboxProjectAndPr(unittest.TestCase):
-    def _item_with_step(self, s, step_name="ready-merge", repo=None, pr=None):
-        item = s.create_item("an item", "a description")
+    def _item_with_step(self, s, step_name="ready-merge", project=None, repo=None, pr=None):
+        item = s.create_item("an item", "a description", project=project)
         if repo:
             s.add_artifact(item, "repo", repo)
         if pr:
@@ -298,19 +298,27 @@ class TestInboxProjectAndPr(unittest.TestCase):
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.kind, "action")
 
-    def test_row_project_from_item_repo_artifact(self):
+    def test_row_project_from_item_project_field(self):
         s = FakeStore()
-        _, tid = self._item_with_step(s, repo="proj-a")
+        _, tid = self._item_with_step(s, project="proj-a")
         resp = InboxUseCase(s, _flow_with_step(s, "ready-merge")).execute(InboxInput())
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertEqual(row.project, "proj-a")
 
-    def test_row_project_none_when_item_has_no_repo_artifact(self):
+    def test_row_project_none_when_item_has_no_project(self):
         s = FakeStore()
         _, tid = self._item_with_step(s)
         resp = InboxUseCase(s, _flow_with_step(s, "ready-merge")).execute(InboxInput())
         row = next(r for r in resp.rows if r.step.id == tid)
         self.assertIsNone(row.project)
+
+    def test_row_repo_from_item_repo_artifact_independent_of_project(self):
+        s = FakeStore()
+        _, tid = self._item_with_step(s, project="proj-a", repo="org/repo-a")
+        resp = InboxUseCase(s, _flow_with_step(s, "ready-merge")).execute(InboxInput())
+        row = next(r for r in resp.rows if r.step.id == tid)
+        self.assertEqual(row.repo, "org/repo-a")
+        self.assertEqual(row.project, "proj-a")
 
     def test_row_pr_from_item_pr_artifact(self):
         s = FakeStore()

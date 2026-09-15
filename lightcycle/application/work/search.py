@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
-from lightcycle.application.work.project_of import project_of
+from lightcycle.application.work.project_of import project_of, repo_of
 from lightcycle.domain.work import Step, node_id_key
 
 _SNIPPET_WINDOW = 40
@@ -16,6 +16,7 @@ class SearchInput:
 class SearchMatch:
     node: Step
     project: Optional[str]
+    repo: Optional[str]
     field: str
     snippet: str
 
@@ -59,6 +60,7 @@ class SearchUseCase:
             field, snippet = hit
             node = self._store.get_node(row.id)
             matches.append(SearchMatch(
-                node=node, project=project_of(self._store, node), field=field, snippet=snippet,
+                node=node, project=project_of(self._store, node), repo=repo_of(self._store, node),
+                field=field, snippet=snippet,
             ))
         return SearchResponse(matches=matches)

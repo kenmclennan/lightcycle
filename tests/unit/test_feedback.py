@@ -229,10 +229,8 @@ class TestRetroSinceScope(unittest.TestCase):
 
 class TestRetroProjectScope(unittest.TestCase):
     def _closed_item(self, s, title, project, text):
-        item = s.create_item(title, "a description")
+        item = s.create_item(title, "a description", project=project)
         s.complete_node(item, "merged")
-        if project is not None:
-            s.add_artifact(item, "repo", project)
         k = s.create_step(step="build", role="agent", parent=item)
         s.complete_node(k, "done")
         _add_reflection(s, k, text)
@@ -257,10 +255,8 @@ class TestRetroProjectScope(unittest.TestCase):
 
 class TestRetroPendingScope(unittest.TestCase):
     def _closed_item(self, s, title, project, text):
-        item = s.create_item(title, "a description")
+        item = s.create_item(title, "a description", project=project)
         s.complete_node(item, "merged")
-        if project is not None:
-            s.add_artifact(item, "repo", project)
         k = s.create_step(step="build", role="agent", parent=item)
         s.complete_node(k, "done")
         _add_reflection(s, k, text)

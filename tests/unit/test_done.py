@@ -12,11 +12,9 @@ from tests.support.fake_store import FakeStore
 class TestDoneDefault(unittest.TestCase):
     def test_returns_closed_items_with_project(self):
         s = FakeStore()
-        b = s.create_item("b item", "a description")
-        s.add_artifact(b, "repo", "proj-b")
+        b = s.create_item("b item", "a description", project="proj-b")
         s.complete_node(b, "merged")
-        a = s.create_item("a item", "a description")
-        s.add_artifact(a, "repo", "proj-a")
+        a = s.create_item("a item", "a description", project="proj-a")
         s.complete_node(a, "merged")
         resp = DoneUseCase(s).execute(DoneInput())
         by_id = {r.step.id: r.project for r in resp.rows}
@@ -31,29 +29,61 @@ class TestDoneDefault(unittest.TestCase):
         resp = DoneUseCase(s).execute(DoneInput())
         self.assertEqual([r.step.id for r in resp.rows], [closed])
 
-    def test_item_without_repo_artifact_has_project_none(self):
+    def test_item_without_project_has_project_none(self):
         s = FakeStore()
-        item = s.create_item("no repo", "a description")
+        item = s.create_item("no project", "a description")
         s.complete_node(item, "merged")
         resp = DoneUseCase(s).execute(DoneInput())
         self.assertIsNone(resp.rows[0].project)
+
+    def test_row_shows_project_and_repo_independently(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description", project="proj-a")
+        s.add_artifact(item, "repo", "org/repo-a")
+        s.complete_node(item, "merged")
+        resp = DoneUseCase(s).execute(DoneInput())
+        self.assertEqual(resp.rows[0].project, "proj-a")
+        self.assertEqual(resp.rows[0].repo, "org/repo-a")
+
+    def test_row_with_repo_but_no_project_does_not_leak_into_project(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        s.add_artifact(item, "repo", "org/repo-a")
+        s.complete_node(item, "merged")
+        resp = DoneUseCase(s).execute(DoneInput())
+        self.assertIsNone(resp.rows[0].project)
+        self.assertEqual(resp.rows[0].repo, "org/repo-a")
 
 
 class TestDoneProjectFilter(unittest.TestCase):
     def test_filters_to_matching_project(self):
         s = FakeStore()
-        keep = s.create_item("keep", "a description")
-        s.add_artifact(keep, "repo", "proj-a")
+        keep = s.create_item("keep", "a description", project="proj-a")
         s.complete_node(keep, "merged")
-        drop = s.create_item("drop", "a description")
-        s.add_artifact(drop, "repo", "proj-b")
+        drop = s.create_item("drop", "a description", project="proj-b")
         s.complete_node(drop, "merged")
         resp = DoneUseCase(s).execute(DoneInput(project="proj-a"))
         self.assertEqual([r.step.id for r in resp.rows], [keep])
 
-    def test_item_without_repo_artifact_is_excluded(self):
+    def test_item_without_project_is_excluded(self):
         s = FakeStore()
-        item = s.create_item("no repo", "a description")
+        item = s.create_item("no project", "a description")
+        s.complete_node(item, "merged")
+        resp = DoneUseCase(s).execute(DoneInput(project="proj-a"))
+        self.assertEqual(resp.rows, [])
+
+    def test_item_whose_project_matches_but_repo_differs_is_included(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description", project="proj-a")
+        s.add_artifact(item, "repo", "org/proj-b")
+        s.complete_node(item, "merged")
+        resp = DoneUseCase(s).execute(DoneInput(project="proj-a"))
+        self.assertEqual([r.step.id for r in resp.rows], [item])
+
+    def test_item_whose_repo_matches_but_project_differs_is_excluded(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description", project="proj-b")
+        s.add_artifact(item, "repo", "org/proj-a")
         s.complete_node(item, "merged")
         resp = DoneUseCase(s).execute(DoneInput(project="proj-a"))
         self.assertEqual(resp.rows, [])
@@ -80,8 +110,7 @@ class TestDoneTextFilter(unittest.TestCase):
 
     def test_matches_by_project_substring_case_insensitive(self):
         s = FakeStore()
-        keep = s.create_item("keep", "a description")
-        s.add_artifact(keep, "repo", "kenmclennan/lightcycle")
+        keep = s.create_item("keep", "a description", project="kenmclennan/lightcycle")
         s.complete_node(keep, "merged")
         drop = s.create_item("drop", "a description")
         s.complete_node(drop, "merged")
@@ -92,8 +121,7 @@ class TestDoneTextFilter(unittest.TestCase):
         s = FakeStore()
         keep_a = s.create_item("alpha widget", "a description")
         s.complete_node(keep_a, "merged")
-        keep_b = s.create_item("beta thing", "a description")
-        s.add_artifact(keep_b, "repo", "widget-co")
+        keep_b = s.create_item("beta thing", "a description", project="widget-co")
         s.complete_node(keep_b, "merged")
         drop = s.create_item("gamma unrelated", "a description")
         s.complete_node(drop, "merged")
@@ -102,14 +130,11 @@ class TestDoneTextFilter(unittest.TestCase):
 
     def test_project_and_text_compose_to_the_intersection(self):
         s = FakeStore()
-        keep = s.create_item("target item", "a description")
-        s.add_artifact(keep, "repo", "proj-a")
+        keep = s.create_item("target item", "a description", project="proj-a")
         s.complete_node(keep, "merged")
-        wrong_project = s.create_item("target item", "a description")
-        s.add_artifact(wrong_project, "repo", "proj-b")
+        wrong_project = s.create_item("target item", "a description", project="proj-b")
         s.complete_node(wrong_project, "merged")
-        wrong_text = s.create_item("other item", "a description")
-        s.add_artifact(wrong_text, "repo", "proj-a")
+        wrong_text = s.create_item("other item", "a description", project="proj-a")
         s.complete_node(wrong_text, "merged")
         resp = DoneUseCase(s).execute(DoneInput(project="proj-a", text="target"))
         self.assertEqual([r.step.id for r in resp.rows], [keep])
@@ -117,11 +142,9 @@ class TestDoneTextFilter(unittest.TestCase):
     def test_counts_are_unaffected_by_text(self):
         s = FakeStore()
         s.add_project("org-a/proj-a")
-        matching = s.create_item("target item", "a description")
-        s.add_artifact(matching, "repo", "proj-a")
+        matching = s.create_item("target item", "a description", project="proj-a")
         s.complete_node(matching, "merged")
-        other = s.create_item("other item", "a description")
-        s.add_artifact(other, "repo", "proj-a")
+        other = s.create_item("other item", "a description", project="proj-a")
         s.complete_node(other, "merged")
         resp = DoneUseCase(s).counts()
         by_project = {p.project: p.count for p in resp.projects}
@@ -187,17 +210,14 @@ class TestDoneCounts(unittest.TestCase):
         s.add_project("org-a/proj-a")
         s.add_project("org-b/proj-b")
         s.add_project("org-c/proj-c")
-        a1 = s.create_item("a1", "a description")
-        s.add_artifact(a1, "repo", "proj-a")
+        a1 = s.create_item("a1", "a description", project="proj-a")
         s.complete_node(a1, "merged")
-        a2 = s.create_item("a2", "a description")
-        s.add_artifact(a2, "repo", "proj-a")
+        a2 = s.create_item("a2", "a description", project="proj-a")
         s.complete_node(a2, "merged")
-        b1 = s.create_item("b1", "a description")
-        s.add_artifact(b1, "repo", "proj-b")
+        b1 = s.create_item("b1", "a description", project="proj-b")
         s.complete_node(b1, "merged")
-        no_repo = s.create_item("no repo", "a description")
-        s.complete_node(no_repo, "merged")
+        no_project = s.create_item("no project", "a description")
+        s.complete_node(no_project, "merged")
         resp = DoneUseCase(s).counts()
         by_project = {p.project: p.count for p in resp.projects}
         self.assertEqual(by_project, {"proj-a": 2, "proj-b": 1, "proj-c": 0})
@@ -217,8 +237,7 @@ class TestDoneCounts(unittest.TestCase):
     def test_a_bare_registered_identity_is_counted_without_raising(self):
         s = FakeStore()
         s.add_project("specs")
-        item = s.create_item("item", "a description")
-        s.add_artifact(item, "repo", "specs")
+        item = s.create_item("item", "a description", project="specs")
         s.complete_node(item, "merged")
         resp = DoneUseCase(s).counts()
         self.assertEqual(resp.projects, [ProjectCount(project="specs", count=1)])
@@ -227,8 +246,7 @@ class TestDoneCounts(unittest.TestCase):
         s = FakeStore()
         s.add_project("org-a/proj-a")
         s.add_project("org-b/proj-b")
-        item = s.create_item("item", "a description")
-        s.add_artifact(item, "repo", "proj-a")
+        item = s.create_item("item", "a description", project="proj-a")
         s.complete_node(item, "merged")
         calls = {"n": 0}
         original = s.get_item

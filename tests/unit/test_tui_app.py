@@ -612,8 +612,7 @@ class TestProjectColumn(unittest.TestCase):
 
     def test_step_with_registered_project_renders_it_in_cyan(self):
         store = FakeStore()
-        item = store.create_item("story", "a description")
-        store.add_artifact(item, "repo", "lightcycle")
+        item = store.create_item("story", "a description", project="lightcycle")
         store.create_step(step="build", role="agent", parent=item)
 
         session = self._launch(store)
@@ -631,10 +630,9 @@ class TestProjectColumn(unittest.TestCase):
 
         self.assertEqual(_cell(session, step, "project"), "")
 
-    def test_step_with_slash_qualified_repo_renders_the_short_label(self):
+    def test_step_with_slash_qualified_project_renders_the_short_label(self):
         store = FakeStore()
-        item = store.create_item("story", "a description")
-        store.add_artifact(item, "repo", "kenmclennan/lightcycle")
+        item = store.create_item("story", "a description", project="kenmclennan/lightcycle")
         store.create_step(step="build", role="agent", parent=item)
 
         session = self._launch(store)
@@ -1238,10 +1236,9 @@ class TestBacklogProjectColumn(unittest.TestCase):
 
         self.assertEqual(_backlog_cell(session, item, "project"), "")
 
-    def test_slash_qualified_repo_shows_shortened_label_in_cyan(self):
+    def test_slash_qualified_project_shows_shortened_label_in_cyan(self):
         store = FakeStore()
-        item = store.create_item("todo item", "a description")
-        store.add_artifact(item, "repo", "kenmclennan/lightcycle")
+        item = store.create_item("todo item", "a description", project="kenmclennan/lightcycle")
 
         session = self._launch(store)
 
@@ -1333,10 +1330,8 @@ class TestBacklogPicker(unittest.TestCase):
         store = FakeStore()
         store.add_project("org-a/proj-a")
         store.add_project("org-b/proj-b")
-        a = store.create_item("a item", "a description")
-        store.add_artifact(a, "repo", "org-a/proj-a")
-        b = store.create_item("b item", "a description")
-        store.add_artifact(b, "repo", "org-b/proj-b")
+        store.create_item("a item", "a description", project="org-a/proj-a")
+        store.create_item("b item", "a description", project="org-b/proj-b")
         return store
 
     def test_f_opens_a_picker_listing_all_and_every_project_with_its_own_count(self):
@@ -1566,8 +1561,7 @@ class TestBacklogEmptyStates(unittest.TestCase):
         session = self._launch(store)
         self._filter_to_lightcycle(session)
 
-        new_item = store.create_item("new item", "a description")
-        store.add_artifact(new_item, "repo", "lightcycle")
+        new_item = store.create_item("new item", "a description", project="lightcycle")
         session.poll_tick()
 
         table = session.app.query_one(BacklogTable)
@@ -1965,7 +1959,7 @@ class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
         store.create_item("queued item", "a description", id=self._ITEM)
         store.create_step(step=self._STEP, role="agent",
                           parent=self._ITEM, id=self._ID)
-        store.add_artifact(self._ITEM, "repo", self._PROJECT)
+        store.edit_node(self._ITEM, project=self._PROJECT)
         width = self._floor_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
         self.addCleanup(session.close)
