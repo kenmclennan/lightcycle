@@ -52,6 +52,27 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
             [s.node.id for s in selection.attention], [escalation, gate]
         )
 
+    def test_an_unblocked_engine_step_in_the_queue_lane_lands_in_active(self):
+        store = FakeStore()
+        step = create_owned_step(store, "polling", step="poll-ci", role="engine")
+        lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
+
+        selection = select_priority_rows(store, lanes, _FixedFlowService())
+
+        self.assertEqual([s.node.id for s in selection.active], [step])
+        self.assertEqual(selection.queued, [])
+
+    def test_a_dependency_blocked_engine_step_stays_in_queued(self):
+        store = FakeStore()
+        blocker = create_owned_step(store, "blocker", step="build", role="agent")
+        step = create_owned_step(store, "polling", step="poll-ci", role="engine", deps=[blocker])
+        lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
+
+        selection = select_priority_rows(store, lanes, _FixedFlowService())
+
+        self.assertEqual(selection.active, [])
+        self.assertEqual([s.node.id for s in selection.queued], [step])
+
     def test_a_mixed_lane_selects_the_resolvable_ones_and_leaves_the_rest_out(self):
         store = FakeStore()
         item_a = store.create_item("a", "a description")

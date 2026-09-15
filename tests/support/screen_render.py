@@ -427,6 +427,19 @@ def _priority_worker_suspended(size):
     return _launch(store, size=size, workers=workers)
 
 
+def _engine_active_store():
+    store = DemoStore(now=lambda: _at(4))
+    item = store.item(
+        "LC-710", "lc config --edit cannot use an editor with arguments", project="lightcycle")
+    store.step("LC-710.1", step="poll-ci", role="engine", parent=item)
+    return store, item
+
+
+def _priority_engine_active(size):
+    store, _item = _engine_active_store()
+    return _launch(store, size=size)
+
+
 def _pool_stop_prompt(size):
     session = _pool_prompt_session(size, 3)
     session.press("p")
@@ -560,6 +573,11 @@ def _done_stacked(size):
 def _hub_hierarchy(size):
     store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="workflow")
+
+
+def _hub_workflow_engine_active(size):
+    store, item = _engine_active_store()
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
 
 
 def _hub_hierarchy_stacked(size):
@@ -1058,6 +1076,7 @@ SCREENS = {
     "priority-list#cost-not-recorded": _priority_cost_not_recorded,
     "priority-list#pool-holding": _priority_pool_holding,
     "priority-list#worker-suspended": _priority_worker_suspended,
+    "priority-list#engine-active": _priority_engine_active,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,
@@ -1078,6 +1097,7 @@ SCREENS = {
     "done#empty-filtered": _done_empty_filtered,
     "done#stacked": _done_stacked,
     "hub#workflow": _hub_hierarchy,
+    "hub#workflow-engine-active": _hub_workflow_engine_active,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
     "hub#workflow-cost": _hub_hierarchy_cost,
     "hub#workflow-human-square": _hub_hierarchy_human_square,

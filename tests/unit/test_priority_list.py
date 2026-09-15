@@ -452,6 +452,22 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         self.assertEqual(queued[0].time, "9m")
 
 
+class TestBuildPriorityRowsEngineStep(unittest.TestCase):
+    def test_an_unblocked_engine_step_lands_in_active_with_the_active_glyph(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step(step="build", role="engine", parent=item)
+        lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
+
+        _, active, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+
+        self.assertEqual(len(active), 1)
+        self.assertEqual(queued, [])
+        self.assertEqual(active[0].group, "active")
+        self.assertEqual(active[0].icon, STATE_GLYPHS["active"].glyph)
+        self.assertEqual(active[0].icon_colour, "cyan")
+
+
 class TestAssembleRows(unittest.TestCase):
     def test_concatenates_all_three_groups_with_no_separator(self):
         self.assertEqual(assemble_rows(["a"], ["b"], ["c"]), ["a", "b", "c"])
