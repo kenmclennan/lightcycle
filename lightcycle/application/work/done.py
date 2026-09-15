@@ -61,7 +61,7 @@ class DoneUseCase:
     def _closed_items(self):
         if self._closed_items_cache is None:
             self._closed_items_cache = [
-                n for n in self._store.all_nodes_including_done()
-                if n.type == "item" and n.state == State.DONE
+                n for n in self._store.all_items_including_done()
+                if n.state == State.DONE
             ]
         return self._closed_items_cache
