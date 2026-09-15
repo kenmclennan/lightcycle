@@ -37,6 +37,12 @@ Feature: The workflow tab
     When the active-glyph animation ticks four times
     Then the step's icon cycles through the diamond pulse frames and returns to the black diamond
 
+  Scenario: An engine-owned step in flight renders and animates the same active diamond as a running worker
+    Given the hierarchy is open, showing an unclaimed engine-owned step
+    Then the step's icon rests on the black diamond
+    When the active-glyph animation ticks four times
+    Then the step's icon cycles through the diamond pulse frames and returns to the black diamond
+
   Scenario: The hierarchy tree's row area shares the frame's own background, not an unnamed default
     Given the hierarchy tab is open
     When it renders

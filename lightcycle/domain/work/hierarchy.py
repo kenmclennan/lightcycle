@@ -22,6 +22,8 @@ def row_bucket(node, flow):
         return "done"
     if node.state == State.RUNNING:
         return "active"
+    if node.state == State.QUEUED and is_engine_step(node):
+        return "active"
     if node.state == State.WAITING and is_human_step(node):
         kind, _outs = node.classify_for_human(flow)
         return "escalation" if kind == "blocked" else "gate"
@@ -32,6 +34,10 @@ def row_bucket(node, flow):
 
 def is_human_step(node):
     return node.type == "step" and (node.role or "human") == "human"
+
+
+def is_engine_step(node):
+    return node.type == "step" and node.role == "engine"
 
 
 def viewable_artifacts(node):

@@ -162,6 +162,23 @@ class TestRowBucket(unittest.TestCase):
         s.create_step(step="await-merge", role="human", parent=item)
         self.assertEqual(row_bucket(s.get_node(item), FLOW), "gate")
 
+    def test_unblocked_engine_step_is_active(self):
+        s = FakeStore()
+        step = create_owned_step(s, "s", step="poll-ci", role="engine")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "active")
+
+    def test_dependency_blocked_engine_step_is_queued(self):
+        s = FakeStore()
+        blocker = create_owned_step(s, "b", step="build", role="agent")
+        step = create_owned_step(s, "s", step="poll-ci", role="engine", deps=[blocker])
+        self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
+
+    def test_queued_item_whose_only_child_is_an_engine_step_does_not_raise(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        s.create_step(step="poll-ci", role="engine", parent=item)
+        self.assertEqual(row_bucket(s.get_node(item), FLOW), "queued")
+
 
 class TestViewableArtifacts(unittest.TestCase):
     def test_internal_artifacts_are_excluded(self):

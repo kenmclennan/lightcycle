@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, List
 
-from lightcycle.domain.work import row_bucket
+from lightcycle.domain.work import is_engine_step, row_bucket
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,9 @@ class PrioritySelection:
 def select_priority_rows(store, lanes, flow_service):
     claimed = set()
     attention, active, queued = [], [], []
-    runnable = [n for n in lanes["queue"] if not n.blocked_by]
+    unblocked = [n for n in lanes["queue"] if not n.blocked_by]
+    runnable = [n for n in unblocked if not is_engine_step(n)]
+    engine_active = [n for n in unblocked if is_engine_step(n)]
     held = [n for n in lanes["queue"] if n.blocked_by]
     inbox = sorted(
         ((n, flow_service.flow_for(n)) for n in lanes["inbox"]),
@@ -29,7 +31,8 @@ def select_priority_rows(store, lanes, flow_service):
     )
     for group_rows, nodes_and_flow in (
         (attention, inbox),
-        (active, [(n, flow_service.flow_for(n)) for n in lanes["active"]]),
+        (active, [(n, flow_service.flow_for(n)) for n in lanes["active"]]
+         + [(n, flow_service.flow_for(n)) for n in engine_active]),
         (queued, [(n, flow_service.flow_for(n)) for n in runnable]
          + [(n, flow_service.flow_for(n)) for n in held]),
     ):

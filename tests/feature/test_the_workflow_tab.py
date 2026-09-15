@@ -221,6 +221,16 @@ def _hierarchy_open_active_step(ctx):
     _launch(ctx, store, item)
 
 
+@given("the hierarchy is open, showing an unclaimed engine-owned step")
+def _hierarchy_open_engine_step(ctx):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    step = store.create_step(step="poll-ci", role="engine", parent=item)
+    ctx["item_id"] = item
+    ctx["step_id"] = step
+    _launch(ctx, store, item)
+
+
 @given("a human step that is done")
 def _human_step_that_is_done(ctx):
     store = FakeStore()
