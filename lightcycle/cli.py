@@ -1645,10 +1645,10 @@ def cmd_config(argv):
             print("%s: (not set - run `lc init`)" % s.key)
         elif s.state == "env":
             print("%s: %s (env: %s)" % (s.key, s.value, s.env_var))
-        elif s.state == "default":
-            print("%s: %s (default)" % (s.key, s.value))
+        elif s.seed == "":
+            print("%s: %s (no seed)" % (s.key, s.value))
         else:
-            print("%s: %s" % (s.key, s.value))
+            print("%s: %s (seed %s)" % (s.key, s.value, s.seed))
     return 0
 
 

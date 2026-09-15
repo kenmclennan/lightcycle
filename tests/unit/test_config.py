@@ -6,8 +6,6 @@ from pathlib import Path
 from lightcycle.config import _SEED_KEYS, Config, ConfigError
 from lightcycle.domain.pool import ModelRates
 
-_SEEDED_EMPTY_AND_REQUIRED = ("workflows-remote",)
-
 HOME = os.path.expanduser("~")
 
 
@@ -550,15 +548,14 @@ class TestInternalShortcode(unittest.TestCase):
 
 
 class TestResolvedSettings(unittest.TestCase):
-    def test_freshly_seeded_config_reports_all_keys_as_default(self):
+    def test_freshly_seeded_config_reports_the_seed_text_for_every_key(self):
         c = _cfg()
         c.ensure_config()
+        seeds = dict(_SEED_KEYS)
         settings = c.resolved_settings()
         self.assertEqual(len(settings), len(_SEED_KEYS))
         for s in settings:
-            if s.key in _SEEDED_EMPTY_AND_REQUIRED:
-                continue
-            self.assertEqual(s.state, "default", s.key)
+            self.assertEqual(s.seed, seeds[s.key], s.key)
 
     def test_workflows_remote_is_seeded_empty_so_it_reports_unset_until_the_user_sets_it(self):
         c = _cfg()
@@ -582,11 +579,6 @@ class TestResolvedSettings(unittest.TestCase):
         for key in ("max-agents", "backups-dir", "editor"):
             self.assertEqual(settings[key].state, "unset")
             self.assertIsNotNone(settings[key].error)
-        for key, s in settings.items():
-            if key not in ("max-agents", "backups-dir", "editor"):
-                if key in _SEEDED_EMPTY_AND_REQUIRED:
-                    continue
-                self.assertEqual(s.state, "default", key)
 
     def test_env_override_reports_env_state_and_value(self):
         c = _cfg({"LC_MAX_AGENTS": "9"}, max_agents="5")
@@ -604,28 +596,41 @@ class TestResolvedSettings(unittest.TestCase):
         self.assertEqual(s.env_var, "EDITOR")
         self.assertEqual(s.value, "nano")
 
-    def test_file_override_without_env_reports_file_state(self):
+    def test_value_set_in_file_reports_seed_alongside_the_chosen_value(self):
         c = _cfg(max_agents="9")
         settings = {s.key: s for s in c.resolved_settings()}
-        self.assertEqual(settings["max-agents"].state, "file")
-        self.assertEqual(settings["max-agents"].value, 9)
+        s = settings["max-agents"]
+        self.assertEqual(s.state, "set")
+        self.assertEqual(s.value, 9)
+        self.assertEqual(s.seed, "5")
 
-    def test_untouched_personal_origin_reports_default_and_none(self):
+    def test_value_left_at_the_seed_still_reports_the_seed_not_a_provenance_claim(self):
+        c = _cfg()
+        c.ensure_config()
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["max-agents"]
+        self.assertEqual(s.state, "set")
+        self.assertEqual(s.value, 5)
+        self.assertEqual(s.seed, "5")
+
+    def test_untouched_personal_origin_reports_its_empty_seed_and_none_value(self):
         c = _cfg()
         c.ensure_config()
         settings = {s.key: s for s in c.resolved_settings()}
         s = settings["personal-origin"]
-        self.assertEqual(s.state, "default")
+        self.assertEqual(s.state, "set")
+        self.assertEqual(s.seed, "")
         self.assertIsNone(s.value)
 
-    def test_path_keys_at_literal_seed_default_report_default_state(self):
+    def test_path_keys_at_literal_seed_report_the_raw_seed_text(self):
         c = _cfg()
         c.ensure_config()
         settings = {s.key: s for s in c.resolved_settings()}
         for key in ("projects", "backups-dir"):
             s = settings[key]
-            self.assertEqual(s.state, "default", key)
+            self.assertEqual(s.state, "set", key)
             self.assertTrue(os.path.isabs(s.value), key)
+            self.assertFalse(os.path.isabs(s.seed), key)
 
 
 _ALL_PRICE_KEYS = dict(

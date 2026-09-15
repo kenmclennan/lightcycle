@@ -48,6 +48,7 @@ class ResolvedSetting:
     error: Optional[str]
     state: str
     env_var: Optional[str]
+    seed: Optional[str]
 
 
 _SEED_KEYS = [
@@ -223,7 +224,6 @@ class Config:
         return tuple(k for k in self.load_config() if k not in seed_names)
 
     def resolved_settings(self):
-        raw = self.load_config()
         entries = []
         for key, default in _SEED_KEYS:
             getter = getattr(self, _GETTER_NAME_OVERRIDES.get(key, key.replace("-", "_")))
@@ -231,19 +231,15 @@ class Config:
                 value = getter()
             except ConfigError as e:
                 entries.append(ResolvedSetting(
-                    key=key, value=None, error=str(e), state="unset", env_var=None))
+                    key=key, value=None, error=str(e), state="unset", env_var=None, seed=default))
                 continue
             env_var = _ENV_OVERRIDE_VARS.get(key)
             if env_var and self._env(env_var) is not None:
                 entries.append(ResolvedSetting(
-                    key=key, value=value, error=None, state="env", env_var=env_var))
+                    key=key, value=value, error=None, state="env", env_var=env_var, seed=default))
                 continue
-            raw_value = raw.get(key)
-            norm_raw = "" if raw_value in _BLANK else raw_value
-            norm_default = "" if default in _BLANK else default
-            state = "default" if norm_raw == norm_default else "file"
             entries.append(ResolvedSetting(
-                key=key, value=value, error=None, state=state, env_var=None))
+                key=key, value=value, error=None, state="set", env_var=None, seed=default))
         return entries
 
     def ensure_config(self):
