@@ -55,3 +55,18 @@ Before recording a figure taken with the pool at `max-agents`, check `lc config`
 **`py-spy` in this environment.** `py-spy record --pid <pid>` requires root on macOS (`task_for_pid` is SIP-gated) and this measurement pass had no interactive path to grant it, so no flame graph was captured here. The commands above are runnable and unchanged by this; the deterministic `sort cumulative` view from the same cProfile run (not shown, since cProfile's own overhead distorts absolute time) corroborated `DoneUseCase.execute()` as the largest single contributor to a tick, consistent with the call-count finding above.
 
 **Deferred findings.** This spec's own Deferred findings section names two further gaps this measurement run did not need to reprove by profiling - both found by reading `_refresh()`, not sampling it: `_refresh()` runs its full row-derivation work every tick regardless of whether the priority screen is the one on top of the screen stack, and the priority list's row-derivation runs unconditionally every tick even when the shape guard finds nothing changed. Acting on any of the three findings recorded in this document - the `DoneUseCase` call-count finding above, or either of the spec's own Deferred findings - is [[LC-705]]'s scope; this item changes no TUI behaviour beyond the gated counter.
+
+## Results ([[LC-705]]'s post-fix measurement run, 2026-09-15)
+
+**Setup.** Same method as the run above: a point-in-time copy of this machine's own live `~/.lightcycle/store.db`, taken via `sqlite3 .backup` (live store never opened for writing), loaded from an isolated `LC_HOME` - the live store itself was never pointed at directly. The live store had grown since the run above, to 459 items / 2280 steps at measurement time. `_refresh()` was driven directly via `TuiSession.poll_tick()`, the same harness the test suite uses, under an 8-tick `cProfile` run sorted by `ncalls` (never `cumulative`, per this doc's own method above).
+
+**Before/after, same store snapshot, same method.** Measured by temporarily reverting `done.py`/`backlog.py` to their pre-fix content, running the identical script, then restoring the fix and re-running it - both passes against the exact same copied database, so the comparison isolates the code change:
+
+|                                                       | pre-fix | post-fix |
+| ----------------------------------------------------- | ------- | -------- |
+| `_row_to_step` calls / tick                           | 4,602   | 2,320    |
+| `DoneUseCase.execute()` share of `_refresh()` cumtime | 66.7%   | 48.2%    |
+
+`_row_to_step` call volume roughly halved (49.6% reduction), matching the spec's synthetic benchmark's exact-halving prediction (Sources) and confirming the double-conversion diagnosis (Why) on real, current store data rather than only the synthetic one. `DoneUseCase.execute()` remains the largest single contributor to a tick - it was never claimed to stop being one, only to stop doing double the necessary `Step` conversion work - and the residual cost is now BacklogUseCase's mechanically identical pattern (also halved) plus the row-derivation work recorded as Deferred findings above, neither of which this item's Design touches (Out of scope).
+
+**Not remeasured.** RSS trend, `py-spy`, and pool contention are unchanged by this item's Design (Out of scope) and were not rerun.

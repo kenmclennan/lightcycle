@@ -270,13 +270,13 @@ class TestBacklogUseCaseMemoization(unittest.TestCase):
         s = FakeStore()
         s.create_item("a", "a description")
         calls = {"n": 0}
-        original = s.all_nodes
+        original = s.all_items
 
         def counted():
             calls["n"] += 1
             return original()
 
-        s.all_nodes = counted
+        s.all_items = counted
         return s, calls
 
     def test_execute_then_counts_on_one_instance_scans_once(self):
@@ -298,6 +298,26 @@ class TestBacklogUseCaseMemoization(unittest.TestCase):
         BacklogUseCase(s, None).execute(BacklogInput())
         BacklogUseCase(s, None).counts()
         self.assertEqual(calls["n"], 2)
+
+    def test_backlogged_items_does_not_call_all_nodes(self):
+        s = FakeStore()
+        s.create_item("a", "a description")
+
+        def raises():
+            raise AssertionError("all_nodes should not be called")
+
+        s.all_nodes = raises
+        BacklogUseCase(s, None).execute(BacklogInput())
+
+    def test_backlogged_items_does_not_call_all_nodes_including_done(self):
+        s = FakeStore()
+        s.create_item("a", "a description")
+
+        def raises():
+            raise AssertionError("all_nodes_including_done should not be called")
+
+        s.all_nodes_including_done = raises
+        BacklogUseCase(s, None).execute(BacklogInput())
 
 
 if __name__ == "__main__":

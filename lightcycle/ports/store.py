@@ -51,6 +51,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def all_items_including_done(self):
+        pass
+
+    @abstractmethod
     def item_texts(self):
         pass
 

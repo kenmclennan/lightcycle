@@ -59,8 +59,8 @@ class BacklogUseCase:
     def _backlogged_items(self):
         if self._backlogged_items_cache is None:
             candidates = [
-                n for n in self._store.all_nodes()
-                if n.type == "item" and n.state in (State.BACKLOGGED, State.BLOCKED)
+                n for n in self._store.all_items()
+                if n.state in (State.BACKLOGGED, State.BLOCKED)
             ]
             self._backlogged_items_cache = [
                 n for n in candidates

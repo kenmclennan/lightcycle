@@ -241,6 +241,63 @@ class TestDoneCounts(unittest.TestCase):
         DoneUseCase(s).counts()
         self.assertEqual(calls["n"], 0)
 
+    def test_closed_items_does_not_call_all_nodes_including_done(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        s.complete_node(item, "merged")
+
+        def raises():
+            raise AssertionError("all_nodes_including_done should not be called")
+
+        s.all_nodes_including_done = raises
+        DoneUseCase(s).execute(DoneInput())
+
+    def test_closed_items_does_not_call_all_nodes(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        s.complete_node(item, "merged")
+
+        def raises():
+            raise AssertionError("all_nodes should not be called")
+
+        s.all_nodes = raises
+        DoneUseCase(s).execute(DoneInput())
+
+
+class TestDoneUseCaseMemoization(unittest.TestCase):
+    def _counting_store(self):
+        s = FakeStore()
+        s.create_item("a", "a description")
+        calls = {"n": 0}
+        original = s.all_items_including_done
+
+        def counted():
+            calls["n"] += 1
+            return original()
+
+        s.all_items_including_done = counted
+        return s, calls
+
+    def test_execute_then_counts_on_one_instance_scans_once(self):
+        s, calls = self._counting_store()
+        uc = DoneUseCase(s)
+        uc.execute(DoneInput())
+        uc.counts()
+        self.assertEqual(calls["n"], 1)
+
+    def test_counts_then_execute_on_one_instance_scans_once(self):
+        s, calls = self._counting_store()
+        uc = DoneUseCase(s)
+        uc.counts()
+        uc.execute(DoneInput())
+        self.assertEqual(calls["n"], 1)
+
+    def test_two_independent_instances_each_scan_once(self):
+        s, calls = self._counting_store()
+        DoneUseCase(s).execute(DoneInput())
+        DoneUseCase(s).counts()
+        self.assertEqual(calls["n"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
