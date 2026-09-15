@@ -46,6 +46,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow import UnblockInput
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
+    PoolHoldStatusUseCase,
     PoolRunningUseCase,
     TailLogInput,
     TailLogUseCase,
@@ -1082,6 +1083,9 @@ class ArtifactViewerScreen(Screen):
         breaker = BreakerStatusUseCase(container.breaker, container.spin).execute(
             self.app._now().timestamp()
         )
+        hold = PoolHoldStatusUseCase(
+            container.machine, container.workers, container.config,
+        ).execute(container.workers.pid_alive)
         self.query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
@@ -1090,6 +1094,7 @@ class ArtifactViewerScreen(Screen):
             version=container.config.version(),
             upgrade_version=self.app.upgrade_version,
             upgrade_error=self.app.upgrade_error,
+            hold=hold,
         )
 
     def action_close(self) -> None:
@@ -1483,6 +1488,9 @@ class NodeHubScreen(Screen):
         breaker = BreakerStatusUseCase(self._container.breaker, self._container.spin).execute(
             self._now().timestamp()
         )
+        hold = PoolHoldStatusUseCase(
+            self._container.machine, self._container.workers, self._container.config,
+        ).execute(self._container.workers.pid_alive)
         self.query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
@@ -1491,6 +1499,7 @@ class NodeHubScreen(Screen):
             version=self._container.config.version(),
             upgrade_version=self.app.upgrade_version,
             upgrade_error=self.app.upgrade_error,
+            hold=hold,
         )
 
     def _hierarchy_layout(self, table, rows):

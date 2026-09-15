@@ -12,6 +12,7 @@ from lightcycle.ports.spawner import SpawnerPort
 from tests.support import tui_harness
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
+from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.tui_harness import (
@@ -44,6 +45,7 @@ def _fully_faked_container(**overrides):
         spawner=_poisoned(SpawnerPort, "spawner"),
         github=FakeGitHub(),
         backup=_poisoned(BackupPort, "backup"),
+        machine=FakeMachine(),
     )
     kwargs.update(overrides)
     return Container(**kwargs)

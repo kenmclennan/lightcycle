@@ -36,6 +36,15 @@ Feature: Pool detects and reclaims a stalled worker
     And the worker's record is marked checked
     And the step is reclaimed to ready
 
+  Scenario: A worker suspended by the pool's own memory admission control is excluded from the stall sweep
+    Given a worker has claimed a step
+    And the worker's log last grew more than the stall threshold ago
+    And the worker's log contains no terminal marker
+    And the worker is past its boot window
+    And the worker is suspended by the pool
+    When the pool sweeps
+    Then the worker is not identified as stalled
+
   Scenario: A worker frozen through a long suspend is stalled on resume, not freshly started
     Given a worker has claimed a step
     And the worker's log stopped growing well before a multi-hour suspend

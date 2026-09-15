@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import unittest
 
 from lightcycle.adapters.worker_log import WorkerLogAdapter, iter_lines
@@ -197,6 +198,26 @@ class TestIterLines(unittest.TestCase):
     def test_fake_fs_unknown_path_yields_nothing(self):
         fs = FakeFs()
         self.assertEqual(list(fs.iter_lines("/l/missing.log")), [])
+
+
+class TestTouch(unittest.TestCase):
+    def test_bumps_mtime_to_approximately_now_without_altering_content(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        with open(path, "wb") as f:
+            f.write(b"line one\n")
+        os.utime(path, (0, 0))
+        adapter = WorkerLogAdapter(None)
+
+        adapter.touch(path)
+
+        self.assertGreater(adapter.log_mtime(path), time.time() - 5)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"line one\n")
+
+    def test_missing_path_does_not_raise(self):
+        root = tempfile.mkdtemp()
+        WorkerLogAdapter(None).touch(os.path.join(root, "gone.log"))
 
 
 if __name__ == "__main__":

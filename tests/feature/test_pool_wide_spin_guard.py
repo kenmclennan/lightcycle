@@ -9,6 +9,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpFlowService,
     NoOpGit,
     NoOpHookCompletions,
+    NoOpMemoryGate,
     NoOpMonitor,
     NoOpUsageGate,
     NoOpWorktrees,
@@ -283,6 +284,7 @@ def _pool_ticks(ctx):
         hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
         backup_gate=NoOpBackupGate(), fs=ctx["fs"], flow_service=NoOpFlowService(),
         spin_port=ctx["spin_port"], usage_gate=NoOpUsageGate(), stream=ClaudeStreamAdapter(),
+        memory_gate=NoOpMemoryGate(),
     )
     ctx["tick_result"] = tick.execute(TickInput(now=ctx["now"]))
     ctx["spawner"] = spawner

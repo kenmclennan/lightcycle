@@ -51,6 +51,7 @@ from lightcycle.adapters.tui.row_grid import (
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
     LiveWorkerCountUseCase,
+    PoolHoldStatusUseCase,
     PoolRunningUseCase,
     StartPoolUseCase,
     StopPoolSignalUseCase,
@@ -63,6 +64,7 @@ from lightcycle.application.work import (
     DoneUseCase,
     StatusUseCase,
 )
+from lightcycle.ports.workers import RegistryUnreadable
 
 POLL_INTERVAL_SECONDS = 10
 FILTER_DEBOUNCE_SECONDS = 0.15
@@ -1237,8 +1239,15 @@ class LightcycleApp(App):
 
     def _refresh(self) -> None:
         lanes = StatusUseCase(self._container.store).execute().lanes
+        try:
+            suspended_steps = {
+                w.step for w in self._container.workers.workers_state() if w.step and w.suspended
+            }
+        except RegistryUnreadable:
+            suspended_steps = frozenset()
         attention_rows, active_rows, queued_rows = build_priority_rows(
-            self._container.store, lanes, self._container.flow_service()
+            self._container.store, lanes, self._container.flow_service(),
+            suspended_steps=suspended_steps,
         )
         shape = (
             tuple(r.id for r in attention_rows),
@@ -1266,7 +1275,7 @@ class LightcycleApp(App):
         if had_prior_attention and newly_attention:
             self.bell()
 
-        self._active_row_ids = tuple(r.id for r in active_rows)
+        self._active_row_ids = tuple(r.id for r in active_rows if not r.suspended)
         self._sync_active_glyph_animation()
 
         self._refresh_backlog_view()
@@ -1277,6 +1286,9 @@ class LightcycleApp(App):
 
         running = PoolRunningUseCase(self._container.lock).execute().running
         breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
+        hold = PoolHoldStatusUseCase(
+            self._container.machine, self._container.workers, self._container.config,
+        ).execute(self._container.workers.pid_alive)
         self.screen_stack[0].query_one(StatusBar).report(
             pool_running=running,
             breaker_is_open=breaker.is_open,
@@ -1285,6 +1297,7 @@ class LightcycleApp(App):
             version=self._container.config.version(),
             upgrade_version=self._upgrade_version,
             upgrade_error=self._upgrade_error,
+            hold=hold,
         )
 
     def _refresh_backlog_view(self) -> None:

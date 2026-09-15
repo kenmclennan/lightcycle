@@ -29,6 +29,9 @@ _ENV_OVERRIDE_VARS = {
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
     "internal-shortcode": "LC_INTERNAL_SHORTCODE",
+    "memory-reserve-fraction": "LC_MEMORY_RESERVE_FRACTION",
+    "suspend-pressure": "LC_SUSPEND_PRESSURE",
+    "resume-pressure": "LC_RESUME_PRESSURE",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -80,6 +83,9 @@ _SEED_KEYS = [
     ("review-rounds-cap", "5"),
     ("context-artifact-types", "spec"),
     ("internal-shortcode", "AUD"),
+    ("memory-reserve-fraction", "0.25"),
+    ("suspend-pressure", "0.85"),
+    ("resume-pressure", "0.70"),
 ]
 
 
@@ -415,6 +421,24 @@ class Config:
         if env is not None:
             return env
         return self._required_int("review-rounds-cap")
+
+    def memory_reserve_fraction(self):
+        env = self._env_float("LC_MEMORY_RESERVE_FRACTION", None)
+        return env if env is not None else self._required_float("memory-reserve-fraction")
+
+    def suspend_pressure(self):
+        env = self._env_float("LC_SUSPEND_PRESSURE", None)
+        return env if env is not None else self._required_float("suspend-pressure")
+
+    def resume_pressure(self):
+        env = self._env_float("LC_RESUME_PRESSURE", None)
+        value = env if env is not None else self._required_float("resume-pressure")
+        if value >= self.suspend_pressure():
+            raise ConfigError(
+                "resume-pressure (%r) must be strictly below suspend-pressure (%r)"
+                % (value, self.suspend_pressure())
+            )
+        return value
 
     def internal_shortcode(self):
         env = self._env("LC_INTERNAL_SHORTCODE")

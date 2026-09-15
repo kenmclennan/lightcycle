@@ -9,6 +9,7 @@ from lightcycle.application.pool import (
     BreakerGateResponse,
     HookCompletionsUseCase,
     ListWorkersUseCase,
+    MemoryGateResponse,
     ResolveLogInput,
     ResolveLogUseCase,
     SweepUseCase,
@@ -25,6 +26,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpFs,
     NoOpGit,
     NoOpHookCompletions,
+    NoOpMemoryGate,
     NoOpMonitor,
     NoOpSpinPort,
     NoOpStream,
@@ -116,6 +118,18 @@ class FakeUsageGate:
 
     def execute(self, now):
         self.calls.append(now)
+
+
+class FakeMemoryGate:
+    def __init__(self, response=None):
+        self._response = response if response is not None else MemoryGateResponse(
+            cap=None, pressure=None
+        )
+        self.calls = []
+
+    def execute(self, pool, probe, now):
+        self.calls.append((pool, probe, now))
+        return self._response
 
 
 class FakeCadenceGate:
@@ -225,6 +239,7 @@ def make_tick(store, workers, spawner, config, **overrides):
         hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
         backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
         spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
+        memory_gate=NoOpMemoryGate(),
     )
     kwargs.update(overrides)
     return TickUseCase(store, workers, spawner, config, **kwargs)
@@ -962,6 +977,36 @@ class TestTick(unittest.TestCase):
         self.assertEqual(result.pool.free_slots, 0)
         self.assertEqual(result.backup.created, "store-1000.db.gz")
         self.assertEqual(result.backup.pruned, ["store-1.db.gz"])
+
+    def test_memory_none_when_the_registry_is_unreadable(self):
+        s = FakeStore()
+        workers = FakeWorkers(raise_workers_state=True)
+        memory_gate = FakeMemoryGate()
+        result = make_tick(
+            s, workers, FakeSpawner(), FakeConfig(max_agents=4), memory_gate=memory_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertIsNone(result.memory)
+        self.assertEqual(memory_gate.calls, [], "the registry-unreadable branch must not call the memory gate")
+
+    def test_memory_cap_narrows_slots_even_when_ready_queue_and_breaker_allow_more(self):
+        s = FakeStore()
+        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b2", step="build", role="agent")
+        spawner = FakeSpawner()
+        memory_gate = FakeMemoryGate(MemoryGateResponse(cap=0, pressure=0.9))
+        result = make_tick(
+            s, FakeWorkers(), spawner, FakeConfig(max_agents=4), memory_gate=memory_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(spawner.spawned, [])
+        self.assertEqual(result.pool.free_slots, 0)
+
+    def test_memory_response_carried_on_tick_response_when_registry_readable(self):
+        s = FakeStore()
+        memory_gate = FakeMemoryGate(MemoryGateResponse(cap=None, pressure=0.5))
+        result = make_tick(
+            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4), memory_gate=memory_gate
+        ).execute(TickInput(now=1000.0))
+        self.assertEqual(result.memory, MemoryGateResponse(cap=None, pressure=0.5))
 
     def test_breaker_half_open_spawns_exactly_one_probe(self):
         s = FakeStore()

@@ -48,6 +48,28 @@ class TestWorker(unittest.TestCase):
     def test_checked_defaults_to_false(self):
         self.assertFalse(Worker.from_state({"spawnid": "sp-1"}).checked)
 
+    def test_from_state_reads_suspended_and_suspended_at(self):
+        w = Worker.from_state({"spawnid": "sp-1", "suspended": True, "suspended_at": 500})
+        self.assertTrue(w.suspended)
+        self.assertEqual(w.suspended_at, 500)
+
+    def test_suspended_defaults_to_false(self):
+        w = Worker.from_state({"spawnid": "sp-1"})
+        self.assertFalse(w.suspended)
+        self.assertIsNone(w.suspended_at)
+
+    def test_is_stalled_false_when_suspended_regardless_of_stale_log(self):
+        w = Worker(step="b-1", started=0, log="/l/1.log", suspended=True)
+        self.assertFalse(
+            w.is_stalled(now=10000, max_boot=120, stall_seconds=1800, mtime_probe=lambda p: 0)
+        )
+
+    def test_is_stalled_unaffected_when_not_suspended(self):
+        w = Worker(step="b-1", started=0, log="/l/1.log", suspended=False)
+        self.assertTrue(
+            w.is_stalled(now=10000, max_boot=120, stall_seconds=1800, mtime_probe=lambda p: 0)
+        )
+
     def test_is_alive_delegates_to_probe(self):
         w = Worker(pid=42)
         self.assertTrue(w.is_alive(probe({42})))

@@ -223,6 +223,15 @@ class NullWorkers(WorkersPort):
     def set_pid_started(self, spawnid, pid_started):
         self._refuse("set_pid_started")
 
+    def set_suspended(self, spawnid, suspended, at=None):
+        self._refuse("set_suspended")
+
+    def signal_suspend(self, pid):
+        self._refuse("signal_suspend")
+
+    def signal_resume(self, pid):
+        self._refuse("signal_resume")
+
 
 class NullSpin(SpinPort):
     def _refuse(self, name):

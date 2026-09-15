@@ -60,6 +60,44 @@ def test_colour_carries_the_state_tokens_the_plain_frame_drops():
     assert "\x1b[" not in plain
 
 
+def test_a_pool_holding_state_renders_the_hold_segment_in_the_footer():
+    frame = render("priority-list#pool-holding")
+
+    assert "holding · 2/5 · memory" in frame
+
+
+def _icon_style(session, row_key, glyph):
+    table = session.app.query_one(PriorityTable)
+    y = 0
+    for r in table.ordered_rows:
+        if r.key.value == row_key:
+            break
+        y += r.height
+    strip = table.render_line(y)
+    for segment in strip:
+        if segment.text.strip() == glyph:
+            return segment.style
+    return None
+
+
+def test_a_worker_suspended_state_renders_a_glyph_distinct_from_active_and_queued():
+    from lightcycle.adapters.tui.design_system import STATE_GLYPHS
+
+    session = SCREENS["priority-list#worker-suspended"](DEFAULT_SIZE)
+    try:
+        suspended_style = _icon_style(session, "LC-600.1", STATE_GLYPHS["suspended"].glyph)
+        active_style = _icon_style(session, "LC-600.2", STATE_GLYPHS["active"].glyph)
+        queued_style = _icon_style(session, "LC-600.3", STATE_GLYPHS["queued"].glyph)
+
+        assert suspended_style is not None
+        assert active_style is not None
+        assert queued_style is not None
+        assert suspended_style.color.get_truecolor() != active_style.color.get_truecolor()
+        assert _icon_style(session, "LC-600.1", STATE_GLYPHS["queued"].glyph) is None
+    finally:
+        session.close()
+
+
 HEADER_FIELDS = ("14m", "code-await-merge", "lightcycle/spec-driven (abfb01d)")
 
 

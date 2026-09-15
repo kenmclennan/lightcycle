@@ -8,6 +8,7 @@ from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lock import RunLockAdapter
+from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.spin import SpinAdapter
@@ -25,7 +26,7 @@ class Container:
         self, *, config=None, store=None, git=None, spawner=None, workers=None, fs=None,
         github=None, lock=None, breaker=None, backup=None, workflow_source=None, launcher=None,
         spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
-        claude_stream=None,
+        claude_stream=None, machine=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -50,6 +51,7 @@ class Container:
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)
         self.claude_stream = claude_stream if claude_stream is not None else ClaudeStreamAdapter()
+        self.machine = machine if machine is not None else MachineAdapter()
 
     def flow_service(self):
         return make_flow_service(self.workflow_bundle, self.store, self.config, self.workflow_source)
@@ -62,6 +64,7 @@ class Container:
         from lightcycle.application.pool.backup import BackupUseCase
         from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
         from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
+        from lightcycle.application.pool.memory_gate import MemoryGateUseCase
         from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
         from lightcycle.application.pool.retro_cadence import RetroCadenceUseCase
         from lightcycle.application.pool.tick import TickUseCase
@@ -95,6 +98,7 @@ class Container:
                 self.store, self.worker_log, self.workers, self.config, self.claude_stream,
             ),
             stream=self.claude_stream,
+            memory_gate=MemoryGateUseCase(self.machine, self.workers, self.worker_log, self.config),
         )
 
     def sweep(self, flow=None):

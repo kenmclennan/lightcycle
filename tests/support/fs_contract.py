@@ -144,3 +144,14 @@ class WorkerLogContractBase:
         data, offset = fs.read_tail(self.path("a.txt"), 2)
         self.assertEqual(data, b"")
         self.assertEqual(offset, len(_TAIL_CONTENT))
+
+    def test_touch_does_not_alter_content(self):
+        fs = self.make_fs(files={"a.log": b"line one\n"})
+        path = self.path("a.log")
+        fs.touch(path)
+        self.assertEqual(list(fs.iter_lines(path)), ["line one\n"])
+        self.assertIsNotNone(fs.log_mtime(path))
+
+    def test_touch_on_a_missing_path_does_not_raise(self):
+        fs = self.make_fs()
+        fs.touch(self.path("missing.log"))

@@ -41,3 +41,15 @@ class WorkersPort(ABC):
     @abstractmethod
     def set_pid_started(self, spawnid, pid_started):
         pass
+
+    @abstractmethod
+    def set_suspended(self, spawnid, suspended, at=None):
+        pass
+
+    @abstractmethod
+    def signal_suspend(self, pid):
+        pass
+
+    @abstractmethod
+    def signal_resume(self, pid):
+        pass

@@ -13,6 +13,7 @@ from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lock import RunLockAdapter
+from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.sqlite_store import SqliteStore
@@ -36,6 +37,7 @@ from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from lightcycle.adapters.tui.hub import NodeHubScreen
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
+from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 
@@ -226,6 +228,7 @@ _LIVE_ADAPTER_TYPES = {
     "workflow_bundle": WorkflowBundleAdapter,
     "worker_log": WorkerLogAdapter,
     "scaffold": ScaffoldAdapter,
+    "machine": MachineAdapter,
 }
 
 
@@ -240,7 +243,8 @@ def assert_hermetic(container):
 
 def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None,
                          launcher=None, git=None, spawner=None, github=None, backup=None,
-                         workflow_bundle=None, worker_log=None, autostart_pool=False):
+                         workflow_bundle=None, worker_log=None, autostart_pool=False,
+                         machine=None):
     fs_double = fs or FakeFs()
     config = HermeticTuiConfig(autostart_pool=autostart_pool)
     store_double = store
@@ -265,6 +269,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
         spawner=spawner if spawner is not None else FakeSpawner(),
         github=github or FakeGitHub(),
         backup=backup or _poisoned(BackupPort, "backup"),
+        machine=machine if machine is not None else FakeMachine(),
     )
     assert_hermetic(container)
     return container

@@ -44,6 +44,15 @@ def log_mtime(path):
         return None
 
 
+def touch(path):
+    if not path:
+        return
+    try:
+        os.utime(path, None)
+    except OSError:
+        pass
+
+
 def iter_lines(path):
     if not path or not os.path.exists(path):
         return
@@ -97,3 +106,6 @@ class WorkerLogAdapter(WorkerLogPort):
 
     def log_mtime(self, path):
         return log_mtime(path)
+
+    def touch(self, path):
+        return touch(path)
