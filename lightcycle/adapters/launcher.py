@@ -1,3 +1,4 @@
+import shlex
 import subprocess
 import sys
 import webbrowser
@@ -27,7 +28,7 @@ def open_path(path):
 
 
 def edit(editor, path):
-    result = subprocess.run([editor, path], timeout=None)
+    result = subprocess.run(shlex.split(editor) + [path], timeout=None)
     return result.returncode
 
 

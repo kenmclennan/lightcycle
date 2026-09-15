@@ -68,6 +68,22 @@ class TestEdit(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 LauncherAdapter().edit("vi", "/x/config")
 
+    def test_splits_an_editor_command_carrying_arguments(self):
+        with patch(
+            "lightcycle.adapters.launcher.subprocess.run", return_value=MagicMock(returncode=0)
+        ) as mock_run:
+            LauncherAdapter().edit("code --wait", "/x/config")
+            mock_run.assert_called_once_with(["code", "--wait", "/x/config"], timeout=None)
+
+    def test_preserves_a_quoted_path_with_a_space_in_the_editor_command(self):
+        with patch(
+            "lightcycle.adapters.launcher.subprocess.run", return_value=MagicMock(returncode=0)
+        ) as mock_run:
+            LauncherAdapter().edit('"/opt/my editor/bin/edit" --wait', "/x/config")
+            mock_run.assert_called_once_with(
+                ["/opt/my editor/bin/edit", "--wait", "/x/config"], timeout=None
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
