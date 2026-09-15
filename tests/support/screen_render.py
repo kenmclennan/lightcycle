@@ -3,14 +3,14 @@ import datetime
 import sys
 
 from lightcycle.domain.pool import ToolUsage
-from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
-from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.step_factory import route_to_human
-from tests.support.tui_harness import FakeBreakerPort, FakeLauncher, FakeLock, launch, make_test_container
+from tests.support.tui_harness import (
+    FakeBreakerPort, FakeLauncher, FakeLock, FakeMemoryGateStatus, launch, make_test_container,
+)
 
 NOW = datetime.datetime(2026, 1, 1, 14, 16, 0)
 DEFAULT_SIZE = (100, 30)
@@ -255,7 +255,7 @@ def _long_hierarchy_store(passes=4):
 
 
 def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None,
-            launcher=None, machine=None):
+            launcher=None, machine=None, memory_gate_status=None):
     container = make_test_container(
         store=store,
         lock=FakeLock(running=lock_running),
@@ -267,6 +267,7 @@ def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, 
         workers=workers,
         launcher=launcher,
         machine=machine,
+        memory_gate_status=memory_gate_status,
     )
     return launch(container, now=lambda: NOW, size=size)
 
@@ -392,8 +393,8 @@ def _pool_prompt_session(size, worker_count):
 
 def _priority_pool_holding(size):
     store, _scan, _coding = _populated_store()
-    machine = FakeMachine(MachineHeadroom(system_pressure=0.95, pool_share=0.0))
-    return _launch(store, size=size, workers=_pool_workers(2), machine=machine)
+    status = FakeMemoryGateStatus({"cap": 0, "system_pressure": 0.95})
+    return _launch(store, size=size, workers=_pool_workers(2), memory_gate_status=status)
 
 
 def _worker_suspended_store():

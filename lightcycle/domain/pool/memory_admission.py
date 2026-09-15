@@ -1,9 +1,11 @@
 def admission_cap(headroom, alive_count, memory_reserve_fraction):
-    if headroom is None or headroom.system_pressure is None:
+    if headroom is None or headroom.pool_share is None:
         return None
-    per_worker = (headroom.pool_share or 0.0) / alive_count if alive_count else 0.0
-    projected = headroom.system_pressure + per_worker
-    return 0 if projected > (1.0 - memory_reserve_fraction) else None
+    per_worker = headroom.pool_share / alive_count if alive_count else 0.0
+    projected = headroom.pool_share + per_worker
+    if projected > (1.0 - memory_reserve_fraction):
+        return 1 if alive_count == 0 else 0
+    return None
 
 
 def worker_to_suspend(alive_workers, pressure, suspend_pressure):

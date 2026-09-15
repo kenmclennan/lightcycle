@@ -42,8 +42,12 @@ def find_offending_classes(tree, port_name, port_methods):
             continue
         if not port_methods <= _method_names(node):
             continue
-        if port_name not in _base_names(node):
-            offenders.append(node.name)
+        bases = _base_names(node)
+        if port_name in bases:
+            continue
+        if any(base in PORT_NAMES for base in bases):
+            continue
+        offenders.append(node.name)
     return offenders
 
 

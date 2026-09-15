@@ -41,7 +41,7 @@ class NoOpUsageGate:
 
 class NoOpMemoryGate:
     def execute(self, pool, probe, now):
-        return MemoryGateResponse(cap=None, pressure=None)
+        return MemoryGateResponse(cap=None, pool_share=None, system_pressure=None)
 
 
 class NoOpFlowService:

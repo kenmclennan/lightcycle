@@ -7,7 +7,8 @@ from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.machine import MachinePort
 
 _SUBPROCESS_TIMEOUT = 2
-_SWAP_RE = re.compile(r"total\s*=\s*([\d.]+)M\s+used\s*=\s*([\d.]+)M")
+_MEMORY_PRESSURE_RE = re.compile(r"System-wide memory free percentage:\s*(\d+)%")
+_PSI_AVG10_RE = re.compile(r"avg10=([\d.]+)")
 
 
 def _run(argv):
@@ -51,15 +52,14 @@ def _pool_rss_kb(workers, rss_argv_for):
     return total
 
 
-def _macos_swap_pressure():
-    out = _run(["sysctl", "-n", "vm.swapusage"])
+def _macos_memory_pressure():
+    out = _run(["memory_pressure"])
     if out is None:
         return None
-    match = _SWAP_RE.search(out)
+    match = _MEMORY_PRESSURE_RE.search(out)
     if not match:
         return None
-    total, used = float(match.group(1)), float(match.group(2))
-    return (used / total) if total > 0 else 0.0
+    return 1.0 - (float(match.group(1)) / 100.0)
 
 
 def _macos_total_memory_kb():
@@ -73,12 +73,12 @@ def _macos_total_memory_kb():
 
 
 def _headroom_macos(workers):
-    pressure = _macos_swap_pressure()
     total_mem_kb = _macos_total_memory_kb()
-    if pressure is None or not total_mem_kb:
-        return MachineHeadroom(system_pressure=None, pool_share=None)
-    pool_rss_kb = _pool_rss_kb(workers, lambda pgid: ["ps", "-o", "rss=", "-g", str(pgid)])
-    return MachineHeadroom(system_pressure=pressure, pool_share=pool_rss_kb / total_mem_kb)
+    pool_share = None
+    if total_mem_kb:
+        pool_rss_kb = _pool_rss_kb(workers, lambda pgid: ["ps", "-o", "rss=", "-g", str(pgid)])
+        pool_share = pool_rss_kb / total_mem_kb
+    return MachineHeadroom(system_pressure=_macos_memory_pressure(), pool_share=pool_share)
 
 
 def _proc_meminfo():
@@ -97,22 +97,28 @@ def _proc_meminfo():
     return values
 
 
-def _linux_swap_pressure(meminfo):
-    total = meminfo.get("SwapTotal")
-    free = meminfo.get("SwapFree")
-    if total is None or free is None:
+def _linux_memory_pressure():
+    try:
+        with open("/proc/pressure/memory") as f:
+            text = f.read()
+    except OSError:
         return None
-    return ((total - free) / total) if total > 0 else 0.0
+    for line in text.splitlines():
+        if line.startswith("full "):
+            match = _PSI_AVG10_RE.search(line)
+            if match:
+                return float(match.group(1)) / 100.0
+    return None
 
 
 def _headroom_linux(workers):
     meminfo = _proc_meminfo()
     total_mem_kb = meminfo.get("MemTotal") if meminfo else None
-    pressure = _linux_swap_pressure(meminfo) if meminfo else None
-    if pressure is None or not total_mem_kb:
-        return MachineHeadroom(system_pressure=None, pool_share=None)
-    pool_rss_kb = _pool_rss_kb(workers, lambda pgid: ["ps", "-o", "rss=", "--pgid", str(pgid)])
-    return MachineHeadroom(system_pressure=pressure, pool_share=pool_rss_kb / total_mem_kb)
+    pool_share = None
+    if total_mem_kb:
+        pool_rss_kb = _pool_rss_kb(workers, lambda pgid: ["ps", "-o", "rss=", "--pgid", str(pgid)])
+        pool_share = pool_rss_kb / total_mem_kb
+    return MachineHeadroom(system_pressure=_linux_memory_pressure(), pool_share=pool_share)
 
 
 class MachineAdapter(MachinePort):

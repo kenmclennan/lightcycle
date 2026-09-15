@@ -1297,7 +1297,7 @@ class LightcycleApp(App):
         running = PoolRunningUseCase(self._container.lock).execute().running
         breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
         hold = PoolHoldStatusUseCase(
-            self._container.machine, self._container.workers, self._container.config,
+            self._container.memory_gate_status, self._container.workers, self._container.config,
         ).execute(self._container.workers.pid_alive)
         self.screen_stack[0].query_one(StatusBar).report(
             pool_running=running,
