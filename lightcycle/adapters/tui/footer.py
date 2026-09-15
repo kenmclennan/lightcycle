@@ -12,6 +12,7 @@ class StatusBar(Horizontal):
     def compose(self) -> ComposeResult:
         yield Static(id="status-pool")
         yield Static(id="status-claude")
+        yield Static(id="status-hold")
         yield Static(id="status-version")
         yield Static(id="status-upgrade")
 
@@ -25,6 +26,7 @@ class StatusBar(Horizontal):
         version,
         upgrade_version,
         upgrade_error=None,
+        hold=None,
     ):
         pool_glyph, pool_colour = FOOTER_GLYPHS["pool-running" if pool_running else "pool-stopped"]
         pool = Text("%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running"),
@@ -44,6 +46,20 @@ class StatusBar(Horizontal):
             claude_glyph, claude_colour = FOOTER_GLYPHS["claude-available"]
             claude_text = "%s claude available" % claude_glyph
         self.query_one("#status-claude", Static).update(Text(claude_text, style=COLOURS[claude_colour]))
+
+        hold_widget = self.query_one("#status-hold", Static)
+        if hold is not None and hold.holding:
+            hold_glyph, hold_colour = FOOTER_GLYPHS["pool-holding"]
+            hold_widget.update(
+                Text(
+                    "%s holding · %d/%d · %s" % (hold_glyph, hold.alive, hold.max_agents, hold.reason),
+                    style=COLOURS[hold_colour],
+                )
+            )
+            hold_widget.display = True
+        else:
+            hold_widget.update("")
+            hold_widget.display = False
 
         self.query_one("#status-version", Static).update(Text("v%s" % version, style=COLOURS["dim"]))
 

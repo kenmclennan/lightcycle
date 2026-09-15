@@ -20,6 +20,7 @@ import lightcycle.adapters.lock as _lock_mod
 import lightcycle.cli as _cli_mod
 import lightcycle.container as _container_mod
 from tests.support.fake_fs import graph_text_from_metas
+from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.application.pool.tick import TickUseCase
@@ -130,6 +131,9 @@ def write_config(projects=None, specs=None):
         "price-sonnet-cache-read-per-mtok: 0.20",
         "shutdown-grace-seconds: 10",
         "tick-failure-cap: 5",
+        "memory-reserve-fraction: 0.25",
+        "suspend-pressure: 0.85",
+        "resume-pressure: 0.70",
     ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p
@@ -741,7 +745,7 @@ class TestRun(unittest.TestCase):
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
@@ -1069,7 +1073,7 @@ class TestRunSingletonLock(unittest.TestCase):
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.pop("LC_SPAWN_CMD", None))
@@ -1215,7 +1219,7 @@ class TestArtifacts(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
 
     def test_add_and_read_artifacts_append(self):
@@ -1233,7 +1237,7 @@ class TestCompositionRoot(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
 
     def test_cmd_status_in_process_with_injected_store(self):
@@ -1248,7 +1252,7 @@ class TestCompositionRoot(unittest.TestCase):
         self.assertIs(_cli_mod._container.store, self.store)
         _cli_mod.set_container(self._orig)
         self.assertIs(_cli_mod._container, self._orig)
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
 
 
 class TestLink(unittest.TestCase):
@@ -1836,7 +1840,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         self.store = FakeStore()
         self.store.add_project("acme/widget", local_path=tempfile.mkdtemp())
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
@@ -2002,7 +2006,7 @@ class TestWorktree(unittest.TestCase):
         self.store.add_project("acme/engine", local_path=self.root)
         self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
@@ -2096,7 +2100,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         self.store = FakeStore()
         self.store.add_project(SPECS_WORKSPACE, local_path=self.specs_repo)
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
@@ -2137,7 +2141,7 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
@@ -2167,7 +2171,7 @@ class TestNamedRepo(unittest.TestCase):
         self.store.add_project("acme/app", local_path=self.app)
         self.store.add_project(SPECS_WORKSPACE, local_path=self.engine)
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
@@ -2270,7 +2274,9 @@ class TestActivationClonesAnAbsentRegisteredProject(unittest.TestCase):
         os.environ["LC_HOME"] = self.engine
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store, git=_StubCloneGit()))
+        _cli_mod.set_container(
+            _cli_mod.Container(store=self.store, git=_StubCloneGit(), machine=FakeMachine())
+        )
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
@@ -2353,7 +2359,7 @@ class TestCloseWorktree(unittest.TestCase):
         self.store.add_project("acme/engine", local_path=self.root)
         self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
 
@@ -2445,7 +2451,7 @@ class TestInitPullsWorkflows(unittest.TestCase):
         os.environ["LC_CONFIG"] = self.cfg
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))
@@ -2484,7 +2490,7 @@ class TestConfig(unittest.TestCase):
         _write_origin(self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
-        _cli_mod.set_container(_cli_mod.Container(store=self.store))
+        _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
         self.addCleanup(lambda: os.environ.pop("LC_HOME", None))
         self.addCleanup(lambda: os.environ.__setitem__("LC_CONFIG", _ABSENT_CONFIG))

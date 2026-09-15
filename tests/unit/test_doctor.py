@@ -28,6 +28,7 @@ _ALL_KEYS = dict(
     price_sonnet_cache_write_per_mtok="2.50", price_sonnet_cache_read_per_mtok="0.20",
     shutdown_grace_seconds="10", tick_failure_cap="5", review_rounds_cap="5",
     context_artifact_types="spec", internal_shortcode="AUD",
+    memory_reserve_fraction="0.25", suspend_pressure="0.85", resume_pressure="0.70",
 )
 
 

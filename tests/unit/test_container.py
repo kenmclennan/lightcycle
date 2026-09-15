@@ -1,6 +1,7 @@
 import unittest
 
-from lightcycle.container import worktrees_for
+from lightcycle.adapters.machine import MachineAdapter
+from lightcycle.container import Container, worktrees_for
 
 
 class _Collaborators:
@@ -33,6 +34,17 @@ class TestWorktreesFor(unittest.TestCase):
         svc = worktrees_for(c, flow=flow)
 
         self.assertIs(svc._flow, flow)
+
+
+class TestContainerMachineDefault(unittest.TestCase):
+    def test_defaults_to_a_machine_adapter(self):
+        c = Container(store=object())
+        self.assertIsInstance(c.machine, MachineAdapter)
+
+    def test_machine_override_is_honoured(self):
+        sentinel = object()
+        c = Container(store=object(), machine=sentinel)
+        self.assertIs(c.machine, sentinel)
 
 
 if __name__ == "__main__":

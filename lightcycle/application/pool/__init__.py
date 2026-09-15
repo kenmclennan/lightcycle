@@ -11,6 +11,7 @@ from lightcycle.application.pool.hook_completions import (
 )
 from lightcycle.application.pool.list_workers import ListWorkersUseCase
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
+from lightcycle.application.pool.memory_gate import MemoryGateResponse, MemoryGateUseCase
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.pool.pool_control import (
     LiveWorkerCountUseCase,
@@ -19,6 +20,7 @@ from lightcycle.application.pool.pool_control import (
     StopPoolSignalResponse,
     StopPoolSignalUseCase,
 )
+from lightcycle.application.pool.pool_hold_status import PoolHoldResponse, PoolHoldStatusUseCase
 from lightcycle.application.pool.resolve_log import ResolveLogInput, ResolveLogUseCase
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse, RetroCadenceUseCase
 from lightcycle.application.pool.run_lock import (
@@ -48,7 +50,11 @@ __all__ = [
     "HookCompletionsUseCase",
     "ListWorkersUseCase",
     "LiveUsageAccrualUseCase",
+    "MemoryGateResponse",
+    "MemoryGateUseCase",
     "MonitorPrsUseCase",
+    "PoolHoldResponse",
+    "PoolHoldStatusUseCase",
     "PoolRunningResponse",
     "PoolRunningUseCase",
     "ReleaseRunLockUseCase",

@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
+from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse, SweepUseCase
@@ -48,13 +49,14 @@ class TickResponse:
     backup: BackupResponse
     pool: PoolState
     breaker: BreakerState
+    memory: Optional[MemoryGateResponse] = None
 
 
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor, cadence_gate, breaker_gate,
         hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
-        stream,
+        stream, memory_gate,
     ):
         self._store = store
         self._workers = workers
@@ -71,6 +73,7 @@ class TickUseCase:
         self._backup_gate = backup_gate
         self._flow_service = flow_service
         self._usage_gate = usage_gate
+        self._memory_gate = memory_gate
 
     def execute(self, input: TickInput) -> TickResponse:
         self._flow_service.clear_cache()
@@ -92,14 +95,18 @@ class TickUseCase:
             slots = pool.free_slots(max_agents, probe)
             alive_count = max_agents - slots
             inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
+            memory_result = self._memory_gate.execute(pool, probe, input.now)
         except RegistryUnreadable:
             covered = set()
             slots = 0
             alive_count = max_agents
             inflight_dict = {}
+            memory_result = None
         cap = breaker.spawn_cap(input.now, alive_count)
         if cap is not None:
             slots = min(slots, cap)
+        if memory_result is not None and memory_result.cap is not None:
+            slots = min(slots, memory_result.cap)
         if breaker_result.spin_open:
             slots = min(slots, 1)
         inflight_total = sum(inflight_dict.values())
@@ -140,4 +147,5 @@ class TickUseCase:
                 spin_open=breaker_result.spin_open,
                 spin_opened=breaker_result.spin_opened,
             ),
+            memory=memory_result,
         )

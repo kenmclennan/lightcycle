@@ -96,21 +96,34 @@ def reap_children():
             break
 
 
-def kill(pid):
+def _signal_group(pid, sig):
     try:
         pid = int(pid)
         own_pgid = os.getpgid(0)
         try:
             pgid = os.getpgid(pid)
         except (OSError, ValueError, TypeError):
-            os.kill(pid, signal.SIGTERM)
+            os.kill(pid, sig)
             return
         if pgid == own_pgid:
-            os.kill(pid, signal.SIGTERM)
+            os.kill(pid, sig)
         else:
-            os.killpg(pgid, signal.SIGTERM)
+            os.killpg(pgid, sig)
     except (OSError, ValueError, TypeError):
         pass
+
+
+def kill(pid):
+    _signal_group(pid, signal.SIGCONT)
+    _signal_group(pid, signal.SIGTERM)
+
+
+def signal_suspend(pid):
+    _signal_group(pid, signal.SIGSTOP)
+
+
+def signal_resume(pid):
+    _signal_group(pid, signal.SIGCONT)
 
 
 def register_worker(root, entry):
@@ -186,6 +199,17 @@ def set_pid_started(root, spawnid, pid_started):
         write_workers(root, workers)
 
 
+def set_suspended(root, spawnid, suspended, at=None):
+    with registry_lock(root):
+        workers = workers_state(root)
+        for w in workers:
+            if w.get("spawnid") == spawnid:
+                w["suspended"] = suspended
+                if suspended:
+                    w["suspended_at"] = at
+        write_workers(root, workers)
+
+
 class WorkersAdapter(WorkersPort):
     def __init__(self, config):
         self._config = config
@@ -217,3 +241,12 @@ class WorkersAdapter(WorkersPort):
 
     def set_pid_started(self, spawnid, pid_started):
         return set_pid_started(self._config.data_root(), spawnid, pid_started)
+
+    def set_suspended(self, spawnid, suspended, at=None):
+        return set_suspended(self._config.data_root(), spawnid, suspended, at)
+
+    def signal_suspend(self, pid):
+        return signal_suspend(pid)
+
+    def signal_resume(self, pid):
+        return signal_resume(pid)

@@ -154,6 +154,70 @@ class TestTunables(unittest.TestCase):
             _cfg({"LC_PROBE_COOLDOWN_SECONDS": "soon"}).probe_cooldown_seconds()
 
 
+class TestMemoryConfig(unittest.TestCase):
+    def _full_cfg(self, environ=None):
+        return _cfg(
+            environ,
+            memory_reserve_fraction="0.25",
+            suspend_pressure="0.85",
+            resume_pressure="0.70",
+        )
+
+    def test_seeded_defaults_from_config(self):
+        c = self._full_cfg()
+        self.assertEqual(c.memory_reserve_fraction(), 0.25)
+        self.assertEqual(c.suspend_pressure(), 0.85)
+        self.assertEqual(c.resume_pressure(), 0.70)
+
+    def test_missing_keys_raise(self):
+        with self.assertRaises(ConfigError):
+            _cfg().memory_reserve_fraction()
+        with self.assertRaises(ConfigError):
+            _cfg().suspend_pressure()
+        with self.assertRaises(ConfigError):
+            _cfg(suspend_pressure="0.85").resume_pressure()
+
+    def test_env_overrides_win(self):
+        c = self._full_cfg({
+            "LC_MEMORY_RESERVE_FRACTION": "0.1",
+            "LC_SUSPEND_PRESSURE": "0.9",
+            "LC_RESUME_PRESSURE": "0.6",
+        })
+        self.assertEqual(c.memory_reserve_fraction(), 0.1)
+        self.assertEqual(c.suspend_pressure(), 0.9)
+        self.assertEqual(c.resume_pressure(), 0.6)
+
+    def test_env_override_without_config_key(self):
+        self.assertEqual(
+            _cfg({"LC_MEMORY_RESERVE_FRACTION": "0.4"}).memory_reserve_fraction(), 0.4
+        )
+
+    def test_malformed_config_fails_fast(self):
+        with self.assertRaises(ConfigError):
+            _cfg(memory_reserve_fraction="nope").memory_reserve_fraction()
+
+    def test_malformed_env_fails_fast(self):
+        with self.assertRaises(ConfigError):
+            _cfg({"LC_SUSPEND_PRESSURE": "nope"}, suspend_pressure="0.85").suspend_pressure()
+
+    def test_resume_pressure_must_be_strictly_below_suspend_pressure(self):
+        with self.assertRaises(ConfigError):
+            _cfg(suspend_pressure="0.8", resume_pressure="0.8").resume_pressure()
+        with self.assertRaises(ConfigError):
+            _cfg(suspend_pressure="0.8", resume_pressure="0.9").resume_pressure()
+
+    def test_resume_pressure_strictly_below_resolves_cleanly(self):
+        self.assertEqual(
+            _cfg(suspend_pressure="0.85", resume_pressure="0.70").resume_pressure(), 0.70
+        )
+
+    def test_resume_pressure_invariant_checked_against_env_override(self):
+        with self.assertRaises(ConfigError):
+            _cfg(
+                {"LC_RESUME_PRESSURE": "0.9"}, suspend_pressure="0.85", resume_pressure="0.70",
+            ).resume_pressure()
+
+
 class TestEnsureConfig(unittest.TestCase):
     def test_creates_all_keys_when_absent(self):
         d = tempfile.mkdtemp()

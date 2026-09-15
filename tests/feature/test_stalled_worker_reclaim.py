@@ -184,6 +184,11 @@ def _log_fresh(ctx):
     ctx["fs"].set_log_mtime(ctx["log"], ctx["now"] - STALL_SECONDS + 1)
 
 
+@given("the worker is suspended by the pool")
+def _suspended_by_pool(ctx):
+    ctx["worker_entry"]["suspended"] = True
+
+
 @given("the worker's log contains no terminal marker")
 def _no_terminal_marker(ctx):
     ctx["fs"].files[ctx["log"]] = NON_TERMINAL_LOG

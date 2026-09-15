@@ -360,6 +360,45 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
         self.assertEqual(active[0].cost, "")
 
 
+class TestBuildPriorityRowsSuspended(unittest.TestCase):
+    def test_an_active_row_whose_step_is_suspended_gets_the_suspended_glyph(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step(step="build", role="agent", parent=item)
+        lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
+
+        _, active, _ = build_priority_rows(
+            store, lanes, FixedFlowService(_FLOW), suspended_steps={step}
+        )
+
+        self.assertTrue(active[0].suspended)
+        self.assertEqual(active[0].icon, STATE_GLYPHS["suspended"].glyph)
+        self.assertEqual(active[0].icon_colour, STATE_GLYPHS["suspended"].colour)
+
+    def test_an_active_row_not_in_suspended_steps_gets_the_active_glyph(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step(step="build", role="agent", parent=item)
+        lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
+
+        _, active, _ = build_priority_rows(
+            store, lanes, FixedFlowService(_FLOW), suspended_steps={"some-other-step"}
+        )
+
+        self.assertFalse(active[0].suspended)
+        self.assertEqual(active[0].icon, STATE_GLYPHS["active"].glyph)
+
+    def test_defaults_to_no_suspended_steps(self):
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        step = store.create_step(step="build", role="agent", parent=item)
+        lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
+
+        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+
+        self.assertFalse(active[0].suspended)
+
+
 class TestBuildPriorityRowsTime(unittest.TestCase):
     def test_a_row_that_has_never_accrued_active_time_is_blank(self):
         store = FakeStore()

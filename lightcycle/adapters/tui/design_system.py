@@ -21,6 +21,7 @@ STATE_GLYPHS = {
     "escalation": Glyph("▲", "red"),
     "active": Glyph("◆", "cyan"),
     "queued": Glyph("○", "dim"),
+    "suspended": Glyph("◆", "dim"),
 }
 
 ACTIVE_GLYPH_FRAMES = ("◇", "◈", "◆", "◈")
@@ -45,6 +46,7 @@ FOOTER_GLYPHS = {
     "claude-unavailable": Glyph("⊘", "red"),
     "claude-probing": Glyph("◐", "amber"),
     "upgrade-available": Glyph("⬆", "amber"),
+    "pool-holding": Glyph("◐", "amber"),
 }
 
 CURSOR_GLYPH = Glyph("❯", "cyan")

@@ -3,8 +3,10 @@ import datetime
 import sys
 
 from lightcycle.domain.pool import ToolUsage
+from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.step_factory import route_to_human
@@ -253,7 +255,7 @@ def _long_hierarchy_store(passes=4):
 
 
 def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None,
-            launcher=None):
+            launcher=None, machine=None):
     container = make_test_container(
         store=store,
         lock=FakeLock(running=lock_running),
@@ -264,6 +266,7 @@ def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, 
         fs=fs,
         workers=workers,
         launcher=launcher,
+        machine=machine,
     )
     return launch(container, now=lambda: NOW, size=size)
 
@@ -385,6 +388,43 @@ def _pool_workers(n):
 def _pool_prompt_session(size, worker_count):
     store, _scan, _coding = _populated_store()
     return _launch(store, size=size, workers=_pool_workers(worker_count))
+
+
+def _priority_pool_holding(size):
+    store, _scan, _coding = _populated_store()
+    machine = FakeMachine(MachineHeadroom(system_pressure=0.95, pool_share=0.0))
+    return _launch(store, size=size, workers=_pool_workers(2), machine=machine)
+
+
+def _worker_suspended_store():
+    store = DemoStore(now=lambda: _at(14))
+
+    suspended_item = store.item("LC-600.1", "Active step with a suspended worker", project="lightcycle")
+    suspended_step = store.step("LC-600.1.1", step="write-code", role="agent", parent=suspended_item)
+    store.assign(suspended_step, "worker-1")
+    store.update_state(suspended_step, State.RUNNING)
+
+    active_item = store.item("LC-600.2", "Active step, not suspended", project="lightcycle")
+    active_step = store.step("LC-600.2.1", step="write-code", role="agent", parent=active_item)
+    store.assign(active_step, "worker-2")
+    store.update_state(active_step, State.RUNNING)
+
+    queued_item = store.item("LC-600.3", "Queued step", project="lightcycle")
+    store.step("LC-600.3.1", step="write-code", role="agent", parent=queued_item)
+
+    return store, suspended_step
+
+
+def _priority_worker_suspended(size):
+    store, suspended_step = _worker_suspended_store()
+    workers = FakeWorkers(
+        workers=[
+            {"spawnid": "w-suspended", "pid": 1, "step": suspended_step, "started": 0,
+             "suspended": True, "suspended_at": 0},
+        ],
+        alive_pids=(1,),
+    )
+    return _launch(store, size=size, workers=workers)
 
 
 def _pool_stop_prompt(size):
@@ -997,6 +1037,8 @@ SCREENS = {
     "priority-list#stacked": _priority_stacked,
     "priority-list#cost": _priority_cost,
     "priority-list#cost-not-recorded": _priority_cost_not_recorded,
+    "priority-list#pool-holding": _priority_pool_holding,
+    "priority-list#worker-suspended": _priority_worker_suspended,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,

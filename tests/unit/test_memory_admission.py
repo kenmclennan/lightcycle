@@ -1,0 +1,79 @@
+import unittest
+
+from lightcycle.domain.pool import Worker
+from lightcycle.domain.pool.machine_headroom import MachineHeadroom
+from lightcycle.domain.pool.memory_admission import (
+    admission_cap, worker_to_resume, worker_to_suspend,
+)
+
+
+class TestAdmissionCap(unittest.TestCase):
+    def test_none_when_headroom_is_none(self):
+        self.assertIsNone(admission_cap(None, 2, 0.25))
+
+    def test_none_when_system_pressure_is_none(self):
+        headroom = MachineHeadroom(system_pressure=None, pool_share=0.2)
+        self.assertIsNone(admission_cap(headroom, 2, 0.25))
+
+    def test_zero_when_projected_exceeds_ceiling(self):
+        headroom = MachineHeadroom(system_pressure=0.7, pool_share=0.2)
+        self.assertEqual(admission_cap(headroom, 2, 0.25), 0)
+
+    def test_none_when_projected_is_within_ceiling(self):
+        headroom = MachineHeadroom(system_pressure=0.3, pool_share=0.1)
+        self.assertIsNone(admission_cap(headroom, 2, 0.25))
+
+    def test_boundary_at_exactly_the_ceiling_is_not_over(self):
+        headroom = MachineHeadroom(system_pressure=0.7, pool_share=0.1)
+        self.assertIsNone(admission_cap(headroom, 2, 0.25))
+
+    def test_alive_count_zero_does_not_raise(self):
+        headroom = MachineHeadroom(system_pressure=0.9, pool_share=0.0)
+        self.assertEqual(admission_cap(headroom, 0, 0.25), 0)
+
+
+def _worker(spawnid, started, suspended=False, suspended_at=None):
+    return Worker(spawnid=spawnid, pid=1, started=started, suspended=suspended, suspended_at=suspended_at)
+
+
+class TestWorkerToSuspend(unittest.TestCase):
+    def test_none_below_suspend_pressure(self):
+        workers = [_worker("a", 1)]
+        self.assertIsNone(worker_to_suspend(workers, 0.5, 0.85))
+
+    def test_none_when_pressure_is_none(self):
+        workers = [_worker("a", 1)]
+        self.assertIsNone(worker_to_suspend(workers, None, 0.85))
+
+    def test_returns_the_newest_not_yet_suspended(self):
+        workers = [_worker("a", 1), _worker("b", 5), _worker("c", 3)]
+        target = worker_to_suspend(workers, 0.9, 0.85)
+        self.assertEqual(target.spawnid, "b")
+
+    def test_never_returns_an_already_suspended_worker(self):
+        workers = [_worker("a", 1), _worker("b", 5, suspended=True)]
+        target = worker_to_suspend(workers, 0.9, 0.85)
+        self.assertEqual(target.spawnid, "a")
+
+    def test_none_when_all_are_already_suspended(self):
+        workers = [_worker("a", 1, suspended=True)]
+        self.assertIsNone(worker_to_suspend(workers, 0.9, 0.85))
+
+
+class TestWorkerToResume(unittest.TestCase):
+    def test_none_at_or_above_resume_pressure(self):
+        workers = [_worker("a", 1, suspended=True, suspended_at=10)]
+        self.assertIsNone(worker_to_resume(workers, 0.70, 0.70))
+        self.assertIsNone(worker_to_resume(workers, 0.9, 0.70))
+
+    def test_returns_the_most_recently_suspended(self):
+        workers = [
+            _worker("a", 1, suspended=True, suspended_at=10),
+            _worker("b", 2, suspended=True, suspended_at=30),
+        ]
+        target = worker_to_resume(workers, 0.5, 0.70)
+        self.assertEqual(target.spawnid, "b")
+
+    def test_none_when_none_are_suspended(self):
+        workers = [_worker("a", 1)]
+        self.assertIsNone(worker_to_resume(workers, 0.5, 0.70))

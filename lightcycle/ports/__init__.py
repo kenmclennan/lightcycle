@@ -5,6 +5,7 @@ from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import GitHubEventsPort
 from lightcycle.ports.launcher import LauncherPort
 from lightcycle.ports.lock import RunLockPort
+from lightcycle.ports.machine import MachinePort
 from lightcycle.ports.scaffold import ScaffoldPort
 from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.ports.spin import SpinPort
@@ -23,6 +24,7 @@ __all__ = [
     "GitHubEventsPort",
     "GitPort",
     "LauncherPort",
+    "MachinePort",
     "RunLockPort",
     "ScaffoldPort",
     "SpawnerPort",

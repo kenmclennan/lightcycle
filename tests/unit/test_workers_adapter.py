@@ -5,8 +5,8 @@ import unittest
 from contextlib import redirect_stderr
 
 from lightcycle.adapters.workers import (
-    mark_checked, prune_workers, register_worker, set_pid_started, set_step, workers_path,
-    workers_state,
+    mark_checked, prune_workers, register_worker, set_pid_started, set_step, set_suspended,
+    workers_path, workers_state,
 )
 from lightcycle.ports.workers import RegistryUnreadable
 
@@ -82,6 +82,30 @@ class TestMutatorsFailClosed(unittest.TestCase):
         with self.assertRaises(RegistryUnreadable):
             set_pid_started(self.root, "x", 12345)
         self._assert_unchanged()
+
+    def test_set_suspended_raises_and_leaves_file_unchanged(self):
+        with self.assertRaises(RegistryUnreadable):
+            set_suspended(self.root, "x", True, at=1000.0)
+        self._assert_unchanged()
+
+
+class TestSetSuspended(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        register_worker(self.root, {"spawnid": "sp1", "step": None})
+
+    def test_marks_suspended_and_records_the_timestamp(self):
+        set_suspended(self.root, "sp1", True, at=500.0)
+        state = workers_state(self.root)
+        self.assertTrue(state[0]["suspended"])
+        self.assertEqual(state[0]["suspended_at"], 500.0)
+
+    def test_resuming_clears_suspended_without_touching_suspended_at(self):
+        set_suspended(self.root, "sp1", True, at=500.0)
+        set_suspended(self.root, "sp1", False)
+        state = workers_state(self.root)
+        self.assertFalse(state[0]["suspended"])
+        self.assertEqual(state[0]["suspended_at"], 500.0)
 
 
 if __name__ == "__main__":
