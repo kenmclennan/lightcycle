@@ -628,27 +628,69 @@ class TestResolvedSettings(unittest.TestCase):
             self.assertTrue(os.path.isabs(s.value), key)
 
 
+_ALL_PRICE_KEYS = dict(
+    price_sonnet_input_per_mtok="3.00",
+    price_sonnet_output_per_mtok="15.00",
+    price_sonnet_cache_write_per_mtok="3.75",
+    price_sonnet_cache_read_per_mtok="0.30",
+    price_opus_input_per_mtok="6.00",
+    price_opus_output_per_mtok="30.00",
+    price_opus_cache_write_per_mtok="7.50",
+    price_opus_cache_read_per_mtok="0.60",
+    price_haiku_input_per_mtok="1.50",
+    price_haiku_output_per_mtok="7.50",
+    price_haiku_cache_write_per_mtok="1.875",
+    price_haiku_cache_read_per_mtok="0.15",
+)
+
+
 class TestUsagePricing(unittest.TestCase):
-    def test_returns_sonnet_rates_parsed_as_floats_from_a_config_file_that_sets_them(self):
-        c = _cfg(
-            price_sonnet_input_per_mtok="3.00",
-            price_sonnet_output_per_mtok="15.00",
-            price_sonnet_cache_write_per_mtok="3.75",
-            price_sonnet_cache_read_per_mtok="0.30",
-        )
+    def test_returns_sonnet_opus_and_haiku_rates_parsed_as_floats_from_a_config_file_that_sets_them(self):
+        c = _cfg(**_ALL_PRICE_KEYS)
         rates = c.usage_pricing()
         self.assertEqual(rates, {
             "sonnet": ModelRates(input=3.00, output=15.00, cache_write=3.75, cache_read=0.30),
+            "opus": ModelRates(input=6.00, output=30.00, cache_write=7.50, cache_read=0.60),
+            "haiku": ModelRates(input=1.50, output=7.50, cache_write=1.875, cache_read=0.15),
         })
 
     def test_a_missing_price_key_raises_config_error(self):
-        c = _cfg(
-            price_sonnet_input_per_mtok="3.00",
-            price_sonnet_output_per_mtok="15.00",
-            price_sonnet_cache_write_per_mtok="3.75",
-        )
+        filevals = dict(_ALL_PRICE_KEYS)
+        del filevals["price_sonnet_cache_read_per_mtok"]
+        c = _cfg(**filevals)
         with self.assertRaises(ConfigError):
             c.usage_pricing()
+
+    def test_a_missing_opus_or_haiku_key_raises_config_error(self):
+        for missing in ("price_opus_input_per_mtok", "price_haiku_cache_read_per_mtok"):
+            filevals = dict(_ALL_PRICE_KEYS)
+            del filevals[missing]
+            c = _cfg(**filevals)
+            with self.assertRaises(ConfigError):
+                c.usage_pricing()
+
+
+class TestOpusPricing(unittest.TestCase):
+    def test_missing_key_raises_config_error(self):
+        c = _cfg()
+        with self.assertRaises(ConfigError):
+            c.price_opus_input_per_mtok()
+
+    def test_reads_value_from_config_file(self):
+        c = _cfg(price_opus_input_per_mtok="6.00")
+        self.assertEqual(c.price_opus_input_per_mtok(), 6.00)
+
+
+class TestHaikuPricing(unittest.TestCase):
+    def test_missing_key_raises_config_error(self):
+        c = _cfg()
+        with self.assertRaises(ConfigError):
+            c.price_haiku_input_per_mtok()
+
+    def test_reads_value_from_config_file(self):
+        c = _cfg(price_haiku_input_per_mtok="1.50")
+        self.assertEqual(c.price_haiku_input_per_mtok(), 1.50)
+
 
 class TestTuiAutostartPool(unittest.TestCase):
     def test_reads_true_and_false_from_the_config_file(self):

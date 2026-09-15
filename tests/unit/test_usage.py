@@ -5,7 +5,7 @@ from lightcycle.adapters.claude_stream import parse_usage_event
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import AttributionEvent, ToolUsage
 from lightcycle.domain.pool.usage import (
-    ModelRates, UsageEvent, UsageResume, price_tokens, resolve_usage,
+    ModelRates, UsageEvent, UsageResume, price_tokens, resolve_usage, sum_usage_events,
 )
 
 
@@ -93,21 +93,35 @@ class TestParseUsageEvent(unittest.TestCase):
 
 class TestPriceTokens(unittest.TestCase):
     def test_known_model_returns_computed_cost_and_derived_basis(self):
-        cost, basis = price_tokens(
+        cost, basis, rates_used = price_tokens(
             "sonnet", 1_000_000, 1_000_000, 1_000_000, 1_000_000, _RATES
         )
         self.assertEqual(cost, Cost.from_usd(2.0 + 10.0 + 0.2 + 2.5))
         self.assertEqual(basis, "derived")
+        self.assertEqual(rates_used, _RATES["sonnet"])
 
-    def test_unknown_model_returns_zero_cost_and_no_basis(self):
-        cost, basis = price_tokens("haiku", 1_000_000, 0, 0, 0, _RATES)
+    def test_unknown_model_returns_zero_cost_and_unpriced_basis(self):
+        cost, basis, rates_used = price_tokens("haiku", 1_000_000, 0, 0, 0, _RATES)
         self.assertEqual(cost, Cost())
-        self.assertIsNone(basis)
+        self.assertEqual(basis, "unpriced")
+        self.assertIsNone(rates_used)
 
     def test_only_cache_read_tokens_prices_at_just_the_cache_read_rate(self):
-        cost, basis = price_tokens("sonnet", 0, 0, 1_000_000, 0, _RATES)
+        cost, basis, rates_used = price_tokens("sonnet", 0, 0, 1_000_000, 0, _RATES)
         self.assertEqual(cost, Cost.from_usd(0.2))
         self.assertEqual(basis, "derived")
+        self.assertEqual(rates_used, _RATES["sonnet"])
+
+
+class TestSumUsageEventsRatesUsed(unittest.TestCase):
+    def test_keeps_the_first_non_null_rates_used_across_events(self):
+        events = [
+            UsageEvent(cost_basis="unpriced", rates_used=None),
+            UsageEvent(cost_basis="derived", rates_used=_RATES["sonnet"]),
+            UsageEvent(cost_basis="derived", rates_used=ModelRates(1, 1, 1, 1)),
+        ]
+        summed = sum_usage_events(events)
+        self.assertEqual(summed.rates_used, _RATES["sonnet"])
 
 
 def _attribution(**recovered):
@@ -141,6 +155,7 @@ class TestResolveUsage(unittest.TestCase):
         self.assertEqual(result.cache_creation_tokens, 1_000_000)
         self.assertEqual(result.cost_usd, Cost.from_usd(2.0 + 10.0 + 0.2 + 2.5))
         self.assertEqual(result.cost_basis, "derived")
+        self.assertEqual(result.rates_used, _RATES["sonnet"])
 
     def test_no_result_line_with_recovered_tokens_and_an_unpriced_model_records_tokens_only(self):
         usage = UsageEvent()
@@ -148,7 +163,8 @@ class TestResolveUsage(unittest.TestCase):
         result = resolve_usage(usage, attribution, "haiku", _RATES)
         self.assertEqual(result.input_tokens, 1_000_000)
         self.assertEqual(result.cost_usd, Cost())
-        self.assertIsNone(result.cost_basis)
+        self.assertEqual(result.cost_basis, "unpriced")
+        self.assertIsNone(result.rates_used)
 
 
 class TestUsageResumeSubtractFrom(unittest.TestCase):
@@ -160,7 +176,7 @@ class TestUsageResumeSubtractFrom(unittest.TestCase):
         usage = UsageEvent(
             input_tokens=100, output_tokens=50, cache_read_tokens=10,
             cache_creation_tokens=5, cost_usd=Cost.from_usd(1.0), cost_basis="list",
-            thinking_tokens=9, has_result_line=True,
+            rates_used=_RATES["sonnet"], thinking_tokens=9, has_result_line=True,
         )
         result = resume.subtract_from(usage)
         self.assertEqual(result.input_tokens, 60)
@@ -169,6 +185,7 @@ class TestUsageResumeSubtractFrom(unittest.TestCase):
         self.assertEqual(result.cache_creation_tokens, 3)
         self.assertEqual(result.cost_usd, Cost.from_usd(0.6))
         self.assertEqual(result.cost_basis, "list")
+        self.assertEqual(result.rates_used, _RATES["sonnet"])
         self.assertEqual(result.thinking_tokens, 9)
         self.assertTrue(result.has_result_line)
 

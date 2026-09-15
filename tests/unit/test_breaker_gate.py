@@ -31,10 +31,11 @@ class RecordingFakeStore(FakeStore):
         self.get_node_calls = []
 
     def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                      rates_used=None):
         self.record_usage_calls.append(
             (tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-             cost_usd, cost_basis, thinking_tokens)
+             cost_usd, cost_basis, thinking_tokens, rates_used)
         )
 
     def record_attribution(self, tid, turn_count, tool_usage):
@@ -498,7 +499,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
         self.assertEqual(
             store.record_usage_calls,
-            [(tid, 68, 16478, 2190437, 72581, 0.893327, "list", 9899)],
+            [(tid, 68, 16478, 2190437, 72581, 0.893327, "list", 9899, None)],
         )
 
     def test_a_dead_worker_with_no_step_causes_no_record_usage_call(self):
@@ -665,7 +666,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
         self.assertEqual(store.get_node_calls, [])
         self.assertEqual(
-            store.record_usage_calls, [(tid, 0, 0, 0, 0, 0.0, None, None)],
+            store.record_usage_calls, [(tid, 0, 0, 0, 0, 0.0, None, None, None)],
         )
 
     def test_reaping_a_dead_worker_without_a_store_does_not_raise(self):
@@ -851,7 +852,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
 
         self.assertEqual(
-            store.record_usage_calls, [(tid, 60, 30, 6, 3, 0.6, "list", None)],
+            store.record_usage_calls, [(tid, 60, 30, 6, 3, 0.6, "list", None, None)],
         )
         self.assertEqual(len(store.record_attribution_calls), 1)
         recorded_tid, turn_count, tool_usage = store.record_attribution_calls[0]
@@ -913,7 +914,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         breaker_port = FakeBreakerPort()
         BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
         self.assertEqual(
-            store.record_usage_calls, [(tid, 68, 10, 0, 0, 0.1, "list", None)],
+            store.record_usage_calls, [(tid, 68, 10, 0, 0, 0.1, "list", None, None)],
         )
         self.assertIsNone(store.usage_accrual_state("sp-1"))
 

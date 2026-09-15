@@ -147,7 +147,7 @@ COST_FIELD_LABELS = {
     "turns": "TURNS", "input_tokens": "INPUT TOKENS", "output_tokens": "OUTPUT TOKENS",
     "cache_read_tokens": "CACHE READ TOKENS", "cache_creation_tokens": "CACHE CREATION TOKENS",
     "thinking_tokens": "THINKING TOKENS", "cache_hit_rate": "CACHE HIT RATE", "cost": "COST",
-    "cost_basis": "COST BASIS",
+    "cost_basis": "COST BASIS", "rates_used": "RATES USED",
 }
 
 
@@ -159,9 +159,28 @@ def _cost_hit_rate_field(rate):
     return "%s (%s)" % (format_rate(rate), COST_CACHE_HIT_RATE_DEFINITION)
 
 
+def _rates_used_text(rates_used):
+    return "%s in / %s out / %s cache-write / %s cache-read per MTok" % (
+        format_usd(Cost.from_usd(rates_used["input"])),
+        format_usd(Cost.from_usd(rates_used["output"])),
+        format_usd(Cost.from_usd(rates_used["cache_write"])),
+        format_usd(Cost.from_usd(rates_used["cache_read"])),
+    )
+
+
+def _unpriced_suffix(unpriced_count):
+    if not unpriced_count:
+        return ""
+    return " (%d unpriced)" % unpriced_count
+
+
 def step_cost_fields(cost):
-    fields = [("cost", format_usd(cost.cost_usd) if cost.recorded else COST_NOT_RECORDED)]
+    fields = [
+        ("cost", format_usd(cost.cost_usd) if cost.recorded and cost.cost_usd else COST_NOT_RECORDED),
+    ]
     fields.append(("cost_basis", cost.cost_basis if cost.recorded else COST_NOT_RECORDED))
+    if cost.cost_basis == "derived" and cost.rates_used:
+        fields.append(("rates_used", _rates_used_text(cost.rates_used)))
     fields.append(("turns", format_tokens(cost.turn_count)))
     fields.append(("input_tokens", format_tokens(cost.input_tokens)))
     fields.append(("output_tokens", format_tokens(cost.output_tokens)))
@@ -174,7 +193,8 @@ def step_cost_fields(cost):
 
 
 def item_cost_fields(cost):
-    fields = [("cost", format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED)]
+    cost_text = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
+    fields = [("cost", cost_text + _unpriced_suffix(cost.unpriced_count))]
     fields.append(("turns", format_tokens(cost.turn_count)))
     fields.append(("input_tokens", format_tokens(cost.input_tokens)))
     fields.append(("output_tokens", format_tokens(cost.output_tokens)))
@@ -187,10 +207,11 @@ def item_cost_fields(cost):
 
 
 def _stage_cost_text(row):
+    suffix = _unpriced_suffix(row.unpriced_count)
     if row.cost_usd:
-        return format_usd(row.cost_usd)
+        return format_usd(row.cost_usd) + suffix
     if row.turn_count > 0:
-        return COST_NOT_RECORDED
+        return COST_NOT_RECORDED + suffix
     return format_usd(Cost())
 
 
@@ -340,7 +361,8 @@ def _item_cost_text(children):
     cost = item_cost(children)
     if cost.turn_count == 0 and not cost.cost_usd:
         return ""
-    return format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
+    base = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
+    return base + _unpriced_suffix(cost.unpriced_count)
 
 
 def _item_wall_active(store, item, children, now):

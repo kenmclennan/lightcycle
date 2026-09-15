@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
@@ -35,6 +36,7 @@ class StepCost:
     cost_usd: Cost
     cost_basis: Optional[str]
     cost_per_turn: Optional[Cost]
+    rates_used: Optional[dict] = None
     tools: Tuple[ToolUsageRow, ...] = ()
 
 
@@ -44,11 +46,16 @@ def step_cost(step, tool_usage) -> StepCost:
             applicable=False, has_run=False, recorded=False, turn_count=0,
             input_tokens=0, output_tokens=0, cache_read_tokens=0, cache_creation_tokens=0,
             thinking_tokens=None, cache_hit_rate=None, cost_usd=Cost(), cost_basis=None,
-            cost_per_turn=None, tools=(),
+            cost_per_turn=None, rates_used=None, tools=(),
         )
     has_run = step.turn_count > 0
     recorded = step.usage_cost_basis is not None
-    cost_per_turn_value = step.usage_cost_usd.per(step.turn_count) if recorded and has_run else None
+    priced = step.usage_cost_basis not in (None, "unpriced")
+    cost_per_turn_value = step.usage_cost_usd.per(step.turn_count) if priced and has_run else None
+    rates_used = (
+        json.loads(step.usage_rates_used)
+        if step.usage_cost_basis == "derived" and step.usage_rates_used else None
+    )
     tools = tuple(sorted(
         (ToolUsageRow(tool, usage.calls, usage.bytes) for tool, usage in tool_usage.items()),
         key=lambda row: (-row.calls, row.tool),
@@ -63,7 +70,7 @@ def step_cost(step, tool_usage) -> StepCost:
             step.usage_cache_read_tokens, step.usage_cache_creation_tokens, step.usage_input_tokens,
         ),
         cost_usd=step.usage_cost_usd, cost_basis=step.usage_cost_basis, cost_per_turn=cost_per_turn_value,
-        tools=tools,
+        rates_used=rates_used, tools=tools,
     )
 
 
@@ -74,6 +81,7 @@ class StageSubtotal:
     turn_count: int
     cost_usd: Cost
     not_recorded_count: int
+    unpriced_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -91,6 +99,7 @@ class ItemCost:
     list_count: int
     derived_count: int
     not_recorded_count: int
+    unpriced_count: int = 0
     stages: Tuple[StageSubtotal, ...] = field(default_factory=tuple)
 
 
@@ -105,8 +114,8 @@ def item_cost(steps) -> ItemCost:
         s.usage_thinking_tokens for s in agent_steps if s.usage_thinking_tokens is not None
     ]
     cost_usd = sum((s.usage_cost_usd for s in agent_steps), Cost())
-    recorded_steps = [s for s in agent_steps if s.usage_cost_basis is not None]
-    recorded_turn_count = sum(s.turn_count for s in recorded_steps)
+    priced_steps = [s for s in agent_steps if s.usage_cost_basis not in (None, "unpriced")]
+    recorded_turn_count = sum(s.turn_count for s in priced_steps)
     return ItemCost(
         turn_count=turn_count, input_tokens=input_tokens, output_tokens=output_tokens,
         cache_read_tokens=cache_read_tokens, cache_creation_tokens=cache_creation_tokens,
@@ -118,6 +127,7 @@ def item_cost(steps) -> ItemCost:
         list_count=sum(1 for s in agent_steps if s.usage_cost_basis == "list"),
         derived_count=sum(1 for s in agent_steps if s.usage_cost_basis == "derived"),
         not_recorded_count=sum(1 for s in agent_steps if s.turn_count > 0 and s.usage_cost_basis is None),
+        unpriced_count=sum(1 for s in agent_steps if s.usage_cost_basis == "unpriced"),
         stages=_stage_subtotals(agent_steps),
     )
 
@@ -125,16 +135,20 @@ def item_cost(steps) -> ItemCost:
 def _stage_subtotals(agent_steps):
     buckets = {}
     for s in agent_steps:
-        bucket = buckets.setdefault(s.stage, {"steps": 0, "turns": 0, "cost": Cost(), "not_recorded": 0})
+        bucket = buckets.setdefault(
+            s.stage, {"steps": 0, "turns": 0, "cost": Cost(), "not_recorded": 0, "unpriced": 0}
+        )
         bucket["steps"] += 1
         bucket["turns"] += s.turn_count
         bucket["cost"] += s.usage_cost_usd
         if s.turn_count > 0 and s.usage_cost_basis is None:
             bucket["not_recorded"] += 1
+        if s.usage_cost_basis == "unpriced":
+            bucket["unpriced"] += 1
     rows = [
         StageSubtotal(
             stage=stage, step_count=bucket["steps"], turn_count=bucket["turns"], cost_usd=bucket["cost"],
-            not_recorded_count=bucket["not_recorded"],
+            not_recorded_count=bucket["not_recorded"], unpriced_count=bucket["unpriced"],
         )
         for stage, bucket in buckets.items()
     ]

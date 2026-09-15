@@ -184,7 +184,8 @@ class StorePort(ABC):
 
     @abstractmethod
     def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                      rates_used=None):
         pass
 
     @abstractmethod
@@ -208,6 +209,7 @@ class StorePort(ABC):
         self, spawnid, resume,
         tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
         cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
+        rates_used=None,
     ):
         pass
 

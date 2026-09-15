@@ -45,6 +45,7 @@ class LiveUsageAccrualUseCase:
 
         cost_usd = Cost()
         cost_basis = None
+        rates_used = None
         if (
             delta.recovered_input_tokens or delta.recovered_output_tokens
             or delta.recovered_cache_read_tokens or delta.recovered_cache_creation_tokens
@@ -53,7 +54,7 @@ class LiveUsageAccrualUseCase:
                 model = self._store.get_node(w.step).model
             except NodeNotFoundError:
                 model = None
-            cost_usd, cost_basis = price_tokens(
+            cost_usd, cost_basis, rates_used = price_tokens(
                 model, delta.recovered_input_tokens, delta.recovered_output_tokens,
                 delta.recovered_cache_read_tokens, delta.recovered_cache_creation_tokens, rates,
             )
@@ -73,6 +74,7 @@ class LiveUsageAccrualUseCase:
             cache_creation_tokens=delta.recovered_cache_creation_tokens,
             cost_usd=cost_usd.to_usd(),
             cost_basis=cost_basis,
+            rates_used=rates_used,
             thinking_tokens=None,
             turn_count=delta.turn_count,
             tool_usage=delta.tool_usage,

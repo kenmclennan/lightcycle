@@ -13,7 +13,8 @@ from lightcycle.domain.work.cost import (
 class _FakeStep:
     def __init__(self, stage="write-code", role="agent", turn_count=0, usage_cost_usd=Cost(),
                  usage_input_tokens=0, usage_output_tokens=0, usage_cache_read_tokens=0,
-                 usage_cache_creation_tokens=0, usage_thinking_tokens=None, usage_cost_basis=None):
+                 usage_cache_creation_tokens=0, usage_thinking_tokens=None, usage_cost_basis=None,
+                 usage_rates_used=None):
         self.stage = stage
         self.role = role
         self.turn_count = turn_count
@@ -24,6 +25,7 @@ class _FakeStep:
         self.usage_cache_creation_tokens = usage_cache_creation_tokens
         self.usage_thinking_tokens = usage_thinking_tokens
         self.usage_cost_basis = usage_cost_basis
+        self.usage_rates_used = usage_rates_used
 
 
 class TestCacheHitRate(unittest.TestCase):
@@ -83,6 +85,31 @@ class TestStepCost(unittest.TestCase):
         self.assertTrue(cost.recorded)
         self.assertEqual(cost.cost_per_turn, Cost.from_usd(0.15))
 
+    def test_agent_ran_unpriced_has_no_cost_per_turn(self):
+        step = _FakeStep(role="agent", turn_count=10, usage_cost_usd=Cost(), usage_cost_basis="unpriced")
+        cost = step_cost(step, {})
+        self.assertTrue(cost.has_run)
+        self.assertTrue(cost.recorded)
+        self.assertIsNone(cost.cost_per_turn)
+
+    def test_rates_used_parses_json_only_when_derived(self):
+        rates_json = '{"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write": 2.5}'
+        derived = _FakeStep(
+            role="agent", turn_count=1, usage_cost_basis="derived", usage_rates_used=rates_json,
+        )
+        self.assertEqual(
+            step_cost(derived, {}).rates_used,
+            {"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write": 2.5},
+        )
+        listed = _FakeStep(
+            role="agent", turn_count=1, usage_cost_basis="list", usage_rates_used=rates_json,
+        )
+        self.assertIsNone(step_cost(listed, {}).rates_used)
+        unpriced = _FakeStep(role="agent", turn_count=1, usage_cost_basis="unpriced")
+        self.assertIsNone(step_cost(unpriced, {}).rates_used)
+        never_run = _FakeStep(role="agent", turn_count=0)
+        self.assertIsNone(step_cost(never_run, {}).rates_used)
+
     def test_tools_ordered_by_calls_descending_tool_name_ascending_on_tie(self):
         step = _FakeStep(role="agent", turn_count=10, usage_cost_usd=Cost.from_usd(1.0), usage_cost_basis="list")
         tool_usage = {
@@ -114,22 +141,33 @@ class TestItemCost(unittest.TestCase):
         self.assertEqual(result.turn_count, 0)
         self.assertEqual(result.stages, ())
 
-    def test_basis_counts_distinguish_list_derived_and_not_recorded(self):
+    def test_basis_counts_distinguish_list_derived_unpriced_and_not_recorded(self):
         steps = [
             _FakeStep(role="agent", turn_count=1, usage_cost_usd=Cost.from_usd(1.0), usage_cost_basis="list"),
             _FakeStep(role="agent", turn_count=2, usage_cost_usd=Cost.from_usd(2.0), usage_cost_basis="derived"),
             _FakeStep(role="agent", turn_count=3, usage_cost_usd=Cost.from_usd(0.0), usage_cost_basis=None),
+            _FakeStep(role="agent", turn_count=4, usage_cost_usd=Cost.from_usd(0.0), usage_cost_basis="unpriced"),
         ]
         result = item_cost(steps)
         self.assertEqual(result.list_count, 1)
         self.assertEqual(result.derived_count, 1)
         self.assertEqual(result.not_recorded_count, 1)
+        self.assertEqual(result.unpriced_count, 1)
 
     def test_cost_per_turn_divides_by_recorded_turn_count_not_full_total(self):
         steps = [
             _FakeStep(role="human", turn_count=100, usage_cost_usd=Cost.from_usd(0.0)),
             _FakeStep(role="agent", turn_count=10, usage_cost_usd=Cost.from_usd(3.0), usage_cost_basis="list"),
             _FakeStep(role="agent", turn_count=246, usage_cost_usd=Cost.from_usd(0.0), usage_cost_basis=None),
+        ]
+        result = item_cost(steps)
+        self.assertEqual(result.recorded_turn_count, 10)
+        self.assertEqual(result.cost_per_turn, Cost.from_usd(0.3))
+
+    def test_cost_per_turn_excludes_unpriced_steps_turns_from_the_divisor(self):
+        steps = [
+            _FakeStep(role="agent", turn_count=10, usage_cost_usd=Cost.from_usd(3.0), usage_cost_basis="derived"),
+            _FakeStep(role="agent", turn_count=5, usage_cost_usd=Cost.from_usd(0.0), usage_cost_basis="unpriced"),
         ]
         result = item_cost(steps)
         self.assertEqual(result.recorded_turn_count, 10)
@@ -168,6 +206,14 @@ class TestItemCost(unittest.TestCase):
         ]
         result = item_cost(steps)
         self.assertEqual(result.stages[0].not_recorded_count, 1)
+
+    def test_stage_unpriced_count_counts_unpriced_steps(self):
+        steps = [
+            _FakeStep(stage="review-code", role="agent", turn_count=0, usage_cost_usd=Cost.from_usd(0.0)),
+            _FakeStep(stage="review-code", role="agent", turn_count=60, usage_cost_usd=Cost.from_usd(0.0), usage_cost_basis="unpriced"),
+        ]
+        result = item_cost(steps)
+        self.assertEqual(result.stages[0].unpriced_count, 1)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from dataclasses import asdict
 
 from lightcycle.adapters.fsio import DB_FILENAME
 from lightcycle.domain.money import Cost
@@ -84,6 +85,7 @@ CREATE TABLE IF NOT EXISTS steps (
     usage_cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
     usage_cost_usd REAL NOT NULL DEFAULT 0,
     usage_cost_basis TEXT,
+    usage_rates_used TEXT,
     usage_thinking_tokens INTEGER,
     turn_count INTEGER NOT NULL DEFAULT 0
 );
@@ -207,7 +209,7 @@ _STEP_COLUMNS = (
     "park_reason", "park_needs", "park_tried",
     "created_at", "fired_at", "closed_at", "active_seconds",
     "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
-    "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis",
+    "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis", "usage_rates_used",
     "usage_thinking_tokens", "turn_count",
 )
 
@@ -421,6 +423,7 @@ class SqliteStore(StorePort):
             ("usage_cache_creation_tokens", "INTEGER NOT NULL DEFAULT 0"),
             ("usage_cost_usd", "REAL NOT NULL DEFAULT 0"),
             ("usage_cost_basis", "TEXT"),
+            ("usage_rates_used", "TEXT"),
             ("usage_thinking_tokens", "INTEGER"),
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
             ("claim_epoch", "INTEGER NOT NULL DEFAULT 0"),
@@ -630,6 +633,7 @@ class SqliteStore(StorePort):
             usage_cache_creation_tokens=d["usage_cache_creation_tokens"],
             usage_cost_usd=Cost.from_usd(d["usage_cost_usd"]),
             usage_cost_basis=d["usage_cost_basis"],
+            usage_rates_used=d["usage_rates_used"],
             usage_thinking_tokens=d["usage_thinking_tokens"],
             turn_count=d["turn_count"],
         )
@@ -1158,7 +1162,9 @@ class SqliteStore(StorePort):
         self._commit()
 
     def _record_usage_nocommit(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                                cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+                                cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                                rates_used=None):
+        rates_used_json = json.dumps(asdict(rates_used)) if rates_used is not None else None
         cursor = self._conn.execute(
             "UPDATE steps SET "
             "usage_input_tokens = usage_input_tokens + ?, "
@@ -1167,19 +1173,21 @@ class SqliteStore(StorePort):
             "usage_cache_creation_tokens = usage_cache_creation_tokens + ?, "
             "usage_cost_usd = usage_cost_usd + ?, "
             "usage_cost_basis = COALESCE(?, usage_cost_basis), "
+            "usage_rates_used = COALESCE(?, usage_rates_used), "
             "usage_thinking_tokens = CASE WHEN ? IS NULL THEN usage_thinking_tokens "
             "ELSE COALESCE(usage_thinking_tokens, 0) + ? END "
             "WHERE id = ?",
             (input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-             cost_usd, cost_basis, thinking_tokens, thinking_tokens, tid),
+             cost_usd, cost_basis, rates_used_json, thinking_tokens, thinking_tokens, tid),
         )
         return cursor.rowcount
 
     def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens):
+                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                      rates_used=None):
         self._record_usage_nocommit(
             tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-            cost_usd, cost_basis, thinking_tokens,
+            cost_usd, cost_basis, thinking_tokens, rates_used=rates_used,
         )
         self._commit()
 
@@ -1224,7 +1232,7 @@ class SqliteStore(StorePort):
                 rowcount = self._record_usage_nocommit(
                     step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
                     usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
-                    usage.thinking_tokens,
+                    usage.thinking_tokens, rates_used=usage.rates_used,
                 )
                 stored = rowcount > 0
                 if stored:
@@ -1241,6 +1249,7 @@ class SqliteStore(StorePort):
         self, spawnid, resume,
         tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
         cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
+        rates_used=None,
     ):
         try:
             self._conn.execute(
@@ -1273,6 +1282,7 @@ class SqliteStore(StorePort):
                 self._record_usage_nocommit(
                     tid, input_tokens, output_tokens, cache_read_tokens,
                     cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                    rates_used=rates_used,
                 )
             if turn_count or tool_usage:
                 self._record_attribution_nocommit(tid, turn_count, tool_usage)
@@ -1329,7 +1339,7 @@ class SqliteStore(StorePort):
             rowcount = self._record_usage_nocommit(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
                 usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
-                usage.thinking_tokens,
+                usage.thinking_tokens, rates_used=usage.rates_used,
             )
             recovered = rowcount > 0
         self._conn.execute(
@@ -1346,15 +1356,19 @@ class SqliteStore(StorePort):
         return [r[0] for r in rows]
 
     def overwrite_usage_and_attribution(self, step_id, usage_totals, turn_count, tool_usage_totals):
+        rates_used_json = (
+            json.dumps(asdict(usage_totals.rates_used)) if usage_totals.rates_used is not None else None
+        )
         self._conn.execute(
             "UPDATE steps SET "
             "usage_input_tokens = ?, usage_output_tokens = ?, usage_cache_read_tokens = ?, "
             "usage_cache_creation_tokens = ?, usage_cost_usd = ?, usage_cost_basis = ?, "
+            "usage_rates_used = ?, "
             "usage_thinking_tokens = ?, turn_count = ? WHERE id = ?",
             (usage_totals.input_tokens, usage_totals.output_tokens,
              usage_totals.cache_read_tokens, usage_totals.cache_creation_tokens,
-             usage_totals.cost_usd.to_usd(), usage_totals.cost_basis, usage_totals.thinking_tokens,
-             turn_count, step_id),
+             usage_totals.cost_usd.to_usd(), usage_totals.cost_basis, rates_used_json,
+             usage_totals.thinking_tokens, turn_count, step_id),
         )
         self._conn.execute("DELETE FROM step_tool_usage WHERE step = ?", (step_id,))
         for tool, usage in tool_usage_totals.items():

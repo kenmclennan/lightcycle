@@ -32,6 +32,7 @@ class Step:
     usage_cache_creation_tokens: int = 0
     usage_cost_usd: Cost = field(default_factory=Cost)
     usage_cost_basis: Optional[str] = None
+    usage_rates_used: Optional[str] = None
     usage_thinking_tokens: Optional[int] = None
     turn_count: int = 0
 
@@ -77,6 +78,7 @@ class Step:
             "usage_cache_creation_tokens": self.usage_cache_creation_tokens,
             "usage_cost_usd": self.usage_cost_usd.to_usd(),
             "usage_cost_basis": self.usage_cost_basis,
+            "usage_rates_used": self.usage_rates_used,
             "usage_thinking_tokens": self.usage_thinking_tokens,
             "turn_count": self.turn_count,
         }
