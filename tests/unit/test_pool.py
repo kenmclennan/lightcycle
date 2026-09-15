@@ -436,6 +436,24 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [])
         self.assertIn(held, [t.id for t in s.claimed_steps()])
 
+    def test_kills_a_stale_worker_whose_step_was_reclaimed_by_its_own_replacement(self):
+        s = FakeStore()
+        held = create_owned_step(s, "h", step="build", role="agent")
+        s.update_state(held, "in_progress")
+        s.assign(held, "new-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "new-sp", "pid": 111, "step": held, "started": 100},
+                {"spawnid": "old-sp", "pid": 222, "step": held, "started": 50},
+            ],
+            alive_pids={111, 222},
+        )
+        result = make_sweep(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [222])
+        self.assertEqual(result.killed, ["old-sp"])
+        self.assertEqual(s.get_node(held).state, "running")
+        self.assertEqual(s.get_node(held).claimed_by, "new-sp")
+
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
         item = s.create_item("merged feature", "a description")
@@ -1140,7 +1158,7 @@ class TestTick(unittest.TestCase):
     def test_active_seconds_credited_for_covered_step_under_the_cap(self):
         s = FakeStore()
         tid = create_owned_step(s, "b1", step="build", role="agent")
-        s.claim_ready("agent")
+        s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
                       "started": 900.0}],
@@ -1154,7 +1172,7 @@ class TestTick(unittest.TestCase):
     def test_active_seconds_capped_on_a_large_gap(self):
         s = FakeStore()
         tid = create_owned_step(s, "b1", step="build", role="agent")
-        s.claim_ready("agent")
+        s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
                       "started": 500.0}],
@@ -1169,8 +1187,8 @@ class TestTick(unittest.TestCase):
         s = FakeStore()
         tid_a = create_owned_step(s, "b1", step="build", role="agent")
         tid_b = create_owned_step(s, "b2", step="build", role="agent")
-        s.claim_ready("agent")
-        s.claim_ready("agent")
+        s.claim_ready("agent", "sp-1")
+        s.claim_ready("agent", "sp-2")
         workers = FakeWorkers(
             workers=[
                 {"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid_a, "started": 900.0},
@@ -1196,7 +1214,7 @@ class TestTick(unittest.TestCase):
     def test_active_seconds_untouched_when_since_is_none(self):
         s = FakeStore()
         tid = create_owned_step(s, "b1", step="build", role="agent")
-        s.claim_ready("agent")
+        s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
                       "started": 900.0}],
@@ -1210,7 +1228,7 @@ class TestTick(unittest.TestCase):
     def test_active_seconds_not_credited_when_delta_is_not_positive(self):
         s = FakeStore()
         tid = create_owned_step(s, "b1", step="build", role="agent")
-        s.claim_ready("agent")
+        s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
                       "started": 900.0}],

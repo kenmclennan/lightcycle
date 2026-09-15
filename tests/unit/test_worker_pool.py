@@ -104,6 +104,36 @@ class TestWorkerPool(unittest.TestCase):
     def test_inflight_counts_alive_booting_by_role(self):
         self.assertEqual(self._pool().inflight(probe({1, 3}), now=150, max_boot=120), {"coder": 1})
 
+    def test_orphans_includes_a_worker_whose_step_is_claimed_by_someone_else(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1", "started": 0}])
+        orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={"b-1": "other-sp"})
+        self.assertEqual([w.spawnid for w in orphans], ["sp"])
+
+    def test_orphans_excludes_a_worker_whose_step_is_claimed_by_itself(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1", "started": 0}])
+        orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={"b-1": "sp"})
+        self.assertEqual(orphans, [])
+
+    def test_orphans_excludes_a_worker_whose_step_is_claimed_with_no_named_owner(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1", "started": 0}])
+        orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={"b-1": None})
+        self.assertEqual(orphans, [])
+
+    def test_orphans_includes_a_worker_whose_step_has_no_claim_at_all(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1", "started": 0}])
+        orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={})
+        self.assertEqual([w.spawnid for w in orphans], ["sp"])
+
+    def test_orphans_includes_a_worker_with_no_step(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": None, "started": 0}])
+        orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={})
+        self.assertEqual([w.spawnid for w in orphans], ["sp"])
+
+    def test_orphans_excludes_a_booting_worker_regardless_of_claim_ownership(self):
+        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": None, "started": 950}])
+        orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={})
+        self.assertEqual(orphans, [])
+
     def test_dead_unchecked_only_includes_dead_unchecked_workers(self):
         pool = WorkerPool.from_state(
             [
