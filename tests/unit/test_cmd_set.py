@@ -98,6 +98,12 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIn("lc close", err)
         self.assertIn("lc done", err)
 
+    def test_unknown_state_points_to_reopen_for_reopening_a_closed_item(self):
+        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        rc, out, err = call(cli.cmd_set, bid, "--state", "in_progress")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("lc reopen", err)
+
     def test_generic_edit_with_allowed_flags_succeeds(self):
         iid = self.store.create_item("an item", "old")
         rc, out, err = call(cli.cmd_set, iid, "--description", "d")
