@@ -6,9 +6,14 @@ from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
     CI_FAILURE,
     CI_SUCCESS,
+    MENTION_TOKEN,
+    PR_CLOSE,
     PR_CONFLICT,
+    PR_CONFLICT_CAP,
+    PR_CONFLICT_ESCALATE,
     PR_FEEDBACK,
     PR_MERGE,
+    REVIEW_BOT_ALLOWLIST,
     REVIEW_ROUNDS_CAP,
 )
 
@@ -65,7 +70,7 @@ class StepDef:
                 ci_cap = CiCap(occ[1], int(occ[2]), occ[3])
 
         pr_conflict_cap = None
-        for occ in graph.hook_occurrences("pr_conflict_cap"):
+        for occ in graph.hook_occurrences(PR_CONFLICT_CAP):
             if occ[0] == stage and len(occ) > 1:
                 pr_conflict_cap = int(occ[1])
 
@@ -75,7 +80,7 @@ class StepDef:
                 review_rounds_cap = ReviewRoundsCap(occ[1], occ[2])
 
         review_bot_allowlist = frozenset()
-        for occ in graph.hook_occurrences("review_bot_allowlist"):
+        for occ in graph.hook_occurrences(REVIEW_BOT_ALLOWLIST):
             if occ[0] == stage:
                 review_bot_allowlist = frozenset(occ[1:])
 
@@ -89,14 +94,14 @@ class StepDef:
         return cls(
             routes=dict(graph.edges.get(stage) or {}),
             pr_merge=first(PR_MERGE),
-            pr_close=first("pr_close"),
+            pr_close=first(PR_CLOSE),
             pr_feedback=first(PR_FEEDBACK),
             pr_conflict=first(PR_CONFLICT),
             pr_conflict_cap=pr_conflict_cap,
-            pr_conflict_escalate=first("pr_conflict_escalate"),
+            pr_conflict_escalate=first(PR_CONFLICT_ESCALATE),
             ci_success=first(CI_SUCCESS),
             ci_failure=first(CI_FAILURE),
-            mention_token=first("mention_token"),
+            mention_token=first(MENTION_TOKEN),
             review_bot_allowlist=review_bot_allowlist,
             ci_cap=ci_cap,
             review_rounds_cap=review_rounds_cap,
