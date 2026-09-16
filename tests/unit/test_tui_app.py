@@ -166,6 +166,19 @@ class TestDashboardScaffold(unittest.TestCase):
         )
         self.assertLessEqual(total_render_width, table.size.width)
 
+    def test_pre_refresh_frame_hides_the_priority_list_and_the_empty_state(self):
+        store = FakeStore()
+        create_owned_step(store, "queued", step="build", role="agent")
+
+        session = launch(make_test_container(store=store), settle=False)
+        self.addCleanup(session.close)
+
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertFalse(session.app.query_one("#empty-state", Static).display)
+        self.assertFalse(session.app.query_one("#priority-list-floor", Static).display)
+        self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(DoneView).display)
+
 
 class TestNeedsAttentionGroup(unittest.TestCase):
     def _launch(self, store):
