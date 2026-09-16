@@ -41,7 +41,7 @@ class TestPhaseMismatch(unittest.TestCase):
 
 
 def _use_case(store, git):
-    return WorkflowSimulateUseCase(store, None, None, None, None, None, git, None)
+    return WorkflowSimulateUseCase(store, None, None, None, None, None, git)
 
 
 class TestPassEndCoverageViolations(unittest.TestCase):

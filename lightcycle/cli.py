@@ -720,7 +720,7 @@ def _workflow_simulate(selector):
         sim = SimulationContainer(_container, scratch)
         use_case = WorkflowSimulateUseCase(
             sim.store, sim.flow, sim.worktrees, sim.claim, sim.complete, sim.projects_root,
-            sim.git, sim.spin, scaffold=sim.scaffold, github_factory=ScriptedGitHub,
+            sim.git, scaffold=sim.scaffold, github_factory=ScriptedGitHub,
             config=sim.config,
         )
         try:
