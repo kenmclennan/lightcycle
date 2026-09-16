@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
-from lightcycle.config import Config
+from lightcycle.config import _SEED_KEYS, Config
 from lightcycle.ports.workflow_source import OriginRegistration
 from tests.support.fake_store import FakeStore
 
@@ -15,25 +15,12 @@ def _cfg(**filevals):
     return Config(environ={"LC_CONFIG": p})
 
 
-_ALL_KEYS = dict(
-    projects="/p", branch_prefix="feat", shortcode="PROJ",
-    default_origin="acme", workflows_remote="git@y", max_agents="5", worktree_retries="6",
-    worktree_retry_sleep="0.25", max_boot_seconds="120", max_session_seconds="1800",
-    stall_seconds="1800", probe_cooldown_seconds="1800", spin_cap="3",
-    poll_seconds="5", worker_history="20", editor="vi", retro_interval_reflections="20",
-    backups_dir="/b", backup_interval_minutes="15", backup_retention="96",
-    workflow_retention="5", max_title_length="72", tui_autostart_pool="false",
-    tui_metrics="false",
-    personal_origin="",
-    price_sonnet_input_per_mtok="2.00", price_sonnet_output_per_mtok="10.00",
-    price_sonnet_cache_write_per_mtok="2.50", price_sonnet_cache_read_per_mtok="0.20",
-    price_opus_input_per_mtok="5.00", price_opus_output_per_mtok="25.00",
-    price_opus_cache_write_per_mtok="6.25", price_opus_cache_read_per_mtok="0.50",
-    price_haiku_input_per_mtok="1.00", price_haiku_output_per_mtok="5.00",
-    price_haiku_cache_write_per_mtok="1.25", price_haiku_cache_read_per_mtok="0.10",
-    shutdown_grace_seconds="10", tick_failure_cap="5", review_rounds_cap="5",
-    context_artifact_types="spec", internal_shortcode="AUD",
-    memory_reserve_fraction="0.25", suspend_pressure="0.85", resume_pressure="0.70",
+_ALL_KEYS = {k.replace("-", "_"): v for k, v in _SEED_KEYS}
+_ALL_KEYS.update(
+    projects="/p",
+    default_origin="acme",
+    workflows_remote="git@y",
+    backups_dir="/b",
 )
 
 
@@ -77,6 +64,11 @@ class FakeWorkflowSource:
 
     def unresolvable_reason(self, url, ref):
         return self.failures.get(url)
+
+
+class TestAllKeysCoversEverySeedKey(unittest.TestCase):
+    def test_all_keys_covers_every_seed_key(self):
+        self.assertEqual(set(_ALL_KEYS), {k.replace("-", "_") for k, _ in _SEED_KEYS})
 
 
 class TestDoctorUseCase(unittest.TestCase):
