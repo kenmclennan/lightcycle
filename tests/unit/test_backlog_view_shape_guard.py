@@ -2,9 +2,11 @@ import unittest
 from unittest.mock import patch
 
 from lightcycle.adapters.tui.app import (
-    BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, BacklogView, DoneTable, DoneView,
+    BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, DONE_COLUMNS, BacklogTable, BacklogView,
+    DoneTable, DoneView,
 )
 from lightcycle.adapters.tui.backlog_list import BacklogRow
+from lightcycle.adapters.tui.done_list import DoneRow
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
 )
@@ -14,6 +16,10 @@ from tests.support.tui_harness import launch, make_test_container
 
 def _row(id, project="", repo="", title="title"):
     return BacklogRow(id=id, project=project, repo=repo, title=title)
+
+
+def _done_row(id, project="", repo="", title="title", cost="", time=""):
+    return DoneRow(id=id, project=project, repo=repo, title=title, cost=cost, time=time)
 
 
 class TestBacklogViewCheapPathOnUnchangedShape(unittest.TestCase):
@@ -208,12 +214,12 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
 class TestDoneViewRebuildGapAtFloorWidth(unittest.TestCase):
     def _floor_terminal_width(self):
         glyph_total = BACKLOG_CONTINUATION_INDENT
-        atomic_values = {"id": ["a", "b"], "project": [""]}
+        atomic_values = {"id": ["a", "b"], "project": [""], "cost": [""], "time": [""]}
         atomic_total = sum(max(1, atomic_column_width(v)) for v in atomic_values.values())
         first_line_width = glyph_total + atomic_total
         floor_width = max(first_line_width, BACKLOG_CONTINUATION_INDENT + FLEXIBLE_MINIMUM)
         row_budget = floor_width - 1
-        return row_budget + 2 + 2 * len(BACKLOG_COLUMNS) + scrollbar_reservation_width(DoneTable)
+        return row_budget + 2 + 2 * len(DONE_COLUMNS) + scrollbar_reservation_width(DoneTable)
 
     def _launch(self):
         store = FakeStore()
@@ -224,14 +230,14 @@ class TestDoneViewRebuildGapAtFloorWidth(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
-        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None, day_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter, day_filter))
         session.pause()
 
     def test_resize_wide_clears_the_floor_and_renders_the_table(self):
         session = self._launch()
         view = session.app.query_one(DoneView)
-        rows = [_row("a"), _row("b")]
+        rows = [_done_row("a"), _done_row("b")]
 
         with patch.object(DoneView, "refresh_column_width"):
             session.press("tab")
@@ -293,7 +299,7 @@ class TestBacklogViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
 
 
 class TestDoneViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
-    _STACKED_WIDTH = 38
+    _STACKED_WIDTH = 44
 
     def _launch(self):
         store = FakeStore()
@@ -303,15 +309,15 @@ class TestDoneViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
         self.addCleanup(session.close)
         return session
 
-    def _apply(self, session, view, rows, total, project_filter, text_filter=None):
-        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter))
+    def _apply(self, session, view, rows, total, project_filter, text_filter=None, day_filter=None):
+        session.run(lambda: view.apply_rows(rows, total, project_filter, text_filter, day_filter))
         session.pause()
 
     def test_hidden_after_stacked_build_then_polled_with_unchanged_rows_rebuilds(self):
         session = self._launch()
         view = session.app.query_one(DoneView)
         table = session.app.query_one(DoneTable)
-        rows = [_row("a"), _row("b")]
+        rows = [_done_row("a"), _done_row("b")]
 
         session.press("tab")
         session.press("tab")

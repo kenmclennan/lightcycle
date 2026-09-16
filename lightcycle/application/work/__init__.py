@@ -4,7 +4,7 @@ from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseC
 from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.create_item import CreateItemInput, CreateItemUseCase
 from lightcycle.application.work.create_step import CreateStepInput, CreateStepUseCase
-from lightcycle.application.work.done import DoneInput, DoneUseCase
+from lightcycle.application.work.done import DayCount, DoneInput, DoneUseCase
 from lightcycle.application.work.reopen_item import (
     ReopenItemInput,
     ReopenItemResponse,
@@ -41,6 +41,7 @@ __all__ = [
     "CreateItemUseCase",
     "CreateStepInput",
     "CreateStepUseCase",
+    "DayCount",
     "DoneInput",
     "DoneUseCase",
     "ReopenItemInput",
