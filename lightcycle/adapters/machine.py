@@ -1,7 +1,9 @@
+import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.machine import MachinePort
@@ -10,6 +12,9 @@ _SUBPROCESS_TIMEOUT = 2
 _VM_STAT_PAGE_SIZE_RE = re.compile(r"page size of (\d+) bytes")
 _VM_STAT_COMPRESSOR_RE = re.compile(r"Pages occupied by compressor:\s*(\d+)\.")
 _PSI_AVG10_RE = re.compile(r"avg10=([\d.]+)")
+_SMAPS_PSS_RE = re.compile(r"^Pss:\s*(\d+) kB", re.MULTILINE)
+_SMAPS_SWAP_PSS_RE = re.compile(r"^SwapPss:\s*(\d+) kB", re.MULTILINE)
+_STATUS_VM_HWM_RE = re.compile(r"^VmHWM:\s*(\d+) kB", re.MULTILINE)
 
 
 def _run(argv):
@@ -24,24 +29,8 @@ def _run(argv):
     return result.stdout.decode("utf-8", errors="replace")
 
 
-def _process_group_rss_kb(argv):
-    out = _run(argv)
-    if out is None:
-        return 0
-    total = 0
-    for line in out.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            total += int(line)
-        except ValueError:
-            continue
-    return total
-
-
-def _pool_rss_kb(workers, rss_argv_for):
-    total = 0
+def _worker_pids(workers, pid_argv_for):
+    groups = []
     for w in workers:
         if w.pid is None:
             continue
@@ -49,8 +38,72 @@ def _pool_rss_kb(workers, rss_argv_for):
             pgid = os.getpgid(int(w.pid))
         except (OSError, ValueError, TypeError):
             continue
-        total += _process_group_rss_kb(rss_argv_for(pgid))
-    return total
+        out = _run(pid_argv_for(pgid))
+        pids = []
+        if out is not None:
+            for line in out.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    pids.append(int(line))
+                except ValueError:
+                    continue
+        groups.append(pids)
+    return groups
+
+
+def _macos_footprint_kb(pids):
+    if not pids:
+        return {}
+    fd, path = tempfile.mkstemp(prefix="lc-footprint-", suffix=".json")
+    os.close(fd)
+    try:
+        argv = ["footprint", "--noCategories", "-j", path] + [str(p) for p in pids]
+        if _run(argv) is None:
+            return None
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return None
+        result = {}
+        for proc in data.get("processes", []):
+            aux = proc.get("auxiliary", {})
+            pid = proc.get("pid")
+            current = aux.get("phys_footprint")
+            peak = aux.get("phys_footprint_peak")
+            if pid is None or current is None or peak is None:
+                continue
+            result[pid] = (current / 1024.0, peak / 1024.0)
+        return result
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _macos_pool_footprint_kb(workers):
+    if not workers:
+        return (0.0, None)
+    groups = _worker_pids(workers, lambda pgid: ["ps", "-o", "pid=", "-g", str(pgid)])
+    all_pids = [pid for g in groups for pid in g]
+    if not all_pids:
+        return (None, None)
+    readings = _macos_footprint_kb(all_pids)
+    if not readings:
+        return (None, None)
+    worker_current_kb = []
+    worker_peak_kb = []
+    for g in groups:
+        if not g:
+            continue
+        worker_current_kb.append(sum(readings.get(p, (0.0, 0.0))[0] for p in g))
+        worker_peak_kb.append(sum(readings.get(p, (0.0, 0.0))[1] for p in g))
+    pool_kb = sum(worker_current_kb)
+    peak_kb = max(worker_peak_kb) if worker_peak_kb else None
+    return (pool_kb, peak_kb)
 
 
 def _macos_memory_pressure(total_mem_kb):
@@ -82,10 +135,17 @@ def _macos_total_memory_kb():
 def _headroom_macos(workers):
     total_mem_kb = _macos_total_memory_kb()
     pool_share = None
+    peak_worker_share = None
     if total_mem_kb:
-        pool_rss_kb = _pool_rss_kb(workers, lambda pgid: ["ps", "-o", "rss=", "-g", str(pgid)])
-        pool_share = pool_rss_kb / total_mem_kb
-    return MachineHeadroom(system_pressure=_macos_memory_pressure(total_mem_kb), pool_share=pool_share)
+        pool_kb, peak_kb = _macos_pool_footprint_kb(workers)
+        if pool_kb is not None:
+            pool_share = pool_kb / total_mem_kb
+        if peak_kb is not None:
+            peak_worker_share = peak_kb / total_mem_kb
+    return MachineHeadroom(
+        system_pressure=_macos_memory_pressure(total_mem_kb), pool_share=pool_share,
+        peak_worker_share=peak_worker_share,
+    )
 
 
 def _proc_meminfo():
@@ -102,6 +162,63 @@ def _proc_meminfo():
         except (ValueError, IndexError):
             continue
     return values
+
+
+def _smaps_rollup_pss_kb(pid):
+    try:
+        with open("/proc/%d/smaps_rollup" % pid) as f:
+            text = f.read()
+    except OSError:
+        return None
+    pss_match = _SMAPS_PSS_RE.search(text)
+    if not pss_match:
+        return None
+    swap_pss_match = _SMAPS_SWAP_PSS_RE.search(text)
+    swap_pss_kb = float(swap_pss_match.group(1)) if swap_pss_match else 0.0
+    return float(pss_match.group(1)) + swap_pss_kb
+
+
+def _status_vm_hwm_kb(pid):
+    try:
+        with open("/proc/%d/status" % pid) as f:
+            text = f.read()
+    except OSError:
+        return None
+    match = _STATUS_VM_HWM_RE.search(text)
+    return float(match.group(1)) if match else None
+
+
+def _linux_pid_footprint_kb(pid):
+    current_kb = _smaps_rollup_pss_kb(pid)
+    if current_kb is None:
+        return None
+    return (current_kb, _status_vm_hwm_kb(pid))
+
+
+def _linux_pool_footprint_kb(workers):
+    if not workers:
+        return (0.0, None)
+    groups = _worker_pids(workers, lambda pgid: ["ps", "-o", "pid=", "--pgid", str(pgid)])
+    all_pids = [pid for g in groups for pid in g]
+    if not all_pids:
+        return (None, None)
+    readings = {}
+    for pid in all_pids:
+        reading = _linux_pid_footprint_kb(pid)
+        if reading is not None:
+            readings[pid] = reading
+    if not readings:
+        return (None, None)
+    worker_current_kb = []
+    worker_peak_kb = []
+    for g in groups:
+        if not g:
+            continue
+        worker_current_kb.append(sum(readings.get(p, (0.0, 0.0))[0] for p in g))
+        worker_peak_kb.append(sum((readings.get(p, (0.0, 0.0))[1] or 0.0) for p in g))
+    pool_kb = sum(worker_current_kb)
+    peak_kb = max(worker_peak_kb) if worker_peak_kb else None
+    return (pool_kb, peak_kb)
 
 
 def _linux_memory_pressure():
@@ -122,10 +239,17 @@ def _headroom_linux(workers):
     meminfo = _proc_meminfo()
     total_mem_kb = meminfo.get("MemTotal") if meminfo else None
     pool_share = None
+    peak_worker_share = None
     if total_mem_kb:
-        pool_rss_kb = _pool_rss_kb(workers, lambda pgid: ["ps", "-o", "rss=", "--pgid", str(pgid)])
-        pool_share = pool_rss_kb / total_mem_kb
-    return MachineHeadroom(system_pressure=_linux_memory_pressure(), pool_share=pool_share)
+        pool_kb, peak_kb = _linux_pool_footprint_kb(workers)
+        if pool_kb is not None:
+            pool_share = pool_kb / total_mem_kb
+        if peak_kb is not None:
+            peak_worker_share = peak_kb / total_mem_kb
+    return MachineHeadroom(
+        system_pressure=_linux_memory_pressure(), pool_share=pool_share,
+        peak_worker_share=peak_worker_share,
+    )
 
 
 class MachineAdapter(MachinePort):
@@ -134,7 +258,7 @@ class MachineAdapter(MachinePort):
             return _headroom_macos(workers)
         if sys.platform == "linux":
             return _headroom_linux(workers)
-        return MachineHeadroom(system_pressure=None, pool_share=None)
+        return MachineHeadroom(system_pressure=None, pool_share=None, peak_worker_share=None)
 
     def self_rss(self):
         out = _run(["ps", "-o", "rss=", "-p", str(os.getpid())])
