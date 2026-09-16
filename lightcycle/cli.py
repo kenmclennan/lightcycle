@@ -1143,7 +1143,7 @@ def _render_state_refusal(r):
     if r.owner is None:
         return (
             "unknown --state %r; use %s - to end a node instead, use `lc close <item>` "
-            "or `lc done <step> <outcome>`"
+            "or `lc done <step> <outcome>`; to reopen a closed item, use `lc reopen <item>`"
         ) % (r.state, ", ".join(r.allowed))
     takes = ", ".join("--state %s" % s for s in r.allowed)
     return "--state %s applies to %s, not %s; %s takes %s" % (
