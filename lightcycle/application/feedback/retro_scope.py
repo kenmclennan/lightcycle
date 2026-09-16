@@ -4,6 +4,7 @@ from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.project_of import project_of
 from lightcycle.domain import feedback as cfeedback
 from lightcycle.domain.feedback import parse_reflections, reflections_of
+from lightcycle.domain.work import ProjectIdentity
 
 
 def _durations_of(store, steps):
@@ -132,7 +133,8 @@ class ProjectScope(RetroScope):
     def items_and_refs(self, store, signals_for):
         rows, all_refs, all_unreadable = [], [], []
         for item in store.closed_unretroed_items():
-            if project_of(store, item) != self.project:
+            project = project_of(store, item)
+            if project is None or ProjectIdentity.short_name(project) != self.project:
                 continue
             row, refs, unreadable = _collect_item_row(store, item, signals_for)
             rows.append(row)

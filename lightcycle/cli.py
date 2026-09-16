@@ -37,6 +37,7 @@ from lightcycle.domain.work import (
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
+from lightcycle.application.work.resolve_project_ref import resolve_project_ref
 from lightcycle.application.work.resolve_workflow_selection import (
     ResolveWorkflowSelectionInput,
     ResolveWorkflowSelectionUseCase,
@@ -928,8 +929,13 @@ def cmd_inbox(argv):
 
 def cmd_backlog(argv):
     a = build_parser(COMMANDS["backlog"]).parse_args(argv)
+    try:
+        project_ref = resolve_project_ref(_container.store, a.project)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     resp = BacklogUseCase(_container.store, _flow()).execute(
-        BacklogInput(n=a.n, project=a.project))
+        BacklogInput(n=a.n, project=project_ref))
     for line in render_backlog(resp.rows, _container.config.max_title_length()):
         print(line)
     return 0
@@ -1217,7 +1223,15 @@ def cmd_set(argv):
         if resp.resolved:
             resolved_pin = resp.value
     effective_description = "" if "description" in unset_fields else a.description
-    effective_project = "" if "project" in unset_fields else a.project
+    if a.project and "project" not in unset_fields:
+        try:
+            resolved_project = resolve_project_ref(_container.store, a.project)
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+    else:
+        resolved_project = a.project
+    effective_project = "" if "project" in unset_fields else resolved_project
     effective_notes = "" if "notes" in unset_fields else a.notes
     try:
         tid = EditNodeUseCase(_container.store, _container.config).execute(
@@ -1745,7 +1759,13 @@ def cmd_retro(argv):
     if sum(flags) != 1:
         parser.error("provide exactly one of: <id>, --since, --last, --project, --pending")
 
-    inp = RetroInput(subject=a.id, since=a.since, last=a.last, project=a.project,
+    try:
+        project_ref = resolve_project_ref(_container.store, a.project)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+
+    inp = RetroInput(subject=a.id, since=a.since, last=a.last, project=project_ref,
                       pending=a.pending)
     resp = RetroUseCase(_container.store, _flow()).execute(inp)
     interval = _container.config.retro_interval_reflections() if a.pending else None

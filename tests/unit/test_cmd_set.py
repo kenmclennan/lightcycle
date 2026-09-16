@@ -333,6 +333,26 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertIn("--depends", err)
 
 
+class TestCmdSetProjectValidation(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        cli.set_container(FakeContainer(self.store))
+
+    def test_unregistered_project_refuses_and_leaves_project_unchanged(self):
+        iid = self.store.create_item("an item", "a description", project="alpha")
+        rc, out, err = call(cli.cmd_set, iid, "--project", "totally-made-up")
+        self.assertEqual(rc, 1)
+        self.assertIn("totally-made-up", err)
+        self.assertEqual(self.store.get_item(iid).project, "alpha")
+
+    def test_registered_full_identity_succeeds_and_stores_the_short_name(self):
+        self.store.add_project("acme/horde", shortcode="HORDE")
+        iid = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_set, iid, "--project", "acme/horde")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store.get_item(iid).project, "horde")
+
+
 class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
     def test_active_with_valid_flags_succeeds(self):
         h = Harness(["coder", "reviewer"])

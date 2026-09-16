@@ -2688,6 +2688,23 @@ class TestInboxBacklog(unittest.TestCase):
         _, out, _ = call(_cli_mod.cmd_backlog, "2")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
 
+    def test_backlog_with_unregistered_project_refuses_and_prints_no_rows(self):
+        call(_cli_mod.cmd_new, "item", "a seed", "--description", "a description")
+        rc, out, err = call(_cli_mod.cmd_backlog, "--project", "totally-made-up")
+        self.assertEqual(rc, 1)
+        self.assertIn("totally-made-up", err)
+        self.assertEqual(out, "")
+
+    def test_backlog_matches_project_by_short_name_or_full_identity(self):
+        self.store.add_project("acme/horde", shortcode="HORDE")
+        call(_cli_mod.cmd_new, "item", "a seed", "--project", "acme/horde", "--description", "a description")
+        rc_short, out_short, err_short = call(_cli_mod.cmd_backlog, "--project", "horde")
+        rc_full, out_full, err_full = call(_cli_mod.cmd_backlog, "--project", "acme/horde")
+        self.assertEqual(rc_short, 0, err_short)
+        self.assertEqual(rc_full, 0, err_full)
+        self.assertEqual(out_short, out_full)
+        self.assertIn("a seed", out_short)
+
     def test_inbox_shows_plan_doc_for_gate_task(self):
         item = self.store.create_item("a gate", "a description")
         self.store.create_step(step="ready-merge", role="human", parent=item)
@@ -2907,6 +2924,12 @@ class TestRetro(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_retro, "--pending")
         self.assertEqual(rc, 0, err)
         self.assertIn("2 / 2 reflections -> fires", out)
+
+    def test_retro_with_unregistered_project_refuses_before_printing_any_header(self):
+        rc, out, err = call(_cli_mod.cmd_retro, "--project", "totally-made-up")
+        self.assertEqual(rc, 1)
+        self.assertIn("totally-made-up", err)
+        self.assertNotIn("== retro:", out)
 
     def test_retro_rejects_zero_or_multiple_selectors(self):
         rc, out, err = call(_cli_mod.cmd_retro)
