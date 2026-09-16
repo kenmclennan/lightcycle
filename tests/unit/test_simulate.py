@@ -63,6 +63,50 @@ class TestPassEndCoverageViolations(unittest.TestCase):
         self.assertIn("done", violations[0])
 
 
+class TestIsWalkTerminal(unittest.TestCase):
+    def test_a_stage_with_only_a_targetless_edge_is_terminal(self):
+        graph = SimpleNamespace(
+            edges={"review-ci": {"reviewed": None}}, hook_occurrences=lambda name: (),
+        )
+        self.assertTrue(_use_case(FakeStore(), FakeGit())._is_walk_terminal(graph, "review-ci"))
+
+    def test_a_stage_with_a_real_target_is_not_terminal(self):
+        graph = SimpleNamespace(
+            edges={"build": {"done": "review"}}, hook_occurrences=lambda name: (),
+        )
+        self.assertFalse(_use_case(FakeStore(), FakeGit())._is_walk_terminal(graph, "build"))
+
+    def test_a_stage_with_both_a_targetless_and_a_routed_outcome_is_not_terminal(self):
+        graph = SimpleNamespace(
+            edges={"build": {"done": "review", "clean": None}}, hook_occurrences=lambda name: (),
+        )
+        self.assertFalse(_use_case(FakeStore(), FakeGit())._is_walk_terminal(graph, "build"))
+
+    def test_a_stage_with_no_declared_edges_at_all_is_terminal(self):
+        graph = SimpleNamespace(edges={}, hook_occurrences=lambda name: ())
+        self.assertTrue(_use_case(FakeStore(), FakeGit())._is_walk_terminal(graph, "cleanup"))
+
+
+class TestTerminalOutcome(unittest.TestCase):
+    def test_a_single_declared_targetless_outcome_is_returned_verbatim(self):
+        graph = SimpleNamespace(edges={"review-ci": {"reviewed": None}})
+        self.assertEqual(
+            _use_case(FakeStore(), FakeGit())._terminal_outcome(graph, "review-ci"), "reviewed",
+        )
+
+    def test_zero_declared_outcomes_falls_back_to_done(self):
+        graph = SimpleNamespace(edges={})
+        self.assertEqual(
+            _use_case(FakeStore(), FakeGit())._terminal_outcome(graph, "cleanup"), "done",
+        )
+
+    def test_two_declared_targetless_outcomes_returns_the_alphabetically_first(self):
+        graph = SimpleNamespace(edges={"gate": {"zeta": None, "alpha": None}})
+        self.assertEqual(
+            _use_case(FakeStore(), FakeGit())._terminal_outcome(graph, "gate"), "alpha",
+        )
+
+
 class TestPassBoundaryViolations(unittest.TestCase):
     def test_a_pass_that_is_still_open_is_exactly_one_did_not_close_violation(self):
         store = FakeStore()

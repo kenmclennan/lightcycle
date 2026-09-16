@@ -366,6 +366,30 @@ class TestPlannerIncompleteWalkIsNotADrivingFailure(SimulateTestCase):
         self.assertNotIn("teardown:", output)
 
 
+_TARGETLESS_TERMINAL_WORKFLOW_TEXT = _WORKFLOW_TEXT.replace(
+    "  resolve-conflict  escalate     review-conflict\n",
+    "  resolve-conflict  escalate     review-conflict\n"
+    "  review-ci         reviewed\n",
+)
+
+
+class TestTargetlessTerminalEdgeSimulatesCleanly(SimulateTestCase):
+    def test_a_stage_declaring_only_a_targetless_outcome_still_passes(self):
+        selector = self._install(_TARGETLESS_TERMINAL_WORKFLOW_TEXT, _STEPS)
+        rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 0)
+
+    def test_the_stage_closes_with_its_declared_outcome_not_a_hardcoded_done(self):
+        resp, store = self._run_direct(_TARGETLESS_TERMINAL_WORKFLOW_TEXT, _STEPS)
+        self.assertTrue(resp.ok, resp.violations)
+        review_ci_steps = [
+            n for n in store.all_nodes_including_done()
+            if n.type == "step" and n.stage == "review-ci"
+        ]
+        self.assertTrue(review_ci_steps)
+        self.assertTrue(all(s.outcome == "reviewed" for s in review_ci_steps))
+
+
 _HANDOFF_WORKFLOW_TEXT = """entry: build
 
 requires: brief repo
