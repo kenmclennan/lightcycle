@@ -33,6 +33,7 @@ from lightcycle.adapters.tui.design_system import (
     MODAL_OVERLAY_ALPHA,
     next_active_glyph_frame,
 )
+from lightcycle.adapters.tui.done_list import build_done_rows
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.hub import NodeHubScreen
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows
@@ -74,6 +75,7 @@ POOL_START_TIMEOUT_SECONDS = 15
 
 DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
 BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
+DONE_COLUMNS = ("cursor", "id", "project", "title", "cost", "time")
 
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
@@ -90,6 +92,7 @@ _VIEW_CYCLE = ("priority", "backlog", "done")
 STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
 BACKLOG_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
+DONE_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
 
 FILTER_ROW_LABEL_WIDTH = 10
 FILTER_ROW_COUNT_GAP = 2
@@ -259,6 +262,38 @@ def _backlog_row_cells(row, layout, row_budget, cursor=False):
 
 def _backlog_stacked_cell_builder(row, layout, row_budget, cursor, icon_override):
     return _backlog_row_cells(row, layout, row_budget, cursor=cursor)
+
+
+def _done_stacked_first_line(row, cursor, layout, row_budget):
+    cursor_field = pad_field(
+        Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else Text(""),
+        GLYPH_WIDTHS["cursor"],
+    )
+    id_field = pad_atomic_field(row.id, layout.atomic_widths["id"])
+    project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else Text("")
+    project_field = pad_atomic_field(project_cell, layout.atomic_widths["project"])
+    cost_field = pad_atomic_field(
+        Text(row.cost, style=COLOURS["dim"]) if row.cost else Text(""), layout.atomic_widths["cost"]
+    )
+    content_so_far = cursor_field + id_field + project_field + cost_field
+    time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else Text("")
+    time_area = max(0, row_budget - len(content_so_far.plain))
+    return content_so_far + pad_field_right(time_cell, time_area)
+
+
+def _done_row_cells(row, layout, row_budget, cursor=False):
+    if layout.stacked:
+        first_line = _done_stacked_first_line(row, cursor, layout, row_budget)
+        return (stacked_cell(first_line, DONE_CONTINUATION_INDENT, row.title, row_budget),)
+    cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
+    project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
+    cost_cell = Text(row.cost, style=COLOURS["dim"]) if row.cost else ""
+    time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
+    return (cursor_cell, row.id, project_cell, row.title, cost_cell, time_cell)
+
+
+def _done_stacked_cell_builder(row, layout, row_budget, cursor, icon_override):
+    return _done_row_cells(row, layout, row_budget, cursor=cursor)
 
 
 class BacklogFilterInput(Input):
@@ -494,6 +529,7 @@ class DoneView(Vertical):
         self._total = 0
         self._project_filter = None
         self._text_filter = None
+        self._day_filter = None
         self._last_shape = None
         self._backlog_needs_rebuild = False
         self._backlog_stacked = False
@@ -510,6 +546,12 @@ class DoneView(Vertical):
             Static(id="done-filter-right"),
             id="done-filter-bar",
         )
+        yield Horizontal(
+            Static("DAY", id="done-day-filter-label", classes="filter-row-label"),
+            Static(id="done-day-filter-left"),
+            Static(id="done-day-filter-right"),
+            id="done-day-filter-bar",
+        )
         yield DoneTable(id="done-table")
         yield Static(id="done-floor")
         yield Static(id="done-empty-overall")
@@ -521,9 +563,10 @@ class DoneView(Vertical):
         table.cursor_type = "row"
         table.show_header = False
 
-    def apply_rows(self, rows, total, project_filter, text_filter) -> None:
-        shape = (tuple(r.id for r in rows), total, project_filter, text_filter)
+    def apply_rows(self, rows, total, project_filter, text_filter, day_filter) -> None:
+        shape = (tuple(r.id for r in rows), total, project_filter, text_filter, day_filter)
         self._render_filter_bar(project_filter, len(rows))
+        self._render_day_filter_bar(day_filter)
         table = self.query_one(DoneTable)
         layout = self._layout(table)
         if (
@@ -539,12 +582,16 @@ class DoneView(Vertical):
         self._total = total
         self._project_filter = project_filter
         self._text_filter = text_filter
-        self._toggle_state(total, len(rows), project_filter, text_filter)
+        self._day_filter = day_filter
+        self._toggle_state(total, len(rows), project_filter, text_filter, day_filter)
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
         self._render_filter_bar(self._project_filter, len(self._rows))
-        self._toggle_state(self._total, len(self._rows), self._project_filter, self._text_filter)
+        self._render_day_filter_bar(self._day_filter)
+        self._toggle_state(
+            self._total, len(self._rows), self._project_filter, self._text_filter, self._day_filter
+        )
 
     def _render_filter_bar(self, project_filter, count) -> None:
         value = project_filter or "All"
@@ -557,6 +604,13 @@ class DoneView(Vertical):
         right.display = fits
         if fits:
             right.update(Text(count_text, style=COLOURS["text"]))
+
+    def _render_day_filter_bar(self, day_filter) -> None:
+        value = day_filter.isoformat() if day_filter else "All"
+        left = self.query_one("#done-day-filter-left", Static)
+        right = self.query_one("#done-day-filter-right", Static)
+        left.update(Text(value, style=COLOURS["text"]))
+        right.display = False
 
     def _selected_row_id(self, table):
         if table.row_count == 0:
@@ -571,9 +625,11 @@ class DoneView(Vertical):
         atomic_values = {
             "id": [row.id for row in self._rows],
             "project": [row.project for row in self._rows],
+            "cost": [row.cost for row in self._rows],
+            "time": [row.time for row in self._rows],
         }
-        row_budget = screen_row_budget_for(table, len(BACKLOG_COLUMNS))
-        indent = BACKLOG_CONTINUATION_INDENT
+        row_budget = screen_row_budget_for(table, len(DONE_COLUMNS))
+        indent = DONE_CONTINUATION_INDENT
         return compute_layout(row_budget, ["cursor"], atomic_values, indent)
 
     def _rebuild_table(self, rows) -> None:
@@ -585,14 +641,14 @@ class DoneView(Vertical):
         if self._floor:
             self._backlog_needs_rebuild = True
             floor_widget.update(
-                Text(floor_message(layout, table, len(BACKLOG_COLUMNS)), style=COLOURS["dim"])
+                Text(floor_message(layout, table, len(DONE_COLUMNS)), style=COLOURS["dim"])
             )
             return
         self._backlog_needs_rebuild = False
         selected_id = self._selected_row_id(table)
 
         table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -601,8 +657,10 @@ class DoneView(Vertical):
                 "id": layout.atomic_widths["id"],
                 "project": layout.atomic_widths["project"],
                 "title": layout.flexible_width,
+                "cost": layout.atomic_widths["cost"],
+                "time": layout.atomic_widths["time"],
             }
-            for key in BACKLOG_COLUMNS:
+            for key in DONE_COLUMNS:
                 table.add_column(key, width=widths[key], key=key)
 
         ids = [row.id for row in rows]
@@ -610,11 +668,11 @@ class DoneView(Vertical):
         table._stacked_mode = layout.stacked
         table._stacked_layout = layout
         table._stacked_row_budget = row_budget
-        table._stacked_cell_builder = _backlog_stacked_cell_builder
+        table._stacked_cell_builder = _done_stacked_cell_builder
         stacked_rows = {}
         for index, row in enumerate(rows):
             is_cursor = index == new_index
-            cells = _backlog_row_cells(row, layout, row_budget, cursor=is_cursor)
+            cells = _done_row_cells(row, layout, row_budget, cursor=is_cursor)
             if layout.stacked:
                 stacked_rows[row.id] = (row, None)
             table.add_row(*cells, height=None, key=row.id)
@@ -625,19 +683,19 @@ class DoneView(Vertical):
     def _update_cells(self, rows) -> None:
         table = self.query_one(DoneTable)
         layout = self._layout(table)
-        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
         selected_id = self._selected_row_id(table)
         for row in rows:
-            cells = _backlog_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
+            cells = _done_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
             if layout.stacked:
                 table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
                 continue
-            for key, value in zip(BACKLOG_COLUMNS, cells):
+            for key, value in zip(DONE_COLUMNS, cells):
                 if key == "cursor":
                     continue
                 table.update_cell(row.id, key, value)
 
-    def _toggle_state(self, total, filtered_count, project_filter, text_filter) -> None:
+    def _toggle_state(self, total, filtered_count, project_filter, text_filter, day_filter) -> None:
         overall_empty = total == 0
         filtered_empty = not overall_empty and filtered_count == 0
         table = self.query_one(DoneTable)
@@ -664,6 +722,10 @@ class DoneView(Vertical):
                 message.append(text_filter, style=COLOURS["text"])
                 message.append('"', style=COLOURS["dim"])
                 hints.append("backspace to clear the search")
+            if day_filter:
+                message.append(" on ", style=COLOURS["dim"])
+                message.append(day_filter.isoformat(), style=COLOURS["text"])
+                hints.append("d to check All days")
             message.append(".", style=COLOURS["dim"])
             message_widget.update(message)
             hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
@@ -725,9 +787,10 @@ class ProjectFilterPicker(ModalScreen):
         Binding("escape", "cancel", "Cancel", show=False),
     ]
 
-    def __init__(self, options):
+    def __init__(self, options, heading="Filter by project"):
         super().__init__()
         self._options = options
+        self._heading = heading
         self._index = 0
         self._count_width = max(
             1, atomic_column_width([str(count) for _, _, count in options])
@@ -745,7 +808,7 @@ class ProjectFilterPicker(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="picker"):
-            yield Static("Filter by project", id="picker-head")
+            yield Static(self._heading, id="picker-head")
             for index, (_, label, count) in enumerate(self._options):
                 yield PickerOption(label, count, self._count_width, id="picker-option-%d" % index)
             yield Static("↑↓ move · enter apply · esc cancel", id="picker-foot")
@@ -1103,6 +1166,17 @@ class LightcycleApp(App):
         width: 1fr;
         content-align: right middle;
     }}
+    #done-day-filter-bar {{
+        height: 2;
+        border-bottom: solid {COLOURS["border"]};
+    }}
+    #done-day-filter-left {{
+        width: auto;
+    }}
+    #done-day-filter-right {{
+        width: 1fr;
+        content-align: right middle;
+    }}
     DoneTable {{
         height: 1fr;
     }}
@@ -1167,6 +1241,7 @@ class LightcycleApp(App):
         Binding("[", "prev_strip", "Prev tab", show=False),
         Binding("]", "next_strip", "Next tab", show=False),
         Binding("f", "open_picker", "Filter", show=False),
+        Binding("d", "open_day_picker", "Day", show=False),
         Binding("/", "focus_search", "Search", show=False),
         Binding("p", "toggle_pool", "Pool", show=False),
     ]
@@ -1207,9 +1282,11 @@ class LightcycleApp(App):
         self._backlog_filter_timer = None
         self._done_project_filter = None
         self._done_text_filter = None
+        self._done_day_filter = None
         self._done_total = 0
         self._done_filtered_count = 0
         self._done_filter_timer = None
+        self._done_cost_time_cache = {}
         self._picker_open = False
 
     @property
@@ -1403,15 +1480,20 @@ class LightcycleApp(App):
 
     def _refresh_done_view(self) -> None:
         done_uc = DoneUseCase(self._container.store)
-        done_resp = done_uc.execute(
-            DoneInput(project=self._done_project_filter, text=self._done_text_filter)
-        )
+        done_resp = done_uc.execute(DoneInput(
+            project=self._done_project_filter, text=self._done_text_filter, day=self._done_day_filter,
+        ))
         done_counts = done_uc.counts()
-        done_rows = build_backlog_rows(done_resp.rows)
         self._done_total = done_counts.total
-        self._done_filtered_count = len(done_rows)
+        self._done_filtered_count = len(done_resp.rows)
+        if self._view != "done":
+            return
+        done_rows = build_done_rows(
+            self._container.store, done_resp.rows, self._now(), self._done_cost_time_cache,
+        )
         self.query_one(DoneView).apply_rows(
-            done_rows, self._done_total, self._done_project_filter, self._done_text_filter
+            done_rows, self._done_total, self._done_project_filter, self._done_text_filter,
+            self._done_day_filter,
         )
 
     def _apply_view_visibility(self) -> None:
@@ -1477,6 +1559,8 @@ class LightcycleApp(App):
             self.pop_screen()
         index = _VIEW_CYCLE.index(self._view)
         self._view = _VIEW_CYCLE[(index + direction) % len(_VIEW_CYCLE)]
+        if self._view == "done":
+            self._refresh_done_view()
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()
@@ -1581,6 +1665,27 @@ class LightcycleApp(App):
             self._done_project_filter = result
             self._refresh()
             self.set_focus(self.query_one(DoneTable))
+
+    def action_open_day_picker(self) -> None:
+        if self._view != "done" or self._picker_open:
+            return
+        done_uc = DoneUseCase(self._container.store)
+        counts = done_uc.counts()
+        options = [(None, "All", counts.total)] + [
+            (dc.day, dc.day.isoformat(), dc.count) for dc in done_uc.day_counts()
+        ]
+        self._picker_open = True
+        self.push_screen(
+            ProjectFilterPicker(options, heading="Filter by day"), self._on_done_day_picker_dismiss
+        )
+
+    def _on_done_day_picker_dismiss(self, result) -> None:
+        self._picker_open = False
+        if result is PICKER_CANCELLED:
+            return
+        self._done_day_filter = result
+        self._refresh()
+        self.set_focus(self.query_one(DoneTable))
 
     def action_focus_search(self) -> None:
         if self._view == "backlog":

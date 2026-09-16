@@ -3,10 +3,11 @@ Feature: The done screen
   The done tab is the third top-level screen, reached from the backlog by Tab
   or the tab strip (priority list -> backlog -> done -> priority list). It
   lists closed items - a lookup for "did X land?", not a report - newest
-  closed first, with the same row grid the backlog already uses and its own
-  independent text filter and project picker. Abandoned work is included,
-  undistinguished from delivered work. Opening a done item goes straight to
-  that item's own hub, the same way opening a backlog item does.
+  closed first, with the backlog's row grid, plus its own cost and time
+  columns, and its own independent text filter, project picker, and day
+  picker. Abandoned work is included, undistinguished from delivered work.
+  Opening a done item goes straight to that item's own hub, the same way
+  opening a backlog item does.
 
   Scenario: Closed items are listed once the done tab is shown
     Given the store has a closed item
@@ -148,3 +149,42 @@ Feature: The done screen
       | key   |
       | Enter |
       | →     |
+
+  Scenario: Pressing d opens the day filter picker on the done tab
+    Given the done tab is shown with closed items on two distinct days
+    When d is pressed
+    Then the picker's header reads "Filter by day"
+    And the picker shows "All" with the total item count
+    And the picker shows each distinct day with its own item count, most recent first
+
+  Scenario: Selecting a day and pressing Enter filters the done tab to it immediately and closes the picker
+    Given the done tab is shown with closed items on two distinct days
+    When d is pressed
+    And Down is pressed
+    And Enter is pressed
+    Then the picker is closed
+    And the done tab is filtered to the most recently closed item
+
+  Scenario: The DAY filter-bar row shows the active day, or "All" when nothing is picked
+    Given the done tab is shown with closed items on two distinct days
+    Then the done day filter row shows "All"
+    When d is pressed
+    And Down is pressed
+    And Enter is pressed
+    Then the done day filter row shows the picked day
+
+  Scenario: A picked day composes with an already-active project filter to their intersection
+    Given the done tab is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with a closed item, closed on different days
+    When f is pressed
+    And Down is pressed
+    And Enter is pressed
+    And d is pressed
+    And Down is pressed
+    And Enter is pressed
+    Then only the done row matching the picked project and day is shown
+
+  Scenario: A done tab filtered to a day with no matching items shows a message naming the day and offers to check all days
+    Given the done tab is shown with a closed item on a single day
+    When the done tab is filtered to a day with no closed items
+    Then the message names the picked day
+    And the hint "d to check All days" is offered

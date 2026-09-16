@@ -2576,6 +2576,153 @@ class TestDoneSearchInput(unittest.TestCase):
             done_refresh.assert_not_called()
 
 
+def _spy_children_and_history_calls(store):
+    calls = {"children": 0, "history": 0}
+    original_children = store.children
+    original_history = store.history
+
+    def counted_children(item_id):
+        calls["children"] += 1
+        return original_children(item_id)
+
+    def counted_history(tid):
+        calls["history"] += 1
+        return original_history(tid)
+
+    store.children = counted_children
+    store.history = counted_history
+    return calls
+
+
+def _closed_item_with_cost(store):
+    item = store.create_item("done item", "a description")
+    step = store.create_step(step="build", role="agent", parent=item)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step], 300)
+    store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+    store.complete_node(step, "done")
+    store.complete_node(item, "merged")
+    return item
+
+
+class TestDoneCostTimeGatedOffThePoll(unittest.TestCase):
+    def test_polling_while_on_priority_never_computes_done_cost_or_time(self):
+        store = FakeStore()
+        _closed_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        self.assertEqual(session.app._view, "priority")
+
+        calls = _spy_children_and_history_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["children"], 0)
+        self.assertEqual(calls["history"], 0)
+
+    def test_polling_while_on_backlog_never_computes_done_cost_or_time(self):
+        store = FakeStore()
+        _closed_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        session.press("tab")
+        self.assertEqual(session.app._view, "backlog")
+
+        calls = _spy_children_and_history_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["children"], 0)
+        self.assertEqual(calls["history"], 0)
+
+    def test_switching_to_done_computes_cost_and_time_immediately_without_a_poll(self):
+        store = FakeStore()
+        item = _closed_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+
+        session.press("tab")
+        session.press("tab")
+
+        self.assertEqual(session.app._view, "done")
+        self.assertEqual(_done_cell(session, item, "cost"), "$2.50")
+
+    def test_revisiting_an_already_computed_day_does_not_recompute(self):
+        store = FakeStore()
+        a = _closed_item_with_cost(store)
+        store._records[a]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        b = store.create_item("other day item", "a description")
+        store.complete_node(b, "merged")
+        store._records[b]["closed_at"] = "2026-01-02T10:00:00+00:00"
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        session.press("tab")
+        session.press("tab")
+        app = session.app
+        day_a = datetime.date(2026, 1, 1)
+        day_b = datetime.date(2026, 1, 2)
+
+        app._done_day_filter = day_a
+        session.run(app._refresh)
+        session.pause()
+
+        calls = _spy_children_and_history_calls(store)
+
+        app._done_day_filter = day_b
+        session.run(app._refresh)
+        session.pause()
+        app._done_day_filter = day_a
+        session.run(app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["children"], 0)
+        self.assertEqual(calls["history"], 0)
+
+
+class TestDoneDayPicker(unittest.TestCase):
+    def _launch_two_days(self):
+        store = FakeStore()
+        older = store.create_item("older item", "a description")
+        store.complete_node(older, "merged")
+        store._records[older]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        newer = store.create_item("newer item", "a description")
+        store.complete_node(newer, "merged")
+        store._records[newer]["closed_at"] = "2026-01-02T10:00:00+00:00"
+        session = _launch_done(store)
+        self.addCleanup(session.close)
+        return session, older, newer
+
+    def test_d_opens_the_day_picker_with_all_and_each_distinct_day(self):
+        session, _older, _newer = self._launch_two_days()
+
+        session.press("d")
+
+        self.assertIsInstance(session.app.screen, ProjectFilterPicker)
+        head = session.app.screen.query_one("#picker-head")
+        self.assertEqual(_rendered_text(head).strip(), "Filter by day")
+
+    def test_selecting_a_day_filters_immediately_and_closes_the_picker(self):
+        session, older, newer = self._launch_two_days()
+
+        session.press("d")
+        session.press("down")
+        session.press("enter")
+
+        self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
+        table = session.app.query_one(DoneTable)
+        self.assertEqual(table.row_count, 1)
+        self.assertIn(row_key(session, newer), table.rows)
+        self.assertNotIn(row_key(session, older), table.rows)
+
+    def test_d_is_a_no_op_outside_the_done_tab(self):
+        session = launch(make_test_container(store=FakeStore()))
+        self.addCleanup(session.close)
+
+        session.press("d")
+
+        self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
+
+
 class TestPoolControl(unittest.TestCase):
     def _launch(self, running=False, autostart=False, workers=None, spawner=None):
         spawner = spawner or FakeSpawner()

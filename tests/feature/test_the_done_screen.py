@@ -1,3 +1,5 @@
+import datetime
+
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
@@ -151,6 +153,50 @@ def _done_shown_two_projects_shared_title(ctx, project_a, project_b, title):
     _launch_and_switch_to_done(ctx, store)
 
 
+@given(parsers.parse(
+    'the done tab is shown with the registered projects "{project_a}" and "{project_b}", '
+    "each with a closed item, closed on different days"
+))
+def _done_shown_two_projects_different_days(ctx, project_a, project_b):
+    store = FakeStore()
+    store.add_project(project_a)
+    store.add_project(project_b)
+    item_a = store.create_item("item a", "a description", project=project_a)
+    store.complete_node(item_a, "merged")
+    store._records[item_a]["closed_at"] = "2026-01-02T10:00:00+00:00"
+    item_b = store.create_item("item b", "a description", project=project_b)
+    store.complete_node(item_b, "merged")
+    store._records[item_b]["closed_at"] = "2026-01-01T10:00:00+00:00"
+    ctx["picked_project_item"] = item_a
+    _launch_and_switch_to_done(ctx, store)
+
+
+@given("the done tab is shown with closed items on two distinct days")
+def _done_shown_two_days(ctx):
+    store = FakeStore()
+    earlier = store.create_item("earlier item", "a description")
+    store.complete_node(earlier, "merged")
+    store._records[earlier]["closed_at"] = "2026-01-01T10:00:00+00:00"
+    later = store.create_item("later item", "a description")
+    store.complete_node(later, "merged")
+    store._records[later]["closed_at"] = "2026-01-02T10:00:00+00:00"
+    ctx["earlier_day"] = datetime.date(2026, 1, 1)
+    ctx["later_day"] = datetime.date(2026, 1, 2)
+    ctx["earlier_item"] = earlier
+    ctx["later_item"] = later
+    ctx["expected_total"] = 2
+    _launch_and_switch_to_done(ctx, store)
+
+
+@given("the done tab is shown with a closed item on a single day")
+def _done_shown_single_day(ctx):
+    store = FakeStore()
+    item = store.create_item("closed item", "a description")
+    store.complete_node(item, "merged")
+    store._records[item]["closed_at"] = "2026-01-01T10:00:00+00:00"
+    _launch_and_switch_to_done(ctx, store)
+
+
 @given("the done tab is shown with a closed item")
 def _done_shown_with_closed_item(ctx):
     store = FakeStore()
@@ -192,6 +238,21 @@ def _when_done_filtered(ctx, project):
 @when("f is pressed")
 def _press_f(ctx):
     ctx["session"].press("f")
+
+
+@when("d is pressed")
+def _press_d(ctx):
+    ctx["session"].press("d")
+
+
+@when("the done tab is filtered to a day with no closed items")
+def _when_done_filtered_to_empty_day(ctx):
+    session = ctx["session"]
+    empty_day = datetime.date(2026, 1, 5)
+    ctx["picked_day"] = empty_day
+    session.app._done_day_filter = empty_day
+    session.run(session.app._refresh)
+    session.pause()
 
 
 @when("Down is pressed")
@@ -314,6 +375,61 @@ def _picker_shows_own_count(ctx, label):
 @then("the picker is closed")
 def _picker_closed(ctx):
     assert not isinstance(ctx["session"].app.screen, ProjectFilterPicker)
+
+
+@then("the picker shows each distinct day with its own item count, most recent first")
+def _picker_shows_days_most_recent_first(ctx):
+    from lightcycle.adapters.tui.design_system import CURSOR_GLYPH
+
+    screen = ctx["session"].app.screen
+    day_options = list(screen.query(PickerOption))[1:]
+    labels = [
+        _rendered_text(o.query_one("#picker-option-label")).replace(CURSOR_GLYPH.glyph, "").strip()
+        for o in day_options
+    ]
+    counts = [_rendered_text(o.query_one(".picker-option-count")).strip() for o in day_options]
+    assert labels == [ctx["later_day"].isoformat(), ctx["earlier_day"].isoformat()]
+    assert counts == ["1", "1"]
+
+
+@then("the done tab is filtered to the most recently closed item")
+def _done_filtered_to_most_recently_closed_item(ctx):
+    table = ctx["session"].app.query_one(DoneTable)
+    assert table.row_count == 1
+    assert table.ordered_rows[0].key.value == ctx["later_item"]
+
+
+@then(parsers.parse('the done day filter row shows "{value}"'))
+def _done_day_filter_row_shows(ctx, value):
+    widget = ctx["session"].app.query_one("#done-day-filter-left")
+    assert _rendered_text(widget).strip() == value
+
+
+@then("the done day filter row shows the picked day")
+def _done_day_filter_row_shows_picked_day(ctx):
+    widget = ctx["session"].app.query_one("#done-day-filter-left")
+    assert _rendered_text(widget).strip() == ctx["later_day"].isoformat()
+
+
+@then("only the done row matching the picked project and day is shown")
+def _only_done_row_matching_picked_project_and_day(ctx):
+    table = ctx["session"].app.query_one(DoneTable)
+    assert table.row_count == 1
+    assert table.ordered_rows[0].key.value == ctx["picked_project_item"]
+
+
+@then("the message names the picked day")
+def _message_names_picked_day(ctx):
+    widget = ctx["session"].app.query_one("#done-empty-filtered-message")
+    assert widget.display
+    assert ctx["picked_day"].isoformat() in _rendered_text(widget).strip()
+
+
+@then(parsers.parse('the hint "{text}" is offered'))
+def _hint_offered(ctx, text):
+    widget = ctx["session"].app.query_one("#done-empty-filtered-hint")
+    assert widget.display
+    assert text in _rendered_text(widget).strip()
 
 
 @then(parsers.parse('the done tab is filtered to "{project}"'))

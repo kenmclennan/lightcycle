@@ -573,6 +573,51 @@ def _done_stacked(size):
     return session
 
 
+def _done_with_cost_store():
+    store = DemoStore(now=lambda: _at(90))
+    lc273 = store.item("LC-273", "Row title repeats the step name", project="lightcycle")
+    step273 = store.step("LC-273.1", step="write-code", role="agent", parent=lc273)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step273], 600)
+    store.record_usage(step273, 1000, 200, 0, 0, 2.91, "list", None)
+    store.complete_node(step273, "done")
+    store.complete_node(lc273, "merged")
+    store._records[lc273]["closed_at"] = "2026-01-01T15:00:00+00:00"
+
+    lc275 = store.item("LC-275", "Active glyph unreadable at terminal size", project="lightcycle")
+    step275 = store.step("LC-275.1", step="write-code", role="agent", parent=lc275)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step275], 900)
+    store.record_usage(step275, 1500, 300, 0, 0, 4.10, "list", None)
+    store.complete_node(step275, "done")
+    store.complete_node(lc275, "merged")
+    store._records[lc275]["closed_at"] = "2026-01-02T09:30:00+00:00"
+
+    store.add_project("kenmclennan/lightcycle")
+    return store
+
+
+def _done_with_cost(size):
+    session = _launch(_done_with_cost_store(), size=size)
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
+def _done_day_picker(size):
+    session = _done_with_cost(size)
+    session.press("d")
+    return session
+
+
+def _done_day_filtered(size):
+    session = _done_with_cost(size)
+    session.app._done_day_filter = datetime.date(2026, 1, 1)
+    session.run(session.app._refresh)
+    session.pause()
+    return session
+
+
 def _hub_hierarchy(size):
     store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="workflow")
@@ -1099,6 +1144,9 @@ SCREENS = {
     "done#empty": _done_empty,
     "done#empty-filtered": _done_empty_filtered,
     "done#stacked": _done_stacked,
+    "done#with-cost": _done_with_cost,
+    "done#day-picker": _done_day_picker,
+    "done#day-filtered": _done_day_filtered,
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-engine-active": _hub_workflow_engine_active,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
