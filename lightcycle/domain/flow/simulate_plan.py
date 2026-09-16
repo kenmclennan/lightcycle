@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
     PR_CONFLICT,
+    PR_CONFLICT_CAP,
     PR_FEEDBACK,
     PR_MERGE,
     REVIEW_ROUNDS_CAP,
@@ -75,7 +76,7 @@ def _cap_occurrences(graph, review_rounds_cap_n=None):
         if len(occ) > 3:
             caps.append(("edge", None, occ[0], occ[1], int(occ[2])))
     conflict_cap = {
-        occ[0]: int(occ[1]) for occ in graph.hook_occurrences("pr_conflict_cap") if len(occ) > 1
+        occ[0]: int(occ[1]) for occ in graph.hook_occurrences(PR_CONFLICT_CAP) if len(occ) > 1
     }
     conflict_outcome = {
         occ[0]: occ[1] for occ in graph.hook_occurrences(PR_CONFLICT) if len(occ) > 1

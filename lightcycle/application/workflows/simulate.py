@@ -9,7 +9,13 @@ from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.contracts import FlowContracts, StepContract
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_CONFLICT, PR_FEEDBACK, PR_MERGE
+from lightcycle.domain.flow.hooks import (
+    CI_FAILED_CAP,
+    MENTION_TOKEN,
+    PR_CONFLICT,
+    PR_FEEDBACK,
+    PR_MERGE,
+)
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work.state import State
@@ -303,7 +309,7 @@ class WorkflowSimulateUseCase:
                                      phase_check=None)
 
     def _mention_token(self, graph, stage):
-        for occ in graph.hook_occurrences("mention_token"):
+        for occ in graph.hook_occurrences(MENTION_TOKEN):
             if occ and occ[0] == stage and len(occ) > 1:
                 return occ[1]
         return None
