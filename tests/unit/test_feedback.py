@@ -252,6 +252,13 @@ class TestRetroProjectScope(unittest.TestCase):
         resp = RetroUseCase(s, _flow(s)).execute(RetroInput(project="saga"))
         self.assertEqual(resp.item_signals, [])
 
+    def test_project_scope_matches_a_full_identity_stored_on_the_item(self):
+        s = FakeStore()
+        horde = self._closed_item(s, "horde work", "acme/horde", "horde friction")
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(project="horde"))
+        self.assertEqual({row.item.id for row in resp.item_signals}, {horde})
+        self.assertEqual(resp.reflection_count, 1)
+
 
 class TestRetroPendingScope(unittest.TestCase):
     def _closed_item(self, s, title, project, text):
