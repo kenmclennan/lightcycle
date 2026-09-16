@@ -84,8 +84,7 @@ class Container:
             self.spawner,
             self.config,
             monitor=MonitorPrsUseCase(
-                self.store, self.github, worktrees, flow, complete, spin_port=self.spin,
-                git=self.git, config=self.config,
+                self.store, self.github, worktrees, flow, complete, git=self.git,
             ),
             cadence_gate=RetroCadenceUseCase(self.store, self.config),
             breaker_gate=BreakerGateUseCase(
@@ -156,7 +155,7 @@ class SimulationContainer:
         from lightcycle.application.flow.claim_step import ClaimStepUseCase
         from lightcycle.application.flow.complete_step import CompleteStepUseCase
         from lightcycle.adapters.simulate import (
-            NullSpin, NullWorkers, RecordingGit, SimulateConfig,
+            NullWorkers, RecordingGit, SimulateConfig,
         )
         from lightcycle.config import Config
 
@@ -175,7 +174,6 @@ class SimulationContainer:
         self.store = SqliteStore(Config(environ={"LC_HOME": self.home, "LC_CONFIG": cfg_path}))
         self.store.add_project(SPECS_WORKSPACE, local_path=self.specs_root)
         self.git = RecordingGit()
-        self.spin = NullSpin()
         self.scaffold = container.scaffold
         self.flow = make_flow_service(
             container.workflow_bundle, self.store, container.config, container.workflow_source

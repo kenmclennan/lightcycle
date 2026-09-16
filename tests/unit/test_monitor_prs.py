@@ -21,7 +21,6 @@ from tests.support.fake_fs import flow_from_metas
 from lightcycle.ports.github import CheckRun, Comment
 from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
-from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
@@ -199,7 +198,7 @@ class TestTickWithMonitor(unittest.TestCase):
         store.create_step(step="ready-merge", role="human", parent=item)
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
-            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW)
         )
 
         result = make_tick(
@@ -218,7 +217,7 @@ class TestTickWithMonitor(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
-            store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW), spin_port=FakeSpinPort()
+            store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW)
         )
 
         result = make_tick(
@@ -310,8 +309,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
 
         uc = MonitorPrsUseCase(
-            store, gh, worktrees, _FlowAdapter(flow), complete, spin_port=FakeSpinPort(),
-            git=git,
+            store, gh, worktrees, _FlowAdapter(flow), complete, git=git,
         )
 
         result = uc.execute()

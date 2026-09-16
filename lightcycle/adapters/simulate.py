@@ -2,7 +2,6 @@ import os
 
 from lightcycle.ports.git import GitOutcome, GitPort
 from lightcycle.ports.github import Comment, GitHubEventsPort
-from lightcycle.ports.spin import SpinPort
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 from lightcycle.ports.workers import WorkersPort
 
@@ -231,17 +230,6 @@ class NullWorkers(WorkersPort):
 
     def signal_resume(self, pid):
         self._refuse("signal_resume")
-
-
-class NullSpin(SpinPort):
-    def _refuse(self, name):
-        raise AssertionError("not expected during simulation: %s" % name)
-
-    def load(self):
-        self._refuse("load")
-
-    def update(self, mutate):
-        self._refuse("update")
 
 
 class SimulateConfig:

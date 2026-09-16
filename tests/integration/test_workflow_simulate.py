@@ -6,7 +6,6 @@ from pathlib import Path
 
 import lightcycle.cli as cli
 from lightcycle.adapters.simulate import (
-    NullSpin,
     NullWorkers,
     RecordingGit,
     ScriptedGitHub,
@@ -234,7 +233,7 @@ class SimulateTestCase(unittest.TestCase):
         claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
-            store, flow, worktrees, claim, complete, projects_root, git, NullSpin(),
+            store, flow, worktrees, claim, complete, projects_root, git,
             scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
         )
         resp = use_case.execute(SimulateInput(workflow=selector))
