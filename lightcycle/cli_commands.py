@@ -144,6 +144,9 @@ COMMANDS = {
         Arg("--note", nargs="+", help="a note to record on the closed item; unquoted "
             "multi-word is fine"),
     )),
+    "reopen": CommandSpec(prog="lc reopen", args=(
+        Arg("id"),
+    )),
     "trace": CommandSpec(prog="lc trace", args=(
         Arg("item"), Arg("--json", action="store_true"),
     )),

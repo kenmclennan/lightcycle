@@ -151,7 +151,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(
             err,
             "--state waiting applies to a step, not an item; "
-            "an item takes --state active, --state in_progress\n",
+            "an item takes --state active\n",
         )
 
 

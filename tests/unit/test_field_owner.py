@@ -67,7 +67,7 @@ class TestRefuseState(unittest.TestCase):
             refuse_state("item", "waiting"),
             StateRefusal(
                 state="waiting", requested_type="item", owner="step",
-                allowed=("active", "in_progress"),
+                allowed=("active",),
             ),
         )
 
@@ -85,7 +85,7 @@ class TestRefuseState(unittest.TestCase):
             refuse_state("item", "bogus"),
             StateRefusal(
                 state="bogus", requested_type="item", owner=None,
-                allowed=("active", "in_progress", "ready", "waiting"),
+                allowed=("active", "ready", "waiting"),
             ),
         )
 

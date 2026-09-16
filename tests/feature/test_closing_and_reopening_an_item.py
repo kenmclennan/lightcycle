@@ -86,7 +86,7 @@ def _have_closed(ctx, outcome):
 
 @given("I have reopened the item")
 def _have_reopened(ctx):
-    rc, out, err = ctx["h"].run("set", ctx["item"], "--state", "in_progress")
+    rc, out, err = ctx["h"].run("reopen", ctx["item"])
     assert rc == 0, err
 
 
@@ -110,14 +110,13 @@ def _close(ctx, outcome):
 
 @when("I reopen the item")
 def _reopen_item(ctx):
-    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("set", ctx["item"], "--state", "in_progress")
-
+    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("reopen", ctx["item"])
 
 
 @when("I reopen the build step")
 def _reopen_build_step(ctx):
     step = _step_node(ctx, "build")
-    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("set", step.id, "--state", "in_progress")
+    ctx["rc"], ctx["out"], ctx["err"] = ctx["h"].run("reopen", step.id)
 
 
 @when("a step is filed directly against the item")
