@@ -20,7 +20,7 @@ REQUIRED_WITH_STATE = {
 }
 
 STATES_BY_TYPE = {
-    "item": frozenset({"active", ALIASES[State.RUNNING]}),
+    "item": frozenset({"active"}),
     "step": frozenset({ALIASES[State.WAITING], State.WAITING.value}),
 }
 

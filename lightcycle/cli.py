@@ -219,6 +219,10 @@ COMMAND_GROUPS = [
          "[--note \"<text>\"]",
          "end an item outright; --outcome is free-form (default \"closed\"), --disposition "
          "defaults to completed - refuses a step, use `done` for that"),
+        ("reopen", "<item>", "undo a close: clears its outcome and close time so its state "
+         "rolls up fresh from its children again - filing a step (or `lc set <item> --state "
+         "active`, if it never had any) is a separate, second action to actually resume it; "
+         "refuses a step (`--state ready` instead), a non-item node, or an item that isn't closed"),
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
@@ -805,6 +809,20 @@ def cmd_close(argv):
     return 0
 
 
+def cmd_reopen(argv):
+    a = build_parser(COMMANDS["reopen"]).parse_args(argv)
+    node_type = _container.store.type_of(a.id)
+    if node_type is None:
+        sys.stderr.write("unknown node '%s'\n" % a.id)
+        return 1
+    try:
+        ReopenItemUseCase(_container.store).execute(ReopenItemInput(item=a.id))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    return 0
+
+
 def cmd_trace(argv):
     a = build_parser(COMMANDS["trace"]).parse_args(argv)
     try:
@@ -1196,9 +1214,6 @@ def cmd_set(argv):
             return 0
         if a.state == ALIASES[State.WAITING]:
             _container.unblock_step_use_case().execute(UnblockInput(step=a.id))
-            return 0
-        if a.state == ALIASES[State.RUNNING]:
-            ReopenItemUseCase(_container.store).execute(ReopenItemInput(item=a.id))
             return 0
 
     except UseCaseError as e:

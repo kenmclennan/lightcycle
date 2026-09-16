@@ -369,7 +369,7 @@ def _item_wall_active(store, item, children, now):
     start = Duration.earliest_claim(store.history(child.id) for child in children)
     if start is None:
         return None
-    end = item.closed_at if item.state == State.DONE else now
+    end = item.closed_at if item.state == State.DONE and item.closed_at else now
     wall = (
         parse_timestamp(end) - parse_timestamp(start)
     ).total_seconds()

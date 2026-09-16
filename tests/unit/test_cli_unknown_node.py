@@ -58,8 +58,8 @@ class TestMainRefusesUnknownNodeId(unittest.TestCase):
         self.assertNotIn("step not found", err)
         self.assertEqual(err, "unknown node 'LC-NOPE-999'\n")
 
-    def test_set_state_in_progress_on_unknown_id_exits_cleanly(self):
-        rc, err = self._run(["set", "LC-999", "--state", "in_progress"])
+    def test_reopen_unknown_id_exits_cleanly(self):
+        rc, err = self._run(["reopen", "LC-999"])
         self.assertEqual(rc, 1)
         self.assertEqual(err, "unknown node 'LC-999'\n")
 
