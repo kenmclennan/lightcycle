@@ -20,6 +20,8 @@ class StatusBar(Horizontal):
         self,
         *,
         pool_running,
+        pool_transition_kind=None,
+        pool_transition_expired=False,
         breaker_is_open,
         breaker_is_probing,
         breaker_reset_at,
@@ -28,9 +30,17 @@ class StatusBar(Horizontal):
         upgrade_error=None,
         hold=None,
     ):
-        pool_glyph, pool_colour = FOOTER_GLYPHS["pool-running" if pool_running else "pool-stopped"]
-        pool = Text("%s %s" % (pool_glyph, "pool running" if pool_running else "pool not running"),
-                    style=COLOURS[pool_colour])
+        if pool_transition_kind == "start":
+            glyph_key = "pool-start-timed-out" if pool_transition_expired else "pool-starting"
+            label = "pool start timed out" if pool_transition_expired else "pool starting"
+        elif pool_transition_kind == "stop":
+            glyph_key = "pool-stop-timed-out" if pool_transition_expired else "pool-stopping"
+            label = "pool stop timed out" if pool_transition_expired else "pool stopping"
+        else:
+            glyph_key = "pool-running" if pool_running else "pool-stopped"
+            label = "pool running" if pool_running else "pool not running"
+        pool_glyph, pool_colour = FOOTER_GLYPHS[glyph_key]
+        pool = Text("%s %s" % (pool_glyph, label), style=COLOURS[pool_colour])
         pool.append(" (p)", style=COLOURS["dim"])
         self.query_one("#status-pool", Static).update(pool)
 

@@ -69,6 +69,8 @@ from lightcycle.ports.workers import RegistryUnreadable
 
 POLL_INTERVAL_SECONDS = 10
 FILTER_DEBOUNCE_SECONDS = 0.15
+POOL_TRANSITION_POLL_SECONDS = 1
+POOL_START_TIMEOUT_SECONDS = 15
 
 DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
 BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
@@ -1191,6 +1193,10 @@ class LightcycleApp(App):
         self._active_row_ids = ()
         self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
         self._active_glyph_timer = None
+        self._pool_transition_kind = None
+        self._pool_transition_expired = False
+        self._pool_transition_deadline = None
+        self._pool_transition_timer = None
         self._priority_layout_cache = None
         self._priority_row_budget_cache = None
         self._backlog_project_filter = None
@@ -1303,13 +1309,29 @@ class LightcycleApp(App):
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
 
+        self._refresh_status_bar()
+
+        if tick_start is not None:
+            wall_seconds = time.perf_counter() - tick_start
+            rss_kb = self._container.machine.self_rss()
+            self._container.worker_log.append_run_log(
+                _tui_metric_line(wall_seconds, rss_kb, self._now().timestamp())
+            )
+
+    def _refresh_status_bar(self) -> None:
         running = PoolRunningUseCase(self._container.lock).execute().running
+        if self._pool_transition_kind == "start" and running:
+            self._clear_pool_transition()
+        elif self._pool_transition_kind == "stop" and not running:
+            self._clear_pool_transition()
         breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
         hold = PoolHoldStatusUseCase(
             self._container.memory_gate_status, self._container.workers, self._container.config,
         ).execute(self._container.workers.pid_alive)
         self.screen_stack[0].query_one(StatusBar).report(
             pool_running=running,
+            pool_transition_kind=self._pool_transition_kind,
+            pool_transition_expired=self._pool_transition_expired,
             breaker_is_open=breaker.is_open,
             breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
@@ -1319,12 +1341,41 @@ class LightcycleApp(App):
             hold=hold,
         )
 
-        if tick_start is not None:
-            wall_seconds = time.perf_counter() - tick_start
-            rss_kb = self._container.machine.self_rss()
-            self._container.worker_log.append_run_log(
-                _tui_metric_line(wall_seconds, rss_kb, self._now().timestamp())
+    def _begin_pool_transition(self, kind) -> None:
+        self._pool_transition_kind = kind
+        self._pool_transition_expired = False
+        timeout = (
+            POOL_START_TIMEOUT_SECONDS if kind == "start"
+            else self._container.config.shutdown_grace_seconds()
+        )
+        self._pool_transition_deadline = self._now().timestamp() + timeout
+        self._refresh_status_bar()
+        self._sync_pool_transition_poll()
+
+    def _clear_pool_transition(self) -> None:
+        self._pool_transition_kind = None
+        self._pool_transition_expired = False
+        self._pool_transition_deadline = None
+        self._sync_pool_transition_poll()
+
+    def _sync_pool_transition_poll(self) -> None:
+        should_run = self._pool_transition_kind is not None and not self._pool_transition_expired
+        if should_run and self._pool_transition_timer is None:
+            self._pool_transition_timer = self.set_interval(
+                POOL_TRANSITION_POLL_SECONDS, self._tick_pool_transition
             )
+        elif not should_run and self._pool_transition_timer is not None:
+            self._pool_transition_timer.stop()
+            self._pool_transition_timer = None
+
+    def _tick_pool_transition(self) -> None:
+        self._refresh_status_bar()
+        if self._pool_transition_kind is None:
+            return
+        if self._now().timestamp() >= self._pool_transition_deadline:
+            self._pool_transition_expired = True
+            self._refresh_status_bar()
+        self._sync_pool_transition_poll()
 
     def _refresh_backlog_view(self) -> None:
         backlog_uc = BacklogUseCase(self._container.store, None)
@@ -1453,7 +1504,7 @@ class LightcycleApp(App):
     def action_toggle_pool(self) -> None:
         if not PoolRunningUseCase(self._container.lock).execute().running:
             self._start_pool()
-            self._refresh()
+            self._begin_pool_transition("start")
             return
         self.push_screen(
             PoolPromptScreen(
@@ -1468,7 +1519,7 @@ class LightcycleApp(App):
         if result != POOL_PROMPT_STOP:
             return
         StopPoolSignalUseCase(self._container.lock, self._container.workers).execute()
-        self._refresh()
+        self._begin_pool_transition("stop")
 
     def action_quit(self) -> None:
         if not PoolRunningUseCase(self._container.lock).execute().running:

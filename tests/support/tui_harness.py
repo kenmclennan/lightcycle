@@ -295,7 +295,9 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
 
 def _start_background_timers_paused(set_interval):
     def _set_interval(self, interval, callback=None, **kwargs):
-        if getattr(callback, "__name__", None) in ("_tick_active_glyph", "_refresh"):
+        if getattr(callback, "__name__", None) in (
+            "_tick_active_glyph", "_refresh", "_tick_pool_transition",
+        ):
             kwargs.setdefault("pause", True)
         return set_interval(self, interval, callback, **kwargs)
 
