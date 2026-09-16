@@ -7,7 +7,8 @@ from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.machine import MachinePort
 
 _SUBPROCESS_TIMEOUT = 2
-_MEMORY_PRESSURE_RE = re.compile(r"System-wide memory free percentage:\s*(\d+)%")
+_VM_STAT_PAGE_SIZE_RE = re.compile(r"page size of (\d+) bytes")
+_VM_STAT_COMPRESSOR_RE = re.compile(r"Pages occupied by compressor:\s*(\d+)\.")
 _PSI_AVG10_RE = re.compile(r"avg10=([\d.]+)")
 
 
@@ -52,14 +53,20 @@ def _pool_rss_kb(workers, rss_argv_for):
     return total
 
 
-def _macos_memory_pressure():
-    out = _run(["memory_pressure"])
+def _macos_memory_pressure(total_mem_kb):
+    if not total_mem_kb:
+        return None
+    out = _run(["vm_stat"])
     if out is None:
         return None
-    match = _MEMORY_PRESSURE_RE.search(out)
-    if not match:
+    page_size_match = _VM_STAT_PAGE_SIZE_RE.search(out)
+    compressor_match = _VM_STAT_COMPRESSOR_RE.search(out)
+    if not page_size_match or not compressor_match:
         return None
-    return 1.0 - (float(match.group(1)) / 100.0)
+    page_size = int(page_size_match.group(1))
+    compressor_pages = int(compressor_match.group(1))
+    compressor_kb = (compressor_pages * page_size) / 1024
+    return compressor_kb / total_mem_kb
 
 
 def _macos_total_memory_kb():
@@ -78,7 +85,7 @@ def _headroom_macos(workers):
     if total_mem_kb:
         pool_rss_kb = _pool_rss_kb(workers, lambda pgid: ["ps", "-o", "rss=", "-g", str(pgid)])
         pool_share = pool_rss_kb / total_mem_kb
-    return MachineHeadroom(system_pressure=_macos_memory_pressure(), pool_share=pool_share)
+    return MachineHeadroom(system_pressure=_macos_memory_pressure(total_mem_kb), pool_share=pool_share)
 
 
 def _proc_meminfo():
