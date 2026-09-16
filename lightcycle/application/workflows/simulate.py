@@ -136,13 +136,18 @@ class WorkflowSimulateUseCase:
         return item_id
 
     def _is_walk_terminal(self, graph, stage):
-        if graph.edges.get(stage):
+        if any((graph.edges.get(stage) or {}).values()):
             return False
         for name in _ADVANCING_HOOKS:
             for occ in graph.hook_occurrences(name):
                 if occ and occ[0] == stage:
                     return False
         return True
+
+    def _terminal_outcome(self, graph, stage):
+        declared = graph.edges.get(stage) or {}
+        targetless = sorted(o for o, t in declared.items() if t is None)
+        return targetless[0] if targetless else "done"
 
     def _claim_stage(self, pin, stage, walk_index, violations):
         role = self._flow.owner_of(stage, pin)
@@ -206,7 +211,7 @@ class WorkflowSimulateUseCase:
             return []
         if not self._is_walk_terminal(graph, node.stage):
             return []
-        return self._complete_terminal(item_id, pin, node, trace, walk_index,
+        return self._complete_terminal(item_id, pin, graph, node, trace, walk_index,
                                         phase_check=phase_check)
 
     def _close_item(self, item_id, reason):
@@ -214,7 +219,7 @@ class WorkflowSimulateUseCase:
             CloseItemInput(item=item_id, reason=reason, disposition="completed")
         )
 
-    def _complete_terminal(self, item_id, pin, node, trace, walk_index, phase_check=None):
+    def _complete_terminal(self, item_id, pin, graph, node, trace, walk_index, phase_check=None):
         resp = self._claim.execute(ClaimInput(role=node.role))
         if resp is None:
             fresh = self._store.get_node(node.id)
@@ -228,16 +233,17 @@ class WorkflowSimulateUseCase:
         if phase_check is not None:
             hook, gate, expected = phase_check
             violations += _phase_mismatch(walk_index, hook, gate, node.stage, expected, actual)
+        outcome = self._terminal_outcome(graph, node.stage)
         try:
-            self._complete.execute(CompleteInput(step=node.id, outcome="done"))
+            self._complete.execute(CompleteInput(step=node.id, outcome=outcome))
         except UseCaseError as e:
-            return violations + ["walk %d: %s[done] raised: %s" % (walk_index, node.stage, e)]
+            return violations + ["walk %d: %s[%s] raised: %s" % (walk_index, node.stage, outcome, e)]
         if not self._item_closed(item_id):
             return violations + [
                 "walk %d: terminal stage '%s' completed but the item did not close"
                 % (walk_index, node.stage)
             ]
-        trace.append("walk %d: %s[done] (terminal, item closed)" % (walk_index, node.stage))
+        trace.append("walk %d: %s[%s] (terminal, item closed)" % (walk_index, node.stage, outcome))
         return violations
 
     def _advance_edge(self, item_id, pin, graph, step_id, planned, trace, walk_index):
@@ -348,8 +354,9 @@ class WorkflowSimulateUseCase:
             walk_index, PR_FEEDBACK, planned.stage, planned.outcome,
             planned.expected_phase, actual,
         )
+        outcome = self._terminal_outcome(graph, feedback_step.stage)
         try:
-            self._complete.execute(CompleteInput(step=feedback_step.id, outcome="done"))
+            self._complete.execute(CompleteInput(step=feedback_step.id, outcome=outcome))
         except UseCaseError as e:
             return violations + [
                 "walk %d: completing rework step '%s' raised: %s"
