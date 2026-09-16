@@ -62,41 +62,51 @@ class TestMachineAdapterSelfRss(unittest.TestCase):
 
 
 class TestMacosMemoryPressure(unittest.TestCase):
-    def test_returns_free_fraction_inverted_from_the_reported_percentage(self):
+    def test_returns_compressor_occupancy_as_a_fraction_of_total_memory(self):
         stdout = (
-            b"the memory_pressure tool is depre...\n"
-            b"System-wide memory free percentage: 49%\n"
+            b"Mach Virtual Memory Statistics: (page size of 4096 bytes)\n"
+            b"Pages free:                               100.\n"
+            b"Pages occupied by compressor:             2000.\n"
         )
         with patch("lightcycle.adapters.machine.subprocess.run", return_value=_proc(stdout)):
-            self.assertAlmostEqual(_macos_memory_pressure(), 0.51)
+            self.assertAlmostEqual(_macos_memory_pressure(100000.0), 0.08)
+
+    def test_returns_none_when_total_mem_kb_is_none(self):
+        self.assertIsNone(_macos_memory_pressure(None))
+
+    def test_returns_none_when_total_mem_kb_is_zero(self):
+        self.assertIsNone(_macos_memory_pressure(0))
 
     def test_returns_none_when_the_subprocess_call_fails(self):
         with patch(
             "lightcycle.adapters.machine.subprocess.run",
             side_effect=OSError("no such command"),
         ):
-            self.assertIsNone(_macos_memory_pressure())
+            self.assertIsNone(_macos_memory_pressure(100000.0))
 
     def test_returns_none_when_the_subprocess_call_times_out(self):
         with patch(
             "lightcycle.adapters.machine.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd="memory_pressure", timeout=2),
+            side_effect=subprocess.TimeoutExpired(cmd="vm_stat", timeout=2),
         ):
-            self.assertIsNone(_macos_memory_pressure())
+            self.assertIsNone(_macos_memory_pressure(100000.0))
 
-    def test_returns_none_when_memory_pressure_exits_non_zero(self):
+    def test_returns_none_when_vm_stat_exits_non_zero(self):
         with patch(
             "lightcycle.adapters.machine.subprocess.run",
             return_value=_proc(b"", returncode=1),
         ):
-            self.assertIsNone(_macos_memory_pressure())
+            self.assertIsNone(_macos_memory_pressure(100000.0))
 
-    def test_returns_none_when_the_expected_line_is_absent(self):
-        with patch(
-            "lightcycle.adapters.machine.subprocess.run",
-            return_value=_proc(b"some other output\n"),
-        ):
-            self.assertIsNone(_macos_memory_pressure())
+    def test_returns_none_when_the_page_size_line_is_absent(self):
+        stdout = b"Pages occupied by compressor:             2000.\n"
+        with patch("lightcycle.adapters.machine.subprocess.run", return_value=_proc(stdout)):
+            self.assertIsNone(_macos_memory_pressure(100000.0))
+
+    def test_returns_none_when_the_compressor_line_is_absent(self):
+        stdout = b"Mach Virtual Memory Statistics: (page size of 4096 bytes)\n"
+        with patch("lightcycle.adapters.machine.subprocess.run", return_value=_proc(stdout)):
+            self.assertIsNone(_macos_memory_pressure(100000.0))
 
 
 class TestLinuxMemoryPressure(unittest.TestCase):
