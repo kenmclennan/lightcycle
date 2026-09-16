@@ -14,6 +14,7 @@ from lightcycle.adapters.tui.app import (
     FILTER_ROW_COUNT_GAP,
     FILTER_ROW_LABEL_WIDTH,
     POLL_INTERVAL_SECONDS,
+    POOL_START_TIMEOUT_SECONDS,
     PRIORITY_CONTINUATION_INDENT,
     BacklogFilterInput,
     BacklogTable,
@@ -1014,8 +1015,8 @@ class TestFooterUpgradeSegment(unittest.TestCase):
 
 
 class TestFooterPoolSegment(unittest.TestCase):
-    def _launch(self, **kwargs):
-        session = launch(make_test_container(**kwargs))
+    def _launch(self, now=None, **kwargs):
+        session = launch(make_test_container(**kwargs), now=now)
         self.addCleanup(session.close)
         return session
 
@@ -1044,6 +1045,100 @@ class TestFooterPoolSegment(unittest.TestCase):
 
         _, text, _ = _rendered_segment(session, "#status-pool")
         self.assertEqual(text, "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph)
+
+    def test_pressing_p_shows_starting_immediately_before_any_poll(self):
+        session = self._launch(lock=FakeLock(running=False))
+
+        session.press("p")
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+        self.assertEqual(text, "%s pool starting (p)" % FOOTER_GLYPHS["pool-starting"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+
+    def test_confirming_stop_shows_stopping_immediately(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        session = self._launch(lock=FakeLock(running=True), workers=workers)
+
+        session.press("p")
+        session.press("enter")
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+        self.assertEqual(text, "%s pool stopping (p)" % FOOTER_GLYPHS["pool-stopping"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+
+    def test_transition_resolves_on_next_fast_poll_and_stops_the_timer(self):
+        lock = FakeLock(running=False)
+        session = self._launch(lock=lock)
+
+        session.press("p")
+        session.run(session.app._tick_pool_transition)
+        session.pause()
+
+        _, text, _ = _rendered_segment(session, "#status-pool")
+        self.assertEqual(text, "%s pool starting (p)" % FOOTER_GLYPHS["pool-starting"].glyph)
+
+        lock.set_running(True)
+        session.run(session.app._tick_pool_transition)
+        session.pause()
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+        self.assertEqual(text, "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
+        self.assertIsNone(session.app._pool_transition_timer)
+
+    def test_start_transition_times_out_and_stops_the_timer(self):
+        clock = {"now": datetime.datetime(2026, 1, 1, 12, 0, 0)}
+        session = self._launch(lock=FakeLock(running=False), now=lambda: clock["now"])
+
+        session.press("p")
+        clock["now"] += datetime.timedelta(seconds=POOL_START_TIMEOUT_SECONDS)
+        session.run(session.app._tick_pool_transition)
+        session.pause()
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+        self.assertEqual(
+            text, "%s pool start timed out (p)" % FOOTER_GLYPHS["pool-start-timed-out"].glyph
+        )
+        self.assertEqual(_colour_of(style), COLOURS["red"].lower())
+        self.assertIsNone(session.app._pool_transition_timer)
+
+    def test_stop_transition_times_out_and_stops_the_timer(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        clock = {"now": datetime.datetime(2026, 1, 1, 12, 0, 0)}
+        session = self._launch(lock=FakeLock(running=True), workers=workers, now=lambda: clock["now"])
+
+        session.press("p")
+        session.press("enter")
+        clock["now"] += datetime.timedelta(seconds=10)
+        session.run(session.app._tick_pool_transition)
+        session.pause()
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+        self.assertEqual(
+            text, "%s pool stop timed out (p)" % FOOTER_GLYPHS["pool-stop-timed-out"].glyph
+        )
+        self.assertEqual(_colour_of(style), COLOURS["red"].lower())
+        self.assertIsNone(session.app._pool_transition_timer)
+
+    def test_late_resolution_after_timeout_still_clears_on_next_full_poll(self):
+        clock = {"now": datetime.datetime(2026, 1, 1, 12, 0, 0)}
+        lock = FakeLock(running=False)
+        session = self._launch(lock=lock, now=lambda: clock["now"])
+
+        session.press("p")
+        clock["now"] += datetime.timedelta(seconds=POOL_START_TIMEOUT_SECONDS)
+        session.run(session.app._tick_pool_transition)
+        session.pause()
+        self.assertIsNone(session.app._pool_transition_timer)
+
+        lock.set_running(True)
+        session.poll_tick()
+
+        _, text, style = _rendered_segment(session, "#status-pool")
+        self.assertEqual(text, "%s pool running (p)" % FOOTER_GLYPHS["pool-running"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["cyan"].lower())
 
 
 class TestFooterClaudeSegment(unittest.TestCase):

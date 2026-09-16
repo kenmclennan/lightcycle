@@ -47,6 +47,10 @@ FOOTER_GLYPHS = {
     "claude-probing": Glyph("◐", "amber"),
     "upgrade-available": Glyph("⬆", "amber"),
     "pool-holding": Glyph("◐", "amber"),
+    "pool-starting": Glyph("●", "amber"),
+    "pool-stopping": Glyph("○", "amber"),
+    "pool-start-timed-out": Glyph("●", "red"),
+    "pool-stop-timed-out": Glyph("○", "red"),
 }
 
 CURSOR_GLYPH = Glyph("❯", "cyan")
