@@ -135,5 +135,20 @@ class TestMemoryGateUseCase(unittest.TestCase):
         self.assertEqual(
             status.load(),
             {"cap": result.cap, "pool_share": result.pool_share,
-             "system_pressure": result.system_pressure},
+             "system_pressure": result.system_pressure,
+             "peak_worker_share": result.peak_worker_share},
         )
+
+    def test_resume_does_not_fire_when_headroom_is_unavailable_and_a_worker_is_suspended(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True,
+                 "suspended_at": 10, "log": "/logs/a.log"},
+            ],
+            alive_pids=(1,),
+        )
+        machine = FakeMachine(MachineHeadroom(system_pressure=None, pool_share=None))
+        result = _execute(workers, machine)
+
+        self.assertIsNone(result.resumed)
+        self.assertEqual(workers.resumed, [])

@@ -6,3 +6,4 @@ from typing import Optional
 class MachineHeadroom:
     system_pressure: Optional[float]
     pool_share: Optional[float]
+    peak_worker_share: Optional[float] = None

@@ -9,6 +9,7 @@ class MemoryGateResponse:
     cap: Optional[int]
     pool_share: Optional[float]
     system_pressure: Optional[float]
+    peak_worker_share: Optional[float] = None
     suspended: Optional[str] = None
     resumed: Optional[str] = None
 
@@ -26,6 +27,7 @@ class MemoryGateUseCase:
         headroom = self._machine.headroom(alive)
         pool_share = headroom.pool_share if headroom else None
         system_pressure = headroom.system_pressure if headroom else None
+        peak_worker_share = headroom.peak_worker_share if headroom else None
         cap = admission_cap(headroom, len(alive), self._config.memory_reserve_fraction())
 
         suspended = None
@@ -44,9 +46,10 @@ class MemoryGateUseCase:
             resumed = resume_target.spawnid
 
         self._memory_gate_status.save(
-            {"cap": cap, "pool_share": pool_share, "system_pressure": system_pressure}
+            {"cap": cap, "pool_share": pool_share, "system_pressure": system_pressure,
+             "peak_worker_share": peak_worker_share}
         )
         return MemoryGateResponse(
             cap=cap, pool_share=pool_share, system_pressure=system_pressure,
-            suspended=suspended, resumed=resumed,
+            peak_worker_share=peak_worker_share, suspended=suspended, resumed=resumed,
         )
