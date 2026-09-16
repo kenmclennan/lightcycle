@@ -309,14 +309,15 @@ NodeHubScreen.set_interval = _start_background_timers_paused(NodeHubScreen.set_i
 
 
 class TuiSession:
-    def __init__(self, container, now=None, upgrade_check=None, size=None):
+    def __init__(self, container, now=None, upgrade_check=None, size=None, settle=True):
         self.app = LightcycleApp(container, now=now, upgrade_check=upgrade_check or _no_upgrade_available)
         self.store = container.store
         self._loop = asyncio.new_event_loop()
         self._ctx = contextvars.copy_context()
         self._run_test_cm = self.app.run_test(size=size) if size else self.app.run_test()
         self.pilot = self._run(self._run_test_cm.__aenter__())
-        self.pause()
+        if settle:
+            self.pause()
 
     def _run(self, coro):
         task = self._loop.create_task(coro, context=self._ctx)
@@ -378,9 +379,10 @@ class TuiSession:
         self._loop.close()
 
 
-def launch(container, now=None, upgrade_check=None, size=None):
-    session = TuiSession(container, now=now, upgrade_check=upgrade_check, size=size)
-    session.pause()
+def launch(container, now=None, upgrade_check=None, size=None, settle=True):
+    session = TuiSession(container, now=now, upgrade_check=upgrade_check, size=size, settle=settle)
+    if settle:
+        session.pause()
     return session
 
 

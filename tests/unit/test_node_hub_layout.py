@@ -161,3 +161,16 @@ def test_pre_refresh_frame_shows_only_the_active_tabs_pane_and_no_empty_message(
             assert screen.query_one(empty_message_id).display is False
     finally:
         session.close()
+
+
+@pytest.mark.parametrize("tab", ["workflow", "log", "artifacts", "detail", "description", "cost"])
+def test_hub_tab_strip_composes_with_only_the_active_tab_marked(tab):
+    tabs = list(_PANE_WIDGET_BY_TAB)
+    strip = HubTabStrip(tabs, tab)
+
+    labels = {widget.id: widget for widget in strip.compose()}
+
+    for candidate_tab in tabs:
+        label = labels["hub-tab-%s" % candidate_tab]
+        assert label.has_class("tab-active") == (candidate_tab == tab)
+        assert label.has_class("tab-dim") == (candidate_tab != tab)

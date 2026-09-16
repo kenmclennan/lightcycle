@@ -813,13 +813,15 @@ class HubHeader(Vertical):
 
 
 class HubTabStrip(Horizontal):
-    def __init__(self, tabs, *args, **kwargs):
+    def __init__(self, tabs, active, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._tabs = tabs
+        self._active = active
 
     def compose(self) -> ComposeResult:
         for tab in self._tabs:
-            yield Static(_TAB_LABELS[tab], id="hub-tab-%s" % tab, classes="tab-dim")
+            classes = "tab-active" if tab == self._active else "tab-dim"
+            yield Static(_TAB_LABELS[tab], id="hub-tab-%s" % tab, classes=classes)
 
     def set_active(self, active) -> None:
         for tab in self._tabs:
@@ -1310,7 +1312,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
 
     def compose(self) -> ComposeResult:
         yield HubHeader(id="hub-header")
-        yield HubTabStrip(self._tab_order, id="hub-tabs")
+        yield HubTabStrip(self._tab_order, self._active_tab, id="hub-tabs")
         yield Static(id="pinned-ancestor")
         hierarchy_table = HierarchyPagingTable(id="hierarchy-table")
         hierarchy_table.display = self._active_tab == "workflow"

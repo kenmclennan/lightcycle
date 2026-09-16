@@ -930,6 +930,7 @@ class LightcycleApp(App):
 
     PriorityTable {{
         height: 1fr;
+        display: none;
     }}
 
     DataTable {{
@@ -1228,11 +1229,21 @@ class LightcycleApp(App):
 
     def compose(self) -> ComposeResult:
         yield TabStrip(id="tab-strip")
-        yield PriorityTable(id="priority-list")
+        on_priority = self._view == "priority"
+        showing_floor = on_priority and self._priority_floor and not self._priority_empty
+        priority_table = PriorityTable(id="priority-list")
+        priority_table.display = on_priority and not self._priority_empty and not showing_floor
+        yield priority_table
         yield Static(EMPTY_STATE_MESSAGE, id="empty-state")
-        yield Static(id="priority-list-floor")
-        yield BacklogView(id="backlog-view")
-        yield DoneView(id="done-view")
+        priority_floor = Static(id="priority-list-floor")
+        priority_floor.display = showing_floor
+        yield priority_floor
+        backlog_view = BacklogView(id="backlog-view")
+        backlog_view.display = self._view == "backlog"
+        yield backlog_view
+        done_view = DoneView(id="done-view")
+        done_view.display = self._view == "done"
+        yield done_view
         yield DashboardFooter(id="footer")
 
     def on_mount(self) -> None:
