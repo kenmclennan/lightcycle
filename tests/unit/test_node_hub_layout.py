@@ -1,7 +1,19 @@
+import pytest
+
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 from lightcycle.adapters.tui.footer import DashboardFooter
-from lightcycle.adapters.tui.hub import HierarchyPagingTable, HubHeader, HubTabStrip, NodeHubScreen
+from lightcycle.adapters.tui.hub import (
+    ArtifactsTable,
+    CostPane,
+    DescriptionPane,
+    DetailTable,
+    HierarchyPagingTable,
+    HubHeader,
+    HubTabStrip,
+    LogPane,
+    NodeHubScreen,
+)
 from tests.support.step_factory import create_owned_step
 
 
@@ -112,5 +124,40 @@ def test_backlog_footer_status_and_shortcut_lines_are_painted():
         shortcut_text = _rendered_row_text(session, shortcut_bar)
         assert "pool" in status_text
         assert "filter" in shortcut_text
+    finally:
+        session.close()
+
+
+_PANE_WIDGET_BY_TAB = {
+    "workflow": HierarchyPagingTable,
+    "log": LogPane,
+    "artifacts": ArtifactsTable,
+    "detail": DetailTable,
+    "description": DescriptionPane,
+    "cost": CostPane,
+}
+
+_EMPTY_MESSAGE_IDS = ("#hub-log-empty", "#hub-artifacts-empty", "#hub-description-empty", "#hub-cost-empty")
+
+
+@pytest.mark.parametrize("tab", ["workflow", "log", "artifacts", "detail", "description", "cost"])
+def test_pre_refresh_frame_shows_only_the_active_tabs_pane_and_no_empty_message(tab):
+    store = FakeStore()
+    if tab in ("log", "detail"):
+        item = store.create_item("Item", "a description")
+        node_id = store.create_step(step="build", role="agent", parent=item)
+    else:
+        node_id = store.create_item("Item", "a description")
+    session = launch(make_test_container(store=store))
+    try:
+        screen = NodeHubScreen(session.app.container, node_id, session.app._now, initial_tab=tab)
+        session.run(lambda: session.app.push_screen(screen))
+
+        for candidate_tab, widget_cls in _PANE_WIDGET_BY_TAB.items():
+            widget = screen.query_one(widget_cls)
+            assert widget.display == (candidate_tab == tab)
+
+        for empty_message_id in _EMPTY_MESSAGE_IDS:
+            assert screen.query_one(empty_message_id).display is False
     finally:
         session.close()

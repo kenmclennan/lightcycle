@@ -1221,6 +1221,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     #hub-log-empty, #hub-artifacts-empty, #hub-description-empty, #hub-cost-empty {{
         content-align: center middle;
         height: 1fr;
+        display: none;
         color: {COLOURS["dim"]};
     }}
     #hierarchy-floor, #artifacts-floor, #detail-floor, #cost-floor {{
@@ -1256,7 +1257,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         node = container.store.get_node(node_id)
         self._node_type = node.type
         self._tab_order = _tab_order(node)
-        self._active_tab = None
+        self._active_tab = self._forced_initial_tab or landing_tab(node)
         self._last_hierarchy_shape = None
         self._last_rows = []
         self._last_multi_pass = False
@@ -1311,20 +1312,36 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         yield HubHeader(id="hub-header")
         yield HubTabStrip(self._tab_order, id="hub-tabs")
         yield Static(id="pinned-ancestor")
-        yield HierarchyPagingTable(id="hierarchy-table")
+        hierarchy_table = HierarchyPagingTable(id="hierarchy-table")
+        hierarchy_table.display = self._active_tab == "workflow"
+        yield hierarchy_table
         yield Static(id="hierarchy-floor")
-        yield LogPane(id="hub-log-view", highlight=False, markup=False)
+        log_pane = LogPane(id="hub-log-view", highlight=False, markup=False)
+        log_pane.display = self._active_tab == "log"
+        yield log_pane
         yield Static(LOG_NO_STREAM_MESSAGE, id="hub-log-empty")
-        yield ArtifactsTable(id="hub-artifacts-table")
+        artifacts_table = ArtifactsTable(id="hub-artifacts-table")
+        artifacts_table.display = self._active_tab == "artifacts"
+        yield artifacts_table
         yield Static(id="artifacts-floor")
         yield Static(ARTIFACTS_EMPTY_MESSAGE, id="hub-artifacts-empty")
         yield Static(id="hub-artifacts-toast")
-        yield DetailTable(id="hub-detail-table")
+        detail_table = DetailTable(id="hub-detail-table")
+        detail_table.display = self._active_tab == "detail"
+        yield detail_table
         yield Static(id="detail-floor")
         yield Static(id="hub-detail-toast")
-        yield DescriptionPane(id="hub-description-view", highlight=False, markup=False, wrap=True, auto_scroll=False)
+        description_pane = DescriptionPane(
+            id="hub-description-view", highlight=False, markup=False, wrap=True, auto_scroll=False
+        )
+        description_pane.display = self._active_tab == "description"
+        yield description_pane
         yield Static(DESCRIPTION_EMPTY_MESSAGE, id="hub-description-empty")
-        yield CostPane(id="hub-cost-view", highlight=False, markup=False, wrap=False, auto_scroll=False, min_width=0)
+        cost_pane = CostPane(
+            id="hub-cost-view", highlight=False, markup=False, wrap=False, auto_scroll=False, min_width=0
+        )
+        cost_pane.display = self._active_tab == "cost"
+        yield cost_pane
         yield Static(id="cost-floor")
         yield Static(id="hub-cost-empty")
         yield DashboardFooter(id="hub-footer", shortcuts=HUB_SHORTCUTS)
@@ -1341,7 +1358,6 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         detail_table.show_header = False
         store = self._container.store
         node = store.get_node(self._node_id)
-        self._active_tab = self._forced_initial_tab or landing_tab(node)
         self._hierarchy_target_id = _hierarchy_default_row_id(store, node)
         self._setup_log_tab()
         self.app.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
