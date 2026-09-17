@@ -184,7 +184,7 @@ def _sweep_temp_roots():
 
 
 class HermeticTuiConfig(Config):
-    def __init__(self, autostart_pool=False, tui_metrics=False):
+    def __init__(self, autostart_pool=False, tui_metrics=False, upgrade_check_seconds=3600):
         root = _tracked_mkdtemp()
         home = os.path.join(root, "home")
         os.makedirs(home)
@@ -192,6 +192,7 @@ class HermeticTuiConfig(Config):
         seeded = dict(_SEED_KEYS)
         seeded["tui-autostart-pool"] = "true" if autostart_pool else "false"
         seeded["tui-metrics"] = "true" if tui_metrics else "false"
+        seeded["tui-upgrade-check-seconds"] = str(upgrade_check_seconds)
         seeded["projects"] = os.path.join(root, "projects")
         seeded["specs"] = os.path.join(root, "specs")
         seeded["backups-dir"] = os.path.join(root, "backups-dir")
@@ -268,9 +269,12 @@ def assert_hermetic(container):
 def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=None,
                          launcher=None, git=None, spawner=None, github=None, backup=None,
                          workflow_bundle=None, worker_log=None, autostart_pool=False,
-                         machine=None, memory_gate_status=None, tui_metrics=False):
+                         machine=None, memory_gate_status=None, tui_metrics=False,
+                         upgrade_check_seconds=3600):
     fs_double = fs or FakeFs()
-    config = HermeticTuiConfig(autostart_pool=autostart_pool, tui_metrics=tui_metrics)
+    config = HermeticTuiConfig(
+        autostart_pool=autostart_pool, tui_metrics=tui_metrics,
+        upgrade_check_seconds=upgrade_check_seconds)
     store_double = store
     if store_double is None:
         store_double = FakeStore()
@@ -305,7 +309,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
 def _start_background_timers_paused(set_interval):
     def _set_interval(self, interval, callback=None, **kwargs):
         if getattr(callback, "__name__", None) in (
-            "_tick_active_glyph", "_refresh", "_tick_pool_transition",
+            "_tick_active_glyph", "_refresh", "_tick_pool_transition", "_start_upgrade_check",
         ):
             kwargs.setdefault("pause", True)
         return set_interval(self, interval, callback, **kwargs)
@@ -348,6 +352,7 @@ class TuiSession:
 
     def pause(self):
         self._run(self.pilot.pause())
+        self._run(self.app.workers.wait_for_complete())
         owners = self._glyph_timer_owners()
         for owner in owners:
             owner._active_glyph_timer.pause()
@@ -355,6 +360,11 @@ class TuiSession:
 
     def poll_tick(self):
         self.run(self.app._refresh)
+        self.pause()
+
+    def check_upgrade_tick(self):
+        self.run(self.app._start_upgrade_check)
+        self._run(self.app.workers.wait_for_complete())
         self.pause()
 
     def pause_for(self, seconds):

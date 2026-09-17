@@ -26,6 +26,7 @@ _ENV_OVERRIDE_VARS = {
     "retro-interval-reflections": "LC_RETRO_INTERVAL_REFLECTIONS",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
     "tui-metrics": "LC_TUI_METRICS",
+    "tui-upgrade-check-seconds": "LC_TUI_UPGRADE_CHECK_SECONDS",
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
@@ -76,6 +77,7 @@ _SEED_KEYS = [
     ("max-title-length", "72"),
     ("tui-autostart-pool", "false"),
     ("tui-metrics", "false"),
+    ("tui-upgrade-check-seconds", "3600"),
     ("personal-origin", ""),
     ("price-sonnet-input-per-mtok", "2.00"),
     ("price-sonnet-output-per-mtok", "10.00"),
@@ -409,6 +411,12 @@ class Config:
         if env is not None:
             return env
         return self._required_bool("tui-metrics")
+
+    def tui_upgrade_check_seconds(self):
+        env = self._env_int("LC_TUI_UPGRADE_CHECK_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("tui-upgrade-check-seconds")
 
     def worker_history(self):
         env = self._env_int("LC_WORKER_HISTORY", None)
