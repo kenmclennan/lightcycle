@@ -37,6 +37,18 @@ class TestOutstandingThreads(unittest.TestCase):
 
         self.assertEqual(outstanding_threads([reply, root]), [reply])
 
+    def test_a_marked_reply_does_not_clear_the_rest_of_its_thread(self):
+        root = Comment(
+            author="alice", body="please fix X and Y", is_top_level=False,
+            id="c1", in_reply_to_id=None, created_at=1000.0,
+        )
+        marked_reply = Comment(
+            author="bob", body=LC_MARKER + " done", is_top_level=False,
+            id="c2", in_reply_to_id="c1", created_at=2000.0,
+        )
+
+        self.assertEqual(outstanding_threads([root, marked_reply]), [root])
+
 
 class TestIsBot(unittest.TestCase):
     def test_bot_suffixed_login_is_a_bot(self):
@@ -92,23 +104,19 @@ class TestReviewHasSignal(unittest.TestCase):
 
 
 class TestOutstandingReviews(unittest.TestCase):
-    def test_a_review_with_signal_and_no_later_marked_reply_is_outstanding(self):
+    def test_a_review_with_signal_is_outstanding(self):
         review = Review(author="alice", body="", created_at=1.0, state="CHANGES_REQUESTED")
 
-        self.assertEqual(outstanding_reviews([review], []), [review])
+        self.assertEqual(outstanding_reviews([review]), [review])
 
-    def test_a_marked_review_is_not_outstanding(self):
+    def test_a_review_marking_its_own_body_is_still_outstanding(self):
         review = Review(
             author="alice", body=LC_MARKER + " done", created_at=1.0, state="CHANGES_REQUESTED"
         )
 
-        self.assertEqual(outstanding_reviews([review], []), [])
+        self.assertEqual(outstanding_reviews([review]), [review])
 
-    def test_a_later_marked_comment_clears_an_earlier_review(self):
+    def test_a_later_marked_comment_does_not_clear_an_earlier_review(self):
         review = Review(author="alice", body="", created_at=1.0, state="CHANGES_REQUESTED")
-        marked = Comment(
-            author="bob", body=LC_MARKER + " handled", is_top_level=True,
-            id="c1", created_at=2.0,
-        )
 
-        self.assertEqual(outstanding_reviews([review], [marked]), [])
+        self.assertEqual(outstanding_reviews([review]), [review])

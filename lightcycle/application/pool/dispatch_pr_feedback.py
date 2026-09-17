@@ -57,20 +57,26 @@ class DispatchPrFeedbackUseCase:
             self._note_gh_read_failure(step.id, failure)
             return []
 
+        feedback_run = run_of(self._store, self._flow_service, step)
+        dispatched_through = _epoch(feedback_run.comments_dispatched_through) if feedback_run \
+            else 0.0
+
         allowlist = flow.step_def(step.stage).review_bot_allowlist
-        items = [c for c in outstanding_threads(inline) if eligible(c.author, allowlist)]
+        items = [
+            c for c in outstanding_threads(inline)
+            if eligible(c.author, allowlist) and c.created_at > dispatched_through
+        ]
         items += [
-            r for r in outstanding_reviews(reviews, top_level + inline) if r.author in allowlist
+            r for r in outstanding_reviews(reviews)
+            if r.author in allowlist and r.created_at > dispatched_through
         ]
 
         mention_token = flow.step_def(step.stage).mention_token
         if mention_token:
-            feedback_run = run_of(self._store, self._flow_service, step)
-            watermark = _epoch(feedback_run.comments_handled_through) if feedback_run else 0.0
             items += [
                 c for c in top_level
                 if LC_MARKER not in c.body and not is_bot(c.author)
-                and mention_token in c.body and c.created_at > watermark
+                and mention_token in c.body and c.created_at > dispatched_through
             ]
 
         return items

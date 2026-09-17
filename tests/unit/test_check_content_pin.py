@@ -551,4 +551,54 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("b.py", node.park.needs)
         self.assertIn("could not read", node.park.reason.lower())
 
+    def test_rework_decision_marker_authorizes_its_own_path(self):
+        comment = Comment(
+            author="review-code",
+            body=LC_MARKER + "<!-- lc:decision=rework -->",
+            is_top_level=False,
+            path="b.py",
+            created_at=100.0,
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "agent")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(self._pin(store, item), "sha2")
+
+    def test_answer_decision_marker_naming_the_file_does_not_authorize_it(self):
+        comment = Comment(
+            author="review-code",
+            body=LC_MARKER + "<!-- lc:decision=answer -->" + " no need to touch b.py",
+            is_top_level=False,
+            path="b.py",
+            created_at=100.0,
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
 
