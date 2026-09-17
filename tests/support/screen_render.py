@@ -669,6 +669,14 @@ def _stats_historical_day(size):
     return session
 
 
+def _stats_stacked(size):
+    session = _launch(_stats_store(), size=(40, size[1]))
+    session.press("tab")
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
 def _hub_hierarchy(size):
     store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="workflow")
@@ -1201,6 +1209,7 @@ SCREENS = {
     "stats#today": _stats_today,
     "stats#day-picker": _stats_day_picker,
     "stats#historical-day": _stats_historical_day,
+    "stats#stacked": _stats_stacked,
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-engine-active": _hub_workflow_engine_active,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
