@@ -2,6 +2,7 @@ import argparse
 import datetime
 import sys
 
+from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
@@ -618,6 +619,56 @@ def _done_day_filtered(size):
     return session
 
 
+def _stats_store():
+    store = DemoStore(now=lambda: NOW.isoformat())
+    lc273 = store.item("LC-273", "Row title repeats the step name", project="lightcycle")
+    step273 = store.step("LC-273.1", step="write-code", role="agent", parent=lc273)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step273], 600)
+    store.record_usage(step273, 1000, 200, 0, 0, 2.91, "list", None)
+    store.complete_node(step273, "done")
+    store.complete_node(lc273, "merged", disposition="completed")
+    store._records[lc273]["closed_at"] = _at(60)
+
+    lc275 = store.item("LC-275", "Active glyph unreadable at terminal size", project="lightcycle")
+    store.complete_node(lc275, "merged", disposition="aborted")
+    store._records[lc275]["closed_at"] = "2025-12-31T09:30:00+00:00"
+
+    aud1 = store.item("AUD-1", "Quarterly review of recent audits", project="lightcycle")
+    store.complete_node(aud1, "merged", disposition="completed")
+    store._records[aud1]["closed_at"] = _at(30)
+    store.label_add(aud1, RETRO_ORIGIN_LABEL)
+
+    lc277 = store.item("LC-277", "Human-facing step display names", project="lightcycle")
+    parked = store.step("LC-277.1", step="scope-and-code", role="agent", parent=lc277)
+    route_to_human(store, parked, "which display convention should win here")
+
+    store.add_project("kenmclennan/lightcycle")
+    return store
+
+
+def _stats_today(size):
+    session = _launch(_stats_store(), size=size)
+    session.press("tab")
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
+def _stats_day_picker(size):
+    session = _stats_today(size)
+    session.press("d")
+    return session
+
+
+def _stats_historical_day(size):
+    session = _stats_today(size)
+    session.app._stats_day = datetime.date(2025, 12, 31)
+    session.run(session.app._refresh_stats_view)
+    session.pause()
+    return session
+
+
 def _hub_hierarchy(size):
     store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, size=size), scan, tab="workflow")
@@ -1147,6 +1198,9 @@ SCREENS = {
     "done#with-cost": _done_with_cost,
     "done#day-picker": _done_day_picker,
     "done#day-filtered": _done_day_filtered,
+    "stats#today": _stats_today,
+    "stats#day-picker": _stats_day_picker,
+    "stats#historical-day": _stats_historical_day,
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-engine-active": _hub_workflow_engine_active,
     "hub#workflow-stacked": _hub_hierarchy_stacked,

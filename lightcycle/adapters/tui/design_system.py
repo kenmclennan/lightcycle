@@ -146,6 +146,13 @@ DONE_SEARCH_EMPTY_SHORTCUTS = (
     ("q", "quit"),
 )
 
+STATS_SHORTCUTS = (
+    ("d", "day"),
+    ("enter/→", "open in done"),
+    ("[/tab]", "prev/next tab"),
+    ("q", "quit"),
+)
+
 HUB_SHORTCUTS = (
     ("[/]", "switch tab"),
     ("↑↓", "scroll"),

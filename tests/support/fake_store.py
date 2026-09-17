@@ -652,6 +652,12 @@ class FakeStore(StorePort):
     def history(self, tid):
         return list(self._history.get(tid, []))
 
+    def waiting_history(self):
+        return [
+            (node_id, ts) for node_id, entries in self._history.items()
+            for state, ts in entries if state == str(State.WAITING)
+        ]
+
     def create_step(self, *, step=None, role=None, parent=None, deps=None,
                     id=None):
         if parent is None:

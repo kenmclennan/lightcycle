@@ -987,6 +987,19 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         self.assertEqual(s.history(tid), [])
 
+    def test_waiting_history_returns_only_waiting_state_rows_across_all_nodes(self):
+        s = self.make_store()
+        parked = self._step(s, "parked", role="agent")
+        s.reassign(parked, "human")
+        completed = self._step(s, "completed", role="agent")
+        s.claim_ready("agent")
+        s.complete_node(completed, "done")
+
+        rows = s.waiting_history()
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], parked)
+
     def test_every_live_write_path_stamps_from_the_injected_clock_not_the_wall_clock(self):
         sentinel = "SENTINEL-1999-01-01T00:00:00"
         s = self.make_store(now=lambda: sentinel)

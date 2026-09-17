@@ -345,6 +345,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def waiting_history(self):
+        pass
+
+    @abstractmethod
     def nodes_closed_since(self, since_date):
         pass
 

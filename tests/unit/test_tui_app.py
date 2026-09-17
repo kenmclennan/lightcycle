@@ -28,9 +28,11 @@ from lightcycle.adapters.tui.app import (
     PriorityTable,
     ProjectFilterPicker,
     ShortcutBar,
+    StatsView,
     StatusBar,
     _tui_metric_line,
 )
+from lightcycle.adapters.tui import app as tui_app_module
 from lightcycle.adapters.tui.design_system import (
     BACKLOG_EMPTY_SHORTCUTS,
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
@@ -48,6 +50,7 @@ from lightcycle.adapters.tui.design_system import (
     FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
     STATE_GLYPHS,
+    STATS_SHORTCUTS,
 )
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
@@ -382,6 +385,9 @@ class TestActiveGroup(unittest.TestCase):
 
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
+
+        session.press("tab")
+        self.assertIsNone(session.app._active_glyph_timer)
 
         session.press("tab")
         self.assertIsNone(session.app._active_glyph_timer)
@@ -1382,15 +1388,26 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_bracket_backward_wraps_to_done(self):
+    def test_bracket_backward_wraps_to_stats(self):
         session = self._launch()
 
         session.press("[")
 
-        self.assertTrue(session.app.query_one(DoneView).display)
+        self.assertTrue(session.app.query_one(StatsView).display)
         self.assertFalse(session.app.query_one(PriorityTable).display)
-        self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
+        self.assertIn("tab-active", session.app.query_one("#tab-stats").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
+
+    def test_bracket_backward_twice_reaches_done(self):
+        session = self._launch()
+
+        session.press("[")
+        session.press("[")
+
+        self.assertTrue(session.app.query_one(DoneView).display)
+        self.assertFalse(session.app.query_one(StatsView).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-stats").classes)
 
     def test_bracket_forward_then_backward_returns_to_priority_list(self):
         session = self._launch()
@@ -1414,18 +1431,34 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-backlog").classes)
 
-    def test_tab_a_third_time_returns_to_priority_list(self):
+    def test_tab_a_third_time_shows_stats(self):
         session = self._launch()
 
         session.press("tab")
         session.press("tab")
         session.press("tab")
 
+        self.assertTrue(session.app.query_one(StatsView).display)
         self.assertFalse(session.app.query_one(BacklogView).display)
         self.assertFalse(session.app.query_one(DoneView).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-stats").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-done").classes)
+
+    def test_tab_a_fourth_time_returns_to_priority_list(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+
+        self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(DoneView).display)
+        self.assertFalse(session.app.query_one(StatsView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-backlog").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-done").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-stats").classes)
 
 
 class TestBacklogPicker(unittest.TestCase):
@@ -1717,6 +1750,7 @@ class TestBacklogFooter(unittest.TestCase):
         store.create_item("todo item", "a description")
         session = self._launch(store)
 
+        session.press("tab")
         session.press("tab")
         session.press("tab")
 
@@ -2141,7 +2175,7 @@ class TestDoneTabSwitch(unittest.TestCase):
         self.assertFalse(session.app.query_one(PriorityTable).display)
         self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
 
-    def test_three_presses_returns_to_priority(self):
+    def test_three_presses_shows_stats(self):
         session = self._launch()
 
         session.press("tab")
@@ -2149,6 +2183,19 @@ class TestDoneTabSwitch(unittest.TestCase):
         session.press("tab")
 
         self.assertFalse(session.app.query_one(DoneView).display)
+        self.assertTrue(session.app.query_one(StatsView).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-stats").classes)
+
+    def test_four_presses_returns_to_priority(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+
+        self.assertFalse(session.app.query_one(DoneView).display)
+        self.assertFalse(session.app.query_one(StatsView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
 
 
@@ -2721,6 +2768,289 @@ class TestDoneDayPicker(unittest.TestCase):
         session.press("d")
 
         self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
+
+
+def _launch_stats(store, **kwargs):
+    session = launch(make_test_container(store=store, **kwargs))
+    session.press("tab")
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
+def _stats_lines(session):
+    widget = session.app.query_one("#stats-figures", Static)
+    return ["".join(seg.text for seg in widget.render_line(i)).rstrip() for i in range(5)]
+
+
+def _spy_waiting_history_calls(store):
+    calls = {"n": 0}
+    original = store.waiting_history
+
+    def counted():
+        calls["n"] += 1
+        return original()
+
+    store.waiting_history = counted
+    return calls
+
+
+class _CountingStatsUseCase:
+    def __init__(self):
+        self.calls = 0
+
+    def patcher(self):
+        real_execute = tui_app_module.StatsUseCase.execute
+        counts = self
+
+        def counted(self_uc, input):
+            counts.calls += 1
+            return real_execute(self_uc, input)
+
+        return patch.object(tui_app_module.StatsUseCase, "execute", counted)
+
+
+class TestStatsTabSwitch(unittest.TestCase):
+    def _launch(self, store=None):
+        session = launch(make_test_container(store=store or FakeStore()))
+        self.addCleanup(session.close)
+        return session
+
+    def test_three_presses_shows_stats_in_place_of_everything_else(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+
+        self.assertTrue(session.app.query_one(StatsView).display)
+        self.assertFalse(session.app.query_one(DoneView).display)
+        self.assertFalse(session.app.query_one(BacklogView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-stats").classes)
+
+    def test_shows_the_stats_shortcuts(self):
+        session = self._launch()
+
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, STATS_SHORTCUTS)
+
+
+class TestStatsFigures(unittest.TestCase):
+    def test_shows_five_figures_for_today_by_default(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        step = store.create_step(step="build", role="agent", parent=item)
+        store.claim_ready("agent")
+        store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+        store.complete_node(step, "done")
+        store.complete_node(item, "merged", disposition="completed")
+
+        session = _launch_stats(store)
+        self.addCleanup(session.close)
+
+        self.assertEqual(
+            _stats_lines(session),
+            [
+                "Closed: 1 (1 completed, 0 aborted)",
+                "Cost: $2.50",
+                "Backlog: 0 (+0 since yesterday)",
+                "Audits: 0",
+                "Escalations: 0",
+            ],
+        )
+
+    def test_zero_activity_day_still_renders_all_five_figures(self):
+        session = _launch_stats(FakeStore())
+        self.addCleanup(session.close)
+
+        self.assertEqual(
+            _stats_lines(session),
+            [
+                "Closed: 0 (0 completed, 0 aborted)",
+                "Cost: not recorded",
+                "Backlog: 0 (+0 since yesterday)",
+                "Audits: 0",
+                "Escalations: 0",
+            ],
+        )
+
+
+class TestStatsGatedOffThePoll(unittest.TestCase):
+    def test_polling_while_on_priority_never_computes_stats(self):
+        store = FakeStore()
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        self.assertEqual(session.app._view, "priority")
+
+        calls = _spy_waiting_history_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["n"], 0)
+
+    def test_polling_while_on_done_never_computes_stats(self):
+        store = FakeStore()
+        session = _launch_done(store)
+        self.addCleanup(session.close)
+        self.assertEqual(session.app._view, "done")
+
+        calls = _spy_waiting_history_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["n"], 0)
+
+    def test_switching_to_stats_triggers_exactly_one_execute_call(self):
+        store = FakeStore()
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        counter = _CountingStatsUseCase()
+
+        with counter.patcher():
+            session.press("tab")
+            session.press("tab")
+            session.press("tab")
+
+        self.assertEqual(counter.calls, 1)
+
+    def test_poll_ticks_while_on_stats_today_do_not_recompute(self):
+        store = FakeStore()
+        session = _launch_stats(store)
+        self.addCleanup(session.close)
+        counter = _CountingStatsUseCase()
+
+        with counter.patcher():
+            session.poll_tick()
+            session.poll_tick()
+            session.poll_tick()
+
+        self.assertEqual(counter.calls, 0)
+
+    def test_revisiting_a_past_day_does_not_recompute_but_today_always_does(self):
+        store = FakeStore()
+        older = store.create_item("older item", "a description")
+        store.complete_node(older, "merged")
+        store._records[older]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        session = launch(
+            make_test_container(store=store),
+            now=lambda: datetime.datetime(2026, 1, 2, 9, 0, 0),
+        )
+        self.addCleanup(session.close)
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+        app = session.app
+        day_a = datetime.date(2026, 1, 1)
+        today = datetime.date(2026, 1, 2)
+
+        app._stats_day = day_a
+        session.run(app._refresh_stats_view)
+        session.pause()
+
+        counter = _CountingStatsUseCase()
+        with counter.patcher():
+            app._stats_day = day_a
+            session.run(app._refresh_stats_view)
+            session.pause()
+        self.assertEqual(counter.calls, 0, "revisiting an already-computed past day should not recompute")
+
+        counter = _CountingStatsUseCase()
+        with counter.patcher():
+            app._stats_day = today
+            session.run(app._refresh_stats_view)
+            session.pause()
+            app._stats_day = today
+            session.run(app._refresh_stats_view)
+            session.pause()
+        self.assertEqual(counter.calls, 2, "today should always be recomputed on every trigger")
+
+
+class TestStatsDayPicker(unittest.TestCase):
+    def _launch_two_days(self):
+        store = FakeStore()
+        older = store.create_item("older item", "a description")
+        store.complete_node(older, "merged", disposition="completed")
+        store._records[older]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        newer = store.create_item("newer item", "a description")
+        store.complete_node(newer, "merged", disposition="completed")
+        store._records[newer]["closed_at"] = "2026-01-02T10:00:00+00:00"
+        session = launch(
+            make_test_container(store=store),
+            now=lambda: datetime.datetime(2026, 1, 3, 9, 0, 0),
+        )
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+        self.addCleanup(session.close)
+        return session, older, newer
+
+    def test_d_opens_the_day_picker_including_today_at_zero_count(self):
+        session, _older, _newer = self._launch_two_days()
+
+        session.press("d")
+
+        self.assertIsInstance(session.app.screen, ProjectFilterPicker)
+        head = session.app.screen.query_one("#picker-head")
+        self.assertEqual(_rendered_text(head).strip(), "Filter by day")
+        today_option = _picker_option_by_label(session.app.screen, "2026-01-03")
+        self.assertEqual(_rendered_text(today_option.query_one(".picker-option-count", Static)), "0")
+
+    def test_selecting_a_day_updates_the_figures_and_day_filter_bar(self):
+        session, older, newer = self._launch_two_days()
+
+        session.press("d")
+        session.press("down")
+        session.press("down")
+        session.press("enter")
+
+        self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
+        self.assertEqual(session.app._stats_day, datetime.date(2026, 1, 1))
+        left = session.app.query_one("#stats-day-filter-left", Static)
+        self.assertEqual(_rendered_text(left).strip(), "2026-01-01")
+        self.assertEqual(_stats_lines(session)[0], "Closed: 1 (1 completed, 0 aborted)")
+
+
+class TestStatsOpensDoneForDay(unittest.TestCase):
+    def test_enter_on_stats_opens_done_filtered_to_the_shown_day(self):
+        store = FakeStore()
+        older = store.create_item("older item", "a description")
+        store.complete_node(older, "merged")
+        store._records[older]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        newer = store.create_item("newer item", "a description")
+        store.complete_node(newer, "merged")
+        store._records[newer]["closed_at"] = "2026-01-02T10:00:00+00:00"
+        session = launch(
+            make_test_container(store=store),
+            now=lambda: datetime.datetime(2026, 1, 2, 9, 0, 0),
+        )
+        self.addCleanup(session.close)
+        session.press("tab")
+        session.press("tab")
+        session.press("tab")
+        session.press("d")
+        session.press("down")
+        session.press("enter")
+        self.assertEqual(session.app._stats_day, datetime.date(2026, 1, 1))
+
+        session.press("enter")
+
+        self.assertEqual(session.app._view, "done")
+        self.assertEqual(session.app._done_day_filter, datetime.date(2026, 1, 1))
+        table = session.app.query_one(DoneTable)
+        self.assertIn(row_key(session, older), table.rows)
+        self.assertNotIn(row_key(session, newer), table.rows)
+
+    def test_enter_is_a_no_op_outside_stats(self):
+        session = launch(make_test_container(store=FakeStore()))
+        self.addCleanup(session.close)
+
+        session.press("enter")
+
+        self.assertEqual(session.app._view, "priority")
 
 
 class TestPoolControl(unittest.TestCase):
