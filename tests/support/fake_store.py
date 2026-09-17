@@ -681,19 +681,13 @@ class FakeStore(StorePort):
                 self.dep_add(tid, dep)
         return tid
 
-    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
+    def edit_node(self, tid, *, title=None, description=None, project=None,
                   parent=None, workflow=None):
         b = self._get(tid)
         if title is not None:
             b["title"] = title
         if description is not None:
             b["description"] = description
-        if goal is not None:
-            cur = self.get_node(tid).goal
-            if cur:
-                self.label_remove(tid, "goal:%s" % cur)
-            if goal:
-                self.label_add(tid, "goal:%s" % goal)
         if project is not None:
             cur = self.get_node(tid).project
             if cur:
