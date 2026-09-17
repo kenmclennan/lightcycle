@@ -1,6 +1,6 @@
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import active_step_any, latest_step
-from lightcycle.domain.feedback import LC_MARKER
+from lightcycle.domain.feedback import LC_MARKER, parse_decision
 from lightcycle.domain.work import State
 from lightcycle.ports.github import ReadFailure
 
@@ -19,9 +19,20 @@ class CheckContentPinUseCase:
         )
         if failure is not None:
             return dropped, True
-        marked_bodies = [c.body for c in list(top_level) + list(inline) if LC_MARKER in c.body]
-        marked_bodies += [r.body for r in reviews if LC_MARKER in r.body]
-        unauthorized = {f for f in dropped if not any(f in body for body in marked_bodies)}
+        authorized = set()
+        for c in list(top_level) + list(inline):
+            if LC_MARKER not in c.body:
+                continue
+            decision = parse_decision(c.body)
+            if decision is None:
+                authorized |= {f for f in dropped if f in c.body}
+            elif decision == "rework" and c.path:
+                authorized.add(c.path)
+        for r in reviews:
+            if LC_MARKER in r.body and parse_decision(r.body) is None:
+                authorized |= {f for f in dropped if f in r.body}
+
+        unauthorized = {f for f in dropped if f not in authorized}
         return unauthorized, False
 
     def execute(self, item, pr_value, phase):

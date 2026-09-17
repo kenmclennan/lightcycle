@@ -1,4 +1,8 @@
+import re
+
 LC_MARKER = "<!-- lc -->"
+
+_DECISION_RE = re.compile(r"<!-- lc:decision=(\w+) -->")
 
 
 def is_bot(author):
@@ -14,13 +18,12 @@ def thread_key(comment):
 
 
 def outstanding_threads(comments):
-    marked_threads = {thread_key(c) for c in comments if LC_MARKER in c.body}
     latest = {}
     for c in sorted(comments, key=lambda c: c.created_at):
         if LC_MARKER in c.body:
             continue
         key = thread_key(c)
-        if key is None or key in marked_threads:
+        if key is None:
             continue
         latest[key] = c
     return list(latest.values())
@@ -34,15 +37,10 @@ def review_has_signal(review):
     return False
 
 
-def outstanding_reviews(reviews, comments):
-    marked_at = sorted(c.created_at for c in comments if LC_MARKER in c.body)
-    outstanding = []
-    for r in reviews:
-        if not review_has_signal(r):
-            continue
-        if LC_MARKER in r.body:
-            continue
-        if any(ts > r.created_at for ts in marked_at):
-            continue
-        outstanding.append(r)
-    return outstanding
+def outstanding_reviews(reviews):
+    return [r for r in reviews if review_has_signal(r)]
+
+
+def parse_decision(body):
+    m = _DECISION_RE.search(body)
+    return m.group(1) if m else None

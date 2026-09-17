@@ -261,7 +261,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         self.assertEqual(result.reworked, [item])
 
-    def test_threaded_comment_with_lc_reply_does_not_spawn(self):
+    def test_threaded_comment_with_lc_reply_still_spawns_until_dispatched(self):
         url = "https://github.com/x/y/pull/30-threaded"
         root = self._inline_comment(1200.0, cid="c1")
         reply = self._inline_comment(
@@ -272,7 +272,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         result = uc.execute()
 
-        self.assertEqual(result.reworked, [])
+        self.assertEqual(result.reworked, [item])
 
     def test_threaded_comment_with_later_unmarked_reply_records_reply_timestamp(self):
         url = "https://github.com/x/y/pull/30-threaded-live-reply"
@@ -356,7 +356,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
 
-    def test_lc_marked_review_does_not_trigger(self):
+    def test_lc_marked_review_still_triggers(self):
         url = "https://github.com/x/y/pull/37-review"
         marked = (
             1200.0,
@@ -372,9 +372,9 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         result = uc.execute()
 
-        self.assertEqual(result.reworked, [])
+        self.assertEqual(result.reworked, [item])
 
-    def test_marked_reply_after_review_clears_it(self):
+    def test_marked_reply_after_review_does_not_clear_it(self):
         url = "https://github.com/x/y/pull/37-review-replied"
         review = self._bot_review(1200.0)
         reply = self._mention_comment(
@@ -385,7 +385,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         result = uc.execute()
 
-        self.assertEqual(result.reworked, [])
+        self.assertEqual(result.reworked, [item])
 
     def test_approved_review_with_body_does_not_trigger(self):
         url = "https://github.com/x/y/pull/37-approved"
@@ -459,7 +459,6 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         uc.execute()
         spawned = self._spawned_feedback_steps(store, step)
         store.complete_node(spawned[0].id, "done")
-        store.replace_artifact(step, "feedback-watermark", "1500.0")
 
         result = uc.execute()
 
