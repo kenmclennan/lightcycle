@@ -1444,6 +1444,7 @@ class LightcycleApp(App):
         self._done_total = 0
         self._done_filtered_count = 0
         self._done_filter_timer = None
+        self._upgrade_check_timer = None
         self._done_cost_time_cache = {}
         self._stats_cache = {}
         self._stats_day = None
@@ -1490,10 +1491,14 @@ class LightcycleApp(App):
         table = self.query_one(PriorityTable)
         table.cursor_type = "row"
         table.show_header = False
-        self._upgrade_version, self._upgrade_error = self._check_upgrade()
+        self._start_upgrade_check()
         self.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self._refresh)
+        upgrade_check_interval = self._container.config.tui_upgrade_check_seconds()
+        if upgrade_check_interval > 0:
+            self._upgrade_check_timer = self.set_interval(
+                upgrade_check_interval, self._start_upgrade_check)
         if self._container.config.tui_autostart_pool():
             self._start_pool()
 
@@ -1509,6 +1514,24 @@ class LightcycleApp(App):
         response = UpgradeNoticeUseCase(
             self._container.config.version(), check=self._upgrade_check).execute()
         return response.remote, response.error
+
+    def _start_upgrade_check(self) -> None:
+        self.run_worker(
+            self._check_upgrade_worker, thread=True,
+            group="upgrade-check", exclusive=True, exit_on_error=False,
+        )
+
+    def _check_upgrade_worker(self) -> None:
+        version, error = self._check_upgrade()
+        self.call_from_thread(self._apply_upgrade_result, version, error)
+
+    def _apply_upgrade_result(self, version, error) -> None:
+        if version is not None or error is None:
+            self._upgrade_version = version
+            self._upgrade_error = error
+        elif self._upgrade_version is None:
+            self._upgrade_error = error
+        self._refresh_status_bar()
 
     def _refresh(self) -> None:
         metrics_enabled = self._container.config.tui_metrics()

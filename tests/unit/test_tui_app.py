@@ -1034,6 +1034,96 @@ class TestFooterUpgradeSegment(unittest.TestCase):
         self.assertNotEqual(version_text.strip(), "")
 
 
+class TestPeriodicUpgradeCheck(unittest.TestCase):
+    def _launch(self, upgrade_check=None, upgrade_check_seconds=3600):
+        session = launch(
+            make_test_container(upgrade_check_seconds=upgrade_check_seconds),
+            upgrade_check=upgrade_check,
+        )
+        self.addCleanup(session.close)
+        return session
+
+    def test_periodic_timer_is_scheduled_by_default(self):
+        session = self._launch()
+        self.assertIsNotNone(session.app._upgrade_check_timer)
+
+    def test_periodic_timer_is_not_scheduled_when_disabled(self):
+        session = self._launch(upgrade_check_seconds=0)
+        self.assertIsNone(session.app._upgrade_check_timer)
+
+    def test_startup_check_still_runs_when_periodic_is_disabled(self):
+        session = self._launch(
+            upgrade_check=lambda: UpgradeResponse(
+                current=__version__, remote="9.9.9", available=True, applied=False
+            ),
+            upgrade_check_seconds=0,
+        )
+        _, text, _ = _rendered_segment(session, "#status-upgrade")
+        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+
+    def test_periodic_recheck_updates_the_footer_from_empty_to_available(self):
+        results = iter([
+            UpgradeResponse(
+                current=__version__, remote=__version__, available=False, applied=False
+            ),
+            UpgradeResponse(current=__version__, remote="9.9.9", available=True, applied=False),
+        ])
+        session = self._launch(upgrade_check=lambda: next(results))
+
+        _, text, _ = _rendered_segment(session, "#status-upgrade")
+        self.assertEqual(text.strip(), "")
+
+        session.check_upgrade_tick()
+
+        _, text, _ = _rendered_segment(session, "#status-upgrade")
+        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+
+    def test_a_failed_periodic_recheck_leaves_a_standing_upgrade_notice_in_place(self):
+        results = iter([
+            UpgradeResponse(current=__version__, remote="9.9.9", available=True, applied=False),
+        ])
+
+        def _check():
+            try:
+                return next(results)
+            except StopIteration:
+                raise ConnectionError("network down")
+
+        session = self._launch(upgrade_check=_check)
+
+        _, text, _ = _rendered_segment(session, "#status-upgrade")
+        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+
+        session.check_upgrade_tick()
+
+        _, text, style = _rendered_segment(session, "#status-upgrade")
+        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+
+    def test_a_failed_periodic_recheck_is_shown_when_no_upgrade_is_currently_known(self):
+        results = iter([
+            UpgradeResponse(
+                current=__version__, remote=__version__, available=False, applied=False
+            ),
+        ])
+
+        def _check():
+            try:
+                return next(results)
+            except StopIteration:
+                raise ConnectionError("network down")
+
+        session = self._launch(upgrade_check=_check)
+
+        _, text, _ = _rendered_segment(session, "#status-upgrade")
+        self.assertEqual(text.strip(), "")
+
+        session.check_upgrade_tick()
+
+        _, text, _ = _rendered_segment(session, "#status-upgrade")
+        self.assertEqual(text.strip(), "upgrade check failed: network down")
+
+
 class TestFooterPoolSegment(unittest.TestCase):
     def _launch(self, now=None, **kwargs):
         session = launch(make_test_container(**kwargs), now=now)
