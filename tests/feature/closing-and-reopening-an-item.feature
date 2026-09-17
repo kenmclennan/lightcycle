@@ -56,14 +56,14 @@ Feature: Closing and reopening an item
     Then the item's outcome and close time are cleared
     And the item is backlogged
 
-  Scenario: Reopening a closed item whose old children are still done does not, by itself, change what it reports
+  Scenario: Reopening a closed item whose old children are still done rolls it back to the backlog
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item
     And the coder has completed the build step with outcome "done"
     And I have closed the item with outcome "shipped"
     When I reopen the item
     Then the item's outcome and close time are cleared
-    And the item is done
+    And the item is backlogged
 
   Scenario: Filing a new step under a reopened item reports it as ready immediately, before anyone claims the new step
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
@@ -75,14 +75,14 @@ Feature: Closing and reopening an item
     Then the item's outcome and close time are cleared
     And the item is ready
 
-  Scenario: Re-activating a reopened item through the normal activation path is refused
+  Scenario: Re-activating a reopened item whose old children are all done files a fresh entry step
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item
     And the coder has completed the build step with outcome "done"
     And I have closed the item with outcome "shipped"
     And I have reopened the item
     When I activate the item
-    Then the command is rejected
+    Then the item is ready
 
   Scenario: Reopening a step directly is refused, distinctly from reopening an item
     Given an item with workflow "lightcycle/spec-driven", with a spec attached

@@ -143,22 +143,6 @@ class TestStatLineItem(unittest.TestCase):
             "Done · 1 step · 30m (0s active)",
         )
 
-    def test_reopened_item_still_rolled_up_done_does_not_raise(self):
-        clock = {"now": "2026-01-01T10:00:00"}
-        store = FakeStore(now=lambda: clock["now"])
-        item = store.create_item("Item", "a description")
-        step = store.create_step(step="build", role="agent", parent=item)
-        store.claim_ready("agent")
-        store.complete_node(step, "done")
-        store.complete_node(item, "done")
-        store.reopen(item)
-        node = store.get_node(item)
-
-        self.assertEqual(node.state, State.DONE)
-        self.assertIsNone(node.closed_at)
-        _stat_line_item(store, node, store.children(item), _StubFlow(), "2026-01-01T10:30:00")
-
-
 class TestStatLineStepAgent(unittest.TestCase):
     def test_never_claimed_shows_phrase_only(self):
         store = FakeStore()

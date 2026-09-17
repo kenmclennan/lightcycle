@@ -221,8 +221,8 @@ COMMAND_GROUPS = [
          "defaults to completed - refuses a step, use `done` for that"),
         ("reopen", "<item>", "undo a close: clears its outcome and close time so its state "
          "rolls up fresh from its children again - filing a step (or `lc set <item> --state "
-         "active`, if it never had any) is a separate, second action to actually resume it; "
-         "refuses a step (`--state ready` instead), a non-item node, or an item that isn't closed"),
+         "active`) is a separate, second action to actually resume it; refuses a step "
+         "(`--state ready` instead), a non-item node, or an item that isn't closed"),
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),

@@ -31,8 +31,8 @@ class TestRollUp(unittest.TestCase):
     def test_no_children_is_backlogged(self):
         self.assertEqual(roll_up([]), State.BACKLOGGED)
 
-    def test_all_done_is_done(self):
-        self.assertEqual(roll_up([State.DONE, State.DONE]), State.DONE)
+    def test_all_done_is_backlogged(self):
+        self.assertEqual(roll_up([State.DONE, State.DONE]), State.BACKLOGGED)
 
     def test_all_queued_is_queued(self):
         self.assertEqual(roll_up([State.QUEUED, State.QUEUED]), State.QUEUED)

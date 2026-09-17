@@ -45,13 +45,14 @@ def _dangling_artifacts(n, by_id):
 
 
 def _stuck_state(item, children):
-    problems = []
-    if children and item.state == State.BACKLOGGED:
-        problems.append(
-            Problem("store", "backlogged but has %d step(s)" % len(children), item.id))
-    steps = [c for c in children if c.type == "step"]
-    if steps and item.state != State.DONE and all(s.state == State.DONE for s in steps):
-        problems.append(
-            Problem("store", "%s but all %d step(s) are done - never closed"
-                    % (item.state, len(steps)), item.id))
-    return problems
+    if not children:
+        return []
+    all_done = all(c.state == State.DONE for c in children)
+    if item.state == State.BACKLOGGED and not all_done:
+        return [Problem("store", "backlogged but has %d step(s)" % len(children), item.id)]
+    if item.state not in (State.DONE, State.BACKLOGGED) and all_done:
+        return [Problem(
+            "store", "%s but all %d step(s) are done - never closed"
+            % (item.state, len(children)), item.id
+        )]
+    return []
