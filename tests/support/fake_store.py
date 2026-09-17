@@ -682,7 +682,7 @@ class FakeStore(StorePort):
         return tid
 
     def edit_node(self, tid, *, title=None, description=None, project=None,
-                  parent=None, workflow=None):
+                  workflow=None):
         b = self._get(tid)
         if title is not None:
             b["title"] = title
@@ -694,8 +694,6 @@ class FakeStore(StorePort):
                 self.label_remove(tid, "project:%s" % cur)
             if project:
                 self.label_add(tid, "project:%s" % project)
-        if parent is not None:
-            b["parent"] = parent
         if workflow is not None:
             b["workflow"] = workflow
         return tid

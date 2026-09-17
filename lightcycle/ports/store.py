@@ -242,8 +242,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, description=None, attention=False):
+    def create_step(self, *, step=None, role=None, parent=None, deps=None, id=None):
         pass
 
     @abstractmethod
@@ -253,7 +252,7 @@ class StorePort(ABC):
 
     @abstractmethod
     def create_item(self, title, description, *, project=None, workflow=None,
-                    shortcode=None):
+                    id=None, shortcode=None):
         pass
 
     @abstractmethod
