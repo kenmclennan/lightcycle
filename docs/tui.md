@@ -40,7 +40,9 @@ Detail is a field list, in a fixed order, showing only fields that have a value.
 
 They lead it because they are what you reach for when a step is in trouble, and they are unambiguous from where the reader stands: a step belongs to exactly one phase run, and that run owns exactly one branch and one PR. The store normalises that - the PR lives on the phase run, not the step - and the view denormalises it back. The reader never has to know the difference.
 
-After PR and branch: stage, state, role, model, claimed_by, outcome, notes, then a parked step's needs, reason and tried, then its reflections.
+Right after branch comes worktree, when its repo can be resolved: the local checkout that branch actually lives in, derived rather than stored. Selecting it opens it in the configured editor (`lc config`'s `editor` key) rather than a browser - reviewing a build means being in that checkout, not just looking at its PR.
+
+After PR, branch and worktree: stage, state, role, model, claimed_by, outcome, notes, then a parked step's needs, reason and tried, then its reflections.
 
 A step can carry **more than one reflection** - they are artifacts, not a column, and a step that ran several times accumulates several. The first renders as `REFLECTION`; subsequent ones as `REFLECTION` under keys `reflection:2`, `reflection:3` and so on, so each is shown rather than the rest being silently dropped.
 

@@ -44,6 +44,36 @@ class TestOpenArtifactUseCase(unittest.TestCase):
         result = use_case.execute(OpenArtifactInput(kind="filepath", value="/specs/x.md"))
         self.assertFalse(result.success)
 
+    def test_editor_opens_via_the_launcher_when_the_path_exists(self):
+        fs = FakeFs(files={"/repo/.worktrees/x": b"x"})
+        launcher = FakeLauncher()
+        use_case = OpenArtifactUseCase(fs, launcher)
+        result = use_case.execute(
+            OpenArtifactInput(kind="editor", value="/repo/.worktrees/x", editor="vi")
+        )
+        self.assertTrue(result.success)
+        self.assertIn("/repo/.worktrees/x", result.message)
+        self.assertEqual(launcher.edited, ("vi", "/repo/.worktrees/x"))
+
+    def test_editor_that_no_longer_exists_never_calls_the_launcher(self):
+        launcher = FakeLauncher()
+        use_case = OpenArtifactUseCase(FakeFs(), launcher)
+        result = use_case.execute(
+            OpenArtifactInput(kind="editor", value="/repo/.worktrees/gone", editor="vi")
+        )
+        self.assertFalse(result.success)
+        self.assertIn("no longer exists", result.message)
+        self.assertIsNone(launcher.edited)
+
+    def test_editor_that_fails_to_launch_reports_failure_instead_of_raising(self):
+        fs = FakeFs(files={"/repo/.worktrees/x": b"x"})
+        launcher = FakeLauncher(edit_raises=FileNotFoundError("no such editor"))
+        use_case = OpenArtifactUseCase(fs, launcher)
+        result = use_case.execute(
+            OpenArtifactInput(kind="editor", value="/repo/.worktrees/x", editor="not-an-editor")
+        )
+        self.assertFalse(result.success)
+
 
 if __name__ == "__main__":
     unittest.main()

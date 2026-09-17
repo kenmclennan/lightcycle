@@ -3,16 +3,19 @@ Feature: The Detail tab
   beyond what the header or a workflow-tab row already shows. Its PR and branch
   lead, since that is what a human opening a step for review came for; both
   live on the step's phase run in storage, but the view shows them as
-  unambiguously the step's own, never naming "phase run" or "pass". After
-  them follow stage, state, role, model, claimed_by, session_id, outcome,
-  notes, park (needs / reason / tried), reflection, and watched_step. `tried` has never
-  been shown anywhere in the TUI before this tab. A field with nothing
-  recorded is omitted rather than shown blank. An item has no step record of
-  its own, so it has no Detail tab. A parked step can also be resumed from
-  here with a dedicated keypress, replacing the header's old copy-pasteable
-  resume command; it succeeds only when the step's stage is workflow-declared
-  agent-owned, and surfaces failure rather than crashing when it isn't. It
-  does nothing on a node that isn't a parked step.
+  unambiguously the step's own, never naming "phase run" or "pass". Right
+  after the branch, when its repo can be resolved, follows the worktree it was
+  built in - opening it, unlike the PR, hands it to the configured editor
+  rather than a browser. After them follow stage, state, role, model,
+  claimed_by, session_id, outcome, notes, park (needs / reason / tried),
+  reflection, and watched_step. `tried` has never been shown anywhere in the
+  TUI before this tab. A field with nothing recorded is omitted rather than
+  shown blank. An item has no step record of its own, so it has no Detail
+  tab. A parked step can also be resumed from here with a dedicated
+  keypress, replacing the header's old copy-pasteable resume command; it
+  succeeds only when the step's stage is workflow-declared agent-owned, and
+  surfaces failure rather than crashing when it isn't. It does nothing on a
+  node that isn't a parked step.
 
   Scenario: A step's PR and branch are shown first, ahead of every other field
     Given a step whose phase run has a branch and a PR
@@ -46,6 +49,26 @@ Feature: The Detail tab
     When I open its Detail tab
     Then no branch field is shown
     And no PR field is shown
+
+  Scenario: A step whose phase run has a branch in a resolvable repo also shows its worktree
+    Given a step whose phase run has a branch, in a resolvable repo
+    When I open its Detail tab
+    Then the worktree is shown
+
+  Scenario: A step with no repo artifact shows no worktree field, even with a branch
+    Given a step whose phase run has a branch, in an unresolvable repo
+    When I open its Detail tab
+    Then no worktree field is shown
+
+  Scenario Outline: Confirming a step's worktree opens it in the configured editor
+    Given a step whose phase run has a branch, in a resolvable repo, its Detail tab open, the worktree field selected
+    When <key> is pressed
+    Then the worktree opens in the editor
+
+    Examples:
+      | key   |
+      | Enter |
+      | →     |
 
   Scenario: The Detail tab shows the step's stage, state, role, and model
     Given a step with a stage, a state, a role, and a model

@@ -147,6 +147,25 @@ class TestWorktreePath(unittest.TestCase):
             os.path.join("/home/u/workspace/projects", "horde"),
         )
 
+    def test_path_for_run_matches_worktree_path_for_the_runs_own_phase(self):
+        item = self.store.create_item("Login feature", "a description")
+        self.store.add_project(
+            "acme/app", local_path=os.path.join("/home/u/workspace/projects", "app")
+        )
+        self.store.add_artifact(item, "repo", "app")
+        svc = WorktreeService(
+            self.store, git=None, fs=None,
+            config=_Cfg("/home/u/workspace/projects"), flow=_PhaseFlow("code"),
+        )
+        rid = plant_run(self.store, item, "code", branch="feat/app-code-login")
+        run = self.store.get_run(rid)
+
+        path = svc.path_for_run(run)
+
+        self.assertEqual(
+            path, os.path.join("/home/u/workspace/projects", "app", ".worktrees", "%s-code" % item)
+        )
+
     def test_two_phases_in_the_same_repo_get_distinct_worktrees_and_branches(self):
         item = self.store.create_item("Login feature", "a description")
         self.store.add_project(
