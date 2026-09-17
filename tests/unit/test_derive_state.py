@@ -54,8 +54,8 @@ class DeriveContainerStateTest(unittest.TestCase):
             role=None, child_states=child_states,
         )
 
-    def test_all_children_done_is_done(self):
-        self.assertEqual(self._item([State.DONE, State.DONE]), State.DONE)
+    def test_all_children_done_is_backlogged(self):
+        self.assertEqual(self._item([State.DONE, State.DONE]), State.BACKLOGGED)
 
     def test_some_children_queued_is_queued(self):
         self.assertEqual(self._item([State.DONE, State.QUEUED]), State.QUEUED)
@@ -79,9 +79,9 @@ class DeriveContainerStateTest(unittest.TestCase):
     def test_item_rolls_up_from_its_steps(self):
         s = derive_state(
             "item", closed=False, assignee=None, has_unresolved_deps=False, role=None,
-            child_states=[State.DONE],
+            child_states=[State.QUEUED],
         )
-        self.assertEqual(s, State.DONE)
+        self.assertEqual(s, State.QUEUED)
 
     def test_items_own_unresolved_dep_outranks_its_childrens_rollup(self):
         s = self._item([State.DONE, State.RUNNING, State.QUEUED], has_unresolved_deps=True)

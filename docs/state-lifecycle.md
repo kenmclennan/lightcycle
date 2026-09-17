@@ -41,8 +41,7 @@ An item's state is derived from its own unresolved dependency first, then its st
 | Item's own `blocked_by` | Children                              | State      |
 | ----------------------- | ------------------------------------- | ---------- |
 | non-empty               | (any)                                 | blocked    |
-| empty                   | none                                  | backlogged |
-| empty                   | all done                              | done       |
+| empty                   | none, or all done                     | backlogged |
 | empty                   | any `waiting`                         | waiting    |
 | empty                   | any `running` (no `waiting`)          | running    |
 | empty                   | any `queued` (no `waiting`/`running`) | queued     |

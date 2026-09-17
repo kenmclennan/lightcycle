@@ -91,6 +91,11 @@ class TestFsck(unittest.TestCase):
         item = _node("i-1", "item", state=State.BACKLOGGED)
         self.assertEqual(fsck([item]), [])
 
+    def test_backlogged_item_with_all_steps_done_is_not_stuck(self):
+        item = _node("i-1", "item", state=State.BACKLOGGED)
+        step = _node("i-1.1", "step", parent="i-1", state=State.DONE)
+        self.assertEqual(fsck([item, step]), [])
+
 
 if __name__ == "__main__":
     unittest.main()

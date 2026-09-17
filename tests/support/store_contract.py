@@ -1129,14 +1129,14 @@ class StoreContractBase:
         s.complete_node(done_step, "done")
         self.assertEqual(s.get_node(item).state, "queued")
 
-    def test_item_state_done_when_all_children_done(self):
+    def test_item_state_backlogged_when_all_children_done_but_item_never_closed(self):
         s = self.make_store()
         item = s.create_item("item", "a description")
         a = self._step(s, "a", parent=item)
         b = self._step(s, "b", parent=item)
         s.complete_node(a, "done")
         s.complete_node(b, "done")
-        self.assertEqual(s.get_node(item).state, "done")
+        self.assertEqual(s.get_node(item).state, "backlogged")
 
     def test_item_state_queued_when_all_children_queued(self):
         s = self.make_store()
