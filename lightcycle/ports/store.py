@@ -243,16 +243,16 @@ class StorePort(ABC):
 
     @abstractmethod
     def create_step(self, title, *, step=None, role=None, parent=None, deps=None,
-                    project=None, goal=None, description=None, attention=False):
+                    project=None, description=None, attention=False):
         pass
 
     @abstractmethod
-    def edit_node(self, tid, *, title=None, description=None, goal=None, project=None,
-                  parent=None, workflow=None) -> str:
+    def edit_node(self, tid, *, title=None, description=None, project=None,
+                  workflow=None) -> str:
         pass
 
     @abstractmethod
-    def create_item(self, title, description, *, project=None, goal=None, workflow=None,
+    def create_item(self, title, description, *, project=None, workflow=None,
                     shortcode=None):
         pass
 
