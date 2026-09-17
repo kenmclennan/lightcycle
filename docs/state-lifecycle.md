@@ -23,7 +23,7 @@ stateDiagram-v2
 - **blocked** - waiting on another item or step's unresolved dependency.
 - **queued** - waiting on a worker slot.
 - **running** - a worker is on it right now.
-- **waiting** - waiting on the human: a gate or an escalation, undifferentiated at item level.
+- **waiting** - waiting on the human. Two different things land here: a routine gate a workflow routes to a human owner by design (`[*] --> waiting` and `blocked --> waiting` above - the step's role was always `human`, so nothing transitioned it) and an escalation, where an agent parked it (`queued --> waiting` and `running --> waiting` above, both via `reassign(step, "human")`). Only the park transitions write a `history` row - a step created or unblocked straight into `waiting` never does - so a `history` row with `state='waiting'` is always an escalation, never a routine gate arrival. See [ontology.md](ontology.md)'s **escalation** entry.
 - **done** - terminal; the `outcome` says how it ended, and (for an item) `disposition` says whether that ending was a completion or an abandonment.
 
 `role`, `outcome` and `disposition` ride alongside the state, not inside it. An unassigned, unblocked step with `role=human` is `waiting`, not `queued` - the state already encodes "needs a human." Reassigning a step to `human` (`reassign`, deriving the resulting state via `role_state`; i.e. `lc set <step> --state waiting`) sets state to `waiting`; reassigning it back to an agent role sets it to `queued`.
@@ -38,15 +38,15 @@ Steps store their state. A **completing step advances the flow first, then closu
 
 An item's state is derived from its own unresolved dependency first, then its steps (`roll_up`):
 
-| Item's own `blocked_by` | Children                          | State      |
-| ------------------------ | ---------------------------------- | ---------- |
-| non-empty                 | (any)                               | blocked    |
-| empty                     | none                                | backlogged |
-| empty                     | all done                            | done       |
-| empty                     | any `waiting`                       | waiting    |
-| empty                     | any `running` (no `waiting`)        | running    |
-| empty                     | any `queued` (no `waiting`/`running`) | queued     |
-| empty                     | any `blocked` and the rest `done`   | blocked    |
+| Item's own `blocked_by` | Children                              | State      |
+| ----------------------- | ------------------------------------- | ---------- |
+| non-empty               | (any)                                 | blocked    |
+| empty                   | none                                  | backlogged |
+| empty                   | all done                              | done       |
+| empty                   | any `waiting`                         | waiting    |
+| empty                   | any `running` (no `waiting`)          | running    |
+| empty                   | any `queued` (no `waiting`/`running`) | queued     |
+| empty                   | any `blocked` and the rest `done`     | blocked    |
 
 The item's own dependency block outranks whatever its children are doing - it does not compete in the child-state precedence race. Within the children themselves, precedence is `waiting > running > queued > blocked`: if any part of the item needs the human, that outranks everything else, because it is the only position where the item stops until they act.
 

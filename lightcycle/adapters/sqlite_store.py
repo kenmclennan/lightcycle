@@ -1573,6 +1573,12 @@ class SqliteStore(StorePort):
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
+    def waiting_history(self):
+        rows = self._conn.execute(
+            "SELECT node_id, ts FROM history WHERE state = 'waiting'"
+        ).fetchall()
+        return [(r[0], r[1]) for r in rows]
+
     def nodes_closed_since(self, since_date):
         return self._select_steps(
             "state = 'done' AND substr(closed_at, 1, 10) >= ?", (since_date,)

@@ -31,11 +31,12 @@ from lightcycle.adapters.tui.design_system import (
     DONE_SHORTCUTS,
     GLOBAL_SHORTCUTS,
     MODAL_OVERLAY_ALPHA,
+    STATS_SHORTCUTS,
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
-from lightcycle.adapters.tui.hub import NodeHubScreen
+from lightcycle.adapters.tui.hub import NodeHubScreen, _format_item_cost
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
@@ -64,6 +65,8 @@ from lightcycle.application.work import (
     BacklogUseCase,
     DoneInput,
     DoneUseCase,
+    StatsInput,
+    StatsUseCase,
     StatusUseCase,
 )
 from lightcycle.ports.workers import RegistryUnreadable
@@ -87,7 +90,7 @@ POOL_PROMPT_QUIT_LEAVE = "quit-leave"
 POOL_PROMPT_QUIT_STOP = "quit-stop"
 POOL_PROMPT_MIN_WIDTH = 52
 
-_VIEW_CYCLE = ("priority", "backlog", "done")
+_VIEW_CYCLE = ("priority", "backlog", "done", "stats")
 
 STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
@@ -105,12 +108,15 @@ class TabStrip(Horizontal):
         yield Static("Backlog", id="tab-backlog", classes="tab-dim")
         yield Static(" · ", classes="tab-separator")
         yield Static("Done", id="tab-done", classes="tab-dim")
+        yield Static(" · ", classes="tab-separator")
+        yield Static("Stats", id="tab-stats", classes="tab-dim")
 
     def set_active(self, view) -> None:
         widgets = {
             "priority": self.query_one("#tab-current-work", Static),
             "backlog": self.query_one("#tab-backlog", Static),
             "done": self.query_one("#tab-done", Static),
+            "stats": self.query_one("#tab-stats", Static),
         }
         for key, widget in widgets.items():
             widget.set_class(key == view, "tab-active")
@@ -731,6 +737,47 @@ class DoneView(Vertical):
             hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
 
 
+def _stats_figures_text(response) -> str:
+    delta = response.backlog_delta
+    delta_text = "+%d" % delta if delta >= 0 else str(delta)
+    return "\n".join([
+        "Closed: %d (%d completed, %d aborted)" % (
+            response.completed + response.aborted, response.completed, response.aborted,
+        ),
+        "Cost: %s" % _format_item_cost(response.cost),
+        "Backlog: %d (%s since yesterday)" % (response.backlog_size, delta_text),
+        "Audits: %d" % response.audits,
+        "Escalations: %d" % response.escalations,
+    ])
+
+
+class StatsView(Vertical):
+    can_focus = True
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._day = None
+
+    def compose(self) -> ComposeResult:
+        yield Horizontal(
+            Static("DAY", id="stats-day-filter-label", classes="filter-row-label"),
+            Static(id="stats-day-filter-left"),
+            Static(id="stats-day-filter-right"),
+            id="stats-day-filter-bar",
+        )
+        yield Static(id="stats-figures")
+
+    def apply_stats(self, response) -> None:
+        self._day = response.day
+        self.query_one("#stats-day-filter-left", Static).update(
+            Text(response.day.isoformat(), style=COLOURS["text"])
+        )
+        self.query_one("#stats-day-filter-right", Static).display = False
+        self.query_one("#stats-figures", Static).update(
+            Text(_stats_figures_text(response), style=COLOURS["text"])
+        )
+
+
 PICKER_MIN_WIDTH = 40
 PICKER_BORDER_WIDTH = 2
 PICKER_PADDING_WIDTH = 2
@@ -1198,6 +1245,24 @@ class LightcycleApp(App):
         display: none;
     }}
 
+    StatsView {{
+        display: none;
+    }}
+    #stats-day-filter-bar {{
+        height: 2;
+        border-bottom: solid {COLOURS["border"]};
+    }}
+    #stats-day-filter-left {{
+        width: auto;
+    }}
+    #stats-day-filter-right {{
+        width: 1fr;
+        content-align: right middle;
+    }}
+    #stats-figures {{
+        margin-top: 1;
+    }}
+
     DashboardFooter {{
         dock: bottom;
         height: 3;
@@ -1244,6 +1309,8 @@ class LightcycleApp(App):
         Binding("d", "open_day_picker", "Day", show=False),
         Binding("/", "focus_search", "Search", show=False),
         Binding("p", "toggle_pool", "Pool", show=False),
+        Binding("enter", "open_done_for_stats_day", "Open", show=False),
+        Binding("right", "open_done_for_stats_day", "Open", show=False),
     ]
 
     def __init__(self, container, now=None, upgrade_check=None):
@@ -1287,6 +1354,8 @@ class LightcycleApp(App):
         self._done_filtered_count = 0
         self._done_filter_timer = None
         self._done_cost_time_cache = {}
+        self._stats_cache = {}
+        self._stats_day = None
         self._picker_open = False
 
     @property
@@ -1321,6 +1390,9 @@ class LightcycleApp(App):
         done_view = DoneView(id="done-view")
         done_view.display = self._view == "done"
         yield done_view
+        stats_view = StatsView(id="stats-view")
+        stats_view.display = self._view == "stats"
+        yield stats_view
         yield DashboardFooter(id="footer")
 
     def on_mount(self) -> None:
@@ -1496,6 +1568,16 @@ class LightcycleApp(App):
             self._done_day_filter,
         )
 
+    def _refresh_stats_view(self) -> None:
+        if self._view != "stats":
+            return
+        day = self._stats_day or self._now().date()
+        cached = self._stats_cache.get(day)
+        if cached is None or day == self._now().date():
+            cached = StatsUseCase(self._container.store).execute(StatsInput(day))
+            self._stats_cache[day] = cached
+        self.query_one(StatsView).apply_stats(cached)
+
     def _apply_view_visibility(self) -> None:
         on_priority = self._view == "priority"
         showing_floor = on_priority and self._priority_floor and not self._priority_empty
@@ -1506,6 +1588,7 @@ class LightcycleApp(App):
         self.query_one("#priority-list-floor", Static).display = showing_floor
         self.query_one(BacklogView).display = self._view == "backlog"
         self.query_one(DoneView).display = self._view == "done"
+        self.query_one(StatsView).display = self._view == "stats"
         self._sync_active_glyph_animation()
 
     def _desired_shortcuts(self):
@@ -1519,6 +1602,8 @@ class LightcycleApp(App):
             if self._done_filtered_count == 0:
                 return DONE_FILTERED_EMPTY_SHORTCUTS
             return DONE_SHORTCUTS
+        if self._view == "stats":
+            return STATS_SHORTCUTS
         if self.focused is self.query_one(BacklogFilterInput):
             return BACKLOG_SEARCH_SHORTCUTS if self._backlog_filtered_count > 0 else BACKLOG_SEARCH_EMPTY_SHORTCUTS
         if self._backlog_total == 0:
@@ -1558,9 +1643,14 @@ class LightcycleApp(App):
         while len(self.screen_stack) > 1:
             self.pop_screen()
         index = _VIEW_CYCLE.index(self._view)
-        self._view = _VIEW_CYCLE[(index + direction) % len(_VIEW_CYCLE)]
+        self._cycle_view_to(_VIEW_CYCLE[(index + direction) % len(_VIEW_CYCLE)])
+
+    def _cycle_view_to(self, view) -> None:
+        self._view = view
         if self._view == "done":
             self._refresh_done_view()
+        elif self._view == "stats":
+            self._refresh_stats_view()
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()
@@ -1569,6 +1659,8 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(PriorityTable))
         elif self._view == "backlog":
             self.set_focus(self.query_one(BacklogTable))
+        elif self._view == "stats":
+            self.set_focus(self.query_one(StatsView))
         else:
             self.set_focus(self.query_one(DoneTable))
 
@@ -1667,17 +1759,22 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(DoneTable))
 
     def action_open_day_picker(self) -> None:
-        if self._view != "done" or self._picker_open:
+        if self._view not in ("done", "stats") or self._picker_open:
             return
         done_uc = DoneUseCase(self._container.store)
-        counts = done_uc.counts()
-        options = [(None, "All", counts.total)] + [
-            (dc.day, dc.day.isoformat(), dc.count) for dc in done_uc.day_counts()
-        ]
+        if self._view == "done":
+            options = [(None, "All", done_uc.counts().total)] + [
+                (dc.day, dc.day.isoformat(), dc.count) for dc in done_uc.day_counts()
+            ]
+            dismiss = self._on_done_day_picker_dismiss
+        else:
+            today = self._now().date()
+            counts = {dc.day: dc.count for dc in done_uc.day_counts()}
+            days = sorted({today} | set(counts), reverse=True)
+            options = [(d, d.isoformat(), counts.get(d, 0)) for d in days]
+            dismiss = self._on_stats_day_picker_dismiss
         self._picker_open = True
-        self.push_screen(
-            ProjectFilterPicker(options, heading="Filter by day"), self._on_done_day_picker_dismiss
-        )
+        self.push_screen(ProjectFilterPicker(options, heading="Filter by day"), dismiss)
 
     def _on_done_day_picker_dismiss(self, result) -> None:
         self._picker_open = False
@@ -1686,6 +1783,20 @@ class LightcycleApp(App):
         self._done_day_filter = result
         self._refresh()
         self.set_focus(self.query_one(DoneTable))
+
+    def _on_stats_day_picker_dismiss(self, result) -> None:
+        self._picker_open = False
+        if result is PICKER_CANCELLED:
+            return
+        self._stats_day = result
+        self._refresh_stats_view()
+        self.set_focus(self.query_one(StatsView))
+
+    def action_open_done_for_stats_day(self) -> None:
+        if self._view != "stats":
+            return
+        self._done_day_filter = self._stats_day or self._now().date()
+        self._cycle_view_to("done")
 
     def action_focus_search(self) -> None:
         if self._view == "backlog":

@@ -357,12 +357,16 @@ def _step_count_text(children):
     return "%d step%s" % (n, "" if n == 1 else "s")
 
 
+def _format_item_cost(cost):
+    base = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
+    return base + _unpriced_suffix(cost.unpriced_count)
+
+
 def _item_cost_text(children):
     cost = item_cost(children)
     if cost.turn_count == 0 and not cost.cost_usd:
         return ""
-    base = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
-    return base + _unpriced_suffix(cost.unpriced_count)
+    return _format_item_cost(cost)
 
 
 def _item_wall_active(store, item, children, now):
