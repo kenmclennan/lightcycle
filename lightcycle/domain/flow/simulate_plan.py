@@ -49,9 +49,21 @@ class CoveragePlan:
 def _edge_transitions(graph):
     out = set()
     for stage, outs in (graph.edges or {}).items():
+        mixed = any(outs.values())
         for outcome, target in outs.items():
-            if target:
+            if target or (mixed and target is None):
                 out.add(PlannedStep(stage=stage, kind="edge", outcome=outcome).key())
+    return out
+
+
+def _targetless_occurrences(graph):
+    out = []
+    for stage, outs in sorted((graph.edges or {}).items()):
+        if not any(outs.values()):
+            continue
+        for outcome, target in sorted(outs.items()):
+            if target is None:
+                out.append((stage, outcome))
     return out
 
 
@@ -270,6 +282,14 @@ def _pass_boundary_walk(graph, entry, stage, outcome, bound):
     return PlannedWalk(tuple(steps), incomplete=resume.incomplete, stuck_at=resume.stuck_at)
 
 
+def _targetless_walk(graph, entry, stage, outcome):
+    entry_path = _bfs_path(graph, entry, stage)
+    if entry_path is None:
+        return PlannedWalk(())
+    steps = list(entry_path) + [PlannedStep(stage=stage, kind="edge", outcome=outcome)]
+    return PlannedWalk(tuple(steps))
+
+
 def build_coverage_plan(graph, flow, review_rounds_cap_n=None):
     entry = graph.entry
     remaining = set(_edge_transitions(graph)) | set(_hook_transitions(graph))
@@ -293,5 +313,8 @@ def build_coverage_plan(graph, flow, review_rounds_cap_n=None):
 
     for stage, outcome in sorted(graph.pass_ends):
         walks.append(_pass_boundary_walk(graph, entry, stage, outcome, bound))
+
+    for stage, outcome in _targetless_occurrences(graph):
+        walks.append(_targetless_walk(graph, entry, stage, outcome))
 
     return CoveragePlan(tuple(w for w in walks if w.steps))

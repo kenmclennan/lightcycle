@@ -7,7 +7,7 @@ from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.flow.simulate_plan import (
     build_coverage_plan, _walk_from_entry, _feedback_walk, _pass_boundary_walk,
-    PlannedStep, PlannedWalk,
+    _edge_transitions, PlannedStep, PlannedWalk,
 )
 
 CONTRACT_METAS = {
@@ -645,3 +645,47 @@ class TestUnreachablePassEndGateReturnsEmptyWalk(unittest.TestCase):
         walk = _pass_boundary_walk(graph, graph.entry, "isolated", "done", bound=8)
 
         self.assertEqual(walk, PlannedWalk(()))
+
+
+_MIXED_TERMINAL_GRAPH = """
+entry: build
+
+edges:
+  build   done    review
+  build   clean
+  review  done    merged
+"""
+
+_MIXED_TERMINAL_METAS = {
+    "coder": {"step": "build"},
+    "reviewer": {"step": "review"},
+}
+
+_TARGETLESS_TERMINAL_GRAPH = """
+entry: build
+
+edges:
+  build      done  review-ci
+  review-ci  reviewed
+"""
+
+
+class TestMixedStageTargetlessCoverage(unittest.TestCase):
+    def test_the_targetless_outcome_of_a_mixed_stage_is_covered_by_some_walk(self):
+        plan, _, _ = _plan(_MIXED_TERMINAL_GRAPH, _MIXED_TERMINAL_METAS)
+
+        covered = set()
+        for walk in plan.walks:
+            covered |= walk.covered()
+
+        self.assertIn(("edge", "build", "clean"), covered)
+
+    def test_edge_transitions_includes_a_mixed_stages_targetless_outcome(self):
+        graph = parse_graph(_MIXED_TERMINAL_GRAPH)
+
+        self.assertIn(("edge", "build", "clean"), _edge_transitions(graph))
+
+    def test_edge_transitions_excludes_a_pure_terminal_stages_targetless_outcome(self):
+        graph = parse_graph(_TARGETLESS_TERMINAL_GRAPH)
+
+        self.assertNotIn(("edge", "review-ci", "reviewed"), _edge_transitions(graph))
