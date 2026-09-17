@@ -390,6 +390,29 @@ class TestTargetlessTerminalEdgeSimulatesCleanly(SimulateTestCase):
         self.assertTrue(all(s.outcome == "reviewed" for s in review_ci_steps))
 
 
+_MIXED_TERMINAL_WORKFLOW_TEXT = _WORKFLOW_TEXT.replace(
+    "  write-code        done         open-pr\n",
+    "  write-code        done         open-pr\n"
+    "  write-code        clean\n",
+)
+
+
+class TestMixedStageTargetlessEdgeIsExercised(SimulateTestCase):
+    def test_a_mixed_stage_still_simulates_cleanly(self):
+        selector = self._install(_MIXED_TERMINAL_WORKFLOW_TEXT, _STEPS)
+        rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 0)
+
+    def test_the_targetless_outcome_is_actually_driven_not_silently_skipped(self):
+        resp, store = self._run_direct(_MIXED_TERMINAL_WORKFLOW_TEXT, _STEPS)
+        self.assertTrue(resp.ok, resp.violations)
+        write_code_steps = [
+            n for n in store.all_nodes_including_done()
+            if n.type == "step" and n.stage == "write-code"
+        ]
+        self.assertTrue(any(s.outcome == "clean" for s in write_code_steps))
+
+
 _HANDOFF_WORKFLOW_TEXT = """entry: build
 
 requires: brief repo
