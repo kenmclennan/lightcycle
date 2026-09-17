@@ -16,7 +16,7 @@ class StatsResponse:
     day: datetime.date
     completed: int
     abandoned: int
-    cost: ItemCost
+    spend: ItemCost
     audits: int
     escalations: int
     backlog_size: int
@@ -83,11 +83,11 @@ class StatsUseCase:
         abandoned = sum(1 for i in items if i.disposition in ("abandoned", "aborted"))
         audits = sum(1 for i in items if RETRO_ORIGIN_LABEL in self._store.labels_of(i.id))
         all_children = [s for i in items for s in self._store.children(i.id)]
-        cost = item_cost(all_children)
+        spend = item_cost(all_children)
         escalations = _escalations_on(self._store, input.day)
         backlog_today, backlog_yesterday = _backlog_size_asof_pair(self._store, input.day)
         return StatsResponse(
-            day=input.day, completed=completed, abandoned=abandoned, cost=cost,
+            day=input.day, completed=completed, abandoned=abandoned, spend=spend,
             audits=audits, escalations=escalations,
             backlog_size=backlog_today, backlog_delta=backlog_today - backlog_yesterday,
         )
