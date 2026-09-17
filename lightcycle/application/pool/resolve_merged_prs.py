@@ -43,7 +43,7 @@ class ResolveMergedPrsUseCase:
                         "a disposition for it" % outcome
                     ),
                     decision=(
-                        "declare 'disposition: %s completed' or 'disposition: %s aborted' "
+                        "declare 'disposition: %s completed' or 'disposition: %s abandoned' "
                         "in the workflow bundle" % (outcome, outcome)
                     ),
                 )

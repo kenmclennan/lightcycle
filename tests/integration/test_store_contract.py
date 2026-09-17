@@ -271,6 +271,46 @@ class TestSqliteStoreRoleCollapseMigration(unittest.TestCase):
         self.assertFalse(hasattr(s.get_item("GRID-1"), "role"))
 
 
+class TestSqliteStoreAbandonedDispositionMigration(unittest.TestCase):
+    def _reopen(self, config):
+        return SqliteStore(config)
+
+    def test_a_legacy_aborted_disposition_is_migrated_to_abandoned_on_reopen(self):
+        s = make_sqlite_store()
+        config = s._config
+        item = s.create_item("an item", "a description")
+        s.complete_node(item, "wontfix", disposition="aborted")
+        s.release()
+
+        reopened = self._reopen(config)
+
+        self.assertEqual(reopened.get_node(item).disposition, "abandoned")
+
+    def test_the_migration_is_idempotent_on_a_second_reopen(self):
+        s = make_sqlite_store()
+        config = s._config
+        item = s.create_item("an item", "a description")
+        s.complete_node(item, "wontfix", disposition="aborted")
+        s.release()
+        first = self._reopen(config)
+        first.release()
+
+        second = self._reopen(config)
+
+        self.assertEqual(second.get_node(item).disposition, "abandoned")
+
+    def test_a_completed_item_is_untouched_by_the_migration(self):
+        s = make_sqlite_store()
+        config = s._config
+        item = s.create_item("an item", "a description")
+        s.complete_node(item, "done", disposition="completed")
+        s.release()
+
+        reopened = self._reopen(config)
+
+        self.assertEqual(reopened.get_node(item).disposition, "completed")
+
+
 class TestSqliteStoreBriefMigration(unittest.TestCase):
     def _item(self, description):
         return {"id": "GRID-1", "type": "item", "title": "an item",

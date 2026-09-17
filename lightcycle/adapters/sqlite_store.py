@@ -285,6 +285,7 @@ class SqliteStore(StorePort):
         self._migrate_add_missing_columns()
         self._migrate_drop_step_reflection_column()
         self._migrate_drop_step_title_column()
+        self._migrate_abandoned_disposition_value()
         self._commit()
 
     def _commit(self):
@@ -456,6 +457,11 @@ class SqliteStore(StorePort):
         if "title" in cols:
             self._conn.execute("UPDATE steps SET title = ''")
             self._conn.execute("ALTER TABLE steps DROP COLUMN title")
+
+    def _migrate_abandoned_disposition_value(self):
+        self._conn.execute(
+            "UPDATE items SET disposition = 'abandoned' WHERE disposition = 'aborted'"
+        )
 
     def _has_table(self, name):
         return self._conn.execute(

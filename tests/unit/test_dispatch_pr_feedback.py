@@ -97,7 +97,7 @@ _FLOW = flow_from_metas(
             "on_pr_close": "abandoned",
         }
     },
-    disposition={"merged": "completed", "abandoned": "aborted"},
+    disposition={"merged": "completed", "abandoned": "abandoned"},
 )
 
 _FEEDBACK_FLOW = flow_from_metas(

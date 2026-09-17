@@ -2407,7 +2407,7 @@ class TestClose(unittest.TestCase):
     def test_close_item_closes_and_force_closes_its_open_steps(self):
         item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
         step = self.store.create_step(step="build", role="agent", parent=item)
-        rc, out, err = call(_cli_mod.cmd_done, item, "wontfix", "--disposition", "aborted")
+        rc, out, err = call(_cli_mod.cmd_done, item, "wontfix", "--disposition", "abandoned")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(item).state, "done")
         self.assertEqual(self.store.get_node(step).state, "done")
@@ -2431,7 +2431,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.store.get_node(item).disposition, "aborted")
 
     def test_close_item_explicit_flag_overrides_bundle_declared_disposition(self):
-        write_workflow(self.root, {}, disposition={"wontfix": "aborted"})
+        write_workflow(self.root, {}, disposition={"wontfix": "abandoned"})
         item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
         rc, out, err = call(_cli_mod.cmd_done, item, "wontfix", "--disposition", "completed")
         self.assertEqual(rc, 0, err)
