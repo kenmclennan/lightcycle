@@ -13,6 +13,37 @@ def _flow(store, requires=None):
     return FlowService(FakeFs(metas, workflow=workflow), store)
 
 
+class _SingleOriginWFSource:
+    def __init__(self, names, sha="abc"):
+        self._names = names
+        self._sha = sha
+
+    def current_sha(self, origin):
+        return self._sha
+
+    def workflow_names(self, origin, sha):
+        return list(self._names)
+
+    def pinned_bundle(self, origin, sha):
+        return "/bundle"
+
+
+class _RefCfg:
+    def default_origin(self):
+        return "lightcycle"
+
+
+def _flow_with_single_default_origin(store):
+    metas = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
+    workflow = graph_text_from_metas(metas, entry="build")
+    return FlowService(
+        FakeFs(metas, workflow=workflow),
+        store,
+        config=_RefCfg(),
+        workflow_source=_SingleOriginWFSource(["standard"]),
+    )
+
+
 class TestCreateStepUseCase(unittest.TestCase):
     def test_role_resolves_from_the_parents_pinned_workflow(self):
         s = FakeStore()
@@ -41,6 +72,15 @@ class TestCreateStepUseCase(unittest.TestCase):
                 CreateStepInput(title="build it", step="not-a-real-step", parent=parent)
             )
         self.assertIn("build", str(ctx.exception))
+
+    def test_a_workflow_less_parent_raises_a_clean_error_not_a_traceback(self):
+        s = FakeStore()
+        parent = s.create_item("an item", "a description")
+        with self.assertRaises(UseCaseError) as ctx:
+            CreateStepUseCase(s, _flow_with_single_default_origin(s)).execute(
+                CreateStepInput(title="", step="build", parent=parent)
+            )
+        self.assertIn("no workflow selected", str(ctx.exception))
 
     def test_unknown_parent_raises(self):
         s = FakeStore()
