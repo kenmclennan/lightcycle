@@ -502,9 +502,12 @@ class FakeStore(StorePort):
     def ready_steps(self):
         return [self._to_node(b) for b in self._ready_records()]
 
-    def claim_ready(self, role, assignee=None):
+    def claim_ready(self, role, assignee=None, item=None, stage=None):
         candidates = [
-            b for b in self._ready_records() if "for:%s" % role in (b.get("labels") or [])
+            b for b in self._ready_records()
+            if "for:%s" % role in (b.get("labels") or [])
+            and (item is None or b.get("parent") == item)
+            and (stage is None or "step:%s" % stage in (b.get("labels") or []))
         ]
         if not candidates:
             return None

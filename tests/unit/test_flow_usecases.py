@@ -1046,6 +1046,31 @@ class TestClaimTask(unittest.TestCase):
     def test_nothing_ready_returns_none(self):
         self.assertIsNone(self._uc(FakeStore()).execute(ClaimInput(role="agent")))
 
+    def test_item_scoped_claim_ignores_a_ready_step_of_the_same_role_in_a_different_item(self):
+        s = FakeStore()
+        other_item = s.create_item("i1", "a description")
+        s.create_step(step="build", role="agent", parent=other_item)
+        item = s.create_item("i2", "a description")
+        wanted = s.create_step(step="build", role="agent", parent=item)
+        claimed = self._uc(s).execute(ClaimInput(role="agent", item=item))
+        self.assertEqual(claimed.view.step.id, wanted)
+
+    def test_stage_scoped_claim_ignores_a_ready_step_of_the_same_role_and_item_at_a_different_stage(self):
+        s = FakeStore()
+        item = s.create_item("i", "a description", workflow="standard")
+        s.create_step(step="review-conflict", role="agent", parent=item)
+        wanted = s.create_step(step="await-merge", role="agent", parent=item)
+        claimed = self._uc(s).execute(ClaimInput(role="agent", item=item, stage="await-merge"))
+        self.assertEqual(claimed.view.step.id, wanted)
+
+    def test_omitting_item_and_stage_still_claims_the_first_ready_step_of_the_role(self):
+        s = FakeStore()
+        item = s.create_item("i", "a description", workflow="standard")
+        first = s.create_step(step="review-conflict", role="agent", parent=item)
+        s.create_step(step="await-merge", role="agent", parent=item)
+        claimed = self._uc(s).execute(ClaimInput(role="agent"))
+        self.assertEqual(claimed.view.step.id, first)
+
     def _inprogress(self, s, tid, owner):
         s.update_state(tid, State.RUNNING)
         s.assign(tid, owner)

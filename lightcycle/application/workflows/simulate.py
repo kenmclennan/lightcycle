@@ -149,16 +149,19 @@ class WorkflowSimulateUseCase:
         targetless = sorted(o for o, t in declared.items() if t is None)
         return targetless[0] if targetless else "done"
 
-    def _claim_stage(self, pin, stage, walk_index, violations):
+    def _claim_stage(self, pin, item_id, stage, walk_index, violations):
         role = self._flow.owner_of(stage, pin)
         if not role:
             violations.append("walk %d: stage '%s' has no owning role" % (walk_index, stage))
             return None
-        resp = self._claim.execute(ClaimInput(role=role))
+        resp = self._claim.execute(ClaimInput(role=role, item=item_id, stage=stage))
         if resp is None:
             node = None
             for n in self._store.all_nodes():
-                if n.type == "step" and n.stage == stage and n.state != State.DONE:
+                if (
+                    n.type == "step" and n.stage == stage and n.item == item_id
+                    and n.state != State.DONE
+                ):
                     node = n
                     break
             reason = node.notes if node is not None else "no ready step"
@@ -220,7 +223,7 @@ class WorkflowSimulateUseCase:
         )
 
     def _complete_terminal(self, item_id, pin, graph, node, trace, walk_index, phase_check=None):
-        resp = self._claim.execute(ClaimInput(role=node.role))
+        resp = self._claim.execute(ClaimInput(role=node.role, item=item_id, stage=node.stage))
         if resp is None:
             fresh = self._store.get_node(node.id)
             reason = fresh.notes or "no ready step"
@@ -382,7 +385,7 @@ class WorkflowSimulateUseCase:
             before_pass = (
                 self._store.current_pass(item_id) if planned.crosses_pass_end else None
             )
-            step_id = self._claim_stage(pin, planned.stage, walk_index, violations)
+            step_id = self._claim_stage(pin, item_id, planned.stage, walk_index, violations)
             if step_id is None:
                 break
             self._synthesize_produces(item_id, pin, planned.stage)

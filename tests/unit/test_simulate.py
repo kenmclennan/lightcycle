@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
+from lightcycle.application.flow.claim_step import ClaimInput
 from lightcycle.application.workflows.simulate import (
     WorkflowSimulateUseCase, _pass_end_coverage_violations, _phase_mismatch,
 )
@@ -105,6 +106,66 @@ class TestTerminalOutcome(unittest.TestCase):
         self.assertEqual(
             _use_case(FakeStore(), FakeGit())._terminal_outcome(graph, "gate"), "alpha",
         )
+
+
+class _RecordingClaim:
+    def __init__(self, response=None):
+        self.calls = []
+        self._response = response
+
+    def execute(self, claim_input):
+        self.calls.append(claim_input)
+        return self._response
+
+
+class TestClaimStage(unittest.TestCase):
+    def test_claims_with_the_walk_s_own_item_and_stage(self):
+        flow = SimpleNamespace(owner_of=lambda stage, pin: "agent")
+        claimed = SimpleNamespace(view=SimpleNamespace(step=SimpleNamespace(id="s1")))
+        claim = _RecordingClaim(response=claimed)
+        uc = WorkflowSimulateUseCase(FakeStore(), flow, None, claim, None, None, FakeGit())
+
+        step_id = uc._claim_stage("pin", "item-1", "await-merge", 0, [])
+
+        self.assertEqual(step_id, "s1")
+        self.assertEqual(
+            claim.calls, [ClaimInput(role="agent", item="item-1", stage="await-merge")]
+        )
+
+    def test_fallback_diagnostic_reports_the_reason_belonging_to_the_step_under_item_id(self):
+        store = FakeStore()
+        item_a = store.create_item("a", "d")
+        item_b = store.create_item("b", "d")
+        store.create_step(step="await-merge", role="agent", parent=item_a)
+        step_b = store.create_step(step="await-merge", role="agent", parent=item_b)
+        store.note(step_b, "item b's own reason")
+        flow = SimpleNamespace(owner_of=lambda stage, pin: "agent")
+        claim = _RecordingClaim(response=None)
+        uc = WorkflowSimulateUseCase(store, flow, None, claim, None, None, FakeGit())
+        violations = []
+
+        result = uc._claim_stage("pin", item_b, "await-merge", 0, violations)
+
+        self.assertIsNone(result)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("item b's own reason", violations[0])
+
+
+class TestCompleteTerminal(unittest.TestCase):
+    def test_claims_with_the_walk_s_own_item_and_the_node_s_stage(self):
+        store = FakeStore()
+        item = store.create_item("i", "d")
+        step_id = store.create_step(step="await-merge", role="agent", parent=item)
+        node = store.get_step(step_id)
+        claim = _RecordingClaim(response=None)
+        uc = WorkflowSimulateUseCase(store, SimpleNamespace(), None, claim, None, None, FakeGit())
+
+        result = uc._complete_terminal(item, "pin", SimpleNamespace(), node, [], 0)
+
+        self.assertEqual(
+            claim.calls, [ClaimInput(role="agent", item=item, stage="await-merge")]
+        )
+        self.assertEqual(len(result), 1)
 
 
 class TestPassBoundaryViolations(unittest.TestCase):
