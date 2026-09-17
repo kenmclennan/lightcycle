@@ -64,6 +64,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
         before = dict(s._records)
+        pass_before = s.current_pass(parent)
 
         def _boom(tid, text):
             raise RuntimeError("boom")
@@ -74,6 +75,39 @@ class TestCreateStepUseCase(unittest.TestCase):
                 CreateStepInput(title="", step="build", parent=parent, note=["x"])
             )
         self.assertEqual(s._records, before)
+        self.assertEqual(s.current_pass(parent), pass_before)
+
+    def test_a_step_filed_with_no_pass_yet_open_is_enrolled_into_a_freshly_opened_pass_1(self):
+        s = FakeStore()
+        parent = s.create_item("an item", "a description", workflow="standard")
+        resp = CreateStepUseCase(s, _flow(s)).execute(
+            CreateStepInput(title="", step="build", parent=parent)
+        )
+        current = s.current_pass(parent)
+        self.assertEqual(s.get_node(resp.id).pass_id, current.id)
+        self.assertEqual(current.n, 1)
+
+    def test_a_step_filed_against_an_item_on_a_later_pass_is_enrolled_into_that_pass(self):
+        s = FakeStore()
+        parent = s.create_item("an item", "a description", workflow="standard")
+        pid1 = s.open_pass(parent)
+        s.close_pass(pid1)
+        pid2 = s.open_pass(parent)
+        resp = CreateStepUseCase(s, _flow(s)).execute(
+            CreateStepInput(title="", step="build", parent=parent)
+        )
+        self.assertEqual(s.get_node(resp.id).pass_id, pid2)
+
+    def test_enrol_happens_for_an_explicit_workflow_too(self):
+        s = FakeStore()
+        parent = s.create_item("an item", "a description", workflow="standard")
+        pid1 = s.open_pass(parent)
+        s.close_pass(pid1)
+        pid2 = s.open_pass(parent)
+        resp = CreateStepUseCase(s, _flow(s)).execute(
+            CreateStepInput(title="", step="build", parent=parent, workflow="standard")
+        )
+        self.assertEqual(s.get_node(resp.id).pass_id, pid2)
 
     def test_a_title_is_refused_before_any_write(self):
         s = FakeStore()

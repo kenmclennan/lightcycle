@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.passes import PassBook
 from lightcycle.domain.work import refuse_fields, render_field_refusal
 
 
@@ -26,10 +27,12 @@ class CreateStepUseCase:
 
     def execute(self, input: CreateStepInput) -> CreateStepResponse:
         flow = None
+        pin = None
         if input.workflow:
             try:
                 selected = self._flow.resolve_selection(input.workflow)
                 flow = self._flow.load_flow(selected)
+                pin = selected
             except (UseCaseError, ValueError) as e:
                 raise UseCaseError(str(e))
         elif input.parent:
@@ -38,6 +41,7 @@ class CreateStepUseCase:
             except KeyError:
                 raise UseCaseError("unknown parent '%s'" % input.parent)
             flow = self._flow.flow_for(parent)
+            pin = self._flow.resolve_selection(parent.workflow)
         if flow is None or not flow.steps():
             raise UseCaseError(
                 "no workflow to resolve --step against; pass --workflow <origin>/<name> "
@@ -55,4 +59,5 @@ class CreateStepUseCase:
             tid = self._store.create_step(step=input.step, role=role, parent=input.parent)
             if input.note:
                 self._store.note(tid, " ".join(input.note))
+            PassBook(self._store, self._flow).enrol(input.parent, tid, input.step, pin)
         return CreateStepResponse(id=tid)
