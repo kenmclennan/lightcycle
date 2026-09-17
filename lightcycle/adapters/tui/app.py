@@ -22,6 +22,7 @@ from lightcycle.adapters.tui.design_system import (
     BACKLOG_SEARCH_SHORTCUTS,
     BACKLOG_SHORTCUTS,
     COLOURS,
+    COLUMN_GRIDS,
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     DONE_EMPTY_SHORTCUTS,
@@ -79,6 +80,7 @@ POOL_START_TIMEOUT_SECONDS = 15
 DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
 BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
 DONE_COLUMNS = ("cursor", "id", "project", "title", "cost", "time")
+STATS_COLUMNS = COLUMN_GRIDS["stats"]
 
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
@@ -96,6 +98,7 @@ STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
 BACKLOG_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
 DONE_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
+STATS_CONTINUATION_INDENT = 2
 
 FILTER_ROW_LABEL_WIDTH = 10
 FILTER_ROW_COUNT_GAP = 2
@@ -737,18 +740,40 @@ class DoneView(Vertical):
             hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
 
 
-def _stats_figures_text(response) -> str:
+def _stats_rows(response):
     delta = response.backlog_delta
     delta_text = "+%d" % delta if delta >= 0 else str(delta)
-    return "\n".join([
-        "Closed: %d (%d completed, %d aborted)" % (
-            response.completed + response.aborted, response.completed, response.aborted,
-        ),
-        "Cost: %s" % _format_item_cost(response.cost),
-        "Backlog: %d (%s since yesterday)" % (response.backlog_size, delta_text),
-        "Audits: %d" % response.audits,
-        "Escalations: %d" % response.escalations,
-    ])
+    return (
+        ("Items Completed", str(response.completed)),
+        ("Items Closed", str(response.completed + response.aborted)),
+        ("Cost", _format_item_cost(response.cost)),
+        ("Escalations", str(response.escalations)),
+        ("Audits", str(response.audits)),
+        ("Backlog Size", str(response.backlog_size)),
+        ("Backlog Delta", delta_text),
+    )
+
+
+def _stats_row_cells(field, layout, row_budget):
+    key, value = field
+    if layout.stacked:
+        key_field = pad_field(Text(key, style=COLOURS["dim"]), layout.atomic_widths["key"])
+        return (
+            stacked_cell(key_field, STATS_CONTINUATION_INDENT, value, row_budget, prose_style=COLOURS["text"]),
+        )
+    return (Text(key, style=COLOURS["dim"]), Text(value, style=COLOURS["text"]))
+
+
+class StatsTable(PagingTable):
+    def on_resize(self, event: events.Resize) -> None:
+        view = self.parent
+        if isinstance(view, StatsView):
+            view.refresh_column_width()
+
+    def on_show(self, event: events.Show) -> None:
+        view = self.parent
+        if isinstance(view, StatsView):
+            view.refresh_column_width()
 
 
 class StatsView(Vertical):
@@ -757,6 +782,9 @@ class StatsView(Vertical):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._day = None
+        self._rows = ()
+        self._floor = False
+        self._stats_stacked = False
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
@@ -765,7 +793,14 @@ class StatsView(Vertical):
             Static(id="stats-day-filter-right"),
             id="stats-day-filter-bar",
         )
-        yield Static(id="stats-figures")
+        yield StatsTable(id="stats-table")
+        yield Static(id="stats-floor")
+
+    def on_mount(self) -> None:
+        table = self.query_one(StatsTable)
+        table.cursor_type = "row"
+        table.show_header = False
+        table.display = False
 
     def apply_stats(self, response) -> None:
         self._day = response.day
@@ -773,9 +808,59 @@ class StatsView(Vertical):
             Text(response.day.isoformat(), style=COLOURS["text"])
         )
         self.query_one("#stats-day-filter-right", Static).display = False
-        self.query_one("#stats-figures", Static).update(
-            Text(_stats_figures_text(response), style=COLOURS["text"])
-        )
+        self._rebuild_table(_stats_rows(response))
+
+    def refresh_column_width(self) -> None:
+        self._rebuild_table(self._rows)
+
+    def _layout(self, table):
+        atomic_values = {"key": [key for key, _value in self._rows]}
+        row_budget = screen_row_budget_for(table, len(STATS_COLUMNS))
+        return compute_layout(row_budget, [], atomic_values, indent=STATS_CONTINUATION_INDENT)
+
+    def _selected_key(self, table):
+        if table.row_count == 0:
+            return None
+        try:
+            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
+        except CellDoesNotExist:
+            return None
+        return cell_key.row_key.value
+
+    def _rebuild_table(self, rows) -> None:
+        table = self.query_one(StatsTable)
+        selected_key = self._selected_key(table)
+        self._rows = rows
+        layout = self._layout(table)
+        self._stats_stacked = layout.stacked
+        self._floor = layout.floor
+        floor_widget = self.query_one("#stats-floor", Static)
+        if self._floor:
+            table.display = False
+            floor_widget.display = True
+            floor_widget.update(
+                Text(floor_message(layout, table, len(STATS_COLUMNS)), style=COLOURS["dim"])
+            )
+            return
+        table.display = True
+        floor_widget.display = False
+
+        table.clear(columns=True)
+        row_budget = render_screen_row_budget(table, layout, len(STATS_COLUMNS))
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+        else:
+            widths = {"key": layout.atomic_widths["key"], "value": layout.flexible_width}
+            for key in STATS_COLUMNS:
+                table.add_column(key, width=widths[key], key=key)
+
+        for field in rows:
+            table.add_row(*_stats_row_cells(field, layout, row_budget), height=None, key=field[0])
+
+        if rows:
+            keys = [key for key, _value in rows]
+            index = keys.index(selected_key) if selected_key in keys else 0
+            table.move_cursor(row=index)
 
 
 PICKER_MIN_WIDTH = 40
@@ -1259,8 +1344,14 @@ class LightcycleApp(App):
         width: 1fr;
         content-align: right middle;
     }}
-    #stats-figures {{
-        margin-top: 1;
+    StatsTable {{
+        height: 1fr;
+    }}
+    #stats-floor {{
+        color: {COLOURS["dim"]};
+        content-align: center middle;
+        height: 1fr;
+        display: none;
     }}
 
     DashboardFooter {{
@@ -1681,6 +1772,9 @@ class LightcycleApp(App):
         elif table.id in ("backlog-table", "done-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))
+        elif table.id == "stats-table":
+            event.stop()
+            self.action_open_done_for_stats_day()
 
     def _start_pool(self):
         return StartPoolUseCase(self._container.lock, self._container.spawner).execute()

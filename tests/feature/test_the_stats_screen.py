@@ -3,7 +3,7 @@ import datetime
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from lightcycle.adapters.tui.app import DoneTable, PickerOption, StatsView
+from lightcycle.adapters.tui.app import DoneTable, PickerOption, StatsTable, StatsView
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -27,9 +27,9 @@ def _rendered_text(widget):
     return "".join(segment.text for segment in strip)
 
 
-def _stats_lines(session):
-    widget = session.app.query_one("#stats-figures")
-    return ["".join(seg.text for seg in widget.render_line(i)).rstrip() for i in range(5)]
+def _stats_cell(session, key, column):
+    table = session.app.query_one(StatsTable)
+    return table.get_cell(key, column).plain
 
 
 def _picker_option_by_label(screen, label):
@@ -111,17 +111,17 @@ def _stats_tab_shown(ctx):
 
 
 @then(parsers.parse(
-    "the stats figures show {n:d} closed item, {completed:d} completed and {aborted:d} aborted"
+    "the stats table shows {completed:d} items completed and {closed:d} items closed"
 ))
-def _stats_figures_closed(ctx, n, completed, aborted):
-    lines = _stats_lines(ctx["session"])
-    assert lines[0] == "Closed: %d (%d completed, %d aborted)" % (n, completed, aborted)
+def _stats_table_closed(ctx, completed, closed):
+    session = ctx["session"]
+    assert _stats_cell(session, "Items Completed", "value") == str(completed)
+    assert _stats_cell(session, "Items Closed", "value") == str(closed)
 
 
-@then("the stats figures show a recorded cost")
-def _stats_figures_cost(ctx):
-    lines = _stats_lines(ctx["session"])
-    assert lines[1] == "Cost: $2.50"
+@then("the stats table shows a recorded cost")
+def _stats_table_cost(ctx):
+    assert _stats_cell(ctx["session"], "Cost", "value") == "$2.50"
 
 
 @then(parsers.parse('the picker\'s header reads "{text}"'))

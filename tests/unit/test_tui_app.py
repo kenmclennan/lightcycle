@@ -28,6 +28,7 @@ from lightcycle.adapters.tui.app import (
     PriorityTable,
     ProjectFilterPicker,
     ShortcutBar,
+    StatsTable,
     StatsView,
     StatusBar,
     _tui_metric_line,
@@ -2778,9 +2779,12 @@ def _launch_stats(store, **kwargs):
     return session
 
 
-def _stats_lines(session):
-    widget = session.app.query_one("#stats-figures", Static)
-    return ["".join(seg.text for seg in widget.render_line(i)).rstrip() for i in range(5)]
+def _stats_rows_shown(session):
+    table = session.app.query_one(StatsTable)
+    return [
+        (table.get_cell(row.key.value, "key").plain, table.get_cell(row.key.value, "value").plain)
+        for row in table.ordered_rows
+    ]
 
 
 def _spy_waiting_history_calls(store):
@@ -2840,7 +2844,7 @@ class TestStatsTabSwitch(unittest.TestCase):
 
 
 class TestStatsFigures(unittest.TestCase):
-    def test_shows_five_figures_for_today_by_default(self):
+    def test_shows_seven_rows_for_today_by_default(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
         step = store.create_step(step="build", role="agent", parent=item)
@@ -2853,28 +2857,32 @@ class TestStatsFigures(unittest.TestCase):
         self.addCleanup(session.close)
 
         self.assertEqual(
-            _stats_lines(session),
+            _stats_rows_shown(session),
             [
-                "Closed: 1 (1 completed, 0 aborted)",
-                "Cost: $2.50",
-                "Backlog: 0 (+0 since yesterday)",
-                "Audits: 0",
-                "Escalations: 0",
+                ("Items Completed", "1"),
+                ("Items Closed", "1"),
+                ("Cost", "$2.50"),
+                ("Escalations", "0"),
+                ("Audits", "0"),
+                ("Backlog Size", "0"),
+                ("Backlog Delta", "+0"),
             ],
         )
 
-    def test_zero_activity_day_still_renders_all_five_figures(self):
+    def test_zero_activity_day_still_renders_all_seven_rows(self):
         session = _launch_stats(FakeStore())
         self.addCleanup(session.close)
 
         self.assertEqual(
-            _stats_lines(session),
+            _stats_rows_shown(session),
             [
-                "Closed: 0 (0 completed, 0 aborted)",
-                "Cost: not recorded",
-                "Backlog: 0 (+0 since yesterday)",
-                "Audits: 0",
-                "Escalations: 0",
+                ("Items Completed", "0"),
+                ("Items Closed", "0"),
+                ("Cost", "not recorded"),
+                ("Escalations", "0"),
+                ("Audits", "0"),
+                ("Backlog Size", "0"),
+                ("Backlog Delta", "+0"),
             ],
         )
 
@@ -3011,7 +3019,8 @@ class TestStatsDayPicker(unittest.TestCase):
         self.assertEqual(session.app._stats_day, datetime.date(2026, 1, 1))
         left = session.app.query_one("#stats-day-filter-left", Static)
         self.assertEqual(_rendered_text(left).strip(), "2026-01-01")
-        self.assertEqual(_stats_lines(session)[0], "Closed: 1 (1 completed, 0 aborted)")
+        self.assertEqual(_stats_rows_shown(session)[0], ("Items Completed", "1"))
+        self.assertEqual(_stats_rows_shown(session)[1], ("Items Closed", "1"))
 
 
 class TestStatsOpensDoneForDay(unittest.TestCase):
