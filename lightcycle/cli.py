@@ -314,7 +314,7 @@ def main(argv=None):
         return cmd_version([])
     if argv and argv[0] == "upgrade":
         if Config().is_worker():
-            sys.stderr.write("lc: workers may not run 'upgrade'\n")
+            sys.stderr.write(worker_refusal_message("upgrade"))
             return 1
         return cmd_upgrade(argv[1:])
     try:

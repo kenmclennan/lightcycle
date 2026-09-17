@@ -2,6 +2,8 @@ import ast
 import pathlib
 import unittest
 
+from lightcycle.ports import __all__ as PORT_NAMES
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOMAIN = REPO_ROOT / "lightcycle" / "domain"
 LIGHTCYCLE = REPO_ROOT / "lightcycle"
@@ -72,10 +74,13 @@ class TestDomainSpeaksNoBead(unittest.TestCase):
         self.assertEqual(offenders, [], "bd wire-format leaked into the domain: %s" % offenders)
 
 
-class TestApplicationImportsNoAdapterTech(unittest.TestCase):
+class TestOnlyAdaptersUseSubprocessUrllibSqlite3(unittest.TestCase):
     def test_no_subprocess_urllib_sqlite3_imports(self):
         offenders = []
-        paths = sorted(APPLICATION.rglob("*.py")) + [CLI]
+        paths = [
+            path for path in sorted(LIGHTCYCLE.rglob("*.py"))
+            if ADAPTERS not in path.parents
+        ]
         for path in paths:
             if path in BANNED_ADAPTER_IMPORT_ALLOW:
                 continue
@@ -248,6 +253,82 @@ class TestHookLiteralsHaveOneDefinition(unittest.TestCase):
         allowed = "domain/flow/hooks.py"
         offenders = [o for o in offenders if not o.startswith(allowed + ":")]
         self.assertEqual(offenders, [], "hook literal respelled outside %s: %s" % (allowed, offenders))
+
+
+class TestSingleHomeWorkerRefusalMessage(unittest.TestCase):
+    def test_worker_refusal_literal_appears_only_in_worker_permissions(self):
+        token = "workers may not run"
+        offenders = []
+        for path in sorted(LIGHTCYCLE.rglob("*.py")):
+            for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                if token in line:
+                    offenders.append("%s:%d" % (path.relative_to(LIGHTCYCLE), lineno))
+        allowed = "domain/work/worker_permissions.py"
+        offenders = [o for o in offenders if not o.startswith(allowed + ":")]
+        self.assertEqual(
+            offenders, [], "worker-refusal literal respelled outside %s: %s" % (allowed, offenders)
+        )
+
+
+def _has_abstractmethod_decorator(node):
+    for dec in node.decorator_list:
+        if isinstance(dec, ast.Name) and dec.id == "abstractmethod":
+            return True
+        if isinstance(dec, ast.Attribute) and dec.attr == "abstractmethod":
+            return True
+    return False
+
+
+def find_non_abstract_methods(cls):
+    offenders = []
+    for node in cls.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name.startswith("__"):
+            continue
+        if not _has_abstractmethod_decorator(node):
+            offenders.append(node.name)
+    return offenders
+
+
+class TestFindNonAbstractMethods(unittest.TestCase):
+    def test_flags_a_method_without_the_decorator(self):
+        tree = ast.parse(
+            "class SomePort:\n"
+            "    @abstractmethod\n"
+            "    def declared(self):\n"
+            "        ...\n"
+            "    def bare(self):\n"
+            "        ...\n"
+        )
+        offenders = find_non_abstract_methods(tree.body[0])
+        self.assertEqual(offenders, ["bare"])
+
+    def test_does_not_flag_a_fully_abstract_class(self):
+        tree = ast.parse(
+            "class SomePort:\n"
+            "    @abstractmethod\n"
+            "    def declared(self):\n"
+            "        ...\n"
+        )
+        offenders = find_non_abstract_methods(tree.body[0])
+        self.assertEqual(offenders, [])
+
+
+class TestPortMethodsAreAbstract(unittest.TestCase):
+    def test_every_port_method_is_abstractmethod(self):
+        offenders = []
+        for port_name in PORT_NAMES:
+            found = False
+            for path in sorted(PORTS.glob("*.py")):
+                tree = ast.parse(path.read_text(), filename=str(path))
+                for node in tree.body:
+                    if isinstance(node, ast.ClassDef) and node.name == port_name:
+                        found = True
+                        for method in find_non_abstract_methods(node):
+                            offenders.append("%s.%s" % (port_name, method))
+            self.assertTrue(found, "port %s not found under %s" % (port_name, PORTS))
+        self.assertEqual(offenders, [], "port method(s) missing @abstractmethod: %s" % offenders)
 
 
 if __name__ == "__main__":

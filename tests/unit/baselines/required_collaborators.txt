@@ -1,0 +1,11 @@
+lightcycle/application/flow/complete_step.py: 2
+lightcycle/application/pool/breaker_gate.py: 2
+lightcycle/application/pool/breaker_status.py: 1
+lightcycle/application/pool/list_workers.py: 1
+lightcycle/application/pool/monitor_prs.py: 2
+lightcycle/application/pool/stop_pool.py: 2
+lightcycle/application/setup/upgrade_notice.py: 2
+lightcycle/application/work/activate_item.py: 1
+lightcycle/application/work/link_artifact.py: 1
+lightcycle/application/workflows/list.py: 1
+lightcycle/application/workflows/simulate.py: 3

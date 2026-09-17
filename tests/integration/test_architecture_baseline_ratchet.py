@@ -10,6 +10,15 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASELINE_FILES = [
     "tests/unit/baselines/subprocess_timeout.txt",
     "tests/unit/baselines/atomic_json_write.txt",
+    "tests/unit/baselines/forbidden_open.txt",
+    "tests/unit/baselines/forbidden_os_makedirs.txt",
+    "tests/unit/baselines/forbidden_pathlib.txt",
+    "tests/unit/baselines/forbidden_time_sleep.txt",
+    "tests/unit/baselines/forbidden_import_ast.txt",
+    "tests/unit/baselines/os_exit.txt",
+    "tests/unit/baselines/parent_package_imports.txt",
+    "tests/unit/baselines/function_local_first_party_imports.txt",
+    "tests/unit/baselines/required_collaborators.txt",
 ]
 
 RATCHET_CODES = {"BLE001", "RUF013", "DTZ", "SIM115"}
