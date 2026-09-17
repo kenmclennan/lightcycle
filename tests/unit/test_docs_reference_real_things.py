@@ -3,6 +3,7 @@ import re
 import unittest
 
 from lightcycle.cli_commands import flags_by_verb
+from lightcycle.config import _SEED_KEYS
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 PKG = REPO / "lightcycle"
@@ -10,6 +11,13 @@ CORPUS = [REPO / "CLAUDE.md"] + sorted((REPO / "docs").glob("*.md"))
 
 PATHISH = re.compile(r"`([A-Za-z0-9_./-]+\.(?:py|md|sh|toml|json|yml|yaml))(?::[0-9,\-]+)?`")
 LC_CALL = re.compile(r"`lc ([a-z][a-z-]*)((?: [^`]*)?)`")
+
+CONFIG_DOC = REPO / "docs" / "installation-and-config.md"
+CONFIG_TABLE_ROW = re.compile(r"^\|([^|]*)\|", re.MULTILINE)
+PRICE_FAMILY = re.compile(
+    r"^price-(sonnet|opus|haiku)-(input|output|cache-write|cache-read)-per-mtok$"
+)
+PRICE_FAMILY_PLACEHOLDER = "price-<model>-<kind>-per-mtok"
 
 ELSEWHERE = {
     "source.toml",
@@ -55,3 +63,26 @@ class TestDocsNameCommandsThatExist(unittest.TestCase):
                     if flag not in surface[verb]:
                         bad.append("%s: lc %s --%s" % (doc.relative_to(REPO), verb, flag))
         self.assertEqual(bad, [], "docs name lc commands or flags that do not exist: %s" % bad)
+
+
+class TestDocsDocumentEveryConfigKey(unittest.TestCase):
+    def test_every_seed_key_has_a_config_table_row(self):
+        text = CONFIG_DOC.read_text()
+        section = text.split("\n## Config\n", 1)[1].split("\n## ", 1)[0]
+        documented = set()
+        for row in CONFIG_TABLE_ROW.finditer(section):
+            documented.update(re.findall(r"`([a-z0-9<>-]+)`", row.group(1)))
+
+        seed_names = {k for k, _ in _SEED_KEYS}
+        price_keys = {k for k in seed_names if PRICE_FAMILY.match(k)}
+        individual = seed_names - price_keys
+
+        missing = sorted(individual - documented)
+        if price_keys and PRICE_FAMILY_PLACEHOLDER not in documented:
+            missing.append(PRICE_FAMILY_PLACEHOLDER)
+
+        self.assertEqual(
+            missing,
+            [],
+            "docs/installation-and-config.md's Config table omits: %s" % missing,
+        )
