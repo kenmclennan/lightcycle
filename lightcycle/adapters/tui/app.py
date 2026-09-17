@@ -798,7 +798,7 @@ class StatsView(Vertical):
 
     def on_mount(self) -> None:
         table = self.query_one(StatsTable)
-        table.cursor_type = "row"
+        table.cursor_type = "none"
         table.show_header = False
         table.display = False
 
@@ -818,18 +818,8 @@ class StatsView(Vertical):
         row_budget = screen_row_budget_for(table, len(STATS_COLUMNS))
         return compute_layout(row_budget, [], atomic_values, indent=STATS_CONTINUATION_INDENT)
 
-    def _selected_key(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
     def _rebuild_table(self, rows) -> None:
         table = self.query_one(StatsTable)
-        selected_key = self._selected_key(table)
         self._rows = rows
         layout = self._layout(table)
         self._stats_stacked = layout.stacked
@@ -856,11 +846,6 @@ class StatsView(Vertical):
 
         for field in rows:
             table.add_row(*_stats_row_cells(field, layout, row_budget), height=None, key=field[0])
-
-        if rows:
-            keys = [key for key, _value in rows]
-            index = keys.index(selected_key) if selected_key in keys else 0
-            table.move_cursor(row=index)
 
 
 PICKER_MIN_WIDTH = 40
@@ -1795,9 +1780,6 @@ class LightcycleApp(App):
         elif table.id in ("backlog-table", "done-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))
-        elif table.id == "stats-table":
-            event.stop()
-            self.action_open_done_for_stats_day()
 
     def _start_pool(self):
         return StartPoolUseCase(self._container.lock, self._container.spawner).execute()
