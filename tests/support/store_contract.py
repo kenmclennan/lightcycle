@@ -332,6 +332,30 @@ class StoreContractBase:
         self._step(s, "t", role="human")
         self.assertIsNone(s.claim_ready("agent"))
 
+    def test_claim_ready_stage_filter_prefers_the_matching_stage_over_an_earlier_ready_step_of_the_same_role_and_item(self):
+        s = self.make_store()
+        first = self._step(s, "t", role="agent", step="review-conflict")
+        item = s.get_step(first).item
+        self._step(s, "t2", role="agent", step="await-merge", parent=item)
+        claimed = s.claim_ready("agent", stage="await-merge")
+        self.assertEqual(claimed.stage, "await-merge")
+
+    def test_claim_ready_item_filter_excludes_a_ready_step_of_the_same_role_in_a_different_item(self):
+        s = self.make_store()
+        self._step(s, "a", role="agent")
+        b = self._step(s, "b", role="agent")
+        b_item = s.get_step(b).item
+        claimed = s.claim_ready("agent", item=b_item)
+        self.assertEqual(claimed.item, b_item)
+
+    def test_claim_ready_without_item_or_stage_returns_the_first_ready_step_of_the_role_as_before(self):
+        s = self.make_store()
+        first = self._step(s, "t", role="agent", step="review-conflict")
+        item = s.get_step(first).item
+        self._step(s, "t2", role="agent", step="await-merge", parent=item)
+        claimed = s.claim_ready("agent")
+        self.assertEqual(claimed.id, first)
+
     def test_reassign_to_human_is_waiting(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

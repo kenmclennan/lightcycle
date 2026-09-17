@@ -1129,15 +1129,23 @@ class SqliteStore(StorePort):
             ")"
         )
 
-    def claim_ready(self, role, assignee=None):
+    def claim_ready(self, role, assignee=None, item=None, stage=None):
+        extra_sql = ""
+        params = [role]
+        if item is not None:
+            extra_sql += " AND item = ?"
+            params.append(item)
+        if stage is not None:
+            extra_sql += " AND stage = ?"
+            params.append(stage)
         row = self._conn.execute(
             "SELECT id FROM steps WHERE state = 'ready' "
-            "AND role = ? AND NOT EXISTS ("
+            "AND role = ?" + extra_sql + " AND NOT EXISTS ("
             "  SELECT 1 FROM deps d LEFT JOIN steps b ON b.id = d.blocked_by "
             "  LEFT JOIN items bi ON bi.id = d.blocked_by "
             "  WHERE d.node_id = steps.id AND COALESCE(b.state, bi.state, 'ready') != 'done'"
             ") LIMIT 1",
-            (role,),
+            params,
         ).fetchone()
         if row is None:
             return None

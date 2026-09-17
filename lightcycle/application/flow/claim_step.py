@@ -14,6 +14,8 @@ from lightcycle.ports.store import ProjectResolutionError
 @dataclass(frozen=True)
 class ClaimInput:
     role: str
+    item: Optional[str] = None
+    stage: Optional[str] = None
 
 
 _STRUCTURAL_META_KEYS = ("model", "accepts", "produces")
@@ -62,7 +64,7 @@ class ClaimStepUseCase:
         assigned = self._assigned_inflight()
         if assigned is not None:
             return self._context(assigned)
-        return self._claim(input.role)
+        return self._claim(input.role, item=input.item, stage=input.stage)
 
     def _assigned_inflight(self):
         spawnid = self._config.spawn_id()
@@ -79,9 +81,9 @@ class ClaimStepUseCase:
             return None
         return node
 
-    def _claim(self, role):
+    def _claim(self, role, item=None, stage=None):
         spawnid = self._config.spawn_id()
-        t = self._store.claim_ready(role, spawnid or role)
+        t = self._store.claim_ready(role, spawnid or role, item=item, stage=stage)
         if t is None:
             return None
         selection = self._flow.workflow_for(t)

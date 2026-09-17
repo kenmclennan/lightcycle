@@ -179,7 +179,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def claim_ready(self, role, assignee=None):
+    def claim_ready(self, role, assignee=None, item=None, stage=None):
         pass
 
     @abstractmethod
