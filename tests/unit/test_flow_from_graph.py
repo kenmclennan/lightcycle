@@ -221,7 +221,7 @@ edges:
 
 disposition:
   merged     completed
-  abandoned  aborted
+  abandoned  abandoned
 """
 
 
@@ -229,7 +229,7 @@ class TestFlowDispositionFor(unittest.TestCase):
     def test_threads_the_graphs_disposition_block_through(self):
         flow = Flow.from_graph(parse_graph(DISPOSITION_GRAPH_TEXT), STEP_METAS)
         self.assertEqual(flow.disposition_for("merged"), "completed")
-        self.assertEqual(flow.disposition_for("abandoned"), "aborted")
+        self.assertEqual(flow.disposition_for("abandoned"), "abandoned")
 
     def test_returns_none_for_an_outcome_the_bundle_does_not_declare(self):
         flow = Flow.from_graph(parse_graph(DISPOSITION_GRAPH_TEXT), STEP_METAS)

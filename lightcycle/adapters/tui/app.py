@@ -745,7 +745,7 @@ def _stats_rows(response):
     delta_text = "+%d" % delta if delta >= 0 else str(delta)
     return (
         ("Items Completed", str(response.completed)),
-        ("Items Closed", str(response.completed + response.aborted)),
+        ("Items Closed", str(response.completed + response.abandoned)),
         ("Cost", _format_item_cost(response.cost)),
         ("Escalations", str(response.escalations)),
         ("Audits", str(response.audits)),

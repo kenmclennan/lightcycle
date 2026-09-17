@@ -128,7 +128,7 @@ COMMANDS = {
             help="a note to forward to the next step, or to record on an item being closed; "
             "unquoted multi-word is fine",
         ),
-        Arg("--disposition", choices=("completed", "aborted")),
+        Arg("--disposition", choices=("completed", "abandoned")),
     )),
     "close": CommandSpec(prog="lc close", args=(
         Arg("id"),
@@ -138,7 +138,7 @@ COMMANDS = {
             "fixed set (default: \"closed\")",
         ),
         Arg(
-            "--disposition", choices=("completed", "aborted"), default="completed",
+            "--disposition", choices=("completed", "abandoned"), default="completed",
             help="default: completed",
         ),
         Arg("--note", nargs="+", help="a note to record on the closed item; unquoted "

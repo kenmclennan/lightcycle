@@ -35,7 +35,7 @@ A **step** stores its own state. An **item** does not store a state - it is **de
 Two things are kept **orthogonal** to the state (baking them in would multiply the states):
 
 - **role** - who processes the node: `agent`, `human`, or `engine`. An unassigned, unblocked step with `role=human` is `waiting` (it shows in the inbox); an `engine`-owned step is `queued` like an agent step, but is completed directly by the engine's own per-tick poll rather than claimed by a worker. Role stays a separate field rather than folding into the state name. The stage a step performs is its `stage` field.
-- **outcome** - how a `done` node ended: `done`, `merged`, `abandoned`, `rejected`, ... `done` is the single terminal state; the outcome records the flavour. An **item** additionally carries a **disposition** (`completed` or `aborted`) once closed - an engine-owned classification of whether its outcome was a delivery or an abandonment, declared per outcome name by the workflow bundle rather than interpreted from the outcome string itself.
+- **outcome** - how a `done` node ended: `done`, `merged`, `abandoned`, `rejected`, ... `done` is the single terminal state; the outcome records the flavour. An **item** additionally carries a **disposition** (`completed` or `abandoned`) once closed - an engine-owned classification of whether its outcome was a delivery or an abandonment, declared per outcome name by the workflow bundle rather than interpreted from the outcome string itself.
 
 ## Attachments
 

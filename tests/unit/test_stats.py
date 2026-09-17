@@ -21,15 +21,24 @@ def _closed_item(store, *, disposition, closed_at, id=None, label=None):
 
 
 class TestStatsUseCase(unittest.TestCase):
-    def test_counts_completed_and_aborted_separately(self):
+    def test_counts_completed_and_abandoned_separately(self):
         s = FakeStore()
         _closed_item(s, disposition="completed", closed_at="2026-01-01T10:00:00+00:00")
-        _closed_item(s, disposition="aborted", closed_at="2026-01-01T11:00:00+00:00")
+        _closed_item(s, disposition="abandoned", closed_at="2026-01-01T11:00:00+00:00")
 
         resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.completed, 1)
-        self.assertEqual(resp.aborted, 1)
+        self.assertEqual(resp.abandoned, 1)
+
+    def test_counts_legacy_aborted_disposition_as_abandoned(self):
+        s = FakeStore()
+        _closed_item(s, disposition="abandoned", closed_at="2026-01-01T10:00:00+00:00")
+        _closed_item(s, disposition="aborted", closed_at="2026-01-01T11:00:00+00:00")
+
+        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+
+        self.assertEqual(resp.abandoned, 2)
 
     def test_audit_is_counted_by_label_regardless_of_id_shortcode(self):
         s = FakeStore()
@@ -56,7 +65,7 @@ class TestStatsUseCase(unittest.TestCase):
         resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.completed, 0)
-        self.assertEqual(resp.aborted, 0)
+        self.assertEqual(resp.abandoned, 0)
         self.assertEqual(resp.audits, 0)
         self.assertEqual(resp.escalations, 0)
         self.assertEqual(resp.backlog_size, 0)

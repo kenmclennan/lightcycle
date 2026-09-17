@@ -77,11 +77,11 @@ class TestCmdCloseDefaults(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(item).outcome, "duplicate of LC-1")
 
-    def test_disposition_can_be_overridden_to_aborted(self):
+    def test_disposition_can_be_overridden_to_abandoned(self):
         item = self.store.create_item("an item", "a description")
-        rc, out, err = call(cli.cmd_close, item, "--disposition", "aborted")
+        rc, out, err = call(cli.cmd_close, item, "--disposition", "abandoned")
         self.assertEqual(rc, 0, err)
-        self.assertEqual(self.store.get_node(item).disposition, "aborted")
+        self.assertEqual(self.store.get_node(item).disposition, "abandoned")
 
     def test_note_is_recorded(self):
         item = self.store.create_item("an item", "a description")

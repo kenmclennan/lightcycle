@@ -215,7 +215,7 @@ COMMAND_GROUPS = [
          "- --force overrides the dirty worktree and stale claims"),
         ("attach", "<id> <type> <value> [--label] [--internal] [--kind K]", "attach an artifact"),
         ("dep", "<id> --needs <id> | --remove <id>", "add or remove a blocker on a node"),
-        ("close", "<item> [--outcome \"<text>\"] [--disposition completed|aborted] "
+        ("close", "<item> [--outcome \"<text>\"] [--disposition completed|abandoned] "
          "[--note \"<text>\"]",
          "end an item outright; --outcome is free-form (default \"closed\"), --disposition "
          "defaults to completed - refuses a step, use `done` for that"),
@@ -226,7 +226,7 @@ COMMAND_GROUPS = [
     ]),
     ("Agent verbs (workers call these)", [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
-        ("done", "<id> <outcome> [--note \"<text>\"] [--disposition completed|aborted]",
+        ("done", "<id> <outcome> [--note \"<text>\"] [--disposition completed|abandoned]",
          "close a node; a step done-with-outcome advances the flow"),
     ]),
     ("Feedback loop", [
@@ -775,7 +775,7 @@ def cmd_done(argv):
             if disposition is None:
                 sys.stderr.write(
                     "outcome '%s' is not bundle-declared; pass --disposition "
-                    "{completed,aborted} explicitly\n" % a.outcome
+                    "{completed,abandoned} explicitly\n" % a.outcome
                 )
                 return 2
             CloseItemUseCase(_container.store, _worktrees()).execute(

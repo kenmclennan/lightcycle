@@ -2002,14 +2002,14 @@ class TestBacklogSearchInput(unittest.TestCase):
     def test_a_settled_backlog_filter_refreshes_the_backlog_view_only(self):
         session = self._launch(FakeStore())
 
-        session.press("/")
-        session.press("w")
         with patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh, \
                 patch.object(LightcycleApp, "_refresh_done_view") as done_refresh, \
                 patch.object(LightcycleApp, "_apply_view_visibility") as apply_visibility, \
                 patch("lightcycle.adapters.tui.app.StatusUseCase") as status_uc, \
                 patch("lightcycle.adapters.tui.app.PoolRunningUseCase") as pool_uc, \
                 patch("lightcycle.adapters.tui.app.BreakerStatusUseCase") as breaker_uc:
+            session.press("/")
+            session.press("w")
             session.settle_backlog_filter()
 
             backlog_refresh.assert_called_once()
@@ -2582,14 +2582,14 @@ class TestDoneSearchInput(unittest.TestCase):
     def test_a_settled_done_filter_refreshes_the_done_view_only(self):
         session = self._launch(FakeStore())
 
-        session.press("/")
-        session.press("w")
         with patch.object(LightcycleApp, "_refresh_done_view") as done_refresh, \
                 patch.object(LightcycleApp, "_refresh_backlog_view") as backlog_refresh, \
                 patch.object(LightcycleApp, "_apply_view_visibility") as apply_visibility, \
                 patch("lightcycle.adapters.tui.app.StatusUseCase") as status_uc, \
                 patch("lightcycle.adapters.tui.app.PoolRunningUseCase") as pool_uc, \
                 patch("lightcycle.adapters.tui.app.BreakerStatusUseCase") as breaker_uc:
+            session.press("/")
+            session.press("w")
             session.settle_done_filter()
 
             done_refresh.assert_called_once()

@@ -194,10 +194,10 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "entry: build\n\n"
             "disposition:\n"
             "  merged     completed\n"
-            "  abandoned  aborted\n"
+            "  abandoned  abandoned\n"
         )
         self.assertEqual(graph.disposition_for("merged"), "completed")
-        self.assertEqual(graph.disposition_for("abandoned"), "aborted")
+        self.assertEqual(graph.disposition_for("abandoned"), "abandoned")
 
     def test_disposition_for_an_undeclared_outcome_returns_none(self):
         graph = parse_graph(

@@ -618,9 +618,9 @@ class TestCloseItem(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         wt = WorktreeService(s, FakeGit(), FakeFs(), FakeConfig(), flow=_RaisingFlow())
-        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="wontfix", disposition="aborted"))
+        CloseItemUseCase(s, wt).execute(CloseItemInput(item=sid, reason="wontfix", disposition="abandoned"))
         self.assertEqual(s.get_node(sid).state, "done")
-        self.assertEqual(s.get_node(sid).disposition, "aborted")
+        self.assertEqual(s.get_node(sid).disposition, "abandoned")
 
 
 class TestCloseItemBacklogResolution(unittest.TestCase):

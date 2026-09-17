@@ -95,7 +95,7 @@ _FLOW = flow_from_metas(
             "on_pr_close": "abandoned",
         }
     },
-    disposition={"merged": "completed", "abandoned": "aborted"},
+    disposition={"merged": "completed", "abandoned": "abandoned"},
 )
 
 _MERGE_ONLY_FLOW = flow_from_metas(
@@ -178,7 +178,7 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
                     "  pr_close   await-merge  abandoned\n\n"
                     "disposition:\n"
                     "  merged     completed\n"
-                    "  abandoned  aborted\n"
+                    "  abandoned  abandoned\n"
                 ),
                 "spec": (
                     "entry: spec-writer\n\n"
@@ -191,7 +191,7 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
                     "  pr_close   await-merge  abandoned\n\n"
                     "disposition:\n"
                     "  spec-merged  completed\n"
-                    "  abandoned    aborted\n"
+                    "  abandoned    abandoned\n"
                 ),
             },
         )
@@ -652,7 +652,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertEqual(result.abandoned, [item])
         self.assertEqual(result.merged, [])
         self.assertEqual(store.get_node(item).state, "done")
-        self.assertEqual(store.get_node(item).disposition, "aborted")
+        self.assertEqual(store.get_node(item).disposition, "abandoned")
         self.assertEqual(store.get_node(step).state, "done")
         self.assertIn(item, worktrees.removed)
 
@@ -663,7 +663,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         uc.execute()
 
         self.assertEqual(store.get_node(item).outcome, "abandoned")
-        self.assertEqual(store.get_node(item).disposition, "aborted")
+        self.assertEqual(store.get_node(item).disposition, "abandoned")
 
     def test_open_pr_does_not_take_abandon_path(self):
         url = "https://github.com/x/y/pull/12"
@@ -707,7 +707,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
                     "on_pr_close": "cancelled",
                 }
             },
-            disposition={"shipped": "completed", "cancelled": "aborted"},
+            disposition={"shipped": "completed", "cancelled": "abandoned"},
         )
         url = "https://github.com/x/y/pull/20"
         store = FakeStore()
@@ -725,7 +725,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
 
         self.assertEqual(result.abandoned, [item])
         self.assertEqual(store.get_node(item).outcome, "cancelled")
-        self.assertEqual(store.get_node(item).disposition, "aborted")
+        self.assertEqual(store.get_node(item).disposition, "abandoned")
         self.assertIn(item, worktrees.removed)
 
     def test_step_without_on_pr_close_not_abandoned_on_close(self):

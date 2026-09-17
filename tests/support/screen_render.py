@@ -631,7 +631,7 @@ def _stats_store():
     store._records[lc273]["closed_at"] = _at(60)
 
     lc275 = store.item("LC-275", "Active glyph unreadable at terminal size", project="lightcycle")
-    store.complete_node(lc275, "merged", disposition="aborted")
+    store.complete_node(lc275, "merged", disposition="abandoned")
     store._records[lc275]["closed_at"] = "2025-12-31T09:30:00+00:00"
 
     aud1 = store.item("AUD-1", "Quarterly review of recent audits", project="lightcycle")
