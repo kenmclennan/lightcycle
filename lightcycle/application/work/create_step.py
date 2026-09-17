@@ -41,7 +41,10 @@ class CreateStepUseCase:
             except KeyError:
                 raise UseCaseError("unknown parent '%s'" % input.parent)
             flow = self._flow.flow_for(parent)
-            pin = self._flow.resolve_selection(parent.workflow)
+            try:
+                pin = self._flow.resolve_selection(parent.workflow)
+            except (UseCaseError, ValueError) as e:
+                raise UseCaseError(str(e))
         if flow is None or not flow.steps():
             raise UseCaseError(
                 "no workflow to resolve --step against; pass --workflow <origin>/<name> "
