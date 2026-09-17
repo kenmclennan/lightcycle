@@ -793,7 +793,13 @@ class HubHeader(Vertical):
     def update(self, header) -> None:
         self.query_one("#hub-identity", Static).update(_identity_text(header))
         context = self.query_one("#hub-context", Static)
-        self._line("#hub-context", _context_text(header, context.screen.size.width))
+        text = _context_text(header, context.screen.size.width)
+        if text:
+            context.update(Text(text, style=COLOURS["dim"]))
+            context.display = True
+        else:
+            context.update("")
+            context.display = False
 
         self._last_header = header
         self._paint_escalation(header)
@@ -809,15 +815,6 @@ class HubHeader(Vertical):
         else:
             panel.update("")
             panel.display = False
-
-    def _line(self, selector, text) -> None:
-        widget = self.query_one(selector, Static)
-        if text:
-            widget.update(Text(text, style=COLOURS["dim"]))
-            widget.display = True
-        else:
-            widget.update("")
-            widget.display = False
 
 
 class HubTabStrip(Horizontal):
@@ -1223,6 +1220,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         width: auto;
         height: 1;
         margin-right: 3;
+    }}
+    #hub-context {{
+        display: none;
     }}
     #hub-escalation {{
         height: auto;
