@@ -38,7 +38,7 @@ class OpenArtifactUseCase:
 
     def _open_in_editor(self, editor, path):
         try:
-            self._launcher.edit(editor, path)
+            self._launcher.edit_detached(editor, path)
             return True
         except (OSError, ValueError):
             return False

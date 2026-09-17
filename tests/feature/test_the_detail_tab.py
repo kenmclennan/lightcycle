@@ -359,7 +359,7 @@ def _no_worktree_field(ctx):
 @then("the worktree opens in the editor")
 def _worktree_opens_in_editor(ctx):
     editor = ctx["session"].app.container.config.editor()
-    assert ctx["launcher"].edited == (editor, ctx["worktree_path"])
+    assert ctx["launcher"].edited_detached == (editor, ctx["worktree_path"])
 
 
 @then("its stage, its state, its role, and its model are all shown")

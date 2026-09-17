@@ -3,7 +3,7 @@ from typing import Optional
 
 from rich.text import Text
 from textual import events
-from textual.app import ComposeResult, SuspendNotSupported
+from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
@@ -2208,11 +2208,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     def _open_worktree(self, path) -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
         editor_input = OpenArtifactInput(kind="editor", value=path, editor=self._container.config.editor())
-        try:
-            with self.app.suspend():
-                result = use_case.execute(editor_input)
-        except SuspendNotSupported:
-            result = use_case.execute(editor_input)
+        result = use_case.execute(editor_input)
         self._show_toast(result.success, result.message, "editor", path, tab="detail")
 
     def _open_external_artifact(self, kind, value) -> None:
