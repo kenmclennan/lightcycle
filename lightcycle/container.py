@@ -61,8 +61,8 @@ class Container:
     def flow_service(self):
         return make_flow_service(self.workflow_bundle, self.store, self.config, self.workflow_source)
 
-    def worktrees(self):
-        return worktrees_for(self)
+    def worktrees(self, flow=None):
+        return worktrees_for(self, flow=flow)
 
     def tick(self, flow=None):
         from lightcycle.application.flow.complete_step import CompleteStepUseCase

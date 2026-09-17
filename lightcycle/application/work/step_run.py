@@ -13,6 +13,9 @@ class StepRunInput:
 class StepRunResponse:
     branch: Optional[str]
     pr: Optional[str]
+    item: Optional[str] = None
+    phase: Optional[str] = None
+    pass_id: Optional[str] = None
 
 
 class StepRunUseCase:
@@ -25,7 +28,9 @@ class StepRunUseCase:
         run = self._run_for(step)
         if run is None:
             return StepRunResponse(branch=None, pr=None)
-        return StepRunResponse(branch=run.branch, pr=run.pr)
+        return StepRunResponse(
+            branch=run.branch, pr=run.pr, item=run.item, phase=run.phase, pass_id=run.pass_id
+        )
 
     def _run_for(self, step):
         if step.pass_id is None:

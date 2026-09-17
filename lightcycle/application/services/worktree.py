@@ -114,13 +114,16 @@ class WorktreeService:
     def _branch_for(self, item):
         return self.item_branch(item) or self._minted_branch(item)
 
+    def path_for_run(self, run):
+        return Worktree(run.item, self._key_for(run)).path_in(self._target_for_phase(run.item, run.phase))
+
     def release_run(self, run, delete_remote=True):
         if run is None or run.branch is None:
             return
         target = self._target_for_phase(run.item, run.phase)
         if not self._git.is_git_repo(target):
             return
-        path = Worktree(run.item, self._key_for(run)).path_in(target)
+        path = self.path_for_run(run)
         self._git.remove_worktree(target, path)
         self._git.delete_branch(target, run.branch)
         if delete_remote:

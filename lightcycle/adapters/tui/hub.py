@@ -3,7 +3,7 @@ from typing import Optional
 
 from rich.text import Text
 from textual import events
-from textual.app import ComposeResult
+from textual.app import ComposeResult, SuspendNotSupported
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
@@ -95,6 +95,7 @@ TOAST_SUB_CAPTION_BY_TAB = {
 }
 TOAST_URL_SUB_SUFFIX = "nothing more to show here"
 TOAST_FILEPATH_DESTINATION = "in its default application"
+TOAST_EDITOR_DESTINATION = "in your editor"
 WORKFLOW_UNRESOLVED = "workflow unresolved"
 
 _ITEM_TAB_ORDER = ("description", "workflow", "artifacts", "cost")
@@ -124,7 +125,7 @@ HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"]
 ARTIFACTS_CONTINUATION_INDENT = 2
 DETAIL_CONTINUATION_INDENT = 2
 DETAIL_FIELD_LABELS = {
-    "pr": "PR", "branch": "BRANCH", "stage": "STAGE", "state": "STATE", "role": "ROLE",
+    "pr": "PR", "branch": "BRANCH", "worktree": "WORKTREE", "stage": "STAGE", "state": "STATE", "role": "ROLE",
     "model": "MODEL", "claimed_by": "CLAIMED_BY", "session_id": "SESSION_ID",
     "outcome": "OUTCOME", "notes": "NOTES",
     "needs": "NEEDS", "reason": "REASON", "tried": "TRIED", "reflection": "REFLECTION",
@@ -269,12 +270,14 @@ def _hierarchy_default_row_id(store, node):
     return cur.id if cur is not None else node.id
 
 
-def detail_fields(step, run, session_id, reflections):
+def detail_fields(step, run, session_id, reflections, worktree_path=None):
     fields = []
     if run.pr:
         fields.append(("pr", run.pr))
     if run.branch:
         fields.append(("branch", run.branch))
+    if worktree_path:
+        fields.append(("worktree", worktree_path))
     fields.append(("stage", step.stage))
     fields.append(("state", str(step.state)))
     fields.append(("role", display_role(step.role)))
@@ -645,7 +648,7 @@ def artifact_row_cells(artifact, layout=None, row_budget=None):
 def detail_row_cells(field, layout=None, row_budget=None):
     key, value = field
     label = _detail_field_label(key)
-    style = COLOURS["cyan"] if key == "pr" else COLOURS["text"]
+    style = COLOURS["cyan"] if key in ("pr", "worktree") else COLOURS["text"]
     if layout is not None and layout.stacked:
         key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
         return (
@@ -677,9 +680,10 @@ def toast_text(success, message, kind, value, tab="artifacts"):
     main, sub = message, base_caption
     if success and kind == "url":
         sub = "%s - %s" % (base_caption, TOAST_URL_SUB_SUFFIX)
-    elif success and kind == "filepath":
+    elif success and kind in ("filepath", "editor"):
         main = "Opened %s" % value
-        sub = "%s - %s" % (TOAST_FILEPATH_DESTINATION, base_caption)
+        destination = TOAST_EDITOR_DESTINATION if kind == "editor" else TOAST_FILEPATH_DESTINATION
+        sub = "%s - %s" % (destination, base_caption)
     text = Text(prefix + main, style=colour)
     text.append("\n")
     text.append(sub, style=COLOURS["dim"])
@@ -1849,8 +1853,17 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         artifacts = store.item_artifacts(step.id)
         reflections, _unreadable = parse_reflections(artifacts)
         session_id = next((a.value for a in artifacts if a.type == "session-id"), None)
-        fields = detail_fields(step, run, session_id, [r.feedback for r in reflections])
+        worktree_path = self._worktree_path_for(run)
+        fields = detail_fields(step, run, session_id, [r.feedback for r in reflections], worktree_path)
         self._render_detail_fields(fields, initial)
+
+    def _worktree_path_for(self, run):
+        if not run.branch:
+            return None
+        try:
+            return self._container.worktrees(flow=self._flow_service).path_for_run(run)
+        except UseCaseError:
+            return None
 
     def _render_detail_fields(self, fields, initial) -> None:
         self._last_detail_fields = fields
@@ -2178,14 +2191,29 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             )
 
     def _open_selected_detail_field(self, key_value) -> None:
-        if key_value != "pr":
+        if key_value not in ("pr", "worktree"):
             return
-        pr = next((value for key, value in self._last_detail_fields if key == "pr"), None)
-        if pr is None:
+        value = next(
+            (v for k, v in self._last_detail_fields if k == key_value), None
+        )
+        if value is None:
             return
+        if key_value == "pr":
+            use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
+            result = use_case.execute(OpenArtifactInput(kind="url", value=value))
+            self._show_toast(result.success, result.message, "url", value, tab="detail")
+            return
+        self._open_worktree(value)
+
+    def _open_worktree(self, path) -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
-        result = use_case.execute(OpenArtifactInput(kind="url", value=pr))
-        self._show_toast(result.success, result.message, "url", pr, tab="detail")
+        editor_input = OpenArtifactInput(kind="editor", value=path, editor=self._container.config.editor())
+        try:
+            with self.app.suspend():
+                result = use_case.execute(editor_input)
+        except SuspendNotSupported:
+            result = use_case.execute(editor_input)
+        self._show_toast(result.success, result.message, "editor", path, tab="detail")
 
     def _open_external_artifact(self, kind, value) -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)

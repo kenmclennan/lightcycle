@@ -92,10 +92,11 @@ class FakeMemoryGateStatus(MemoryGateStatusPort):
 
 
 class FakeLauncher(LauncherPort):
-    def __init__(self, url_succeeds=True, path_succeeds=True, returncode=0):
+    def __init__(self, url_succeeds=True, path_succeeds=True, returncode=0, edit_raises=None):
         self.url_succeeds = url_succeeds
         self.path_succeeds = path_succeeds
         self.returncode = returncode
+        self.edit_raises = edit_raises
         self.opened_urls = []
         self.opened_paths = []
         self.edited = None
@@ -109,6 +110,8 @@ class FakeLauncher(LauncherPort):
         return self.path_succeeds
 
     def edit(self, editor, path):
+        if self.edit_raises is not None:
+            raise self.edit_raises
         self.edited = (editor, path)
         return self.returncode
 

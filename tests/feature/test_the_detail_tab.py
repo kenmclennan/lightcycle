@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
@@ -127,6 +128,46 @@ def _await_merge_step_with_pr(ctx):
 def _step_no_branch_no_pr(ctx):
     _, step_id = _launch_step(ctx)
     _push_hub(ctx, step_id)
+
+
+_WRITE_CODE_METAS = {"write-code": {"model": "sonnet", "step": "write-code", "phase": "code"}}
+
+
+def _set_up_branch_in_repo(ctx, *, launcher=None, resolvable):
+    store, step_id = _launch_step(ctx, metas=_WRITE_CODE_METAS, launcher=launcher)
+    if resolvable:
+        store.add_artifact(ctx["item_id"], "repo", "/repo")
+    _set_phase_run(store, ctx["item_id"], step_id, "code", branch="feat/x")
+    worktree_path = os.path.join("/repo", ".worktrees", "%s-code" % ctx["item_id"])
+    ctx["worktree_path"] = worktree_path
+    if resolvable:
+        ctx["session"].app.container.fs._dirs[worktree_path] = []
+    return store, step_id
+
+
+@given("a step whose phase run has a branch, in a resolvable repo")
+def _step_branch_resolvable_repo(ctx):
+    _, step_id = _set_up_branch_in_repo(ctx, resolvable=True)
+    _push_hub(ctx, step_id)
+
+
+@given("a step whose phase run has a branch, in an unresolvable repo")
+def _step_branch_unresolvable_repo(ctx):
+    _, step_id = _set_up_branch_in_repo(ctx, resolvable=False)
+    _push_hub(ctx, step_id)
+
+
+@given(
+    "a step whose phase run has a branch, in a resolvable repo, its Detail tab open, "
+    "the worktree field selected"
+)
+def _step_worktree_field_selected(ctx):
+    launcher = FakeLauncher()
+    ctx["launcher"] = launcher
+    _, step_id = _set_up_branch_in_repo(ctx, launcher=launcher, resolvable=True)
+    _push_hub(ctx, step_id)
+    table = ctx["session"].app.screen.query_one(DetailTable)
+    table.move_cursor(row=table.get_row_index("worktree"))
 
 
 @given("a step with a stage, a state, a role, and a model")
@@ -303,6 +344,22 @@ def _no_branch_field(ctx):
 @then("no PR field is shown")
 def _no_pr_field(ctx):
     assert not _field_present(ctx, "pr")
+
+
+@then("the worktree is shown")
+def _worktree_shown(ctx):
+    assert _field_value(ctx, "worktree") == ctx["worktree_path"]
+
+
+@then("no worktree field is shown")
+def _no_worktree_field(ctx):
+    assert not _field_present(ctx, "worktree")
+
+
+@then("the worktree opens in the editor")
+def _worktree_opens_in_editor(ctx):
+    editor = ctx["session"].app.container.config.editor()
+    assert ctx["launcher"].edited == (editor, ctx["worktree_path"])
 
 
 @then("its stage, its state, its role, and its model are all shown")
