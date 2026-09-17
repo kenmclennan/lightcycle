@@ -1213,9 +1213,11 @@ class LightcycleApp(App):
     #backlog-filter-right {{
         width: 1fr;
         content-align: right middle;
+        display: none;
     }}
     BacklogTable {{
         height: 1fr;
+        display: none;
     }}
     #backlog-empty-overall {{
         content-align: center top;
@@ -1282,6 +1284,7 @@ class LightcycleApp(App):
     #done-filter-right {{
         width: 1fr;
         content-align: right middle;
+        display: none;
     }}
     #done-day-filter-bar {{
         height: 2;
@@ -1293,9 +1296,11 @@ class LightcycleApp(App):
     #done-day-filter-right {{
         width: 1fr;
         content-align: right middle;
+        display: none;
     }}
     DoneTable {{
         height: 1fr;
+        display: none;
     }}
     #done-empty-overall {{
         content-align: center top;
@@ -1328,6 +1333,7 @@ class LightcycleApp(App):
     #stats-day-filter-right {{
         width: 1fr;
         content-align: right middle;
+        display: none;
     }}
     StatsTable {{
         height: 1fr;
@@ -1357,6 +1363,12 @@ class LightcycleApp(App):
     }}
     StatusBar #status-upgrade {{
         margin-right: 0;
+    }}
+    #status-hold {{
+        display: none;
+    }}
+    #status-upgrade {{
+        display: none;
     }}
     ShortcutBar {{
         height: 1;
