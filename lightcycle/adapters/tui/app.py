@@ -746,7 +746,7 @@ def _stats_rows(response):
     return (
         ("Items Completed", str(response.completed)),
         ("Items Closed", str(response.completed + response.abandoned)),
-        ("Cost", _format_item_cost(response.cost)),
+        ("Spend", _format_item_cost(response.spend)),
         ("Escalations", str(response.escalations)),
         ("Audits", str(response.audits)),
         ("Backlog Size", str(response.backlog_size)),

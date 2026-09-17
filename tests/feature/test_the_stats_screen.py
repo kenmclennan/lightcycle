@@ -121,7 +121,7 @@ def _stats_table_closed(ctx, completed, closed):
 
 @then("the stats table shows a recorded cost")
 def _stats_table_cost(ctx):
-    assert _stats_cell(ctx["session"], "Cost", "value") == "$2.50"
+    assert _stats_cell(ctx["session"], "Spend", "value") == "$2.50"
 
 
 @then(parsers.parse('the picker\'s header reads "{text}"'))

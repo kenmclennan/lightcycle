@@ -2861,7 +2861,7 @@ class TestStatsFigures(unittest.TestCase):
             [
                 ("Items Completed", "1"),
                 ("Items Closed", "1"),
-                ("Cost", "$2.50"),
+                ("Spend", "$2.50"),
                 ("Escalations", "0"),
                 ("Audits", "0"),
                 ("Backlog Size", "0"),
@@ -2878,7 +2878,7 @@ class TestStatsFigures(unittest.TestCase):
             [
                 ("Items Completed", "0"),
                 ("Items Closed", "0"),
-                ("Cost", "not recorded"),
+                ("Spend", "not recorded"),
                 ("Escalations", "0"),
                 ("Audits", "0"),
                 ("Backlog Size", "0"),

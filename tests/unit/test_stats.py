@@ -70,7 +70,7 @@ class TestStatsUseCase(unittest.TestCase):
         self.assertEqual(resp.escalations, 0)
         self.assertEqual(resp.backlog_size, 0)
         self.assertEqual(resp.backlog_delta, 0)
-        self.assertFalse(resp.cost.cost_usd)
+        self.assertFalse(resp.spend.cost_usd)
 
     def test_cost_matches_item_cost_over_the_days_closed_items_children(self):
         s = FakeStore()
@@ -85,8 +85,8 @@ class TestStatsUseCase(unittest.TestCase):
         resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
 
         expected = item_cost(s.children(item))
-        self.assertEqual(resp.cost.cost_usd, expected.cost_usd)
-        self.assertEqual(resp.cost.unpriced_count, expected.unpriced_count)
+        self.assertEqual(resp.spend.cost_usd, expected.cost_usd)
+        self.assertEqual(resp.spend.unpriced_count, expected.unpriced_count)
 
 
 class TestStatsUseCaseBacklog(unittest.TestCase):
