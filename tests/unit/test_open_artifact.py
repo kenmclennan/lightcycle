@@ -53,7 +53,7 @@ class TestOpenArtifactUseCase(unittest.TestCase):
         )
         self.assertTrue(result.success)
         self.assertIn("/repo/.worktrees/x", result.message)
-        self.assertEqual(launcher.edited, ("vi", "/repo/.worktrees/x"))
+        self.assertEqual(launcher.edited_detached, ("vi", "/repo/.worktrees/x"))
 
     def test_editor_that_no_longer_exists_never_calls_the_launcher(self):
         launcher = FakeLauncher()
@@ -63,7 +63,7 @@ class TestOpenArtifactUseCase(unittest.TestCase):
         )
         self.assertFalse(result.success)
         self.assertIn("no longer exists", result.message)
-        self.assertIsNone(launcher.edited)
+        self.assertIsNone(launcher.edited_detached)
 
     def test_editor_that_fails_to_launch_reports_failure_instead_of_raising(self):
         fs = FakeFs(files={"/repo/.worktrees/x": b"x"})

@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -26,7 +27,7 @@ class TestOpenPath(unittest.TestCase):
         ) as mock_run:
             self.assertTrue(LauncherAdapter().open_path("/specs/x.md"))
             mock_run.assert_called_once_with(
-                ["open", "/specs/x.md"], capture_output=True, check=False
+                ["open", "/specs/x.md"], capture_output=True, check=False, timeout=10
             )
 
     def test_uses_xdg_open_elsewhere(self):
@@ -35,7 +36,7 @@ class TestOpenPath(unittest.TestCase):
         ) as mock_run:
             self.assertTrue(LauncherAdapter().open_path("/specs/x.md"))
             mock_run.assert_called_once_with(
-                ["xdg-open", "/specs/x.md"], capture_output=True, check=False
+                ["xdg-open", "/specs/x.md"], capture_output=True, check=False, timeout=10
             )
 
     def test_returns_false_on_a_nonzero_returncode(self):
@@ -82,6 +83,34 @@ class TestEdit(unittest.TestCase):
             LauncherAdapter().edit('"/opt/my editor/bin/edit" --wait', "/x/config")
             mock_run.assert_called_once_with(
                 ["/opt/my editor/bin/edit", "--wait", "/x/config"], timeout=None
+            )
+
+
+class TestEditDetached(unittest.TestCase):
+    def test_launches_the_editor_without_waiting_for_it_to_exit(self):
+        with patch("lightcycle.adapters.launcher.subprocess.Popen") as mock_popen:
+            LauncherAdapter().edit_detached("vi", "/repo/.worktrees/x")
+            mock_popen.assert_called_once_with(
+                ["vi", "/repo/.worktrees/x"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            mock_popen.return_value.wait.assert_not_called()
+
+    def test_does_not_catch_a_missing_editor(self):
+        with patch("lightcycle.adapters.launcher.subprocess.Popen", side_effect=FileNotFoundError):
+            with self.assertRaises(FileNotFoundError):
+                LauncherAdapter().edit_detached("vi", "/repo/.worktrees/x")
+
+    def test_splits_an_editor_command_carrying_arguments(self):
+        with patch("lightcycle.adapters.launcher.subprocess.Popen") as mock_popen:
+            LauncherAdapter().edit_detached("code --wait", "/repo/.worktrees/x")
+            mock_popen.assert_called_once_with(
+                ["code", "--wait", "/repo/.worktrees/x"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
 
 

@@ -100,6 +100,7 @@ class FakeLauncher(LauncherPort):
         self.opened_urls = []
         self.opened_paths = []
         self.edited = None
+        self.edited_detached = None
 
     def open_url(self, url):
         self.opened_urls.append(url)
@@ -114,6 +115,11 @@ class FakeLauncher(LauncherPort):
             raise self.edit_raises
         self.edited = (editor, path)
         return self.returncode
+
+    def edit_detached(self, editor, path):
+        if self.edit_raises is not None:
+            raise self.edit_raises
+        self.edited_detached = (editor, path)
 
 
 class FakeWorkflowSource(WorkflowSourcePort):

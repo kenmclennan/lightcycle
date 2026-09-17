@@ -20,7 +20,7 @@ def open_url(url):
 def open_path(path):
     try:
         result = subprocess.run(
-            [_os_open_command(), path], capture_output=True, check=False
+            [_os_open_command(), path], capture_output=True, check=False, timeout=10
         )
     except Exception:
         return False
@@ -32,6 +32,15 @@ def edit(editor, path):
     return result.returncode
 
 
+def edit_detached(editor, path):
+    subprocess.Popen(
+        shlex.split(editor) + [path],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 class LauncherAdapter(LauncherPort):
     def open_url(self, url):
         return open_url(url)
@@ -41,3 +50,6 @@ class LauncherAdapter(LauncherPort):
 
     def edit(self, editor, path):
         return edit(editor, path)
+
+    def edit_detached(self, editor, path):
+        return edit_detached(editor, path)

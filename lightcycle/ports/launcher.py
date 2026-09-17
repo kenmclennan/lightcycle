@@ -13,3 +13,7 @@ class LauncherPort(ABC):
     @abstractmethod
     def edit(self, editor, path):
         pass
+
+    @abstractmethod
+    def edit_detached(self, editor, path):
+        pass
