@@ -1783,6 +1783,8 @@ class LightcycleApp(App):
         return LiveWorkerCountUseCase(self._container.workers).execute()
 
     def action_toggle_pool(self) -> None:
+        if self._pool_transition_kind is not None and not self._pool_transition_expired:
+            return
         if not PoolRunningUseCase(self._container.lock).execute().running:
             self._start_pool()
             self._begin_pool_transition("start")

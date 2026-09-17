@@ -3063,7 +3063,7 @@ class TestStatsOpensDoneForDay(unittest.TestCase):
 
 
 class TestPoolControl(unittest.TestCase):
-    def _launch(self, running=False, autostart=False, workers=None, spawner=None):
+    def _launch(self, running=False, autostart=False, workers=None, spawner=None, now=None):
         spawner = spawner or FakeSpawner()
         container = make_test_container(
             lock=FakeLock(running=running),
@@ -3071,7 +3071,7 @@ class TestPoolControl(unittest.TestCase):
             spawner=spawner,
             autostart_pool=autostart,
         )
-        session = launch(container)
+        session = launch(container, now=now)
         self.addCleanup(session.close)
         return session, spawner, container
 
@@ -3091,6 +3091,40 @@ class TestPoolControl(unittest.TestCase):
         session.press("p")
 
         self.assertEqual(spawner.pool_spawns, 0)
+
+    def test_a_second_p_press_while_starting_does_not_spawn_again(self):
+        session, spawner, _ = self._launch(running=False)
+
+        session.press("p")
+        session.press("p")
+
+        self.assertEqual(spawner.pool_spawns, 1)
+
+    def test_a_second_p_press_while_stopping_does_not_reprompt(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 0}], alive_pids=(1,))
+        session, _, container = self._launch(running=True, workers=workers)
+
+        session.press("p")
+        session.press("enter")
+        session.press("p")
+
+        self.assertEqual(len(container.workers.killed), 1)
+        self.assertLessEqual(
+            len([s for s in session.app.screen_stack if isinstance(s, PoolPromptScreen)]), 1
+        )
+
+    def test_p_can_retry_starting_after_the_transition_times_out(self):
+        clock = {"now": datetime.datetime(2026, 1, 1, 12, 0, 0)}
+        session, spawner, _ = self._launch(running=False, now=lambda: clock["now"])
+
+        session.press("p")
+        clock["now"] += datetime.timedelta(seconds=POOL_START_TIMEOUT_SECONDS)
+        session.run(session.app._tick_pool_transition)
+        session.pause()
+        session.press("p")
+
+        self.assertEqual(spawner.pool_spawns, 2)
 
     def test_p_on_a_running_pool_asks_before_stopping(self):
         workers = FakeWorkers(
