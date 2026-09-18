@@ -187,7 +187,8 @@ COMMANDS = {
             "title", "description", "project", "workflow", "state", "label",
             "needs", "reason", "tried", "step", "notes",
         )),
-        Arg("--backlog", action="append"), Arg("--depends", action="append"),
+        Arg("--backlog", action="append"),
+        Arg("--depends", action="append", help="item id to gate activation on, not a step"),
         Arg("--unset", action="append"), Arg("id"),
     )),
     "attach": CommandSpec(prog="lc attach", args=(
@@ -198,7 +199,9 @@ COMMANDS = {
     )),
     "dep": CommandSpec(prog="lc dep", args=(
         Arg("id"),
-        MutexGroup(required=True, args=(Arg("--needs"), Arg("--remove"))),
+        MutexGroup(required=True, args=(
+            Arg("--needs", help="item or step id that blocks this one"), Arg("--remove"),
+        )),
     )),
     "rm": CommandSpec(prog="lc rm", args=(
         Arg("id"), Arg("--force", action="store_true"),
