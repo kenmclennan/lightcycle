@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.domain.pool import WorkerPool
+from lightcycle.domain.pool import WorkerPool, pressure_source
 from lightcycle.ports.workers import RegistryUnreadable
 
 
@@ -11,7 +11,7 @@ class PoolHoldResponse:
     alive: int
     max_agents: int
     reason: str = "memory"
-    system_pressure: Optional[float] = None
+    pressure_source: Optional[str] = None
 
 
 class PoolHoldStatusUseCase:
@@ -26,10 +26,17 @@ class PoolHoldStatusUseCase:
             pool = WorkerPool(self._workers.workers_state())
         except RegistryUnreadable:
             return PoolHoldResponse(holding=False, alive=0, max_agents=max_agents)
-        alive = len(pool.alive(probe))
+        alive = pool.alive(probe)
         state = self._memory_gate_status.load()
         cap = state.get("cap")
+        suspended = any(w.suspended for w in alive)
+        if cap == 0:
+            source = "pool"
+        elif suspended:
+            source = pressure_source(state.get("pool_share"), state.get("system_pressure"))
+        else:
+            source = None
         return PoolHoldResponse(
-            holding=cap == 0, alive=alive, max_agents=max_agents,
-            system_pressure=state.get("system_pressure"),
+            holding=cap == 0 or suspended, alive=len(alive), max_agents=max_agents,
+            pressure_source=source,
         )

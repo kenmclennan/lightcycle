@@ -3,7 +3,7 @@ import unittest
 from lightcycle.domain.pool import Worker
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.domain.pool.memory_admission import (
-    admission_cap, combined_pressure, worker_to_resume, worker_to_suspend,
+    admission_cap, combined_pressure, pressure_source, worker_to_resume, worker_to_suspend,
 )
 
 
@@ -21,6 +21,26 @@ class TestCombinedPressure(unittest.TestCase):
 
     def test_equal_values(self):
         self.assertEqual(combined_pressure(0.4, 0.4), 0.4)
+
+
+class TestPressureSource(unittest.TestCase):
+    def test_none_when_both_are_none(self):
+        self.assertIsNone(pressure_source(None, None))
+
+    def test_pool_when_only_pool_share_is_available(self):
+        self.assertEqual(pressure_source(0.5, None), "pool")
+
+    def test_machine_when_only_system_pressure_is_available(self):
+        self.assertEqual(pressure_source(None, 0.5), "machine")
+
+    def test_pool_when_pool_share_dominates(self):
+        self.assertEqual(pressure_source(0.6, 0.3), "pool")
+
+    def test_machine_when_system_pressure_dominates(self):
+        self.assertEqual(pressure_source(0.3, 0.6), "machine")
+
+    def test_pool_wins_the_tie(self):
+        self.assertEqual(pressure_source(0.4, 0.4), "pool")
 
 
 class TestAdmissionCap(unittest.TestCase):

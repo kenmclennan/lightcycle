@@ -427,7 +427,8 @@ def _priority_worker_suspended(size):
         ],
         alive_pids=(1,),
     )
-    return _launch(store, size=size, workers=workers)
+    status = FakeMemoryGateStatus({"pool_share": 0.05, "system_pressure": 0.9})
+    return _launch(store, size=size, workers=workers, memory_gate_status=status)
 
 
 def _engine_active_store():
