@@ -364,6 +364,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def release_day_summary(self, day):
+        pass
+
+    @abstractmethod
     def summary_day_for_step(self, step_id):
         pass
 

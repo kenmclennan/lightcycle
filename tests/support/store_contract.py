@@ -1296,6 +1296,25 @@ class StoreContractBase:
         s = self.make_store()
         self.assertIsNone(s.summary_day_for_step("no-such-step"))
 
+    def test_release_day_summary_clears_the_claim_and_keeps_generated_at(self):
+        s = self.make_store()
+        day = datetime.date(2026, 1, 1)
+        s.mark_day_summary_dirty(day)
+        s.start_day_summary(day, step_id="step-1", spawn_count=1)
+        s.finish_day_summary(day, summary="text", summarized_count=1, clear_dirty=False)
+        before = s.day_summary(day)
+        s.start_day_summary(day, step_id="step-2", spawn_count=2)
+
+        s.release_day_summary(day)
+
+        row = s.day_summary(day)
+        self.assertIsNone(row.step_id)
+        self.assertIsNone(row.spawn_count)
+        self.assertEqual(row.generated_at, before.generated_at)
+        self.assertEqual(row.summary, "text")
+        self.assertEqual(row.summarized_count, 1)
+        self.assertEqual(row.dirty_since, before.dirty_since)
+
     def test_finish_day_summary_with_clear_dirty_false_leaves_dirty_since_untouched(self):
         s = self.make_store()
         day = datetime.date(2026, 1, 1)
