@@ -1589,17 +1589,8 @@ class LightcycleApp(App):
                 _tui_metric_line(wall_seconds, rss_kb, self._now().timestamp())
             )
 
-    def _refresh_status_bar(self) -> None:
-        running = PoolRunningUseCase(self._container.lock).execute().running
-        if self._pool_transition_kind == "start" and running:
-            self._clear_pool_transition()
-        elif self._pool_transition_kind == "stop" and not running:
-            self._clear_pool_transition()
-        breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
-        hold = PoolHoldStatusUseCase(
-            self._container.memory_gate_status, self._container.workers, self._container.config,
-        ).execute(self._container.workers.pid_alive)
-        self.screen_stack[0].query_one(StatusBar).report(
+    def _render_status_bar(self, status_bar, running, breaker, hold) -> None:
+        status_bar.report(
             pool_running=running,
             pool_transition_kind=self._pool_transition_kind,
             pool_transition_expired=self._pool_transition_expired,
@@ -1611,6 +1602,23 @@ class LightcycleApp(App):
             upgrade_error=self._upgrade_error,
             hold=hold,
         )
+
+    def _refresh_status_bar(self) -> None:
+        running = PoolRunningUseCase(self._container.lock).execute().running
+        if self._pool_transition_kind == "start" and running:
+            self._clear_pool_transition()
+        elif self._pool_transition_kind == "stop" and not running:
+            self._clear_pool_transition()
+        breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
+        hold = PoolHoldStatusUseCase(
+            self._container.memory_gate_status, self._container.workers, self._container.config,
+        ).execute(self._container.workers.pid_alive)
+        for screen in self.screen_stack:
+            try:
+                status_bar = screen.query_one(StatusBar)
+            except NoMatches:
+                continue
+            self._render_status_bar(status_bar, running, breaker, hold)
 
     def _begin_pool_transition(self, kind) -> None:
         self._pool_transition_kind = kind

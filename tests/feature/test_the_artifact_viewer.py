@@ -246,9 +246,7 @@ def _pool_or_breaker_state_changes(ctx):
 
 @when("one poll interval elapses")
 def _one_poll_interval_elapses(ctx):
-    session = ctx["session"]
-    session.run(session.app.screen.poll_refresh)
-    session.pause()
+    ctx["session"].poll_tick()
 
 
 @then("it opens full-screen")
