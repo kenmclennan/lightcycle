@@ -1,5 +1,6 @@
 from lightcycle.domain.work.active_time import item_active_seconds
 from lightcycle.domain.work.artifact import Artifact, default_kind_for, type_label
+from lightcycle.domain.work.daily_summary import DailySummary
 from lightcycle.domain.work.cost import (
     ItemCost,
     StageSubtotal,
@@ -43,6 +44,7 @@ from lightcycle.domain.work.worker_permissions import (
 
 __all__ = [
     "item_active_seconds",
+    "DailySummary",
     "Artifact", "default_kind_for", "type_label", "Lane", "State", "lane_for", "roll_up",
     "ItemCost", "StageSubtotal", "StepCost", "ToolUsageRow", "cache_hit_rate",
     "item_cost", "step_cost",

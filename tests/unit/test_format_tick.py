@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.pool.backup import BackupResponse
+from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
@@ -31,6 +32,7 @@ def _result(**kw):
             ci_resolved=defaults["ci_resolved"],
         ),
         cadence=RetroCadenceResponse(fired=defaults["cadence_fired"]),
+        summary=DailySummaryCadenceResponse(),
         hooks=HookCompletionsResponse(completed=defaults["hook_completed"]),
         backup=BackupResponse(created=defaults["backed_up"], pruned=defaults["backup_pruned"]),
         pool=PoolState(

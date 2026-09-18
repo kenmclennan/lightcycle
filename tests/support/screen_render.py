@@ -620,7 +620,7 @@ def _done_day_filtered(size):
     return session
 
 
-def _stats_store():
+def _report_store():
     store = DemoStore(now=lambda: NOW.isoformat())
     lc273 = store.item("LC-273", "Row title repeats the step name", project="lightcycle")
     step273 = store.step("LC-273.1", step="write-code", role="agent", parent=lc273)
@@ -648,30 +648,49 @@ def _stats_store():
     return store
 
 
-def _stats_today(size):
-    session = _launch(_stats_store(), size=size)
+def _report_today(size):
+    session = _launch(_report_store(), size=size)
     session.press("tab")
     session.press("tab")
     session.press("tab")
     return session
 
 
-def _stats_day_picker(size):
-    session = _stats_today(size)
+def _report_day_picker(size):
+    session = _report_today(size)
     session.press("d")
     return session
 
 
-def _stats_historical_day(size):
-    session = _stats_today(size)
-    session.app._stats_day = datetime.date(2025, 12, 31)
-    session.run(session.app._refresh_stats_view)
+def _report_historical_day(size):
+    session = _report_today(size)
+    session.app._report_day = datetime.date(2025, 12, 31)
+    session.run(session.app._refresh_report_view)
     session.pause()
     return session
 
 
-def _stats_stacked(size):
-    session = _launch(_stats_store(), size=(40, size[1]))
+def _report_stacked(size):
+    session = _launch(_report_store(), size=(40, size[1]))
+    session.press("tab")
+    session.press("tab")
+    session.press("tab")
+    return session
+
+
+def _report_with_summary(size):
+    store = _report_store()
+    today = NOW.date()
+    with store.transaction():
+        store.mark_day_summary_dirty(today)
+        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+    store.finish_day_summary(
+        today,
+        summary="Closed a handful of items today, mostly hardening the reporting surface.",
+        summarized_count=1,
+        clear_dirty=True,
+    )
+    session = _launch(store, size=size)
     session.press("tab")
     session.press("tab")
     session.press("tab")
@@ -1207,10 +1226,11 @@ SCREENS = {
     "done#with-cost": _done_with_cost,
     "done#day-picker": _done_day_picker,
     "done#day-filtered": _done_day_filtered,
-    "stats#today": _stats_today,
-    "stats#day-picker": _stats_day_picker,
-    "stats#historical-day": _stats_historical_day,
-    "stats#stacked": _stats_stacked,
+    "report#today": _report_today,
+    "report#day-picker": _report_day_picker,
+    "report#historical-day": _report_historical_day,
+    "report#stacked": _report_stacked,
+    "report#with-summary": _report_with_summary,
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-engine-active": _hub_workflow_engine_active,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
