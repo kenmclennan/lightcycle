@@ -33,9 +33,7 @@ class RemoveNodeUseCase:
         covered = pool.covered_steps(self._workers.pid_alive)
         live_spawnids = pool.live_spawnids(self._workers.pid_alive)
         for t in self._store.claimed_steps():
-            if t.id in step_ids and (
-                t.id in covered or (t.claimed_by and t.claimed_by in live_spawnids)
-            ):
+            if t.id in step_ids and (t.id in covered or t.claimed_by in live_spawnids):
                 return t.id
         return None
 
