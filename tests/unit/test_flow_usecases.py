@@ -1104,23 +1104,25 @@ class TestClaimTask(unittest.TestCase):
         self.assertEqual(resp.view.step.id, assigned)
         self.assertEqual(s.get_node(later).state, "queued")
 
-    def test_idempotent_falls_through_when_assignment_is_done(self):
+    def test_idempotent_refuses_a_further_claim_when_assignment_is_done(self):
         s = FakeStore()
         old = create_owned_step(s, "build: x", step="build", role="agent")
         s.complete_node(old, "done")
         fresh = create_owned_step(s, "build: y", step="build", role="agent")
-        resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": old})).execute(
-            ClaimInput(role="agent"))
-        self.assertEqual(resp.view.step.id, fresh)
+        uc = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": old}))
+        with self.assertRaisesRegex(UseCaseError, "sp1.*%s" % old):
+            uc.execute(ClaimInput(role="agent"))
+        self.assertEqual(s.get_node(fresh).state, "queued")
 
-    def test_idempotent_falls_through_when_reassigned_to_another_worker(self):
+    def test_idempotent_refuses_a_further_claim_when_reassigned_to_another_worker(self):
         s = FakeStore()
         stolen = create_owned_step(s, "build: x", step="build", role="agent")
         self._inprogress(s, stolen, "other")
         fresh = create_owned_step(s, "build: y", step="build", role="agent")
-        resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": stolen})).execute(
-            ClaimInput(role="agent"))
-        self.assertEqual(resp.view.step.id, fresh)
+        uc = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": stolen}))
+        with self.assertRaises(UseCaseError):
+            uc.execute(ClaimInput(role="agent"))
+        self.assertEqual(s.get_node(fresh).state, "queued")
 
     def test_resume_after_a_real_claim_ready_agrees_on_owner(self):
         s = FakeStore(config=FakeConfig(spawn="sp1"))
@@ -1133,12 +1135,13 @@ class TestClaimTask(unittest.TestCase):
         resume = uc.execute(ClaimInput(role="agent"))
         self.assertEqual(resume.view.step.id, step)
 
-    def test_idempotent_falls_through_when_assigned_step_is_gone(self):
+    def test_idempotent_refuses_a_further_claim_when_assigned_step_is_gone(self):
         s = FakeStore()
         fresh = create_owned_step(s, "build: y", step="build", role="agent")
-        resp = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": "ghost"})).execute(
-            ClaimInput(role="agent"))
-        self.assertEqual(resp.view.step.id, fresh)
+        uc = self._idempotent_uc(s, FakeWorkers(assigned={"sp1": "ghost"}))
+        with self.assertRaises(UseCaseError):
+            uc.execute(ClaimInput(role="agent"))
+        self.assertEqual(s.get_node(fresh).state, "queued")
 
     def test_idempotent_path_does_not_reclaim_on_assembly_failure(self):
         s = FakeStore()

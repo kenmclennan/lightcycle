@@ -61,18 +61,20 @@ class ClaimStepUseCase:
         self._config = config
 
     def execute(self, input: ClaimInput) -> Optional[ClaimResponse]:
-        assigned = self._assigned_inflight()
-        if assigned is not None:
-            return self._context(assigned)
+        spawnid = self._config.spawn_id()
+        if spawnid:
+            sid = self._workers.step_for(spawnid)
+            if sid:
+                node = self._assigned_inflight(sid, spawnid)
+                if node is not None:
+                    return self._context(node)
+                raise UseCaseError(
+                    "spawnid '%s' already claimed step '%s'; refusing a further claim"
+                    % (spawnid, sid)
+                )
         return self._claim(input.role, item=input.item, stage=input.stage)
 
-    def _assigned_inflight(self):
-        spawnid = self._config.spawn_id()
-        if not spawnid:
-            return None
-        sid = self._workers.step_for(spawnid)
-        if not sid:
-            return None
+    def _assigned_inflight(self, sid, spawnid):
         try:
             node = self._store.get_node(sid)
         except KeyError:
