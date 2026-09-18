@@ -52,30 +52,30 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `default-origin` | the workflow origin the spawner reads step prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
 | `workflows-remote` | git remote for the built-in workflow origin. Seeded blank; `lc init` only pulls it once set (`lc config --edit`, then `lc workflow add <url> --name <origin>`) |
 | `workflow-retention` | pulled bundles kept per origin (plus any a live item pins) |
-| `max-agents` | worker cap the pool fills to each tick |
+| `max-agents` | worker cap the pool fills to each tick; must be `>= 0` (`0` pauses admission for the tick) |
 | `poll-seconds` | pool tick interval |
 | `branch-prefix` | prefix for worktree branches |
-| `max-boot-seconds` / `max-session-seconds` | worker boot and session caps |
-| `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step |
-| `probe-cooldown-seconds` | how long the breaker waits before allowing another probe after the previous one stalled |
+| `max-boot-seconds` / `max-session-seconds` | worker boot and session caps; both must be `>= 0` |
+| `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step; must be `>= 0` |
+| `probe-cooldown-seconds` | how long the breaker waits before allowing another probe after the previous one stalled; must be `>= 0` |
 | `spin-cap` | consecutive no-work worker deaths, on one step or pool-wide, before the pool parks the step / caps itself to one worker |
 | `retro-interval-reflections` | reflections pending across un-retroed items and un-retroed closed passes of items still open, between engine retro audits |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
 | `max-title-length` | cap on an item's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description`. A step has no title of its own - it is composed at render time from its stage and its item's title - so this cap does not apply to one |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |
-| `shutdown-grace-seconds` | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping |
+| `shutdown-grace-seconds` | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping; must be `>= 0` |
 | `tick-failure-cap` | consecutive tick exceptions the pool loop tolerates (logging and continuing) before it re-raises and exits non-gracefully |
 | `personal-origin` | the user's own workflow-origin repo, set by `lc workflow init`. Optional - unset (empty) until one exists |
 | `context-artifact-types` | artifact types an agent step resolves to a repo-relative file path (e.g. `spec`). Optional - soft-defaults to `spec` if unset |
 | `internal-shortcode` | id prefix for items the engine creates for itself (e.g. retro-cadence audit items) - distinct from `shortcode`, which prefixes items you create |
-| `memory-reserve-fraction` | fraction of machine memory headroom the pool always withholds from worker admission |
-| `suspend-pressure` | pool memory-share threshold above which the memory gate signals a running worker to suspend |
-| `resume-pressure` | pool memory-share threshold below which the memory gate signals a suspended worker to resume; must be set strictly below `suspend-pressure` |
+| `memory-reserve-fraction` | fraction of machine memory headroom the pool always withholds from worker admission; must be in `[0, 1]` |
+| `suspend-pressure` | pool memory-share threshold above which the memory gate signals a running worker to suspend; must be in `[0, 1]` |
+| `resume-pressure` | pool memory-share threshold below which the memory gate signals a suspended worker to resume; must be set strictly below `suspend-pressure`, and must itself be in `[0, 1]` |
 | `review-rounds-cap` | consecutive review-reject rounds on one step a workflow's review-rounds-cap transition tolerates before it fires |
 | `tui-autostart-pool` | whether the TUI starts the pool loop automatically on launch |
 | `tui-metrics` | whether the TUI records its own per-tick refresh timing to the run log |
-| `tui-upgrade-check-seconds` | how often the TUI rechecks for a new engine version in the background; `0` disables the periodic recheck (the check still runs once on launch) |
-| `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS` |
+| `tui-upgrade-check-seconds` | how often the TUI rechecks for a new engine version in the background; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
+| `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS`; each must be `>= 0` |
 
 ## Workflow sources
 

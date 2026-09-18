@@ -101,6 +101,31 @@ _SEED_KEYS = [
     ("resume-pressure", "0.70"),
 ]
 
+_NUMERIC_RANGES = {
+    "memory-reserve-fraction": (0.0, 1.0),
+    "suspend-pressure": (0.0, 1.0),
+    "resume-pressure": (0.0, 1.0),
+    "max-agents": (0, None),
+    "max-boot-seconds": (0, None),
+    "max-session-seconds": (0, None),
+    "stall-seconds": (0, None),
+    "probe-cooldown-seconds": (0, None),
+    "tui-upgrade-check-seconds": (0, None),
+    "shutdown-grace-seconds": (0, None),
+    "price-sonnet-input-per-mtok": (0.0, None),
+    "price-sonnet-output-per-mtok": (0.0, None),
+    "price-sonnet-cache-write-per-mtok": (0.0, None),
+    "price-sonnet-cache-read-per-mtok": (0.0, None),
+    "price-opus-input-per-mtok": (0.0, None),
+    "price-opus-output-per-mtok": (0.0, None),
+    "price-opus-cache-write-per-mtok": (0.0, None),
+    "price-opus-cache-read-per-mtok": (0.0, None),
+    "price-haiku-input-per-mtok": (0.0, None),
+    "price-haiku-output-per-mtok": (0.0, None),
+    "price-haiku-cache-write-per-mtok": (0.0, None),
+    "price-haiku-cache-read-per-mtok": (0.0, None),
+}
+
 
 class ConfigError(Exception):
     pass
@@ -302,6 +327,17 @@ class Config:
         except (TypeError, ValueError):
             raise ConfigError("config value %r must be a number (got %r)" % (key, v))
 
+    def _check_range(self, key, value):
+        bounds = _NUMERIC_RANGES.get(key)
+        if bounds is None:
+            return value
+        lo, hi = bounds
+        if lo is not None and value < lo:
+            raise ConfigError("config value %r must be >= %r (got %r)" % (key, lo, value))
+        if hi is not None and value > hi:
+            raise ConfigError("config value %r must be <= %r (got %r)" % (key, hi, value))
+        return value
+
     @staticmethod
     def _parse_bool(key, raw):
         text = str(raw).strip().lower()
@@ -348,9 +384,8 @@ class Config:
 
     def max_agents(self):
         env = self._env_int("LC_MAX_AGENTS", None)
-        if env is not None:
-            return env
-        return self._required_int("max-agents")
+        value = env if env is not None else self._required_int("max-agents")
+        return self._check_range("max-agents", value)
 
     def worktree_retries(self):
         env = self._env_int("LC_WORKTREE_RETRIES", None)
@@ -366,27 +401,23 @@ class Config:
 
     def max_boot_seconds(self):
         env = self._env_int("LC_MAX_BOOT_SECONDS", None)
-        if env is not None:
-            return env
-        return self._required_int("max-boot-seconds")
+        value = env if env is not None else self._required_int("max-boot-seconds")
+        return self._check_range("max-boot-seconds", value)
 
     def max_session_seconds(self):
         env = self._env_int("LC_MAX_SESSION_SECONDS", None)
-        if env is not None:
-            return env
-        return self._required_int("max-session-seconds")
+        value = env if env is not None else self._required_int("max-session-seconds")
+        return self._check_range("max-session-seconds", value)
 
     def stall_seconds(self):
         env = self._env_int("LC_STALL_SECONDS", None)
-        if env is not None:
-            return env
-        return self._required_int("stall-seconds")
+        value = env if env is not None else self._required_int("stall-seconds")
+        return self._check_range("stall-seconds", value)
 
     def probe_cooldown_seconds(self):
         env = self._env_int("LC_PROBE_COOLDOWN_SECONDS", None)
-        if env is not None:
-            return env
-        return self._required_int("probe-cooldown-seconds")
+        value = env if env is not None else self._required_int("probe-cooldown-seconds")
+        return self._check_range("probe-cooldown-seconds", value)
 
     def spin_cap(self):
         env = self._env_int("LC_SPIN_CAP", None)
@@ -414,9 +445,8 @@ class Config:
 
     def tui_upgrade_check_seconds(self):
         env = self._env_int("LC_TUI_UPGRADE_CHECK_SECONDS", None)
-        if env is not None:
-            return env
-        return self._required_int("tui-upgrade-check-seconds")
+        value = env if env is not None else self._required_int("tui-upgrade-check-seconds")
+        return self._check_range("tui-upgrade-check-seconds", value)
 
     def worker_history(self):
         env = self._env_int("LC_WORKER_HISTORY", None)
@@ -426,9 +456,8 @@ class Config:
 
     def shutdown_grace_seconds(self):
         env = self._env_int("LC_SHUTDOWN_GRACE_SECONDS", None)
-        if env is not None:
-            return env
-        return self._required_int("shutdown-grace-seconds")
+        value = env if env is not None else self._required_int("shutdown-grace-seconds")
+        return self._check_range("shutdown-grace-seconds", value)
 
     def tick_failure_cap(self):
         env = self._env_int("LC_TICK_FAILURE_CAP", None)
@@ -444,15 +473,18 @@ class Config:
 
     def memory_reserve_fraction(self):
         env = self._env_float("LC_MEMORY_RESERVE_FRACTION", None)
-        return env if env is not None else self._required_float("memory-reserve-fraction")
+        value = env if env is not None else self._required_float("memory-reserve-fraction")
+        return self._check_range("memory-reserve-fraction", value)
 
     def suspend_pressure(self):
         env = self._env_float("LC_SUSPEND_PRESSURE", None)
-        return env if env is not None else self._required_float("suspend-pressure")
+        value = env if env is not None else self._required_float("suspend-pressure")
+        return self._check_range("suspend-pressure", value)
 
     def resume_pressure(self):
         env = self._env_float("LC_RESUME_PRESSURE", None)
         value = env if env is not None else self._required_float("resume-pressure")
+        value = self._check_range("resume-pressure", value)
         if value >= self.suspend_pressure():
             raise ConfigError(
                 "resume-pressure (%r) must be strictly below suspend-pressure (%r)"
@@ -494,40 +526,70 @@ class Config:
         return self._required_int("max-title-length")
 
     def price_sonnet_input_per_mtok(self):
-        return self._required_float("price-sonnet-input-per-mtok")
+        return self._check_range(
+            "price-sonnet-input-per-mtok", self._required_float("price-sonnet-input-per-mtok")
+        )
 
     def price_sonnet_output_per_mtok(self):
-        return self._required_float("price-sonnet-output-per-mtok")
+        return self._check_range(
+            "price-sonnet-output-per-mtok", self._required_float("price-sonnet-output-per-mtok")
+        )
 
     def price_sonnet_cache_write_per_mtok(self):
-        return self._required_float("price-sonnet-cache-write-per-mtok")
+        return self._check_range(
+            "price-sonnet-cache-write-per-mtok",
+            self._required_float("price-sonnet-cache-write-per-mtok"),
+        )
 
     def price_sonnet_cache_read_per_mtok(self):
-        return self._required_float("price-sonnet-cache-read-per-mtok")
+        return self._check_range(
+            "price-sonnet-cache-read-per-mtok",
+            self._required_float("price-sonnet-cache-read-per-mtok"),
+        )
 
     def price_opus_input_per_mtok(self):
-        return self._required_float("price-opus-input-per-mtok")
+        return self._check_range(
+            "price-opus-input-per-mtok", self._required_float("price-opus-input-per-mtok")
+        )
 
     def price_opus_output_per_mtok(self):
-        return self._required_float("price-opus-output-per-mtok")
+        return self._check_range(
+            "price-opus-output-per-mtok", self._required_float("price-opus-output-per-mtok")
+        )
 
     def price_opus_cache_write_per_mtok(self):
-        return self._required_float("price-opus-cache-write-per-mtok")
+        return self._check_range(
+            "price-opus-cache-write-per-mtok",
+            self._required_float("price-opus-cache-write-per-mtok"),
+        )
 
     def price_opus_cache_read_per_mtok(self):
-        return self._required_float("price-opus-cache-read-per-mtok")
+        return self._check_range(
+            "price-opus-cache-read-per-mtok",
+            self._required_float("price-opus-cache-read-per-mtok"),
+        )
 
     def price_haiku_input_per_mtok(self):
-        return self._required_float("price-haiku-input-per-mtok")
+        return self._check_range(
+            "price-haiku-input-per-mtok", self._required_float("price-haiku-input-per-mtok")
+        )
 
     def price_haiku_output_per_mtok(self):
-        return self._required_float("price-haiku-output-per-mtok")
+        return self._check_range(
+            "price-haiku-output-per-mtok", self._required_float("price-haiku-output-per-mtok")
+        )
 
     def price_haiku_cache_write_per_mtok(self):
-        return self._required_float("price-haiku-cache-write-per-mtok")
+        return self._check_range(
+            "price-haiku-cache-write-per-mtok",
+            self._required_float("price-haiku-cache-write-per-mtok"),
+        )
 
     def price_haiku_cache_read_per_mtok(self):
-        return self._required_float("price-haiku-cache-read-per-mtok")
+        return self._check_range(
+            "price-haiku-cache-read-per-mtok",
+            self._required_float("price-haiku-cache-read-per-mtok"),
+        )
 
     def usage_pricing(self):
         return {
