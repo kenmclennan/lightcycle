@@ -4,14 +4,13 @@ from functools import partial
 from lightcycle.adapters.tui.design_system import (
     DEPENDENCY_BLOCKED_EXTRA_GLYPH, HUMAN_STEP_GLYPH, STATE_GLYPHS,
 )
-from lightcycle.adapters.tui.hub import COST_NOT_RECORDED, _unpriced_suffix
+from lightcycle.adapters.tui.hub import _item_cost_text
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.flow.engine_steps import engine_display_of
-from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.work import is_human_step, item_active_seconds, row_bucket
-from lightcycle.render import format_elapsed, format_usd
+from lightcycle.render import format_elapsed
 
 
 @dataclass(frozen=True)
@@ -116,25 +115,18 @@ def _queued_row(store, node, flow):
     )
 
 
-def _rolled_up_cost_text(store, item_id):
-    cost = CostUseCase(store).execute(CostInput(node=item_id))
-    if cost.turn_count == 0 and not cost.cost_usd:
-        return ""
-    base = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
-    return base + _unpriced_suffix(cost.unpriced_count)
-
-
-def _rolled_up_time_text(store, item_id):
-    total = item_active_seconds(store.children(item_id))
+def _rolled_up_time_text(children):
+    total = item_active_seconds(children)
     return format_elapsed(total) if total > 0 else ""
 
 
 def _row_for(store, row_builder, selected):
     row = row_builder(store, selected.node, selected.flow)
+    children = store.children(selected.owning_node.id)
     return replace(
         row, id=selected.owning_node.id, title=selected.owning_node.title,
-        cost=_rolled_up_cost_text(store, selected.owning_node.id),
-        time=_rolled_up_time_text(store, selected.owning_node.id),
+        cost=_item_cost_text(children),
+        time=_rolled_up_time_text(children),
     )
 
 
