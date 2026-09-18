@@ -103,8 +103,7 @@ def _signal_group(pid, sig):
         try:
             pgid = os.getpgid(pid)
         except (OSError, ValueError, TypeError):
-            os.kill(pid, sig)
-            return
+            pgid = pid
         if pgid == own_pgid:
             os.kill(pid, sig)
         else:

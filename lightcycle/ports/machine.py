@@ -9,3 +9,7 @@ class MachinePort(ABC):
     @abstractmethod
     def self_rss(self):
         pass
+
+    @abstractmethod
+    def worktree_pids(self, path):
+        pass

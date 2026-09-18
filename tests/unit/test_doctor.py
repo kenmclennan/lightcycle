@@ -7,6 +7,8 @@ from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.config import _SEED_KEYS, Config
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.ports.workflow_source import OriginRegistration
+from tests.support.fake_fs import FakeFs
+from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 
 
@@ -79,6 +81,20 @@ class FakeWorkflowBundle:
         return None if body is None else StepPrompt(meta={}, body=body)
 
 
+class _Worktrees:
+    def __init__(self, paths=None):
+        self._paths = paths or {}
+
+    def worktree_path(self, item):
+        return self._paths[item]
+
+
+def _uc(store, source, config, bundle):
+    return DoctorUseCase(
+        store, source, config, bundle, FakeFs(), FakeMachine(), _Worktrees(),
+    )
+
+
 class TestAllKeysCoversEverySeedKey(unittest.TestCase):
     def test_all_keys_covers_every_seed_key(self):
         self.assertEqual(set(_ALL_KEYS), {k.replace("-", "_") for k, _ in _SEED_KEYS})
@@ -90,7 +106,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertTrue(report.healthy())
         for problems in report.problems.values():
             self.assertEqual(problems, [])
@@ -101,7 +117,7 @@ class TestDoctorUseCase(unittest.TestCase):
         store.update_state(item, "in_progress")
         source = FakeWorkflowSource()
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
         self.assertEqual(len(report.problems["pins"]), 1)
         self.assertIn(item, report.problems["pins"][0].node_id)
@@ -114,7 +130,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 99)
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
         self.assertEqual(report.problems["pins"], [])
         self.assertEqual(len(report.problems["contract"]), 1)
@@ -134,7 +150,7 @@ class TestDoctorUseCase(unittest.TestCase):
             ("acme", "sha2"): {"write-code": "same body"},
         })
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, bundle).execute(DoctorInput())
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(report.problems["pins"], [])
 
     def test_pin_differs_from_current_with_differing_step_body_reports_pins_problem(self):
@@ -149,7 +165,7 @@ class TestDoctorUseCase(unittest.TestCase):
             ("acme", "sha2"): {"write-code": "new body"},
         })
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, bundle).execute(DoctorInput())
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(len(report.problems["pins"]), 1)
         problem = report.problems["pins"][0]
         self.assertEqual(problem.node_id, item)
@@ -169,7 +185,7 @@ class TestDoctorUseCase(unittest.TestCase):
             ("acme", "sha2"): {"write-code": "body", "review-code": "new step"},
         })
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, bundle).execute(DoctorInput())
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(len(report.problems["pins"]), 1)
         self.assertIn("review-code", report.problems["pins"][0].message)
 
@@ -181,7 +197,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1)
         bundle = FakeWorkflowBundle({("acme", "sha1"): {"write-code": "body"}})
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, bundle).execute(DoctorInput())
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(report.problems["pins"], [])
 
     def test_current_sha_not_on_disk_reports_no_drift_problem(self):
@@ -193,7 +209,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.currents["acme"] = "sha-pruned"
         bundle = FakeWorkflowBundle({("acme", "sha1"): {"write-code": "body"}})
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, bundle).execute(DoctorInput())
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(report.problems["pins"], [])
 
     def test_contract_incompatible_and_content_drifted_produce_both_problems(self):
@@ -208,7 +224,7 @@ class TestDoctorUseCase(unittest.TestCase):
             ("acme", "sha2"): {"write-code": "new body"},
         })
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, bundle).execute(DoctorInput())
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(len(report.problems["contract"]), 1)
         self.assertEqual(len(report.problems["pins"]), 1)
 
@@ -228,7 +244,7 @@ class TestDoctorUseCase(unittest.TestCase):
             ("acme", "sha3"): {"write-code": "same body"},
         })
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, bundle).execute(DoctorInput())
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(len(report.problems["pins"]), 1)
         self.assertEqual(report.problems["pins"][0].node_id, drifted)
 
@@ -236,7 +252,7 @@ class TestDoctorUseCase(unittest.TestCase):
         store = FakeStore()
         source = FakeWorkflowSource()
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
         self.assertEqual(len(report.problems["origin"]), 1)
         self.assertIn("acme", report.problems["origin"][0].message)
@@ -247,7 +263,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         source.register_origin("acme", ref="main")
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(report.problems["origin"], [])
 
     def test_registered_origin_with_deleted_ref_reports_origin_problem(self):
@@ -257,7 +273,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.register_origin("acme", ref="gone-branch")
         source.fail_resolve("acme", "ref 'gone-branch' no longer resolves against acme")
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(len(report.problems["origin"]), 1)
         problem = report.problems["origin"][0]
         self.assertIn("acme", problem.message)
@@ -270,7 +286,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.register_origin("acme", ref="main")
         source.fail_resolve("acme", "acme is not reachable right now")
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(len(report.problems["origin"]), 1)
         message = report.problems["origin"][0].message
         self.assertIn("not reachable", message)
@@ -284,7 +300,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.register_origin("other", ref="gone-branch")
         source.fail_resolve("other", "ref 'gone-branch' no longer resolves against other")
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(len(report.problems["origin"]), 1)
         self.assertIn("other", report.problems["origin"][0].message)
 
@@ -293,7 +309,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         source.register_origin("other", ref="main")
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(len(report.problems["origin"]), 1)
         self.assertIn("acme", report.problems["origin"][0].message)
 
@@ -303,7 +319,7 @@ class TestDoctorUseCase(unittest.TestCase):
         store = FakeStore()
         source = FakeWorkflowSource()
         config = _cfg(**keys)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(report.problems["origin"], [])
         self.assertTrue(any("default-origin" in p.message for p in report.problems["config"]))
 
@@ -314,7 +330,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**keys)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
         self.assertTrue(any("max-agents" in p.message for p in report.problems["config"]))
 
@@ -325,7 +341,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**keys)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
         self.assertTrue(any("retro-interval-items" in p.message for p in report.problems["config"]))
 
@@ -335,7 +351,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**_ALL_KEYS)
         self.assertEqual(config.obsolete_config_keys(), ())
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(report.problems["config"], [])
 
     def test_blank_required_key_reports_config_problem_distinct_from_missing_and_obsolete(self):
@@ -345,7 +361,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**keys)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
         problems = report.problems["config"]
         self.assertEqual(len(problems), 1)
@@ -358,10 +374,50 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**_ALL_KEYS)
-        report = DoctorUseCase(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
+        report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
         self.assertEqual(len(report.problems["store"]), 1)
         self.assertEqual(report.problems["store"][0].node_id, item)
+
+
+class TestDoctorOrphans(unittest.TestCase):
+    def _report(self, store, fs, machine, worktrees):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        config = _cfg(**_ALL_KEYS)
+        return DoctorUseCase(
+            store, source, config, FakeWorkflowBundle(), fs, machine, worktrees,
+        ).execute(DoctorInput())
+
+    def test_worktree_matching_a_claimed_items_path_reports_no_problem(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        item = store.create_item("item", "a description")
+        step = store.create_step(parent=item, role="agent")
+        store.update_state(step, "in_progress")
+        path = "/repo/.worktrees/%s-code" % item
+        fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item]})
+        report = self._report(store, fs, FakeMachine(), _Worktrees({item: path}))
+        self.assertEqual(report.problems["orphans"], [])
+
+    def test_unmatched_worktree_with_live_pids_reports_one_problem_naming_path_and_pids(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        fs = FakeFs(dirs={"/repo/.worktrees": ["stray-item-code"]})
+        machine = FakeMachine(worktree_pids={"/repo/.worktrees/stray-item-code": [111, 222]})
+        report = self._report(store, fs, machine, _Worktrees())
+        self.assertEqual(len(report.problems["orphans"]), 1)
+        problem = report.problems["orphans"][0]
+        self.assertIn("/repo/.worktrees/stray-item-code", problem.message)
+        self.assertIn("111", problem.message)
+        self.assertIn("222", problem.message)
+
+    def test_unmatched_worktree_with_no_live_pids_reports_no_problem(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        fs = FakeFs(dirs={"/repo/.worktrees": ["idle-item-code"]})
+        report = self._report(store, fs, FakeMachine(), _Worktrees())
+        self.assertEqual(report.problems["orphans"], [])
 
 
 if __name__ == "__main__":

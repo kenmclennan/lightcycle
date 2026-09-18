@@ -6,6 +6,8 @@ from contextlib import redirect_stdout, redirect_stderr
 from lightcycle import cli
 from lightcycle.config import ResolvedSetting
 from lightcycle.ports.workflow_source import OriginRegistration
+from tests.support.fake_fs import FakeFs
+from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 
 
@@ -74,12 +76,22 @@ class FakeWorkflowBundle:
         return None
 
 
+class FakeWorktrees:
+    def worktree_path(self, item):
+        raise AssertionError("no claimed steps expected in cmd_doctor tests")
+
+
 class FakeContainer:
     def __init__(self, store, workflow_source=None, config=None, workflow_bundle=None):
         self.store = store
         self.workflow_source = workflow_source or FakeWorkflowSource()
         self.config = config or FakeConfig()
         self.workflow_bundle = workflow_bundle or FakeWorkflowBundle()
+        self.fs = FakeFs()
+        self.machine = FakeMachine()
+
+    def worktrees(self):
+        return FakeWorktrees()
 
 
 class TestCmdDoctor(unittest.TestCase):
@@ -88,7 +100,7 @@ class TestCmdDoctor(unittest.TestCase):
         rc, out, err = call(cli.cmd_doctor)
         self.assertEqual(rc, 0)
         self.assertIn("healthy", out)
-        for cat in ("store", "pins", "contract", "origin", "config"):
+        for cat in ("store", "pins", "contract", "origin", "config", "orphans"):
             self.assertIn("%s: ok" % cat, out)
 
     def test_unhealthy_store_returns_one(self):
@@ -105,7 +117,9 @@ class TestCmdDoctor(unittest.TestCase):
         rc, out, err = call(cli.cmd_doctor, "--json")
         self.assertEqual(rc, 0)
         data = json.loads(out)
-        self.assertEqual(set(data.keys()), {"store", "pins", "contract", "origin", "config"})
+        self.assertEqual(
+            set(data.keys()), {"store", "pins", "contract", "origin", "config", "orphans"}
+        )
         for probs in data.values():
             self.assertEqual(probs, [])
 

@@ -819,7 +819,10 @@ class FakeStore(StorePort):
         return [self._to_node(b) for b in self._records.values() if b.get("parent") == item_id]
 
     def claimed_steps(self):
-        return [self._to_node(b) for b in self._records.values() if b.get("state") == "in_progress"]
+        return [
+            self._to_node(b) for b in self._records.values()
+            if b.get("type") == "step" and b.get("state") == "in_progress"
+        ]
 
     def nodes_closed_since(self, since_date):
         result = []
