@@ -42,10 +42,7 @@ class WorkerPool:
 
     @staticmethod
     def _claim_mismatch(step, spawnid, claimed_owner):
-        if step not in claimed_owner:
-            return True
-        owner = claimed_owner[step]
-        return owner is not None and owner != spawnid
+        return claimed_owner.get(step) != spawnid
 
     def stalled(self, probe, now, max_boot, stall_seconds, mtime_probe):
         return [
