@@ -1698,6 +1698,8 @@ class LightcycleApp(App):
         )
 
     def _refresh_done_view(self) -> None:
+        if self._view != "done":
+            return
         done_uc = DoneUseCase(self._container.store)
         done_resp = done_uc.execute(DoneInput(
             project=self._done_project_filter, text=self._done_text_filter, day=self._done_day_filter,
@@ -1705,8 +1707,6 @@ class LightcycleApp(App):
         done_counts = done_uc.counts()
         self._done_total = done_counts.total
         self._done_filtered_count = len(done_resp.rows)
-        if self._view != "done":
-            return
         done_rows = build_done_rows(
             self._container.store, done_resp.rows, self._now(), self._done_cost_time_cache,
         )
