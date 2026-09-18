@@ -8,8 +8,8 @@ from lightcycle.application.flow.engine_steps import (
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
-from lightcycle.application.pool.daily_summary_cadence import _closed_count
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.application.work.closed_count import closed_count
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.pending_reflections import pass_reflection_count
 from lightcycle.domain.contracts import StepContract
@@ -157,7 +157,7 @@ class CompleteStepUseCase:
                     (a.value for a in self._store.item_artifacts(t.id) if a.type == "summary"),
                     None,
                 )
-                current = _closed_count(self._store, day)
+                current = closed_count(self._store, day)
                 self._store.finish_day_summary(
                     day, summary=text, summarized_count=row.spawn_count,
                     clear_dirty=(current == row.spawn_count),

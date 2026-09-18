@@ -2,9 +2,8 @@ import datetime
 from dataclasses import dataclass, field
 from typing import List
 
-from lightcycle.application.flow.engine_steps import (
-    DAILY_SUMMARY_STEP, RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL,
-)
+from lightcycle.application.flow.engine_steps import DAILY_SUMMARY_STEP, SUMMARY_ORIGIN_LABEL
+from lightcycle.application.work.closed_count import closed_count
 from lightcycle.application.work.done import DoneInput, DoneUseCase
 from lightcycle.domain.work import State, parse_timestamp
 
@@ -15,23 +14,6 @@ _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
 def _local_date(now):
     return datetime.datetime.fromtimestamp(now).astimezone().date()
-
-
-_INTERNAL_LABELS = frozenset({SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL})
-
-
-def _closed_count(store, day):
-    count = 0
-    for item in store.all_items_including_done():
-        if item.state != State.DONE:
-            continue
-        closed = parse_timestamp(item.closed_at)
-        if closed is None or closed.date() != day:
-            continue
-        if _INTERNAL_LABELS.intersection(store.labels_of(item.id)):
-            continue
-        count += 1
-    return count
 
 
 def _describe_day(store, day):
@@ -70,7 +52,7 @@ class DailySummaryCadenceUseCase:
                 return None
             self._last_scan[day] = now
             summarized = row.summarized_count if row else 0
-            if _closed_count(self._store, day) <= summarized:
+            if closed_count(self._store, day) <= summarized:
                 return None
             self._store.mark_day_summary_dirty(day)
             return None
@@ -84,7 +66,7 @@ class DailySummaryCadenceUseCase:
         row = self._store.day_summary(day)
         if row and row.step_id:
             return None
-        count = _closed_count(self._store, day)
+        count = closed_count(self._store, day)
         title = "Daily summary: %s" % day.isoformat()
         description = _describe_day(self._store, day)
         with self._store.transaction():
@@ -106,7 +88,7 @@ class DailySummaryCadenceUseCase:
             day = today - datetime.timedelta(days=n)
             row = self._store.day_summary(day)
             summarized = row.summarized_count if row else 0
-            if _closed_count(self._store, day) <= summarized:
+            if closed_count(self._store, day) <= summarized:
                 continue
             tid = self._spawn(day)
             if tid:
