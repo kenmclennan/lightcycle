@@ -237,6 +237,32 @@ class TestLinkArtifact(unittest.TestCase):
             )
         self.assertEqual(s.get_item(sid).repo, "widget")
 
+    def test_repo_derives_project_when_registered_and_project_unset(self):
+        s = FakeStore()
+        s.add_project("kenmclennan/lightcycle", shortcode="LC")
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="kenmclennan/lightcycle")
+        )
+        self.assertEqual(s.get_item(sid).project, "lightcycle")
+
+    def test_repo_unregistered_leaves_project_unset(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="ghost/repo")
+        )
+        self.assertIsNone(s.get_item(sid).project)
+
+    def test_repo_leaves_an_already_set_project_untouched(self):
+        s = FakeStore()
+        s.add_project("kenmclennan/lightcycle", shortcode="LC")
+        sid = s.create_item("st", "a description", project="acme/app")
+        LinkArtifactUseCase(s).execute(
+            LinkArtifactInput(item=sid, atype="repo", value="kenmclennan/lightcycle", replace=True)
+        )
+        self.assertEqual(s.get_item(sid).project, "acme/app")
+
     def test_run_field_empty_pr_raises_and_leaves_run_unchanged(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")

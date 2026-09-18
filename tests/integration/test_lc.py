@@ -1185,6 +1185,31 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("xy", err)
 
+    def test_new_item_with_registered_repo_and_no_project_derives_project_and_no_warning(self):
+        self.store.add_project("kenmclennan/lightcycle", shortcode="LC")
+        rc, out, err = call(
+            _cli_mod.cmd_new, "item", "look at X later",
+            "--repo", "kenmclennan/lightcycle", "--description", "a description",
+        )
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
+        rc2, out2, _ = call(_cli_mod.cmd_show, new)
+        t = json.loads(out2)
+        self.assertEqual(t["project"], "lightcycle")
+        self.assertNotIn("no --project given", err)
+
+    def test_new_item_with_unregistered_repo_and_no_project_defaults_and_warns_naming_repo(self):
+        rc, out, err = call(
+            _cli_mod.cmd_new, "item", "look at X later",
+            "--repo", "ghost/repo", "--description", "a description",
+        )
+        self.assertEqual(rc, 0, err)
+        new = out.strip()
+        rc2, out2, _ = call(_cli_mod.cmd_show, new)
+        t = json.loads(out2)
+        self.assertIsNone(t["project"])
+        self.assertIn("ghost/repo", err)
+        self.assertIn("xy", err)
 
 
 class TestProjectScanCli(unittest.TestCase):

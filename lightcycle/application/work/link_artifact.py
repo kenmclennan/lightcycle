@@ -3,10 +3,11 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
+from lightcycle.application.work.resolve_project_ref import resolve_project_ref
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work import State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
-from lightcycle.ports.store import ProjectResolutionError
+from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,21 @@ class LinkArtifactUseCase:
                 input.item, input.atype, input.value, input.label,
                 internal=input.internal, kind=input.kind,
             )
+        if input.atype == "repo":
+            self._derive_project_if_unset(input.item, input.value)
+
+    def _derive_project_if_unset(self, item, repo):
+        try:
+            node = self._store.get_item(item)
+        except NodeNotFoundError:
+            return
+        if node.project:
+            return
+        try:
+            derived = resolve_project_ref(self._store, repo)
+        except UseCaseError:
+            return
+        self._store.edit_node(item, project=derived)
 
     def _refuse_if_duplicate(self, input):
         exists = any(
