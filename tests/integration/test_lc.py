@@ -25,7 +25,7 @@ from tests.support.fake_store import FakeStore
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.application.pool.tick import TickUseCase
 from lightcycle.adapters.scaffold import ScaffoldAdapter
-from lightcycle.adapters.workers import process_start_time
+from lightcycle.adapters.workers import process_start_time, register_worker
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.domain.flow.flow import SPECS_WORKSPACE
@@ -447,6 +447,24 @@ class TestClaim(unittest.TestCase):
         self.addCleanup(os.environ.pop, "LC_SPAWNID", None)
         call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(self.store.get_node(b).claimed_by, "spawn-xyz")
+
+    def test_claim_refuses_a_further_claim_after_its_step_is_done(self):
+        b = create_owned_step(self.store, "build: y", step="build", role="agent")
+        cfg = write_config(projects=self.root, specs=self.root)
+        inject_container(
+            self, store=self.store, home=self.root, config_path=cfg,
+            extra_env={"LC_SPAWNID": "spawn-xyz"},
+        )
+        os.environ["LC_SPAWNID"] = "spawn-xyz"
+        self.addCleanup(os.environ.pop, "LC_SPAWNID", None)
+        register_worker(self.root, {"spawnid": "spawn-xyz", "role": "agent", "step": None})
+        call(_cli_mod.cmd_claim, "agent")
+        self.store.complete_node(b, "done")
+        second = create_owned_step(self.store, "build: z", step="build", role="agent")
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("spawn-xyz", err)
+        self.assertEqual(self.store.get_node(second).state, "queued")
 
     def test_corrupt_registry_exits_one_with_a_clean_message(self):
         create_owned_step(self.store, "build: y", step="build", role="agent")
