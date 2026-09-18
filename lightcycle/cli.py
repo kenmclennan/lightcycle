@@ -1185,9 +1185,15 @@ def cmd_set(argv):
             depends_ids = a.depends or []
             for node_id in depends_ids:
                 try:
-                    _container.store.get_node(node_id)
+                    node = _container.store.get_node(node_id)
                 except KeyError:
                     sys.stderr.write("unknown node '%s'\n" % node_id)
+                    return 1
+                if node.type != "item":
+                    sys.stderr.write(
+                        "'%s' is a step, not an item; --depends gates on an item's own "
+                        "closure - pass the item id, not one of its steps\n" % node_id
+                    )
                     return 1
             resp = ActivateItemUseCase(
                 _container.store, _flow(), _container.git, _container.config, _container.scaffold

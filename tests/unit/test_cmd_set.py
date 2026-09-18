@@ -371,7 +371,7 @@ class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
 
     def test_active_with_depends_blocks_the_entry_step_until_the_dependency_closes(self):
         h = Harness(["coder", "reviewer"])
-        blocker = create_owned_step(h.store, "blocker", role="agent")
+        blocker = h.store.create_item("blocker item", "a description")
         item = h.store.create_item("st", "a description")
         rc, step_id, err = h.run(
             "set", item, "--state", "active", "--workflow", DEFAULT_WORKFLOW,
@@ -393,6 +393,19 @@ class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("unknown node", err)
+        self.assertEqual(h.store.get_node(item).state, "backlogged")
+
+    def test_active_with_step_depends_id_is_refused_before_activation(self):
+        h = Harness(["coder", "reviewer"])
+        blocker = create_owned_step(h.store, "blocker", role="agent")
+        item = h.store.create_item("st", "a description")
+        rc, out, err = h.run(
+            "set", item, "--state", "active", "--workflow", DEFAULT_WORKFLOW,
+            "--step", "build", "--depends", blocker,
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn(blocker, err)
+        self.assertIn("not an item", err)
         self.assertEqual(h.store.get_node(item).state, "backlogged")
 
 
