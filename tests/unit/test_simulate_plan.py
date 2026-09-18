@@ -780,6 +780,35 @@ class TestPrConflictCapOwnedEdgeBearingTargetCoverage(unittest.TestCase):
         self.assertIn(("edge", "review-conflict", "resolved"), walk.covered())
 
 
+_CI_CAP_TARGETLESS_OUTCOME_GRAPH = """
+entry: build
+
+edges:
+  build      done         watch
+  watch      done         review
+  review     done         merged
+  review-ci  reviewed     merged
+
+hooks:
+  ci_failed_cap    watch   ci-failed   2   review-ci
+"""
+
+_CI_CAP_TARGETLESS_OUTCOME_METAS = dict(_CI_CAP_METAS)
+
+
+class TestCiFailedCapTargetlessOutcomeDoesNotEscalate(unittest.TestCase):
+    def test_no_escalation_tail_when_the_loop_back_outcome_has_no_edge_target(self):
+        plan, _, _ = _plan(_CI_CAP_TARGETLESS_OUTCOME_GRAPH, _CI_CAP_TARGETLESS_OUTCOME_METAS)
+        repeat_walks = [w for w in plan.walks if any(s.repeat_total == 3 for s in w.steps)]
+        self.assertEqual(len(repeat_walks), 1)
+        walk = repeat_walks[0]
+        repeats = [s for s in walk.steps if s.stage == "watch" and s.outcome == "ci-failed"]
+        self.assertEqual(len(repeats), 1)
+        self.assertEqual(repeats[0].repeat_index, 1)
+        self.assertEqual(repeats[0].repeat_total, 3)
+        self.assertNotIn(("edge", "review-ci", "reviewed"), walk.covered())
+
+
 _PR_CONFLICT_NO_BACK_PATH_GRAPH = """
 entry: build
 
