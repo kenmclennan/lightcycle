@@ -114,11 +114,6 @@ class TestWorkerPool(unittest.TestCase):
         orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={"b-1": "sp"})
         self.assertEqual(orphans, [])
 
-    def test_orphans_excludes_a_worker_whose_step_is_claimed_with_no_named_owner(self):
-        pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1", "started": 0}])
-        orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={"b-1": None})
-        self.assertEqual(orphans, [])
-
     def test_orphans_includes_a_worker_whose_step_has_no_claim_at_all(self):
         pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": "b-1", "started": 0}])
         orphans = pool.orphans(probe({1}), now=1000, max_boot=120, claimed_owner={})

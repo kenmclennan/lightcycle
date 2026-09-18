@@ -356,6 +356,14 @@ class StoreContractBase:
         claimed = s.claim_ready("agent")
         self.assertEqual(claimed.id, first)
 
+    def test_claim_ready_never_produces_a_claimed_step_with_no_owner(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        claimed = s.claim_ready("agent")
+        self.assertEqual(claimed.id, tid)
+        self.assertTrue(claimed.claimed_by)
+        self.assertTrue(all(t.claimed_by for t in s.claimed_steps()))
+
     def test_reassign_to_human_is_waiting(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

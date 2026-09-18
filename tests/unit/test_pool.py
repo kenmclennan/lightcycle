@@ -423,19 +423,6 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
 
-    def test_live_worker_holding_task_kept_when_claimed_by_is_none(self):
-        s = FakeStore()
-        held = create_owned_step(s, "h", step="build", role="agent")
-        s.update_state(held, "in_progress")
-        workers = FakeWorkers(
-            workers=[{"spawnid": "sp", "pid": 555, "step": held, "started": 100}],
-            alive_pids={555},
-        )
-        result = make_sweep(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
-        self.assertEqual(workers.killed, [])
-        self.assertEqual(result.swept, [])
-        self.assertIn(held, [t.id for t in s.claimed_steps()])
-
     def test_kills_a_stale_worker_whose_step_was_reclaimed_by_its_own_replacement(self):
         s = FakeStore()
         held = create_owned_step(s, "h", step="build", role="agent")
