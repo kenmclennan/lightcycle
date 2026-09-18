@@ -152,3 +152,28 @@ class TestMemoryGateUseCase(unittest.TestCase):
 
         self.assertIsNone(result.resumed)
         self.assertEqual(workers.resumed, [])
+
+    def test_suspends_on_system_pressure_alone_when_pool_share_is_low(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
+            alive_pids=(1,),
+        )
+        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.1))
+        result = _execute(workers, machine)
+
+        self.assertIsNotNone(result.suspended)
+        self.assertEqual(workers.suspended, [1])
+
+    def test_does_not_resume_while_system_pressure_remains_high_even_though_pool_share_is_low(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True,
+                 "suspended_at": 10, "log": "/logs/a.log"},
+            ],
+            alive_pids=(1,),
+        )
+        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.05))
+        result = _execute(workers, machine)
+
+        self.assertIsNone(result.resumed)
+        self.assertEqual(workers.resumed, [])
