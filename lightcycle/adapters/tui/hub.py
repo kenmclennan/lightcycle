@@ -27,7 +27,7 @@ from lightcycle.adapters.tui.design_system import (
     TEXT_ARTIFACT_SHORTCUTS,
     next_active_glyph_frame,
 )
-from lightcycle.adapters.tui.footer import DashboardFooter, StatusBar
+from lightcycle.adapters.tui.footer import DashboardFooter
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
     apply_widths,
@@ -46,8 +46,6 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow import UnblockInput
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
-    PoolHoldStatusUseCase,
-    PoolRunningUseCase,
     TailLogInput,
     TailLogUseCase,
 )
@@ -1100,31 +1098,7 @@ class ArtifactViewerScreen(Screen, inherit_bindings=False):
         self._node_id = node_id
 
     def on_mount(self) -> None:
-        self._refresh_footer()
-        self.set_interval(POLL_INTERVAL_SECONDS, self.poll_refresh)
-
-    def poll_refresh(self) -> None:
-        self._refresh_footer()
-
-    def _refresh_footer(self) -> None:
-        container = self.app.container
-        running = PoolRunningUseCase(container.lock).execute().running
-        breaker = BreakerStatusUseCase(container.breaker, container.spin).execute(
-            self.app._now().timestamp()
-        )
-        hold = PoolHoldStatusUseCase(
-            container.memory_gate_status, container.workers, container.config,
-        ).execute(container.workers.pid_alive)
-        self.query_one(StatusBar).report(
-            pool_running=running,
-            breaker_is_open=breaker.is_open,
-            breaker_is_probing=breaker.is_probing,
-            breaker_reset_at=breaker.reset_at,
-            version=container.config.version(),
-            upgrade_version=self.app.upgrade_version,
-            upgrade_error=self.app.upgrade_error,
-            hold=hold,
-        )
+        self.app._refresh_status_bar()
 
     def action_close(self) -> None:
         self.app.pop_screen()
@@ -1532,23 +1506,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._refresh_footer()
 
     def _refresh_footer(self) -> None:
-        running = PoolRunningUseCase(self._container.lock).execute().running
-        breaker = BreakerStatusUseCase(self._container.breaker, self._container.spin).execute(
-            self._now().timestamp()
-        )
-        hold = PoolHoldStatusUseCase(
-            self._container.memory_gate_status, self._container.workers, self._container.config,
-        ).execute(self._container.workers.pid_alive)
-        self.query_one(StatusBar).report(
-            pool_running=running,
-            breaker_is_open=breaker.is_open,
-            breaker_is_probing=breaker.is_probing,
-            breaker_reset_at=breaker.reset_at,
-            version=self._container.config.version(),
-            upgrade_version=self.app.upgrade_version,
-            upgrade_error=self.app.upgrade_error,
-            hold=hold,
-        )
+        self.app._refresh_status_bar()
 
     def _hierarchy_layout(self, table, rows):
         store = self._container.store
