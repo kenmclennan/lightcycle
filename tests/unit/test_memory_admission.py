@@ -3,8 +3,24 @@ import unittest
 from lightcycle.domain.pool import Worker
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.domain.pool.memory_admission import (
-    admission_cap, worker_to_resume, worker_to_suspend,
+    admission_cap, combined_pressure, worker_to_resume, worker_to_suspend,
 )
+
+
+class TestCombinedPressure(unittest.TestCase):
+    def test_returns_the_greater_regardless_of_order(self):
+        self.assertEqual(combined_pressure(0.3, 0.7), 0.7)
+        self.assertEqual(combined_pressure(0.7, 0.3), 0.7)
+
+    def test_falls_back_to_whichever_value_is_available(self):
+        self.assertEqual(combined_pressure(0.5, None), 0.5)
+        self.assertEqual(combined_pressure(None, 0.5), 0.5)
+
+    def test_none_when_both_are_none(self):
+        self.assertIsNone(combined_pressure(None, None))
+
+    def test_equal_values(self):
+        self.assertEqual(combined_pressure(0.4, 0.4), 0.4)
 
 
 class TestAdmissionCap(unittest.TestCase):
@@ -41,6 +57,10 @@ class TestAdmissionCap(unittest.TestCase):
 
     def test_peak_worker_share_none_falls_back_to_zero(self):
         headroom = MachineHeadroom(system_pressure=None, pool_share=0.6, peak_worker_share=None)
+        self.assertIsNone(admission_cap(headroom, 2, 0.25))
+
+    def test_high_system_pressure_alone_does_not_produce_a_cap(self):
+        headroom = MachineHeadroom(system_pressure=0.99, pool_share=0.1)
         self.assertIsNone(admission_cap(headroom, 2, 0.25))
 
 

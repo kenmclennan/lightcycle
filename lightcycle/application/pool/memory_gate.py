@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.domain.pool import admission_cap, worker_to_resume, worker_to_suspend
+from lightcycle.domain.pool import (
+    admission_cap, combined_pressure, worker_to_resume, worker_to_suspend,
+)
 
 
 @dataclass(frozen=True)
@@ -29,16 +31,17 @@ class MemoryGateUseCase:
         system_pressure = headroom.system_pressure if headroom else None
         peak_worker_share = headroom.peak_worker_share if headroom else None
         cap = admission_cap(headroom, len(alive), self._config.memory_reserve_fraction())
+        suspend_signal = combined_pressure(pool_share, system_pressure)
 
         suspended = None
-        target = worker_to_suspend(alive, pool_share, self._config.suspend_pressure())
+        target = worker_to_suspend(alive, suspend_signal, self._config.suspend_pressure())
         if target is not None:
             self._workers.signal_suspend(target.pid)
             self._workers.set_suspended(target.spawnid, True, now)
             suspended = target.spawnid
 
         resumed = None
-        resume_target = worker_to_resume(alive, pool_share, self._config.resume_pressure())
+        resume_target = worker_to_resume(alive, suspend_signal, self._config.resume_pressure())
         if resume_target is not None:
             self._workers.signal_resume(resume_target.pid)
             self._workers.set_suspended(resume_target.spawnid, False)
