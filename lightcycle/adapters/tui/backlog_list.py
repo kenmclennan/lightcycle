@@ -9,6 +9,7 @@ class BacklogRow:
     project: str
     repo: str
     title: str
+    blocked_by: tuple = ()
 
 
 def build_backlog_rows(human_node_rows):
@@ -16,6 +17,7 @@ def build_backlog_rows(human_node_rows):
         BacklogRow(
             id=r.step.id, project=short_project_label(r.project),
             repo=short_repo_label(r.repo), title=r.step.title,
+            blocked_by=tuple(sorted(r.step.blocked_by)),
         )
         for r in human_node_rows
     ]
