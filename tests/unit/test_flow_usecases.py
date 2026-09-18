@@ -415,6 +415,19 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         self.assertEqual(s.get_node(findings.id).state, "done")
         self.assertEqual(s.get_node(batch).state, "done")
 
+    def test_findings_step_keeps_the_note_given_on_close(self):
+        s = FakeStore()
+        self._reviewed_item(s)
+        batch = self._retro_batch(s)
+        aid = self._audit_step(s, batch)
+        self._uc(s).execute(CompleteInput(step=aid, outcome="findings", note="the digest"))
+        findings = [c for c in s.children(batch) if c.role == "human"][0]
+        self._uc(s).execute(
+            CompleteInput(step=findings.id, outcome="reviewed", note="filed 2, refuted 1"))
+        notes = s.get_node(findings.id).notes or ""
+        self.assertIn("outcome: reviewed", notes)
+        self.assertIn("filed 2, refuted 1", notes)
+
     def test_clean_marks_retroed_with_no_inbox_step(self):
         s = FakeStore()
         reviewed = self._reviewed_item(s)

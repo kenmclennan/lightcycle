@@ -138,6 +138,8 @@ class CompleteStepUseCase:
         if not won:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
+        if input.note:
+            self._store.note(input.step, input.note)
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 
