@@ -24,6 +24,7 @@ _ENV_OVERRIDE_VARS = {
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
     "retro-interval-reflections": "LC_RETRO_INTERVAL_REFLECTIONS",
+    "daily-summary-debounce-seconds": "LC_DAILY_SUMMARY_DEBOUNCE_SECONDS",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
     "tui-metrics": "LC_TUI_METRICS",
     "tui-upgrade-check-seconds": "LC_TUI_UPGRADE_CHECK_SECONDS",
@@ -70,6 +71,7 @@ _SEED_KEYS = [
     ("worker-history", "20"),
     ("editor", "vi"),
     ("retro-interval-reflections", "20"),
+    ("daily-summary-debounce-seconds", "600"),
     ("backups-dir", "~/.lightcycle-backups"),
     ("backup-interval-minutes", "15"),
     ("backup-retention", "96"),
@@ -509,6 +511,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("retro-interval-reflections")
+
+    def daily_summary_debounce_seconds(self):
+        env = self._env_int("LC_DAILY_SUMMARY_DEBOUNCE_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("daily-summary-debounce-seconds")
 
     def backups_dir(self):
         return self._required_path("backups-dir")

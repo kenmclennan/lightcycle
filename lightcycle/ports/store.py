@@ -348,6 +348,26 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def day_summary(self, day):
+        pass
+
+    @abstractmethod
+    def mark_day_summary_dirty(self, day):
+        pass
+
+    @abstractmethod
+    def start_day_summary(self, day, step_id, spawn_count):
+        pass
+
+    @abstractmethod
+    def finish_day_summary(self, day, summary, summarized_count, clear_dirty):
+        pass
+
+    @abstractmethod
+    def summary_day_for_step(self, step_id):
+        pass
+
+    @abstractmethod
     def nodes_closed_since(self, since_date):
         pass
 

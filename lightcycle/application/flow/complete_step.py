@@ -2,10 +2,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.flow.engine_steps import AUDIT_STEP, FINDINGS_STEP, RETRO_ORIGIN_LABEL
+from lightcycle.application.flow.engine_steps import (
+    AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL,
+)
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+from lightcycle.application.pool.daily_summary_cadence import _closed_count
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.pending_reflections import pass_reflection_count
@@ -49,10 +52,15 @@ class CompleteStepUseCase:
                 return self._complete_engine_audit(t, input)
             if t.stage == FINDINGS_STEP:
                 return self._complete_findings(t, input)
+        if self._is_summary_origin(t) and t.stage == DAILY_SUMMARY_STEP:
+            return self._complete_daily_summary(t, input)
         return self._complete_workflow(t, input)
 
     def _is_retro_origin(self, t):
         return RETRO_ORIGIN_LABEL in self._store.labels_of(t.item)
+
+    def _is_summary_origin(self, t):
+        return SUMMARY_ORIGIN_LABEL in self._store.labels_of(t.item)
 
     def _complete_workflow(self, t, input: CompleteInput) -> CompleteResponse:
         name = self._flow.workflow_for(t)
@@ -130,6 +138,33 @@ class CompleteStepUseCase:
         if not won:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
+        self._cascade_close(t.item)
+        return CompleteResponse(next_step=None)
+
+    def _complete_daily_summary(self, t, input: CompleteInput) -> CompleteResponse:
+        won, _ = self._store.complete_step_atomic(
+            input.step, input.outcome, self._expected_assignee(), None)
+        if not won:
+            return CompleteResponse(next_step=None)
+        self._store.note(input.step, "outcome: %s" % input.outcome)
+        day = self._store.summary_day_for_step(t.id)
+        if day is not None:
+            row = self._store.day_summary(day)
+            if input.outcome == "done":
+                text = next(
+                    (a.value for a in self._store.item_artifacts(t.item) if a.type == "summary"),
+                    None,
+                )
+                current = _closed_count(self._store, day)
+                self._store.finish_day_summary(
+                    day, summary=text, summarized_count=row.spawn_count,
+                    clear_dirty=(current == row.spawn_count),
+                )
+            else:
+                self._store.finish_day_summary(
+                    day, summary=row.summary, summarized_count=row.summarized_count,
+                    clear_dirty=False,
+                )
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 

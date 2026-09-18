@@ -100,6 +100,7 @@ from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     BackfillUsageUseCase,
+    DailySummaryCadenceUseCase,
     ListWorkersUseCase,
     ReleaseRunLockUseCase,
     StartPoolUseCase,
@@ -239,6 +240,8 @@ COMMAND_GROUPS = [
         ("doctor", "[--json]", "read-only diagnostics: store fsck + pinned-bundle/config/origin drift"),
         ("backfill-usage", "", "capture usage/attribution from historical worker logs in "
          "$LC_HOME/logs that predate live capture"),
+        ("backfill-summaries", "", "one-off: spawn a daily-summary agent for each of the last 7 "
+         "days that closed at least one item and has none yet (idempotent - safe to re-run)"),
     ]),
     ("Plumbing (the loop uses these)", [
         ("advance", "<id> <outcome>", "create the next step for an outcome without closing"),
@@ -933,6 +936,16 @@ def cmd_backfill_usage(argv):
             "repair: %d/%d steps corrected, %d ledgered logs missing on disk"
             % (resp.repair_corrected, resp.repair_examined, resp.repair_missing_logs)
         )
+    return 0
+
+
+def cmd_backfill_summaries(argv):
+    build_parser(COMMANDS["backfill-summaries"]).parse_args(argv)
+    gate = DailySummaryCadenceUseCase(_container.store, _container.config)
+    spawned = gate.backfill(time.time())
+    for day, tid in spawned:
+        print("%s: spawned %s" % (day.isoformat(), tid))
+    print("backfilled %d day(s)" % len(spawned))
     return 0
 
 

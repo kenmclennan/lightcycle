@@ -17,7 +17,7 @@ lightcycle keeps code, data, and pulled workflows strictly apart. This split is 
 graph TD
   subgraph engine[ENGINE - the pipx venv, REPLACED by an upgrade]
     code[lightcycle code]
-    prompts[prompts - steps/audit.md]
+    prompts[prompts - steps/audit.md, steps/daily-summary.md]
   end
   subgraph data[DATA - your home dir, NEVER touched by an upgrade]
     store[store.db]
@@ -31,7 +31,7 @@ graph TD
   end
 ```
 
-- **Engine** (`~/.local/pipx/venvs/lightcycle`) - the code plus `prompts/` (the engine-owned agent prompts it spawns directly: `prompts/steps/audit.md`). This is the only thing an upgrade changes; the engine ships no workflow library.
+- **Engine** (`~/.local/pipx/venvs/lightcycle`) - the code plus `prompts/` (the engine-owned agent prompts it spawns directly: `prompts/steps/audit.md`, `prompts/steps/daily-summary.md`). This is the only thing an upgrade changes; the engine ships no workflow library.
 - **Data** (`~/.lightcycle`, the `data_root`) - `store.db`, the `config` file, `logs/`, `.worktrees/` (isolated per-item checkouts), `backups/`, the `.lc-run.pid` singleton lock, and `workflows/<origin>/<sha>/` (the immutable, sha-pinned workflow bundles pulled from origins).
 - **Projects** - your repos, wherever they live. Each is named to lightcycle by registering it (`lc project add <owner/name> [--shortcode X] [--path P]`); the registry holds the identity, the shortcode ids are minted from, and the local path. A project carries no lightcycle config of its own, and there is no step or workflow override. `lc init` registers one project automatically, under the identity `specs` (defaulting to `~/workspace/specs`) - the `workspace: specs` value a spec-driven workflow declares resolves through this same registry entry, not a dedicated config key.
 
@@ -60,6 +60,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `probe-cooldown-seconds` | how long the breaker waits before allowing another probe after the previous one stalled; must be `>= 0` |
 | `spin-cap` | consecutive no-work worker deaths, on one step or pool-wide, before the pool parks the step / caps itself to one worker |
 | `retro-interval-reflections` | reflections pending across un-retroed items and un-retroed closed passes of items still open, between engine retro audits |
+| `daily-summary-debounce-seconds` | how long a day must sit with uncaptured closed-item activity before the engine spawns a fresh daily-summary agent |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
 | `max-title-length` | cap on an item's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description`. A step has no title of its own - it is composed at render time from its stage and its item's title - so this cap does not apply to one |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |

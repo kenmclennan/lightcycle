@@ -32,7 +32,7 @@ from lightcycle.adapters.tui.design_system import (
     DONE_SHORTCUTS,
     GLOBAL_SHORTCUTS,
     MODAL_OVERLAY_ALPHA,
-    STATS_SHORTCUTS,
+    REPORT_SHORTCUTS,
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
@@ -66,8 +66,8 @@ from lightcycle.application.work import (
     BacklogUseCase,
     DoneInput,
     DoneUseCase,
-    StatsInput,
-    StatsUseCase,
+    ReportInput,
+    ReportUseCase,
     StatusUseCase,
 )
 from lightcycle.application.work.priority_rows import select_priority_rows
@@ -81,7 +81,7 @@ POOL_START_TIMEOUT_SECONDS = 15
 DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
 BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
 DONE_COLUMNS = ("cursor", "id", "project", "title", "cost", "time")
-STATS_COLUMNS = COLUMN_GRIDS["stats"]
+REPORT_COLUMNS = COLUMN_GRIDS["report"]
 
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
@@ -93,13 +93,13 @@ POOL_PROMPT_QUIT_LEAVE = "quit-leave"
 POOL_PROMPT_QUIT_STOP = "quit-stop"
 POOL_PROMPT_MIN_WIDTH = 52
 
-_VIEW_CYCLE = ("priority", "backlog", "done", "stats")
+_VIEW_CYCLE = ("priority", "backlog", "done", "report")
 
 STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
 BACKLOG_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
 DONE_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
-STATS_CONTINUATION_INDENT = 2
+REPORT_CONTINUATION_INDENT = 2
 
 FILTER_ROW_LABEL_WIDTH = 10
 FILTER_ROW_COUNT_GAP = 2
@@ -113,14 +113,14 @@ class TabStrip(Horizontal):
         yield Static(" · ", classes="tab-separator")
         yield Static("Done", id="tab-done", classes="tab-dim")
         yield Static(" · ", classes="tab-separator")
-        yield Static("Stats", id="tab-stats", classes="tab-dim")
+        yield Static("Report", id="tab-report", classes="tab-dim")
 
     def set_active(self, view) -> None:
         widgets = {
             "priority": self.query_one("#tab-current-work", Static),
             "backlog": self.query_one("#tab-backlog", Static),
             "done": self.query_one("#tab-done", Static),
-            "stats": self.query_one("#tab-stats", Static),
+            "report": self.query_one("#tab-report", Static),
         }
         for key, widget in widgets.items():
             widget.set_class(key == view, "tab-active")
@@ -741,7 +741,7 @@ class DoneView(Vertical):
             hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
 
 
-def _stats_rows(response):
+def _report_rows(response):
     delta = response.backlog_delta
     delta_text = "+%d" % delta if delta >= 0 else str(delta)
     return (
@@ -755,29 +755,29 @@ def _stats_rows(response):
     )
 
 
-def _stats_row_cells(field, layout, row_budget):
+def _report_row_cells(field, layout, row_budget):
     key, value = field
     if layout.stacked:
         key_field = pad_field(Text(key, style=COLOURS["dim"]), layout.atomic_widths["key"])
         return (
-            stacked_cell(key_field, STATS_CONTINUATION_INDENT, value, row_budget, prose_style=COLOURS["text"]),
+            stacked_cell(key_field, REPORT_CONTINUATION_INDENT, value, row_budget, prose_style=COLOURS["text"]),
         )
     return (Text(key, style=COLOURS["dim"]), Text(value, style=COLOURS["text"]))
 
 
-class StatsTable(PagingTable):
+class ReportTable(PagingTable):
     def on_resize(self, event: events.Resize) -> None:
         view = self.parent
-        if isinstance(view, StatsView):
+        if isinstance(view, ReportView):
             view.refresh_column_width()
 
     def on_show(self, event: events.Show) -> None:
         view = self.parent
-        if isinstance(view, StatsView):
+        if isinstance(view, ReportView):
             view.refresh_column_width()
 
 
-class StatsView(Vertical):
+class ReportView(Vertical):
     can_focus = True
 
     def __init__(self, *args, **kwargs) -> None:
@@ -785,68 +785,76 @@ class StatsView(Vertical):
         self._day = None
         self._rows = ()
         self._floor = False
-        self._stats_stacked = False
+        self._report_stacked = False
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
-            Static("DAY", id="stats-day-filter-label", classes="filter-row-label"),
-            Static(id="stats-day-filter-left"),
-            Static(id="stats-day-filter-right"),
-            id="stats-day-filter-bar",
+            Static("DAY", id="report-day-filter-label", classes="filter-row-label"),
+            Static(id="report-day-filter-left"),
+            Static(id="report-day-filter-right"),
+            id="report-day-filter-bar",
         )
-        yield StatsTable(id="stats-table")
-        yield Static(id="stats-floor")
+        yield Static(id="report-summary")
+        yield ReportTable(id="report-table")
+        yield Static(id="report-floor")
 
     def on_mount(self) -> None:
-        table = self.query_one(StatsTable)
+        table = self.query_one(ReportTable)
         table.cursor_type = "none"
         table.show_header = False
         table.display = False
+        self.query_one("#report-summary", Static).display = False
 
-    def apply_stats(self, response) -> None:
+    def apply_report(self, response) -> None:
         self._day = response.day
-        self.query_one("#stats-day-filter-left", Static).update(
+        self.query_one("#report-day-filter-left", Static).update(
             Text(response.day.isoformat(), style=COLOURS["text"])
         )
-        self.query_one("#stats-day-filter-right", Static).display = False
-        self._rebuild_table(_stats_rows(response))
+        self.query_one("#report-day-filter-right", Static).display = False
+        summary_widget = self.query_one("#report-summary", Static)
+        if response.summary:
+            summary_widget.update(Text(response.summary, style=COLOURS["text"]))
+            summary_widget.display = True
+        else:
+            summary_widget.display = False
+        self._rebuild_table(_report_rows(response))
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
 
     def _layout(self, table):
         atomic_values = {"key": [key for key, _value in self._rows]}
-        row_budget = screen_row_budget_for(table, len(STATS_COLUMNS))
-        return compute_layout(row_budget, [], atomic_values, indent=STATS_CONTINUATION_INDENT)
+        row_budget = screen_row_budget_for(table, len(REPORT_COLUMNS))
+        return compute_layout(row_budget, [], atomic_values, indent=REPORT_CONTINUATION_INDENT)
 
     def _rebuild_table(self, rows) -> None:
-        table = self.query_one(StatsTable)
+        table = self.query_one(ReportTable)
         self._rows = rows
         layout = self._layout(table)
-        self._stats_stacked = layout.stacked
+        self._report_stacked = layout.stacked
         self._floor = layout.floor
-        floor_widget = self.query_one("#stats-floor", Static)
+        floor_widget = self.query_one("#report-floor", Static)
         if self._floor:
             table.display = False
             floor_widget.display = True
             floor_widget.update(
-                Text(floor_message(layout, table, len(STATS_COLUMNS)), style=COLOURS["dim"])
+                Text(floor_message(layout, table, len(REPORT_COLUMNS)), style=COLOURS["dim"])
             )
             return
         table.display = True
         floor_widget.display = False
 
         table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(STATS_COLUMNS))
+        row_budget = render_screen_row_budget(table, layout, len(REPORT_COLUMNS))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
             widths = {"key": layout.atomic_widths["key"], "value": layout.flexible_width}
-            for key in STATS_COLUMNS:
+            for key in REPORT_COLUMNS:
                 table.add_column(key, width=widths[key], key=key)
 
         for field in rows:
-            table.add_row(*_stats_row_cells(field, layout, row_budget), height=None, key=field[0])
+            table.add_row(*_report_row_cells(field, layout, row_budget), height=None, key=field[0])
 
 
 PICKER_MIN_WIDTH = 40
@@ -1321,25 +1329,30 @@ class LightcycleApp(App):
         display: none;
     }}
 
-    StatsView {{
+    ReportView {{
         display: none;
     }}
-    #stats-day-filter-bar {{
+    #report-day-filter-bar {{
         height: 2;
         border-bottom: solid {COLOURS["border"]};
     }}
-    #stats-day-filter-left {{
+    #report-day-filter-left {{
         width: auto;
     }}
-    #stats-day-filter-right {{
+    #report-day-filter-right {{
         width: 1fr;
         content-align: right middle;
         display: none;
     }}
-    StatsTable {{
+    #report-summary {{
+        height: auto;
+        margin: 1 0;
+        display: none;
+    }}
+    ReportTable {{
         height: 1fr;
     }}
-    #stats-floor {{
+    #report-floor {{
         color: {COLOURS["dim"]};
         content-align: center middle;
         height: 1fr;
@@ -1398,8 +1411,8 @@ class LightcycleApp(App):
         Binding("d", "open_day_picker", "Day", show=False),
         Binding("/", "focus_search", "Search", show=False),
         Binding("p", "toggle_pool", "Pool", show=False),
-        Binding("enter", "open_done_for_stats_day", "Open", show=False),
-        Binding("right", "open_done_for_stats_day", "Open", show=False),
+        Binding("enter", "open_done_for_report_day", "Open", show=False),
+        Binding("right", "open_done_for_report_day", "Open", show=False),
     ]
 
     def __init__(self, container, now=None, upgrade_check=None):
@@ -1446,8 +1459,8 @@ class LightcycleApp(App):
         self._done_filter_timer = None
         self._upgrade_check_timer = None
         self._done_cost_time_cache = {}
-        self._stats_cache = {}
-        self._stats_day = None
+        self._report_cache = {}
+        self._report_day = None
         self._picker_open = False
 
     @property
@@ -1482,9 +1495,9 @@ class LightcycleApp(App):
         done_view = DoneView(id="done-view")
         done_view.display = self._view == "done"
         yield done_view
-        stats_view = StatsView(id="stats-view")
-        stats_view.display = self._view == "stats"
-        yield stats_view
+        report_view = ReportView(id="report-view")
+        report_view.display = self._view == "report"
+        yield report_view
         yield DashboardFooter(id="footer")
 
     def on_mount(self) -> None:
@@ -1704,15 +1717,15 @@ class LightcycleApp(App):
             self._done_day_filter,
         )
 
-    def _refresh_stats_view(self) -> None:
-        if self._view != "stats":
+    def _refresh_report_view(self) -> None:
+        if self._view != "report":
             return
-        day = self._stats_day or self._now().date()
-        cached = self._stats_cache.get(day)
+        day = self._report_day or self._now().date()
+        cached = self._report_cache.get(day)
         if cached is None or day == self._now().date():
-            cached = StatsUseCase(self._container.store).execute(StatsInput(day))
-            self._stats_cache[day] = cached
-        self.query_one(StatsView).apply_stats(cached)
+            cached = ReportUseCase(self._container.store).execute(ReportInput(day))
+            self._report_cache[day] = cached
+        self.query_one(ReportView).apply_report(cached)
 
     def _apply_view_visibility(self) -> None:
         on_priority = self._view == "priority"
@@ -1724,7 +1737,7 @@ class LightcycleApp(App):
         self.query_one("#priority-list-floor", Static).display = showing_floor
         self.query_one(BacklogView).display = self._view == "backlog"
         self.query_one(DoneView).display = self._view == "done"
-        self.query_one(StatsView).display = self._view == "stats"
+        self.query_one(ReportView).display = self._view == "report"
         self._sync_active_glyph_animation()
 
     def _desired_shortcuts(self):
@@ -1738,8 +1751,8 @@ class LightcycleApp(App):
             if self._done_filtered_count == 0:
                 return DONE_FILTERED_EMPTY_SHORTCUTS
             return DONE_SHORTCUTS
-        if self._view == "stats":
-            return STATS_SHORTCUTS
+        if self._view == "report":
+            return REPORT_SHORTCUTS
         if self.focused is self.query_one(BacklogFilterInput):
             return BACKLOG_SEARCH_SHORTCUTS if self._backlog_filtered_count > 0 else BACKLOG_SEARCH_EMPTY_SHORTCUTS
         if self._backlog_total == 0:
@@ -1792,8 +1805,8 @@ class LightcycleApp(App):
             self._refresh_backlog_view()
         elif self._view == "done":
             self._refresh_done_view()
-        elif self._view == "stats":
-            self._refresh_stats_view()
+        elif self._view == "report":
+            self._refresh_report_view()
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()
@@ -1802,8 +1815,8 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(PriorityTable))
         elif self._view == "backlog":
             self.set_focus(self.query_one(BacklogTable))
-        elif self._view == "stats":
-            self.set_focus(self.query_one(StatsView))
+        elif self._view == "report":
+            self.set_focus(self.query_one(ReportView))
         else:
             self.set_focus(self.query_one(DoneTable))
 
@@ -1904,7 +1917,7 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(DoneTable))
 
     def action_open_day_picker(self) -> None:
-        if self._view not in ("done", "stats") or self._picker_open:
+        if self._view not in ("done", "report") or self._picker_open:
             return
         done_uc = DoneUseCase(self._container.store)
         if self._view == "done":
@@ -1917,7 +1930,7 @@ class LightcycleApp(App):
             counts = {dc.day: dc.count for dc in done_uc.day_counts()}
             days = sorted({today} | set(counts), reverse=True)
             options = [(d, d.isoformat(), counts.get(d, 0)) for d in days]
-            dismiss = self._on_stats_day_picker_dismiss
+            dismiss = self._on_report_day_picker_dismiss
         self._picker_open = True
         self.push_screen(ProjectFilterPicker(options, heading="Filter by day"), dismiss)
 
@@ -1929,18 +1942,18 @@ class LightcycleApp(App):
         self._refresh()
         self.set_focus(self.query_one(DoneTable))
 
-    def _on_stats_day_picker_dismiss(self, result) -> None:
+    def _on_report_day_picker_dismiss(self, result) -> None:
         self._picker_open = False
         if result is PICKER_CANCELLED:
             return
-        self._stats_day = result
-        self._refresh_stats_view()
-        self.set_focus(self.query_one(StatsView))
+        self._report_day = result
+        self._refresh_report_view()
+        self.set_focus(self.query_one(ReportView))
 
-    def action_open_done_for_stats_day(self) -> None:
-        if self._view != "stats":
+    def action_open_done_for_report_day(self) -> None:
+        if self._view != "report":
             return
-        self._done_day_filter = self._stats_day or self._now().date()
+        self._done_day_filter = self._report_day or self._now().date()
         self._cycle_view_to("done")
 
     def action_focus_search(self) -> None:

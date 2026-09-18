@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.pool.backup import BackupResponse
+from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
@@ -45,6 +46,7 @@ class TickResponse:
     spawned: List[str]
     monitor: MonitorPrsResponse
     cadence: RetroCadenceResponse
+    summary: DailySummaryCadenceResponse
     hooks: HookCompletionsResponse
     backup: BackupResponse
     pool: PoolState
@@ -56,7 +58,7 @@ class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor, cadence_gate, breaker_gate,
         hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
-        stream, memory_gate,
+        stream, memory_gate, summary_gate,
     ):
         self._store = store
         self._workers = workers
@@ -68,6 +70,7 @@ class TickUseCase:
         )
         self._monitor = monitor
         self._cadence_gate = cadence_gate
+        self._summary_gate = summary_gate
         self._breaker_gate = breaker_gate
         self._hook_completions = hook_completions
         self._backup_gate = backup_gate
@@ -80,6 +83,7 @@ class TickUseCase:
         self._workers.reap()
         monitor_result = self._monitor.execute()
         cadence_result = self._cadence_gate.execute(input.now)
+        summary_result = self._summary_gate.execute(input.now)
         breaker_result = self._breaker_gate.execute(input.now)
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
@@ -129,6 +133,7 @@ class TickUseCase:
             spawned=spawned,
             monitor=monitor_result,
             cadence=cadence_result,
+            summary=summary_result,
             hooks=hook_result,
             backup=backup_result,
             pool=PoolState(

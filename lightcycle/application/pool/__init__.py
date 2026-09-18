@@ -5,6 +5,10 @@ from lightcycle.application.pool.breaker_status import (
     BreakerStatusResponse,
     BreakerStatusUseCase,
 )
+from lightcycle.application.pool.daily_summary_cadence import (
+    DailySummaryCadenceResponse,
+    DailySummaryCadenceUseCase,
+)
 from lightcycle.application.pool.hook_completions import (
     HookCompletionsResponse,
     HookCompletionsUseCase,
@@ -46,6 +50,8 @@ __all__ = [
     "BreakerGateUseCase",
     "BreakerStatusResponse",
     "BreakerStatusUseCase",
+    "DailySummaryCadenceResponse",
+    "DailySummaryCadenceUseCase",
     "HookCompletionsResponse",
     "HookCompletionsUseCase",
     "ListWorkersUseCase",

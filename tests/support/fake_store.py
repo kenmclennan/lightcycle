@@ -15,7 +15,7 @@ from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work import (
-    Artifact, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
+    Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
     merge_condition_note, role_state,
 )
 
@@ -124,6 +124,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
 _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
+    "_daily_summaries",
 )
 
 
@@ -139,6 +140,7 @@ class FakeStore(StorePort):
         self._tool_usage = {}
         self._backfill_log = {}
         self._usage_accrual_state = {}
+        self._daily_summaries = {}
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
         self._tx_depth = 0
@@ -660,6 +662,45 @@ class FakeStore(StorePort):
             (node_id, ts) for node_id, entries in self._history.items()
             for state, ts in entries if state == str(State.WAITING)
         ]
+
+    def _daily_summary_row(self, day):
+        b = self._daily_summaries.get(day)
+        if b is None:
+            return None
+        return DailySummary(
+            day=day, summary=b.get("summary"), generated_at=b.get("generated_at"),
+            summarized_count=b.get("summarized_count", 0), dirty_since=b.get("dirty_since"),
+            step_id=b.get("step_id"), spawn_count=b.get("spawn_count"),
+        )
+
+    def day_summary(self, day):
+        return self._daily_summary_row(day)
+
+    def mark_day_summary_dirty(self, day):
+        b = self._daily_summaries.setdefault(day, {"summarized_count": 0})
+        if b.get("dirty_since") is None:
+            b["dirty_since"] = self._now()
+
+    def start_day_summary(self, day, step_id, spawn_count):
+        b = self._daily_summaries[day]
+        b["step_id"] = step_id
+        b["spawn_count"] = spawn_count
+
+    def finish_day_summary(self, day, summary, summarized_count, clear_dirty):
+        b = self._daily_summaries[day]
+        b["summary"] = summary
+        b["generated_at"] = self._now()
+        b["summarized_count"] = summarized_count
+        b["step_id"] = None
+        b["spawn_count"] = None
+        if clear_dirty:
+            b["dirty_since"] = None
+
+    def summary_day_for_step(self, step_id):
+        for day, b in self._daily_summaries.items():
+            if b.get("step_id") == step_id:
+                return day
+        return None
 
     def create_step(self, *, step=None, role=None, parent=None, deps=None,
                     id=None):

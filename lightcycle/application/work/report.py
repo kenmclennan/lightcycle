@@ -1,5 +1,6 @@
 import datetime
 from dataclasses import dataclass
+from typing import Optional
 
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL
 from lightcycle.application.work.done import DoneInput, DoneUseCase
@@ -7,12 +8,12 @@ from lightcycle.domain.work import ItemCost, item_cost, parse_timestamp
 
 
 @dataclass(frozen=True)
-class StatsInput:
+class ReportInput:
     day: datetime.date
 
 
 @dataclass(frozen=True)
-class StatsResponse:
+class ReportResponse:
     day: datetime.date
     completed: int
     abandoned: int
@@ -21,6 +22,7 @@ class StatsResponse:
     escalations: int
     backlog_size: int
     backlog_delta: int
+    summary: Optional[str]
 
 
 def _earliest_step_created_by_item(store):
@@ -71,11 +73,11 @@ def _escalations_on(store, day):
     return count
 
 
-class StatsUseCase:
+class ReportUseCase:
     def __init__(self, store):
         self._store = store
 
-    def execute(self, input: StatsInput) -> StatsResponse:
+    def execute(self, input: ReportInput) -> ReportResponse:
         done_uc = DoneUseCase(self._store)
         closed_today = done_uc.execute(DoneInput(day=input.day)).rows
         items = [r.step for r in closed_today]
@@ -86,8 +88,11 @@ class StatsUseCase:
         spend = item_cost(all_children)
         escalations = _escalations_on(self._store, input.day)
         backlog_today, backlog_yesterday = _backlog_size_asof_pair(self._store, input.day)
-        return StatsResponse(
+        row = self._store.day_summary(input.day)
+        summary = row.summary if row else None
+        return ReportResponse(
             day=input.day, completed=completed, abandoned=abandoned, spend=spend,
             audits=audits, escalations=escalations,
             backlog_size=backlog_today, backlog_delta=backlog_today - backlog_yesterday,
+            summary=summary,
         )

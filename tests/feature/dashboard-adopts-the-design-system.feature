@@ -32,11 +32,11 @@ Feature: The dashboard adopts the design system's visual vocabulary
   Scenario: The tab strip shows the current-work tab emphasised and the other tabs dim
     Given the lightcycle store is reachable
     When I launch the dashboard
-    Then the tab strip reads "Current work · Backlog · Done · Stats"
+    Then the tab strip reads "Current work · Backlog · Done · Report"
     And the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
     And the "Done" tab is in the dim colour
-    And the "Stats" tab is in the dim colour
+    And the "Report" tab is in the dim colour
 
   Scenario: Pressing Tab moves the emphasis from the Current work tab to the Backlog tab
     Given the dashboard has launched
@@ -51,12 +51,12 @@ Feature: The dashboard adopts the design system's visual vocabulary
     Then the "Done" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
 
-  Scenario: Pressing Tab a third time moves the emphasis from the Done tab to the Stats tab
+  Scenario: Pressing Tab a third time moves the emphasis from the Done tab to the Report tab
     Given the dashboard has launched
     When Tab is pressed
     And Tab is pressed
     And Tab is pressed
-    Then the "Stats" tab is bold and in the cyan colour
+    Then the "Report" tab is bold and in the cyan colour
     And the "Done" tab is in the dim colour
 
   Scenario: Pressing Tab a fourth time moves the emphasis back to the Current work tab
@@ -68,7 +68,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
     Then the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
     And the "Done" tab is in the dim colour
-    And the "Stats" tab is in the dim colour
+    And the "Report" tab is in the dim colour
 
   Scenario: A table's selection cursor uses the design system's selected-row styling
     Given the lightcycle store is reachable
