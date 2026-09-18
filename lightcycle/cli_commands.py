@@ -224,6 +224,23 @@ COMMANDS = {
             Arg("dir", nargs="?", default="."), Arg("--json", action="store_true"),
         )),
     }),
+    "goal": CommandSpec(prog="lc goal", subparsers={
+        "new": CommandSpec(prog="lc goal new", args=(
+            Arg("title"), Arg("--outcome"), Arg("--scope"),
+        )),
+        "list": CommandSpec(prog="lc goal list"),
+        "show": CommandSpec(prog="lc goal show", args=(Arg("id"),)),
+        "set": CommandSpec(prog="lc goal set", args=(
+            Arg("id"), Arg("--title"), Arg("--outcome"), Arg("--scope"), Arg("--status"),
+        )),
+        "log": CommandSpec(prog="lc goal log", args=(Arg("id"), Arg("text"))),
+        "ask": CommandSpec(prog="lc goal ask", args=(Arg("id"), Arg("text"))),
+        "resolve": CommandSpec(prog="lc goal resolve", args=(
+            Arg("question", type=int), Arg("resolution"),
+        )),
+        "link": CommandSpec(prog="lc goal link", args=(Arg("id"), Arg("item"))),
+        "unlink": CommandSpec(prog="lc goal unlink", args=(Arg("id"), Arg("item"))),
+    }),
     "config": CommandSpec(prog="lc config", args=(
         Arg("--edit", action="store_true"),
     )),

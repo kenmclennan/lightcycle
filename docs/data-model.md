@@ -37,6 +37,10 @@ Two things are kept **orthogonal** to the state (baking them in would multiply t
 - **role** - who processes the node: `agent`, `human`, or `engine`. An unassigned, unblocked step with `role=human` is `waiting` (it shows in the inbox); an `engine`-owned step is `queued` like an agent step, but is completed directly by the engine's own per-tick poll rather than claimed by a worker. Role stays a separate field rather than folding into the state name. The stage a step performs is its `stage` field.
 - **outcome** - how a `done` node ended: `done`, `merged`, `abandoned`, `rejected`, ... `done` is the single terminal state; the outcome records the flavour. An **item** additionally carries a **disposition** (`completed` or `abandoned`) once closed - an engine-owned classification of whether its outcome was a delivery or an abandonment, declared per outcome name by the workflow bundle rather than interpreted from the outcome string itself.
 
+## Goals
+
+Four additive tables, none of them a node: `goals` (`id` as `G-<n>` minted from the `counters` table under the `goal` namespace, `title`, `outcome`, `scope`, `status` defaulting to `not started`, timestamps), `goal_log` (append-only, `goal_id`, `body`), `goal_questions` (append-only, `goal_id`, `body`, `raised_at`, and `resolved_at`/`resolution` once resolved) and `goal_items` (primary key `(goal_id, item_id)`, so no uniqueness on the item side and one item may serve several goals). No foreign keys are declared, as with every table; `delete` of an item removes its `goal_items` rows explicitly and leaves the goal, its log and its questions. Nothing in claim, lanes, `all_nodes()` or roll-up reads them.
+
 ## Attachments
 
 - **artifacts** - typed values attached to an **item**: `repo`, `spec`, `brief`, `blueprint`, `spec-amendment`. Steps declare `accepts` / `produces` in their frontmatter, and the engine checks the item's artifacts against that contract before a step may close. `branch`, `pr` and `comments-handled` are NOT artifacts: `lc attach` routes them onto the item's current phase run, which is where every reader looks for them.

@@ -331,6 +331,6 @@ def _css_text(value_node):
                 parts.append(str(value.value))
             else:
                 parts.append(_INTERP_MARKER)
-        raw = "".join(parts)
+        raw = re.sub(r"^\s*" + _INTERP_MARKER + r"\s*$", "", "".join(parts), flags=re.M)
         return re.sub(r"[A-Za-z-]+\s*:[^;{}]*" + _INTERP_MARKER + r"[^;{}]*;", "", raw)
     return None

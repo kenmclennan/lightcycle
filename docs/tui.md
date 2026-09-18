@@ -1,16 +1,27 @@
 # The TUI
 
-`lc tui` opens an interactive dashboard over the same store the CLI reads. It shows two screens: a **priority list** of work, and a **node hub** for one item or step. This document describes the model those screens present. It is not a keybinding reference - the footer renders the bindings for whatever screen you are on, and a duplicated list here would be the copy that goes stale.
+`lc tui` opens an interactive dashboard over the same store the CLI reads. It shows three kinds of screen: a **priority list** of work, a **node hub** for one item or step, and a **goal hub** for one goal. This document describes the model those screens present. It is not a keybinding reference - the footer renders the bindings for whatever screen you are on, and a duplicated list here would be the copy that goes stale.
 
 Where `tests/feature/the-*-tab.feature` and `tests/feature/priority-list-renders-current-work.feature` state behaviour exactly, this document says what the shape is and lets the scenarios hold the detail, the way [data-model.md](data-model.md) does for the store.
 
-## Two screens
+## Screens
 
-**The priority list** answers "what is happening, and what needs me". It has a Current work view and a Backlog view.
+**The priority list** answers "what is happening, and what needs me". Its tab strip reads `Goals · Current work · Backlog · Done · Report`; the dashboard lands on Current work, and `[` from there reaches Goals. Goals, Backlog, Done and Report are the other views alongside Current work.
 
 Current work is three fixed-order groups - needs-attention, active, queued - with one row per **item**, never per step. A row carries the item's id, its project, its title, the stage of its current or next step, and for active work a live approximate elapsed time. A terminal bell rings the moment something newly enters needs-attention, so it can be noticed in an unfocused pane, and never rings again for the same item while it stays there.
 
 **The node hub** answers "what is the state of this one thing". It opens for a single node and its tab strip is type-aware.
+
+## Goals
+
+The Goals tab is a one-column table of goal titles - no status, count, icon or badge. Selecting a goal opens a **goal hub**, a separate screen class from the node hub because a goal is not a node. It reuses the hub's tab strip and the description pane's shape and closes with escape or left. Its tabs, in order:
+
+- **Overview** - the title, the hand-set status, and the outcome and scope as scrollable prose. It states plainly that the progress statement is not built yet.
+- **Log** - the goal's decisions, newest first, each with its timestamp.
+- **Open questions** - unresolved questions, newest first.
+- **Items** - linked items by id and title only. No state, lane or count: derived state is deliberately absent from this screen.
+
+The hub refreshes on the same poll interval as the node hub, so `lc goal log` in another terminal appears without reopening it.
 
 ## The item/step split
 
@@ -72,14 +83,14 @@ A parked step's escalation shows in the hub **header**, not in a tab. It has to 
 
 One vocabulary, shared by the priority list and the Workflow tab.
 
-| glyph     | meaning                                                   |
-| --------- | --------------------------------------------------------- |
-| `●` amber | a gate - waiting for you                                  |
-| `▲` red   | an escalation - a step parked for a decision              |
-| `◆` cyan  | active; it animates through `◇ ◈ ◆ ◈` while a worker runs, or while an engine-owned step is in flight |
-| `○` dim   | queued, or done                                           |
-| `□` dim   | a human-role step, done or queued                         |
-| `⊣` dim   | held by a dependency, drawn alongside the state glyph     |
+| glyph | meaning |
+| --- | --- |
+| `●` amber | a gate - waiting for you |
+| `▲` red | an escalation - a step parked for a decision |
+| `◆` cyan | active; it animates through `◇ ◈ ◆ ◈` while a worker runs, or while an engine-owned step is in flight |
+| `○` dim | queued, or done |
+| `□` dim | a human-role step, done or queued |
+| `⊣` dim | held by a dependency, drawn alongside the state glyph |
 
 The footer carries its own set for pool and Claude availability: `●`/`○` for the pool running or stopped, `●`/`⊘`/`◐` for Claude available, unavailable or being probed, and `⬆` amber when an engine upgrade is available.
 
