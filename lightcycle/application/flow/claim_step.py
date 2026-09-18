@@ -99,7 +99,7 @@ class ClaimStepUseCase:
                 ParkInput(step=t.id, observation=observation, decision=decision)
             )
             return None
-        meta = self._flow.meta_for_step(t.stage, pin) if pin else {}
+        meta = self._meta_for(t.stage, pin)
         missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
         if missing:
             decision = "missing required input(s): %s" % ", ".join(sorted(missing))
@@ -122,11 +122,16 @@ class ClaimStepUseCase:
             self._store.reclaim(t.id)
             raise
 
+    def _meta_for(self, stage, pin):
+        if pin:
+            return self._flow.meta_for_step(stage, pin)
+        return self._flow.meta_for_unpinned_step(stage)
+
     def _context(self, t, pin=None, meta=None):
         if pin is None:
             pin = self._flow.workflow_for(t)
         if meta is None:
-            meta = self._flow.meta_for_step(t.stage, pin) if pin else {}
+            meta = self._meta_for(t.stage, pin)
         view = self._store.node_view(t.id)
         surface = node_read_surface(self._store, self._flow, view)
         item = t.item or t.id

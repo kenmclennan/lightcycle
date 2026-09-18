@@ -211,6 +211,12 @@ class FlowService:
         a = self._fs.parse_step(graph.file_for(stage), root)
         return a.meta if a else {}
 
+    def meta_for_unpinned_step(self, stage):
+        if self._config is None:
+            return {}
+        a = self._fs.parse_step(stage, self._config.prompts_root())
+        return a.meta if a else {}
+
     def file_for_step(self, stage, name=None):
         graph, _root = self._graph_and_root(name)
         return graph.file_for(stage)

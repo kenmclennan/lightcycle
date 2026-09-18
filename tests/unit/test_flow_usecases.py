@@ -150,6 +150,11 @@ class FakeConfig:
         return "/projects"
 
 
+class PromptsConfig:
+    def prompts_root(self):
+        return "/prompts"
+
+
 class TestAdvanceTask(unittest.TestCase):
     def test_creates_next_task(self):
         s = FakeStore()
@@ -1041,6 +1046,15 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="standard"))
         self._uc(s).execute(ClaimInput(role="agent"))
+        self.assertEqual(s.get_node(bid).model, "sonnet")
+
+    def test_records_model_for_a_workflow_less_step_from_its_own_frontmatter(self):
+        s = FakeStore()
+        bid = s.create_step(step="audit", role="agent",
+                            parent=s.create_item("i", "a description"))
+        flow = FlowService(FakeFs({"audit": {"model": "sonnet", "step": "audit"}}), s, PromptsConfig())
+        uc = ClaimStepUseCase(s, flow, FakeWorktrees(), FakeWorkers(), FakeConfig())
+        uc.execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(bid).model, "sonnet")
 
     def test_nothing_ready_returns_none(self):

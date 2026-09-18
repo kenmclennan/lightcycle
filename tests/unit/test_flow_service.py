@@ -184,6 +184,29 @@ class TestFlowService(unittest.TestCase):
         self.assertEqual(service.load_flow().step_def("review-plan").owner, "human")
         self.assertEqual(service.meta_for_step("review-plan"), metas["review-plan"])
 
+    def test_meta_for_unpinned_step_reads_the_step_file_from_prompts_root(self):
+        class _PromptsCfg:
+            def prompts_root(self):
+                return "/prompts"
+
+        fs = FakeFs({AUDIT_STEP: {"model": "sonnet", "step": AUDIT_STEP}})
+        service = FlowService(fs, FakeStore(), config=_PromptsCfg())
+        self.assertEqual(
+            service.meta_for_unpinned_step(AUDIT_STEP), {"model": "sonnet", "step": AUDIT_STEP}
+        )
+
+    def test_meta_for_unpinned_step_unknown_stage_is_empty(self):
+        class _PromptsCfg:
+            def prompts_root(self):
+                return "/prompts"
+
+        service = FlowService(FakeFs({}), FakeStore(), config=_PromptsCfg())
+        self.assertEqual(service.meta_for_unpinned_step("ghost"), {})
+
+    def test_meta_for_unpinned_step_without_config_is_empty(self):
+        service = FlowService(FakeFs({AUDIT_STEP: {"model": "sonnet"}}), FakeStore())
+        self.assertEqual(service.meta_for_unpinned_step(AUDIT_STEP), {})
+
     def test_ready_roles_from_store(self):
         store = FakeStore()
         create_owned_step(store, "b", step="build", role="agent")
