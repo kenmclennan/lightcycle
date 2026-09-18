@@ -495,7 +495,7 @@ class TestCompleteStepDailySummary(unittest.TestCase):
         day = datetime.date(2026, 1, 1)
         self._closed_item(s, day)
         tid = self._summary_step(s, day, spawn_count=1)
-        s.add_artifact(s.get_node(tid).item, "summary", "what shipped today")
+        s.add_artifact(tid, "summary", "what shipped today")
 
         self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
 
@@ -511,7 +511,7 @@ class TestCompleteStepDailySummary(unittest.TestCase):
         day = datetime.date(2026, 1, 1)
         self._closed_item(s, day)
         tid = self._summary_step(s, day, spawn_count=1)
-        s.add_artifact(s.get_node(tid).item, "summary", "what shipped today")
+        s.add_artifact(tid, "summary", "what shipped today")
         self._closed_item(s, day)
 
         self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
@@ -521,6 +521,17 @@ class TestCompleteStepDailySummary(unittest.TestCase):
         self.assertEqual(row.summarized_count, 1)
         self.assertIsNone(row.step_id)
         self.assertIsNotNone(row.dirty_since)
+
+    def test_summary_attached_to_the_owning_item_is_not_read_as_the_steps_output(self):
+        s = FakeStore()
+        day = datetime.date(2026, 1, 1)
+        self._closed_item(s, day)
+        tid = self._summary_step(s, day, spawn_count=1)
+        s.add_artifact(s.get_node(tid).item, "summary", "stale item-level text")
+
+        self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
+
+        self.assertIsNone(s.day_summary(day).summary)
 
     def test_non_done_outcome_writes_no_summary_and_leaves_the_day_exactly_as_dirty_as_before(self):
         s = FakeStore()
