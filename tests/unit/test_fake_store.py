@@ -259,6 +259,31 @@ class TestListNodes(unittest.TestCase):
         self.assertEqual(self.s.closed_items(), [])
 
 
+class TestCreateItemShortcode(unittest.TestCase):
+    def setUp(self):
+        self.s = FakeStore()
+
+    def test_shortcode_prefixes_the_minted_id(self):
+        iid = self.s.create_item("item: foo", "a description", shortcode="HORDE")
+        self.assertTrue(iid.startswith("HORDE-"), iid)
+
+    def test_shortcode_ignored_when_id_given_explicitly(self):
+        iid = self.s.create_item("item: foo", "a description", shortcode="HORDE", id="fixed-1")
+        self.assertEqual(iid, "fixed-1")
+
+    def test_different_shortcodes_get_independent_counters(self):
+        horde_first = self.s.create_item("h1", "a description", shortcode="HORDE")
+        saga_first = self.s.create_item("s1", "a description", shortcode="SAGA")
+        self.assertEqual(horde_first, "HORDE-1")
+        self.assertEqual(saga_first, "SAGA-1")
+
+    def test_same_shortcode_increments_across_items(self):
+        first = self.s.create_item("h1", "a description", shortcode="HORDE")
+        second = self.s.create_item("h2", "a description", shortcode="HORDE")
+        self.assertEqual(first, "HORDE-1")
+        self.assertEqual(second, "HORDE-2")
+
+
 class TestNoSubprocess(unittest.TestCase):
     def test_importable_without_subprocess(self):
         from tests.support.fake_store import FakeStore as FS
