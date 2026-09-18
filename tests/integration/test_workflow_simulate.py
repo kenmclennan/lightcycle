@@ -19,6 +19,7 @@ from lightcycle.config import Config
 from lightcycle.container import Container, make_flow_service, make_worktrees
 from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.runs.phase_run import RunState
+from lightcycle.domain.work.state import State
 
 _WORKFLOW_TEXT = """entry: write-code
 
@@ -530,3 +531,38 @@ class TestPreExistingSimulateFixturesStillPassUnmodified(SimulateTestCase):
         output = err.getvalue()
         self.assertIn("was created but never removed", output)
         self.assertIn("was created but never deleted", output)
+
+
+_OWNED_EDGE_BEARING_ESCALATION_STEPS = dict(_STEPS)
+_OWNED_EDGE_BEARING_ESCALATION_STEPS["review-conflict"] = (
+    "Resolve the conflict by hand, then re-enter the PR/CI cycle.\n"
+)
+
+_OWNED_EDGE_BEARING_ESCALATION_WORKFLOW_TEXT = _WORKFLOW_TEXT.replace(
+    "  resolve-conflict  escalate     review-conflict\n",
+    "  resolve-conflict  escalate     review-conflict\n"
+    "  review-conflict   resolved     open-pr\n"
+    "  review-ci         reviewed\n",
+)
+
+
+class TestOwnedEdgeBearingCapEscalationTargetSimulatesCleanly(SimulateTestCase):
+    def test_a_bundle_whose_cap_escalation_targets_are_owned_still_passes(self):
+        selector = self._install(
+            _OWNED_EDGE_BEARING_ESCALATION_WORKFLOW_TEXT, _OWNED_EDGE_BEARING_ESCALATION_STEPS,
+        )
+        rc = cli._workflow_simulate(selector)
+        self.assertEqual(rc, 0)
+
+    def test_the_edge_bearing_escalation_target_is_actually_driven_not_left_dangling(self):
+        resp, store = self._run_direct(
+            _OWNED_EDGE_BEARING_ESCALATION_WORKFLOW_TEXT, _OWNED_EDGE_BEARING_ESCALATION_STEPS,
+        )
+        self.assertTrue(resp.ok, resp.violations)
+        review_conflict_steps = [
+            n for n in store.all_nodes_including_done()
+            if n.type == "step" and n.stage == "review-conflict"
+        ]
+        self.assertTrue(review_conflict_steps)
+        self.assertTrue(all(s.outcome == "resolved" for s in review_conflict_steps))
+        self.assertTrue(all(s.state == State.DONE for s in review_conflict_steps))
