@@ -43,6 +43,7 @@ from lightcycle.adapters.tui.design_system import (
     COLOURS,
     ACTIVE_GLYPH_FRAMES,
     CURSOR_GLYPH,
+    DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     DONE_EMPTY_SHORTCUTS,
     DONE_FILTERED_EMPTY_SHORTCUTS,
     DONE_SEARCH_EMPTY_SHORTCUTS,
@@ -1407,6 +1408,26 @@ class TestBacklogRows(unittest.TestCase):
         self.assertGreater(table.cursor_row, 0)
         session.press("ctrl+u")
         self.assertEqual(table.cursor_row, 0)
+
+    def test_blocked_item_shows_the_dependency_glyph_in_its_title(self):
+        store = FakeStore()
+        blocker = store.create_item("blocker", "a description")
+        blocked = store.create_item("blocked item", "a description")
+        store.dep_add(blocked, blocker)
+
+        session = self._launch(store)
+
+        title_cell = _backlog_cell(session, blocked, "title")
+        self.assertIn(DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, title_cell)
+
+    def test_unblocked_item_shows_no_dependency_glyph_in_its_title(self):
+        store = FakeStore()
+        item = store.create_item("todo item", "a description")
+
+        session = self._launch(store)
+
+        title_cell = _backlog_cell(session, item, "title")
+        self.assertNotIn(DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, title_cell)
 
 
 class TestBacklogTableColumnWidth(unittest.TestCase):
