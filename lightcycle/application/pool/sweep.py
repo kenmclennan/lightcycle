@@ -125,7 +125,7 @@ class SweepUseCase:
         parked = []
         for t in claimed:
             if t.id not in stalled_ids and (
-                t.id in covered or (t.claimed_by and t.claimed_by in live_spawnids) or booting
+                t.id in covered or t.claimed_by in live_spawnids or booting
             ):
                 continue
             captured = self._capture(t)
