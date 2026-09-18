@@ -967,6 +967,45 @@ class TestTuiUpgradeCheckSeconds(unittest.TestCase):
         self.assertEqual(dict(_SEED_KEYS)["tui-upgrade-check-seconds"], "900")
 
 
+class TestPoolUpgradeCheckSeconds(unittest.TestCase):
+    def test_reads_value_from_config_file(self):
+        self.assertEqual(
+            _cfg(pool_upgrade_check_seconds="1800").pool_upgrade_check_seconds(), 1800
+        )
+
+    def test_zero_is_accepted(self):
+        self.assertEqual(_cfg(pool_upgrade_check_seconds="0").pool_upgrade_check_seconds(), 0)
+
+    def test_negative_is_refused_naming_the_key_via_config(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(pool_upgrade_check_seconds="-1").pool_upgrade_check_seconds()
+        self.assertIn("pool-upgrade-check-seconds", str(e.exception))
+
+    def test_negative_is_refused_naming_the_key_via_env(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg({"LC_POOL_UPGRADE_CHECK_SECONDS": "-1"}).pool_upgrade_check_seconds()
+        self.assertIn("pool-upgrade-check-seconds", str(e.exception))
+
+    def test_a_malformed_value_is_refused_naming_the_key(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(pool_upgrade_check_seconds="soon").pool_upgrade_check_seconds()
+        self.assertIn("pool-upgrade-check-seconds", str(e.exception))
+
+    def test_an_unset_value_is_refused_rather_than_defaulted(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(max_agents="5").pool_upgrade_check_seconds()
+        self.assertIn("pool-upgrade-check-seconds", str(e.exception))
+
+    def test_the_env_var_overrides_the_file(self):
+        cfg = _cfg(
+            environ={"LC_POOL_UPGRADE_CHECK_SECONDS": "60"}, pool_upgrade_check_seconds="1800"
+        )
+        self.assertEqual(cfg.pool_upgrade_check_seconds(), 60)
+
+    def test_it_is_seeded_fifteen_minutes_in_the_default_config(self):
+        self.assertEqual(dict(_SEED_KEYS)["pool-upgrade-check-seconds"], "900")
+
+
 class TestWorkflowsRemoteSeed(unittest.TestCase):
     def test_it_is_seeded_blank_in_the_default_config(self):
         self.assertEqual(dict(_SEED_KEYS)["workflows-remote"], "")

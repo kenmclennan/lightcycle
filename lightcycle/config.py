@@ -27,6 +27,7 @@ _ENV_OVERRIDE_VARS = {
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
     "tui-metrics": "LC_TUI_METRICS",
     "tui-upgrade-check-seconds": "LC_TUI_UPGRADE_CHECK_SECONDS",
+    "pool-upgrade-check-seconds": "LC_POOL_UPGRADE_CHECK_SECONDS",
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
@@ -78,6 +79,7 @@ _SEED_KEYS = [
     ("tui-autostart-pool", "false"),
     ("tui-metrics", "false"),
     ("tui-upgrade-check-seconds", "900"),
+    ("pool-upgrade-check-seconds", "900"),
     ("personal-origin", ""),
     ("price-sonnet-input-per-mtok", "2.00"),
     ("price-sonnet-output-per-mtok", "10.00"),
@@ -111,6 +113,7 @@ _NUMERIC_RANGES = {
     "stall-seconds": (0, None),
     "probe-cooldown-seconds": (0, None),
     "tui-upgrade-check-seconds": (0, None),
+    "pool-upgrade-check-seconds": (0, None),
     "shutdown-grace-seconds": (0, None),
     "price-sonnet-input-per-mtok": (0.0, None),
     "price-sonnet-output-per-mtok": (0.0, None),
@@ -455,6 +458,11 @@ class Config:
         env = self._env_int("LC_TUI_UPGRADE_CHECK_SECONDS", None)
         value = env if env is not None else self._required_int("tui-upgrade-check-seconds")
         return self._check_range("tui-upgrade-check-seconds", value)
+
+    def pool_upgrade_check_seconds(self):
+        env = self._env_int("LC_POOL_UPGRADE_CHECK_SECONDS", None)
+        value = env if env is not None else self._required_int("pool-upgrade-check-seconds")
+        return self._check_range("pool-upgrade-check-seconds", value)
 
     def worker_history(self):
         env = self._env_int("LC_WORKER_HISTORY", None)

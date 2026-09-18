@@ -139,6 +139,7 @@ def write_config(projects=None, specs=None):
         "price-haiku-cache-read-per-mtok: 0.10",
         "shutdown-grace-seconds: 10",
         "tick-failure-cap: 5",
+        "pool-upgrade-check-seconds: 900",
         "memory-reserve-fraction: 0.25",
         "suspend-pressure: 0.85",
         "resume-pressure: 0.70",
