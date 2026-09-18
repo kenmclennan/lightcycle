@@ -98,9 +98,9 @@ _SEED_KEYS = [
     ("review-rounds-cap", "5"),
     ("context-artifact-types", "spec"),
     ("internal-shortcode", "AUD"),
-    ("memory-reserve-fraction", "0.25"),
-    ("suspend-pressure", "0.85"),
-    ("resume-pressure", "0.70"),
+    ("memory-reserve-fraction", "0.65"),
+    ("suspend-pressure", "0.40"),
+    ("resume-pressure", "0.30"),
 ]
 
 _NUMERIC_RANGES = {
