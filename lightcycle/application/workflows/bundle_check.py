@@ -51,6 +51,10 @@ def check_bundle_references(bundle):
             messages.append(
                 "%s on %r targets %r, which resolves to nothing" % (hook, gate, target)
             )
+        for hook, gate, got, want in contracts.malformed_hook_occurrences():
+            messages.append(
+                "%s on %r has %d token(s), needs at least %d" % (hook, gate, got, want)
+            )
         if contracts.unknown_display():
             messages.append(
                 "display phrase declared for a stage this bundle does not reference: %s"

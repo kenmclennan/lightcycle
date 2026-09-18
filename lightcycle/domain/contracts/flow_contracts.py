@@ -1,5 +1,10 @@
 from lightcycle.domain.contracts.step_contract import StepContract
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK, REVIEW_ROUNDS_CAP
+from lightcycle.domain.flow.hooks import (
+    CI_FAILED_CAP,
+    HOOK_MIN_ARITY,
+    PR_FEEDBACK,
+    REVIEW_ROUNDS_CAP,
+)
 
 
 class FlowContracts:
@@ -121,7 +126,7 @@ class FlowContracts:
         return {p: sorted(ws) for p, ws in groups.items() if len(ws) > 1}
 
     def _collect_hook_phase_mismatch(self, mismatches, hook, occ, target_index):
-        if len(occ) <= target_index:
+        if len(occ) < HOOK_MIN_ARITY[hook]:
             return
         gate, target = occ[0], occ[target_index]
         if not self._flow.step_def(target).owner:
@@ -142,7 +147,7 @@ class FlowContracts:
         return sorted(mismatches)
 
     def _collect_unresolved_hook_target(self, unresolved, hook, occ, target_index, known):
-        if len(occ) <= target_index:
+        if len(occ) < HOOK_MIN_ARITY[hook]:
             return
         gate, target = occ[0], occ[target_index]
         if target not in known:
@@ -160,6 +165,14 @@ class FlowContracts:
             self._collect_unresolved_hook_target(unresolved, REVIEW_ROUNDS_CAP, occ, 2, known)
         return sorted(unresolved)
 
+    def malformed_hook_occurrences(self):
+        malformed = []
+        for hook, min_len in HOOK_MIN_ARITY.items():
+            for occ in self._graph.hook_occurrences(hook):
+                if occ and len(occ) < min_len:
+                    malformed.append((hook, occ[0], len(occ), min_len))
+        return sorted(malformed)
+
     def ok(self):
         return (
             not self.missing()
@@ -168,6 +181,7 @@ class FlowContracts:
             and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
             and not self.hook_phase_mismatches()
             and not self.unresolved_hook_targets()
+            and not self.malformed_hook_occurrences()
         )
 
     def as_dict(self):
@@ -189,5 +203,6 @@ class FlowContracts:
             "unreachable_pass_ends": self.unreachable_pass_ends(),
             "hook_phase_mismatches": self.hook_phase_mismatches(),
             "unresolved_hook_targets": self.unresolved_hook_targets(),
+            "malformed_hook_occurrences": self.malformed_hook_occurrences(),
             "ok": self.ok(),
         }

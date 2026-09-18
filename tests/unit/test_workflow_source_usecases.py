@@ -158,6 +158,21 @@ class TestAdd(unittest.TestCase):
         self.assertIn("line 4", str(caught.exception))
         self.assertEqual(source.list_origins(), [])
 
+    def test_malformed_hook_occurrence_raises_and_registers_nothing(self):
+        source = FakeSource()
+        source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha1",
+            steps={"code": _step_text({"model": "x", "step": "code"})},
+            workflows={"build": "entry: code\n\nhooks:\n  ci_failed_cap  code\n"})
+        with self.assertRaises(WorkflowSourceError) as caught:
+            _add(source).execute(url="u", ref="main", name=None)
+        message = str(caught.exception)
+        self.assertIn("ci_failed_cap", message)
+        self.assertIn("code", message)
+        self.assertIn("1 token", message)
+        self.assertIn("4", message)
+        self.assertEqual(source.list_origins(), [])
+
     def test_prompt_drift_raises_and_registers_nothing(self):
         source = FakeSource()
         source.add_remote(

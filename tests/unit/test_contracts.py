@@ -6,6 +6,19 @@ from lightcycle.domain.contracts import ArtifactRequirement, FlowContracts, Step
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
+from lightcycle.domain.flow.hooks import (
+    CI_FAILED_CAP,
+    CI_FAILURE,
+    CI_SUCCESS,
+    MENTION_TOKEN,
+    PR_CLOSE,
+    PR_CONFLICT,
+    PR_CONFLICT_CAP,
+    PR_CONFLICT_ESCALATE,
+    PR_FEEDBACK,
+    PR_MERGE,
+    REVIEW_ROUNDS_CAP,
+)
 from tests.support.fake_fs import graph_text_from_metas
 
 _ROOT = str(Path(__file__).resolve().parents[1] / "support" / "library")
@@ -428,6 +441,100 @@ class TestUnresolvedHookTargets(unittest.TestCase):
         metas = {"gate": {"step": "gate", "on_pr_feedback": "target"}}
         a = contracts(metas)
         self.assertEqual(a.as_dict()["unresolved_hook_targets"], a.unresolved_hook_targets())
+
+
+_ARITY_2_OUTCOME_HOOKS = (
+    PR_MERGE, PR_CLOSE, PR_CONFLICT, PR_CONFLICT_CAP, PR_CONFLICT_ESCALATE,
+    CI_SUCCESS, CI_FAILURE, MENTION_TOKEN,
+)
+
+
+class TestMalformedHookOccurrences(unittest.TestCase):
+    def test_below_minimum_outcome_hook_is_flagged(self):
+        for hook in _ARITY_2_OUTCOME_HOOKS:
+            with self.subTest(hook=hook):
+                metas = {"gate": {"step": "gate", "on_%s" % hook: True}}
+                a = contracts(metas)
+                self.assertEqual(a.malformed_hook_occurrences(), [(hook, "gate", 1, 2)])
+                self.assertFalse(a.ok())
+
+    def test_at_minimum_outcome_hook_is_not_flagged(self):
+        for hook in _ARITY_2_OUTCOME_HOOKS:
+            with self.subTest(hook=hook):
+                value = 3 if hook == PR_CONFLICT_CAP else "value"
+                metas = {"gate": {"step": "gate", "on_%s" % hook: value}}
+                a = contracts(metas)
+                self.assertEqual(a.malformed_hook_occurrences(), [])
+                self.assertTrue(a.ok())
+
+    def test_below_minimum_pr_feedback_is_flagged_and_its_target_is_not_checked(self):
+        metas = {"gate": {"step": "gate", "on_pr_feedback": True}}
+        a = contracts(metas)
+        self.assertEqual(a.malformed_hook_occurrences(), [(PR_FEEDBACK, "gate", 1, 2)])
+        self.assertEqual(a.unresolved_hook_targets(), [])
+        self.assertFalse(a.ok())
+
+    def test_at_minimum_pr_feedback_with_a_resolved_target_is_not_flagged(self):
+        metas = {
+            "gate": {"step": "gate", "on_pr_feedback": "target"},
+            "target": {"step": "target"},
+        }
+        a = contracts(metas)
+        self.assertEqual(a.malformed_hook_occurrences(), [])
+        self.assertTrue(a.ok())
+
+    def _ci_failed_cap_contracts(self, occurrence):
+        text = "entry: gate\n\nhooks:\n  ci_failed_cap  %s\n" % occurrence
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        return FlowContracts(flow, graph, metas)
+
+    def test_ci_failed_cap_below_minimum_is_flagged(self):
+        cases = {"gate": 1, "gate  ci-failed": 2, "gate  ci-failed  3": 3}
+        for occurrence, length in cases.items():
+            with self.subTest(occurrence=occurrence):
+                a = self._ci_failed_cap_contracts(occurrence)
+                self.assertEqual(
+                    a.malformed_hook_occurrences(), [(CI_FAILED_CAP, "gate", length, 4)]
+                )
+                self.assertFalse(a.ok())
+
+    def test_ci_failed_cap_at_minimum_is_not_flagged(self):
+        a = self._ci_failed_cap_contracts("gate  ci-failed  3  target")
+        self.assertEqual(a.malformed_hook_occurrences(), [])
+        self.assertTrue(a.ok())
+
+    def _review_rounds_cap_contracts(self, occurrence):
+        text = "entry: gate\n\nhooks:\n  review_rounds_cap  %s\n" % occurrence
+        graph = parse_graph(text)
+        metas = {"gate": {"model": "x"}, "target": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        return FlowContracts(flow, graph, metas)
+
+    def test_review_rounds_cap_below_minimum_is_flagged(self):
+        cases = {"gate": 1, "gate  rejected": 2}
+        for occurrence, length in cases.items():
+            with self.subTest(occurrence=occurrence):
+                a = self._review_rounds_cap_contracts(occurrence)
+                self.assertEqual(
+                    a.malformed_hook_occurrences(), [(REVIEW_ROUNDS_CAP, "gate", length, 3)]
+                )
+                self.assertFalse(a.ok())
+
+    def test_review_rounds_cap_at_minimum_is_not_flagged(self):
+        a = self._review_rounds_cap_contracts("gate  rejected  target")
+        self.assertEqual(a.malformed_hook_occurrences(), [])
+        self.assertTrue(a.ok())
+
+    def test_as_dict_includes_malformed_hook_occurrences(self):
+        graph = parse_graph("entry: gate\n\nhooks:\n  ci_failed_cap  gate\n")
+        metas = {"gate": {"model": "x"}}
+        flow = Flow.from_graph(graph, metas)
+        a = FlowContracts(flow, graph, metas)
+        self.assertEqual(
+            a.as_dict()["malformed_hook_occurrences"], a.malformed_hook_occurrences()
+        )
 
 
 class TestDisplayContracts(unittest.TestCase):
