@@ -185,7 +185,7 @@ COMMAND_GROUPS = [
          "engine (no LLM/GitHub) to its terminals - separate from `lc upgrade`, which updates the engine"),
     ]),
     ("Start working", [
-        ("start", "[--once] [--detach]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (default 4) workers from the ready queue; --detach spawns it in the background and returns immediately"),
+        ("start", "[--once] [--detach]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (see `lc config`) workers from the ready queue; --detach spawns it in the background and returns immediately"),
         ("stop", "", "signal a detached pool to stop; reports the pid signalled"),
     ]),
     ("See what's happening", [
@@ -233,7 +233,7 @@ COMMAND_GROUPS = [
         ("retro", "<item>", "gather child feedback + objective signals into a read digest"),
     ]),
     ("Maintenance", [
-        ("sweep", "", "reclaim orphaned step claims and prune dead worker entries (kept: LC_WORKER_HISTORY, default 20)"),
+        ("sweep", "", "reclaim orphaned step claims and prune dead worker entries (kept: LC_WORKER_HISTORY, see `lc config`)"),
         ("restore", "[<snapshot>] --force", "overwrite the live store from a backup snapshot "
          "(newest if omitted); refuses without --force or while lc start is running"),
         ("doctor", "[--json]", "read-only diagnostics: store fsck + pinned-bundle/config/origin drift"),
