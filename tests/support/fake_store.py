@@ -697,6 +697,11 @@ class FakeStore(StorePort):
         if clear_dirty:
             b["dirty_since"] = None
 
+    def release_day_summary(self, day):
+        b = self._daily_summaries[day]
+        b["step_id"] = None
+        b["spawn_count"] = None
+
     def summary_day_for_step(self, step_id):
         for day, b in self._daily_summaries.items():
             if b.get("step_id") == step_id:

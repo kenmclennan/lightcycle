@@ -163,10 +163,7 @@ class CompleteStepUseCase:
                     clear_dirty=(current == row.spawn_count),
                 )
             else:
-                self._store.finish_day_summary(
-                    day, summary=row.summary, summarized_count=row.summarized_count,
-                    clear_dirty=False,
-                )
+                self._store.release_day_summary(day)
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 

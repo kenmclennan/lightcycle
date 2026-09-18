@@ -229,10 +229,6 @@ class TestDailySummaryCadenceScanThrottle(unittest.TestCase):
         self.assertEqual(calls["n"], 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestDailySummaryCadenceSettles(unittest.TestCase):
     def test_a_completed_summary_does_not_respawn_for_a_day_with_no_new_real_work(self):
         day = datetime.date(2026, 1, 1)
@@ -250,3 +246,27 @@ class TestDailySummaryCadenceSettles(unittest.TestCase):
         self.assertIsNone(store.day_summary(day).dirty_since)
         for offset in (800, 1600, 2400):
             self.assertEqual(_tick(gate, clock, _epoch(day) + offset).fired, [])
+
+    def test_a_non_done_completion_leaves_generated_at_unchanged(self):
+        day = datetime.date(2026, 1, 1)
+        store, clock = _make_store_and_clock(_epoch(day))
+        _close_item(store, day)
+        gate = _gate(store, debounce_seconds=600)
+        _tick(gate, clock, _epoch(day))
+        tid = _tick(gate, clock, _epoch(day) + 700).fired[0]
+        store.finish_day_summary(day, summary="old", summarized_count=0, clear_dirty=False)
+        store.start_day_summary(day, step_id=tid, spawn_count=1)
+        before = store.day_summary(day).generated_at
+        clock.epoch = _epoch(day) + 900
+
+        CompleteStepUseCase(store, flow_for(METAS, store)).execute(
+            CompleteInput(step=tid, outcome="failed"))
+
+        row = store.day_summary(day)
+        self.assertEqual(row.generated_at, before)
+        self.assertEqual(row.summary, "old")
+        self.assertIsNone(row.step_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

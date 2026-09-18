@@ -1647,6 +1647,13 @@ class SqliteStore(StorePort):
             )
         self._commit()
 
+    def release_day_summary(self, day):
+        self._conn.execute(
+            "UPDATE daily_summaries SET step_id = NULL, spawn_count = NULL WHERE day = ?",
+            (day.isoformat(),),
+        )
+        self._commit()
+
     def summary_day_for_step(self, step_id):
         row = self._conn.execute(
             "SELECT day FROM daily_summaries WHERE step_id = ?", (step_id,)
