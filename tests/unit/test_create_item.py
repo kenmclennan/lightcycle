@@ -79,6 +79,37 @@ class TestCreateItemUseCase(unittest.TestCase):
         self.assertIn("acme/ghost", str(ctx.exception))
         self.assertEqual(store.all_nodes(), [])
 
+    def test_registered_repo_with_no_project_derives_shortcode_and_project(self):
+        store = FakeStore()
+        store.add_project("kenmclennan/lightcycle", shortcode="LC")
+        resp = CreateItemUseCase(store, FakeConfig(shortcode="XY")).execute(
+            CreateItemInput(
+                title="an item", description="a description", repo="kenmclennan/lightcycle"
+            )
+        )
+        self.assertFalse(resp.defaulted)
+        self.assertEqual(store.get_item(resp.id).project, "lightcycle")
+
+    def test_unregistered_repo_with_no_project_defaults_and_leaves_project_unset(self):
+        store = FakeStore()
+        resp = CreateItemUseCase(store, FakeConfig()).execute(
+            CreateItemInput(title="an item", description="a description", repo="ghost/repo")
+        )
+        self.assertTrue(resp.defaulted)
+        self.assertIsNone(store.get_item(resp.id).project)
+
+    def test_explicit_project_wins_over_a_different_registered_repo(self):
+        store = FakeStore()
+        store.add_project("acme/app", shortcode="ACME")
+        store.add_project("kenmclennan/lightcycle", shortcode="LC")
+        resp = CreateItemUseCase(store, FakeConfig()).execute(
+            CreateItemInput(
+                title="an item", description="a description",
+                project="acme/app", repo="kenmclennan/lightcycle",
+            )
+        )
+        self.assertEqual(store.get_item(resp.id).project, "acme/app")
+
 
 if __name__ == "__main__":
     unittest.main()

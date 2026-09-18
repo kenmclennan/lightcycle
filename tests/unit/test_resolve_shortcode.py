@@ -45,6 +45,22 @@ class TestResolveShortcode(unittest.TestCase):
             resolve_shortcode(store, FakeConfig(), "acme/ghost")
         self.assertIn("acme/ghost", str(ctx.exception))
 
+    def test_no_project_but_registered_repo_derives_shortcode_and_project(self):
+        store = FakeStore()
+        store.add_project("kenmclennan/lightcycle", shortcode="LC")
+        resolved = resolve_shortcode(store, FakeConfig(), None, repo="kenmclennan/lightcycle")
+        self.assertEqual(resolved, ResolvedShortcode("LC", False, "lightcycle"))
+
+    def test_no_project_and_unregistered_repo_returns_the_defaulted_global_shortcode(self):
+        resolved = resolve_shortcode(FakeStore(), FakeConfig(), None, repo="ghost/repo")
+        self.assertEqual(resolved, ResolvedShortcode("XY", True))
+
+    def test_no_project_and_repo_registered_with_no_shortcode_returns_the_defaulted_global_shortcode(self):
+        store = FakeStore()
+        store.add_project("acme/ghost", local_path="/x")
+        resolved = resolve_shortcode(store, FakeConfig(), None, repo="acme/ghost")
+        self.assertEqual(resolved, ResolvedShortcode("XY", True))
+
 
 if __name__ == "__main__":
     unittest.main()
