@@ -82,6 +82,23 @@ class TestMaxAgents(unittest.TestCase):
         with self.assertRaises(ConfigError):
             _cfg({"LC_MAX_AGENTS": "lots"}).max_agents()
 
+    def test_zero_is_accepted(self):
+        self.assertEqual(_cfg(max_agents="0").max_agents(), 0)
+
+    def test_negative_is_refused_via_config_naming_key_and_value(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg(max_agents="-1").max_agents()
+        msg = str(ctx.exception)
+        self.assertIn("max-agents", msg)
+        self.assertIn("-1", msg)
+
+    def test_negative_is_refused_via_env(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg({"LC_MAX_AGENTS": "-1"}).max_agents()
+        msg = str(ctx.exception)
+        self.assertIn("max-agents", msg)
+        self.assertIn("-1", msg)
+
 
 class TestTunables(unittest.TestCase):
     def _full_cfg(self, environ=None):
@@ -151,6 +168,39 @@ class TestTunables(unittest.TestCase):
         with self.assertRaises(ConfigError):
             _cfg({"LC_PROBE_COOLDOWN_SECONDS": "soon"}).probe_cooldown_seconds()
 
+    def test_seconds_getters_accept_zero(self):
+        self.assertEqual(_cfg(max_boot_seconds="0").max_boot_seconds(), 0)
+        self.assertEqual(_cfg(max_session_seconds="0").max_session_seconds(), 0)
+        self.assertEqual(_cfg(stall_seconds="0").stall_seconds(), 0)
+        self.assertEqual(_cfg(probe_cooldown_seconds="0").probe_cooldown_seconds(), 0)
+        self.assertEqual(_cfg(shutdown_grace_seconds="0").shutdown_grace_seconds(), 0)
+
+    def test_seconds_getters_refuse_negative_via_config(self):
+        cases = (
+            ("max_boot_seconds", "max_boot_seconds", "max-boot-seconds"),
+            ("max_session_seconds", "max_session_seconds", "max-session-seconds"),
+            ("stall_seconds", "stall_seconds", "stall-seconds"),
+            ("probe_cooldown_seconds", "probe_cooldown_seconds", "probe-cooldown-seconds"),
+            ("shutdown_grace_seconds", "shutdown_grace_seconds", "shutdown-grace-seconds"),
+        )
+        for filekey, getter, key in cases:
+            with self.assertRaises(ConfigError) as ctx:
+                getattr(_cfg(**{filekey: "-1"}), getter)()
+            self.assertIn(key, str(ctx.exception), key)
+
+    def test_seconds_getters_refuse_negative_via_env(self):
+        cases = (
+            ("LC_MAX_BOOT_SECONDS", "max_boot_seconds", "max-boot-seconds"),
+            ("LC_MAX_SESSION_SECONDS", "max_session_seconds", "max-session-seconds"),
+            ("LC_STALL_SECONDS", "stall_seconds", "stall-seconds"),
+            ("LC_PROBE_COOLDOWN_SECONDS", "probe_cooldown_seconds", "probe-cooldown-seconds"),
+            ("LC_SHUTDOWN_GRACE_SECONDS", "shutdown_grace_seconds", "shutdown-grace-seconds"),
+        )
+        for envvar, getter, key in cases:
+            with self.assertRaises(ConfigError) as ctx:
+                getattr(_cfg({envvar: "-1"}), getter)()
+            self.assertIn(key, str(ctx.exception), key)
+
 
 class TestMemoryConfig(unittest.TestCase):
     def _full_cfg(self, environ=None):
@@ -214,6 +264,65 @@ class TestMemoryConfig(unittest.TestCase):
             _cfg(
                 {"LC_RESUME_PRESSURE": "0.9"}, suspend_pressure="0.85", resume_pressure="0.70",
             ).resume_pressure()
+
+    def test_memory_reserve_fraction_accepts_both_boundary_values(self):
+        self.assertEqual(
+            _cfg(memory_reserve_fraction="0.0").memory_reserve_fraction(), 0.0
+        )
+        self.assertEqual(
+            _cfg(memory_reserve_fraction="1.0").memory_reserve_fraction(), 1.0
+        )
+
+    def test_suspend_pressure_accepts_both_boundary_values(self):
+        self.assertEqual(_cfg(suspend_pressure="0.0").suspend_pressure(), 0.0)
+        self.assertEqual(_cfg(suspend_pressure="1.0").suspend_pressure(), 1.0)
+
+    def test_memory_reserve_fraction_out_of_range_raises_naming_key_and_value(self):
+        for raw in ("-0.1", "1.1"):
+            with self.assertRaises(ConfigError) as ctx:
+                _cfg(memory_reserve_fraction=raw).memory_reserve_fraction()
+            msg = str(ctx.exception)
+            self.assertIn("memory-reserve-fraction", msg)
+            self.assertIn(raw, msg)
+
+    def test_memory_reserve_fraction_out_of_range_via_env_raises(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg({"LC_MEMORY_RESERVE_FRACTION": "1.1"}).memory_reserve_fraction()
+        msg = str(ctx.exception)
+        self.assertIn("memory-reserve-fraction", msg)
+        self.assertIn("1.1", msg)
+
+    def test_suspend_pressure_out_of_range_raises_naming_key_and_value(self):
+        for raw in ("-0.1", "1.1"):
+            with self.assertRaises(ConfigError) as ctx:
+                _cfg(suspend_pressure=raw).suspend_pressure()
+            msg = str(ctx.exception)
+            self.assertIn("suspend-pressure", msg)
+            self.assertIn(raw, msg)
+
+    def test_suspend_pressure_out_of_range_via_env_raises(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg({"LC_SUSPEND_PRESSURE": "1.1"}).suspend_pressure()
+        msg = str(ctx.exception)
+        self.assertIn("suspend-pressure", msg)
+        self.assertIn("1.1", msg)
+
+    def test_resume_pressure_range_violation_reported_as_range_error_not_cross_check(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg(resume_pressure="-0.1", suspend_pressure="0.85").resume_pressure()
+        msg = str(ctx.exception)
+        self.assertIn("resume-pressure", msg)
+        self.assertNotIn("strictly below", msg)
+
+    def test_resume_pressure_surfaces_range_violation_on_suspend_pressure(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg(resume_pressure="0.70", suspend_pressure="1.5").resume_pressure()
+        self.assertIn("suspend-pressure", str(ctx.exception))
+
+    def test_resume_pressure_boundary_values_mutually_compatible(self):
+        self.assertEqual(
+            _cfg(resume_pressure="0.0", suspend_pressure="1.0").resume_pressure(), 0.0
+        )
 
 
 class TestEnsureConfig(unittest.TestCase):
@@ -674,6 +783,28 @@ class TestUsagePricing(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 c.usage_pricing()
 
+    def test_a_negative_price_key_raises_config_error_naming_it(self):
+        for negative_key in _ALL_PRICE_KEYS:
+            filevals = dict(_ALL_PRICE_KEYS)
+            filevals[negative_key] = "-1"
+            c = _cfg(**filevals)
+            with self.assertRaises(ConfigError) as ctx:
+                c.usage_pricing()
+            self.assertIn(negative_key.replace("_", "-"), str(ctx.exception), negative_key)
+
+    def test_all_price_keys_at_zero_resolve_cleanly(self):
+        filevals = {k: "0" for k in _ALL_PRICE_KEYS}
+        c = _cfg(**filevals)
+        rates = c.usage_pricing()
+        self.assertEqual(
+            rates,
+            {
+                "sonnet": ModelRates(input=0.0, output=0.0, cache_write=0.0, cache_read=0.0),
+                "opus": ModelRates(input=0.0, output=0.0, cache_write=0.0, cache_read=0.0),
+                "haiku": ModelRates(input=0.0, output=0.0, cache_write=0.0, cache_read=0.0),
+            },
+        )
+
 
 class TestOpusPricing(unittest.TestCase):
     def test_missing_key_raises_config_error(self):
@@ -765,6 +896,16 @@ class TestTuiUpgradeCheckSeconds(unittest.TestCase):
 
     def test_zero_is_accepted(self):
         self.assertEqual(_cfg(tui_upgrade_check_seconds="0").tui_upgrade_check_seconds(), 0)
+
+    def test_negative_is_refused_naming_the_key_via_config(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(tui_upgrade_check_seconds="-1").tui_upgrade_check_seconds()
+        self.assertIn("tui-upgrade-check-seconds", str(e.exception))
+
+    def test_negative_is_refused_naming_the_key_via_env(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg({"LC_TUI_UPGRADE_CHECK_SECONDS": "-1"}).tui_upgrade_check_seconds()
+        self.assertIn("tui-upgrade-check-seconds", str(e.exception))
 
     def test_a_malformed_value_is_refused_naming_the_key(self):
         with self.assertRaises(ConfigError) as e:
