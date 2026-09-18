@@ -5,6 +5,15 @@ from types import MappingProxyType
 _SECTIONS = ("nodes", "edges", "hooks", "signals", "display", "pass-end", "disposition")
 
 
+def _expect(parts, count, line_no, section, shape):
+    if len(parts) != count:
+        raise ValueError(
+            "line %d: %s expected '%s' (%d token(s)), got %d: %r"
+            % (line_no, section, shape, count, len(parts), " ".join(parts))
+        )
+    return parts
+
+
 @dataclass(frozen=True)
 class WorkflowGraph:
     entry: str
@@ -85,7 +94,7 @@ def parse_graph(text):
     pass_ends = set()
     disposition = {}
     section = None
-    for line in text.splitlines():
+    for line_no, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
             continue
         if line[0] not in " \t":
@@ -110,9 +119,15 @@ def parse_graph(text):
             continue
         parts = line.split()
         if section == "nodes":
-            stage, step_file = parts
+            stage, step_file = _expect(parts, 2, line_no, "nodes", "<stage> <file>")
             nodes[stage] = step_file
         elif section == "edges":
+            if len(parts) < 2:
+                raise ValueError(
+                    "line %d: edges expected '<from> <outcome> [<target>] [primary]' "
+                    "(at least 2 token(s)), got %d: %r"
+                    % (line_no, len(parts), " ".join(parts))
+                )
             frm, outcome = parts[0], parts[1]
             target = parts[2] if len(parts) > 2 else None
             edges.setdefault(frm, {})[outcome] = target
@@ -121,22 +136,28 @@ def parse_graph(text):
         elif section == "hooks":
             hooks.setdefault(parts[0], []).append(parts[1:])
         elif section == "signals":
-            stage, name, decl = parts
+            stage, name, decl = _expect(parts, 3, line_no, "signals", "<stage> <name> <decl>")
             signals.setdefault(stage, {})[name] = decl
         elif section == "workspace":
-            stage, ws = parts
+            stage, ws = _expect(parts, 2, line_no, "workspace", "<stage> <workspace>")
             workspaces[stage] = ws
         elif section == "phase":
-            stage, ph = parts
+            stage, ph = _expect(parts, 2, line_no, "phase", "<stage> <phase>")
             phases[stage] = ph
         elif section == "display":
-            stage, phrase = line.split(maxsplit=1)
+            fields = line.split(maxsplit=1)
+            if len(fields) != 2:
+                raise ValueError(
+                    "line %d: display expected '<stage> <phrase>' (2 token(s)), got %d: %r"
+                    % (line_no, len(fields), line.strip())
+                )
+            stage, phrase = fields
             display[stage] = phrase
         elif section == "pass-end":
-            stage, outcome = parts
+            stage, outcome = _expect(parts, 2, line_no, "pass-end", "<stage> <outcome>")
             pass_ends.add((stage, outcome))
         elif section == "disposition":
-            outcome, value = parts
+            outcome, value = _expect(parts, 2, line_no, "disposition", "<outcome> <value>")
             disposition[outcome] = value
     return WorkflowGraph(
         entry=entry, requires=requires, provides=provides, workspace=workspace,

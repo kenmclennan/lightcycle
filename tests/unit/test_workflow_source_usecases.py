@@ -148,6 +148,16 @@ class TestAdd(unittest.TestCase):
             _add(source).execute(url="u", ref="main", name=None)
         self.assertEqual(source.list_origins(), [])
 
+    def test_malformed_bundle_line_raises_and_registers_nothing(self):
+        source = FakeSource()
+        source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha1",
+            workflows={"build": "entry: build\n\ndisposition:\n  merged completed extra\n"})
+        with self.assertRaises(WorkflowSourceError) as caught:
+            _add(source).execute(url="u", ref="main", name=None)
+        self.assertIn("line 4", str(caught.exception))
+        self.assertEqual(source.list_origins(), [])
+
     def test_prompt_drift_raises_and_registers_nothing(self):
         source = FakeSource()
         source.add_remote(

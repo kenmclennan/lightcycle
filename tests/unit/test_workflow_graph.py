@@ -226,3 +226,99 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         self.assertEqual(graph.entry, "build")
         self.assertEqual(graph.target("build", "done"), "review")
         self.assertEqual(graph.file_for("build"), "build")
+
+    def test_malformed_nodes_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "nodes:\n"
+                "  build  coder  extra\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("nodes", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
+    def test_malformed_edges_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "edges:\n"
+                "  build\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("edges", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
+    def test_malformed_signals_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "signals:\n"
+                "  review  review_rounds\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("signals", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
+    def test_malformed_workspace_block_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "workspace:\n"
+                "  build  specs  extra\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("workspace", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
+    def test_malformed_phase_block_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "phase:\n"
+                "  build  code  extra\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("phase", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
+    def test_malformed_display_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "display:\n"
+                "  build\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("display", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
+    def test_malformed_pass_end_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "pass-end:\n"
+                "  build  done  extra\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("pass-end", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
+    def test_malformed_disposition_line_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "disposition:\n"
+                "  merged completed extra\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("disposition", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)

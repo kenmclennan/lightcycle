@@ -21,7 +21,11 @@ def check_bundle_references(bundle):
         step_metas[role] = meta
     problems = {}
     for name, text in bundle.workflows.items():
-        graph = parse_graph(text)
+        try:
+            graph = parse_graph(text)
+        except ValueError as e:
+            problems[name] = ["parse error: %s" % e]
+            continue
         flow = Flow.from_graph(graph, step_metas)
         contracts = FlowContracts(flow, graph, step_metas)
         messages = []
