@@ -6,6 +6,7 @@ from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
     CI_FAILURE,
     CI_SUCCESS,
+    HOOK_MIN_ARITY,
     MENTION_TOKEN,
     PR_CLOSE,
     PR_CONFLICT,
@@ -60,23 +61,23 @@ class StepDef:
     def from_graph(cls, graph, stage) -> "StepDef":
         def first(name, index=1):
             for occ in graph.hook_occurrences(name):
-                if occ[0] == stage and len(occ) > index:
+                if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[name]:
                     return occ[index]
             return None
 
         ci_cap = None
         for occ in graph.hook_occurrences(CI_FAILED_CAP):
-            if occ[0] == stage:
+            if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[CI_FAILED_CAP]:
                 ci_cap = CiCap(occ[1], int(occ[2]), occ[3])
 
         pr_conflict_cap = None
         for occ in graph.hook_occurrences(PR_CONFLICT_CAP):
-            if occ[0] == stage and len(occ) > 1:
+            if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT_CAP]:
                 pr_conflict_cap = int(occ[1])
 
         review_rounds_cap = None
         for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
-            if occ[0] == stage and len(occ) > 2:
+            if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[REVIEW_ROUNDS_CAP]:
                 review_rounds_cap = ReviewRoundsCap(occ[1], occ[2])
 
         review_bot_allowlist = frozenset()

@@ -114,6 +114,17 @@ class TestStepDefFromGraph(unittest.TestCase):
         self.assertIsNone(sd.display)
 
 
+class TestMalformedCiFailedCap(unittest.TestCase):
+    def test_below_minimum_occurrence_leaves_ci_cap_none(self):
+        for occurrence in ("review", "review  ci-failed", "review  ci-failed  3"):
+            with self.subTest(occurrence=occurrence):
+                graph = parse_graph(
+                    "entry: build\n\nhooks:\n  ci_failed_cap  %s\n" % occurrence
+                )
+                sd = StepDef.from_graph(graph, "review")
+                self.assertIsNone(sd.ci_cap)
+
+
 class TestFlowStepDef(unittest.TestCase):
     def test_returns_the_stored_step_def(self):
         sd = StepDef(phase="spec")

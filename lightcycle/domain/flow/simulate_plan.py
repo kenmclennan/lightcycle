@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 
 from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
+    HOOK_MIN_ARITY,
     PR_CONFLICT,
     PR_CONFLICT_CAP,
     PR_CONFLICT_ESCALATE,
@@ -72,30 +73,38 @@ def _hook_transitions(graph):
     out = set()
     for name in _HOOK_OUTCOME_NAMES:
         for occ in graph.hook_occurrences(name):
-            if len(occ) > 1:
+            if len(occ) >= HOOK_MIN_ARITY[name]:
                 out.add(PlannedStep(stage=occ[0], kind="hook", hook=name, outcome=occ[1]).key())
     return out
 
 
 def _feedback_occurrences(graph):
     return [
-        (occ[0], occ[1]) for occ in graph.hook_occurrences(PR_FEEDBACK) if len(occ) > 1
+        (occ[0], occ[1])
+        for occ in graph.hook_occurrences(PR_FEEDBACK)
+        if len(occ) >= HOOK_MIN_ARITY[PR_FEEDBACK]
     ]
 
 
 def _cap_occurrences(graph, review_rounds_cap_n=None):
     caps = []
     for occ in graph.hook_occurrences(CI_FAILED_CAP):
-        if len(occ) > 3:
+        if len(occ) >= HOOK_MIN_ARITY[CI_FAILED_CAP]:
             caps.append(("edge", None, occ[0], occ[1], int(occ[2]), occ[3]))
     conflict_cap = {
-        occ[0]: int(occ[1]) for occ in graph.hook_occurrences(PR_CONFLICT_CAP) if len(occ) > 1
+        occ[0]: int(occ[1])
+        for occ in graph.hook_occurrences(PR_CONFLICT_CAP)
+        if len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT_CAP]
     }
     conflict_outcome = {
-        occ[0]: occ[1] for occ in graph.hook_occurrences(PR_CONFLICT) if len(occ) > 1
+        occ[0]: occ[1]
+        for occ in graph.hook_occurrences(PR_CONFLICT)
+        if len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT]
     }
     conflict_escalate = {
-        occ[0]: occ[1] for occ in graph.hook_occurrences(PR_CONFLICT_ESCALATE) if len(occ) > 1
+        occ[0]: occ[1]
+        for occ in graph.hook_occurrences(PR_CONFLICT_ESCALATE)
+        if len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT_ESCALATE]
     }
     for stage, n in conflict_cap.items():
         if stage in conflict_outcome:
@@ -107,7 +116,7 @@ def _cap_occurrences(graph, review_rounds_cap_n=None):
             caps.append(("hook", PR_CONFLICT, stage, conflict_outcome[stage], n, escalate_target))
     if review_rounds_cap_n is not None:
         for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
-            if len(occ) > 2:
+            if len(occ) >= HOOK_MIN_ARITY[REVIEW_ROUNDS_CAP]:
                 caps.append(("edge", None, occ[0], occ[1], review_rounds_cap_n, occ[2]))
     return caps
 
@@ -119,7 +128,7 @@ def _outgoing(graph, stage):
             opts.append(PlannedStep(stage=stage, kind="edge", outcome=outcome))
     for name in _HOOK_OUTCOME_NAMES:
         for occ in graph.hook_occurrences(name):
-            if occ[0] == stage and len(occ) > 1:
+            if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[name]:
                 target = (graph.edges.get(stage) or {}).get(occ[1])
                 if target:
                     opts.append(PlannedStep(stage=stage, kind="hook", hook=name, outcome=occ[1]))
@@ -273,7 +282,7 @@ def _feedback_walk(graph, entry, stage, feedback_step, bound):
 def _pass_end_hook(graph, stage, outcome):
     for name in _HOOK_OUTCOME_NAMES:
         for occ in graph.hook_occurrences(name):
-            if len(occ) > 1 and occ[0] == stage and occ[1] == outcome:
+            if len(occ) >= HOOK_MIN_ARITY[name] and occ[0] == stage and occ[1] == outcome:
                 return name
     return None
 
