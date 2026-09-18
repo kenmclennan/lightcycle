@@ -251,6 +251,18 @@ class TestWorkflowGraphParsing(unittest.TestCase):
         self.assertIn("edges", str(ctx.exception))
         self.assertNotIsInstance(ctx.exception, IndexError)
 
+    def test_edges_line_with_extra_trailing_tokens_raises_with_line_number(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_graph(
+                "entry: build\n"
+                "\n"
+                "edges:\n"
+                "  build  done  review  primary  junk\n"
+            )
+        self.assertIn("line 4", str(ctx.exception))
+        self.assertIn("edges", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, IndexError)
+
     def test_malformed_signals_line_raises_with_line_number(self):
         with self.assertRaises(ValueError) as ctx:
             parse_graph(

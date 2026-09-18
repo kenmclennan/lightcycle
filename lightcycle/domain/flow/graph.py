@@ -122,10 +122,10 @@ def parse_graph(text):
             stage, step_file = _expect(parts, 2, line_no, "nodes", "<stage> <file>")
             nodes[stage] = step_file
         elif section == "edges":
-            if len(parts) < 2:
+            if not 2 <= len(parts) <= 4:
                 raise ValueError(
                     "line %d: edges expected '<from> <outcome> [<target>] [primary]' "
-                    "(at least 2 token(s)), got %d: %r"
+                    "(2 to 4 token(s)), got %d: %r"
                     % (line_no, len(parts), " ".join(parts))
                 )
             frm, outcome = parts[0], parts[1]
