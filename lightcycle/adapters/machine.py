@@ -68,8 +68,8 @@ def _macos_footprint_kb(pids):
         except (OSError, ValueError):
             return None
         result = {}
-        for proc in data.get("processes", []):
-            aux = proc.get("auxiliary", {})
+        for proc in data.get("processes") or []:
+            aux = proc.get("auxiliary") or {}
             pid = proc.get("pid")
             current = aux.get("phys_footprint")
             peak = aux.get("phys_footprint_peak")
