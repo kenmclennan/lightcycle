@@ -7,7 +7,9 @@ from lightcycle.application.flow.engine_steps import (
 from lightcycle.application.pool.daily_summary_cadence import (
     DailySummaryCadenceUseCase, _SCAN_INTERVAL_SECONDS,
 )
+from lightcycle.application.flow.complete_step import CompleteInput, CompleteStepUseCase
 from tests.support.fake_store import FakeStore
+from tests.unit.test_flow_usecases import METAS, flow_for
 
 
 class FakeConfig:
@@ -229,3 +231,22 @@ class TestDailySummaryCadenceScanThrottle(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDailySummaryCadenceSettles(unittest.TestCase):
+    def test_a_completed_summary_does_not_respawn_for_a_day_with_no_new_real_work(self):
+        day = datetime.date(2026, 1, 1)
+        store, clock = _make_store_and_clock(_epoch(day))
+        _close_item(store, day)
+        gate = _gate(store, debounce_seconds=600)
+        _tick(gate, clock, _epoch(day))
+        tid = _tick(gate, clock, _epoch(day) + 700).fired[0]
+        clock.epoch = _epoch(day) + 710
+        store.add_artifact(tid, "summary", "what shipped")
+
+        CompleteStepUseCase(store, flow_for(METAS, store)).execute(
+            CompleteInput(step=tid, outcome="done"))
+
+        self.assertIsNone(store.day_summary(day).dirty_since)
+        for offset in (800, 1600, 2400):
+            self.assertEqual(_tick(gate, clock, _epoch(day) + offset).fired, [])
