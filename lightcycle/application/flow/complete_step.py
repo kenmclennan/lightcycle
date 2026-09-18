@@ -152,7 +152,7 @@ class CompleteStepUseCase:
             row = self._store.day_summary(day)
             if input.outcome == "done":
                 text = next(
-                    (a.value for a in self._store.item_artifacts(t.item) if a.type == "summary"),
+                    (a.value for a in self._store.item_artifacts(t.id) if a.type == "summary"),
                     None,
                 )
                 current = _closed_count(self._store, day)
