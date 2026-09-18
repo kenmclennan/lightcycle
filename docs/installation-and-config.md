@@ -75,6 +75,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `tui-autostart-pool` | whether the TUI starts the pool loop automatically on launch |
 | `tui-metrics` | whether the TUI records its own per-tick refresh timing to the run log |
 | `tui-upgrade-check-seconds` | how often the TUI rechecks for a new engine version in the background; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
+| `pool-upgrade-check-seconds` | how often `lc start`'s pool loop rechecks for a new engine version while running; `0` disables the periodic recheck (the check still runs once at startup); must be `>= 0` |
 | `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS`; each must be `>= 0` |
 
 ## Workflow sources

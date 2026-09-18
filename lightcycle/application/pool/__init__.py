@@ -34,6 +34,7 @@ from lightcycle.application.pool.stop_pool import StopPoolResponse, StopPoolUseC
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.pool.tail_log import TailLogInput, TailLogResult, TailLogUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
+from lightcycle.application.pool.upgrade_cadence import UpgradeCadenceUseCase
 
 __all__ = [
     "AcquireRunLockResponse",
@@ -75,4 +76,5 @@ __all__ = [
     "TailLogUseCase",
     "TickInput",
     "TickUseCase",
+    "UpgradeCadenceUseCase",
 ]

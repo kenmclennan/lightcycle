@@ -108,6 +108,7 @@ from lightcycle.application.pool import (
     StopPoolSignalUseCase,
     StopPoolUseCase,
     TickInput,
+    UpgradeCadenceUseCase,
 )
 from lightcycle.application.setup import (
     AddProjectInput,
@@ -1537,9 +1538,11 @@ def cmd_start(argv):
             return 0
         interval = _container.config.poll_seconds()
         max_agents = _container.config.max_agents()
-        for line in _upgrade_notice_lines(
-            UpgradeNoticeUseCase(__version__, port=_container.upgrade).execute()
-        ):
+        upgrade_cadence = UpgradeCadenceUseCase(
+            UpgradeNoticeUseCase(__version__, port=_container.upgrade),
+            _container.config.pool_upgrade_check_seconds(),
+        )
+        for line in _upgrade_notice_lines(upgrade_cadence.execute(time.time())):
             print(line)
         print("lc start  poll=%ds  max-agents=%d" % (interval, max_agents))
         prev_snapshot = None
@@ -1548,6 +1551,8 @@ def cmd_start(argv):
         tick_failure_cap = _container.config.tick_failure_cap()
         while True:
             now = time.time()
+            for line in _upgrade_notice_lines(upgrade_cadence.execute(now)):
+                print(line)
             try:
                 result = _run_tick(tick, _container.worker_log, TickInput(now=now, since=prev_now), now)
             except Exception:
