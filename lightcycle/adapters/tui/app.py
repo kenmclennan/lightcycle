@@ -38,7 +38,7 @@ from lightcycle.adapters.tui.design_system import (
 from lightcycle.adapters.tui.done_list import build_done_rows
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.hub import NodeHubScreen, _format_item_cost
-from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows
+from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows_from_selection
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
     apply_widths,
@@ -70,6 +70,7 @@ from lightcycle.application.work import (
     StatsUseCase,
     StatusUseCase,
 )
+from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.ports.workers import RegistryUnreadable
 
 POLL_INTERVAL_SECONDS = 10
@@ -1414,6 +1415,8 @@ class LightcycleApp(App):
         self._upgrade_error = None
         self._last_shape = None
         self._last_attention_ids = None
+        self._last_priority_selection = None
+        self._last_priority_suspended_steps = frozenset()
         self._selected_flat_index = 0
         self._view = "priority"
         self._priority_empty = True
@@ -1541,37 +1544,30 @@ class LightcycleApp(App):
             }
         except RegistryUnreadable:
             suspended_steps = frozenset()
-        attention_rows, active_rows, queued_rows = build_priority_rows(
+
+        selection = select_priority_rows(
             self._container.store, lanes, self._container.flow_service(),
-            suspended_steps=suspended_steps,
         )
         shape = (
-            tuple(r.id for r in attention_rows),
-            tuple(r.id for r in active_rows),
-            tuple(r.id for r in queued_rows),
+            tuple(s.owning_node.id for s in selection.attention),
+            tuple(s.owning_node.id for s in selection.active),
+            tuple(s.owning_node.id for s in selection.queued),
         )
-        rows = assemble_rows(attention_rows, active_rows, queued_rows)
-
-        table = self.query_one(PriorityTable)
-        self._priority_empty = not rows
-
-        layout = self._priority_layout(table, rows)
-        if (
-            shape == self._last_shape
-            and not self._priority_needs_rebuild
-            and layout.stacked == self._priority_stacked
-        ):
-            self._update_cells(table, rows)
-        else:
-            self._rebuild_table(table, rows)
         had_prior_attention = self._last_attention_ids is not None
         newly_attention = set(shape[0]) - (self._last_attention_ids or set())
-        self._last_shape = shape
         self._last_attention_ids = set(shape[0])
         if had_prior_attention and newly_attention:
             self.bell()
 
-        self._active_row_ids = tuple(r.id for r in active_rows if not r.suspended)
+        self._active_row_ids = tuple(
+            s.owning_node.id for s in selection.active if s.node.id not in suspended_steps
+        )
+        self._last_priority_selection = selection
+        self._last_priority_suspended_steps = suspended_steps
+        if self._view == "priority":
+            self._render_priority_rows(selection, suspended_steps, shape)
+        self._last_shape = shape
+
         self._sync_active_glyph_animation()
 
         self._refresh_backlog_view()
@@ -1588,6 +1584,25 @@ class LightcycleApp(App):
             self._container.worker_log.append_run_log(
                 _tui_metric_line(wall_seconds, rss_kb, self._now().timestamp())
             )
+
+    def _render_priority_rows(self, selection, suspended_steps, shape=None, force_rebuild=False) -> None:
+        store = self._container.store
+        attention_rows, active_rows, queued_rows = build_priority_rows_from_selection(
+            store, selection, suspended_steps,
+        )
+        rows = assemble_rows(attention_rows, active_rows, queued_rows)
+        table = self.query_one(PriorityTable)
+        self._priority_empty = not rows
+        layout = self._priority_layout(table, rows)
+        if (
+            not force_rebuild
+            and shape == self._last_shape
+            and not self._priority_needs_rebuild
+            and layout.stacked == self._priority_stacked
+        ):
+            self._update_cells(table, rows)
+        else:
+            self._rebuild_table(table, rows)
 
     def _render_status_bar(self, status_bar, running, breaker, hold) -> None:
         status_bar.report(
@@ -1657,14 +1672,16 @@ class LightcycleApp(App):
         self._sync_pool_transition_poll()
 
     def _refresh_backlog_view(self) -> None:
+        if self._view != "backlog":
+            return
         backlog_uc = BacklogUseCase(self._container.store, None)
         backlog_resp = backlog_uc.execute(
             BacklogInput(project=self._backlog_project_filter, text=self._backlog_text_filter)
         )
         backlog_counts = backlog_uc.counts()
-        backlog_rows = build_backlog_rows(backlog_resp.rows)
         self._backlog_total = backlog_counts.total
-        self._backlog_filtered_count = len(backlog_rows)
+        self._backlog_filtered_count = len(backlog_resp.rows)
+        backlog_rows = build_backlog_rows(backlog_resp.rows)
         self.query_one(BacklogView).apply_rows(
             backlog_rows, self._backlog_total, self._backlog_project_filter, self._backlog_text_filter
         )
@@ -1766,7 +1783,14 @@ class LightcycleApp(App):
 
     def _cycle_view_to(self, view) -> None:
         self._view = view
-        if self._view == "done":
+        if self._view == "priority":
+            if self._last_priority_selection is not None:
+                self._render_priority_rows(
+                    self._last_priority_selection, self._last_priority_suspended_steps, force_rebuild=True,
+                )
+        elif self._view == "backlog":
+            self._refresh_backlog_view()
+        elif self._view == "done":
             self._refresh_done_view()
         elif self._view == "stats":
             self._refresh_stats_view()

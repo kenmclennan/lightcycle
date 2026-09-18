@@ -8,10 +8,12 @@ from lightcycle.adapters.tui.priority_list import (
     _project,
     _queued_row,
     build_priority_rows,
+    build_priority_rows_from_selection,
     assemble_rows,
 )
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.flow.engine_steps import AUDIT_STEP, FINDINGS_STEP
+from lightcycle.application.work.priority_rows import select_priority_rows
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -43,6 +45,26 @@ class TestProject(unittest.TestCase):
         step = store.create_step(step="build", role="agent", parent=item)
         node = store.get_node(step)
         self.assertEqual(_project(store, node), "lightcycle")
+
+
+class TestBuildPriorityRowsFromSelection(unittest.TestCase):
+    def test_matches_build_priority_rows_for_the_same_inputs(self):
+        store = FakeStore()
+        attention_step = create_owned_step(store, "escalated", step="build", role="human")
+        active_step = create_owned_step(store, "in progress", step="build", role="agent")
+        queued_step = create_owned_step(store, "queued", step="build", role="agent")
+        lanes = {
+            "inbox": [store.get_node(attention_step)],
+            "queue": [store.get_node(queued_step)],
+            "active": [store.get_node(active_step)],
+        }
+        flow_service = FixedFlowService(_FLOW)
+
+        expected = build_priority_rows(store, lanes, flow_service, suspended_steps={active_step})
+        selection = select_priority_rows(store, lanes, flow_service)
+        actual = build_priority_rows_from_selection(store, selection, suspended_steps={active_step})
+
+        self.assertEqual(actual, expected)
 
 
 class TestQueuedRowDependencyTieBreak(unittest.TestCase):

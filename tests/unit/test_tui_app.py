@@ -935,6 +935,18 @@ class TestBell(unittest.TestCase):
 
         self.assertEqual(calls["count"], 0)
 
+    def test_rings_for_fresh_attention_while_backlog_is_active(self):
+        store = FakeStore()
+        session = self._launch(store)
+        session.press("tab")
+        self.assertEqual(session.app._view, "backlog")
+        calls = self._spy(session)
+
+        create_owned_step(store, "escalated", step="triage", role="human")
+        session.poll_tick()
+
+        self.assertEqual(calls["count"], 1)
+
 
 class TestFooterVersionSegment(unittest.TestCase):
     def _launch(self, **kwargs):
@@ -2815,6 +2827,124 @@ class TestDoneCostTimeGatedOffThePoll(unittest.TestCase):
 
         self.assertEqual(calls["children"], 0)
         self.assertEqual(calls["history"], 0)
+
+
+def _active_item_with_cost(store):
+    step = create_owned_step(store, "active item", step="build", role="agent")
+    store.assign(step, "worker-1")
+    store.update_state(step, State.RUNNING)
+    store.accrue_active_seconds([step], 300)
+    store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+    return step
+
+
+class TestPriorityCostTimeGatedOffThePoll(unittest.TestCase):
+    def test_polling_while_on_backlog_never_computes_priority_cost_or_time(self):
+        store = FakeStore()
+        _active_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        session.press("tab")
+        self.assertEqual(session.app._view, "backlog")
+
+        calls = _spy_children_and_history_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["children"], 0)
+        self.assertEqual(calls["history"], 0)
+
+    def test_polling_while_on_done_never_computes_priority_cost_or_time(self):
+        store = FakeStore()
+        _active_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        session.press("tab")
+        session.press("tab")
+        self.assertEqual(session.app._view, "done")
+
+        calls = _spy_children_and_history_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["children"], 0)
+        self.assertEqual(calls["history"], 0)
+
+    def test_switching_to_priority_computes_cost_and_time_immediately_without_a_poll(self):
+        store = FakeStore()
+        step = _active_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        session.press("tab")
+        self.assertEqual(session.app._view, "backlog")
+
+        session.press("[")
+
+        self.assertEqual(session.app._view, "priority")
+        self.assertEqual(_cell(session, step, "cost"), "$2.50")
+
+
+def _spy_all_items_calls(store):
+    calls = {"n": 0}
+    original = store.all_items
+
+    def counted():
+        calls["n"] += 1
+        return original()
+
+    store.all_items = counted
+    return calls
+
+
+class TestBacklogRowsGatedOffThePoll(unittest.TestCase):
+    def test_polling_while_on_priority_never_computes_backlog_rows(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        self.assertEqual(session.app._view, "priority")
+
+        calls = _spy_all_items_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["n"], 0)
+        self.assertEqual(session.app._backlog_total, 0)
+        self.assertEqual(session.app._backlog_filtered_count, 0)
+
+    def test_polling_while_on_done_never_computes_backlog_rows(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        session.press("tab")
+        session.press("tab")
+        self.assertEqual(session.app._view, "done")
+        total_before = session.app._backlog_total
+        filtered_before = session.app._backlog_filtered_count
+
+        store.create_item("second todo item", "a description")
+        calls = _spy_all_items_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["n"], 0)
+        self.assertEqual(session.app._backlog_total, total_before)
+        self.assertEqual(session.app._backlog_filtered_count, filtered_before)
+
+    def test_switching_to_backlog_computes_rows_and_counts_immediately_without_a_poll(self):
+        store = FakeStore()
+        item = store.create_item("todo item", "a description")
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        self.assertEqual(session.app._view, "priority")
+
+        session.press("tab")
+
+        self.assertEqual(session.app._view, "backlog")
+        self.assertIn(item, session.app.query_one(BacklogTable).rows)
+        self.assertEqual(session.app._backlog_total, 1)
+        self.assertEqual(session.app._backlog_filtered_count, 1)
 
 
 class TestDoneDayPicker(unittest.TestCase):

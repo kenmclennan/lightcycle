@@ -121,13 +121,13 @@ class TestBacklogViewRebuildGapAtZeroWidth(unittest.TestCase):
         view = session.app.query_one(BacklogView)
         rows = [_row("a"), _row("b")]
 
+        with patch.object(BacklogView, "refresh_column_width"):
+            session.press("tab")
+
         self._apply(session, view, rows, 2, None)
         table = session.app.query_one(BacklogTable)
         self.assertFalse(view._backlog_needs_rebuild)
         self.assertEqual(table.row_count, len(rows))
-
-        with patch.object(BacklogView, "refresh_column_width"):
-            session.press("tab")
 
         with patch.object(BacklogView, "_rebuild_table") as rebuild, \
                 patch.object(BacklogView, "_update_cells") as update:
