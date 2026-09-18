@@ -1454,14 +1454,6 @@ class LightcycleApp(App):
     def container(self):
         return self._container
 
-    @property
-    def upgrade_version(self):
-        return self._upgrade_version
-
-    @property
-    def upgrade_error(self):
-        return self._upgrade_error
-
     def get_default_screen(self) -> Screen:
         return MainScreen(id="_default")
 
