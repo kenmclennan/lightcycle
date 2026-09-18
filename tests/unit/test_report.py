@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL
-from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_size_asof_pair
+from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_start_and_close
 from lightcycle.domain.work import item_cost
 from tests.support.fake_store import FakeStore
 
@@ -68,7 +68,8 @@ class TestReportUseCase(unittest.TestCase):
         self.assertEqual(resp.abandoned, 0)
         self.assertEqual(resp.audits, 0)
         self.assertEqual(resp.escalations, 0)
-        self.assertEqual(resp.backlog_size, 0)
+        self.assertEqual(resp.backlog_start, 0)
+        self.assertEqual(resp.backlog_close, 0)
         self.assertEqual(resp.backlog_delta, 0)
         self.assertFalse(resp.spend.cost_usd)
 
@@ -96,18 +97,18 @@ class TestReportUseCaseBacklog(unittest.TestCase):
         s._records[item]["created_at"] = "2026-01-05T08:00:00"
         s.create_step(step="build", role="agent", parent=item)
 
-        today, _yesterday = _backlog_size_asof_pair(s, datetime.date(2026, 1, 5))
+        start, _close = _backlog_start_and_close(s, datetime.date(2026, 1, 5))
 
-        self.assertEqual(today, 0)
+        self.assertEqual(start, 0)
 
     def test_item_created_the_day_before_with_no_step_yet_is_included(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
         s._records[item]["created_at"] = "2026-01-04T08:00:00"
 
-        today, _yesterday = _backlog_size_asof_pair(s, datetime.date(2026, 1, 5))
+        start, _close = _backlog_start_and_close(s, datetime.date(2026, 1, 5))
 
-        self.assertEqual(today, 1)
+        self.assertEqual(start, 1)
 
     def test_item_closed_exactly_at_day_start_is_excluded(self):
         s = FakeStore()
@@ -116,21 +117,37 @@ class TestReportUseCaseBacklog(unittest.TestCase):
         s.complete_node(item, "merged", disposition="completed")
         s._records[item]["closed_at"] = _local_midnight_iso(datetime.date(2026, 1, 5))
 
-        today, _yesterday = _backlog_size_asof_pair(s, datetime.date(2026, 1, 5))
+        start, _close = _backlog_start_and_close(s, datetime.date(2026, 1, 5))
 
-        self.assertEqual(today, 0)
+        self.assertEqual(start, 0)
 
-    def test_delta_equals_todays_size_minus_yesterdays_across_two_distinct_days(self):
+    def test_delta_is_the_days_own_movement_from_starting_to_closing_size(self):
         s = FakeStore()
         earlier = s.create_item("earlier", "a description")
         s._records[earlier]["created_at"] = "2026-01-01T08:00:00"
-        later = s.create_item("later", "a description")
-        s._records[later]["created_at"] = "2026-01-04T08:00:00"
+        entered = s.create_item("entered", "a description")
+        s._records[entered]["created_at"] = "2026-01-05T08:00:00"
+        also_entered = s.create_item("also entered", "a description")
+        s._records[also_entered]["created_at"] = "2026-01-05T09:00:00"
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 5)))
 
-        self.assertEqual(resp.backlog_size, 2)
-        self.assertEqual(resp.backlog_delta, 1)
+        self.assertEqual(resp.backlog_start, 1)
+        self.assertEqual(resp.backlog_close, 3)
+        self.assertEqual(resp.backlog_delta, 2)
+
+    def test_delta_is_negative_when_more_items_leave_the_backlog_than_enter(self):
+        s = FakeStore()
+        leaver = s.create_item("leaver", "a description")
+        s._records[leaver]["created_at"] = "2026-01-01T08:00:00"
+        s.create_step(step="build", role="agent", parent=leaver)
+        s._records[s.children(leaver)[0].id]["created_at"] = "2026-01-05T08:00:00"
+
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 5)))
+
+        self.assertEqual(resp.backlog_start, 1)
+        self.assertEqual(resp.backlog_close, 0)
+        self.assertEqual(resp.backlog_delta, -1)
 
 
 class TestReportUseCaseEscalations(unittest.TestCase):

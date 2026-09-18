@@ -2,9 +2,11 @@ Feature: The report screen
 
   The report tab is the fourth top-level screen, reached from the done tab by
   Tab or the tab strip (priority list -> backlog -> done -> report -> priority
-  list). It shows seven store-wide rows for one day, as a table: items
-  completed, items closed, cost, escalations, audits, backlog size and
-  backlog delta - defaulting to today. Above the table, it shows the day's
+  list). It shows eight store-wide rows for one day, as a table: items
+  completed, items closed, cost, escalations, audits, starting backlog
+  size (as of that day's midnight), closing backlog size (as of the next
+  midnight) and backlog delta (closing minus starting) - defaulting to
+  today. On the current day the closing size is live and keeps moving. Above the table, it shows the day's
   stored prose summary when one has been generated, and no summary widget at
   all otherwise. It has its own independent day picker, shared with the done
   tab's own. Pressing Enter opens the done tab filtered to whichever day
@@ -15,7 +17,7 @@ Feature: The report screen
     When I switch to the report tab
     Then the report tab is shown
 
-  Scenario: The report tab shows seven rows for today by default
+  Scenario: The report tab shows eight rows for today by default
     Given the store has a closed item today, costing money, with a completed disposition
     When I switch to the report tab
     Then the report table shows 1 items completed and 1 items closed
