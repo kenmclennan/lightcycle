@@ -8,8 +8,9 @@ from lightcycle.adapters.machine import (
     MachineAdapter, _headroom_linux, _headroom_macos, _linux_memory_pressure,
     _linux_pid_footprint_kb, _linux_pool_footprint_kb, _macos_footprint_kb,
     _macos_memory_pressure, _macos_pool_footprint_kb, _smaps_rollup_pss_kb,
-    _status_vm_hwm_kb,
+    _status_vm_hwm_kb, _worker_pids,
 )
+from lightcycle.domain.pool.worker import Worker
 from tests.support.fake_machine import FakeMachine
 
 
@@ -357,6 +358,76 @@ class TestLinuxPoolFootprintKb(unittest.TestCase):
 
         self.assertEqual(pool_kb, 100.0)
         self.assertEqual(peak_kb, 0.0)
+
+
+class TestWorkerPidsGetpgidFallback(unittest.TestCase):
+    def test_uses_the_dead_pid_itself_as_pgid_when_getpgid_raises(self):
+        worker = Worker(pid=4242)
+        captured = {}
+
+        def pid_argv_for(pgid):
+            captured["pgid"] = pgid
+            return ["ps", "-o", "pid=", "-g", str(pgid)]
+
+        with patch("os.getpgid", side_effect=ProcessLookupError()), \
+             patch(
+                 "lightcycle.adapters.machine.subprocess.run",
+                 return_value=_proc(b"4242\n5000\n"),
+             ):
+            groups = _worker_pids([worker], pid_argv_for)
+
+        self.assertEqual(captured["pgid"], 4242)
+        self.assertEqual(groups, [[4242, 5000]])
+
+
+class TestMachineAdapterWorktreePids(unittest.TestCase):
+    def setUp(self):
+        self.adapter = MachineAdapter()
+
+    def test_returns_pids_parsed_from_lsof_p_lines(self):
+        with patch(
+            "lightcycle.adapters.machine.subprocess.run",
+            return_value=_proc(b"p1234\np5678\n"),
+        ):
+            self.assertEqual(self.adapter.worktree_pids("/repo/.worktrees/x"), [1234, 5678])
+
+    def test_returns_empty_list_when_lsof_exits_non_zero(self):
+        with patch(
+            "lightcycle.adapters.machine.subprocess.run",
+            return_value=_proc(b"", returncode=1),
+        ):
+            self.assertEqual(self.adapter.worktree_pids("/repo/.worktrees/x"), [])
+
+    def test_returns_empty_list_when_lsof_is_missing(self):
+        with patch(
+            "lightcycle.adapters.machine.subprocess.run",
+            side_effect=OSError("no such command"),
+        ):
+            self.assertEqual(self.adapter.worktree_pids("/repo/.worktrees/x"), [])
+
+    def test_returns_empty_list_when_nothing_is_found(self):
+        with patch(
+            "lightcycle.adapters.machine.subprocess.run", return_value=_proc(b""),
+        ):
+            self.assertEqual(self.adapter.worktree_pids("/repo/.worktrees/x"), [])
+
+    def test_invokes_lsof_scoped_to_the_given_path(self):
+        mock_run = MagicMock(return_value=_proc(b""))
+        with patch("lightcycle.adapters.machine.subprocess.run", mock_run):
+            self.adapter.worktree_pids("/repo/.worktrees/x")
+
+        argv = mock_run.call_args.args[0]
+        self.assertIn("/repo/.worktrees/x", argv)
+        self.assertIn("+D", argv)
+
+
+class TestFakeMachineWorktreePids(unittest.TestCase):
+    def test_returns_the_configured_pids_for_the_given_path(self):
+        machine = FakeMachine(worktree_pids={"/repo/.worktrees/x": [111, 222]})
+        self.assertEqual(machine.worktree_pids("/repo/.worktrees/x"), [111, 222])
+
+    def test_returns_empty_list_for_an_unconfigured_path(self):
+        self.assertEqual(FakeMachine().worktree_pids("/repo/.worktrees/x"), [])
 
 
 class TestFakeMachineSelfRss(unittest.TestCase):

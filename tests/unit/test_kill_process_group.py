@@ -26,7 +26,7 @@ class TestKillProcessGroup(unittest.TestCase):
         os_kill.assert_has_calls([call(4242, signal.SIGCONT), call(4242, signal.SIGTERM)])
         self.assertEqual(os_kill.call_count, 2)
 
-    def test_falls_back_to_direct_kill_when_getpgid_raises_for_an_already_dead_pid(self):
+    def test_kills_via_killpg_using_pid_as_pgid_when_getpgid_raises_for_an_already_dead_pid(self):
         def getpgid(pid):
             if pid == 0:
                 return _OWN_PGID
@@ -36,9 +36,9 @@ class TestKillProcessGroup(unittest.TestCase):
              patch("os.killpg") as killpg, \
              patch("os.kill") as os_kill:
             kill(4242)
-        killpg.assert_not_called()
-        os_kill.assert_has_calls([call(4242, signal.SIGCONT), call(4242, signal.SIGTERM)])
-        self.assertEqual(os_kill.call_count, 2)
+        killpg.assert_has_calls([call(4242, signal.SIGCONT), call(4242, signal.SIGTERM)])
+        self.assertEqual(killpg.call_count, 2)
+        os_kill.assert_not_called()
 
     def test_never_raises_when_killpg_itself_fails(self):
         with patch("os.getpgid", side_effect=lambda pid: _OWN_PGID if pid == 0 else 2000), \

@@ -891,7 +891,8 @@ def cmd_restore(argv):
 def cmd_doctor(argv):
     a = build_parser(COMMANDS["doctor"]).parse_args(argv)
     report = DoctorUseCase(
-        _container.store, _container.workflow_source, _container.config, _container.workflow_bundle
+        _container.store, _container.workflow_source, _container.config, _container.workflow_bundle,
+        _container.fs, _container.machine, _container.worktrees(),
     ).execute(DoctorInput())
     if a.json:
         print(json.dumps(

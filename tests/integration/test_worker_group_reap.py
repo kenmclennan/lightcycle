@@ -60,6 +60,17 @@ class TestWorkerGroupReap(unittest.TestCase):
             _wait_until_group_empty(pid), "orphaned child survived prune_workers"
         )
 
+    def test_kill_reaps_a_dead_leaders_orphaned_child(self):
+        pid = _spawn_leader_with_child()
+        self.strays.append(pid)
+        self.assertTrue(_in_group(pid), "probe did not leave an orphan; test is not exercising the bug")
+
+        wk.kill(pid)
+
+        self.assertTrue(
+            _wait_until_group_empty(pid), "orphaned child survived wk.kill(pid)"
+        )
+
     def test_a_live_pid_is_never_signalled(self):
         live = subprocess.Popen(["sleep", "300"], start_new_session=True)
         self.addCleanup(live.kill)

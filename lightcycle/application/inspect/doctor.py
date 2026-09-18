@@ -1,6 +1,8 @@
+import os
 from dataclasses import dataclass
 from typing import Dict, List
 
+from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.health import Problem, fsck
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -22,11 +24,14 @@ class DoctorReport:
 
 
 class DoctorUseCase:
-    def __init__(self, store, workflow_source, config, workflow_bundle):
+    def __init__(self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees):
         self._store = store
         self._workflow_source = workflow_source
         self._config = config
         self._workflow_bundle = workflow_bundle
+        self._fs = fs
+        self._machine = machine
+        self._worktrees = worktrees
 
     def execute(self, input: DoctorInput) -> DoctorReport:
         nodes = self._store.all_nodes_including_done()
@@ -37,6 +42,7 @@ class DoctorUseCase:
             "contract": contracts,
             "origin": self._origin_problems(),
             "config": self._config_problems(),
+            "orphans": self._orphan_problems(),
         })
 
     def _in_flight_pins(self, nodes):
@@ -123,4 +129,34 @@ class DoctorUseCase:
             Problem("config", "config key %r is set but not read by this version" % k)
             for k in self._config.obsolete_config_keys()
         ]
+        return problems
+
+    def _expected_worktree_paths(self):
+        expected = set()
+        for step in self._store.claimed_steps():
+            try:
+                expected.add(self._worktrees.worktree_path(step.item))
+            except UseCaseError:
+                continue
+        return expected
+
+    def _orphan_problems(self):
+        expected = self._expected_worktree_paths()
+        problems = []
+        for project in self._store.list_projects():
+            if not project.local_path:
+                continue
+            wt_dir = self._fs.worktrees_dir(project.local_path)
+            for name in self._fs.list_dir(wt_dir):
+                path = os.path.join(wt_dir, name)
+                if path in expected:
+                    continue
+                pids = self._machine.worktree_pids(path)
+                if not pids:
+                    continue
+                problems.append(Problem(
+                    "orphans",
+                    "worktree %s has no active worker but %d live process(es): %s" % (
+                        path, len(pids), ", ".join(str(p) for p in pids)),
+                ))
         return problems

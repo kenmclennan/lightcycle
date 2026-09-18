@@ -37,7 +37,7 @@ def _worker_pids(workers, pid_argv_for):
         try:
             pgid = os.getpgid(int(w.pid))
         except (OSError, ValueError, TypeError):
-            continue
+            pgid = int(w.pid)
         out = _run(pid_argv_for(pgid))
         pids = []
         if out is not None:
@@ -268,3 +268,18 @@ class MachineAdapter(MachinePort):
             return int(out.strip())
         except ValueError:
             return None
+
+    def worktree_pids(self, path):
+        out = _run(["lsof", "+D", path, "-Fp"])
+        if out is None:
+            return []
+        pids = []
+        for line in out.splitlines():
+            line = line.strip()
+            if not line.startswith("p"):
+                continue
+            try:
+                pids.append(int(line[1:]))
+            except ValueError:
+                continue
+        return pids
