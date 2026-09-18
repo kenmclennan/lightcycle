@@ -107,8 +107,7 @@ class DispatchPrFeedbackUseCase:
                         n.type == "step" and n.stage == feedback_step and n.item == step.item
                         for n in self._store.all_nodes()
                     )
-                    spawned_through = _epoch(run.comments_dispatched_through) if run else 0.0
-                    if not open_now and newest > spawned_through:
+                    if not open_now:
                         role = flow.step_def(feedback_step).owner
                         tid = self._store.create_step(
                             step=feedback_step, role=role, parent=step.item,
