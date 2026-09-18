@@ -124,6 +124,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
 _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
+    "_counters",
 )
 
 
@@ -139,6 +140,7 @@ class FakeStore(StorePort):
         self._tool_usage = {}
         self._backfill_log = {}
         self._usage_accrual_state = {}
+        self._counters = {}
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
         self._tx_depth = 0
@@ -698,6 +700,11 @@ class FakeStore(StorePort):
             b["workflow"] = workflow
         return tid
 
+    def _mint_id(self, prefix):
+        n = self._counters.get(prefix, 0) + 1
+        self._counters[prefix] = n
+        return "%s-%d" % (prefix, n)
+
     def create_item(self, title, description, *, project=None, workflow=None, id=None,
                     shortcode=None):
         fields = dict(
@@ -710,6 +717,8 @@ class FakeStore(StorePort):
         )
         if id is not None:
             fields["id"] = id
+        elif shortcode is not None:
+            fields["id"] = self._mint_id(shortcode)
         b = self._new_record(**fields)
         tid = b["id"]
         self._records[tid] = b
