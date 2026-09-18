@@ -689,3 +689,131 @@ class TestMixedStageTargetlessCoverage(unittest.TestCase):
         graph = parse_graph(_TARGETLESS_TERMINAL_GRAPH)
 
         self.assertNotIn(("edge", "review-ci", "reviewed"), _edge_transitions(graph))
+
+
+_CI_CAP_OWNED_EDGE_GRAPH = """
+entry: build
+
+edges:
+  build      done         watch
+  watch      done         review
+  watch      ci-failed    build
+  review     done         merged
+  review-ci  reviewed     merged
+
+hooks:
+  ci_failed_cap    watch   ci-failed   2   review-ci
+"""
+
+_CI_CAP_OWNED_EDGE_METAS = dict(_CI_CAP_METAS)
+
+
+class TestCiFailedCapOwnedEdgeBearingTargetCoverage(unittest.TestCase):
+    def test_walk_continues_past_the_escalation_target_to_a_real_terminal(self):
+        plan, _, _ = _plan(_CI_CAP_OWNED_EDGE_GRAPH, _CI_CAP_OWNED_EDGE_METAS)
+        repeat_walks = [w for w in plan.walks if any(s.repeat_total == 3 for s in w.steps)]
+        self.assertEqual(len(repeat_walks), 1)
+        walk = repeat_walks[0]
+        self.assertFalse(walk.incomplete, walk.stuck_at)
+        self.assertIn(("edge", "review-ci", "reviewed"), walk.covered())
+
+
+_RR_CAP_OWNED_EDGE_GRAPH = """
+entry: build
+
+edges:
+  build                    done      review
+  review                   done      merged
+  review                   rejected  build
+  review-rounds-exceeded   reviewed  merged
+
+hooks:
+  review_rounds_cap    review   rejected   review-rounds-exceeded
+"""
+
+_RR_CAP_OWNED_EDGE_METAS = dict(_RR_CAP_METAS)
+
+
+class TestReviewRoundsCapOwnedEdgeBearingTargetCoverage(unittest.TestCase):
+    def test_walk_continues_past_the_escalation_target_to_a_real_terminal(self):
+        plan, _, _ = _plan(_RR_CAP_OWNED_EDGE_GRAPH, _RR_CAP_OWNED_EDGE_METAS, review_rounds_cap_n=2)
+        repeat_walks = [w for w in plan.walks if any(s.repeat_total == 3 for s in w.steps)]
+        self.assertEqual(len(repeat_walks), 1)
+        walk = repeat_walks[0]
+        self.assertFalse(walk.incomplete, walk.stuck_at)
+        self.assertIn(("edge", "review-rounds-exceeded", "reviewed"), walk.covered())
+
+
+_PR_CONFLICT_OWNED_EDGE_GRAPH = """
+entry: build
+
+edges:
+  build             done        open-pr
+  open-pr           done        await
+  await             merged      cleanup
+  await             conflicted  resolve
+  await             gave-up     review-conflict
+  resolve           resolved    open-pr
+  resolve           escalate    review-conflict
+  review-conflict   resolved    open-pr
+
+hooks:
+  pr_conflict           await   conflicted
+  pr_conflict_cap       await   2
+  pr_conflict_escalate  await   gave-up
+"""
+
+_PR_CONFLICT_OWNED_EDGE_METAS = dict(_PR_CONFLICT_METAS)
+_PR_CONFLICT_OWNED_EDGE_METAS["reviewer"] = {"step": "review-conflict"}
+
+
+class TestPrConflictCapOwnedEdgeBearingTargetCoverage(unittest.TestCase):
+    def test_walk_continues_past_the_escalation_target_to_a_real_terminal(self):
+        plan, _, _ = _plan(_PR_CONFLICT_OWNED_EDGE_GRAPH, _PR_CONFLICT_OWNED_EDGE_METAS)
+        repeat_walks = [
+            w for w in plan.walks
+            if any(s.repeat_total == 3 and s.kind == "hook" for s in w.steps)
+        ]
+        self.assertEqual(len(repeat_walks), 1)
+        walk = repeat_walks[0]
+        self.assertFalse(walk.incomplete, walk.stuck_at)
+        self.assertIn(("edge", "review-conflict", "resolved"), walk.covered())
+
+
+_PR_CONFLICT_NO_BACK_PATH_GRAPH = """
+entry: build
+
+edges:
+  build             done        open-pr
+  open-pr           done        await
+  await             merged      cleanup
+  await             conflicted  resolve
+  await             gave-up     review-conflict
+  review-conflict   resolved    open-pr
+
+hooks:
+  pr_conflict           await   conflicted
+  pr_conflict_cap       await   2
+  pr_conflict_escalate  await   gave-up
+"""
+
+_PR_CONFLICT_NO_BACK_PATH_METAS = dict(_PR_CONFLICT_OWNED_EDGE_METAS)
+
+
+class TestPrConflictCapEarlyBreakDoesNotEscalate(unittest.TestCase):
+    def test_no_escalation_tail_when_the_repeats_cannot_reach_the_cap(self):
+        plan, _, _ = _plan(_PR_CONFLICT_NO_BACK_PATH_GRAPH, _PR_CONFLICT_NO_BACK_PATH_METAS)
+        repeat_walks = [
+            w for w in plan.walks
+            if any(s.repeat_total == 3 and s.kind == "hook" for s in w.steps)
+        ]
+        self.assertEqual(len(repeat_walks), 1)
+        walk = repeat_walks[0]
+        repeats = [
+            s for s in walk.steps
+            if s.stage == "await" and s.kind == "hook" and s.hook == "pr_conflict"
+        ]
+        self.assertEqual(len(repeats), 1)
+        self.assertEqual(repeats[0].repeat_index, 1)
+        self.assertEqual(repeats[0].repeat_total, 3)
+        self.assertNotIn(("edge", "review-conflict", "resolved"), walk.covered())

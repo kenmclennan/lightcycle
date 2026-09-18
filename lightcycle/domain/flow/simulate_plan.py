@@ -6,6 +6,7 @@ from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
     PR_CONFLICT,
     PR_CONFLICT_CAP,
+    PR_CONFLICT_ESCALATE,
     PR_FEEDBACK,
     PR_MERGE,
     REVIEW_ROUNDS_CAP,
@@ -86,20 +87,28 @@ def _cap_occurrences(graph, review_rounds_cap_n=None):
     caps = []
     for occ in graph.hook_occurrences(CI_FAILED_CAP):
         if len(occ) > 3:
-            caps.append(("edge", None, occ[0], occ[1], int(occ[2])))
+            caps.append(("edge", None, occ[0], occ[1], int(occ[2]), occ[3]))
     conflict_cap = {
         occ[0]: int(occ[1]) for occ in graph.hook_occurrences(PR_CONFLICT_CAP) if len(occ) > 1
     }
     conflict_outcome = {
         occ[0]: occ[1] for occ in graph.hook_occurrences(PR_CONFLICT) if len(occ) > 1
     }
+    conflict_escalate = {
+        occ[0]: occ[1] for occ in graph.hook_occurrences(PR_CONFLICT_ESCALATE) if len(occ) > 1
+    }
     for stage, n in conflict_cap.items():
         if stage in conflict_outcome:
-            caps.append(("hook", PR_CONFLICT, stage, conflict_outcome[stage], n))
+            escalate_outcome = conflict_escalate.get(stage)
+            escalate_target = (
+                (graph.edges.get(stage) or {}).get(escalate_outcome)
+                if escalate_outcome is not None else None
+            )
+            caps.append(("hook", PR_CONFLICT, stage, conflict_outcome[stage], n, escalate_target))
     if review_rounds_cap_n is not None:
         for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
             if len(occ) > 2:
-                caps.append(("edge", None, occ[0], occ[1], review_rounds_cap_n))
+                caps.append(("edge", None, occ[0], occ[1], review_rounds_cap_n, occ[2]))
     return caps
 
 
@@ -209,7 +218,7 @@ def _walk_from_entry(graph, entry, remaining, bound):
     return PlannedWalk(tuple(steps))
 
 
-def _forced_repeat_walk(graph, entry, stage, outcome, times, kind, hook=None):
+def _forced_repeat_walk(graph, entry, stage, outcome, times, kind, hook=None, escalate_target=None):
     steps = []
     entry_path = _bfs_path(graph, entry, stage)
     if entry_path is None:
@@ -218,6 +227,7 @@ def _forced_repeat_walk(graph, entry, stage, outcome, times, kind, hook=None):
     normal_target = (graph.edges.get(stage) or {}).get(outcome)
     gate_phase = graph.phase_for(stage)
     phase_gated = kind == "edge" and hook is None
+    reached_cap = False
     for i in range(times):
         final = i == times - 1
         steps.append(
@@ -228,6 +238,7 @@ def _forced_repeat_walk(graph, entry, stage, outcome, times, kind, hook=None):
             )
         )
         if final:
+            reached_cap = True
             break
         if normal_target is None:
             break
@@ -235,6 +246,11 @@ def _forced_repeat_walk(graph, entry, stage, outcome, times, kind, hook=None):
         if back is None:
             break
         steps.extend(back)
+    if reached_cap and escalate_target and _outgoing(graph, escalate_target):
+        completion = _bfs_to_terminal(graph, escalate_target)
+        if completion is None:
+            return PlannedWalk(tuple(steps), incomplete=True, stuck_at=escalate_target)
+        steps.extend(completion)
     return PlannedWalk(tuple(steps))
 
 
@@ -305,8 +321,12 @@ def build_coverage_plan(graph, flow, review_rounds_cap_n=None):
         if len(remaining) == before:
             break
 
-    for kind, hook, stage, outcome, n in _cap_occurrences(graph, review_rounds_cap_n):
-        walks.append(_forced_repeat_walk(graph, entry, stage, outcome, n + 1, kind, hook=hook))
+    for kind, hook, stage, outcome, n, escalate_target in _cap_occurrences(graph, review_rounds_cap_n):
+        walks.append(
+            _forced_repeat_walk(
+                graph, entry, stage, outcome, n + 1, kind, hook=hook, escalate_target=escalate_target,
+            )
+        )
 
     for stage, feedback_step in _feedback_occurrences(graph):
         walks.append(_feedback_walk(graph, entry, stage, feedback_step, bound))
