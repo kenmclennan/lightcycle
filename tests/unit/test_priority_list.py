@@ -67,6 +67,34 @@ class TestBuildPriorityRowsFromSelection(unittest.TestCase):
         self.assertEqual(actual, expected)
 
 
+class TestRowForStoreCalls(unittest.TestCase):
+    def test_calls_children_exactly_once_per_row(self):
+        store = FakeStore()
+        attention_step = create_owned_step(store, "escalated", step="build", role="human")
+        active_step = create_owned_step(store, "in progress", step="build", role="agent")
+        queued_step = create_owned_step(store, "queued", step="build", role="agent")
+        for step in (attention_step, active_step, queued_step):
+            store.record_usage(step, 100, 10, 0, 0, 1.25, "list", None)
+            store.accrue_active_seconds([step], 300)
+        lanes = {
+            "inbox": [store.get_node(attention_step)],
+            "queue": [store.get_node(queued_step)],
+            "active": [store.get_node(active_step)],
+        }
+        calls = {"n": 0}
+        original = store.children
+
+        def counted(item_id):
+            calls["n"] += 1
+            return original(item_id)
+
+        store.children = counted
+
+        build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+
+        self.assertEqual(calls["n"], 3)
+
+
 class TestQueuedRowDependencyTieBreak(unittest.TestCase):
     def test_shows_lexicographically_lowest_blocker(self):
         store = FakeStore()
