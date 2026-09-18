@@ -48,6 +48,7 @@ class Flow:
                 stages.add(occ[2])
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())
+        stages.discard(None)
 
         owner = {}
         for stage in stages:

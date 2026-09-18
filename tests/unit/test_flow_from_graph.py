@@ -72,6 +72,12 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertEqual(t.to_role, "agent")
         self.assertEqual(self.flow.next("review", "rejected").to_stage, "build")
 
+    def test_a_terminal_edge_does_not_declare_a_stage_for_its_absent_destination(self):
+        self.assertFalse(self.flow.declared(None))
+
+    def test_hook_steps_reads_a_graph_carrying_a_terminal_edge(self):
+        self.assertEqual(self.flow.hook_steps(), ["ready-merge", "review", "watch-pr"])
+
     def test_terminal_and_conflict_outcomes(self):
         self.assertEqual(self.flow.step_def("ready-merge").pr_merge, "merged")
         self.assertEqual(self.flow.step_def("ready-merge").pr_conflict, "conflicted")
