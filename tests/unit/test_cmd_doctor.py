@@ -4,6 +4,7 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
+from lightcycle.config import ResolvedSetting
 from lightcycle.ports.workflow_source import OriginRegistration
 from tests.support.fake_store import FakeStore
 
@@ -131,6 +132,33 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 1)
         data = json.loads(out)
         self.assertTrue(any("old-key" in p["message"] for p in data["config"]))
+
+    def test_rejected_config_value_reports_rejected_not_blank(self):
+        class RejectedFakeConfig(FakeConfig):
+            def resolved_settings(self):
+                return (
+                    ResolvedSetting(
+                        key="max-agents", value=None,
+                        error="config value 'max-agents' must be >= 0 (got -1)",
+                        state="invalid", env_var=None, seed="5",
+                    ),
+                )
+
+        cli.set_container(FakeContainer(FakeStore(), config=RejectedFakeConfig()))
+        rc, out, err = call(cli.cmd_doctor)
+        self.assertEqual(rc, 1)
+        self.assertIn("config:", out)
+        self.assertIn("max-agents", out)
+        self.assertIn("rejected", out)
+        self.assertIn("-1", out)
+        self.assertNotIn("set but blank", out)
+
+        cli.set_container(FakeContainer(FakeStore(), config=RejectedFakeConfig()))
+        rc, out, err = call(cli.cmd_doctor, "--json")
+        self.assertEqual(rc, 1)
+        data = json.loads(out)
+        self.assertTrue(any("max-agents" in p["message"] and "-1" in p["message"]
+                             for p in data["config"]))
 
     def test_json_unhealthy_shape_and_exit_code(self):
         store = FakeStore()

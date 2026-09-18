@@ -105,6 +105,23 @@ class TestCmdConfig(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("personal-origin: mine (no seed)", out)
 
+    def test_out_of_range_value_shows_rejected_not_not_set(self):
+        c = _cfg()
+        c.ensure_config()
+        text = Path(c.config_path()).read_text()
+        text = "\n".join(
+            "max-agents: -1" if line.startswith("max-agents:") else line
+            for line in text.splitlines()
+        ) + "\n"
+        Path(c.config_path()).write_text(text)
+        cli.set_container(FakeContainer(c))
+        rc, out, err = call(cli.cmd_config)
+        self.assertEqual(rc, 0, err)
+        line = next(l for l in out.splitlines() if l.startswith("max-agents:"))
+        self.assertIn("rejected", line)
+        self.assertIn("-1", line)
+        self.assertNotIn("not set", line)
+
     def test_env_override_shows_only_the_env_marker_not_a_seed(self):
         c = _cfg()
         c.ensure_config()
