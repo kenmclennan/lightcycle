@@ -20,7 +20,8 @@ class ReportResponse:
     spend: ItemCost
     audits: int
     escalations: int
-    backlog_size: int
+    backlog_start: int
+    backlog_close: int
     backlog_delta: int
     summary: Optional[str]
 
@@ -56,12 +57,12 @@ def _local_midnight(day):
     return datetime.datetime.combine(day, datetime.time()).astimezone()
 
 
-def _backlog_size_asof_pair(store, day):
+def _backlog_start_and_close(store, day):
     items = store.all_items_including_done()
     earliest = _earliest_step_created_by_item(store)
-    today = _backlog_size_asof(items, earliest, _local_midnight(day))
-    yesterday = _backlog_size_asof(items, earliest, _local_midnight(day - datetime.timedelta(days=1)))
-    return today, yesterday
+    start = _backlog_size_asof(items, earliest, _local_midnight(day))
+    close = _backlog_size_asof(items, earliest, _local_midnight(day + datetime.timedelta(days=1)))
+    return start, close
 
 
 def _escalations_on(store, day):
@@ -87,12 +88,13 @@ class ReportUseCase:
         all_children = [s for i in items for s in self._store.children(i.id)]
         spend = item_cost(all_children)
         escalations = _escalations_on(self._store, input.day)
-        backlog_today, backlog_yesterday = _backlog_size_asof_pair(self._store, input.day)
+        backlog_start, backlog_close = _backlog_start_and_close(self._store, input.day)
         row = self._store.day_summary(input.day)
         summary = row.summary if row else None
         return ReportResponse(
             day=input.day, completed=completed, abandoned=abandoned, spend=spend,
             audits=audits, escalations=escalations,
-            backlog_size=backlog_today, backlog_delta=backlog_today - backlog_yesterday,
+            backlog_start=backlog_start, backlog_close=backlog_close,
+            backlog_delta=backlog_close - backlog_start,
             summary=summary,
         )

@@ -769,7 +769,8 @@ def _report_rows(response):
         ("Spend", _format_item_cost(response.spend)),
         ("Escalations", str(response.escalations)),
         ("Audits", str(response.audits)),
-        ("Backlog Size", str(response.backlog_size)),
+        ("Starting Backlog Size", str(response.backlog_start)),
+        ("Closing Backlog Size", str(response.backlog_close)),
         ("Backlog Delta", delta_text),
     )
 

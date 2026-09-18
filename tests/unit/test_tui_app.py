@@ -3166,12 +3166,13 @@ class TestReportFigures(unittest.TestCase):
                 ("Spend", "$2.50"),
                 ("Escalations", "0"),
                 ("Audits", "0"),
-                ("Backlog Size", "0"),
+                ("Starting Backlog Size", "0"),
+                ("Closing Backlog Size", "0"),
                 ("Backlog Delta", "+0"),
             ],
         )
 
-    def test_zero_activity_day_still_renders_all_seven_rows(self):
+    def test_zero_activity_day_still_renders_all_eight_rows(self):
         session = _launch_report(FakeStore())
         self.addCleanup(session.close)
 
@@ -3183,7 +3184,8 @@ class TestReportFigures(unittest.TestCase):
                 ("Spend", "not recorded"),
                 ("Escalations", "0"),
                 ("Audits", "0"),
-                ("Backlog Size", "0"),
+                ("Starting Backlog Size", "0"),
+                ("Closing Backlog Size", "0"),
                 ("Backlog Delta", "+0"),
             ],
         )
