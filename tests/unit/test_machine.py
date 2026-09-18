@@ -222,6 +222,36 @@ class TestMacosFootprintKb(unittest.TestCase):
 
         self.assertEqual(result, {})
 
+    def test_skips_a_reaped_process_whose_auxiliary_block_is_null(self):
+        payload = {
+            "processes": [
+                {"pid": 111, "auxiliary": None},
+                {
+                    "pid": 222,
+                    "auxiliary": {"phys_footprint": 241172480, "phys_footprint_peak": 1249902592},
+                },
+            ]
+        }
+
+        def _write_payload(argv):
+            with open(argv[3], "w") as f:
+                json.dump(payload, f)
+            return ""
+
+        with patch("lightcycle.adapters.machine._run", side_effect=_write_payload):
+            result = _macos_footprint_kb([111, 222])
+
+        self.assertEqual(result, {222: (235520.0, 1220608.0)})
+
+    def test_returns_empty_when_the_payload_carries_a_null_process_list(self):
+        def _write_payload(argv):
+            with open(argv[3], "w") as f:
+                json.dump({"processes": None}, f)
+            return ""
+
+        with patch("lightcycle.adapters.machine._run", side_effect=_write_payload):
+            self.assertEqual(_macos_footprint_kb([111]), {})
+
     def test_returns_none_when_the_subprocess_call_fails(self):
         with patch("lightcycle.adapters.machine._run", return_value=None):
             self.assertIsNone(_macos_footprint_kb([111]))
