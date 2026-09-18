@@ -61,8 +61,8 @@ class StatusBar(Horizontal):
         if hold is not None and hold.holding:
             hold_glyph, hold_colour = FOOTER_GLYPHS["pool-holding"]
             text = "%s holding · %d/%d · %s" % (hold_glyph, hold.alive, hold.max_agents, hold.reason)
-            if hold.system_pressure is not None:
-                text += " (machine %d%%)" % round(hold.system_pressure * 100)
+            if hold.pressure_source is not None:
+                text += " (%s)" % hold.pressure_source
             hold_widget.update(Text(text, style=COLOURS[hold_colour]))
             hold_widget.display = True
         else:

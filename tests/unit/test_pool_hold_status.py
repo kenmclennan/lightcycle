@@ -98,27 +98,62 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
         self.assertEqual(result.alive, 2)
         self.assertEqual(result.max_agents, 9)
 
-    def test_system_pressure_passes_through_from_the_persisted_state(self):
+    def test_holding_true_when_a_worker_is_suspended_even_though_cap_is_not_zero(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True}],
+            alive_pids=(1,),
+        )
+        result = PoolHoldStatusUseCase(
+            FakeMemoryGateStatus({"cap": 1}), workers, FakeConfig(),
+        ).execute(workers.pid_alive)
+
+        self.assertTrue(result.holding)
+
+    def test_pressure_source_is_pool_when_cap_is_zero_even_when_system_pressure_is_higher(self):
         workers = FakeWorkers(
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
         result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 0, "system_pressure": 0.42}), workers, FakeConfig(),
+            FakeMemoryGateStatus({"cap": 0, "pool_share": 0.1, "system_pressure": 0.95}),
+            workers, FakeConfig(),
         ).execute(workers.pid_alive)
 
-        self.assertEqual(result.system_pressure, 0.42)
+        self.assertEqual(result.pressure_source, "pool")
 
-    def test_system_pressure_absent_is_none(self):
+    def test_pressure_source_is_machine_when_only_a_suspension_holds_and_system_pressure_dominates(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True}],
+            alive_pids=(1,),
+        )
+        result = PoolHoldStatusUseCase(
+            FakeMemoryGateStatus({"pool_share": 0.1, "system_pressure": 0.9}), workers, FakeConfig(),
+        ).execute(workers.pid_alive)
+
+        self.assertEqual(result.pressure_source, "machine")
+
+    def test_pressure_source_is_pool_when_only_a_suspension_holds_and_pool_share_dominates(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True}],
+            alive_pids=(1,),
+        )
+        result = PoolHoldStatusUseCase(
+            FakeMemoryGateStatus({"pool_share": 0.9, "system_pressure": 0.1}), workers, FakeConfig(),
+        ).execute(workers.pid_alive)
+
+        self.assertEqual(result.pressure_source, "pool")
+
+    def test_pressure_source_is_none_when_not_holding(self):
         workers = FakeWorkers(
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
         result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 0}), workers, FakeConfig(),
+            FakeMemoryGateStatus({"cap": 1}), workers, FakeConfig(),
         ).execute(workers.pid_alive)
 
-        self.assertIsNone(result.system_pressure)
+        self.assertFalse(result.holding)
+        self.assertIsNone(result.pressure_source)
 
 
 if __name__ == "__main__":
