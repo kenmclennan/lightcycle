@@ -782,8 +782,8 @@ class TestTuiUpgradeCheckSeconds(unittest.TestCase):
         )
         self.assertEqual(cfg.tui_upgrade_check_seconds(), 60)
 
-    def test_it_is_seeded_one_hour_in_the_default_config(self):
-        self.assertEqual(dict(_SEED_KEYS)["tui-upgrade-check-seconds"], "3600")
+    def test_it_is_seeded_fifteen_minutes_in_the_default_config(self):
+        self.assertEqual(dict(_SEED_KEYS)["tui-upgrade-check-seconds"], "900")
 
 
 class TestWorkflowsRemoteSeed(unittest.TestCase):

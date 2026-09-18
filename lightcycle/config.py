@@ -77,7 +77,7 @@ _SEED_KEYS = [
     ("max-title-length", "72"),
     ("tui-autostart-pool", "false"),
     ("tui-metrics", "false"),
-    ("tui-upgrade-check-seconds", "3600"),
+    ("tui-upgrade-check-seconds", "900"),
     ("personal-origin", ""),
     ("price-sonnet-input-per-mtok", "2.00"),
     ("price-sonnet-output-per-mtok", "10.00"),
