@@ -297,6 +297,36 @@ def _bash_tool_usage(step_id):
     return {"Bash": ToolUsage(calls=1, bytes=len(json.dumps({"id": step_id}).encode()))}
 
 
+def _claim_log_with_no_result_line(step_id, input_tokens, output_tokens):
+    lines = [
+        json.dumps({
+            "type": "assistant",
+            "message": {
+                "id": "msg-1",
+                "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+                "content": [
+                    {"type": "tool_use", "id": "tu-1", "name": "Bash",
+                     "input": {"command": "lc claim agent"}},
+                ],
+            },
+        }),
+        json.dumps({
+            "type": "user",
+            "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "tu-1", "content": json.dumps({"id": step_id})},
+            ]},
+        }),
+    ]
+    return "\n".join(lines).encode()
+
+
+class FakeConfigWithHaikuRates(FakeConfig):
+    def usage_pricing(self):
+        rates = dict(super().usage_pricing())
+        rates["haiku"] = ModelRates(input=0.25, output=1.25, cache_write=0.3, cache_read=0.03)
+        return rates
+
+
 class TestBackfillUsageDoesNotDoubleALiveCapturedLog(unittest.TestCase):
     def test_a_log_reaped_live_then_backfilled_is_ingested_once(self):
         store = FakeStore()
@@ -372,6 +402,25 @@ class TestBackfillUsageRepair(unittest.TestCase):
         self.assertEqual(t.usage_cost_usd, Cost.from_usd(0.5))
         self.assertEqual(t.turn_count, 1)
         self.assertEqual(store.tool_usage_for(tid), _bash_tool_usage(tid))
+
+    def test_repair_prices_a_step_left_unpriced_once_its_model_gets_rates(self):
+        store = RecordingFakeStore()
+        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        store.set_model(tid, "haiku")
+        log_file = "/home/logs/worker-a.log"
+        fs = FakeFs(files={log_file: _claim_log_with_no_result_line(tid, 1000, 500)})
+        workers = FakeWorkers()
+        BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()
+        self.assertEqual(store.get_node(tid).usage_cost_basis, "unpriced")
+
+        resp = BackfillUsageUseCase(
+            store, fs, workers, FakeConfigWithHaikuRates(), fs, stream=ClaudeStreamAdapter()
+        ).execute(repair=True)
+
+        self.assertEqual(resp.repair_corrected, 1)
+        t = store.get_node(tid)
+        self.assertEqual(t.usage_cost_basis, "derived")
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(1000 / 1_000_000 * 0.25 + 500 / 1_000_000 * 1.25))
 
     def test_repair_skips_a_missing_ledgered_log_and_reports_it_without_crashing(self):
         store = RecordingFakeStore()
