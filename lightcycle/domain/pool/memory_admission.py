@@ -23,6 +23,12 @@ def admission_cap(headroom, alive_count, memory_reserve_fraction):
     return None
 
 
+def admission_veto(pressure, suspend_pressure, alive_count):
+    if pressure is None or pressure < suspend_pressure:
+        return None
+    return 1 if alive_count == 0 else 0
+
+
 def worker_to_suspend(alive_workers, pressure, suspend_pressure):
     if pressure is None or pressure < suspend_pressure:
         return None

@@ -3,7 +3,8 @@ import unittest
 from lightcycle.domain.pool import Worker
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.domain.pool.memory_admission import (
-    admission_cap, combined_pressure, pressure_source, worker_to_resume, worker_to_suspend,
+    admission_cap, admission_veto, combined_pressure, pressure_source, worker_to_resume,
+    worker_to_suspend,
 )
 
 
@@ -82,6 +83,23 @@ class TestAdmissionCap(unittest.TestCase):
     def test_high_system_pressure_alone_does_not_produce_a_cap(self):
         headroom = MachineHeadroom(system_pressure=0.99, pool_share=0.1)
         self.assertIsNone(admission_cap(headroom, 2, 0.25))
+
+
+class TestAdmissionVeto(unittest.TestCase):
+    def test_none_below_suspend_pressure(self):
+        self.assertIsNone(admission_veto(0.5, 0.85, alive_count=2))
+
+    def test_none_when_pressure_is_none(self):
+        self.assertIsNone(admission_veto(None, 0.85, alive_count=2))
+
+    def test_zero_at_or_above_suspend_pressure_when_a_worker_is_already_alive(self):
+        self.assertEqual(admission_veto(0.9, 0.85, alive_count=2), 0)
+
+    def test_boundary_at_exactly_suspend_pressure_vetoes(self):
+        self.assertEqual(admission_veto(0.85, 0.85, alive_count=1), 0)
+
+    def test_floors_to_one_when_no_worker_is_alive(self):
+        self.assertEqual(admission_veto(0.9, 0.85, alive_count=0), 1)
 
 
 def _worker(spawnid, started, suspended=False, suspended_at=None):
