@@ -528,6 +528,38 @@ class TestRetroCadenceConfig(unittest.TestCase):
         self.assertFalse(hasattr(c, "retro_min_items"))
 
 
+class TestDailySummaryDebounceConfig(unittest.TestCase):
+    def test_missing_key_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().daily_summary_debounce_seconds()
+
+    def test_config_value_read(self):
+        self.assertEqual(
+            _cfg(daily_summary_debounce_seconds="600").daily_summary_debounce_seconds(), 600
+        )
+        self.assertEqual(
+            _cfg(daily_summary_debounce_seconds="60").daily_summary_debounce_seconds(), 60
+        )
+
+    def test_env_override_wins(self):
+        self.assertEqual(
+            _cfg(
+                {"LC_DAILY_SUMMARY_DEBOUNCE_SECONDS": "30"}, daily_summary_debounce_seconds="600"
+            ).daily_summary_debounce_seconds(),
+            30,
+        )
+
+    def test_env_override_without_config_key(self):
+        self.assertEqual(
+            _cfg({"LC_DAILY_SUMMARY_DEBOUNCE_SECONDS": "600"}).daily_summary_debounce_seconds(),
+            600,
+        )
+
+    def test_malformed_config_fails_fast(self):
+        with self.assertRaises(ConfigError):
+            _cfg(daily_summary_debounce_seconds="lots").daily_summary_debounce_seconds()
+
+
 class TestBackupConfig(unittest.TestCase):
     def test_missing_keys_raise_naming_the_key(self):
         with self.assertRaises(ConfigError) as ctx:

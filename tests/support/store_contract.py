@@ -1,3 +1,5 @@
+import datetime
+
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import AttributionEvent, ModelRates, ToolUsage, UsageEvent, UsageResume
 from lightcycle.domain.work import NodeSpec
@@ -1251,3 +1253,59 @@ class StoreContractBase:
 
         got = {(a.type, a.value) for a in view.item_artifacts}
         self.assertEqual(got, {("spec", "specs/foo.md")})
+
+    def test_day_summary_missing_returns_none(self):
+        s = self.make_store()
+        self.assertIsNone(s.day_summary(datetime.date(2026, 1, 1)))
+
+    def test_day_summary_roundtrip(self):
+        s = self.make_store()
+        day = datetime.date(2026, 1, 1)
+        s.mark_day_summary_dirty(day)
+        s.start_day_summary(day, step_id="step-1", spawn_count=3)
+        s.finish_day_summary(day, summary="what shipped", summarized_count=3, clear_dirty=True)
+
+        row = s.day_summary(day)
+
+        self.assertEqual(row.day, day)
+        self.assertEqual(row.summary, "what shipped")
+        self.assertEqual(row.summarized_count, 3)
+        self.assertIsNone(row.dirty_since)
+        self.assertIsNone(row.step_id)
+        self.assertIsNone(row.spawn_count)
+        self.assertIsNotNone(row.generated_at)
+
+    def test_mark_day_summary_dirty_is_idempotent(self):
+        s = self.make_store()
+        day = datetime.date(2026, 1, 1)
+        s.mark_day_summary_dirty(day)
+        first = s.day_summary(day).dirty_since
+        s.mark_day_summary_dirty(day)
+        second = s.day_summary(day).dirty_since
+        self.assertEqual(first, second)
+
+    def test_start_day_summary_then_summary_day_for_step_resolves_back(self):
+        s = self.make_store()
+        day = datetime.date(2026, 1, 1)
+        s.mark_day_summary_dirty(day)
+        s.start_day_summary(day, step_id="step-1", spawn_count=1)
+
+        self.assertEqual(s.summary_day_for_step("step-1"), day)
+
+    def test_summary_day_for_step_unknown_returns_none(self):
+        s = self.make_store()
+        self.assertIsNone(s.summary_day_for_step("no-such-step"))
+
+    def test_finish_day_summary_with_clear_dirty_false_leaves_dirty_since_untouched(self):
+        s = self.make_store()
+        day = datetime.date(2026, 1, 1)
+        s.mark_day_summary_dirty(day)
+        dirty_since = s.day_summary(day).dirty_since
+        s.start_day_summary(day, step_id="step-1", spawn_count=1)
+
+        s.finish_day_summary(day, summary="text", summarized_count=1, clear_dirty=False)
+
+        row = s.day_summary(day)
+        self.assertEqual(row.dirty_since, dirty_since)
+        self.assertIsNone(row.step_id)
+        self.assertEqual(row.summary, "text")

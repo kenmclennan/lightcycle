@@ -4,6 +4,7 @@ from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.breaker_gate import BreakerGateResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.no_op_gates import (
     NoOpBackupGate,
     NoOpBreakerGate,
@@ -15,6 +16,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpMonitor,
     NoOpSpinPort,
     NoOpStream,
+    NoOpSummaryGate,
     NoOpUsageGate,
     NoOpWorktrees,
 )
@@ -32,6 +34,11 @@ class TestNoOpMonitor(unittest.TestCase):
 class TestNoOpCadenceGate(unittest.TestCase):
     def test_execute_returns_no_fired(self):
         self.assertEqual(NoOpCadenceGate().execute(now=1.0), RetroCadenceResponse())
+
+
+class TestNoOpSummaryGate(unittest.TestCase):
+    def test_execute_returns_no_fired(self):
+        self.assertEqual(NoOpSummaryGate().execute(now=1.0), DailySummaryCadenceResponse())
 
 
 class TestNoOpBreakerGate(unittest.TestCase):

@@ -62,7 +62,7 @@ COLUMN_GRIDS = {
     "workflow": ("icon", "id", "title", "turns", "time", "cost"),
     "artifacts": ("type", "value"),
     "detail": ("key", "value"),
-    "stats": ("key", "value"),
+    "report": ("key", "value"),
 }
 
 GLOBAL_SHORTCUTS = (
@@ -147,7 +147,7 @@ DONE_SEARCH_EMPTY_SHORTCUTS = (
     ("q", "quit"),
 )
 
-STATS_SHORTCUTS = (
+REPORT_SHORTCUTS = (
     ("d", "day"),
     ("enter/→", "open in done"),
     ("[/tab]", "prev/next tab"),

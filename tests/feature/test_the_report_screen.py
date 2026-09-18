@@ -3,11 +3,11 @@ import datetime
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from lightcycle.adapters.tui.app import DoneTable, PickerOption, StatsTable, StatsView
+from lightcycle.adapters.tui.app import DoneTable, PickerOption, ReportTable, ReportView
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
-scenarios("the-stats-screen.feature")
+scenarios("the-report-screen.feature")
 
 _TODAY = datetime.date(2026, 1, 3)
 _NOW = datetime.datetime(2026, 1, 3, 9, 0, 0)
@@ -27,8 +27,8 @@ def _rendered_text(widget):
     return "".join(segment.text for segment in strip)
 
 
-def _stats_cell(session, key, column):
-    table = session.app.query_one(StatsTable)
+def _report_cell(session, key, column):
+    table = session.app.query_one(ReportTable)
     return table.get_cell(key, column).plain
 
 
@@ -65,6 +65,25 @@ def _store_closed_item_today_with_cost(ctx):
     _launch(ctx, store)
 
 
+_SUMMARY_TEXT = "A quiet day: mostly hardening the report tab's own machinery."
+
+
+@given("the store has a closed item today with a stored daily summary")
+def _store_closed_item_today_with_summary(ctx):
+    store = FakeStore(now=lambda: _NOW.isoformat())
+    item = store.create_item("done item", "a description")
+    store.complete_node(item, "merged", disposition="completed")
+    store._records[item]["closed_at"] = _NOW.isoformat()
+    today = _NOW.date()
+    with store.transaction():
+        store.mark_day_summary_dirty(today)
+        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+    store.finish_day_summary(
+        today, summary=_SUMMARY_TEXT, summarized_count=1, clear_dirty=True,
+    )
+    _launch(ctx, store)
+
+
 @given("the store has closed items on two distinct days before today")
 def _store_closed_items_two_days(ctx):
     store = FakeStore(now=lambda: _NOW.isoformat())
@@ -81,8 +100,8 @@ def _store_closed_items_two_days(ctx):
     _launch(ctx, store)
 
 
-@when("I switch to the stats tab")
-def _switch_to_stats(ctx):
+@when("I switch to the report tab")
+def _switch_to_report(ctx):
     ctx["session"].press("tab")
     ctx["session"].press("tab")
     ctx["session"].press("tab")
@@ -103,25 +122,25 @@ def _press_enter(ctx):
     ctx["session"].press("enter")
 
 
-@then("the stats tab is shown")
-def _stats_tab_shown(ctx):
+@then("the report tab is shown")
+def _report_tab_shown(ctx):
     session = ctx["session"]
-    assert session.app.query_one(StatsView).display
-    assert "tab-active" in session.app.query_one("#tab-stats").classes
+    assert session.app.query_one(ReportView).display
+    assert "tab-active" in session.app.query_one("#tab-report").classes
 
 
 @then(parsers.parse(
-    "the stats table shows {completed:d} items completed and {closed:d} items closed"
+    "the report table shows {completed:d} items completed and {closed:d} items closed"
 ))
-def _stats_table_closed(ctx, completed, closed):
+def _report_table_closed(ctx, completed, closed):
     session = ctx["session"]
-    assert _stats_cell(session, "Items Completed", "value") == str(completed)
-    assert _stats_cell(session, "Items Closed", "value") == str(closed)
+    assert _report_cell(session, "Items Completed", "value") == str(completed)
+    assert _report_cell(session, "Items Closed", "value") == str(closed)
 
 
-@then("the stats table shows a recorded cost")
-def _stats_table_cost(ctx):
-    assert _stats_cell(ctx["session"], "Spend", "value") == "$2.50"
+@then("the report table shows a recorded cost")
+def _report_table_cost(ctx):
+    assert _report_cell(ctx["session"], "Spend", "value") == "$2.50"
 
 
 @then(parsers.parse('the picker\'s header reads "{text}"'))
@@ -152,9 +171,9 @@ def _picker_shows_days(ctx):
     assert labels == [ctx["later_day"].isoformat(), ctx["earlier_day"].isoformat()]
 
 
-@then("the stats day filter row shows the earlier day")
-def _stats_day_filter_row(ctx):
-    widget = ctx["session"].app.query_one("#stats-day-filter-left")
+@then("the report day filter row shows the earlier day")
+def _report_day_filter_row(ctx):
+    widget = ctx["session"].app.query_one("#report-day-filter-left")
     assert _rendered_text(widget).strip() == ctx["earlier_day"].isoformat()
 
 
@@ -166,3 +185,16 @@ def _done_tab_filtered_to_earlier_day(ctx):
     table = session.app.query_one(DoneTable)
     assert table.row_count == 1
     assert table.ordered_rows[0].key.value == ctx["earlier_item"]
+
+
+@then("the report summary is shown, reading the stored text")
+def _report_summary_shown(ctx):
+    widget = ctx["session"].app.query_one("#report-summary")
+    assert widget.display
+    assert _rendered_text(widget).strip() == _SUMMARY_TEXT
+
+
+@then("no report summary is shown")
+def _no_report_summary_shown(ctx):
+    widget = ctx["session"].app.query_one("#report-summary")
+    assert not widget.display

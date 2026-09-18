@@ -1,3 +1,4 @@
+import datetime
 import os
 import unittest
 
@@ -20,7 +21,7 @@ from lightcycle.application.flow import (
     UnblockInput,
     UnblockStepUseCase,
 )
-from lightcycle.application.flow.engine_steps import FINDINGS_STEP
+from lightcycle.application.flow.engine_steps import DAILY_SUMMARY_STEP, FINDINGS_STEP
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State, compose_step_title
@@ -467,6 +468,73 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         self.assertNotIn(one, remaining)
         self.assertNotIn(two, remaining)
         self.assertNotIn(three, remaining)
+
+
+class TestCompleteStepDailySummary(unittest.TestCase):
+    def _uc(self, store):
+        return CompleteStepUseCase(store, flow_for(METAS, store))
+
+    def _summary_step(self, store, day, spawn_count):
+        item = store.create_item("Daily summary: %s" % day.isoformat(), "the day's items")
+        store.label_add(item, "summary-origin")
+        tid = store.create_step(step=DAILY_SUMMARY_STEP, role="agent", parent=item)
+        store.mark_day_summary_dirty(day)
+        store.start_day_summary(day, step_id=tid, spawn_count=spawn_count)
+        return tid
+
+    def _closed_item(self, store, day):
+        item = store.create_item("item", "a description")
+        store.complete_node(item, "merged", disposition="completed")
+        store._records[item]["closed_at"] = (
+            datetime.datetime.combine(day, datetime.time(10, 0)).astimezone().isoformat()
+        )
+        return item
+
+    def test_done_outcome_writes_the_summary_and_clears_dirty_when_nothing_closed_since_spawn(self):
+        s = FakeStore()
+        day = datetime.date(2026, 1, 1)
+        self._closed_item(s, day)
+        tid = self._summary_step(s, day, spawn_count=1)
+        s.add_artifact(s.get_node(tid).item, "summary", "what shipped today")
+
+        self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
+
+        row = s.day_summary(day)
+        self.assertEqual(row.summary, "what shipped today")
+        self.assertIsNotNone(row.generated_at)
+        self.assertEqual(row.summarized_count, 1)
+        self.assertIsNone(row.step_id)
+        self.assertIsNone(row.dirty_since)
+
+    def test_done_outcome_when_another_item_closed_since_spawn_still_writes_but_stays_dirty(self):
+        s = FakeStore()
+        day = datetime.date(2026, 1, 1)
+        self._closed_item(s, day)
+        tid = self._summary_step(s, day, spawn_count=1)
+        s.add_artifact(s.get_node(tid).item, "summary", "what shipped today")
+        self._closed_item(s, day)
+
+        self._uc(s).execute(CompleteInput(step=tid, outcome="done"))
+
+        row = s.day_summary(day)
+        self.assertEqual(row.summary, "what shipped today")
+        self.assertEqual(row.summarized_count, 1)
+        self.assertIsNone(row.step_id)
+        self.assertIsNotNone(row.dirty_since)
+
+    def test_non_done_outcome_writes_no_summary_and_leaves_the_day_exactly_as_dirty_as_before(self):
+        s = FakeStore()
+        day = datetime.date(2026, 1, 1)
+        self._closed_item(s, day)
+        tid = self._summary_step(s, day, spawn_count=1)
+        dirty_since_before = s.day_summary(day).dirty_since
+
+        self._uc(s).execute(CompleteInput(step=tid, outcome="abandoned"))
+
+        row = s.day_summary(day)
+        self.assertIsNone(row.summary)
+        self.assertEqual(row.summarized_count, 0)
+        self.assertEqual(row.dirty_since, dirty_since_before)
 
 
 class TestCompleteStepCascadeClose(unittest.TestCase):

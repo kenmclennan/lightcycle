@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL
-from lightcycle.application.work.stats import StatsInput, StatsUseCase, _backlog_size_asof_pair
+from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_size_asof_pair
 from lightcycle.domain.work import item_cost
 from tests.support.fake_store import FakeStore
 
@@ -20,13 +20,13 @@ def _closed_item(store, *, disposition, closed_at, id=None, label=None):
     return item
 
 
-class TestStatsUseCase(unittest.TestCase):
+class TestReportUseCase(unittest.TestCase):
     def test_counts_completed_and_abandoned_separately(self):
         s = FakeStore()
         _closed_item(s, disposition="completed", closed_at="2026-01-01T10:00:00+00:00")
         _closed_item(s, disposition="abandoned", closed_at="2026-01-01T11:00:00+00:00")
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.completed, 1)
         self.assertEqual(resp.abandoned, 1)
@@ -36,7 +36,7 @@ class TestStatsUseCase(unittest.TestCase):
         _closed_item(s, disposition="abandoned", closed_at="2026-01-01T10:00:00+00:00")
         _closed_item(s, disposition="aborted", closed_at="2026-01-01T11:00:00+00:00")
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.abandoned, 2)
 
@@ -54,7 +54,7 @@ class TestStatsUseCase(unittest.TestCase):
             s, disposition="completed", closed_at="2026-01-01T10:00:00+00:00", id="LC-2",
         )
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.audits, 2)
         self.assertEqual(resp.completed, 3)
@@ -62,7 +62,7 @@ class TestStatsUseCase(unittest.TestCase):
     def test_a_day_with_zero_closed_items_returns_a_valid_all_zero_response(self):
         s = FakeStore()
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.completed, 0)
         self.assertEqual(resp.abandoned, 0)
@@ -82,14 +82,14 @@ class TestStatsUseCase(unittest.TestCase):
         s.complete_node(item, "merged", disposition="completed")
         s._records[item]["closed_at"] = "2026-01-01T10:00:00+00:00"
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         expected = item_cost(s.children(item))
         self.assertEqual(resp.spend.cost_usd, expected.cost_usd)
         self.assertEqual(resp.spend.unpriced_count, expected.unpriced_count)
 
 
-class TestStatsUseCaseBacklog(unittest.TestCase):
+class TestReportUseCaseBacklog(unittest.TestCase):
     def test_item_created_the_same_day_as_the_snapshot_is_excluded(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
@@ -127,20 +127,20 @@ class TestStatsUseCaseBacklog(unittest.TestCase):
         later = s.create_item("later", "a description")
         s._records[later]["created_at"] = "2026-01-04T08:00:00"
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 5)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 5)))
 
         self.assertEqual(resp.backlog_size, 2)
         self.assertEqual(resp.backlog_delta, 1)
 
 
-class TestStatsUseCaseEscalations(unittest.TestCase):
+class TestReportUseCaseEscalations(unittest.TestCase):
     def test_a_step_still_parked_with_a_waiting_entry_on_the_day_counts(self):
         s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
         item = s.create_item("item", "a description")
         step = s.create_step(step="build", role="agent", parent=item)
         s.reassign(step, "human")
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.escalations, 1)
 
@@ -152,7 +152,7 @@ class TestStatsUseCaseEscalations(unittest.TestCase):
         s.reassign(step, "agent")
 
         self.assertEqual(s.get_node(step).role, "agent")
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.escalations, 1)
 
@@ -162,7 +162,7 @@ class TestStatsUseCaseEscalations(unittest.TestCase):
         step = s.create_step(step="build", role="agent", parent=item)
         s.reassign(step, "human")
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.escalations, 0)
 
@@ -174,9 +174,39 @@ class TestStatsUseCaseEscalations(unittest.TestCase):
         s.update_metadata(step, {"reason": None, "needs": None, "tried": None})
         s.reassign(step, "agent")
 
-        resp = StatsUseCase(s).execute(StatsInput(day=datetime.date(2026, 1, 1)))
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
         self.assertEqual(resp.escalations, 1)
+
+
+class TestReportUseCaseSummary(unittest.TestCase):
+    def test_a_day_with_a_generated_summary_returns_it(self):
+        s = FakeStore()
+        day = datetime.date(2026, 1, 1)
+        with s.transaction():
+            s.mark_day_summary_dirty(day)
+            s.start_day_summary(day, step_id="step-1", spawn_count=0)
+        s.finish_day_summary(day, summary="what shipped", summarized_count=0, clear_dirty=True)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=day))
+
+        self.assertEqual(resp.summary, "what shipped")
+
+    def test_a_day_with_no_row_returns_none(self):
+        s = FakeStore()
+
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
+
+        self.assertIsNone(resp.summary)
+
+    def test_a_day_with_a_row_but_no_summary_yet_returns_none(self):
+        s = FakeStore()
+        day = datetime.date(2026, 1, 1)
+        s.mark_day_summary_dirty(day)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=day))
+
+        self.assertIsNone(resp.summary)
 
 
 if __name__ == "__main__":
