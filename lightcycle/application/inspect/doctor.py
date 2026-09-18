@@ -22,10 +22,11 @@ class DoctorReport:
 
 
 class DoctorUseCase:
-    def __init__(self, store, workflow_source, config):
+    def __init__(self, store, workflow_source, config, workflow_bundle):
         self._store = store
         self._workflow_source = workflow_source
         self._config = config
+        self._workflow_bundle = workflow_bundle
 
     def execute(self, input: DoctorInput) -> DoctorReport:
         nodes = self._store.all_nodes_including_done()
@@ -61,7 +62,31 @@ class DoctorUseCase:
                     "%s has contract %d, engine is %d" % (pin, manifest.contract, ENGINE_CONTRACT),
                     n.id,
                 ))
+            current = self._workflow_source.current_sha(origin)
+            if current and current != sha and self._workflow_source.has_version(origin, current):
+                changed = self._changed_step_roles(origin, sha, current)
+                if changed:
+                    pins.append(Problem(
+                        "pins",
+                        "%s differs from origin's current %s (changed steps: %s)" % (
+                            pin, format_pin(origin, name, current), ", ".join(sorted(changed))),
+                        n.id,
+                    ))
         return pins, contracts
+
+    def _changed_step_roles(self, origin, old_sha, new_sha):
+        old_root = self._workflow_source.pinned_bundle(origin, old_sha)
+        new_root = self._workflow_source.pinned_bundle(origin, new_sha)
+        roles = set(self._workflow_bundle.step_roles(old_root)) | set(self._workflow_bundle.step_roles(new_root))
+        changed = set()
+        for role in roles:
+            old_step = self._workflow_bundle.parse_step(role, old_root)
+            new_step = self._workflow_bundle.parse_step(role, new_root)
+            old_body = old_step.body if old_step else None
+            new_body = new_step.body if new_step else None
+            if old_body != new_body:
+                changed.add(role)
+        return changed
 
     def _origin_problems(self):
         problems = []

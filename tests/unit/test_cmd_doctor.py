@@ -65,11 +65,20 @@ class FakeConfig:
         return "acme"
 
 
+class FakeWorkflowBundle:
+    def step_roles(self, root):
+        return []
+
+    def parse_step(self, role, root):
+        return None
+
+
 class FakeContainer:
-    def __init__(self, store, workflow_source=None, config=None):
+    def __init__(self, store, workflow_source=None, config=None, workflow_bundle=None):
         self.store = store
         self.workflow_source = workflow_source or FakeWorkflowSource()
         self.config = config or FakeConfig()
+        self.workflow_bundle = workflow_bundle or FakeWorkflowBundle()
 
 
 class TestCmdDoctor(unittest.TestCase):
