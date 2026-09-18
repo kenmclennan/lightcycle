@@ -2968,6 +2968,67 @@ class TestBacklogRowsGatedOffThePoll(unittest.TestCase):
         self.assertEqual(session.app._backlog_filtered_count, 1)
 
 
+def _spy_all_items_including_done_calls(store):
+    calls = {"n": 0}
+    original = store.all_items_including_done
+
+    def counted():
+        calls["n"] += 1
+        return original()
+
+    store.all_items_including_done = counted
+    return calls
+
+
+class TestDoneUseCaseGatedOffThePoll(unittest.TestCase):
+    def test_polling_while_on_priority_never_scans_for_done_items(self):
+        store = FakeStore()
+        _closed_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        self.assertEqual(session.app._view, "priority")
+
+        calls = _spy_all_items_including_done_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["n"], 0)
+        self.assertEqual(session.app._done_total, 0)
+        self.assertEqual(session.app._done_filtered_count, 0)
+
+    def test_polling_while_on_backlog_never_scans_for_done_items(self):
+        store = FakeStore()
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        session.press("tab")
+        self.assertEqual(session.app._view, "backlog")
+        total_before = session.app._done_total
+        filtered_before = session.app._done_filtered_count
+
+        _closed_item_with_cost(store)
+        calls = _spy_all_items_including_done_calls(store)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["n"], 0)
+        self.assertEqual(session.app._done_total, total_before)
+        self.assertEqual(session.app._done_filtered_count, filtered_before)
+
+    def test_switching_to_done_computes_counts_and_rows_immediately_without_a_poll(self):
+        store = FakeStore()
+        item = _closed_item_with_cost(store)
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+
+        session.press("tab")
+        session.press("tab")
+
+        self.assertEqual(session.app._view, "done")
+        self.assertEqual(session.app._done_total, 1)
+        self.assertEqual(session.app._done_filtered_count, 1)
+        self.assertEqual(_done_cell(session, item, "id"), item)
+
+
 class TestDoneDayPicker(unittest.TestCase):
     def _launch_two_days(self):
         store = FakeStore()
