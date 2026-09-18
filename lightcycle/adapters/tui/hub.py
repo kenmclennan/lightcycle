@@ -101,6 +101,7 @@ _STEP_TAB_ORDER = ("detail", "workflow", "log", "cost")
 _TAB_LABELS = {
     "description": "Description", "workflow": "Workflow", "artifacts": "Artifacts",
     "detail": "Detail", "log": "Log", "cost": "Cost",
+    "overview": "Overview", "questions": "Open questions", "items": "Items",
 }
 
 
@@ -1161,6 +1162,20 @@ class ListArtifactViewerScreen(ArtifactViewerScreen):
             self.set_focus(table)
 
 
+HUB_TAB_STRIP_CSS = f"""
+    HubTabStrip {{
+        height: 3;
+        border-top: solid {COLOURS["border"]};
+        border-bottom: solid {COLOURS["border"]};
+    }}
+    HubTabStrip Static {{
+        width: auto;
+        height: 1;
+        margin-right: 3;
+    }}
+"""
+
+
 class NodeHubScreen(Screen, inherit_bindings=False):
     BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
         Binding("escape", "close_hub", "Back", show=False),
@@ -1185,16 +1200,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     CostPane {{
         height: 1fr;
     }}
-    HubTabStrip {{
-        height: 3;
-        border-top: solid {COLOURS["border"]};
-        border-bottom: solid {COLOURS["border"]};
-    }}
-    HubTabStrip Static {{
-        width: auto;
-        height: 1;
-        margin-right: 3;
-    }}
+    {HUB_TAB_STRIP_CSS}
     #hub-context {{
         display: none;
     }}

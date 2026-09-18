@@ -17,6 +17,7 @@ from lightcycle.adapters.tui.app import (
     POOL_START_TIMEOUT_SECONDS,
     PRIORITY_CONTINUATION_INDENT,
     BacklogFilterInput,
+    GoalsView,
     BacklogTable,
     BacklogView,
     DoneFilterInput,
@@ -388,14 +389,9 @@ class TestActiveGroup(unittest.TestCase):
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
 
-        session.press("tab")
-        self.assertIsNone(session.app._active_glyph_timer)
-
-        session.press("tab")
-        self.assertIsNone(session.app._active_glyph_timer)
-
-        session.press("tab")
-        self.assertIsNone(session.app._active_glyph_timer)
+        for _ in range(4):
+            session.press("tab")
+            self.assertIsNone(session.app._active_glyph_timer)
 
         session.press("tab")
         self.assertIsNotNone(session.app._active_glyph_timer)
@@ -1512,26 +1508,38 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_bracket_backward_wraps_to_report(self):
+    def test_bracket_backward_from_the_landing_view_reaches_goals(self):
         session = self._launch()
 
+        session.press("[")
+
+        self.assertTrue(session.app.query_one(GoalsView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertIn("tab-active", session.app.query_one("#tab-goals").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
+
+    def test_bracket_backward_twice_wraps_to_report(self):
+        session = self._launch()
+
+        session.press("[")
         session.press("[")
 
         self.assertTrue(session.app.query_one(ReportView).display)
-        self.assertFalse(session.app.query_one(PriorityTable).display)
+        self.assertFalse(session.app.query_one(GoalsView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
-        self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-goals").classes)
 
-    def test_bracket_backward_twice_reaches_done(self):
+    def test_bracket_forward_from_report_wraps_to_goals(self):
         session = self._launch()
 
-        session.press("[")
-        session.press("[")
+        for _ in range(3):
+            session.press("]")
+        self.assertTrue(session.app.query_one(ReportView).display)
+        session.press("]")
 
-        self.assertTrue(session.app.query_one(DoneView).display)
+        self.assertTrue(session.app.query_one(GoalsView).display)
         self.assertFalse(session.app.query_one(ReportView).display)
-        self.assertIn("tab-active", session.app.query_one("#tab-done").classes)
-        self.assertIn("tab-dim", session.app.query_one("#tab-report").classes)
+        self.assertIn("tab-active", session.app.query_one("#tab-goals").classes)
 
     def test_bracket_forward_then_backward_returns_to_priority_list(self):
         session = self._launch()
@@ -1568,13 +1576,11 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-done").classes)
 
-    def test_tab_a_fourth_time_returns_to_priority_list(self):
+    def test_tab_a_fifth_time_returns_to_priority_list(self):
         session = self._launch()
 
-        session.press("tab")
-        session.press("tab")
-        session.press("tab")
-        session.press("tab")
+        for _ in range(5):
+            session.press("tab")
 
         self.assertFalse(session.app.query_one(BacklogView).display)
         self.assertFalse(session.app.query_one(DoneView).display)
@@ -1874,9 +1880,8 @@ class TestBacklogFooter(unittest.TestCase):
         store.create_item("todo item", "a description")
         session = self._launch(store)
 
-        session.press("tab")
-        session.press("tab")
-        session.press("tab")
+        for _ in range(4):
+            session.press("tab")
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
 
@@ -2310,13 +2315,11 @@ class TestDoneTabSwitch(unittest.TestCase):
         self.assertTrue(session.app.query_one(ReportView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
 
-    def test_four_presses_returns_to_priority(self):
+    def test_five_presses_returns_to_priority(self):
         session = self._launch()
 
-        session.press("tab")
-        session.press("tab")
-        session.press("tab")
-        session.press("tab")
+        for _ in range(5):
+            session.press("tab")
 
         self.assertFalse(session.app.query_one(DoneView).display)
         self.assertFalse(session.app.query_one(ReportView).display)

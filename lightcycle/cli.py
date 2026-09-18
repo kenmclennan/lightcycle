@@ -35,6 +35,19 @@ from lightcycle.domain.work import (
     worker_refusal_message,
 )
 from lightcycle.domain.work.state import ALIASES
+from lightcycle.application.goals import (
+    AppendGoalLogUseCase,
+    AskGoalQuestionUseCase,
+    CreateGoalInput,
+    CreateGoalUseCase,
+    EditGoalInput,
+    EditGoalUseCase,
+    LinkGoalItemUseCase,
+    ListGoalsUseCase,
+    ResolveGoalQuestionUseCase,
+    ShowGoalUseCase,
+    UnlinkGoalItemUseCase,
+)
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_project_ref import resolve_project_ref
@@ -230,6 +243,13 @@ COMMAND_GROUPS = [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
         ("done", "<id> <outcome> [--note \"<text>\"] [--disposition completed|abandoned]",
          "close a node; a step done-with-outcome advances the flow"),
+    ]),
+    ("Goals", [
+        ("goal", "<new|list|show|set|log|ask|resolve|link|unlink> ...", "maintain a goal by hand: "
+         "new \"<title>\" [--outcome T] [--scope T], list, show <G-n>, set <G-n> [--title/--outcome/"
+         "--scope/--status \"not started|in progress|done\"], log <G-n> \"<text>\", ask <G-n> "
+         "\"<text>\", resolve <question#> \"<resolution>\", link/unlink <G-n> <item> - a goal is not "
+         "a node and the flow engine never touches it"),
     ]),
     ("Feedback loop", [
         ("retro", "<item>", "gather child feedback + objective signals into a read digest"),
@@ -1665,6 +1685,74 @@ def cmd_project(argv):
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
+
+
+def cmd_goal(argv):
+    parser = build_parser(COMMANDS["goal"])
+    a = parser.parse_args(argv)
+    if a.sub is None:
+        parser.print_help()
+        return 2
+    store = _container.store
+    try:
+        if a.sub == "new":
+            print(CreateGoalUseCase(store).execute(
+                CreateGoalInput(title=a.title, outcome=a.outcome or "", scope=a.scope or "")
+            ))
+            return 0
+        if a.sub == "list":
+            for g in ListGoalsUseCase(store).execute():
+                print("%s\t%s\t%s" % (g.id, g.status, g.title))
+            return 0
+        if a.sub == "show":
+            _print_goal(ShowGoalUseCase(store).execute(a.id))
+            return 0
+        if a.sub == "set":
+            EditGoalUseCase(store).execute(EditGoalInput(
+                id=a.id, title=a.title, outcome=a.outcome, scope=a.scope, status=a.status
+            ))
+            print("updated %s" % a.id)
+            return 0
+        if a.sub == "log":
+            AppendGoalLogUseCase(store).execute(a.id, a.text)
+            print("logged to %s" % a.id)
+            return 0
+        if a.sub == "ask":
+            print("#%d" % AskGoalQuestionUseCase(store).execute(a.id, a.text))
+            return 0
+        if a.sub == "resolve":
+            ResolveGoalQuestionUseCase(store).execute(a.question, a.resolution)
+            print("resolved #%d" % a.question)
+            return 0
+        if a.sub == "link":
+            LinkGoalItemUseCase(store).execute(a.id, a.item)
+            print("linked %s to %s" % (a.item, a.id))
+            return 0
+        if a.sub == "unlink":
+            UnlinkGoalItemUseCase(store).execute(a.id, a.item)
+            print("unlinked %s from %s" % (a.item, a.id))
+            return 0
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+
+
+def _print_goal(view):
+    g = view.goal
+    print("%s  %s" % (g.id, g.title))
+    print("status: %s" % g.status)
+    print("\noutcome:\n%s" % (g.outcome or "(none)"))
+    print("\nscope:\n%s" % (g.scope or "(none)"))
+    print("\nitems:")
+    for ref in view.items:
+        print("  %s%s" % (ref.id, "  %s" % ref.title if ref.title else ""))
+    print("\nopen questions:")
+    for q in view.questions:
+        if q.resolved_at is None:
+            print("  #%d  %s" % (q.id, q.body))
+    print("\nlog:")
+    for e in view.log:
+        print("  %s  %s" % (e.created_at, e.body))
 
 
 def _init_pull_default_origin():

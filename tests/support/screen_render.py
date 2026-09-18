@@ -1194,6 +1194,94 @@ def _hub_cost_item(size):
     return _open_hub(_launch(store, size=size), item, tab="cost")
 
 
+
+GOAL_OUTCOME = (
+    "Every project the driver touches has a goal record that states, in plain prose, what done "
+    "looks like for work that spans many items, so the driver can reorient without rereading "
+    "every item's history. The record is written by a person and maintained by hand."
+)
+GOAL_SCOPE = (
+    "In: the goal record, its decision log, its open questions and the item links. "
+    "Out: any generated progress statement and every figure derived from linked items."
+)
+
+
+def _goals_store(with_content=True):
+    store = DemoStore(now=lambda: _at(30))
+    gid = store.create_goal("Ship the goals record", GOAL_OUTCOME if with_content else "", GOAL_SCOPE if with_content else "")
+    store.create_goal("Make the driver loop reorient itself")
+    store.create_goal("Retire the legacy report screen")
+    if with_content:
+        store.item("LC-858", "Goals slice 1: the record and the tab")
+        store.item("LC-859", "Goals slice 2: the generated progress statement")
+        store.link_goal_item(gid, "LC-858")
+        store.link_goal_item(gid, "LC-859")
+        store.add_goal_log(gid, "Goals are not nodes: the flow engine never reads them.")
+        store.add_goal_log(gid, "Status is three hand-set values, deliberately not a state.")
+        store.add_goal_question(gid, "Should a goal ever close itself once its items are done?")
+        store.add_goal_question(gid, "Who owns the progress statement's wording?")
+    return store, gid
+
+
+def _goals_normal(size):
+    store, _gid = _goals_store()
+    session = _launch(store, size=size)
+    session.press("[")
+    return session
+
+
+def _goals_empty(size):
+    session = _launch(DemoStore(), size=size)
+    session.press("[")
+    return session
+
+
+def _open_goal_hub(size, tab, populated=True):
+    from lightcycle.adapters.tui.goal_hub import GoalHubScreen
+    from lightcycle.adapters.tui.hub import HubTabStrip
+
+    store, gid = _goals_store(with_content=populated)
+    session = _launch(store, size=size)
+    screen = GoalHubScreen(session.app._container, gid, lambda: NOW)
+    session.run(lambda: session.app.push_screen(screen))
+    session.pause()
+    session.pause()
+    if tab != "overview":
+        session.run(lambda: setattr(screen, "_active_tab", tab))
+        session.run(lambda: screen.query_one(HubTabStrip).set_active(tab))
+        session.run(screen._apply_tab_visibility)
+        session.pause()
+    return session
+
+
+def _goal_hub_overview(size):
+    return _open_goal_hub(size, "overview")
+
+
+def _goal_hub_overview_empty(size):
+    return _open_goal_hub(size, "overview", populated=False)
+
+
+def _goal_hub_log(size):
+    return _open_goal_hub(size, "log")
+
+
+def _goal_hub_questions(size):
+    return _open_goal_hub(size, "questions")
+
+
+def _goal_hub_questions_empty(size):
+    return _open_goal_hub(size, "questions", populated=False)
+
+
+def _goal_hub_items(size):
+    return _open_goal_hub(size, "items")
+
+
+def _goal_hub_items_empty(size):
+    return _open_goal_hub(size, "items", populated=False)
+
+
 SCREENS = {
     "priority-list#normal": _priority_normal,
     "priority-list#empty": _priority_empty,
@@ -1204,6 +1292,15 @@ SCREENS = {
     "priority-list#pool-holding": _priority_pool_holding,
     "priority-list#worker-suspended": _priority_worker_suspended,
     "priority-list#engine-active": _priority_engine_active,
+    "goals#normal": _goals_normal,
+    "goals#empty": _goals_empty,
+    "goal-hub#overview": _goal_hub_overview,
+    "goal-hub#overview-empty": _goal_hub_overview_empty,
+    "goal-hub#log": _goal_hub_log,
+    "goal-hub#questions": _goal_hub_questions,
+    "goal-hub#questions-empty": _goal_hub_questions_empty,
+    "goal-hub#items": _goal_hub_items,
+    "goal-hub#items-empty": _goal_hub_items_empty,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,

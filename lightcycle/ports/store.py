@@ -410,3 +410,55 @@ class StorePort(ABC):
     @abstractmethod
     def remove_project(self, identity):
         pass
+
+    @abstractmethod
+    def create_goal(self, title, outcome="", scope=""):
+        pass
+
+    @abstractmethod
+    def get_goal(self, goal_id):
+        pass
+
+    @abstractmethod
+    def list_goals(self):
+        pass
+
+    @abstractmethod
+    def update_goal(self, goal_id, *, title=None, outcome=None, scope=None, status=None):
+        pass
+
+    @abstractmethod
+    def add_goal_log(self, goal_id, body):
+        pass
+
+    @abstractmethod
+    def goal_log(self, goal_id):
+        pass
+
+    @abstractmethod
+    def add_goal_question(self, goal_id, body):
+        pass
+
+    @abstractmethod
+    def get_goal_question(self, question_id):
+        pass
+
+    @abstractmethod
+    def goal_questions(self, goal_id):
+        pass
+
+    @abstractmethod
+    def resolve_goal_question(self, question_id, resolution):
+        pass
+
+    @abstractmethod
+    def link_goal_item(self, goal_id, item_id):
+        pass
+
+    @abstractmethod
+    def unlink_goal_item(self, goal_id, item_id):
+        pass
+
+    @abstractmethod
+    def goal_items(self, goal_id):
+        pass

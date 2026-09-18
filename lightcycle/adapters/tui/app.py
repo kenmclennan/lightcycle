@@ -31,12 +31,15 @@ from lightcycle.adapters.tui.design_system import (
     DONE_SEARCH_SHORTCUTS,
     DONE_SHORTCUTS,
     GLOBAL_SHORTCUTS,
+    GOALS_EMPTY_SHORTCUTS,
+    GOALS_SHORTCUTS,
     MODAL_OVERLAY_ALPHA,
     REPORT_SHORTCUTS,
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
+from lightcycle.adapters.tui.goal_hub import GoalHubScreen
 from lightcycle.adapters.tui.hub import NodeHubScreen, _format_item_cost
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows_from_selection
 from lightcycle.adapters.tui.row_grid import (
@@ -52,6 +55,7 @@ from lightcycle.adapters.tui.row_grid import (
     screen_row_budget_for,
     stacked_cell,
 )
+from lightcycle.application.goals import ListGoalsUseCase
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
     LiveWorkerCountUseCase,
@@ -93,7 +97,9 @@ POOL_PROMPT_QUIT_LEAVE = "quit-leave"
 POOL_PROMPT_QUIT_STOP = "quit-stop"
 POOL_PROMPT_MIN_WIDTH = 52
 
-_VIEW_CYCLE = ("priority", "backlog", "done", "report")
+_VIEW_CYCLE = ("goals", "priority", "backlog", "done", "report")
+
+GOALS_EMPTY_MESSAGE = "No goals yet."
 
 STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
@@ -107,6 +113,8 @@ FILTER_ROW_COUNT_GAP = 2
 
 class TabStrip(Horizontal):
     def compose(self) -> ComposeResult:
+        yield Static("Goals", id="tab-goals", classes="tab-dim")
+        yield Static(" · ", classes="tab-separator")
         yield Static("Current work", id="tab-current-work", classes="tab-active")
         yield Static(" · ", classes="tab-separator")
         yield Static("Backlog", id="tab-backlog", classes="tab-dim")
@@ -117,6 +125,7 @@ class TabStrip(Horizontal):
 
     def set_active(self, view) -> None:
         widgets = {
+            "goals": self.query_one("#tab-goals", Static),
             "priority": self.query_one("#tab-current-work", Static),
             "backlog": self.query_one("#tab-backlog", Static),
             "done": self.query_one("#tab-done", Static),
@@ -797,6 +806,53 @@ class ReportTable(PagingTable):
             view.refresh_column_width()
 
 
+class GoalsTable(PagingTable):
+    pass
+
+
+class GoalsView(Vertical):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._last_shape = None
+        self._count = 0
+
+    def compose(self) -> ComposeResult:
+        goals_table = GoalsTable(id="goals-table")
+        goals_table.display = False
+        yield goals_table
+        yield Static(GOALS_EMPTY_MESSAGE, id="goals-empty")
+
+    def on_mount(self) -> None:
+        table = self.query_one(GoalsTable)
+        table.cursor_type = "row"
+        table.show_header = False
+        table.add_column("title", key="title")
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    def apply_goals(self, goals) -> None:
+        shape = tuple((g.id, g.title) for g in goals)
+        table = self.query_one(GoalsTable)
+        if shape != self._last_shape:
+            self._last_shape = shape
+            previous = None
+            if table.row_count and table.cursor_row < len(table.ordered_rows):
+                previous = table.ordered_rows[table.cursor_row].key.value
+            table.clear()
+            for goal in goals:
+                table.add_row(Text(goal.title, style=COLOURS["text"]), key=goal.id)
+            if previous is not None:
+                for index, row in enumerate(table.ordered_rows):
+                    if row.key.value == previous:
+                        table.move_cursor(row=index)
+                        break
+        self._count = len(goals)
+        table.display = bool(goals)
+        self.query_one("#goals-empty", Static).display = not goals
+
+
 class ReportView(Vertical):
     can_focus = True
 
@@ -1349,6 +1405,19 @@ class LightcycleApp(App):
         display: none;
     }}
 
+    GoalsView {{
+        display: none;
+    }}
+    GoalsTable {{
+        height: 1fr;
+    }}
+    #goals-empty {{
+        color: {COLOURS["dim"]};
+        content-align: center middle;
+        height: 1fr;
+        display: none;
+    }}
+
     ReportView {{
         display: none;
     }}
@@ -1501,6 +1570,9 @@ class LightcycleApp(App):
         priority_floor = Static(id="priority-list-floor")
         priority_floor.display = showing_floor
         yield priority_floor
+        goals_view = GoalsView(id="goals-view")
+        goals_view.display = self._view == "goals"
+        yield goals_view
         backlog_view = BacklogView(id="backlog-view")
         backlog_view.display = self._view == "backlog"
         yield backlog_view
@@ -1595,6 +1667,7 @@ class LightcycleApp(App):
 
         self._sync_active_glyph_animation()
 
+        self._refresh_goals_view()
         self._refresh_backlog_view()
         self._refresh_done_view()
 
@@ -1711,6 +1784,11 @@ class LightcycleApp(App):
             backlog_rows, self._backlog_total, self._backlog_project_filter, self._backlog_text_filter
         )
 
+    def _refresh_goals_view(self) -> None:
+        if self._view != "goals":
+            return
+        self.query_one(GoalsView).apply_goals(ListGoalsUseCase(self._container.store).execute())
+
     def _refresh_done_view(self) -> None:
         if self._view != "done":
             return
@@ -1747,6 +1825,7 @@ class LightcycleApp(App):
         )
         self.query_one("#empty-state", Static).display = on_priority and self._priority_empty
         self.query_one("#priority-list-floor", Static).display = showing_floor
+        self.query_one(GoalsView).display = self._view == "goals"
         self.query_one(BacklogView).display = self._view == "backlog"
         self.query_one(DoneView).display = self._view == "done"
         self.query_one(ReportView).display = self._view == "report"
@@ -1765,6 +1844,8 @@ class LightcycleApp(App):
             return DONE_SHORTCUTS
         if self._view == "report":
             return REPORT_SHORTCUTS
+        if self._view == "goals":
+            return GOALS_SHORTCUTS if self.query_one(GoalsView).count else GOALS_EMPTY_SHORTCUTS
         if self.focused is self.query_one(BacklogFilterInput):
             return BACKLOG_SEARCH_SHORTCUTS if self._backlog_filtered_count > 0 else BACKLOG_SEARCH_EMPTY_SHORTCUTS
         if self._backlog_total == 0:
@@ -1783,13 +1864,13 @@ class LightcycleApp(App):
         self._cycle_view(1)
 
     def action_prev_strip(self) -> None:
-        if isinstance(self.screen, NodeHubScreen):
+        if isinstance(self.screen, (NodeHubScreen, GoalHubScreen)):
             self.screen.action_prev_tab()
             return
         self._cycle_view(-1)
 
     def action_next_strip(self) -> None:
-        if isinstance(self.screen, NodeHubScreen):
+        if isinstance(self.screen, (NodeHubScreen, GoalHubScreen)):
             self.screen.action_next_tab()
             return
         self._cycle_view(1)
@@ -1813,6 +1894,8 @@ class LightcycleApp(App):
                 self._render_priority_rows(
                     self._last_priority_selection, self._last_priority_suspended_steps, force_rebuild=True,
                 )
+        elif self._view == "goals":
+            self._refresh_goals_view()
         elif self._view == "backlog":
             self._refresh_backlog_view()
         elif self._view == "done":
@@ -1825,6 +1908,8 @@ class LightcycleApp(App):
         self._sync_active_glyph_animation()
         if self._view == "priority":
             self.set_focus(self.query_one(PriorityTable))
+        elif self._view == "goals":
+            self.set_focus(self.query_one(GoalsTable))
         elif self._view == "backlog":
             self.set_focus(self.query_one(BacklogTable))
         elif self._view == "report":
@@ -1846,6 +1931,9 @@ class LightcycleApp(App):
             if row is None:
                 return
             self.push_screen(NodeHubScreen(self._container, row.step_id, self._now))
+        elif table.id == "goals-table":
+            event.stop()
+            self.push_screen(GoalHubScreen(self._container, row_id, self._now))
         elif table.id in ("backlog-table", "done-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))

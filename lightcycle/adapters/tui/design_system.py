@@ -73,6 +73,19 @@ GLOBAL_SHORTCUTS = (
     ("q", "quit"),
 )
 
+GOALS_SHORTCUTS = (
+    ("↑↓", "move"),
+    ("enter/→", "open goal"),
+    ("[/tab]", "prev/next tab"),
+    ("ctrl-u/ctrl-d", "scroll"),
+    ("q", "quit"),
+)
+
+GOALS_EMPTY_SHORTCUTS = (
+    ("[/tab]", "prev/next tab"),
+    ("q", "quit"),
+)
+
 BACKLOG_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter/→", "explore in tree"),
