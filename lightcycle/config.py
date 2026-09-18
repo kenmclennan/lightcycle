@@ -131,6 +131,10 @@ class ConfigError(Exception):
     pass
 
 
+class ConfigValueError(ConfigError):
+    pass
+
+
 class Config:
 
     def __init__(self, environ=None):
@@ -149,7 +153,7 @@ class Config:
         try:
             return int(raw)
         except ValueError:
-            raise ConfigError("%s must be an integer (got %r)" % (key, raw))
+            raise ConfigValueError("%s must be an integer (got %r)" % (key, raw))
 
     def _env_bool(self, key, default):
         raw = self._env(key)
@@ -164,7 +168,7 @@ class Config:
         try:
             return float(raw)
         except ValueError:
-            raise ConfigError("%s must be a number (got %r)" % (key, raw))
+            raise ConfigValueError("%s must be a number (got %r)" % (key, raw))
 
     def base_env(self):
         return dict(self._environ)
@@ -256,6 +260,10 @@ class Config:
             getter = getattr(self, _GETTER_NAME_OVERRIDES.get(key, key.replace("-", "_")))
             try:
                 value = getter()
+            except ConfigValueError as e:
+                entries.append(ResolvedSetting(
+                    key=key, value=None, error=str(e), state="invalid", env_var=None, seed=default))
+                continue
             except ConfigError as e:
                 entries.append(ResolvedSetting(
                     key=key, value=None, error=str(e), state="unset", env_var=None, seed=default))
@@ -313,7 +321,7 @@ class Config:
         try:
             return int(v)
         except (TypeError, ValueError):
-            raise ConfigError("config value %r must be an integer (got %r)" % (key, v))
+            raise ConfigValueError("config value %r must be an integer (got %r)" % (key, v))
 
     def _required_float(self, key):
         v = self.load_config().get(key)
@@ -325,7 +333,7 @@ class Config:
         try:
             return float(v)
         except (TypeError, ValueError):
-            raise ConfigError("config value %r must be a number (got %r)" % (key, v))
+            raise ConfigValueError("config value %r must be a number (got %r)" % (key, v))
 
     def _check_range(self, key, value):
         bounds = _NUMERIC_RANGES.get(key)
@@ -333,9 +341,9 @@ class Config:
             return value
         lo, hi = bounds
         if lo is not None and value < lo:
-            raise ConfigError("config value %r must be >= %r (got %r)" % (key, lo, value))
+            raise ConfigValueError("config value %r must be >= %r (got %r)" % (key, lo, value))
         if hi is not None and value > hi:
-            raise ConfigError("config value %r must be <= %r (got %r)" % (key, hi, value))
+            raise ConfigValueError("config value %r must be <= %r (got %r)" % (key, hi, value))
         return value
 
     @staticmethod
@@ -345,7 +353,7 @@ class Config:
             return True
         if text in _FALSE:
             return False
-        raise ConfigError(
+        raise ConfigValueError(
             "config value %r must be one of %s or %s (got %r)"
             % (key, "/".join(_TRUE), "/".join(_FALSE), raw))
 
@@ -486,7 +494,7 @@ class Config:
         value = env if env is not None else self._required_float("resume-pressure")
         value = self._check_range("resume-pressure", value)
         if value >= self.suspend_pressure():
-            raise ConfigError(
+            raise ConfigValueError(
                 "resume-pressure (%r) must be strictly below suspend-pressure (%r)"
                 % (value, self.suspend_pressure())
             )

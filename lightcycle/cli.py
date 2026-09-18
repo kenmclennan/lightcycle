@@ -1685,6 +1685,8 @@ def cmd_config(argv):
             print("%s: (not set)" % s.key)
         elif s.state == "unset":
             print("%s: (not set - run `lc init`)" % s.key)
+        elif s.state == "invalid":
+            print("%s: (rejected - %s)" % (s.key, s.error))
         elif s.state == "env":
             print("%s: %s (env: %s)" % (s.key, s.value, s.env_var))
         elif s.seed == "":

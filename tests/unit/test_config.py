@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lightcycle.config import _SEED_KEYS, Config, ConfigError
+from lightcycle.config import _SEED_KEYS, Config, ConfigError, ConfigValueError
 from lightcycle.domain.pool import ModelRates
 
 HOME = os.path.expanduser("~")
@@ -98,6 +98,19 @@ class TestMaxAgents(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("max-agents", msg)
         self.assertIn("-1", msg)
+
+    def test_negative_is_a_value_error_not_a_missing_key(self):
+        with self.assertRaises(ConfigValueError):
+            _cfg(max_agents="-1").max_agents()
+
+    def test_malformed_is_a_value_error_not_a_missing_key(self):
+        with self.assertRaises(ConfigValueError):
+            _cfg(max_agents="nope").max_agents()
+
+    def test_missing_key_is_not_a_value_error(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().max_agents()
+        self.assertNotIsInstance(ctx.exception, ConfigValueError)
 
 
 class TestTunables(unittest.TestCase):
@@ -740,6 +753,33 @@ class TestResolvedSettings(unittest.TestCase):
             self.assertEqual(s.state, "set", key)
             self.assertTrue(os.path.isabs(s.value), key)
             self.assertFalse(os.path.isabs(s.seed), key)
+
+    def test_out_of_range_value_reports_invalid_not_unset(self):
+        c = _cfg(max_agents="-1")
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["max-agents"]
+        self.assertEqual(s.state, "invalid")
+        self.assertIn("-1", s.error)
+        self.assertIn(">=", s.error)
+
+    def test_malformed_value_reports_invalid_not_unset(self):
+        c = _cfg(max_agents="nope")
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["max-agents"]
+        self.assertEqual(s.state, "invalid")
+        self.assertIn("nope", s.error)
+
+    def test_genuinely_absent_key_still_reports_unset_not_invalid(self):
+        c = _cfg()
+        c.ensure_config()
+        text = Path(c.config_path()).read_text()
+        text = "\n".join(
+            line for line in text.splitlines() if not line.startswith("max-agents:")
+        ) + "\n"
+        Path(c.config_path()).write_text(text)
+        settings = {s.key: s for s in c.resolved_settings()}
+        s = settings["max-agents"]
+        self.assertEqual(s.state, "unset")
 
 
 _ALL_PRICE_KEYS = dict(

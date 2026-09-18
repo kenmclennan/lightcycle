@@ -105,13 +105,19 @@ class DoctorUseCase:
 
     def _config_problems(self):
         missing = self._config.missing_config_keys()
+        settings = self._config.resolved_settings()
         problems = [
             Problem("config", "required config key %r is not set" % k) for k in missing
         ]
         problems += [
             Problem("config", "required config key %r is set but blank" % s.key)
-            for s in self._config.resolved_settings()
+            for s in settings
             if s.state == "unset" and s.key not in missing
+        ]
+        problems += [
+            Problem("config", "required config key %r is set but rejected: %s" % (s.key, s.error))
+            for s in settings
+            if s.state == "invalid"
         ]
         problems += [
             Problem("config", "config key %r is set but not read by this version" % k)
