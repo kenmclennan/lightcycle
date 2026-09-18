@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.domain.pool import (
-    admission_cap, combined_pressure, worker_to_resume, worker_to_suspend,
+    admission_cap, admission_veto, combined_pressure, worker_to_resume, worker_to_suspend,
 )
 
 
@@ -32,6 +32,9 @@ class MemoryGateUseCase:
         peak_worker_share = headroom.peak_worker_share if headroom else None
         cap = admission_cap(headroom, len(alive), self._config.memory_reserve_fraction())
         suspend_signal = combined_pressure(pool_share, system_pressure)
+        veto = admission_veto(suspend_signal, self._config.suspend_pressure(), len(alive))
+        vetoed_caps = [c for c in (cap, veto) if c is not None]
+        vetoed_cap = min(vetoed_caps) if vetoed_caps else None
 
         suspended = None
         target = worker_to_suspend(alive, suspend_signal, self._config.suspend_pressure())
@@ -53,6 +56,6 @@ class MemoryGateUseCase:
              "peak_worker_share": peak_worker_share}
         )
         return MemoryGateResponse(
-            cap=cap, pool_share=pool_share, system_pressure=system_pressure,
+            cap=vetoed_cap, pool_share=pool_share, system_pressure=system_pressure,
             peak_worker_share=peak_worker_share, suspended=suspended, resumed=resumed,
         )
