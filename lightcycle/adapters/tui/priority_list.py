@@ -140,6 +140,10 @@ def _row_for(store, row_builder, selected):
 
 def build_priority_rows(store, lanes, flow_service, suspended_steps=frozenset()):
     selection = select_priority_rows(store, lanes, flow_service)
+    return build_priority_rows_from_selection(store, selection, suspended_steps)
+
+
+def build_priority_rows_from_selection(store, selection, suspended_steps=frozenset()):
     return (
         [_row_for(store, _attention_row, s) for s in selection.attention],
         [
