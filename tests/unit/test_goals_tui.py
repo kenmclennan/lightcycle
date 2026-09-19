@@ -3,15 +3,14 @@ import unittest
 from lightcycle.adapters.tui.app import GoalsTable, GoalsView, TabStrip
 from lightcycle.adapters.tui.goal_hub import (
     GOAL_ITEMS_EMPTY_MESSAGE,
-    GOAL_PROGRESS_NOT_BUILT_MESSAGE,
-    GOAL_QUESTIONS_EMPTY_MESSAGE,
+    GOAL_DESCRIPTION_EMPTY_MESSAGE,
     GOAL_TAB_ORDER,
     GoalHubScreen,
 )
 from lightcycle.adapters.tui.hub import HUB_TAB_STRIP_CSS, HubTabStrip, NodeHubScreen
 from tests.support.fake_store import FakeStore
 from tests.support.screen_render import (
-    GOAL_OUTCOME,
+    GOAL_DESCRIPTION,
     SCREENS,
     _goals_store,
     _launch,
@@ -24,6 +23,12 @@ def _frame(session):
 
     strips = session.run(lambda: session.app.screen._compositor.render_strips())
     return "\n".join(_plain_row(strip) for strip in strips)
+
+
+def _header(session):
+    return next(
+        line for line in _frame(session).splitlines() if "Ship the goals record" in line
+    )
 
 
 class TestGoalsTab(unittest.TestCase):
@@ -66,7 +71,9 @@ class TestGoalsTab(unittest.TestCase):
 
         self.assertIsInstance(session.app.screen, GoalHubScreen)
         self.assertNotIsInstance(session.app.screen, NodeHubScreen)
-        self.assertIn("%s  Ship the goals record" % gid, _frame(session))
+        frame = _frame(session)
+        self.assertIn("Ship the goals record", frame)
+        self.assertNotIn(gid, frame)
 
     def test_empty_goals_tab_says_so(self):
         session = self._launch(FakeStore())
@@ -92,18 +99,18 @@ class TestGoalHub(unittest.TestCase):
         session.press("enter")
         return session, store, gid
 
-    def test_tabs_are_overview_log_questions_items_and_wrap_both_ways(self):
+    def test_tabs_are_overview_log_items_and_wrap_both_ways(self):
         session, _, _ = self._open()
         strip = session.app.screen.query_one(HubTabStrip)
         labels = [str(child.content) for child in strip.children]
-        self.assertEqual(labels, ["Overview", "Log", "Open questions", "Items"])
-        self.assertEqual(GOAL_TAB_ORDER, ("overview", "log", "questions", "items"))
+        self.assertEqual(labels, ["Overview", "Log", "Items"])
+        self.assertEqual(GOAL_TAB_ORDER, ("overview", "log", "items"))
 
         seen = []
-        for _ in range(4):
+        for _ in range(3):
             session.press("]")
             seen.append(session.app.screen._active_tab)
-        self.assertEqual(seen, ["log", "questions", "items", "overview"])
+        self.assertEqual(seen, ["log", "items", "overview"])
 
         session.press("[")
         self.assertEqual(session.app.screen._active_tab, "items")
@@ -114,20 +121,57 @@ class TestGoalHub(unittest.TestCase):
             session.press(key)
             self.assertNotIsInstance(session.app.screen, GoalHubScreen)
 
-    def test_overview_wraps_long_prose_and_says_progress_is_not_built(self):
+    def test_header_carries_title_status_and_project_but_no_id_or_status_label(self):
+        session, _, gid = self._open()
+        header = _header(session)
+        self.assertIn("Ship the goals record", header)
+        self.assertIn("not started", header)
+        self.assertIn("lightcycle", header)
+        self.assertNotIn(gid, _frame(session))
+        self.assertNotIn("status", _frame(session))
+
+    def test_overview_is_one_continuous_document_with_no_labels_or_progress_line(self):
         session, _, _ = self._open()
         frame = _frame(session)
-        first_line = GOAL_OUTCOME[:40]
-        self.assertIn(first_line, frame)
-        self.assertNotIn(GOAL_OUTCOME, frame)
-        self.assertIn(GOAL_PROGRESS_NOT_BUILT_MESSAGE, frame)
-        self.assertIn("not started", frame)
+        self.assertIn(GOAL_DESCRIPTION[:40], frame)
+        self.assertNotIn(GOAL_DESCRIPTION, frame)
+        for text in ("## Outcome", "## Constraints", "## Open questions"):
+            self.assertIn(text, frame)
+        self.assertNotIn("OUTCOME", frame)
+        self.assertNotIn("SCOPE", frame)
+        self.assertNotIn("Progress statement", frame)
 
-    def test_overview_of_a_bare_goal_shows_empty_states_not_blank_panes(self):
+    def test_a_description_taller_than_the_screen_scrolls(self):
+        store, gid = _goals_store()
+        store.update_goal(gid, description="\n".join("line %d" % n for n in range(80)))
+        session = _launch(store, size=(80, 24))
+        self.addCleanup(session.close)
+        session.press("[")
+        session.press("enter")
+        before = _frame(session)
+        self.assertIn("line 0", before)
+        self.assertNotIn("line 79", before)
+        for _ in range(3):
+            session.press("pagedown")
+        after = _frame(session)
+        self.assertNotIn("line 0\n", after)
+        self.assertNotEqual(before, after)
+
+    def test_overview_of_a_bare_goal_shows_the_empty_state_not_a_blank_pane(self):
         session, _, _ = self._open(populated=False)
-        frame = _frame(session)
-        self.assertIn("No outcome written yet.", frame)
-        self.assertIn("No scope written yet.", frame)
+        self.assertIn(GOAL_DESCRIPTION_EMPTY_MESSAGE, _frame(session))
+
+    def test_a_goal_without_a_project_shows_nothing_in_that_position(self):
+        store, gid = _goals_store()
+        store.update_goal(gid, project="")
+        session = _launch(store)
+        self.addCleanup(session.close)
+        session.press("[")
+        session.press("enter")
+        self.assertEqual(
+            _header(session).strip("│ ").split(),
+            ["Ship", "the", "goals", "record", "not", "started"],
+        )
 
     def test_log_is_newest_first(self):
         session, _, _ = self._open()
@@ -138,26 +182,9 @@ class TestGoalHub(unittest.TestCase):
             frame.index("Goals are not nodes"),
         )
 
-    def test_questions_lists_only_open_ones_newest_first(self):
-        session, store, gid = self._open()
-        store.resolve_goal_question(2, "the driver")
-        session.press("]")
-        session.press("]")
-        session.run(session.app.screen.poll_refresh)
-        session.pause()
-        frame = _frame(session)
-        self.assertIn("Should a goal ever close itself", frame)
-        self.assertNotIn("Who owns the progress statement", frame)
-
-    def test_questions_empty_state(self):
-        session, _, _ = self._open(populated=False)
-        session.press("]")
-        session.press("]")
-        self.assertIn(GOAL_QUESTIONS_EMPTY_MESSAGE, _frame(session))
-
     def test_items_show_ids_and_titles_and_no_state(self):
         session, _, _ = self._open()
-        for _ in range(3):
+        for _ in range(2):
             session.press("]")
         frame = _frame(session)
         self.assertIn("LC-858", frame)
@@ -167,7 +194,7 @@ class TestGoalHub(unittest.TestCase):
 
     def test_items_empty_state(self):
         session, _, _ = self._open(populated=False)
-        for _ in range(3):
+        for _ in range(2):
             session.press("]")
         self.assertIn(GOAL_ITEMS_EMPTY_MESSAGE, _frame(session))
 
@@ -186,10 +213,11 @@ class TestGoalHub(unittest.TestCase):
     def test_goal_hub_states_are_registered(self):
         for state in (
             "goals#normal", "goals#empty", "goal-hub#overview", "goal-hub#log",
-            "goal-hub#questions", "goal-hub#questions-empty", "goal-hub#items",
-            "goal-hub#items-empty",
+            "goal-hub#overview-empty", "goal-hub#items", "goal-hub#items-empty",
         ):
             self.assertIn(state, SCREENS)
+        for state in ("goal-hub#questions", "goal-hub#questions-empty"):
+            self.assertNotIn(state, SCREENS)
 
     def test_goal_hub_fits_a_narrow_terminal(self):
         frame = render("goal-hub#overview", size=(44, 30))

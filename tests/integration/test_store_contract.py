@@ -1219,3 +1219,119 @@ class TestSqliteStoreAtomicity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSqliteStoreGoalsMigration(unittest.TestCase):
+    G1_OUTCOME = "Problem: agents starve.\n\nOutcome: fewer stalls.\n\n- Constraint one"
+    G1_QUESTION = "Is max-agents: 5 on 16 GB itself the miscalibration?"
+
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def _plant(self, root, goals, questions=()):
+        config = self._config(root)
+        SqliteStore(config)._conn.close()
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.executescript(
+            "DROP TABLE goals;"
+            "CREATE TABLE goals (id TEXT PRIMARY KEY, title TEXT NOT NULL, "
+            "outcome TEXT NOT NULL DEFAULT '', scope TEXT NOT NULL DEFAULT '', "
+            "status TEXT NOT NULL DEFAULT 'not started', created_at TEXT, updated_at TEXT);"
+            "CREATE TABLE goal_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "goal_id TEXT NOT NULL, body TEXT NOT NULL, raised_at TEXT, resolved_at TEXT, "
+            "resolution TEXT);"
+            "CREATE INDEX idx_goal_questions_goal_id ON goal_questions(goal_id);"
+        )
+        for gid, title, outcome, scope in goals:
+            conn.execute(
+                "INSERT INTO goals (id, title, outcome, scope, status) VALUES (?, ?, ?, ?, 'in progress')",
+                (gid, title, outcome, scope),
+            )
+        for gid, body, resolved in questions:
+            conn.execute(
+                "INSERT INTO goal_questions (goal_id, body, resolved_at, resolution) VALUES (?, ?, ?, ?)",
+                (gid, body, "2026-09-18" if resolved else None, "r" if resolved else None),
+            )
+        conn.execute("INSERT INTO goal_log (goal_id, body) VALUES ('G-1', 'kept log')")
+        conn.execute("INSERT INTO goal_items (goal_id, item_id) VALUES ('G-1', 'LC-1')")
+        conn.commit()
+        conn.close()
+        return config
+
+    def _tables(self, store):
+        return {
+            r[0] for r in store._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+
+    def test_g1_shape_keeps_outcome_verbatim_and_carries_only_the_open_question(self):
+        root = tempfile.mkdtemp()
+        config = self._plant(
+            root, [("G-1", "g", self.G1_OUTCOME, "")],
+            [("G-1", self.G1_QUESTION, False), ("G-1", "settled?", True)],
+        )
+
+        store = SqliteStore(config)
+
+        goal = store.get_goal("G-1")
+        self.assertEqual(
+            goal.description, "%s\n\n## Open questions\n\n- %s" % (self.G1_OUTCOME, self.G1_QUESTION)
+        )
+        self.assertNotIn("settled?", goal.description)
+        self.assertEqual((goal.project, goal.status), ("", "in progress"))
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(goals)").fetchall()}
+        self.assertEqual(
+            cols, {"id", "title", "description", "project", "status", "created_at", "updated_at"}
+        )
+        self.assertNotIn("goal_questions", self._tables(store))
+        self.assertEqual([e.body for e in store.goal_log("G-1")], ["kept log"])
+        self.assertEqual(store.goal_items("G-1"), ["LC-1"])
+
+    def test_non_blank_scope_is_carried_over_under_its_own_heading(self):
+        root = tempfile.mkdtemp()
+        config = self._plant(root, [("G-1", "g", "out", "In: x")])
+
+        self.assertEqual(
+            SqliteStore(config).get_goal("G-1").description,
+            "out\n\n## Scope (carried over)\n\nIn: x",
+        )
+
+    def test_empty_outcome_starts_at_the_first_appended_heading(self):
+        root = tempfile.mkdtemp()
+        config = self._plant(root, [("G-1", "g", "", "")], [("G-1", "q?", False)])
+
+        self.assertEqual(
+            SqliteStore(config).get_goal("G-1").description, "## Open questions\n\n- q?"
+        )
+
+    def test_each_goal_gets_its_own_result(self):
+        root = tempfile.mkdtemp()
+        config = self._plant(
+            root, [("G-1", "a", "one", ""), ("G-2", "b", "two", "")], [("G-1", "q?", False)]
+        )
+
+        store = SqliteStore(config)
+
+        self.assertEqual(store.get_goal("G-1").description, "one\n\n## Open questions\n\n- q?")
+        self.assertEqual(store.get_goal("G-2").description, "two")
+
+    def test_migration_is_idempotent(self):
+        root = tempfile.mkdtemp()
+        config = self._plant(root, [("G-1", "g", "out", "In: x")], [("G-1", "q?", False)])
+        first = SqliteStore(config).get_goal("G-1")
+        SqliteStore(config)._conn.close()
+
+        self.assertEqual(SqliteStore(config).get_goal("G-1"), first)
+
+    def test_fresh_store_has_the_new_shape_and_no_question_table(self):
+        store = SqliteStore(self._config(tempfile.mkdtemp()))
+
+        self.assertNotIn("goal_questions", self._tables(store))
+        gid = store.create_goal("g", "d", "p")
+        self.assertEqual(
+            (store.get_goal(gid).description, store.get_goal(gid).project), ("d", "p")
+        )

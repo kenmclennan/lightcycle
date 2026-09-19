@@ -6,8 +6,8 @@ from lightcycle.application.goals._common import require_text
 @dataclass(frozen=True)
 class CreateGoalInput:
     title: str
-    outcome: str = ""
-    scope: str = ""
+    description: str = ""
+    project: str = ""
 
 
 class CreateGoalUseCase:
@@ -16,4 +16,5 @@ class CreateGoalUseCase:
 
     def execute(self, inp):
         title = require_text(inp.title, "title")
-        return self._store.create_goal(title, inp.outcome or "", inp.scope or "")
+        project = require_text(inp.project, "project")
+        return self._store.create_goal(title, inp.description or "", project)

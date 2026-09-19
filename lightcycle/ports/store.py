@@ -412,7 +412,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_goal(self, title, outcome="", scope=""):
+    def create_goal(self, title, description="", project=""):
         pass
 
     @abstractmethod
@@ -424,7 +424,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def update_goal(self, goal_id, *, title=None, outcome=None, scope=None, status=None):
+    def update_goal(self, goal_id, *, title=None, description=None, project=None, status=None):
         pass
 
     @abstractmethod
@@ -433,22 +433,6 @@ class StorePort(ABC):
 
     @abstractmethod
     def goal_log(self, goal_id):
-        pass
-
-    @abstractmethod
-    def add_goal_question(self, goal_id, body):
-        pass
-
-    @abstractmethod
-    def get_goal_question(self, question_id):
-        pass
-
-    @abstractmethod
-    def goal_questions(self, goal_id):
-        pass
-
-    @abstractmethod
-    def resolve_goal_question(self, question_id, resolution):
         pass
 
     @abstractmethod

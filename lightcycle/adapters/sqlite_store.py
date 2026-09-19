@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import asdict
 
 from lightcycle.adapters.fsio import DB_FILENAME
-from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry, GoalQuestion
+from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage, UsageResume
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
@@ -211,8 +211,8 @@ CREATE TABLE IF NOT EXISTS daily_summaries (
 CREATE TABLE IF NOT EXISTS goals (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
-    outcome TEXT NOT NULL DEFAULT '',
-    scope TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    project TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'not started',
     created_at TEXT,
     updated_at TEXT
@@ -225,16 +225,6 @@ CREATE TABLE IF NOT EXISTS goal_log (
     created_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_goal_log_goal_id ON goal_log(goal_id);
-
-CREATE TABLE IF NOT EXISTS goal_questions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    goal_id TEXT NOT NULL,
-    body TEXT NOT NULL,
-    raised_at TEXT,
-    resolved_at TEXT,
-    resolution TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_goal_questions_goal_id ON goal_questions(goal_id);
 
 CREATE TABLE IF NOT EXISTS goal_items (
     goal_id TEXT NOT NULL,
@@ -333,6 +323,7 @@ class SqliteStore(StorePort):
         self._migrate_drop_step_reflection_column()
         self._migrate_drop_step_title_column()
         self._migrate_abandoned_disposition_value()
+        self._migrate_goals_description_and_project()
         self._commit()
 
     def _commit(self):
@@ -509,6 +500,46 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "UPDATE items SET disposition = 'abandoned' WHERE disposition = 'aborted'"
         )
+
+    def _migrate_goals_description_and_project(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(goals)").fetchall()}
+        if "outcome" in cols:
+            for name in ("description", "project"):
+                if name not in cols:
+                    self._conn.execute(
+                        "ALTER TABLE goals ADD COLUMN %s TEXT NOT NULL DEFAULT ''" % name
+                    )
+            has_scope = "scope" in cols
+            rows = self._conn.execute(
+                "SELECT id, outcome, %s FROM goals" % ("scope" if has_scope else "''")
+            ).fetchall()
+            for goal_id, outcome, scope in rows:
+                questions = []
+                if self._has_table("goal_questions"):
+                    questions = [
+                        r[0]
+                        for r in self._conn.execute(
+                            "SELECT body FROM goal_questions "
+                            "WHERE goal_id = ? AND resolved_at IS NULL ORDER BY id",
+                            (goal_id,),
+                        ).fetchall()
+                    ]
+                parts = [outcome or ""]
+                if (scope or "").strip():
+                    parts.append("## Scope (carried over)\n\n%s" % scope)
+                if questions:
+                    parts.append(
+                        "## Open questions\n\n%s" % "\n".join("- %s" % q for q in questions)
+                    )
+                merged = "\n\n".join(p for i, p in enumerate(parts) if i or p)
+                self._conn.execute(
+                    "UPDATE goals SET description = ? WHERE id = ?", (merged, goal_id)
+                )
+            self._conn.execute("ALTER TABLE goals DROP COLUMN outcome")
+            if has_scope:
+                self._conn.execute("ALTER TABLE goals DROP COLUMN scope")
+        if self._has_table("goal_questions"):
+            self._conn.execute("DROP TABLE goal_questions")
 
     def _has_table(self, name):
         return self._conn.execute(
@@ -1737,7 +1768,7 @@ class SqliteStore(StorePort):
         self._conn.execute("DELETE FROM goal_items WHERE item_id = ?", (tid,))
         self._commit()
 
-    def create_goal(self, title, outcome="", scope=""):
+    def create_goal(self, title, description="", project=""):
         row = self._conn.execute(
             "INSERT INTO counters (namespace, next) VALUES ('goal', 2) "
             "ON CONFLICT(namespace) DO UPDATE SET next = next + 1 "
@@ -1746,16 +1777,16 @@ class SqliteStore(StorePort):
         gid = "G-%d" % row[0]
         now = self._now()
         self._conn.execute(
-            "INSERT INTO goals (id, title, outcome, scope, status, created_at, updated_at) "
+            "INSERT INTO goals (id, title, description, project, status, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (gid, title, outcome, scope, GOAL_DEFAULT_STATUS, now, now),
+            (gid, title, description, project, GOAL_DEFAULT_STATUS, now, now),
         )
         self._commit()
         return gid
 
     def get_goal(self, goal_id):
         row = self._conn.execute(
-            "SELECT id, title, outcome, scope, status, created_at, updated_at "
+            "SELECT id, title, description, project, status, created_at, updated_at "
             "FROM goals WHERE id = ?",
             (goal_id,),
         ).fetchone()
@@ -1763,14 +1794,16 @@ class SqliteStore(StorePort):
 
     def list_goals(self):
         rows = self._conn.execute(
-            "SELECT id, title, outcome, scope, status, created_at, updated_at FROM goals"
+            "SELECT id, title, description, project, status, created_at, updated_at FROM goals"
         ).fetchall()
         goals = [Goal(*r) for r in rows]
         goals.sort(key=lambda g: int(g.id.split("-", 1)[1]))
         return goals
 
-    def update_goal(self, goal_id, *, title=None, outcome=None, scope=None, status=None):
-        fields = {"title": title, "outcome": outcome, "scope": scope, "status": status}
+    def update_goal(self, goal_id, *, title=None, description=None, project=None, status=None):
+        fields = {
+            "title": title, "description": description, "project": project, "status": status,
+        }
         sets = [(k, v) for k, v in fields.items() if v is not None]
         if not sets:
             return
@@ -1795,37 +1828,6 @@ class SqliteStore(StorePort):
             (goal_id,),
         ).fetchall()
         return [GoalLogEntry(*r) for r in rows]
-
-    def add_goal_question(self, goal_id, body):
-        cur = self._conn.execute(
-            "INSERT INTO goal_questions (goal_id, body, raised_at) VALUES (?, ?, ?)",
-            (goal_id, body, self._now()),
-        )
-        self._commit()
-        return cur.lastrowid
-
-    def get_goal_question(self, question_id):
-        row = self._conn.execute(
-            "SELECT id, goal_id, body, raised_at, resolved_at, resolution "
-            "FROM goal_questions WHERE id = ?",
-            (question_id,),
-        ).fetchone()
-        return GoalQuestion(*row) if row else None
-
-    def goal_questions(self, goal_id):
-        rows = self._conn.execute(
-            "SELECT id, goal_id, body, raised_at, resolved_at, resolution "
-            "FROM goal_questions WHERE goal_id = ? ORDER BY id DESC",
-            (goal_id,),
-        ).fetchall()
-        return [GoalQuestion(*r) for r in rows]
-
-    def resolve_goal_question(self, question_id, resolution):
-        self._conn.execute(
-            "UPDATE goal_questions SET resolved_at = ?, resolution = ? WHERE id = ?",
-            (self._now(), resolution, question_id),
-        )
-        self._commit()
 
     def link_goal_item(self, goal_id, item_id):
         self._conn.execute(

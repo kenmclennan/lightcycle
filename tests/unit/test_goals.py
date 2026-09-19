@@ -7,14 +7,12 @@ from lightcycle import cli
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.goals import (
     AppendGoalLogUseCase,
-    AskGoalQuestionUseCase,
     CreateGoalInput,
     CreateGoalUseCase,
     EditGoalInput,
     EditGoalUseCase,
     LinkGoalItemUseCase,
     ListGoalsUseCase,
-    ResolveGoalQuestionUseCase,
     ShowGoalUseCase,
     UnlinkGoalItemUseCase,
 )
@@ -26,13 +24,12 @@ class TestGoalUseCases(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self.item = self.store.create_item("an item", "d")
-        self.goal = CreateGoalUseCase(self.store).execute(CreateGoalInput(title="g"))
+        self.goal = CreateGoalUseCase(self.store).execute(CreateGoalInput(title="g", project="acme"))
 
     def _snapshot(self):
         s = self.store
         return (
-            s.list_goals(), s.goal_log(self.goal), s.goal_questions(self.goal),
-            s.goal_items(self.goal),
+            s.list_goals(), s.goal_log(self.goal), s.goal_items(self.goal),
         )
 
     def _refuses(self, fn, *args):
@@ -45,26 +42,20 @@ class TestGoalUseCases(unittest.TestCase):
         s = self.store
         second = s.create_item("second item", "d")
         EditGoalUseCase(s).execute(EditGoalInput(
-            id=self.goal, title="new title", outcome="the outcome", scope="the scope",
-            status="in progress",
+            id=self.goal, title="new title", description="the description",
+            project="other", status="in progress",
         ))
         AppendGoalLogUseCase(s).execute(self.goal, "decided x")
-        q1 = AskGoalQuestionUseCase(s).execute(self.goal, "why?")
-        AskGoalQuestionUseCase(s).execute(self.goal, "when?")
-        ResolveGoalQuestionUseCase(s).execute(q1, "because")
         LinkGoalItemUseCase(s).execute(self.goal, self.item)
         LinkGoalItemUseCase(s).execute(self.goal, second)
 
         view = ShowGoalUseCase(s).execute(self.goal)
 
         self.assertEqual(
-            (view.goal.title, view.goal.outcome, view.goal.scope, view.goal.status),
-            ("new title", "the outcome", "the scope", "in progress"),
+            (view.goal.title, view.goal.description, view.goal.project, view.goal.status),
+            ("new title", "the description", "other", "in progress"),
         )
-        self.assertEqual(
-            [e.body for e in view.log], ["Resolved: why? - because", "decided x"]
-        )
-        self.assertEqual([q.body for q in view.questions if q.resolved_at is None], ["when?"])
+        self.assertEqual([e.body for e in view.log], ["decided x"])
         self.assertEqual(
             [(r.id, r.title) for r in view.items],
             [(self.item, "an item"), (second, "second item")],
@@ -89,15 +80,11 @@ class TestGoalUseCases(unittest.TestCase):
             (ShowGoalUseCase(s).execute, ("G-9",)),
             (EditGoalUseCase(s).execute, (EditGoalInput(id="G-9", title="x"),)),
             (AppendGoalLogUseCase(s).execute, ("G-9", "x")),
-            (AskGoalQuestionUseCase(s).execute, ("G-9", "x")),
             (LinkGoalItemUseCase(s).execute, ("G-9", self.item)),
             (UnlinkGoalItemUseCase(s).execute, ("G-9", self.item)),
         ):
             with self.assertRaises(UseCaseError):
                 fn(*args)
-
-    def test_refuses_unknown_question(self):
-        self._refuses(ResolveGoalQuestionUseCase(self.store).execute, 42, "r")
 
     def test_refuses_invalid_status(self):
         self._refuses(
@@ -106,19 +93,21 @@ class TestGoalUseCases(unittest.TestCase):
 
     def test_refuses_empty_text(self):
         s = self.store
-        self._refuses(CreateGoalUseCase(s).execute, CreateGoalInput(title="  "))
+        self._refuses(CreateGoalUseCase(s).execute, CreateGoalInput(title="  ", project="acme"))
         self._refuses(AppendGoalLogUseCase(s).execute, self.goal, " ")
-        self._refuses(AskGoalQuestionUseCase(s).execute, self.goal, "")
-        q = AskGoalQuestionUseCase(s).execute(self.goal, "q?")
-        self._refuses(ResolveGoalQuestionUseCase(s).execute, q, " ")
+        self._refuses(CreateGoalUseCase(s).execute, CreateGoalInput(title="t", project=" "))
+        self._refuses(CreateGoalUseCase(s).execute, CreateGoalInput(title="t"))
+        self._refuses(
+            EditGoalUseCase(s).execute, EditGoalInput(id=self.goal, project=" ")
+        )
+
+    def test_set_accepts_an_empty_description(self):
+        EditGoalUseCase(self.store).execute(EditGoalInput(id=self.goal, description="x"))
+        EditGoalUseCase(self.store).execute(EditGoalInput(id=self.goal, description=""))
+        self.assertEqual(self.store.get_goal(self.goal).description, "")
 
     def test_refuses_set_with_no_fields(self):
         self._refuses(EditGoalUseCase(self.store).execute, EditGoalInput(id=self.goal))
-
-    def test_refuses_resolving_a_resolved_question(self):
-        q = AskGoalQuestionUseCase(self.store).execute(self.goal, "q?")
-        ResolveGoalQuestionUseCase(self.store).execute(q, "r")
-        self._refuses(ResolveGoalQuestionUseCase(self.store).execute, q, "again")
 
     def test_refuses_linking_a_step_an_unknown_id_and_a_linked_pair(self):
         step = self.store.create_step(step="s", role="agent", parent=self.item)
@@ -130,17 +119,6 @@ class TestGoalUseCases(unittest.TestCase):
     def test_refuses_unlinking_an_unlinked_pair(self):
         self._refuses(UnlinkGoalItemUseCase(self.store).execute, self.goal, self.item)
 
-    def test_resolve_leaves_question_unresolved_when_the_log_write_fails(self):
-        q = AskGoalQuestionUseCase(self.store).execute(self.goal, "q?")
-
-        def boom(*a, **k):
-            raise RuntimeError("log failed")
-
-        self.store.add_goal_log = boom
-        with self.assertRaises(RuntimeError):
-            ResolveGoalQuestionUseCase(self.store).execute(q, "r")
-        self.assertIsNone(self.store.get_goal_question(q).resolved_at)
-
     def test_goal_is_not_a_worker_verb(self):
         self.assertFalse(worker_permitted("goal", {}))
 
@@ -150,6 +128,8 @@ class TestGoalCli(unittest.TestCase):
         self._orig = cli._container
         self.addCleanup(lambda: cli.set_container(self._orig))
         self.store = FakeStore()
+        self.store.add_project("acme/lightcycle")
+        self.store.add_project("acme/saga")
         self.item = self.store.create_item("an item", "d")
         cli.set_container(SimpleNamespace(store=self.store))
 
@@ -160,30 +140,61 @@ class TestGoalCli(unittest.TestCase):
         return rc, out.getvalue(), err.getvalue()
 
     def test_every_subcommand_happy_path(self):
-        rc, out, _ = self._run("new", "Ship it", "--outcome", "o", "--scope", "s")
+        rc, out, _ = self._run(
+            "new", "Ship it", "--project", "lightcycle", "--description", "the description"
+        )
         self.assertEqual((rc, out.strip()), (0, "G-1"))
+        self.assertEqual(self.store.get_goal("G-1").project, "lightcycle")
         self.assertEqual(self._run("set", "G-1", "--status", "in progress")[0], 0)
+        self.assertEqual(self._run("set", "G-1", "--project", "saga")[0], 0)
+        self.assertEqual(self.store.get_goal("G-1").project, "saga")
         self.assertEqual(self._run("log", "G-1", "decided")[0], 0)
-        rc, out, _ = self._run("ask", "G-1", "why?")
-        self.assertEqual((rc, out.strip()), (0, "#1"))
         self.assertEqual(self._run("link", "G-1", self.item)[0], 0)
         rc, out, _ = self._run("list")
         self.assertEqual(out.strip(), "G-1\tin progress\tShip it")
         _, out, _ = self._run("show", "G-1")
-        for text in ("Ship it", "in progress", "o", "s", self.item, "an item", "#1", "decided"):
+        for text in (
+            "Ship it", "saga", "in progress", "the description", self.item, "an item", "decided",
+        ):
             self.assertIn(text, out)
-        self.assertEqual(self._run("resolve", "1", "because")[0], 0)
-        _, out, _ = self._run("show", "G-1")
-        self.assertIn("Resolved: why? - because", out)
+        self.assertNotIn("open questions", out)
         self.assertEqual(self._run("unlink", "G-1", self.item)[0], 0)
 
+    def test_set_accepts_an_empty_description(self):
+        self._run("new", "g", "--project", "lightcycle", "--description", "x")
+        self.assertEqual(self._run("set", "G-1", "--description", "")[0], 0)
+        self.assertEqual(self.store.get_goal("G-1").description, "")
+
+    def test_new_refuses_a_missing_or_unresolvable_project_leaving_the_store_untouched(self):
+        for argv in (("new", "g"), ("new", "g", "--project", "nonesuch")):
+            rc, _, err = self._run(*argv)
+            self.assertEqual(rc, 1, argv)
+            self.assertTrue(err.strip(), argv)
+        self.assertEqual(self.store.list_goals(), [])
+
+    def test_set_refuses_an_unresolvable_project(self):
+        self._run("new", "g", "--project", "lightcycle")
+        rc, _, err = self._run("set", "G-1", "--project", "nonesuch")
+        self.assertEqual(rc, 1)
+        self.assertTrue(err.strip())
+        self.assertEqual(self.store.get_goal("G-1").project, "lightcycle")
+
     def test_refusals_exit_nonzero_with_a_message(self):
-        self._run("new", "g")
+        self._run("new", "g", "--project", "lightcycle")
         for argv in (
             ("show", "G-9"), ("set", "G-1"), ("set", "G-1", "--status", "x"),
-            ("log", "G-1", ""), ("resolve", "7", "r"), ("link", "G-1", "LC-999"),
-            ("unlink", "G-1", self.item),
+            ("log", "G-1", ""), ("link", "G-1", "LC-999"), ("unlink", "G-1", self.item),
         ):
             rc, _, err = self._run(*argv)
             self.assertEqual(rc, 1, argv)
             self.assertTrue(err.strip(), argv)
+
+    def test_removed_verbs_and_flags_are_rejected_by_the_parser(self):
+        for argv in (
+            ("ask", "G-1", "q"), ("resolve", "1", "r"),
+            ("new", "g", "--project", "lightcycle", "--outcome", "o"),
+            ("new", "g", "--project", "lightcycle", "--scope", "s"),
+            ("set", "G-1", "--outcome", "o"), ("set", "G-1", "--scope", "s"),
+        ):
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                cli.cmd_goal(list(argv))

@@ -101,7 +101,7 @@ _STEP_TAB_ORDER = ("detail", "workflow", "log", "cost")
 _TAB_LABELS = {
     "description": "Description", "workflow": "Workflow", "artifacts": "Artifacts",
     "detail": "Detail", "log": "Log", "cost": "Cost",
-    "overview": "Overview", "questions": "Open questions", "items": "Items",
+    "overview": "Overview", "items": "Items",
 }
 
 

@@ -285,6 +285,7 @@ def _open_hub(session, node_id, tab=None):
         session.run(lambda: screen.query_one(HubTabStrip).set_active(tab))
         session.run(screen._apply_tab_visibility)
         session.pause()
+        session.pause()
     return session
 
 
@@ -1195,20 +1196,26 @@ def _hub_cost_item(size):
 
 
 
-GOAL_OUTCOME = (
+GOAL_DESCRIPTION = (
     "Every project the driver touches has a goal record that states, in plain prose, what done "
     "looks like for work that spans many items, so the driver can reorient without rereading "
-    "every item's history. The record is written by a person and maintained by hand."
-)
-GOAL_SCOPE = (
-    "In: the goal record, its decision log, its open questions and the item links. "
-    "Out: any generated progress statement and every figure derived from linked items."
+    "every item's history.\n\n"
+    "## Outcome\n\n"
+    "The record is written by a person and maintained by hand.\n\n"
+    "## Constraints\n\n"
+    "- Out: any generated progress statement and every figure derived from linked items.\n"
+    "- The flow engine never reads a goal.\n\n"
+    "## Open questions\n\n"
+    "- Should a goal ever close itself once its items are done?\n"
+    "- Who owns the progress statement's wording?"
 )
 
 
 def _goals_store(with_content=True):
     store = DemoStore(now=lambda: _at(30))
-    gid = store.create_goal("Ship the goals record", GOAL_OUTCOME if with_content else "", GOAL_SCOPE if with_content else "")
+    gid = store.create_goal(
+        "Ship the goals record", GOAL_DESCRIPTION if with_content else "", "lightcycle"
+    )
     store.create_goal("Make the driver loop reorient itself")
     store.create_goal("Retire the legacy report screen")
     if with_content:
@@ -1218,8 +1225,6 @@ def _goals_store(with_content=True):
         store.link_goal_item(gid, "LC-859")
         store.add_goal_log(gid, "Goals are not nodes: the flow engine never reads them.")
         store.add_goal_log(gid, "Status is three hand-set values, deliberately not a state.")
-        store.add_goal_question(gid, "Should a goal ever close itself once its items are done?")
-        store.add_goal_question(gid, "Who owns the progress statement's wording?")
     return store, gid
 
 
@@ -1251,6 +1256,7 @@ def _open_goal_hub(size, tab, populated=True):
         session.run(lambda: screen.query_one(HubTabStrip).set_active(tab))
         session.run(screen._apply_tab_visibility)
         session.pause()
+        session.pause()
     return session
 
 
@@ -1264,14 +1270,6 @@ def _goal_hub_overview_empty(size):
 
 def _goal_hub_log(size):
     return _open_goal_hub(size, "log")
-
-
-def _goal_hub_questions(size):
-    return _open_goal_hub(size, "questions")
-
-
-def _goal_hub_questions_empty(size):
-    return _open_goal_hub(size, "questions", populated=False)
 
 
 def _goal_hub_items(size):
@@ -1297,8 +1295,6 @@ SCREENS = {
     "goal-hub#overview": _goal_hub_overview,
     "goal-hub#overview-empty": _goal_hub_overview_empty,
     "goal-hub#log": _goal_hub_log,
-    "goal-hub#questions": _goal_hub_questions,
-    "goal-hub#questions-empty": _goal_hub_questions_empty,
     "goal-hub#items": _goal_hub_items,
     "goal-hub#items-empty": _goal_hub_items_empty,
     "backlog#normal": _backlog_normal,
