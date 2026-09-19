@@ -39,7 +39,7 @@ Two things are kept **orthogonal** to the state (baking them in would multiply t
 
 ## Goals
 
-Four additive tables, none of them a node: `goals` (`id` as `G-<n>` minted from the `counters` table under the `goal` namespace, `title`, `outcome`, `scope`, `status` defaulting to `not started`, timestamps), `goal_log` (append-only, `goal_id`, `body`), `goal_questions` (append-only, `goal_id`, `body`, `raised_at`, and `resolved_at`/`resolution` once resolved) and `goal_items` (primary key `(goal_id, item_id)`, so no uniqueness on the item side and one item may serve several goals). No foreign keys are declared, as with every table; `delete` of an item removes its `goal_items` rows explicitly and leaves the goal, its log and its questions. Nothing in claim, lanes, `all_nodes()` or roll-up reads them.
+Three additive tables, none of them a node: `goals` (`id` as `G-<n>` minted from the `counters` table under the `goal` namespace, `title`, `description`, `project` (the registry short name, empty on a goal that predates it), `status` defaulting to `not started`, timestamps), `goal_log` (append-only, `goal_id`, `body`), `goal_items` (primary key `(goal_id, item_id)`, so no uniqueness on the item side and one item may serve several goals). No foreign keys are declared, as with every table; `delete` of an item removes its `goal_items` rows explicitly and leaves the goal and its log. Nothing in claim, lanes, `all_nodes()` or roll-up reads them.
 
 ## Attachments
 

@@ -11,7 +11,7 @@ from lightcycle.ports.store import (
     ProjectEntry,
     StorePort,
 )
-from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry, GoalQuestion
+from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
@@ -125,7 +125,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
 _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
-    "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_questions", "_goal_items",
+    "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_items",
 )
 
 
@@ -145,7 +145,6 @@ class FakeStore(StorePort):
         self._daily_summaries = {}
         self._goals = {}
         self._goal_log = []
-        self._goal_questions = []
         self._goal_items = []
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
@@ -932,12 +931,12 @@ class FakeStore(StorePort):
         self._history.pop(tid, None)
         self._goal_items = [(g, i) for g, i in self._goal_items if i != tid]
 
-    def create_goal(self, title, outcome="", scope=""):
+    def create_goal(self, title, description="", project=""):
         n = self._counters.get("goal", 0) + 1
         self._counters["goal"] = n
         gid = "G-%d" % n
         now = self._now()
-        self._goals[gid] = Goal(gid, title, outcome, scope, GOAL_DEFAULT_STATUS, now, now)
+        self._goals[gid] = Goal(gid, title, description, project, GOAL_DEFAULT_STATUS, now, now)
         return gid
 
     def get_goal(self, goal_id):
@@ -946,10 +945,11 @@ class FakeStore(StorePort):
     def list_goals(self):
         return sorted(self._goals.values(), key=lambda g: int(g.id.split("-", 1)[1]))
 
-    def update_goal(self, goal_id, *, title=None, outcome=None, scope=None, status=None):
+    def update_goal(self, goal_id, *, title=None, description=None, project=None, status=None):
         g = self._goals[goal_id]
         changes = {k: v for k, v in
-                   (("title", title), ("outcome", outcome), ("scope", scope), ("status", status))
+                   (("title", title), ("description", description), ("project", project),
+                    ("status", status))
                    if v is not None}
         if changes:
             self._goals[goal_id] = g._replace(updated_at=self._now(), **changes)
@@ -960,27 +960,6 @@ class FakeStore(StorePort):
 
     def goal_log(self, goal_id):
         return [e for e in reversed(self._goal_log) if e.goal_id == goal_id]
-
-    def add_goal_question(self, goal_id, body):
-        qid = len(self._goal_questions) + 1
-        self._goal_questions.append(GoalQuestion(qid, goal_id, body, self._now(), None, None))
-        return qid
-
-    def get_goal_question(self, question_id):
-        for q in self._goal_questions:
-            if q.id == question_id:
-                return q
-        return None
-
-    def goal_questions(self, goal_id):
-        return [q for q in reversed(self._goal_questions) if q.goal_id == goal_id]
-
-    def resolve_goal_question(self, question_id, resolution):
-        for idx, q in enumerate(self._goal_questions):
-            if q.id == question_id:
-                self._goal_questions[idx] = q._replace(
-                    resolved_at=self._now(), resolution=resolution
-                )
 
     def link_goal_item(self, goal_id, item_id):
         if (goal_id, item_id) not in self._goal_items:

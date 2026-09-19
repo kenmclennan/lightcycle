@@ -1331,21 +1331,20 @@ class StoreContractBase:
 
     def test_create_goal_mints_sequential_ids_and_defaults_status(self):
         s = self.make_store()
-        a = s.create_goal("first", "out", "scope")
+        a = s.create_goal("first", "desc", "lightcycle")
         b = s.create_goal("second")
         self.assertEqual((a, b), ("G-1", "G-2"))
         goal = s.get_goal(a)
         self.assertEqual(
-            (goal.title, goal.outcome, goal.scope, goal.status),
-            ("first", "out", "scope", "not started"),
+            (goal.title, goal.description, goal.project, goal.status),
+            ("first", "desc", "lightcycle", "not started"),
         )
-        self.assertEqual(s.get_goal(b).outcome, "")
+        self.assertEqual((s.get_goal(b).description, s.get_goal(b).project), ("", ""))
         self.assertEqual([g.id for g in s.list_goals()], ["G-1", "G-2"])
 
-    def test_get_goal_and_question_return_none_when_absent(self):
+    def test_get_goal_returns_none_when_absent(self):
         s = self.make_store()
         self.assertIsNone(s.get_goal("G-9"))
-        self.assertIsNone(s.get_goal_question(9))
 
     def test_goal_ids_do_not_disturb_node_ids(self):
         s = self.make_store()
@@ -1356,12 +1355,18 @@ class StoreContractBase:
 
     def test_update_goal_changes_only_given_fields(self):
         s = self.make_store()
-        gid = s.create_goal("t", "o", "sc")
+        gid = s.create_goal("t", "o", "p")
         s.update_goal(gid, status="in progress", title="t2")
         goal = s.get_goal(gid)
         self.assertEqual(
-            (goal.title, goal.outcome, goal.scope, goal.status),
-            ("t2", "o", "sc", "in progress"),
+            (goal.title, goal.description, goal.project, goal.status),
+            ("t2", "o", "p", "in progress"),
+        )
+        s.update_goal(gid, description="d2", project="q")
+        goal = s.get_goal(gid)
+        self.assertEqual(
+            (goal.title, goal.description, goal.project, goal.status),
+            ("t2", "d2", "q", "in progress"),
         )
 
     def test_goal_log_reads_newest_first_and_per_goal(self):
@@ -1372,20 +1377,6 @@ class StoreContractBase:
         s.add_goal_log(g1, "two")
         self.assertEqual([e.body for e in s.goal_log(g1)], ["two", "one"])
         self.assertEqual([e.body for e in s.goal_log(g2)], ["other"])
-
-    def test_goal_question_ask_read_resolve_newest_first(self):
-        s = self.make_store()
-        gid = s.create_goal("a")
-        q1 = s.add_goal_question(gid, "first?")
-        q2 = s.add_goal_question(gid, "second?")
-        self.assertNotEqual(q1, q2)
-        self.assertEqual([q.body for q in s.goal_questions(gid)], ["second?", "first?"])
-        s.resolve_goal_question(q1, "yes")
-        q = s.get_goal_question(q1)
-        self.assertEqual(q.resolution, "yes")
-        self.assertIsNotNone(q.resolved_at)
-        self.assertIsNone(s.get_goal_question(q2).resolved_at)
-        self.assertEqual(len(s.goal_questions(gid)), 2)
 
     def test_goal_item_links_keep_order_and_allow_one_item_in_many_goals(self):
         s = self.make_store()
@@ -1400,7 +1391,7 @@ class StoreContractBase:
         s.unlink_goal_item(g1, i2)
         self.assertEqual(s.goal_items(g1), [i1])
 
-    def test_delete_removes_goal_links_and_keeps_goal_log_and_questions(self):
+    def test_delete_removes_goal_links_and_keeps_goal_log(self):
         s = self.make_store()
         gid = s.create_goal("a")
         item = s.create_item("x", "d")
@@ -1408,23 +1399,20 @@ class StoreContractBase:
         s.link_goal_item(gid, item)
         s.link_goal_item(gid, other)
         s.add_goal_log(gid, "kept")
-        s.add_goal_question(gid, "kept?")
 
         s.delete(item)
 
         self.assertEqual(s.goal_items(gid), [other])
         self.assertIsNotNone(s.get_goal(gid))
         self.assertEqual(len(s.goal_log(gid)), 1)
-        self.assertEqual(len(s.goal_questions(gid)), 1)
 
     def test_goal_writes_roll_back_with_the_transaction(self):
         s = self.make_store()
         gid = s.create_goal("a")
-        qid = s.add_goal_question(gid, "q?")
         with self.assertRaises(RuntimeError):
             with s.transaction():
-                s.resolve_goal_question(qid, "r")
+                s.update_goal(gid, description="changed")
                 s.add_goal_log(gid, "log")
                 raise RuntimeError("boom")
-        self.assertIsNone(s.get_goal_question(qid).resolved_at)
+        self.assertEqual(s.get_goal(gid).description, "")
         self.assertEqual(s.goal_log(gid), [])
