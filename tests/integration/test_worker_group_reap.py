@@ -10,8 +10,15 @@ LEADER = "import subprocess,time;subprocess.Popen(['sleep','300']);time.sleep(0.
 
 
 def _in_group(pgid):
-    out = subprocess.run(["pgrep", "-g", str(pgid)], capture_output=True, text=True)
-    return out.stdout.split()
+    out = subprocess.run(
+        ["ps", "-A", "-o", "pid=,pgid=,stat="], capture_output=True, text=True
+    )
+    live = []
+    for line in out.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and fields[1] == str(pgid) and not fields[2].startswith("Z"):
+            live.append(fields[0])
+    return live
 
 
 def _wait_until_group_empty(pgid, timeout=5.0, interval=0.1):

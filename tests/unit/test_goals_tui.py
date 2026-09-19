@@ -339,6 +339,14 @@ class TestGoalItemsTab(unittest.TestCase):
         session.press("enter")
         self.assertEqual(session.app.screen._node_id, "LC-858")
 
+    def test_right_opens_the_item_hub_like_enter(self):
+        session, _, _ = self._open()
+        for _ in range(4):
+            session.press("down")
+        session.press("right")
+        self.assertIsInstance(session.app.screen, NodeHubScreen)
+        self.assertEqual(session.app.screen._node_id, "LC-858")
+
     def test_slash_focuses_search_and_typing_narrows_all_groups(self):
         session, _, _ = self._open()
         session.press("/")

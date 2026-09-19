@@ -100,6 +100,12 @@ def _is_header_row(table, row_index):
 
 
 class GoalItemsTable(DataTable):
+    _BASE_BINDINGS = [b for b in DataTable.BINDINGS if b.key != "right"]
+
+    BINDINGS = _BASE_BINDINGS + [
+        Binding("right", "select_cursor", "Open", show=False),
+    ]
+
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("cursor_foreground_priority", "renderable")
         super().__init__(*args, **kwargs)
