@@ -1,6 +1,6 @@
 Feature: The done screen
 
-  The done tab is the third top-level screen, reached from the backlog by Tab
+  The done tab is the third top-level screen, reached from the backlog by ]
   or the tab strip (priority list -> backlog -> done -> priority list). It
   lists closed items - a lookup for "did X land?", not a report - newest
   closed first, with the backlog's row grid, plus its own cost and time
@@ -117,7 +117,7 @@ Feature: The done screen
       | position | key     | action     |
       | 1        | ↑↓      | move       |
       | 2        | enter   | open       |
-      | 3        | esc/tab | back       |
+      | 3        | esc     | back       |
       | 4        | [/]     | switch tab |
       | 5        | q       | quit       |
 
@@ -131,7 +131,7 @@ Feature: The done screen
 
     Examples:
       | position | key     | action     |
-      | 1        | esc/tab | back       |
+      | 1        | esc     | back       |
       | 2        | [/]     | switch tab |
       | 3        | q       | quit       |
 

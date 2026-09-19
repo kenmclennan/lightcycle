@@ -41,7 +41,7 @@ class TestBacklogStackedRebuildRendersEachRowOnce(unittest.TestCase):
 
     def test_rebuild_calls_the_cell_builder_once_per_row_not_twice(self):
         session = self._launch()
-        session.press("tab")
+        session.press("]")
         view = session.app.query_one(BacklogView)
         table = session.app.query_one(BacklogTable)
         self.assertTrue(table._stacked_mode)
@@ -54,7 +54,7 @@ class TestBacklogStackedRebuildRendersEachRowOnce(unittest.TestCase):
 
     def test_moving_the_cursor_repaints_only_the_two_affected_rows(self):
         session = self._launch()
-        session.press("tab")
+        session.press("]")
         table = session.app.query_one(BacklogTable)
         self.assertTrue(table._stacked_mode)
 

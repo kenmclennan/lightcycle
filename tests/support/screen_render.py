@@ -341,19 +341,19 @@ def _priority_cost_not_recorded(size):
 
 def _backlog_normal(size):
     session = _launch(_backlog_store(), size=size)
-    session.press("tab")
+    session.press("]")
     return session
 
 
 def _backlog_stacked(size):
     session = _launch(_stacked_backlog_store(), size=size)
-    session.press("tab")
+    session.press("]")
     return session
 
 
 def _backlog_empty(size):
     session = _launch(FakeStore(), size=size)
-    session.press("tab")
+    session.press("]")
     return session
 
 
@@ -361,7 +361,7 @@ def _backlog_empty_filtered(size):
     store = _backlog_store()
     store.item("LC-999", "An item in another project", project="horde")
     session = _launch(store, size=size)
-    session.press("tab")
+    session.press("]")
     session.app._backlog_project_filter = "horde"
     session.run(session.app._refresh)
     session.pause()
@@ -470,7 +470,7 @@ def _backlog_picker_long_label(size):
     store = _backlog_store()
     store.add_project(LONG_PROJECT_NAME)
     session = _launch(store, size=size)
-    session.press("tab")
+    session.press("]")
     session.press("f")
     return session
 
@@ -481,7 +481,7 @@ def _backlog_long_project_filter(size):
     store = _backlog_store()
     store.add_project(LONG_PROJECT_NAME)
     session = _launch(store, size=size)
-    session.press("tab")
+    session.press("]")
     session.app._backlog_project_filter = short_project_label(LONG_PROJECT_NAME)
     session.run(session.app._refresh)
     session.pause()
@@ -492,7 +492,7 @@ def _backlog_text_filter(size):
     from lightcycle.adapters.tui.app import BacklogFilterInput
 
     session = _launch(_backlog_store(), size=size)
-    session.press("tab")
+    session.press("]")
     session.app.query_one(BacklogFilterInput).value = "row"
     session.settle_backlog_filter()
     return session
@@ -502,7 +502,7 @@ def _backlog_text_and_project_filter(size):
     from lightcycle.adapters.tui.app import BacklogFilterInput
 
     session = _launch(_backlog_store(), size=size)
-    session.press("tab")
+    session.press("]")
     session.app._backlog_project_filter = "lightcycle"
     session.app.query_one(BacklogFilterInput).value = "row"
     session.settle_backlog_filter()
@@ -511,7 +511,7 @@ def _backlog_text_and_project_filter(size):
 
 def _backlog_claude_unavailable(size):
     session = _launch(_backlog_store(), breaker_open=True, size=size)
-    session.press("tab")
+    session.press("]")
     return session
 
 
@@ -531,8 +531,8 @@ def _done_store():
 
 def _done_normal(size):
     session = _launch(_done_store(), size=size)
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
     return session
 
 
@@ -544,16 +544,16 @@ def _done_search_focused(size):
 
 def _done_empty(size):
     session = _launch(FakeStore(), size=size)
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
     return session
 
 
 def _done_empty_filtered(size):
     store = _done_store()
     session = _launch(store, size=size)
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
     session.app._done_project_filter = "horde"
     session.run(session.app._refresh)
     session.pause()
@@ -571,8 +571,8 @@ def _stacked_done_store():
 
 def _done_stacked(size):
     session = _launch(_stacked_done_store(), size=size)
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
     return session
 
 
@@ -602,8 +602,8 @@ def _done_with_cost_store():
 
 def _done_with_cost(size):
     session = _launch(_done_with_cost_store(), size=size)
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
     return session
 
 
@@ -651,9 +651,9 @@ def _report_store():
 
 def _report_today(size):
     session = _launch(_report_store(), size=size)
-    session.press("tab")
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
+    session.press("]")
     return session
 
 
@@ -673,9 +673,9 @@ def _report_historical_day(size):
 
 def _report_stacked(size):
     session = _launch(_report_store(), size=(40, size[1]))
-    session.press("tab")
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
+    session.press("]")
     return session
 
 
@@ -692,9 +692,9 @@ def _report_with_summary(size, width=None):
         clear_dirty=True,
     )
     session = _launch(store, size=(width or size[0], size[1]))
-    session.press("tab")
-    session.press("tab")
-    session.press("tab")
+    session.press("]")
+    session.press("]")
+    session.press("]")
     return session
 
 

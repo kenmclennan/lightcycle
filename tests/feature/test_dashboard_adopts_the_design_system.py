@@ -104,7 +104,7 @@ def _open_backlog(ctx):
     store.create_item("An item", "a description", id=long_id)
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
     ctx["floor_widget_id"] = "#backlog-floor"
 
 
@@ -208,9 +208,9 @@ def _when_launch(ctx):
         _launch(ctx)
 
 
-@when("Tab is pressed")
+@when("] is pressed")
 def _press_tab(ctx):
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
 
 
 @when(parsers.parse("the shortcut at position {position:d} in the footer's shortcut line is read"))

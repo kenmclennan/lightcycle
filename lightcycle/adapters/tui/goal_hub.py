@@ -167,6 +167,7 @@ def _row_icon(row):
 class GoalHubScreen(Screen, inherit_bindings=False):
     BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
         Binding("escape", "close_hub", "Back", show=False),
+        Binding("tab", "close_hub", "Back", show=False),
         Binding("left", "close_hub", "Back", show=False),
         Binding("/", "focus_search", "Search", show=False),
     ]

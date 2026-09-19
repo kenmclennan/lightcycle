@@ -1453,7 +1453,6 @@ class LightcycleApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit", show=False, priority=True),
         Binding("ctrl+c", "quit", "Quit", show=False, priority=True),
-        Binding("tab", "toggle_view", "Toggle view", show=False),
         Binding("[", "prev_strip", "Prev tab", show=False),
         Binding("]", "next_strip", "Next tab", show=False),
         Binding("f", "open_picker", "Filter", show=False),
@@ -1814,9 +1813,6 @@ class LightcycleApp(App):
         desired = self._desired_shortcuts()
         if shortcut_bar.shortcuts != desired:
             shortcut_bar.set_shortcuts(desired)
-
-    def action_toggle_view(self) -> None:
-        self._cycle_view(1)
 
     def action_prev_strip(self) -> None:
         if isinstance(self.screen, (NodeHubScreen, GoalHubScreen)):

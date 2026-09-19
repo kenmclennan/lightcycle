@@ -70,7 +70,7 @@ COLUMN_GRIDS = {
 GLOBAL_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter/→", "open"),
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
@@ -78,13 +78,13 @@ GLOBAL_SHORTCUTS = (
 GOALS_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter/→", "open goal"),
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 GOALS_EMPTY_SHORTCUTS = (
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
@@ -93,20 +93,20 @@ BACKLOG_SHORTCUTS = (
     ("enter/→", "explore in tree"),
     ("f", "filter"),
     ("/", "search"),
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 BACKLOG_EMPTY_SHORTCUTS = (
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 BACKLOG_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("/", "search"),
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
@@ -116,13 +116,13 @@ DONE_SHORTCUTS = (
     ("f", "filter"),
     ("d", "day"),
     ("/", "search"),
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("ctrl-u/ctrl-d", "scroll"),
     ("q", "quit"),
 )
 
 DONE_EMPTY_SHORTCUTS = (
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
@@ -130,20 +130,20 @@ DONE_FILTERED_EMPTY_SHORTCUTS = (
     ("f", "filter"),
     ("d", "day"),
     ("/", "search"),
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 BACKLOG_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "explore in tree"),
-    ("esc/tab", "back"),
+    ("esc", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
-    ("esc/tab", "back"),
+    ("esc", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
@@ -151,13 +151,13 @@ BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
 DONE_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "open"),
-    ("esc/tab", "back"),
+    ("esc", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 DONE_SEARCH_EMPTY_SHORTCUTS = (
-    ("esc/tab", "back"),
+    ("esc", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
@@ -165,7 +165,7 @@ DONE_SEARCH_EMPTY_SHORTCUTS = (
 REPORT_SHORTCUTS = (
     ("d", "day"),
     ("enter/→", "open in done"),
-    ("[/tab]", "prev/next tab"),
+    ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
@@ -174,7 +174,6 @@ HUB_SHORTCUTS = (
     ("↑↓", "scroll"),
     ("enter/→", "open"),
     ("esc/←", "back"),
-    ("tab", "next tab"),
     ("q", "quit"),
 )
 
@@ -182,14 +181,12 @@ TEXT_ARTIFACT_SHORTCUTS = (
     ("↑↓", "scroll"),
     ("ctrl-u/ctrl-d", "page"),
     ("esc/←", "back to artifacts"),
-    ("tab", "next tab"),
     ("q", "quit"),
 )
 
 LIST_ARTIFACT_SHORTCUTS = (
     ("↑↓", "scroll"),
     ("esc/←", "back to artifacts"),
-    ("tab", "next tab"),
     ("q", "quit"),
 )
 
@@ -237,7 +234,7 @@ SEARCH_BAR_CSS = f"""
 GOAL_LOG_SHORTCUTS = HUB_SHORTCUTS + (("/", "search"),)
 
 GOAL_LOG_SEARCH_SHORTCUTS = (
-    ("esc/tab", "back"),
+    ("esc", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )

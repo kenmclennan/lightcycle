@@ -233,9 +233,9 @@ def _scroll_to_end(ctx):
         session.pause()
 
 
-@when("Tab is pressed")
+@when("] is pressed")
 def _tab_is_pressed(ctx):
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
 
 
 @when("the pool or breaker state changes")

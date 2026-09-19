@@ -68,15 +68,15 @@ Feature: The backlog screen
     Given the backlog is shown with a todo item with no registered project
     Then that item's row shows a blank project field
 
-  Scenario: Pressing Tab from the priority list shows the backlog in its place
+  Scenario: Pressing ] from the priority list shows the backlog in its place
     Given the dashboard has launched
-    When Tab is pressed
+    When ] is pressed
     Then the backlog is shown in place of the priority list
 
-  Scenario: Pressing Tab again from the backlog moves to the Done tab in its place
+  Scenario: Pressing ] again from the backlog moves to the Done tab in its place
     Given the dashboard has launched
-    When Tab is pressed
-    And Tab is pressed
+    When ] is pressed
+    And ] is pressed
     Then the done tab is shown in place of the backlog
 
   Scenario: Pressing f opens the project filter picker listing All and every registered project with its own count
@@ -200,7 +200,7 @@ Feature: The backlog screen
       | 2        | enter/→       | explore in tree |
       | 3        | f             | filter          |
       | 4        | /             | search          |
-      | 5        | [/tab]        | prev/next tab   |
+      | 5        | [/]           | switch tab      |
       | 6        | ctrl-u/ctrl-d | scroll          |
       | 7        | q             | quit            |
 
@@ -213,7 +213,7 @@ Feature: The backlog screen
 
     Examples:
       | position | key    | action        |
-      | 1        | [/tab] | prev/next tab |
+      | 1        | [/]    | switch tab    |
       | 2        | q      | quit          |
 
   Scenario Outline: Each shortcut for the filtered-empty backlog appears in the footer, in order
@@ -226,7 +226,7 @@ Feature: The backlog screen
       | position | key    | action        |
       | 1        | f      | filter        |
       | 2        | /      | search        |
-      | 3        | [/tab] | prev/next tab |
+      | 3        | [/]    | switch tab    |
       | 4        | q      | quit          |
 
   Scenario Outline: Each shortcut for the backlog with the search box focused and rows present appears in the footer, in order
@@ -240,7 +240,7 @@ Feature: The backlog screen
       | position | key     | action          |
       | 1        | ↑↓      | move            |
       | 2        | enter   | explore in tree |
-      | 3        | esc/tab | back            |
+      | 3        | esc     | back            |
       | 4        | [/]     | switch tab      |
       | 5        | q       | quit            |
 
@@ -254,7 +254,7 @@ Feature: The backlog screen
 
     Examples:
       | position | key     | action     |
-      | 1        | esc/tab | back       |
+      | 1        | esc     | back       |
       | 2        | [/]     | switch tab |
       | 3        | q       | quit       |
 
@@ -335,7 +335,7 @@ Feature: The backlog screen
     Given the backlog is shown with the todo items "widget one" and "gadget two"
     When / is pressed
     And "widget" is typed into the search box
-    And Tab is pressed
-    And Tab is pressed
-    And Tab is pressed
+    And ] is pressed
+    And ] is pressed
+    And ] is pressed
     Then only the row matching "widget" is shown

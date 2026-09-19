@@ -144,9 +144,9 @@ Feature: The Artifact viewer
       | list | Esc |
       | list | ←   |
 
-  Scenario: Tab jumps straight to the backlog from an open artifact viewer, bypassing Esc/← back-navigation
+  Scenario: ] jumps straight to the backlog from an open artifact viewer, bypassing Esc/← back-navigation
     Given the artifact viewer is open, showing a text artifact
-    When Tab is pressed
+    When ] is pressed
     Then the backlog is shown in place of the viewer
 
   Scenario Outline: The status bar renders on the Artifact Viewer's first frame, before any poll tick

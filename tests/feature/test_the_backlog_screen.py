@@ -32,7 +32,7 @@ def ctx():
 def _launch_and_switch(ctx, store, size=None):
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store), size=size)
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
 
 
 def _rendered_text(widget):
@@ -287,7 +287,7 @@ def _backlog_shown_filtered_empty(ctx, project):
 def _switch_to_backlog(ctx):
     if "session" not in ctx:
         ctx["session"] = launch(make_test_container(store=ctx["store"]))
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
 
 
 @when("that item is activated")
@@ -300,9 +300,9 @@ def _poll_interval_elapses(ctx):
     ctx["session"].poll_tick()
 
 
-@when("Tab is pressed")
+@when("] is pressed")
 def _press_tab(ctx):
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
 
 
 @when("Down is pressed")
@@ -345,7 +345,7 @@ def _when_backlog_filtered(ctx, project):
     if "session" not in ctx:
         ctx["session"] = launch(make_test_container(store=ctx["store"]))
     session = ctx["session"]
-    session.press("tab")
+    session.press("]")
     session.app._backlog_project_filter = project
     session.run(session.app._refresh)
     session.pause()
@@ -379,7 +379,7 @@ def _item_gone(ctx):
 def _ctrl_d_matches_page_down(ctx):
     actual = ctx["session"].app.query_one(BacklogTable).cursor_row
     compare = launch(make_test_container(store=ctx["build_store"]()))
-    compare.press("tab")
+    compare.press("]")
     compare.press("pagedown")
     expected = compare.app.query_one(BacklogTable).cursor_row
     compare.close()

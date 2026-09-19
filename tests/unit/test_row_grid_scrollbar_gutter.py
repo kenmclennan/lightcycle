@@ -105,7 +105,7 @@ class TestBacklogTableScrollbarDoesNotClipTitle(unittest.TestCase):
     def _launch(self, count):
         store = _backlog_item_store(count, self._TITLE)
         session = launch(make_test_container(store=store), size=_SIZE)
-        session.press("tab")
+        session.press("]")
         self.addCleanup(session.close)
         return session
 

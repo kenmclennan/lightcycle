@@ -29,8 +29,8 @@ def ctx():
 def _launch_and_switch_to_done(ctx, store):
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
-    ctx["session"].press("tab")
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
+    ctx["session"].press("]")
 
 
 def _rendered_text(widget):
@@ -221,8 +221,8 @@ def _done_shown_two_titled_items(ctx, title_a, title_b):
 def _switch_to_done(ctx):
     if "session" not in ctx:
         ctx["session"] = launch(make_test_container(store=ctx["store"]))
-        ctx["session"].press("tab")
-        ctx["session"].press("tab")
+        ctx["session"].press("]")
+        ctx["session"].press("]")
 
 
 @when(parsers.parse('the done tab is filtered to "{project}"'))
