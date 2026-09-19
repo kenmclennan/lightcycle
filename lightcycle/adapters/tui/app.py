@@ -37,6 +37,7 @@ from lightcycle.adapters.tui.design_system import (
     GOALS_SHORTCUTS,
     MODAL_OVERLAY_ALPHA,
     REPORT_SHORTCUTS,
+    ROW_SPACER,
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
@@ -279,11 +280,11 @@ def _backlog_title_prose(row):
 
 def _backlog_title_cell(row):
     if not row.blocked_by:
-        return row.title
+        return row.title + ROW_SPACER
     glyph = Text(
         DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph + " ", style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
     )
-    return glyph + Text(row.title)
+    return glyph + Text(row.title + ROW_SPACER)
 
 
 def _backlog_row_cells(row, layout, row_budget, cursor=False):
@@ -292,7 +293,8 @@ def _backlog_row_cells(row, layout, row_budget, cursor=False):
         return (
             stacked_cell(
                 first_line, BACKLOG_CONTINUATION_INDENT, _backlog_title_prose(row), row_budget
-            ),
+            )
+            + Text(ROW_SPACER),
         )
     cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
     project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
@@ -323,12 +325,12 @@ def _done_stacked_first_line(row, cursor, layout, row_budget):
 def _done_row_cells(row, layout, row_budget, cursor=False):
     if layout.stacked:
         first_line = _done_stacked_first_line(row, cursor, layout, row_budget)
-        return (stacked_cell(first_line, DONE_CONTINUATION_INDENT, row.title, row_budget),)
+        return (stacked_cell(first_line, DONE_CONTINUATION_INDENT, row.title, row_budget) + Text(ROW_SPACER),)
     cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
     project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
     cost_cell = Text(row.cost, style=COLOURS["dim"]) if row.cost else ""
     time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
-    return (cursor_cell, row.id, project_cell, row.title, cost_cell, time_cell)
+    return (cursor_cell, row.id, project_cell, row.title + ROW_SPACER, cost_cell, time_cell)
 
 
 def _done_stacked_cell_builder(row, layout, row_budget, cursor, icon_override):
@@ -2147,8 +2149,7 @@ class LightcycleApp(App):
         if layout.stacked:
             first_line = self._stacked_first_line(row, cursor, layout, row_budget, icon_override)
             cell = stacked_cell(first_line, PRIORITY_CONTINUATION_INDENT, row.title, row_budget)
-            spacer = Text("\n" + " " * PRIORITY_CONTINUATION_INDENT + " ")
-            return (cell + spacer,)
+            return (cell + Text(ROW_SPACER),)
         cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
         icon_cell = Text(icon_override if icon_override is not None else row.icon, style=COLOURS[row.icon_colour])
         if row.dependency_icon:
@@ -2160,7 +2161,7 @@ class LightcycleApp(App):
         cost_cell = Text(row.cost, style=COLOURS["dim"]) if row.cost else ""
         time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
         return (
-            cursor_cell, icon_cell, row.id, project_cell, row.title + "\n ", step_cell, cost_cell, time_cell,
+            cursor_cell, icon_cell, row.id, project_cell, row.title + ROW_SPACER, step_cell, cost_cell, time_cell,
         )
 
     def _stacked_row_cell_builder(self, row, layout, row_budget, cursor, icon_override):

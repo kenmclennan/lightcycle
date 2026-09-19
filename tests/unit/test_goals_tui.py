@@ -121,9 +121,9 @@ class TestGoalsTab(unittest.TestCase):
 
 
 class TestGoalHub(unittest.TestCase):
-    def _open(self, populated=True):
+    def _open(self, populated=True, size=None):
         store, gid = _goals_store(with_content=populated)
-        session = _launch(store)
+        session = _launch(store) if size is None else _launch(store, size=size)
         self.addCleanup(session.close)
         session.press("[")
         session.press("enter")
@@ -213,7 +213,7 @@ class TestGoalHub(unittest.TestCase):
         )
 
     def test_items_show_three_groups_in_order_with_dim_headers(self):
-        session, _, _ = self._open()
+        session, _, _ = self._open(size=(100, 45))
         for _ in range(2):
             session.press("]")
         frame = _frame(session)
@@ -348,7 +348,7 @@ class TestGoalItemsTab(unittest.TestCase):
         self.assertEqual(session.app.screen._node_id, "LC-858")
 
     def test_slash_focuses_search_and_typing_narrows_all_groups(self):
-        session, _, _ = self._open()
+        session, _, _ = self._open(size=(100, 45))
         session.press("/")
         self.assertIsInstance(session.app.screen.focused, GoalItemsFilterInput)
         self.assertIn("SEARCH", _frame(session))

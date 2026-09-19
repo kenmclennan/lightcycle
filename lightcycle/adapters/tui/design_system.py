@@ -55,6 +55,8 @@ FOOTER_GLYPHS = {
 
 CURSOR_GLYPH = Glyph("❯", "cyan")
 
+ROW_SPACER = "\n "
+
 COLUMN_GRIDS = {
     "priority-list": ("cursor", "icon", "id", "project", "title", "step", "cost", "time"),
     "backlog": ("cursor", "id", "project", "title"),

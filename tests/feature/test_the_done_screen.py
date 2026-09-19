@@ -317,7 +317,7 @@ def _rows_in_order(ctx, first, second):
     titles = []
     for row in table.ordered_rows:
         cell = table.get_cell(row.key.value, "title")
-        titles.append(cell.plain if hasattr(cell, "plain") else cell)
+        titles.append((cell.plain if hasattr(cell, "plain") else cell).strip())
     assert titles == [first, second]
 
 

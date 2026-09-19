@@ -17,6 +17,7 @@ from lightcycle.adapters.tui.design_system import (
     GOAL_LOG_SEARCH_SHORTCUTS,
     GOAL_LOG_SHORTCUTS,
     HUB_SHORTCUTS,
+    ROW_SPACER,
     STATE_GLYPHS,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar
@@ -447,14 +448,14 @@ class GoalHubScreen(Screen, inherit_bindings=False):
                         _row_icon(row), row.id, row.title, id_width, width, row.step, row.step_colour
                     )
                     if index < len(rows) - 1:
-                        cell = cell + Text("\n ")
+                        cell = cell + Text(ROW_SPACER)
                     table.add_row(Text(""), cell, height=None, key=row.id)
                 continue
-            for ref in entries:
-                table.add_row(
-                    Text(""), _item_cells(Text(""), ref.id, ref.title, id_width, width),
-                    height=None, key=ref.id,
-                )
+            for index, ref in enumerate(entries):
+                cell = _item_cells(Text(""), ref.id, ref.title, id_width, width)
+                if index < len(entries) - 1:
+                    cell = cell + Text(ROW_SPACER)
+                table.add_row(Text(""), cell, height=None, key=ref.id)
         self._items_step_ids = {r.id: r.step_id for r in rows}
         self._restore_items_cursor(table, previous)
 
