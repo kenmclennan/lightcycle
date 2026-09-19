@@ -213,5 +213,21 @@ class TestSuspendedStepIds(unittest.TestCase):
         )
         self.assertEqual(suspended_step_ids(workers), frozenset({"S-1"}))
 
+    def test_a_dead_suspended_worker_does_not_suspend_a_step_a_live_worker_holds(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "dead", "pid": 1, "step": "S-1", "started": 0, "suspended": True, "suspended_at": 0},
+                {"spawnid": "live", "pid": 2, "step": "S-1", "started": 0},
+            ],
+            alive_pids=(2,),
+        )
+        self.assertEqual(suspended_step_ids(workers), frozenset())
+
+    def test_a_dead_suspended_worker_alone_suspends_nothing(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "dead", "pid": 1, "step": "S-1", "started": 0, "suspended": True, "suspended_at": 0}],
+        )
+        self.assertEqual(suspended_step_ids(workers), frozenset())
+
     def test_an_unreadable_registry_yields_the_empty_set(self):
         self.assertEqual(suspended_step_ids(UnreadableWorkers()), frozenset())
