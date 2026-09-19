@@ -33,6 +33,8 @@ def worker_to_suspend(alive_workers, pressure, suspend_pressure):
     if pressure is None or pressure < suspend_pressure:
         return None
     candidates = [w for w in alive_workers if not w.suspended]
+    if len(candidates) <= 1:
+        return None
     return max(candidates, key=lambda w: w.started, default=None)
 
 
