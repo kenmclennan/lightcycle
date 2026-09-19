@@ -1417,3 +1417,55 @@ class StoreContractBase:
                 raise RuntimeError("boom")
         self.assertEqual(s.get_goal(gid).description, "")
         self.assertEqual(s.goal_log(gid), [])
+
+    def test_a_new_goal_has_no_state_of_play(self):
+        s = self.make_store()
+        gid = s.create_goal("a")
+        goal = s.get_goal(gid)
+        self.assertEqual((goal.state_of_play, goal.state_of_play_at), ("", None))
+        self.assertIsNone(s.goal_state_of_play_step(gid))
+
+    def test_finish_state_of_play_is_read_back_by_get_and_list_and_clears_the_pointer(self):
+        s = self.make_store()
+        gid = s.create_goal("a", "desc")
+        before = s.get_goal(gid).updated_at
+        s.start_goal_state_of_play(gid, "LC-1.1")
+        self.assertEqual(s.goal_state_of_play_step(gid), "LC-1.1")
+        s.finish_goal_state_of_play(gid, "do this first")
+        for goal in (s.get_goal(gid), s.list_goals()[0]):
+            self.assertEqual(goal.state_of_play, "do this first")
+            self.assertTrue(goal.state_of_play_at)
+            self.assertEqual(goal.description, "desc")
+        self.assertEqual(s.get_goal(gid).updated_at, before)
+        self.assertIsNone(s.goal_state_of_play_step(gid))
+
+    def test_release_and_update_goal_keep_the_state_of_play(self):
+        s = self.make_store()
+        gid = s.create_goal("a")
+        s.finish_goal_state_of_play(gid, "kept")
+        stamp = s.get_goal(gid).state_of_play_at
+        s.start_goal_state_of_play(gid, "LC-1.1")
+        s.release_goal_state_of_play(gid)
+        s.update_goal(gid, description="d2")
+        goal = s.get_goal(gid)
+        self.assertEqual((goal.state_of_play, goal.state_of_play_at), ("kept", stamp))
+        self.assertIsNone(s.goal_state_of_play_step(gid))
+
+    def test_goal_for_state_of_play_step_round_trips_and_is_none_when_unknown(self):
+        s = self.make_store()
+        gid = s.create_goal("a")
+        s.start_goal_state_of_play(gid, "LC-1.1")
+        self.assertEqual(s.goal_for_state_of_play_step("LC-1.1"), gid)
+        self.assertIsNone(s.goal_for_state_of_play_step("LC-9.9"))
+
+    def test_state_of_play_writes_roll_back_with_the_transaction(self):
+        s = self.make_store()
+        gid = s.create_goal("a")
+        with self.assertRaises(RuntimeError):
+            with s.transaction():
+                s.start_goal_state_of_play(gid, "LC-1.1")
+                s.finish_goal_state_of_play(gid, "text")
+                s.start_goal_state_of_play(gid, "LC-1.2")
+                raise RuntimeError("boom")
+        self.assertEqual(s.get_goal(gid).state_of_play, "")
+        self.assertIsNone(s.goal_state_of_play_step(gid))

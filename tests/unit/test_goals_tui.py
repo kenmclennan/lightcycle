@@ -624,3 +624,41 @@ class TestGoalLogSearch(unittest.TestCase):
             session.run(screen.on_screen_suspend)
         stop.assert_called_once()
         self.assertIsNone(screen._filter_timer)
+
+
+class TestGoalStateOfPlayOverview(unittest.TestCase):
+    def _open(self, description, state_of_play):
+        store, gid = _goals_store(with_content=False)
+        store.update_goal(gid, description=description)
+        if state_of_play:
+            store.finish_goal_state_of_play(gid, state_of_play)
+        session = _launch(store)
+        self.addCleanup(session.close)
+        session.press("[")
+        session.press("enter")
+        return session
+
+    def test_description_then_header_then_text_in_that_order(self):
+        frame = _frame(self._open("the described problem", "do the first thing next"))
+
+        marks = ["the described problem", "State of play", "do the first thing next"]
+        positions = [frame.index(m) for m in marks]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn(GOAL_DESCRIPTION_EMPTY_MESSAGE, frame)
+
+    def test_a_goal_without_one_shows_no_header(self):
+        frame = _frame(self._open("the described problem", ""))
+
+        self.assertIn("the described problem", frame)
+        self.assertNotIn("State of play", frame)
+
+    def test_state_of_play_alone_replaces_the_empty_message_and_takes_focus(self):
+        session = self._open("", "only the generated text")
+        frame = _frame(session)
+
+        self.assertIn("only the generated text", frame)
+        self.assertNotIn(GOAL_DESCRIPTION_EMPTY_MESSAGE, frame)
+        self.assertEqual(session.app.screen.focused.id, "goal-description-view")
+
+    def test_neither_shows_the_empty_message(self):
+        self.assertIn(GOAL_DESCRIPTION_EMPTY_MESSAGE, _frame(self._open("", "")))

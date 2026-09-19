@@ -3,7 +3,8 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import (
-    AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL,
+    AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, GOAL_STATE_OF_PLAY_STEP, RETRO_ORIGIN_LABEL,
+    SUMMARY_ORIGIN_LABEL,
 )
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
@@ -54,6 +55,8 @@ class CompleteStepUseCase:
                 return self._complete_findings(t, input)
         if self._is_summary_origin(t) and t.stage == DAILY_SUMMARY_STEP:
             return self._complete_daily_summary(t, input)
+        if self._is_summary_origin(t) and t.stage == GOAL_STATE_OF_PLAY_STEP:
+            return self._complete_goal_state_of_play(t, input)
         return self._complete_workflow(t, input)
 
     def _is_retro_origin(self, t):
@@ -164,6 +167,27 @@ class CompleteStepUseCase:
                 )
             else:
                 self._store.release_day_summary(day)
+        self._cascade_close(t.item)
+        return CompleteResponse(next_step=None)
+
+    def _complete_goal_state_of_play(self, t, input: CompleteInput) -> CompleteResponse:
+        won, _ = self._store.complete_step_atomic(
+            input.step, input.outcome, self._expected_assignee(), None)
+        if not won:
+            return CompleteResponse(next_step=None)
+        self._store.note(input.step, "outcome: %s" % input.outcome)
+        goal_id = self._store.goal_for_state_of_play_step(t.id)
+        if goal_id is not None:
+            text = ""
+            if input.outcome == "done":
+                text = next(
+                    (a.value for a in self._store.item_artifacts(t.id) if a.type == "summary"),
+                    "",
+                )
+            if (text or "").strip():
+                self._store.finish_goal_state_of_play(goal_id, text)
+            else:
+                self._store.release_goal_state_of_play(goal_id)
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 
