@@ -65,14 +65,29 @@ class TestGoalsTab(unittest.TestCase):
             self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
             self.assertFalse(session.app.query_one(GoalsView).display)
 
-    def test_goals_table_is_one_column_of_titles_with_no_status_text(self):
+    def test_goals_list_names_the_project_of_goals_in_different_projects(self):
+        store = FakeStore()
+        store.create_goal("Alpha goal", "", "alpha")
+        store.create_goal("Beta goal", "", "beta")
+        session = self._launch(store)
+        session.press("[")
+        lines = _frame(session).splitlines()
+
+        alpha = next(line for line in lines if "Alpha goal" in line)
+        beta = next(line for line in lines if "Beta goal" in line)
+        self.assertIn("alpha", alpha)
+        self.assertNotIn("beta", alpha)
+        self.assertIn("beta", beta)
+
+    def test_goals_table_is_project_and_title_with_no_status_text(self):
         store, _ = _goals_store()
         session = self._launch(store)
         session.press("[")
         table = session.app.query_one(GoalsTable)
         frame = _frame(session)
 
-        self.assertEqual(len(table.columns), 1)
+        self.assertEqual(len(table.columns), 2)
+        self.assertIn("lightcycle", frame)
         self.assertEqual(table.row_count, 3)
         self.assertIn("Ship the goals record", frame)
         for status in ("not started", "in progress", "done"):
@@ -231,7 +246,7 @@ class TestGoalHub(unittest.TestCase):
 
     def test_goal_hub_states_are_registered(self):
         for state in (
-            "goals#normal", "goals#empty", "goal-hub#overview", "goal-hub#log",
+            "goals#normal", "goals#two-projects", "goals#empty", "goal-hub#overview", "goal-hub#log",
             "goal-hub#log-search", "goal-hub#log-search-none", "goal-hub#log-empty",
             "goal-hub#overview-empty", "goal-hub#items", "goal-hub#items-empty",
             "goal-hub#items-search", "goal-hub#items-search-none",
