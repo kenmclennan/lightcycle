@@ -17,7 +17,7 @@ Current work is three fixed-order groups - needs-attention, active, queued - wit
 The Goals tab is a one-column table of goal titles - no status, count, icon or badge. Selecting a goal opens a **goal hub**, a separate screen class from the node hub because a goal is not a node. It reuses the hub's tab strip and the description pane's shape and closes with escape or left. Its tabs, in order:
 
 - **Overview** - the goal's description as one scrolling document. The header line above the tab strip carries the title, the hand-set status and the project; the goal id is a CLI handle and is not shown.
-- **Log** - the goal's decisions, newest first, each with its timestamp.
+- **Log** - the goal's decisions, newest first. Each entry is a header line (title left, timestamp right-aligned as `YYYY-MM-DD HH:MM`), a blank line, the body, and a blank line. A `SEARCH` row above the log (focused with `/`) filters entries by a case-insensitive substring of title or body; it appears only when the goal has entries.
 - **Items** - linked items by id and title only. No state, lane or count: derived state is deliberately absent from this screen.
 
 The hub refreshes on the same poll interval as the node hub, so `lc goal log` in another terminal appears without reopening it.

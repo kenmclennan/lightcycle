@@ -221,6 +221,7 @@ CREATE TABLE IF NOT EXISTS goals (
 CREATE TABLE IF NOT EXISTS goal_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     goal_id TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
     body TEXT NOT NULL,
     created_at TEXT
 );
@@ -466,6 +467,9 @@ class SqliteStore(StorePort):
             ("usage_thinking_tokens", "INTEGER"),
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
             ("claim_epoch", "INTEGER NOT NULL DEFAULT 0"),
+        ),
+        "goal_log": (
+            ("title", "TEXT NOT NULL DEFAULT ''"),
         ),
         "usage_backfill_log": (
             ("had_result_line", "INTEGER"),
@@ -1814,16 +1818,16 @@ class SqliteStore(StorePort):
         )
         self._commit()
 
-    def add_goal_log(self, goal_id, body):
+    def add_goal_log(self, goal_id, title, body):
         self._conn.execute(
-            "INSERT INTO goal_log (goal_id, body, created_at) VALUES (?, ?, ?)",
-            (goal_id, body, self._now()),
+            "INSERT INTO goal_log (goal_id, title, body, created_at) VALUES (?, ?, ?, ?)",
+            (goal_id, title, body, self._now()),
         )
         self._commit()
 
     def goal_log(self, goal_id):
         rows = self._conn.execute(
-            "SELECT id, goal_id, body, created_at FROM goal_log "
+            "SELECT id, goal_id, title, body, created_at FROM goal_log "
             "WHERE goal_id = ? ORDER BY id DESC",
             (goal_id,),
         ).fetchall()

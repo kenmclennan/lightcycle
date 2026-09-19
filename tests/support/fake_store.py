@@ -954,9 +954,9 @@ class FakeStore(StorePort):
         if changes:
             self._goals[goal_id] = g._replace(updated_at=self._now(), **changes)
 
-    def add_goal_log(self, goal_id, body):
+    def add_goal_log(self, goal_id, title, body):
         entry_id = len(self._goal_log) + 1
-        self._goal_log.append(GoalLogEntry(entry_id, goal_id, body, self._now()))
+        self._goal_log.append(GoalLogEntry(entry_id, goal_id, title, body, self._now()))
 
     def goal_log(self, goal_id):
         return [e for e in reversed(self._goal_log) if e.goal_id == goal_id]

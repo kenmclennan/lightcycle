@@ -3,6 +3,7 @@ from lightcycle.domain.goals.goal import (
     GOAL_STATUSES,
     Goal,
     GoalLogEntry,
+    goal_log_stamp,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "GOAL_STATUSES",
     "Goal",
     "GoalLogEntry",
+    "goal_log_stamp",
 ]

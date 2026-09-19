@@ -1244,6 +1244,10 @@ class TestSqliteStoreGoalsMigration(unittest.TestCase):
             "goal_id TEXT NOT NULL, body TEXT NOT NULL, raised_at TEXT, resolved_at TEXT, "
             "resolution TEXT);"
             "CREATE INDEX idx_goal_questions_goal_id ON goal_questions(goal_id);"
+            "DROP TABLE goal_log;"
+            "CREATE TABLE goal_log (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "goal_id TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT);"
+            "CREATE INDEX idx_goal_log_goal_id ON goal_log(goal_id);"
         )
         for gid, title, outcome, scope in goals:
             conn.execute(
@@ -1255,7 +1259,7 @@ class TestSqliteStoreGoalsMigration(unittest.TestCase):
                 "INSERT INTO goal_questions (goal_id, body, resolved_at, resolution) VALUES (?, ?, ?, ?)",
                 (gid, body, "2026-09-18" if resolved else None, "r" if resolved else None),
             )
-        conn.execute("INSERT INTO goal_log (goal_id, body) VALUES ('G-1', 'kept log')")
+        conn.execute("INSERT INTO goal_log (goal_id, body, created_at) VALUES ('G-1', 'kept log', '2026-09-19T09:30:00+01:00')")
         conn.execute("INSERT INTO goal_items (goal_id, item_id) VALUES ('G-1', 'LC-1')")
         conn.commit()
         conn.close()
@@ -1290,6 +1294,24 @@ class TestSqliteStoreGoalsMigration(unittest.TestCase):
         self.assertNotIn("goal_questions", self._tables(store))
         self.assertEqual([e.body for e in store.goal_log("G-1")], ["kept log"])
         self.assertEqual(store.goal_items("G-1"), ["LC-1"])
+
+    def test_goal_log_gains_a_title_column_keeping_legacy_rows_and_indexes(self):
+        root = tempfile.mkdtemp()
+        config = self._plant(root, [("G-1", "g", self.G1_OUTCOME, "")])
+
+        store = SqliteStore(config)
+
+        cols = [r[1] for r in store._conn.execute("PRAGMA table_info(goal_log)").fetchall()]
+        self.assertIn("title", cols)
+        legacy = store.goal_log("G-1")[0]
+        self.assertEqual(
+            (legacy.title, legacy.body, legacy.created_at, legacy.id),
+            ("", "kept log", "2026-09-19T09:30:00+01:00", 1),
+        )
+        store.add_goal_log("G-1", "new title", "new body")
+        self.assertEqual([e.title for e in store.goal_log("G-1")], ["new title", ""])
+        indexes = {r[1] for r in store._conn.execute("PRAGMA index_list(goal_log)").fetchall()}
+        self.assertIn("idx_goal_log_goal_id", indexes)
 
     def test_non_blank_scope_is_carried_over_under_its_own_heading(self):
         root = tempfile.mkdtemp()
