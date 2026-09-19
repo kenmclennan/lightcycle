@@ -4,6 +4,9 @@ from lightcycle import frontmatter
 from lightcycle.ports.workflow_bundle import StepPrompt, WorkflowBundlePort
 
 
+INCLUDE_PREFIX = "@include "
+
+
 def _roots(roots):
     return roots if isinstance(roots, (list, tuple)) else [roots]
 
@@ -22,6 +25,20 @@ def step_roles(roots):
     return sorted(names)
 
 
+def _resolve_includes(roots, body, relpath):
+    lines = []
+    for line in body.split("\n"):
+        if line.startswith(INCLUDE_PREFIX) and line[len(INCLUDE_PREFIX) :].strip():
+            name = line[len(INCLUDE_PREFIX) :].strip()
+            fragment = read_md(roots, os.path.join("fragments", "%s.md" % name))
+            if fragment is None:
+                raise ValueError("fragment %r included by %s not found" % (name, relpath))
+            lines.append(fragment.body.strip("\n"))
+        else:
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def read_md(roots, relpath):
     for root in _roots(roots):
         path = os.path.join(root, relpath)
@@ -29,7 +46,7 @@ def read_md(roots, relpath):
             with open(path) as f:
                 text = f.read()
             meta, body = frontmatter.split_frontmatter(text)
-            return StepPrompt(meta=meta, body=body)
+            return StepPrompt(meta=meta, body=_resolve_includes(roots, body, relpath))
     return None
 
 
