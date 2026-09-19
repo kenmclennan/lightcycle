@@ -644,9 +644,9 @@ def _filter_bar_composited_left(ctx):
 def _search_and_project_value_aligned(ctx):
     search_input = ctx["session"].app.query_one("#backlog-filter-text")
     project_value = ctx["session"].app.query_one("#backlog-filter-left")
-    assert search_input.content_region.x == project_value.content_region.x, (
+    assert search_input.region.x == project_value.content_region.x, (
         "search value starts at column %d but project value starts at column %d"
-        % (search_input.content_region.x, project_value.content_region.x)
+        % (search_input.region.x, project_value.content_region.x)
     )
 
 
@@ -797,7 +797,7 @@ def _search_label_cyan(ctx):
     from lightcycle.adapters.tui.design_system import COLOURS
 
     widget = ctx["session"].app.query_one("#backlog-search-label")
-    strip = widget.render_line(0)
+    strip = widget.render_line(1)
     style = next(s.style for s in strip if s.text.strip())
     assert _colour_of(style) == COLOURS["cyan"].lower()
 
@@ -807,7 +807,7 @@ def _search_label_not_cyan(ctx):
     from lightcycle.adapters.tui.design_system import COLOURS
 
     widget = ctx["session"].app.query_one("#backlog-search-label")
-    strip = widget.render_line(0)
+    strip = widget.render_line(1)
     style = next(s.style for s in strip if s.text.strip())
     assert _colour_of(style) != COLOURS["cyan"].lower()
 

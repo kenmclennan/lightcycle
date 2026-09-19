@@ -38,6 +38,7 @@ from lightcycle.adapters.tui.design_system import (
     MODAL_OVERLAY_ALPHA,
     REPORT_SHORTCUTS,
     ROW_SPACER,
+    SEARCH_BAR_CSS,
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
@@ -373,8 +374,9 @@ class BacklogView(Vertical):
     def compose(self) -> ComposeResult:
         yield Horizontal(
             Static("SEARCH", id="backlog-search-label", classes="filter-row-label"),
-            BacklogFilterInput(id="backlog-filter-text"),
+            BacklogFilterInput(id="backlog-filter-text", classes="search-input"),
             id="backlog-search-bar",
+            classes="search-bar",
         )
         yield Horizontal(
             Static("PROJECT", id="backlog-filter-label", classes="filter-row-label"),
@@ -578,8 +580,9 @@ class DoneView(Vertical):
     def compose(self) -> ComposeResult:
         yield Horizontal(
             Static("SEARCH", id="done-search-label", classes="filter-row-label"),
-            DoneFilterInput(id="done-filter-text"),
+            DoneFilterInput(id="done-filter-text", classes="search-input"),
             id="done-search-bar",
+            classes="search-bar",
         )
         yield Horizontal(
             Static("PROJECT", id="done-filter-label", classes="filter-row-label"),
@@ -1269,34 +1272,7 @@ class LightcycleApp(App):
         width: {FILTER_ROW_LABEL_WIDTH};
         color: {COLOURS["text"]};
     }}
-    #backlog-search-bar {{
-        height: 1;
-        margin-top: 1;
-    }}
-    #backlog-search-bar:focus-within .filter-row-label {{
-        color: {COLOURS["cyan"]};
-    }}
-    BacklogFilterInput {{
-        border: none;
-        padding: 0;
-        height: 1;
-        background: {COLOURS["bg"]};
-        color: {COLOURS["text"]};
-    }}
-    BacklogFilterInput:focus {{
-        background: {COLOURS["bg"]};
-        background-tint: 0%;
-    }}
-    BacklogFilterInput > .input--placeholder {{
-        color: {COLOURS["dim"]};
-    }}
-    BacklogFilterInput > .input--cursor {{
-        background: {COLOURS["cyan"]};
-        color: {COLOURS["bg"]};
-    }}
-    BacklogFilterInput > .input--selection {{
-        background: {COLOURS["selected-bg"]};
-    }}
+    {SEARCH_BAR_CSS}
     #backlog-filter-bar {{
         height: 2;
         border-bottom: solid {COLOURS["border"]};
@@ -1339,34 +1315,6 @@ class LightcycleApp(App):
         content-align: center middle;
         height: 1fr;
         display: none;
-    }}
-    #done-search-bar {{
-        height: 1;
-        margin-top: 1;
-    }}
-    #done-search-bar:focus-within .filter-row-label {{
-        color: {COLOURS["cyan"]};
-    }}
-    DoneFilterInput {{
-        border: none;
-        padding: 0;
-        height: 1;
-        background: {COLOURS["bg"]};
-        color: {COLOURS["text"]};
-    }}
-    DoneFilterInput:focus {{
-        background: {COLOURS["bg"]};
-        background-tint: 0%;
-    }}
-    DoneFilterInput > .input--placeholder {{
-        color: {COLOURS["dim"]};
-    }}
-    DoneFilterInput > .input--cursor {{
-        background: {COLOURS["cyan"]};
-        color: {COLOURS["bg"]};
-    }}
-    DoneFilterInput > .input--selection {{
-        background: {COLOURS["selected-bg"]};
     }}
     #done-filter-bar {{
         height: 2;

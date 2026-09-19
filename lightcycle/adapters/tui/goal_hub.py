@@ -18,6 +18,7 @@ from lightcycle.adapters.tui.design_system import (
     GOAL_LOG_SHORTCUTS,
     HUB_SHORTCUTS,
     ROW_SPACER,
+    SEARCH_BAR_CSS,
     STATE_GLYPHS,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar
@@ -188,35 +189,9 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         height: 1fr;
         display: none;
     }}
+    {SEARCH_BAR_CSS}
     #goal-log-search-bar, #goal-items-search-bar {{
-        height: 1;
-        margin-top: 1;
         display: none;
-    }}
-    #goal-log-search-bar:focus-within .filter-row-label,
-    #goal-items-search-bar:focus-within .filter-row-label {{
-        color: {COLOURS["cyan"]};
-    }}
-    GoalFilterInput {{
-        border: none;
-        padding: 0;
-        height: 1;
-        background: {COLOURS["bg"]};
-        color: {COLOURS["text"]};
-    }}
-    GoalFilterInput:focus {{
-        background: {COLOURS["bg"]};
-        background-tint: 0%;
-    }}
-    GoalFilterInput > .input--placeholder {{
-        color: {COLOURS["dim"]};
-    }}
-    GoalFilterInput > .input--cursor {{
-        background: {COLOURS["cyan"]};
-        color: {COLOURS["bg"]};
-    }}
-    GoalFilterInput > .input--selection {{
-        background: {COLOURS["selected-bg"]};
     }}
     #goal-log-empty, #goal-items-empty {{
         content-align: center middle;
@@ -253,8 +228,9 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         yield Static(GOAL_DESCRIPTION_EMPTY_MESSAGE, id="goal-description-empty")
         yield Horizontal(
             Static("SEARCH", id="goal-log-search-label", classes="filter-row-label"),
-            GoalLogFilterInput(id="goal-log-filter-text"),
+            GoalLogFilterInput(id="goal-log-filter-text", classes="search-input"),
             id="goal-log-search-bar",
+            classes="search-bar",
         )
         yield DescriptionPane(
             id="goal-log-view", highlight=False, markup=False, wrap=True, auto_scroll=False
@@ -262,8 +238,9 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         yield Static(GOAL_LOG_EMPTY_MESSAGE, id="goal-log-empty")
         yield Horizontal(
             Static("SEARCH", id="goal-items-search-label", classes="filter-row-label"),
-            GoalItemsFilterInput(id="goal-items-filter-text"),
+            GoalItemsFilterInput(id="goal-items-filter-text", classes="search-input"),
             id="goal-items-search-bar",
+            classes="search-bar",
         )
         yield GoalItemsTable(id="goal-items-table")
         yield Static(GOAL_ITEMS_EMPTY_MESSAGE, id="goal-items-empty")
