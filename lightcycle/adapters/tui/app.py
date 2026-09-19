@@ -879,9 +879,9 @@ class ReportView(Vertical):
             Static(id="report-day-filter-right"),
             id="report-day-filter-bar",
         )
-        yield Static(id="report-summary")
         yield ReportTable(id="report-table")
         yield Static(id="report-floor")
+        yield Static(id="report-summary")
 
     def on_mount(self) -> None:
         table = self.query_one(ReportTable)
@@ -1444,11 +1444,14 @@ class LightcycleApp(App):
     }}
     #report-summary {{
         height: auto;
+        max-height: 30%;
+        overflow-y: auto;
         margin: 1 0;
         display: none;
     }}
     ReportTable {{
-        height: 1fr;
+        height: auto;
+        max-height: 70%;
     }}
     #report-floor {{
         color: {COLOURS["dim"]};

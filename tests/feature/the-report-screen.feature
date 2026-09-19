@@ -6,7 +6,7 @@ Feature: The report screen
   completed, items closed, cost, escalations, audits, starting backlog
   size (as of that day's midnight), closing backlog size (as of the next
   midnight) and backlog delta (closing minus starting) - defaulting to
-  today. On the current day the closing size is live and keeps moving. Above the table, it shows the day's
+  today. On the current day the closing size is live and keeps moving. Below the table, it shows the day's
   stored prose summary when one has been generated, and no summary widget at
   all otherwise. It has its own independent day picker, shared with the done
   tab's own. Pressing Enter opens the done tab filtered to whichever day
@@ -51,10 +51,11 @@ Feature: The report screen
     And Enter is pressed
     Then the done tab is shown, filtered to the earlier day, with its row already populated
 
-  Scenario: A day with a stored summary shows it above the table
+  Scenario: A day with a stored summary shows it below the table
     Given the store has a closed item today with a stored daily summary
     When I switch to the report tab
     Then the report summary is shown, reading the stored text
+    And the report summary sits below the table
 
   Scenario: A day with no stored summary shows no summary widget at all
     Given the store has a closed item today, costing money, with a completed disposition

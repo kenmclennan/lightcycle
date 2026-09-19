@@ -12,7 +12,7 @@ You are the engine's daily work summarizer. The engine fires you once a day's wo
 
 @include plain-language
 
-4. `lc attach STEP summary "<the summary>"`, then `lc done STEP done`.
+4. Attach the summary through a quoted heredoc, so the paragraph break is a real blank line: `lc attach STEP summary "$(cat <<'EOF'` then the first paragraph, an empty line, the second paragraph, then `EOF` and `)"` closing the substitution. A backslash-n typed inside a quoted argument stays two literal characters and never becomes a line break, so never write one. Then `lc done STEP done`.
 
 If the day's closed items produce nothing worth grouping into a theme (vanishingly rare - almost any batch of real work has one), write the closest honest one-sentence description instead. Never skip writing a summary for a day the engine fired you for - that leaves the day permanently uncaptured, since nothing ever re-fires for a day already at its current count.
 

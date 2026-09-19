@@ -194,6 +194,16 @@ def _report_summary_shown(ctx):
     assert _rendered_text(widget).strip() == _SUMMARY_TEXT
 
 
+@then("the report summary sits below the table")
+def _report_summary_below_table(ctx):
+    app = ctx["session"].app
+    table = app.query_one(ReportTable)
+    widget = app.query_one("#report-summary")
+    screen = app.screen.region
+    assert widget.region.y >= table.region.y + table.region.height
+    assert widget.region.y + widget.region.height <= screen.y + screen.height
+
+
 @then("no report summary is shown")
 def _no_report_summary_shown(ctx):
     widget = ctx["session"].app.query_one("#report-summary")

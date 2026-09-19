@@ -679,7 +679,7 @@ def _report_stacked(size):
     return session
 
 
-def _report_with_summary(size):
+def _report_with_summary(size, width=None):
     store = _report_store()
     today = NOW.date()
     with store.transaction():
@@ -691,11 +691,15 @@ def _report_with_summary(size):
         summarized_count=1,
         clear_dirty=True,
     )
-    session = _launch(store, size=size)
+    session = _launch(store, size=(width or size[0], size[1]))
     session.press("tab")
     session.press("tab")
     session.press("tab")
     return session
+
+
+def _report_stacked_with_summary(size):
+    return _report_with_summary(size, width=40)
 
 
 def _hub_hierarchy(size):
@@ -1401,6 +1405,7 @@ SCREENS = {
     "report#historical-day": _report_historical_day,
     "report#stacked": _report_stacked,
     "report#with-summary": _report_with_summary,
+    "report#stacked-with-summary": _report_stacked_with_summary,
     "hub#workflow": _hub_hierarchy,
     "hub#workflow-engine-active": _hub_workflow_engine_active,
     "hub#workflow-stacked": _hub_hierarchy_stacked,
