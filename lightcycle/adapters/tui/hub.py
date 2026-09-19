@@ -1076,6 +1076,7 @@ class ArtifactViewerHeader(Horizontal):
 class ArtifactViewerScreen(Screen, inherit_bindings=False):
     BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
         Binding("escape", "close", "Back", show=False),
+        Binding("tab", "close", "Back", show=False),
         Binding("left", "close", "Back", show=False),
     ]
 
@@ -1179,6 +1180,7 @@ HUB_TAB_STRIP_CSS = f"""
 class NodeHubScreen(Screen, inherit_bindings=False):
     BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
         Binding("escape", "close_hub", "Back", show=False),
+        Binding("tab", "close_hub", "Back", show=False),
         Binding("left", "close_hub", "Back", show=False),
         Binding("t", "toggle_thinking", "Thinking", show=False),
         Binding("r", "resume", "Resume", show=False),

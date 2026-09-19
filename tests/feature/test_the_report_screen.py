@@ -102,9 +102,9 @@ def _store_closed_items_two_days(ctx):
 
 @when("I switch to the report tab")
 def _switch_to_report(ctx):
-    ctx["session"].press("tab")
-    ctx["session"].press("tab")
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
+    ctx["session"].press("]")
+    ctx["session"].press("]")
 
 
 @when("d is pressed")

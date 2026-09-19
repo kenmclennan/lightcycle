@@ -29,7 +29,7 @@ class TestBacklogViewCheapPathOnUnchangedShape(unittest.TestCase):
         store.create_item("seed", "a description")
         session = launch(make_test_container(store=store))
         self.addCleanup(session.close)
-        session.press("tab")
+        session.press("]")
         return session
 
     def _apply(self, session, view, rows, total, project_filter, text_filter=None):
@@ -123,7 +123,7 @@ class TestBacklogViewRebuildGapAtZeroWidth(unittest.TestCase):
         rows = [_row("a"), _row("b")]
 
         with patch.object(BacklogView, "refresh_column_width"):
-            session.press("tab")
+            session.press("]")
 
         self._apply(session, view, rows, 2, None)
         table = session.app.query_one(BacklogTable)
@@ -179,7 +179,7 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
         rows = [_row("a"), _row("b")]
 
         with patch.object(BacklogView, "refresh_column_width"):
-            session.press("tab")
+            session.press("]")
 
         self._apply(session, view, rows, 2, None)
         self.assertTrue(view._floor)
@@ -198,7 +198,7 @@ class TestBacklogViewRebuildGapAtFloorWidth(unittest.TestCase):
         rows = [_row("a"), _row("b")]
 
         with patch.object(BacklogView, "refresh_column_width"):
-            session.press("tab")
+            session.press("]")
 
         self._apply(session, view, rows, 2, None)
         self.assertTrue(view._floor)
@@ -241,8 +241,8 @@ class TestDoneViewRebuildGapAtFloorWidth(unittest.TestCase):
         rows = [_done_row("a"), _done_row("b")]
 
         with patch.object(DoneView, "refresh_column_width"):
-            session.press("tab")
-            session.press("tab")
+            session.press("]")
+            session.press("]")
 
         self._apply(session, view, rows, 2, None)
         self.assertTrue(view._floor)
@@ -276,12 +276,12 @@ class TestBacklogViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
         table = session.app.query_one(BacklogTable)
         rows = [_row("a"), _row("b")]
 
-        session.press("tab")
+        session.press("]")
         self._apply(session, view, rows, 2, None)
         self.assertTrue(table._stacked_mode)
 
         with patch.object(BacklogView, "refresh_column_width"):
-            session.press("tab")
+            session.press("]")
         self.assertEqual(table.size.width, 0)
 
         with patch.object(view, "_rebuild_table", wraps=view._rebuild_table) as rebuild, \
@@ -291,8 +291,8 @@ class TestBacklogViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
             rebuild.assert_not_called()
 
         with patch.object(BacklogView, "refresh_column_width"):
-            session.press("tab")
-            session.press("tab")
+            session.press("]")
+            session.press("]")
         self._apply(session, view, rows, 2, None)
 
         self.assertEqual(table.row_count, len(rows))
@@ -320,13 +320,13 @@ class TestDoneViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
         table = session.app.query_one(DoneTable)
         rows = [_done_row("a"), _done_row("b")]
 
-        session.press("tab")
-        session.press("tab")
+        session.press("]")
+        session.press("]")
         self._apply(session, view, rows, 2, None)
         self.assertTrue(table._stacked_mode)
 
         with patch.object(DoneView, "refresh_column_width"):
-            session.press("tab")
+            session.press("]")
         self.assertEqual(table.size.width, 0)
 
         with patch.object(view, "_rebuild_table", wraps=view._rebuild_table) as rebuild, \
@@ -336,7 +336,7 @@ class TestDoneViewRebuildGapAfterHidingAStackedTable(unittest.TestCase):
             rebuild.assert_not_called()
 
         with patch.object(DoneView, "refresh_column_width"):
-            session.press("tab")
+            session.press("]")
         self._apply(session, view, rows, 2, None)
 
         self.assertEqual(table.row_count, len(rows))

@@ -38,34 +38,34 @@ Feature: The dashboard adopts the design system's visual vocabulary
     And the "Done" tab is in the dim colour
     And the "Report" tab is in the dim colour
 
-  Scenario: Pressing Tab moves the emphasis from the Current work tab to the Backlog tab
+  Scenario: Pressing ] moves the emphasis from the Current work tab to the Backlog tab
     Given the dashboard has launched
-    When Tab is pressed
+    When ] is pressed
     Then the "Backlog" tab is bold and in the cyan colour
     And the "Current work" tab is in the dim colour
 
-  Scenario: Pressing Tab again moves the emphasis from the Backlog tab to the Done tab
+  Scenario: Pressing ] again moves the emphasis from the Backlog tab to the Done tab
     Given the dashboard has launched
-    When Tab is pressed
-    And Tab is pressed
+    When ] is pressed
+    And ] is pressed
     Then the "Done" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
 
-  Scenario: Pressing Tab a third time moves the emphasis from the Done tab to the Report tab
+  Scenario: Pressing ] a third time moves the emphasis from the Done tab to the Report tab
     Given the dashboard has launched
-    When Tab is pressed
-    And Tab is pressed
-    And Tab is pressed
+    When ] is pressed
+    And ] is pressed
+    And ] is pressed
     Then the "Report" tab is bold and in the cyan colour
     And the "Done" tab is in the dim colour
 
-  Scenario: Pressing Tab a fifth time moves the emphasis back to the Current work tab
+  Scenario: Pressing ] a fifth time moves the emphasis back to the Current work tab
     Given the dashboard has launched
-    When Tab is pressed
-    And Tab is pressed
-    And Tab is pressed
-    And Tab is pressed
-    And Tab is pressed
+    When ] is pressed
+    And ] is pressed
+    And ] is pressed
+    And ] is pressed
+    And ] is pressed
     Then the "Current work" tab is bold and in the cyan colour
     And the "Backlog" tab is in the dim colour
     And the "Done" tab is in the dim colour
@@ -109,7 +109,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | position | key           | action        |
       | 1        | ↑↓            | move          |
       | 2        | enter/→       | open          |
-      | 3        | [/tab]        | prev/next tab |
+      | 3        | [/]           | switch tab    |
       | 4        | ctrl-u/ctrl-d | scroll        |
       | 5        | q             | quit          |
 

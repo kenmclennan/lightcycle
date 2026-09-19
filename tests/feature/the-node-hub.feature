@@ -6,9 +6,8 @@ Feature: The node hub
   always lands on Description, whatever its status; a step lands on Log while
   its worker is running, and on Detail otherwise - the Workflow tab is never a
   landing tab for either type, and neither is Cost. The header stays fixed
-  while ] and [ cycle the tabs within whichever strip the type has; Tab keeps
-  its own global meaning, jumping straight to the backlog (or back to current
-  work) from any tab, at any depth, without first backing out through Esc.
+  while ] and [ cycle the tabs within whichever strip the type has; Tab leaves
+  the hub exactly as Esc does, from any tab, and never cycles anything.
   Selecting a row inside the Workflow tab replaces the current hub screen in
   place, rather than pushing a new one on top of it - moving between an item's
   own row and its step rows is lateral movement inside one item's tree, not
@@ -167,11 +166,11 @@ Feature: The node hub
       | Log      | Workflow |
       | Workflow | Detail   |
 
-  Scenario Outline: Tab jumps straight to the backlog from any tab in an open item's hub, without cycling tabs
+  Scenario Outline: Tab closes an open item's hub from any tab, like Esc, without cycling tabs
     Given an item, its hub open
     When the "<tab>" tab is active
     And Tab is pressed
-    Then the backlog is shown in place of the hub
+    Then the hub is closed
 
     Examples:
       | tab         |
@@ -180,11 +179,11 @@ Feature: The node hub
       | Description |
       | Cost        |
 
-  Scenario Outline: Tab jumps straight to the backlog from any tab in an open step's hub, without cycling tabs
+  Scenario Outline: Tab closes an open step's hub from any tab, like Esc, without cycling tabs
     Given a step is selected, rather than an item
     When the "<tab>" tab is active
     And Tab is pressed
-    Then the backlog is shown in place of the hub
+    Then the hub is closed
 
     Examples:
       | tab      |
@@ -193,12 +192,12 @@ Feature: The node hub
       | Workflow |
       | Cost     |
 
-  Scenario Outline: Tab jumps straight to Done from any tab in an item's hub opened from the backlog, without cycling tabs
+  Scenario Outline: Tab returns to the backlog from any tab in an item's hub opened from the backlog, like Esc
     Given the backlog is showing with a todo item
     When <key> is pressed
     And the "<tab>" tab is active
     And Tab is pressed
-    Then the done tab is shown in place of the hub
+    Then the backlog is shown in place of the hub
 
     Examples:
       | tab         | key   |

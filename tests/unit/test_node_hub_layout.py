@@ -117,7 +117,7 @@ def test_backlog_footer_status_and_shortcut_lines_are_painted():
     store.create_item("todo item", "a description")
     session = launch(make_test_container(store=store))
     try:
-        session.press("tab")
+        session.press("]")
         footer = session.app.screen.query_one(DashboardFooter)
         status_bar, shortcut_bar = footer.children
         status_text = _rendered_row_text(session, status_bar)

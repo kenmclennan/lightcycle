@@ -48,7 +48,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
             store.create_item("word " * 30 + str(i), "a description")
 
         session = self._launch(store)
-        session.press("tab")
+        session.press("]")
 
         screen = session.app.screen
         table = session.app.query_one(BacklogTable)
@@ -62,7 +62,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
         store.create_item("single row", "a description")
 
         session = self._launch(store)
-        session.press("tab")
+        session.press("]")
 
         screen = session.app.screen
         table = session.app.query_one(BacklogTable)

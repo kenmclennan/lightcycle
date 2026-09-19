@@ -434,7 +434,7 @@ def _backlog_todo_item(ctx):
     ctx["item_id"] = item
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
 
 
 @given("an item blocked on another item's completion, its hub open")
@@ -609,7 +609,7 @@ def _backlog_shown_with_todo(ctx):
     ctx["item_id"] = item
     ctx["store"] = store
     ctx["session"] = launch(make_test_container(store=store))
-    ctx["session"].press("tab")
+    ctx["session"].press("]")
 
 
 @given("I opened a backlog item's hub from a specific row in the backlog, with content on every tab")
@@ -621,7 +621,7 @@ def _opened_backlog_hub(ctx):
     store.edit_node(item, description="A description")
     ctx["item_id"] = item
     session = _launch(ctx, store)
-    session.press("tab")
+    session.press("]")
     table = session.app.query_one(BacklogTable)
     ids = [row.key.value for row in table.ordered_rows]
     table.move_cursor(row=ids.index(item))
@@ -777,6 +777,11 @@ def _no_two_tabs_shown(ctx, a, b):
     screen = ctx["session"].app.screen
     for label in (a, b):
         assert len(screen.query("#hub-tab-%s" % label.lower())) == 0
+
+
+@then("the hub is closed")
+def _hub_is_closed(ctx):
+    assert not isinstance(ctx["session"].app.screen, NodeHubScreen)
 
 
 @then("the backlog is shown in place of the hub")
