@@ -108,19 +108,32 @@ class TestMemoryGateUseCase(unittest.TestCase):
         self.assertIsNone(result.suspended)
         self.assertIsNone(result.resumed)
 
+    def test_admission_floors_to_one_when_the_only_alive_worker_is_suspended(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True,
+                      "suspended_at": 10, "log": "/logs/a.log"}],
+            alive_pids=(1,),
+        )
+        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.05))
+        result = _execute(workers, machine)
+
+        self.assertEqual(result.cap, 1)
+        self.assertIsNone(result.suspended)
+
     def test_only_one_branch_fires_per_tick_given_the_config_invariant(self):
         workers = FakeWorkers(
             workers=[
                 {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"},
+                {"spawnid": "c", "pid": 3, "started": 3, "step": "s-3"},
                 {"spawnid": "b", "pid": 2, "started": 5, "step": "s-2", "suspended": True,
                  "suspended_at": 10, "log": "/logs/b.log"},
             ],
-            alive_pids=(1, 2),
+            alive_pids=(1, 2, 3),
         )
         machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.9))
         result = _execute(workers, machine)
 
-        self.assertEqual(result.suspended, "a")
+        self.assertEqual(result.suspended, "c")
         self.assertIsNone(result.resumed)
 
     def test_persists_the_tick_decision_to_the_memory_gate_status(self):
@@ -182,14 +195,17 @@ class TestMemoryGateUseCase(unittest.TestCase):
 
     def test_suspends_on_system_pressure_alone_when_pool_share_is_low(self):
         workers = FakeWorkers(
-            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
-            alive_pids=(1,),
+            workers=[
+                {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"},
+                {"spawnid": "b", "pid": 2, "started": 5, "step": "s-2"},
+            ],
+            alive_pids=(1, 2),
         )
         machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.1))
         result = _execute(workers, machine)
 
         self.assertIsNotNone(result.suspended)
-        self.assertEqual(workers.suspended, [1])
+        self.assertEqual(workers.suspended, [2])
 
     def test_does_not_resume_while_system_pressure_remains_high_even_though_pool_share_is_low(self):
         workers = FakeWorkers(

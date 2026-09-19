@@ -121,12 +121,26 @@ class TestWorkerToSuspend(unittest.TestCase):
         self.assertEqual(target.spawnid, "b")
 
     def test_never_returns_an_already_suspended_worker(self):
-        workers = [_worker("a", 1), _worker("b", 5, suspended=True)]
+        workers = [_worker("a", 1), _worker("c", 3), _worker("b", 5, suspended=True)]
         target = worker_to_suspend(workers, 0.9, 0.85)
-        self.assertEqual(target.spawnid, "a")
+        self.assertEqual(target.spawnid, "c")
 
     def test_none_when_all_are_already_suspended(self):
         workers = [_worker("a", 1, suspended=True)]
+        self.assertIsNone(worker_to_suspend(workers, 0.9, 0.85))
+
+    def test_never_suspends_the_last_working_worker(self):
+        workers = [_worker("a", 1)]
+        self.assertIsNone(worker_to_suspend(workers, 0.9, 0.85))
+
+    def test_never_suspends_the_last_working_worker_beside_a_suspended_one(self):
+        workers = [_worker("a", 1), _worker("b", 5, suspended=True)]
+        self.assertIsNone(worker_to_suspend(workers, 0.9, 0.85))
+
+    def test_suspends_the_newer_of_two_and_no_more_on_a_further_tick(self):
+        workers = [_worker("a", 1), _worker("b", 5)]
+        self.assertEqual(worker_to_suspend(workers, 0.9, 0.85).spawnid, "b")
+        workers = [_worker("a", 1), _worker("b", 5, suspended=True)]
         self.assertIsNone(worker_to_suspend(workers, 0.9, 0.85))
 
 

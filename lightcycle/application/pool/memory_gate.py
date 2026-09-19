@@ -30,9 +30,10 @@ class MemoryGateUseCase:
         pool_share = headroom.pool_share if headroom else None
         system_pressure = headroom.system_pressure if headroom else None
         peak_worker_share = headroom.peak_worker_share if headroom else None
-        cap = admission_cap(headroom, len(alive), self._config.memory_reserve_fraction())
+        working = sum(1 for w in alive if not w.suspended)
+        cap = admission_cap(headroom, working, self._config.memory_reserve_fraction())
         suspend_signal = combined_pressure(pool_share, system_pressure)
-        veto = admission_veto(suspend_signal, self._config.suspend_pressure(), len(alive))
+        veto = admission_veto(suspend_signal, self._config.suspend_pressure(), working)
         vetoed_caps = [c for c in (cap, veto) if c is not None]
         vetoed_cap = min(vetoed_caps) if vetoed_caps else None
 
