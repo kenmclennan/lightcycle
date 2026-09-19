@@ -1372,11 +1372,12 @@ class StoreContractBase:
     def test_goal_log_reads_newest_first_and_per_goal(self):
         s = self.make_store()
         g1, g2 = s.create_goal("a"), s.create_goal("b")
-        s.add_goal_log(g1, "one")
-        s.add_goal_log(g2, "other")
-        s.add_goal_log(g1, "two")
+        s.add_goal_log(g1, "t1", "one")
+        s.add_goal_log(g2, "t-other", "other")
+        s.add_goal_log(g1, "t2", "two")
         self.assertEqual([e.body for e in s.goal_log(g1)], ["two", "one"])
-        self.assertEqual([e.body for e in s.goal_log(g2)], ["other"])
+        self.assertEqual([e.title for e in s.goal_log(g1)], ["t2", "t1"])
+        self.assertEqual([(e.title, e.body) for e in s.goal_log(g2)], [("t-other", "other")])
 
     def test_goal_item_links_keep_order_and_allow_one_item_in_many_goals(self):
         s = self.make_store()
@@ -1398,7 +1399,7 @@ class StoreContractBase:
         other = s.create_item("y", "d")
         s.link_goal_item(gid, item)
         s.link_goal_item(gid, other)
-        s.add_goal_log(gid, "kept")
+        s.add_goal_log(gid, "kept title", "kept")
 
         s.delete(item)
 
@@ -1412,7 +1413,7 @@ class StoreContractBase:
         with self.assertRaises(RuntimeError):
             with s.transaction():
                 s.update_goal(gid, description="changed")
-                s.add_goal_log(gid, "log")
+                s.add_goal_log(gid, "log title", "log")
                 raise RuntimeError("boom")
         self.assertEqual(s.get_goal(gid).description, "")
         self.assertEqual(s.goal_log(gid), [])

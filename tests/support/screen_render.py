@@ -1223,8 +1223,19 @@ def _goals_store(with_content=True):
         store.item("LC-859", "Goals slice 2: the generated progress statement")
         store.link_goal_item(gid, "LC-858")
         store.link_goal_item(gid, "LC-859")
-        store.add_goal_log(gid, "Goals are not nodes: the flow engine never reads them.")
-        store.add_goal_log(gid, "Status is three hand-set values, deliberately not a state.")
+        store.add_goal_log(
+            gid,
+            "Suspending cannot relieve pressure the pool did not cause",
+            "Suspending a worker frees only the pool's own share of the load. When the machine "
+            "is busy for some other reason, suspending more workers changes nothing and only "
+            "starves the pool.",
+        )
+        store.add_goal_log(
+            gid,
+            "Per-machine thresholds ratcheted the pool to zero",
+            "Tried gating on combined_pressure(pool_share, system_pressure) with thresholds "
+            "tuned to this machine. It suspended the last working worker...",
+        )
     return store, gid
 
 
@@ -1272,6 +1283,26 @@ def _goal_hub_log(size):
     return _open_goal_hub(size, "log")
 
 
+def _goal_hub_log_search(size, term="starves"):
+    session = _open_goal_hub(size, "log")
+    screen = session.app.screen
+    session.press("/")
+    session.pause()
+    session.run(lambda: setattr(screen.query_one("#goal-log-filter-text"), "value", term))
+    session.pause()
+    session.run(screen.on_log_filter_settled)
+    session.pause()
+    return session
+
+
+def _goal_hub_log_search_none(size):
+    return _goal_hub_log_search(size, term="zzzz-no-such-term")
+
+
+def _goal_hub_log_empty(size):
+    return _open_goal_hub(size, "log", populated=False)
+
+
 def _goal_hub_items(size):
     return _open_goal_hub(size, "items")
 
@@ -1295,6 +1326,9 @@ SCREENS = {
     "goal-hub#overview": _goal_hub_overview,
     "goal-hub#overview-empty": _goal_hub_overview_empty,
     "goal-hub#log": _goal_hub_log,
+    "goal-hub#log-search": _goal_hub_log_search,
+    "goal-hub#log-search-none": _goal_hub_log_search_none,
+    "goal-hub#log-empty": _goal_hub_log_empty,
     "goal-hub#items": _goal_hub_items,
     "goal-hub#items-empty": _goal_hub_items_empty,
     "backlog#normal": _backlog_normal,

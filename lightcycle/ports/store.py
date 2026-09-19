@@ -428,7 +428,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def add_goal_log(self, goal_id, body):
+    def add_goal_log(self, goal_id, title, body):
         pass
 
     @abstractmethod

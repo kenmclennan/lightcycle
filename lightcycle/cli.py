@@ -28,6 +28,7 @@ from lightcycle.application.feedback import (
     WorklogInput,
     WorklogUseCase,
 )
+from lightcycle.domain.goals import goal_log_stamp
 from lightcycle.domain.work import (
     ALLOWED_STATES_BY_FLAG, DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal, State,
     UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, compose_step_title,
@@ -245,7 +246,7 @@ COMMAND_GROUPS = [
     ("Goals", [
         ("goal", "<new|list|show|set|log|link|unlink> ...", "maintain a goal by hand: "
          "new \"<title>\" --project <ref> [--description T], list, show <G-n>, set <G-n> [--title/"
-         "--description/--project/--status \"not started|in progress|done\"], log <G-n> \"<text>\", "
+         "--description/--project/--status \"not started|in progress|done\"], log <G-n> \"<title>\" \"<body>\", "
          "link/unlink <G-n> <item> - a goal is not a node and the flow engine never touches it"),
     ]),
     ("Feedback loop", [
@@ -1717,7 +1718,7 @@ def cmd_goal(argv):
             print("updated %s" % a.id)
             return 0
         if a.sub == "log":
-            AppendGoalLogUseCase(store).execute(a.id, a.text)
+            AppendGoalLogUseCase(store).execute(a.id, a.title, a.body)
             print("logged to %s" % a.id)
             return 0
         if a.sub == "link":
@@ -1744,7 +1745,9 @@ def _print_goal(view):
         print("  %s%s" % (ref.id, "  %s" % ref.title if ref.title else ""))
     print("\nlog:")
     for e in view.log:
-        print("  %s  %s" % (e.created_at, e.body))
+        print("  %s%s" % (goal_log_stamp(e.created_at), "  %s" % e.title if e.title else ""))
+        for line in e.body.splitlines():
+            print("    %s" % line)
 
 
 def _init_pull_default_origin():

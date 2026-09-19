@@ -233,7 +233,7 @@ COMMANDS = {
         "set": CommandSpec(prog="lc goal set", args=(
             Arg("id"), Arg("--title"), Arg("--description"), Arg("--project"), Arg("--status"),
         )),
-        "log": CommandSpec(prog="lc goal log", args=(Arg("id"), Arg("text"))),
+        "log": CommandSpec(prog="lc goal log", args=(Arg("id"), Arg("title"), Arg("body"))),
         "link": CommandSpec(prog="lc goal link", args=(Arg("id"), Arg("item"))),
         "unlink": CommandSpec(prog="lc goal unlink", args=(Arg("id"), Arg("item"))),
     }),

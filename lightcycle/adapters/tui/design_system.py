@@ -190,3 +190,14 @@ LIST_ARTIFACT_SHORTCUTS = (
     ("tab", "next tab"),
     ("q", "quit"),
 )
+
+FILTER_DEBOUNCE_SECONDS = 0.15
+FILTER_ROW_LABEL_WIDTH = 10
+
+GOAL_LOG_SHORTCUTS = HUB_SHORTCUTS + (("/", "search"),)
+
+GOAL_LOG_SEARCH_SHORTCUTS = (
+    ("esc/tab", "back"),
+    ("[/]", "switch tab"),
+    ("q", "quit"),
+)
