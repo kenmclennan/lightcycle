@@ -196,6 +196,44 @@ LIST_ARTIFACT_SHORTCUTS = (
 FILTER_DEBOUNCE_SECONDS = 0.15
 FILTER_ROW_LABEL_WIDTH = 10
 
+SEARCH_BAR_CSS = f"""
+    .search-bar {{
+        height: 3;
+        margin-bottom: 1;
+    }}
+    .search-bar .filter-row-label {{
+        height: 3;
+        content-align: left middle;
+        color: {COLOURS["dim"]};
+    }}
+    .search-bar:focus-within .filter-row-label {{
+        color: {COLOURS["cyan"]};
+    }}
+    .search-input {{
+        width: 1fr;
+        height: 3;
+        border: round {COLOURS["border"]};
+        padding: 0 1;
+        background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
+    }}
+    .search-input:focus {{
+        border: round {COLOURS["cyan"]};
+        background: {COLOURS["bg"]};
+        background-tint: 0%;
+    }}
+    .search-input > .input--placeholder {{
+        color: {COLOURS["dim"]};
+    }}
+    .search-input > .input--cursor {{
+        background: {COLOURS["cyan"]};
+        color: {COLOURS["bg"]};
+    }}
+    .search-input > .input--selection {{
+        background: {COLOURS["selected-bg"]};
+    }}
+"""
+
 GOAL_LOG_SHORTCUTS = HUB_SHORTCUTS + (("/", "search"),)
 
 GOAL_LOG_SEARCH_SHORTCUTS = (
