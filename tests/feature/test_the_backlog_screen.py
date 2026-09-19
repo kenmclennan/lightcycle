@@ -415,7 +415,7 @@ def _row_blank_project(ctx):
 def _row_shows_id_in_full(ctx, id):
     table = ctx["session"].app.query_one(BacklogTable)
     row = next(r for r in table.ordered_rows if r.key.value == ctx["item_id"])
-    assert row.height == 1
+    assert row.height == 2
     lines = _row_lines(table, ctx["item_id"])
     text = _rendered_cell_text_at(table, lines[0], "id")
     assert text.strip() == id
@@ -427,7 +427,7 @@ def _both_ids_shown_in_full(ctx):
     for key in ("id_a", "id_b"):
         row_id = ctx[key]
         row = next(r for r in table.ordered_rows if r.key.value == row_id)
-        assert row.height == 1
+        assert row.height == 2
         lines = _row_lines(table, row_id)
         text = _rendered_cell_text_at(table, lines[0], "id")
         assert text.strip() == row_id
@@ -477,6 +477,8 @@ def _backlog_stacked_continuation(ctx, indent):
     for line in lines[1:]:
         text = _stacked_cell_text(table, line)
         stripped = text.rstrip()
+        if not stripped:
+            continue
         leading = len(stripped) - len(stripped.lstrip(" "))
         assert leading == indent
         words.extend(stripped.strip().split())
