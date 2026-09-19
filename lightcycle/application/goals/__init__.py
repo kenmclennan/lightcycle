@@ -1,6 +1,7 @@
 from lightcycle.application.goals.append_goal_log import AppendGoalLogUseCase, log_entry_matches
 from lightcycle.application.goals.create_goal import CreateGoalInput, CreateGoalUseCase
 from lightcycle.application.goals.edit_goal import EditGoalInput, EditGoalUseCase
+from lightcycle.application.goals.goal_items import GoalItems, GoalItemsUseCase
 from lightcycle.application.goals.link_goal_item import LinkGoalItemUseCase
 from lightcycle.application.goals.list_goals import ListGoalsUseCase
 from lightcycle.application.goals.show_goal import GoalItemRef, GoalView, ShowGoalUseCase
@@ -13,6 +14,8 @@ __all__ = [
     "EditGoalInput",
     "EditGoalUseCase",
     "GoalItemRef",
+    "GoalItems",
+    "GoalItemsUseCase",
     "GoalView",
     "LinkGoalItemUseCase",
     "ListGoalsUseCase",

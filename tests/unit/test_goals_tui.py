@@ -3,11 +3,15 @@ import unittest
 from lightcycle.adapters.tui.app import GoalsTable, GoalsView, TabStrip
 from lightcycle.adapters.tui.goal_hub import (
     GOAL_ITEMS_EMPTY_MESSAGE,
+    GOAL_ITEMS_NO_MATCH_MESSAGE,
     GOAL_DESCRIPTION_EMPTY_MESSAGE,
     GOAL_TAB_ORDER,
     GOAL_LOG_NO_MATCH_MESSAGE,
     GOAL_LOG_EMPTY_MESSAGE,
+    GoalFilterInput,
     GoalHubScreen,
+    GoalItemsFilterInput,
+    GoalItemsTable,
     GoalLogFilterInput,
 )
 from lightcycle.adapters.tui.design_system import (
@@ -17,6 +21,7 @@ from lightcycle.adapters.tui.design_system import (
 )
 from lightcycle.adapters.tui.footer import ShortcutBar
 from lightcycle.domain.goals import GoalLogEntry
+from lightcycle.domain.work import State
 from lightcycle.adapters.tui.hub import HUB_TAB_STRIP_CSS, HubTabStrip, NodeHubScreen
 from tests.support.fake_store import FakeStore
 from tests.support.screen_render import (
@@ -192,15 +197,19 @@ class TestGoalHub(unittest.TestCase):
             frame.index("Suspending cannot relieve"),
         )
 
-    def test_items_show_ids_and_titles_and_no_state(self):
+    def test_items_show_three_groups_in_order_with_dim_headers(self):
         session, _, _ = self._open()
         for _ in range(2):
             session.press("]")
         frame = _frame(session)
-        self.assertIn("LC-858", frame)
-        self.assertIn("Goals slice 1: the record and the tab", frame)
-        for word in ("todo", "ready", "running", "waiting", "blocked", "active"):
-            self.assertNotIn(word, frame)
+        self.assertLess(frame.index("CURRENT WORK"), frame.index("BACKLOG"))
+        self.assertLess(frame.index("BACKLOG"), frame.index("DONE"))
+        for glyph in ("●", "◆", "○"):
+            self.assertIn(glyph, frame)
+        self.assertLess(frame.index("LC-864"), frame.index("LC-858"))
+        self.assertLess(frame.index("LC-859"), frame.index("LC-857"))
+        for item_id in ("LC-857", "LC-858", "LC-859", "LC-861", "LC-862", "LC-863", "LC-864"):
+            self.assertEqual(frame.count(item_id + " "), 1)
 
     def test_items_empty_state(self):
         session, _, _ = self._open(populated=False)
@@ -225,6 +234,7 @@ class TestGoalHub(unittest.TestCase):
             "goals#normal", "goals#empty", "goal-hub#overview", "goal-hub#log",
             "goal-hub#log-search", "goal-hub#log-search-none", "goal-hub#log-empty",
             "goal-hub#overview-empty", "goal-hub#items", "goal-hub#items-empty",
+            "goal-hub#items-search", "goal-hub#items-search-none",
         ):
             self.assertIn(state, SCREENS)
         for state in ("goal-hub#questions", "goal-hub#questions-empty"):
@@ -233,6 +243,160 @@ class TestGoalHub(unittest.TestCase):
     def test_goal_hub_fits_a_narrow_terminal(self):
         frame = render("goal-hub#overview", size=(44, 30))
         self.assertIn("Overview", frame)
+
+
+class TestGoalItemsTab(unittest.TestCase):
+    def _open(self, size=None):
+        store, gid = _goals_store()
+        session = _launch(store) if size is None else _launch(store, size=size)
+        self.addCleanup(session.close)
+        session.press("[")
+        session.press("enter")
+        for _ in range(2):
+            session.press("]")
+        return session, store, gid
+
+    def _type(self, session, text):
+        screen = session.app.screen
+        session.run(lambda: setattr(screen.query_one(GoalItemsFilterInput), "value", text))
+        session.pause()
+        session.run(screen.on_items_filter_settled)
+        session.pause()
+
+    def _cursor_rows(self, session):
+        return [line for line in _rows(session) if "❯" in line]
+
+    def test_step_text_is_right_aligned_on_its_own_line(self):
+        session, _, _ = self._open()
+        lines = _rows(session)
+        index = next(i for i, line in enumerate(lines) if "LC-862" in line)
+        step_line = lines[index + 1]
+        self.assertTrue(step_line.rstrip().endswith("write-code"))
+        self.assertGreater(len(step_line) - len(step_line.lstrip()), 40)
+
+    def test_dependency_blocked_row_shows_the_blocker_in_place_of_the_step(self):
+        session, _, _ = self._open()
+        frame = _frame(session)
+        self.assertIn("○⊣", frame)
+        self.assertIn("blocked · LC-862.1", frame)
+
+    def test_backlog_and_done_rows_carry_no_glyph_or_step(self):
+        session, _, _ = self._open()
+        for line in _rows(session):
+            if "LC-858" in line or "LC-859" in line or "LC-857" in line:
+                self.assertRegex(line.strip(), r"^(❯\s+)?LC-85\d\s")
+
+    def test_titles_wrap_instead_of_truncating_on_a_narrow_terminal(self):
+        session, _, _ = self._open(size=(40, 40))
+        frame = _frame(session)
+        self.assertNotIn("…", frame)
+        for word in ("gate", "human", "clears", "progress", "statement"):
+            self.assertIn(word, frame)
+
+    def test_cursor_starts_on_the_first_item_and_never_rests_on_a_header(self):
+        session, _, _ = self._open()
+        self.assertIn("LC-861", self._cursor_rows(session)[0])
+        seen = []
+        for _ in range(8):
+            session.press("down")
+            rows = self._cursor_rows(session)
+            self.assertEqual(len(rows), 1)
+            seen.append(rows[0])
+        for header in ("CURRENT WORK", "BACKLOG", "DONE"):
+            self.assertFalse(any(header in row for row in seen))
+        self.assertTrue(any("LC-858" in row for row in seen))
+        self.assertIn("LC-857", seen[-1])
+        for _ in range(8):
+            session.press("up")
+        self.assertIn("LC-861", self._cursor_rows(session)[0])
+
+    def test_enter_opens_the_step_hub_for_current_work_and_the_item_hub_otherwise(self):
+        session, _, _ = self._open()
+        session.press("enter")
+        screen = session.app.screen
+        self.assertIsInstance(screen, NodeHubScreen)
+        self.assertEqual(screen._node_id, "LC-861.1")
+        session.press("escape")
+        self.assertIsInstance(session.app.screen, GoalHubScreen)
+        self.assertEqual(session.app.screen._active_tab, "items")
+        for _ in range(4):
+            session.press("down")
+        session.press("enter")
+        self.assertEqual(session.app.screen._node_id, "LC-858")
+
+    def test_slash_focuses_search_and_typing_narrows_all_groups(self):
+        session, _, _ = self._open()
+        session.press("/")
+        self.assertIsInstance(session.app.screen.focused, GoalItemsFilterInput)
+        self.assertIn("SEARCH", _frame(session))
+        self._type(session, "slice 1")
+        frame = _frame(session)
+        self.assertIn("LC-858", frame)
+        self.assertNotIn("LC-862", frame)
+        self.assertNotIn("CURRENT WORK", frame)
+        self._type(session, "")
+        frame = _frame(session)
+        for item_id in ("LC-857", "LC-858", "LC-862"):
+            self.assertIn(item_id, frame)
+
+    def test_search_spans_current_work_and_done_by_id(self):
+        session, _, _ = self._open()
+        session.press("/")
+        self._type(session, "lc-86")
+        frame = _frame(session)
+        self.assertIn("CURRENT WORK", frame)
+        self.assertNotIn("BACKLOG", frame)
+        self.assertNotIn("DONE", frame)
+
+    def test_no_match_message(self):
+        session, _, _ = self._open()
+        session.press("/")
+        self._type(session, "zzzz-no-such-term")
+        frame = _frame(session)
+        self.assertIn(GOAL_ITEMS_NO_MATCH_MESSAGE, frame)
+        self.assertIn("SEARCH", frame)
+
+    def test_escape_leaves_search_keeping_text(self):
+        session, _, _ = self._open()
+        session.press("/")
+        self._type(session, "slice 1")
+        session.press("escape")
+        screen = session.app.screen
+        self.assertIsInstance(screen, GoalHubScreen)
+        self.assertIsInstance(screen.focused, GoalItemsTable)
+        self.assertEqual(screen.query_one(GoalItemsFilterInput).value, "slice 1")
+
+    def test_footer_follows_focus_on_the_items_tab(self):
+        session, _, _ = self._open()
+
+        def shortcuts():
+            return session.run(lambda: session.app.screen.query_one(ShortcutBar).shortcuts)
+
+        self.assertEqual(shortcuts(), GOAL_LOG_SHORTCUTS)
+        session.press("/")
+        self.assertEqual(shortcuts(), GOAL_LOG_SEARCH_SHORTCUTS)
+
+    def test_search_row_is_absent_when_the_goal_has_no_items(self):
+        store, _ = _goals_store(with_content=False)
+        session = _launch(store)
+        self.addCleanup(session.close)
+        session.press("[")
+        session.press("enter")
+        for _ in range(2):
+            session.press("]")
+        frame = _frame(session)
+        self.assertNotIn("SEARCH", frame)
+        self.assertIn(GOAL_ITEMS_EMPTY_MESSAGE, frame)
+
+    def test_a_state_change_repaints_on_the_next_poll(self):
+        session, store, _ = self._open()
+        store.update_state("LC-862.1", State.QUEUED)
+        store.assign("LC-862.1", None)
+        session.run(session.app.screen.poll_refresh)
+        session.pause()
+        lines = _rows(session)
+        row = next(line for line in lines if "LC-862" in line)
+        self.assertIn("○", row)
 
 
 def _rows(session):
@@ -343,13 +507,12 @@ class TestGoalLogSearch(unittest.TestCase):
         self.assertIsInstance(session.app.screen.focused, GoalLogFilterInput)
         self.assertIn("SEARCH", _frame(session))
 
-    def test_slash_is_inert_on_overview_and_items(self):
+    def test_slash_is_inert_on_overview(self):
         session, _, _ = self._open()
-        for _ in range(2):
-            session.press("]")
-            session.press("/")
-            self.assertNotIsInstance(session.app.screen.focused, GoalLogFilterInput)
-            self.assertIsInstance(session.app.screen, GoalHubScreen)
+        session.press("[")
+        session.press("/")
+        self.assertNotIsInstance(session.app.screen.focused, GoalFilterInput)
+        self.assertIsInstance(session.app.screen, GoalHubScreen)
 
     def test_slash_is_bound_on_the_screen(self):
         self.assertIn("/", {b.key for b in GoalHubScreen.BINDINGS})
@@ -427,9 +590,9 @@ class TestGoalLogSearch(unittest.TestCase):
         self.assertNotIn(GOAL_LOG_EMPTY_MESSAGE, frame)
         self.assertIn("SEARCH", frame)
 
-    def test_the_search_row_is_absent_off_the_log_tab(self):
+    def test_the_search_row_is_absent_on_overview(self):
         session, _, _ = self._open()
-        session.press("]")
+        session.press("[")
         self.assertNotIn("SEARCH", _frame(session))
 
     def test_footer_follows_tab_and_focus(self):
@@ -438,6 +601,8 @@ class TestGoalLogSearch(unittest.TestCase):
         session.press("/")
         self.assertEqual(self._shortcuts(session), GOAL_LOG_SEARCH_SHORTCUTS)
         session.press("escape")
+        self.assertEqual(self._shortcuts(session), GOAL_LOG_SHORTCUTS)
+        session.press("]")
         self.assertEqual(self._shortcuts(session), GOAL_LOG_SHORTCUTS)
         session.press("]")
         self.assertEqual(self._shortcuts(session), HUB_SHORTCUTS)

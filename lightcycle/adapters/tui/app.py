@@ -77,7 +77,7 @@ from lightcycle.application.work import (
     StatusUseCase,
 )
 from lightcycle.application.work.priority_rows import select_priority_rows
-from lightcycle.ports.workers import RegistryUnreadable
+from lightcycle.application.work.suspended_steps import suspended_step_ids
 
 POLL_INTERVAL_SECONDS = 10
 POOL_TRANSITION_POLL_SECONDS = 1
@@ -1635,12 +1635,7 @@ class LightcycleApp(App):
         tick_start = time.perf_counter() if metrics_enabled else None
 
         lanes = StatusUseCase(self._container.store).execute().lanes
-        try:
-            suspended_steps = {
-                w.step for w in self._container.workers.workers_state() if w.step and w.suspended
-            }
-        except RegistryUnreadable:
-            suspended_steps = frozenset()
+        suspended_steps = suspended_step_ids(self._container.workers)
 
         selection = select_priority_rows(
             self._container.store, lanes, self._container.flow_service(),

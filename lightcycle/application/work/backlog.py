@@ -2,10 +2,11 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
+from lightcycle.application.work.item_partition import is_backlogged_item
 from lightcycle.application.work.item_filter import project_matches, text_matches
 from lightcycle.application.work.project_counts import ProjectCount, project_counts
 from lightcycle.application.work.project_of import project_of, repo_of
-from lightcycle.domain.work import State, node_id_key
+from lightcycle.domain.work import node_id_key
 
 
 @dataclass(frozen=True)
@@ -59,12 +60,7 @@ class BacklogUseCase:
 
     def _backlogged_items(self):
         if self._backlogged_items_cache is None:
-            candidates = [
-                n for n in self._store.all_items()
-                if n.state in (State.BACKLOGGED, State.BLOCKED)
-            ]
             self._backlogged_items_cache = [
-                n for n in candidates
-                if n.state == State.BACKLOGGED or not self._store.children(n.id)
+                n for n in self._store.all_items() if is_backlogged_item(self._store, n)
             ]
         return self._backlogged_items_cache
