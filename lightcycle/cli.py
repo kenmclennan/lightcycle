@@ -44,6 +44,7 @@ from lightcycle.application.goals import (
     EditGoalUseCase,
     LinkGoalItemUseCase,
     ListGoalsUseCase,
+    RefreshGoalStateOfPlayUseCase,
     ShowGoalUseCase,
     UnlinkGoalItemUseCase,
 )
@@ -244,10 +245,10 @@ COMMAND_GROUPS = [
          "close a node; a step done-with-outcome advances the flow"),
     ]),
     ("Goals", [
-        ("goal", "<new|list|show|set|log|link|unlink> ...", "maintain a goal by hand: "
+        ("goal", "<new|list|show|set|log|link|unlink|refresh> ...", "maintain a goal by hand: "
          "new \"<title>\" --project <ref> [--description T], list, show <G-n>, set <G-n> [--title/"
          "--description/--project/--status \"not started|in progress|done\"], log <G-n> \"<title>\" \"<body>\", "
-         "link/unlink <G-n> <item> - a goal is not a node and the flow engine never touches it"),
+         "link/unlink <G-n> <item>, refresh <G-n> (queue a generated state of play) - a goal is not a node and the flow engine never touches it"),
     ]),
     ("Feedback loop", [
         ("retro", "<item>", "gather child feedback + objective signals into a read digest"),
@@ -1729,6 +1730,13 @@ def cmd_goal(argv):
             UnlinkGoalItemUseCase(store).execute(a.id, a.item)
             print("unlinked %s from %s" % (a.item, a.id))
             return 0
+        if a.sub == "refresh":
+            step = RefreshGoalStateOfPlayUseCase(store, _container.config).execute(a.id)
+            print(
+                "queued state of play for %s (%s); the pool writes it - read it with "
+                "lc goal show %s" % (a.id, step, a.id)
+            )
+            return 0
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -1740,6 +1748,8 @@ def _print_goal(view):
     print("project: %s" % (g.project or "(none)"))
     print("status: %s" % g.status)
     print("\ndescription:\n%s" % (g.description or "(none)"))
+    if g.state_of_play:
+        print("\nState of play  %s:\n%s" % (goal_log_stamp(g.state_of_play_at), g.state_of_play))
     print("\nitems:")
     for ref in view.items:
         print("  %s%s" % (ref.id, "  %s" % ref.title if ref.title else ""))

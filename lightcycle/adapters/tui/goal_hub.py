@@ -44,6 +44,7 @@ from lightcycle.domain.goals import goal_log_stamp
 
 GOAL_TAB_ORDER = ("overview", "log", "items")
 
+STATE_OF_PLAY_TITLE = "State of play"
 GOAL_DESCRIPTION_EMPTY_MESSAGE = "No description written yet."
 GOAL_LOG_EMPTY_MESSAGE = "No decisions logged yet."
 GOAL_LOG_NO_MATCH_MESSAGE = "No entries match."
@@ -366,6 +367,21 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         description = self._view.goal.description
         if description:
             pane.write(Text(description, style=COLOURS["text"]))
+        state_of_play = self._view.goal.state_of_play
+        if state_of_play:
+            width = pane.size.width - pane.styles.scrollbar_size_vertical
+            if width <= 0:
+                width = LOG_FALLBACK_WIDTH
+            if description:
+                pane.write(Text(""), width=width)
+            stamp = goal_log_stamp(self._view.goal.state_of_play_at)
+            for text in _header_lines(STATE_OF_PLAY_TITLE, stamp, width):
+                split = len(text) - len(stamp)
+                header = Text(text[:split], style=COLOURS["text"])
+                header.append(text[split:], style=COLOURS["dim"])
+                pane.write(header, width=width)
+            pane.write(Text(""), width=width)
+            pane.write(Text(state_of_play, style=COLOURS["text"]), width=width)
 
     def _render_log(self) -> None:
         pane = self.query_one("#goal-log-view", DescriptionPane)
@@ -454,7 +470,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
             return
         tab = self._active_tab
         overview = tab == "overview"
-        has_description = bool(self._view.goal.description)
+        has_description = bool(self._view.goal.description or self._view.goal.state_of_play)
         self.query_one("#goal-description-view", DescriptionPane).display = (
             overview and has_description
         )
@@ -487,7 +503,9 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         if self._view is None:
             return
         tab = self._active_tab
-        if tab == "overview" and self._view.goal.description:
+        if tab == "overview" and (
+            self._view.goal.description or self._view.goal.state_of_play
+        ):
             self.set_focus(self.query_one("#goal-description-view", DescriptionPane))
         elif tab == "log" and self._view.log:
             self.set_focus(self.query_one("#goal-log-view", DescriptionPane))

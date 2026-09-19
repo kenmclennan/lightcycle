@@ -126,6 +126,7 @@ _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
     "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_items",
+    "_goal_state_of_play_steps",
 )
 
 
@@ -146,6 +147,7 @@ class FakeStore(StorePort):
         self._goals = {}
         self._goal_log = []
         self._goal_items = []
+        self._goal_state_of_play_steps = {}
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
         self._tx_depth = 0
@@ -953,6 +955,26 @@ class FakeStore(StorePort):
                    if v is not None}
         if changes:
             self._goals[goal_id] = g._replace(updated_at=self._now(), **changes)
+
+    def start_goal_state_of_play(self, goal_id, step_id):
+        self._goal_state_of_play_steps[goal_id] = step_id
+
+    def finish_goal_state_of_play(self, goal_id, text):
+        self._goals[goal_id] = self._goals[goal_id]._replace(
+            state_of_play=text, state_of_play_at=self._now())
+        self._goal_state_of_play_steps.pop(goal_id, None)
+
+    def release_goal_state_of_play(self, goal_id):
+        self._goal_state_of_play_steps.pop(goal_id, None)
+
+    def goal_state_of_play_step(self, goal_id):
+        return self._goal_state_of_play_steps.get(goal_id)
+
+    def goal_for_state_of_play_step(self, step_id):
+        for goal_id, sid in self._goal_state_of_play_steps.items():
+            if sid == step_id:
+                return goal_id
+        return None
 
     def add_goal_log(self, goal_id, title, body):
         entry_id = len(self._goal_log) + 1

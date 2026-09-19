@@ -1289,8 +1289,14 @@ class TestSqliteStoreGoalsMigration(unittest.TestCase):
         self.assertEqual((goal.project, goal.status), ("", "in progress"))
         cols = {r[1] for r in store._conn.execute("PRAGMA table_info(goals)").fetchall()}
         self.assertEqual(
-            cols, {"id", "title", "description", "project", "status", "created_at", "updated_at"}
+            cols,
+            {
+                "id", "title", "description", "project", "status", "created_at", "updated_at",
+                "state_of_play", "state_of_play_at", "state_of_play_step",
+            },
         )
+        self.assertEqual((goal.state_of_play, goal.state_of_play_at), ("", None))
+        self.assertIsNone(store.goal_state_of_play_step("G-1"))
         self.assertNotIn("goal_questions", self._tables(store))
         self.assertEqual([e.body for e in store.goal_log("G-1")], ["kept log"])
         self.assertEqual(store.goal_items("G-1"), ["LC-1"])
