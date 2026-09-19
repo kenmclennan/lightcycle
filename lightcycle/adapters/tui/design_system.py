@@ -14,6 +14,8 @@ COLOURS = {
     "selected-bg": "#1c2a2c",
 }
 
+HEADING_STYLE = "bold " + COLOURS["cyan"]
+
 MODAL_OVERLAY_ALPHA = 0.72
 
 STATE_GLYPHS = {

@@ -165,7 +165,9 @@ class TestGoalHub(unittest.TestCase):
         frame = _frame(session)
         self.assertIn(GOAL_DESCRIPTION[:40], frame)
         self.assertNotIn(GOAL_DESCRIPTION, frame)
-        for text in ("## Outcome", "## Constraints", "## Open questions"):
+        for text in ("## Outcome", "## Constraints", "## Open questions", "[["):
+            self.assertNotIn(text, frame)
+        for text in ("Outcome", "Constraints", "Open questions"):
             self.assertIn(text, frame)
         self.assertNotIn("OUTCOME", frame)
         self.assertNotIn("SCOPE", frame)

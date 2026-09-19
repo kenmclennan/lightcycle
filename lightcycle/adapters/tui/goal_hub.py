@@ -16,6 +16,7 @@ from lightcycle.adapters.tui.design_system import (
     FILTER_DEBOUNCE_SECONDS,
     GOAL_LOG_SEARCH_SHORTCUTS,
     GOAL_LOG_SHORTCUTS,
+    HEADING_STYLE,
     HUB_SHORTCUTS,
     ROW_SPACER,
     SEARCH_BAR_CSS,
@@ -29,6 +30,7 @@ from lightcycle.adapters.tui.hub import (
     HubTabStrip,
     NodeHubScreen,
 )
+from lightcycle.adapters.tui.prose_text import prose_text, resolve_titles
 from lightcycle.adapters.tui.priority_list import (
     PriorityRow,
     assemble_rows,
@@ -209,6 +211,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         self._now = now
         self._active_tab = GOAL_TAB_ORDER[0]
         self._view = None
+        self._titles = {}
         self._last_key = None
         self._poll_timer = None
         self._log_filter = ""
@@ -288,21 +291,28 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         )
         rows = self._current_rows(result)
         width = self._items_width()
+        titles = self._reference_titles(view)
         key = (
             view.goal, tuple(view.log), tuple(view.items), self._log_filter, self._log_width(),
             self._items_filter, width, tuple(rows), tuple(result.backlog), tuple(result.done),
-            result.total,
+            result.total, tuple(sorted(titles.items())),
         )
         if key == self._last_key:
             return
         self._last_key = key
         self._view = view
+        self._titles = titles
         self._items_result = result
         self._items_rows = rows
         self._render_identity()
         self._render_overview()
         self._render_log()
         self._render_items()
+
+    def _reference_titles(self, view):
+        goal = view.goal
+        texts = [goal.description, goal.state_of_play] + [e.body for e in view.log]
+        return resolve_titles(self._container.store, "\n".join(t for t in texts if t))
 
     def _current_rows(self, result):
         suspended = suspended_step_ids(self._container.workers)
@@ -351,7 +361,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         pane.clear()
         description = self._view.goal.description
         if description:
-            pane.write(Text(description, style=COLOURS["text"]))
+            pane.write(prose_text(description, self._titles))
         state_of_play = self._view.goal.state_of_play
         if state_of_play:
             width = pane.size.width - pane.styles.scrollbar_size_vertical
@@ -362,11 +372,11 @@ class GoalHubScreen(Screen, inherit_bindings=False):
             stamp = goal_log_stamp(self._view.goal.state_of_play_at)
             for text in _header_lines(STATE_OF_PLAY_TITLE, stamp, width):
                 split = len(text) - len(stamp)
-                header = Text(text[:split], style=COLOURS["text"])
+                header = Text(text[:split], style=HEADING_STYLE)
                 header.append(text[split:], style=COLOURS["dim"])
                 pane.write(header, width=width)
             pane.write(Text(""), width=width)
-            pane.write(Text(state_of_play, style=COLOURS["text"]), width=width)
+            pane.write(prose_text(state_of_play, self._titles), width=width)
 
     def _render_log(self) -> None:
         pane = self.query_one("#goal-log-view", DescriptionPane)
@@ -383,13 +393,13 @@ class GoalHubScreen(Screen, inherit_bindings=False):
             for index, text in enumerate(lines):
                 if index == 0:
                     split = len(text) - len(stamp)
-                    header = Text(text[:split], style=COLOURS["text"])
+                    header = Text(text[:split], style=HEADING_STYLE)
                     header.append(text[split:], style=COLOURS["dim"])
                     pane.write(header, width=width)
                 else:
-                    pane.write(Text(text, style=COLOURS["text"]), width=width)
+                    pane.write(Text(text, style=HEADING_STYLE), width=width)
             pane.write(Text(""), width=width)
-            pane.write(Text(entry.body, style=COLOURS["text"]), width=width)
+            pane.write(prose_text(entry.body, self._titles), width=width)
             pane.write(Text(""), width=width)
 
     def _render_items(self) -> None:
@@ -415,7 +425,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
             entries = groups[name]
             if not entries:
                 continue
-            header = Text(label, style=COLOURS["dim"])
+            header = Text(label, style=HEADING_STYLE)
             if not first:
                 header = Text("\n") + header
             first = False

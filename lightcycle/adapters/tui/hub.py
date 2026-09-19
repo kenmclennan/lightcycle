@@ -28,6 +28,7 @@ from lightcycle.adapters.tui.design_system import (
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter
+from lightcycle.adapters.tui.prose_text import prose_text, resolve_titles
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
     apply_widths,
@@ -1973,14 +1974,16 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._apply_tab_visibility()
 
     def _render_description(self, description) -> None:
-        if description == self._last_description:
+        titles = resolve_titles(self._container.store, description)
+        key = (description, tuple(sorted(titles.items())))
+        if key == self._last_description:
             return
-        self._last_description = description
+        self._last_description = key
         self._has_description = bool(description)
         pane = self.query_one(DescriptionPane)
         pane.clear()
         if description:
-            pane.write(Text(description, style=COLOURS["text"]))
+            pane.write(prose_text(description, titles))
 
     def update_pinned_ancestor(self) -> None:
         banner = self.query_one("#pinned-ancestor", Static)

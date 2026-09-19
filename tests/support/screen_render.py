@@ -1208,7 +1208,8 @@ GOAL_DESCRIPTION = (
     "The record is written by a person and maintained by hand.\n\n"
     "## Constraints\n\n"
     "- Out: any generated progress statement and every figure derived from linked items.\n"
-    "- The flow engine never reads a goal.\n\n"
+    "- The flow engine never reads a goal.\n"
+    "- Waits on [[LC-861]] and supersedes [[LC-9999]].\n\n"
     "## Open questions\n\n"
     "- Should a goal ever close itself once its items are done?\n"
     "- Who owns the progress statement's wording?"
@@ -1241,6 +1242,9 @@ def _goals_store(with_content=True):
         store.complete_node(finished, "merged")
         for linked in (gate, active, queued, held, finished):
             store.link_goal_item(gid, linked)
+        store.finish_goal_state_of_play(
+            gid, "Two slices are done.\n\n## Next\n\nThe gate slice ([[LC-861]]) is waiting on a human."
+        )
         store.add_goal_log(
             gid,
             "Suspending cannot relieve pressure the pool did not cause",
