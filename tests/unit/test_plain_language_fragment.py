@@ -103,6 +103,13 @@ class TestEnginePromptsResolve(unittest.TestCase):
             self.assertNotIn("two short paragraphs", raw, role)
             self.assertNotIn("do LC-861 first", raw, role)
 
+    def test_summary_prompts_attach_through_a_heredoc_not_a_backslash_n(self):
+        for role in ("daily-summary", "goal-state-of-play"):
+            with open(os.path.join(ENGINE_PROMPTS, "steps", "%s.md" % role)) as f:
+                raw = f.read()
+            self.assertIn("<<'EOF'", raw, role)
+            self.assertIn("two literal characters", raw, role)
+
     def test_audit_cites_rules_and_stands_outside_the_bar(self):
         with open(os.path.join(ENGINE_PROMPTS, "steps", "audit.md")) as f:
             raw = f.read()
