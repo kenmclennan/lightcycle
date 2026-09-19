@@ -77,6 +77,7 @@ from lightcycle.application.work import (
     StatusUseCase,
 )
 from lightcycle.application.work.priority_rows import select_priority_rows
+from lightcycle.application.work.project_of import short_project_label
 from lightcycle.application.work.suspended_steps import suspended_step_ids
 
 POLL_INTERVAL_SECONDS = 10
@@ -826,6 +827,7 @@ class GoalsView(Vertical):
         table = self.query_one(GoalsTable)
         table.cursor_type = "row"
         table.show_header = False
+        table.add_column("project", key="project")
         table.add_column("title", key="title")
 
     @property
@@ -833,7 +835,7 @@ class GoalsView(Vertical):
         return self._count
 
     def apply_goals(self, goals) -> None:
-        shape = tuple((g.id, g.title) for g in goals)
+        shape = tuple((g.id, g.project, g.title) for g in goals)
         table = self.query_one(GoalsTable)
         if shape != self._last_shape:
             self._last_shape = shape
@@ -842,7 +844,12 @@ class GoalsView(Vertical):
                 previous = table.ordered_rows[table.cursor_row].key.value
             table.clear()
             for goal in goals:
-                table.add_row(Text(goal.title, style=COLOURS["text"]), key=goal.id)
+                project = short_project_label(goal.project)
+                table.add_row(
+                    Text(project, style=COLOURS["cyan"]),
+                    Text(goal.title, style=COLOURS["text"]),
+                    key=goal.id,
+                )
             if previous is not None:
                 for index, row in enumerate(table.ordered_rows):
                     if row.key.value == previous:

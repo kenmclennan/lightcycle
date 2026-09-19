@@ -1260,6 +1260,16 @@ def _goals_normal(size):
     return session
 
 
+def _goals_two_projects(size):
+    store = DemoStore(now=lambda: _at(30))
+    store.create_goal("Ship the goals record", "", "lightcycle")
+    store.create_goal("Publish the plugin marketplace", "", "lightcycle-plugin")
+    store.create_goal("Make the driver loop reorient itself")
+    session = _launch(store, size=size)
+    session.press("[")
+    return session
+
+
 def _goals_empty(size):
     session = _launch(DemoStore(), size=size)
     session.press("[")
@@ -1352,6 +1362,7 @@ SCREENS = {
     "priority-list#worker-suspended": _priority_worker_suspended,
     "priority-list#engine-active": _priority_engine_active,
     "goals#normal": _goals_normal,
+    "goals#two-projects": _goals_two_projects,
     "goals#empty": _goals_empty,
     "goal-hub#overview": _goal_hub_overview,
     "goal-hub#overview-empty": _goal_hub_overview_empty,
