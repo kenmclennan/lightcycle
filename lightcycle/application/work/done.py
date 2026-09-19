@@ -4,9 +4,10 @@ from typing import List, Optional
 
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.item_filter import project_matches, text_matches
+from lightcycle.application.work.item_partition import is_closed_item
 from lightcycle.application.work.project_counts import ProjectCount, project_counts
 from lightcycle.application.work.project_of import project_of, repo_of
-from lightcycle.domain.work import State, node_id_key, parse_timestamp
+from lightcycle.domain.work import node_id_key, parse_timestamp
 
 _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
@@ -91,6 +92,6 @@ class DoneUseCase:
         if self._closed_items_cache is None:
             self._closed_items_cache = [
                 n for n in self._store.all_items_including_done()
-                if n.state == State.DONE
+                if is_closed_item(n)
             ]
         return self._closed_items_cache

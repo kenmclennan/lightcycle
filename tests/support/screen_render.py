@@ -1223,6 +1223,20 @@ def _goals_store(with_content=True):
         store.item("LC-859", "Goals slice 2: the generated progress statement")
         store.link_goal_item(gid, "LC-858")
         store.link_goal_item(gid, "LC-859")
+        gate = store.item("LC-861", "Goals slice 4: the gate a human clears", workflow=WORKFLOW)
+        store.step("LC-861.1", step="code-await-merge", role="human", parent=gate)
+        active = store.item("LC-862", "Goals slice 5: state on the items tab", workflow=WORKFLOW)
+        active_step = store.step("LC-862.1", step="write-code", role="agent", parent=active)
+        store.assign(active_step, "worker-1")
+        store.update_state(active_step, State.RUNNING)
+        queued = store.item("LC-863", "Goals slice 6: a queued item", workflow=WORKFLOW)
+        store.step("LC-863.1", step="write-code", role="agent", parent=queued)
+        held = store.item("LC-864", "Goals slice 7: an item held behind another", workflow=WORKFLOW)
+        store.step("LC-864.1", step="write-code", role="agent", parent=held, deps=[active_step])
+        finished = store.item("LC-857", "Goals slice 0: the design record")
+        store.complete_node(finished, "merged")
+        for linked in (gate, active, queued, held, finished):
+            store.link_goal_item(gid, linked)
         store.add_goal_log(
             gid,
             "Suspending cannot relieve pressure the pool did not cause",
@@ -1307,6 +1321,22 @@ def _goal_hub_items(size):
     return _open_goal_hub(size, "items")
 
 
+def _goal_hub_items_search(size, term="slice 5"):
+    session = _open_goal_hub(size, "items")
+    screen = session.app.screen
+    session.press("/")
+    session.pause()
+    session.run(lambda: setattr(screen.query_one("#goal-items-filter-text"), "value", term))
+    session.pause()
+    session.run(screen.on_items_filter_settled)
+    session.pause()
+    return session
+
+
+def _goal_hub_items_search_none(size):
+    return _goal_hub_items_search(size, term="zzzz-no-such-term")
+
+
 def _goal_hub_items_empty(size):
     return _open_goal_hub(size, "items", populated=False)
 
@@ -1330,6 +1360,8 @@ SCREENS = {
     "goal-hub#log-search-none": _goal_hub_log_search_none,
     "goal-hub#log-empty": _goal_hub_log_empty,
     "goal-hub#items": _goal_hub_items,
+    "goal-hub#items-search": _goal_hub_items_search,
+    "goal-hub#items-search-none": _goal_hub_items_search_none,
     "goal-hub#items-empty": _goal_hub_items_empty,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
