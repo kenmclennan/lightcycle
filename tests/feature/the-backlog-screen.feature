@@ -240,7 +240,7 @@ Feature: The backlog screen
       | position | key     | action          |
       | 1        | ↑↓      | move            |
       | 2        | enter   | explore in tree |
-      | 3        | esc     | back            |
+      | 3        | esc/tab | back            |
       | 4        | [/]     | switch tab      |
       | 5        | q       | quit            |
 
@@ -254,7 +254,7 @@ Feature: The backlog screen
 
     Examples:
       | position | key     | action     |
-      | 1        | esc     | back       |
+      | 1        | esc/tab | back       |
       | 2        | [/]     | switch tab |
       | 3        | q       | quit       |
 

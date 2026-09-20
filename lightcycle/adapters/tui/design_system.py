@@ -139,13 +139,13 @@ DONE_FILTERED_EMPTY_SHORTCUTS = (
 BACKLOG_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "explore in tree"),
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
@@ -153,13 +153,13 @@ BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
 DONE_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
     ("enter", "open"),
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 DONE_SEARCH_EMPTY_SHORTCUTS = (
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
@@ -236,7 +236,7 @@ SEARCH_BAR_CSS = f"""
 GOAL_LOG_SHORTCUTS = HUB_SHORTCUTS + (("/", "search"),)
 
 GOAL_LOG_SEARCH_SHORTCUTS = (
-    ("esc", "back"),
+    ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
