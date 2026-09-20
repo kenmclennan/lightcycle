@@ -12,6 +12,7 @@ from lightcycle.adapters.tui.app import (
 )
 from lightcycle.adapters.tui.hub import NodeHubScreen
 from tests.support.fake_store import FakeStore
+from tests.support.filter_block import block_text
 from tests.support.tui_harness import launch, make_test_container
 
 scenarios("the-done-screen.feature")
@@ -401,14 +402,12 @@ def _done_filtered_to_most_recently_closed_item(ctx):
 
 @then(parsers.parse('the done day filter row shows "{value}"'))
 def _done_day_filter_row_shows(ctx, value):
-    widget = ctx["session"].app.query_one("#done-day-filter-left")
-    assert _rendered_text(widget).strip() == value
+    assert "DAY %s" % value in block_text(ctx["session"].app, "done")
 
 
 @then("the done day filter row shows the picked day")
 def _done_day_filter_row_shows_picked_day(ctx):
-    widget = ctx["session"].app.query_one("#done-day-filter-left")
-    assert _rendered_text(widget).strip() == ctx["later_day"].isoformat()
+    assert "DAY %s" % ctx["later_day"].isoformat() in block_text(ctx["session"].app, "done")
 
 
 @then("only the done row matching the picked project and day is shown")
@@ -434,8 +433,7 @@ def _hint_offered(ctx, text):
 
 @then(parsers.parse('the done tab is filtered to "{project}"'))
 def _done_filtered_to(ctx, project):
-    widget = ctx["session"].app.query_one("#done-filter-left")
-    assert _rendered_text(widget).strip() == project
+    assert "PROJECT %s" % project in block_text(ctx["session"].app, "done")
 
 
 @then(parsers.parse('only the done row under "{project}" is shown'))
@@ -488,16 +486,6 @@ def _only_done_row_matching_still_shown(ctx, needle):
     cell = table.get_cell(row_id, "title")
     text = cell.plain if hasattr(cell, "plain") else cell
     assert needle.lower() in text.lower()
-
-
-@then("the done search value and the done project value start at the same column")
-def _done_search_and_project_value_aligned(ctx):
-    search_input = ctx["session"].app.query_one("#done-filter-text")
-    project_value = ctx["session"].app.query_one("#done-filter-left")
-    assert search_input.region.x == project_value.content_region.x, (
-        "done search value starts at column %d but done project value starts at column %d"
-        % (search_input.region.x, project_value.content_region.x)
-    )
 
 
 @then(parsers.parse('its key is "{key}"'))

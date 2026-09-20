@@ -15,6 +15,8 @@ from tests.support.tui_harness import (
 
 NOW = datetime.datetime(2026, 1, 1, 14, 16, 0)
 DEFAULT_SIZE = (100, 30)
+WRAPPED_BACKLOG_WIDTH = 40
+WRAPPED_DONE_WIDTH = 50
 
 
 def _at(minutes):
@@ -617,6 +619,18 @@ def _done_day_picker(size):
 
 def _done_day_filtered(size):
     session = _done_with_cost(size)
+    session.app._done_day_filter = datetime.date(2026, 1, 1)
+    session.run(session.app._refresh)
+    session.pause()
+    return session
+
+
+def _backlog_filter_wrapped(size):
+    return _backlog_normal((WRAPPED_BACKLOG_WIDTH, size[1]))
+
+
+def _done_filter_wrapped(size):
+    session = _done_with_cost((WRAPPED_DONE_WIDTH, size[1]))
     session.app._done_day_filter = datetime.date(2026, 1, 1)
     session.run(session.app._refresh)
     session.pause()
@@ -1398,6 +1412,7 @@ SCREENS = {
     "backlog#text-and-project-filter": _backlog_text_and_project_filter,
     "backlog#claude-unavailable": _backlog_claude_unavailable,
     "backlog#stacked": _backlog_stacked,
+    "backlog#filter-wrapped": _backlog_filter_wrapped,
     "done#normal": _done_normal,
     "done#search-focused": _done_search_focused,
     "done#empty": _done_empty,
@@ -1406,6 +1421,7 @@ SCREENS = {
     "done#with-cost": _done_with_cost,
     "done#day-picker": _done_day_picker,
     "done#day-filtered": _done_day_filtered,
+    "done#filter-wrapped": _done_filter_wrapped,
     "report#today": _report_today,
     "report#day-picker": _report_day_picker,
     "report#historical-day": _report_historical_day,

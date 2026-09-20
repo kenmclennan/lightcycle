@@ -42,6 +42,7 @@ from lightcycle.adapters.tui.design_system import (
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
+from lightcycle.adapters.tui.filter_row import FILTER_ROW_GAP, flow_filter_row, segment_width
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.goal_hub import GoalHubScreen
 from lightcycle.adapters.tui.hub import NodeHubScreen, _format_item_cost
@@ -111,7 +112,63 @@ BACKLOG_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
 DONE_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
 REPORT_CONTINUATION_INDENT = 2
 
-FILTER_ROW_COUNT_GAP = 2
+
+
+class FilterLineRest(Static):
+    pass
+
+
+class FilterBlock(Vertical):
+    def __init__(self, prefix, search_input, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._prefix = prefix
+        self._search_input = search_input
+
+    def compose(self) -> ComposeResult:
+        yield Horizontal(
+            Static("SEARCH", id=f"{self._prefix}-search-label", classes="filter-row-label"),
+            self._search_input,
+            Static(id=f"{self._prefix}-filter-line-one", classes="filter-line-one"),
+            id=f"{self._prefix}-search-bar",
+            classes="search-bar",
+        )
+        yield FilterLineRest(id=f"{self._prefix}-filter-line-rest")
+
+    def reflow(self, segments, count_text) -> None:
+        width = self.screen.size.width
+        layout = flow_filter_row(width, segments, count_text)
+        first, *rest = layout.lines
+        line_one = Text()
+        for segment in first.segments:
+            line_one.append(" " * FILTER_ROW_GAP)
+            self._append_segment(line_one, segment)
+        if first.count:
+            line_one.append(" " * FILTER_ROW_GAP)
+            line_one.append(first.count, style=COLOURS["text"])
+        self.query_one(f"#{self._prefix}-filter-line-one", Static).update(line_one)
+        line_rest = Text()
+        for index, line in enumerate(rest):
+            if index:
+                line_rest.append("\n")
+            used = 0
+            for position, segment in enumerate(line.segments):
+                if position:
+                    line_rest.append(" " * FILTER_ROW_GAP)
+                    used += FILTER_ROW_GAP
+                self._append_segment(line_rest, segment)
+                used += segment_width(segment)
+            if line.count:
+                line_rest.append(" " * max(width - used - len(line.count), 0))
+                line_rest.append(line.count, style=COLOURS["text"])
+        self.query_one(FilterLineRest).update(line_rest)
+        self.query_one(FilterLineRest).display = bool(rest)
+
+    @staticmethod
+    def _append_segment(text, segment) -> None:
+        label, value = segment
+        text.append(label, style=COLOURS["dim"])
+        text.append(" ")
+        text.append(value, style=COLOURS["text"])
 
 
 class TabStrip(Horizontal):
@@ -372,17 +429,10 @@ class BacklogView(Vertical):
         self._backlog_stacked = False
 
     def compose(self) -> ComposeResult:
-        yield Horizontal(
-            Static("SEARCH", id="backlog-search-label", classes="filter-row-label"),
+        yield FilterBlock(
+            "backlog",
             BacklogFilterInput(id="backlog-filter-text", classes="search-input"),
-            id="backlog-search-bar",
-            classes="search-bar",
-        )
-        yield Horizontal(
-            Static("PROJECT", id="backlog-filter-label", classes="filter-row-label"),
-            Static(id="backlog-filter-left"),
-            Static(id="backlog-filter-right"),
-            id="backlog-filter-bar",
+            id="backlog-filter-block",
         )
         yield BacklogTable(id="backlog-table")
         yield Static(id="backlog-floor")
@@ -421,16 +471,9 @@ class BacklogView(Vertical):
         self._toggle_state(self._total, len(self._rows), self._project_filter, self._text_filter)
 
     def _render_filter_bar(self, project_filter, count) -> None:
-        value = project_filter or "All"
-        count_text = "%d items" % count
-        left = self.query_one("#backlog-filter-left", Static)
-        right = self.query_one("#backlog-filter-right", Static)
-        left.update(Text(value, style=COLOURS["text"]))
-        available = self.screen.size.width
-        fits = FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
-        right.display = fits
-        if fits:
-            right.update(Text(count_text, style=COLOURS["text"]))
+        self.query_one("#backlog-filter-block", FilterBlock).reflow(
+            [("PROJECT", project_filter or "All")], "%d items" % count
+        )
 
     def _selected_row_id(self, table):
         if table.row_count == 0:
@@ -578,23 +621,10 @@ class DoneView(Vertical):
         self._backlog_stacked = False
 
     def compose(self) -> ComposeResult:
-        yield Horizontal(
-            Static("SEARCH", id="done-search-label", classes="filter-row-label"),
+        yield FilterBlock(
+            "done",
             DoneFilterInput(id="done-filter-text", classes="search-input"),
-            id="done-search-bar",
-            classes="search-bar",
-        )
-        yield Horizontal(
-            Static("PROJECT", id="done-filter-label", classes="filter-row-label"),
-            Static(id="done-filter-left"),
-            Static(id="done-filter-right"),
-            id="done-filter-bar",
-        )
-        yield Horizontal(
-            Static("DAY", id="done-day-filter-label", classes="filter-row-label"),
-            Static(id="done-day-filter-left"),
-            Static(id="done-day-filter-right"),
-            id="done-day-filter-bar",
+            id="done-filter-block",
         )
         yield DoneTable(id="done-table")
         yield Static(id="done-floor")
@@ -609,8 +639,7 @@ class DoneView(Vertical):
 
     def apply_rows(self, rows, total, project_filter, text_filter, day_filter) -> None:
         shape = (tuple(r.id for r in rows), total, project_filter, text_filter, day_filter)
-        self._render_filter_bar(project_filter, len(rows))
-        self._render_day_filter_bar(day_filter)
+        self._render_filter_bar(project_filter, day_filter, len(rows))
         table = self.query_one(DoneTable)
         layout = self._layout(table)
         if (
@@ -631,30 +660,19 @@ class DoneView(Vertical):
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
-        self._render_filter_bar(self._project_filter, len(self._rows))
-        self._render_day_filter_bar(self._day_filter)
+        self._render_filter_bar(self._project_filter, self._day_filter, len(self._rows))
         self._toggle_state(
             self._total, len(self._rows), self._project_filter, self._text_filter, self._day_filter
         )
 
-    def _render_filter_bar(self, project_filter, count) -> None:
-        value = project_filter or "All"
-        count_text = "%d items" % count
-        left = self.query_one("#done-filter-left", Static)
-        right = self.query_one("#done-filter-right", Static)
-        left.update(Text(value, style=COLOURS["text"]))
-        available = self.screen.size.width
-        fits = FILTER_ROW_LABEL_WIDTH + len(value) + FILTER_ROW_COUNT_GAP + len(count_text) <= available
-        right.display = fits
-        if fits:
-            right.update(Text(count_text, style=COLOURS["text"]))
-
-    def _render_day_filter_bar(self, day_filter) -> None:
-        value = day_filter.isoformat() if day_filter else "All"
-        left = self.query_one("#done-day-filter-left", Static)
-        right = self.query_one("#done-day-filter-right", Static)
-        left.update(Text(value, style=COLOURS["text"]))
-        right.display = False
+    def _render_filter_bar(self, project_filter, day_filter, count) -> None:
+        self.query_one("#done-filter-block", FilterBlock).reflow(
+            [
+                ("PROJECT", project_filter or "All"),
+                ("DAY", day_filter.isoformat() if day_filter else "All"),
+            ],
+            "%d items" % count,
+        )
 
     def _selected_row_id(self, table):
         if table.row_count == 0:
@@ -1273,16 +1291,20 @@ class LightcycleApp(App):
         color: {COLOURS["text"]};
     }}
     {SEARCH_BAR_CSS}
-    #backlog-filter-bar {{
-        height: 2;
+    FilterBlock {{
+        height: auto;
         border-bottom: solid {COLOURS["border"]};
     }}
-    #backlog-filter-left {{
-        width: auto;
+    FilterBlock .search-bar {{
+        margin-bottom: 0;
     }}
-    #backlog-filter-right {{
-        width: 1fr;
-        content-align: right middle;
+    .filter-line-one {{
+        width: auto;
+        height: 3;
+        content-align: left middle;
+    }}
+    FilterLineRest {{
+        height: auto;
         display: none;
     }}
     BacklogTable {{
@@ -1314,30 +1336,6 @@ class LightcycleApp(App):
         color: {COLOURS["dim"]};
         content-align: center middle;
         height: 1fr;
-        display: none;
-    }}
-    #done-filter-bar {{
-        height: 2;
-        border-bottom: solid {COLOURS["border"]};
-    }}
-    #done-filter-left {{
-        width: auto;
-    }}
-    #done-filter-right {{
-        width: 1fr;
-        content-align: right middle;
-        display: none;
-    }}
-    #done-day-filter-bar {{
-        height: 2;
-        border-bottom: solid {COLOURS["border"]};
-    }}
-    #done-day-filter-left {{
-        width: auto;
-    }}
-    #done-day-filter-right {{
-        width: 1fr;
-        content-align: right middle;
         display: none;
     }}
     DoneTable {{

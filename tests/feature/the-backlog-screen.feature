@@ -162,15 +162,6 @@ Feature: The backlog screen
       | backlog#text-filter                |
       | backlog#text-and-project-filter    |
 
-  Scenario Outline: The search value and the project value start in the same column
-    Given the "<state>" screen state is rendered
-    Then the search value and the project value start at the same column
-
-    Examples:
-      | state                |
-      | backlog#normal       |
-      | backlog#text-filter  |
-
   Scenario: An overall-empty backlog shows a calm message instead of a blank area
     Given the store has no todo items anywhere
     When I switch to the backlog

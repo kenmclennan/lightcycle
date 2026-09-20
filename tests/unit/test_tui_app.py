@@ -11,8 +11,6 @@ from lightcycle import __version__
 from lightcycle.adapters.tui.app import (
     BACKLOG_COLUMNS,
     DATA_COLUMNS,
-    FILTER_ROW_COUNT_GAP,
-    FILTER_ROW_LABEL_WIDTH,
     POLL_INTERVAL_SECONDS,
     POOL_START_TIMEOUT_SECONDS,
     PRIORITY_CONTINUATION_INDENT,
@@ -55,6 +53,7 @@ from lightcycle.adapters.tui.design_system import (
     STATE_GLYPHS,
     REPORT_SHORTCUTS,
     ROW_SPACER,
+    SEARCH_MIN_WIDTH,
 )
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
@@ -64,6 +63,7 @@ from lightcycle.domain.work import State
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
+from tests.support.filter_block import block_rows, block_text, last_text_row
 from tests.support.tui_harness import (
     row_key, FakeBreakerPort, FakeLock, FakeSpawner, launch, make_test_container,
 )
@@ -1342,6 +1342,27 @@ class TestQuit(unittest.TestCase):
         self.assertFalse(session.app.is_running)
 
 
+def _painted_box_width(session, prefix):
+    top = block_rows(session.app, prefix)[0]
+    return top.rindex("╮") - top.index("╭") + 1
+
+
+def _block_height(session, prefix):
+    return session.app.query_one("#%s-filter-block" % prefix).region.height
+
+
+APP_FRAME_COLUMNS = 2
+
+
+def _launch_sized(width, tabs, store=None):
+    session = launch(
+        make_test_container(store=store or FakeStore()), size=(width + APP_FRAME_COLUMNS, 30)
+    )
+    for _ in range(tabs):
+        session.press("]")
+    return session
+
+
 def _launch_backlog(store, **kwargs):
     session = launch(make_test_container(store=store, **kwargs))
     session.press("]")
@@ -1660,8 +1681,7 @@ class TestBacklogPicker(unittest.TestCase):
         session.press("enter")
 
         self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
-        _, left, _ = _rendered_segment(session, "#backlog-filter-left")
-        self.assertEqual(left, "proj-a")
+        self.assertIn("PROJECT proj-a", block_text(session.app, "backlog"))
         self.assertEqual(session.app.query_one(BacklogTable).row_count, 1)
 
     def test_esc_closes_the_picker_without_changing_the_filter(self):
@@ -1673,8 +1693,7 @@ class TestBacklogPicker(unittest.TestCase):
         session.press("escape")
 
         self.assertNotIsInstance(session.app.screen, ProjectFilterPicker)
-        _, left, _ = _rendered_segment(session, "#backlog-filter-left")
-        self.assertEqual(left, "All")
+        self.assertIn("PROJECT All", block_text(session.app, "backlog"))
 
     def test_filter_bar_shows_only_the_active_filters_own_count(self):
         session = self._launch(self._store_with_two_projects())
@@ -1683,8 +1702,7 @@ class TestBacklogPicker(unittest.TestCase):
         session.press("down")
         session.press("enter")
 
-        _, right, _ = _rendered_segment(session, "#backlog-filter-right")
-        self.assertEqual(right.strip(), "1 items")
+        self.assertTrue(last_text_row(session.app, "backlog").rstrip().endswith("1 items"))
 
 
 class TestBacklogFilterBar(unittest.TestCase):
@@ -1700,86 +1718,94 @@ class TestBacklogFilterBar(unittest.TestCase):
 
         session = self._launch(store)
 
-        _, left, _ = _rendered_segment(session, "#backlog-filter-left")
-        _, right, _ = _rendered_segment(session, "#backlog-filter-right")
-        self.assertEqual(left, "All")
-        self.assertEqual(right.strip(), "3 items")
+        self.assertIn("PROJECT All", block_text(session.app, "backlog"))
+        self.assertTrue(last_text_row(session.app, "backlog").rstrip().endswith("3 items"))
 
     def test_count_is_plural_even_when_zero(self):
         session = self._launch(FakeStore())
 
-        _, right, _ = _rendered_segment(session, "#backlog-filter-right")
-        self.assertEqual(right.strip(), "0 items")
+        self.assertTrue(last_text_row(session.app, "backlog").rstrip().endswith("0 items"))
 
 
-class TestFilterRowWidthFallback(unittest.TestCase):
-    def _launch(self, store):
-        session = _launch_backlog(store)
+class TestBacklogFilterRowFlow(unittest.TestCase):
+    def _flowed(self, width, value="All", count=149, store=None):
+        session = _launch_sized(width, 1, store)
         self.addCleanup(session.close)
+        session.app.query_one(BacklogView)._render_filter_bar(None if value == "All" else value, count)
+        session.pause()
         return session
 
-    def _boundary_value_length(self, view, count_text):
-        available = view.size.width
-        return available - FILTER_ROW_LABEL_WIDTH - FILTER_ROW_COUNT_GAP - len(count_text)
+    def test_wide_row_is_one_line_with_the_count_last(self):
+        session = self._flowed(80)
 
-    def test_count_hidden_when_available_is_one_column_narrower_than_needed(self):
-        session = self._launch(FakeStore())
-        view = session.app.query_one(BacklogView)
-        count_text = "1 items"
-        n = self._boundary_value_length(view, count_text) + 1
+        self.assertEqual(_block_height(session, "backlog"), 4)
+        row = block_rows(session.app, "backlog")[1]
+        self.assertLess(row.index("SEARCH"), row.index("PROJECT All"))
+        self.assertTrue(row.rstrip().endswith("149 items"))
+        self.assertEqual(_painted_box_width(session, "backlog"), 46)
 
-        view._render_filter_bar("x" * n, 1)
+    def test_box_is_exactly_the_minimum_where_the_count_just_still_fits(self):
+        session = self._flowed(50)
+
+        self.assertEqual(_block_height(session, "backlog"), 4)
+        self.assertTrue(block_rows(session.app, "backlog")[1].rstrip().endswith("149 items"))
+        self.assertEqual(_painted_box_width(session, "backlog"), SEARCH_MIN_WIDTH)
+
+    def test_count_moves_to_a_second_line_one_column_narrower(self):
+        session = self._flowed(49)
+
+        self.assertEqual(_block_height(session, "backlog"), 5)
+        rows = block_rows(session.app, "backlog")
+        self.assertNotIn("149 items", rows[1])
+        self.assertTrue(rows[3].rstrip().endswith("149 items"))
+        self.assertEqual(_painted_box_width(session, "backlog"), 26)
+
+    def test_box_is_one_column_wider_one_column_past_the_boundary(self):
+        session = self._flowed(51)
+
+        self.assertEqual(_painted_box_width(session, "backlog"), SEARCH_MIN_WIDTH + 1)
+
+    def test_box_grows_when_the_filter_value_shortens_at_constant_width(self):
+        session = self._flowed(80, value="lightcycle-workflows")
+        long_box = _painted_box_width(session, "backlog")
+        long_height = _block_height(session, "backlog")
+
+        session.app.query_one(BacklogView)._render_filter_bar(None, 149)
         session.pause()
 
-        left = session.app.query_one("#backlog-filter-left", Static)
-        right = session.app.query_one("#backlog-filter-right", Static)
-        self.assertFalse(right.display)
-        self.assertEqual(_rendered_text(left).strip(), "x" * n)
+        self.assertGreater(_painted_box_width(session, "backlog"), long_box)
+        self.assertEqual(_block_height(session, "backlog"), long_height)
 
-    def test_count_shown_when_available_exactly_equals_what_is_needed(self):
-        session = self._launch(FakeStore())
-        view = session.app.query_one(BacklogView)
-        count_text = "1 items"
-        n = self._boundary_value_length(view, count_text)
-
-        view._render_filter_bar("x" * n, 1)
-        session.pause()
-
-        right = session.app.query_one("#backlog-filter-right", Static)
-        self.assertTrue(right.display)
-        self.assertEqual(_rendered_text(right).strip(), count_text)
-
-    def test_count_shown_when_available_is_one_column_wider_than_needed(self):
-        session = self._launch(FakeStore())
-        view = session.app.query_one(BacklogView)
-        count_text = "1 items"
-        n = self._boundary_value_length(view, count_text) - 1
-
-        view._render_filter_bar("x" * n, 1)
-        session.pause()
-
-        right = session.app.query_one("#backlog-filter-right", Static)
-        self.assertTrue(right.display)
-        self.assertEqual(_rendered_text(right).strip(), count_text)
-
-
-class TestFilterRowRerendersOnResize(unittest.TestCase):
-    def _launch(self, store):
-        session = launch(make_test_container(store=store), size=(100, 30))
-        session.press("]")
-        self.addCleanup(session.close)
-        return session
-
-    def test_resize_alone_hides_the_count_without_new_data(self):
+    def test_table_starts_directly_below_the_block_at_both_heights(self):
         store = FakeStore()
         store.create_item("todo item", "a description")
-        session = self._launch(store)
-        right = session.app.query_one("#backlog-filter-right", Static)
-        self.assertTrue(right.display)
+        for width in (80, 49):
+            session = self._flowed(width, store=store)
+            block = session.app.query_one("#backlog-filter-block")
+            table = session.app.query_one(BacklogTable)
+            self.assertEqual(table.region.y, block.region.y + block.region.height)
 
-        session.resize(15, 30)
+    def test_resize_alone_reflows_the_row_in_both_directions(self):
+        store = FakeStore()
+        store.create_item("todo item", "a description")
+        session = _launch_sized(100, 1, store)
+        self.addCleanup(session.close)
+        self.assertEqual(_block_height(session, "backlog"), 4)
 
-        self.assertFalse(right.display)
+        session.resize(40, 30)
+        self.assertEqual(_block_height(session, "backlog"), 5)
+        self.assertTrue(last_text_row(session.app, "backlog").rstrip().endswith("1 items"))
+
+        session.resize(100, 30)
+        self.assertEqual(_block_height(session, "backlog"), 4)
+
+    def test_overlong_value_is_truncated_with_an_ellipsis_not_dropped(self):
+        session = self._flowed(40, value="x" * 60)
+
+        text = block_text(session.app, "backlog")
+        self.assertIn("PROJECT xxx", text)
+        self.assertIn("…", text)
+        self.assertTrue(last_text_row(session.app, "backlog").rstrip().endswith("149 items"))
 
 
 class TestBacklogEmptyStates(unittest.TestCase):
@@ -2355,76 +2381,97 @@ class TestDoneRows(unittest.TestCase):
         self.assertEqual(session.app.query_one(DoneTable).row_count, 0)
 
 
-class TestDoneFilterRowWidthFallback(unittest.TestCase):
-    def _launch(self, store):
-        session = _launch_done(store)
+class TestDoneFilterRowFlow(unittest.TestCase):
+    DAY = datetime.date(2026, 9, 20)
+
+    def _flowed(self, width, project=None, day=DAY, count=149, store=None):
+        session = _launch_sized(width, 2, store)
         self.addCleanup(session.close)
+        session.app.query_one(DoneView)._render_filter_bar(project, day, count)
+        session.pause()
         return session
 
-    def _boundary_value_length(self, view, count_text):
-        available = view.size.width
-        return available - FILTER_ROW_LABEL_WIDTH - FILTER_ROW_COUNT_GAP - len(count_text)
+    def test_wide_row_has_project_day_and_count_in_order_on_one_line(self):
+        session = self._flowed(80)
 
-    def test_count_hidden_when_available_is_one_column_narrower_than_needed(self):
-        session = self._launch(FakeStore())
-        view = session.app.query_one(DoneView)
-        count_text = "1 items"
-        n = self._boundary_value_length(view, count_text) + 1
+        self.assertEqual(_block_height(session, "done"), 4)
+        row = block_rows(session.app, "done")[1]
+        self.assertLess(row.index("SEARCH"), row.index("PROJECT All"))
+        self.assertLess(row.index("PROJECT All"), row.index("DAY 2026-09-20"))
+        self.assertTrue(row.rstrip().endswith("149 items"))
+        self.assertEqual(_painted_box_width(session, "done"), 80 - 10 - 13 - 16 - 11)
 
-        view._render_filter_bar("x" * n, 1)
+    def test_count_takes_the_second_line_alone_when_only_it_does_not_fit(self):
+        session = self._flowed(60)
+
+        self.assertEqual(_block_height(session, "done"), 5)
+        rows = block_rows(session.app, "done")
+        self.assertIn("DAY 2026-09-20", rows[1])
+        self.assertEqual(rows[3].strip(), "149 items")
+        self.assertTrue(rows[3].rstrip().endswith("149 items"))
+
+    def test_day_moves_to_the_second_line_with_the_count_after_it(self):
+        session = self._flowed(50)
+
+        rows = block_rows(session.app, "done")
+        self.assertNotIn("DAY", rows[1])
+        self.assertTrue(rows[3].startswith("DAY 2026-09-20"))
+        self.assertTrue(rows[3].rstrip().endswith("149 items"))
+
+    def test_box_is_exactly_the_minimum_where_day_just_still_fits(self):
+        session = self._flowed(55)
+
+        self.assertIn("DAY 2026-09-20", block_rows(session.app, "done")[1])
+        self.assertEqual(_painted_box_width(session, "done"), SEARCH_MIN_WIDTH)
+
+    def test_day_moves_to_line_two_one_column_narrower(self):
+        session = self._flowed(54)
+
+        self.assertNotIn("DAY", block_rows(session.app, "done")[1])
+        self.assertEqual(_painted_box_width(session, "done"), 54 - 10 - 13)
+
+    def test_box_is_one_column_wider_one_column_past_the_boundary(self):
+        session = self._flowed(56)
+
+        self.assertEqual(_painted_box_width(session, "done"), SEARCH_MIN_WIDTH + 1)
+
+    def test_each_value_appears_next_to_its_own_label(self):
+        session = self._flowed(90, project="proj-a", day=None)
+        text = block_text(session.app, "done")
+        self.assertIn("PROJECT proj-a", text)
+        self.assertIn("DAY All", text)
+
+        session.app.query_one(DoneView)._render_filter_bar("proj-a", self.DAY, 1)
         session.pause()
+        text = block_text(session.app, "done")
+        self.assertIn("PROJECT proj-a", text)
+        self.assertIn("DAY 2026-09-20", text)
+        self.assertTrue(last_text_row(session.app, "done").rstrip().endswith("1 items"))
 
-        left = session.app.query_one("#done-filter-left", Static)
-        right = session.app.query_one("#done-filter-right", Static)
-        self.assertFalse(right.display)
-        self.assertEqual(_rendered_text(left).strip(), "x" * n)
-
-    def test_count_shown_when_available_exactly_equals_what_is_needed(self):
-        session = self._launch(FakeStore())
-        view = session.app.query_one(DoneView)
-        count_text = "1 items"
-        n = self._boundary_value_length(view, count_text)
-
-        view._render_filter_bar("x" * n, 1)
-        session.pause()
-
-        right = session.app.query_one("#done-filter-right", Static)
-        self.assertTrue(right.display)
-        self.assertEqual(_rendered_text(right).strip(), count_text)
-
-    def test_count_shown_when_available_is_one_column_wider_than_needed(self):
-        session = self._launch(FakeStore())
-        view = session.app.query_one(DoneView)
-        count_text = "1 items"
-        n = self._boundary_value_length(view, count_text) - 1
-
-        view._render_filter_bar("x" * n, 1)
-        session.pause()
-
-        right = session.app.query_one("#done-filter-right", Static)
-        self.assertTrue(right.display)
-        self.assertEqual(_rendered_text(right).strip(), count_text)
-
-
-class TestDoneFilterRowRerendersOnResize(unittest.TestCase):
-    def _launch(self, store):
-        session = launch(make_test_container(store=store), size=(100, 30))
-        session.press("]")
-        session.press("]")
-        self.addCleanup(session.close)
-        return session
-
-    def test_resize_alone_hides_the_count_without_new_data(self):
+    def test_table_starts_directly_below_the_block_at_both_heights(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
         store.complete_node(item, "merged")
-        session = self._launch(store)
-        right = session.app.query_one("#done-filter-right", Static)
-        self.assertTrue(right.display)
+        for width in (90, 50):
+            session = self._flowed(width, store=store)
+            block = session.app.query_one("#done-filter-block")
+            table = session.app.query_one(DoneTable)
+            self.assertEqual(table.region.y, block.region.y + block.region.height)
 
-        session.resize(15, 30)
+    def test_resize_alone_reflows_the_row_in_both_directions(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.complete_node(item, "merged")
+        session = _launch_sized(100, 2, store)
+        self.addCleanup(session.close)
+        self.assertEqual(_block_height(session, "done"), 4)
 
-        self.assertFalse(right.display)
+        session.resize(40, 30)
+        self.assertEqual(_block_height(session, "done"), 5)
+        self.assertTrue(last_text_row(session.app, "done").rstrip().endswith("1 items"))
+
+        session.resize(100, 30)
+        self.assertEqual(_block_height(session, "done"), 4)
 
 
 class TestDoneEmptyStates(unittest.TestCase):

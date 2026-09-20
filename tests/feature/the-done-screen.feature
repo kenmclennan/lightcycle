@@ -35,10 +35,6 @@ Feature: The done screen
     Then the message "No done items for lightcycle." is shown, with "lightcycle" in the text colour and the rest of the message in the dim colour
     And the hint "Press f to check All." is shown below the message
 
-  Scenario: The done search value and the done project value start in the same column
-    Given the done tab is shown with a closed item
-    Then the done search value and the done project value start at the same column
-
   Scenario: Pressing f opens the project filter picker on the done tab
     Given the done tab is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with a closed item
     When f is pressed
