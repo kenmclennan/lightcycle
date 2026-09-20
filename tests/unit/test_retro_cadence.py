@@ -16,15 +16,15 @@ def _flow(store):
 
 
 class FakeConfig:
-    def __init__(self, interval_reflections=3, internal_shortcode="AUD"):
+    def __init__(self, interval_reflections=3, audit_shortcode="AUD"):
         self._interval = interval_reflections
-        self._internal_shortcode = internal_shortcode
+        self._audit_shortcode = audit_shortcode
 
     def retro_interval_reflections(self):
         return self._interval
 
-    def internal_shortcode(self):
-        return self._internal_shortcode
+    def audit_shortcode(self):
+        return self._audit_shortcode
 
 
 def _add_reflection(store, node_id, feedback):
@@ -59,8 +59,8 @@ def _open_item_with_closed_pass(store, title, reflections=0):
     return eid, pid
 
 
-def _gate(store, interval_reflections=3, internal_shortcode="AUD"):
-    return RetroCadenceUseCase(store, FakeConfig(interval_reflections, internal_shortcode))
+def _gate(store, interval_reflections=3, audit_shortcode="AUD"):
+    return RetroCadenceUseCase(store, FakeConfig(interval_reflections, audit_shortcode))
 
 
 class TestRetroCadenceNoFire(unittest.TestCase):
@@ -332,8 +332,8 @@ class TestRetroCadenceAtomicity(unittest.TestCase):
         self.assertEqual({i.id for i in s.all_items()}, before_ids)
 
 
-class TestRetroCadenceUsesInternalShortcode(unittest.TestCase):
-    def test_audit_item_is_minted_with_the_configured_internal_shortcode(self):
+class TestRetroCadenceUsesAuditShortcode(unittest.TestCase):
+    def test_audit_item_is_minted_with_the_configured_audit_shortcode(self):
         s = FakeStore()
         for i in range(3):
             _close_item(s, "item %d" % i, reflections=1)
@@ -345,8 +345,9 @@ class TestRetroCadenceUsesInternalShortcode(unittest.TestCase):
             return original_create_item(*args, **kwargs)
 
         s.create_item = spy_create_item
-        _gate(s, interval_reflections=3, internal_shortcode="ENG").execute(0.0)
+        result = _gate(s, interval_reflections=3, audit_shortcode="ENG").execute(0.0)
         self.assertEqual(calls[0].get("shortcode"), "ENG")
+        self.assertTrue(s.get_node(result.fired[0]).item.startswith("ENG-"))
 
 
 class TestRetroLaneVisibility(unittest.TestCase):

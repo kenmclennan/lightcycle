@@ -2,6 +2,7 @@ import datetime
 from dataclasses import dataclass
 from typing import List, Optional
 
+from lightcycle.application.work import automation
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.item_filter import project_matches, text_matches
 from lightcycle.application.work.item_partition import is_closed_item
@@ -92,6 +93,6 @@ class DoneUseCase:
         if self._closed_items_cache is None:
             self._closed_items_cache = [
                 n for n in self._store.all_items_including_done()
-                if is_closed_item(n)
+                if is_closed_item(n) and not automation.is_automation_item(self._store, n)
             ]
         return self._closed_items_cache

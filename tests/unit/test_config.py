@@ -476,6 +476,17 @@ class TestObsoleteConfigKeys(unittest.TestCase):
         self.assertEqual(set(c.missing_config_keys()), {k for k, _ in _SEED_KEYS})
 
 
+class TestRenamedShortcodeKey(unittest.TestCase):
+    def test_a_file_still_carrying_internal_shortcode_is_reported_obsolete(self):
+        c = _cfg(internal_shortcode="AUD")
+        self.assertIn("internal-shortcode", c.obsolete_config_keys())
+
+    def test_new_shortcode_keys_are_seeded_with_their_defaults(self):
+        seeds = dict(_SEED_KEYS)
+        self.assertEqual(seeds["audit-shortcode"], "AUD")
+        self.assertEqual(seeds["summary-shortcode"], "SUM")
+
+
 class TestMaxTitleLength(unittest.TestCase):
     def test_missing_key_raises(self):
         with self.assertRaises(ConfigError):
@@ -683,22 +694,28 @@ class TestReviewRoundsCap(unittest.TestCase):
             _cfg(review_rounds_cap="lots").review_rounds_cap()
 
 
-class TestInternalShortcode(unittest.TestCase):
-    def test_missing_key_raises(self):
+class TestAuditAndSummaryShortcodes(unittest.TestCase):
+    def test_missing_keys_raise(self):
         with self.assertRaises(ConfigError):
-            _cfg().internal_shortcode()
+            _cfg().audit_shortcode()
+        with self.assertRaises(ConfigError):
+            _cfg().summary_shortcode()
 
-    def test_seeded_default_resolves(self):
-        self.assertEqual(_cfg(internal_shortcode="AUD").internal_shortcode(), "AUD")
+    def test_seeded_defaults_resolve(self):
+        self.assertEqual(_cfg(audit_shortcode="AUD").audit_shortcode(), "AUD")
+        self.assertEqual(_cfg(summary_shortcode="SUM").summary_shortcode(), "SUM")
 
     def test_env_override_wins(self):
         self.assertEqual(
-            _cfg({"LC_INTERNAL_SHORTCODE": "ENG"}, internal_shortcode="AUD").internal_shortcode(),
-            "ENG",
+            _cfg({"LC_AUDIT_SHORTCODE": "ADT"}, audit_shortcode="AUD").audit_shortcode(), "ADT",
+        )
+        self.assertEqual(
+            _cfg({"LC_SUMMARY_SHORTCODE": "SMY"}, summary_shortcode="SUM").summary_shortcode(), "SMY",
         )
 
     def test_env_override_without_config_key(self):
-        self.assertEqual(_cfg({"LC_INTERNAL_SHORTCODE": "ENG"}).internal_shortcode(), "ENG")
+        self.assertEqual(_cfg({"LC_AUDIT_SHORTCODE": "ADT"}).audit_shortcode(), "ADT")
+        self.assertEqual(_cfg({"LC_SUMMARY_SHORTCODE": "SMY"}).summary_shortcode(), "SMY")
 
 
 class TestResolvedSettings(unittest.TestCase):

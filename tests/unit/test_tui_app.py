@@ -18,6 +18,8 @@ from lightcycle.adapters.tui.app import (
     GoalsView,
     BacklogTable,
     BacklogView,
+    AutomationTable,
+    AutomationView,
     DoneFilterInput,
     DoneTable,
     DoneView,
@@ -27,12 +29,15 @@ from lightcycle.adapters.tui.app import (
     PriorityTable,
     ProjectFilterPicker,
     ShortcutBar,
+    TabStrip,
     ReportTable,
     ReportView,
     StatusBar,
     _tui_metric_line,
 )
 from lightcycle.adapters.tui import app as tui_app_module
+from lightcycle.adapters.tui.hub import NodeHubScreen
+from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
 from lightcycle.adapters.tui.design_system import (
     BACKLOG_EMPTY_SHORTCUTS,
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
@@ -47,6 +52,8 @@ from lightcycle.adapters.tui.design_system import (
     DONE_FILTERED_EMPTY_SHORTCUTS,
     DONE_SEARCH_EMPTY_SHORTCUTS,
     DONE_SEARCH_SHORTCUTS,
+    AUTOMATION_EMPTY_SHORTCUTS,
+    AUTOMATION_SHORTCUTS,
     DONE_SHORTCUTS,
     FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
@@ -390,7 +397,7 @@ class TestActiveGroup(unittest.TestCase):
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
 
-        for _ in range(4):
+        for _ in range(5):
             session.press("]")
             self.assertIsNone(session.app._active_glyph_timer)
 
@@ -1540,27 +1547,27 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-goals").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_bracket_backward_twice_wraps_to_report(self):
+    def test_bracket_backward_twice_wraps_to_automation(self):
         session = self._launch()
 
         session.press("[")
         session.press("[")
 
-        self.assertTrue(session.app.query_one(ReportView).display)
+        self.assertTrue(session.app.query_one(AutomationView).display)
         self.assertFalse(session.app.query_one(GoalsView).display)
-        self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
+        self.assertIn("tab-active", session.app.query_one("#tab-automation").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-goals").classes)
 
-    def test_bracket_forward_from_report_wraps_to_goals(self):
+    def test_bracket_forward_from_automation_wraps_to_goals(self):
         session = self._launch()
 
-        for _ in range(3):
+        for _ in range(4):
             session.press("]")
-        self.assertTrue(session.app.query_one(ReportView).display)
+        self.assertTrue(session.app.query_one(AutomationView).display)
         session.press("]")
 
         self.assertTrue(session.app.query_one(GoalsView).display)
-        self.assertFalse(session.app.query_one(ReportView).display)
+        self.assertFalse(session.app.query_one(AutomationView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-goals").classes)
 
     def test_bracket_forward_then_backward_returns_to_priority_list(self):
@@ -1598,10 +1605,10 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-done").classes)
 
-    def test_tab_a_fifth_time_returns_to_priority_list(self):
+    def test_tab_a_sixth_time_returns_to_priority_list(self):
         session = self._launch()
 
-        for _ in range(5):
+        for _ in range(6):
             session.press("]")
 
         self.assertFalse(session.app.query_one(BacklogView).display)
@@ -1907,7 +1914,7 @@ class TestBacklogFooter(unittest.TestCase):
         store.create_item("todo item", "a description")
         session = self._launch(store)
 
-        for _ in range(4):
+        for _ in range(5):
             session.press("]")
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
@@ -2343,10 +2350,10 @@ class TestDoneTabSwitch(unittest.TestCase):
         self.assertTrue(session.app.query_one(ReportView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
 
-    def test_five_presses_returns_to_priority(self):
+    def test_six_presses_returns_to_priority(self):
         session = self._launch()
 
-        for _ in range(5):
+        for _ in range(6):
             session.press("]")
 
         self.assertFalse(session.app.query_one(DoneView).display)
@@ -3199,7 +3206,7 @@ class TestReportTabSwitch(unittest.TestCase):
 
 
 class TestReportFigures(unittest.TestCase):
-    def test_shows_seven_rows_for_today_by_default(self):
+    def test_shows_nine_rows_for_today_by_default(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
         step = store.create_step(step="build", role="agent", parent=item)
@@ -3217,15 +3224,16 @@ class TestReportFigures(unittest.TestCase):
                 ("Items Completed", "1"),
                 ("Items Closed", "1"),
                 ("Spend", "$2.50"),
+                ("Automation Items", "0"),
+                ("Automation Spend", "not recorded"),
                 ("Escalations", "0"),
-                ("Audits", "0"),
                 ("Starting Backlog Size", "0"),
                 ("Closing Backlog Size", "0"),
                 ("Backlog Delta", "+0"),
             ],
         )
 
-    def test_zero_activity_day_still_renders_all_eight_rows(self):
+    def test_zero_activity_day_still_renders_all_nine_rows(self):
         session = _launch_report(FakeStore())
         self.addCleanup(session.close)
 
@@ -3235,8 +3243,9 @@ class TestReportFigures(unittest.TestCase):
                 ("Items Completed", "0"),
                 ("Items Closed", "0"),
                 ("Spend", "not recorded"),
+                ("Automation Items", "0"),
+                ("Automation Spend", "not recorded"),
                 ("Escalations", "0"),
-                ("Audits", "0"),
                 ("Starting Backlog Size", "0"),
                 ("Closing Backlog Size", "0"),
                 ("Backlog Delta", "+0"),
@@ -3620,3 +3629,90 @@ class TestTuiMetricsRecording(unittest.TestCase):
         session.pause()
 
         self.assertEqual(self._run_log_lines(container), before)
+
+
+def _launch_automation(store, **kwargs):
+    session = launch(make_test_container(store=store), **kwargs)
+    for _ in range(4):
+        session.press("]")
+    return session
+
+
+def _automation_item(store, id, label, step, closed_at="2026-01-01T10:00:00+00:00"):
+    item = store.create_item("title %s" % id, "d", id=id)
+    child = store.create_step(step=step, role="agent", parent=item)
+    store.complete_node(child, "done")
+    store.complete_node(item, "merged", disposition="completed")
+    store._records[item]["closed_at"] = closed_at
+    store.label_add(item, label)
+    return item
+
+
+class TestAutomationTab(unittest.TestCase):
+    def test_tab_strip_reads_automation_last(self):
+        session = launch(make_test_container(store=FakeStore()))
+        self.addCleanup(session.close)
+        strip = session.app.query_one(TabStrip)
+        text = "".join(str(w.render()) for w in strip.query(Static))
+        self.assertTrue(text.endswith("Report · Automation"))
+
+    def test_shows_tally_lines_and_rows_for_a_mixed_fixture(self):
+        store = FakeStore()
+        _automation_item(store, "AUD-1", RETRO_ORIGIN_LABEL, "audit")
+        _automation_item(store, "SUM-1", SUMMARY_ORIGIN_LABEL, "daily-summary")
+        session = _launch_automation(store)
+        self.addCleanup(session.close)
+
+        tally = session.app.query_one("#automation-tally", Static).render().plain.splitlines()
+
+        self.assertEqual(len(tally), 4)
+        self.assertTrue(tally[0].startswith("Audits"))
+        self.assertTrue(tally[2].startswith("State of play"))
+        self.assertTrue(tally[3].startswith("Total"))
+        table = session.app.query_one(AutomationTable)
+        self.assertEqual({r.key.value for r in table.ordered_rows}, {"AUD-1", "SUM-1"})
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, AUTOMATION_SHORTCUTS)
+
+    def test_empty_state_and_footer_with_zero_items(self):
+        session = _launch_automation(FakeStore())
+        self.addCleanup(session.close)
+
+        empty = session.app.query_one("#automation-empty", Static)
+
+        self.assertTrue(empty.display)
+        self.assertEqual(empty.render().plain, "No automation has run yet.")
+        self.assertFalse(session.app.query_one(AutomationTable).display)
+        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, AUTOMATION_EMPTY_SHORTCUTS)
+
+    def test_in_flight_automation_is_not_listed(self):
+        store = FakeStore()
+        item = store.create_item("running", "d", id="AUD-1")
+        store.create_step(step="audit", role="agent", parent=item)
+        store.label_add(item, RETRO_ORIGIN_LABEL)
+        session = _launch_automation(store)
+        self.addCleanup(session.close)
+
+        self.assertEqual(session.app.query_one(AutomationTable).row_count, 0)
+
+    def test_enter_opens_the_node_hub(self):
+        store = FakeStore()
+        _automation_item(store, "AUD-1", RETRO_ORIGIN_LABEL, "audit")
+        session = _launch_automation(store)
+        self.addCleanup(session.close)
+
+        session.press("enter")
+
+        self.assertIsInstance(session.app.screen, NodeHubScreen)
+
+    def test_polling_from_another_view_never_scans_for_automation(self):
+        store = FakeStore()
+        _automation_item(store, "AUD-1", RETRO_ORIGIN_LABEL, "audit")
+        session = launch(make_test_container(store=store))
+        self.addCleanup(session.close)
+        calls = _spy_all_items_including_done_calls(store)
+
+        session.run(session.app._refresh_automation_view)
+        session.run(session.app._refresh)
+        session.pause()
+
+        self.assertEqual(calls["n"], 0)

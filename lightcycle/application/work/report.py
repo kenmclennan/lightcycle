@@ -2,7 +2,7 @@ import datetime
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL
+from lightcycle.application.work.automation import AutomationInput, AutomationUseCase
 from lightcycle.application.work.done import DoneInput, DoneUseCase
 from lightcycle.domain.work import ItemCost, item_cost, parse_timestamp
 
@@ -18,7 +18,8 @@ class ReportResponse:
     completed: int
     abandoned: int
     spend: ItemCost
-    audits: int
+    automation_count: int
+    automation_spend: ItemCost
     escalations: int
     backlog_start: int
     backlog_close: int
@@ -84,7 +85,7 @@ class ReportUseCase:
         items = [r.step for r in closed_today]
         completed = sum(1 for i in items if i.disposition == "completed")
         abandoned = sum(1 for i in items if i.disposition in ("abandoned", "aborted"))
-        audits = sum(1 for i in items if RETRO_ORIGIN_LABEL in self._store.labels_of(i.id))
+        automation = AutomationUseCase(self._store).execute(AutomationInput(day=input.day)).total
         all_children = [s for i in items for s in self._store.children(i.id)]
         spend = item_cost(all_children)
         escalations = _escalations_on(self._store, input.day)
@@ -93,7 +94,8 @@ class ReportUseCase:
         summary = row.summary if row else None
         return ReportResponse(
             day=input.day, completed=completed, abandoned=abandoned, spend=spend,
-            audits=audits, escalations=escalations,
+            automation_count=automation.count, automation_spend=automation.spend,
+            escalations=escalations,
             backlog_start=backlog_start, backlog_close=backlog_close,
             backlog_delta=backlog_close - backlog_start,
             summary=summary,

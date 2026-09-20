@@ -23,8 +23,8 @@ PROMPT = os.path.join(
 
 
 class FakeConfig:
-    def internal_shortcode(self):
-        return "AUD"
+    def summary_shortcode(self):
+        return "SUM"
 
 
 def _complete(store, step, outcome="done"):
@@ -113,6 +113,7 @@ class TestRefresh(_Base):
         self.assertEqual((node.stage, node.role), (GOAL_STATE_OF_PLAY_STEP, "agent"))
         self.assertIn(SUMMARY_ORIGIN_LABEL, self.store.labels_of(node.item))
         item = self.store.get_node(node.item)
+        self.assertTrue(item.id.startswith("SUM-"))
         self.assertEqual(item.title, "State of play: %s" % self.gid)
         self.assertEqual(item.description, assemble_goal_context(self.store, self.gid))
         self.assertEqual(self.store.goal_state_of_play_step(self.gid), step)

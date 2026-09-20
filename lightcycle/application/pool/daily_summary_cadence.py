@@ -72,7 +72,7 @@ class DailySummaryCadenceUseCase:
         with self._store.transaction():
             self._store.mark_day_summary_dirty(day)
             item_id = self._store.create_item(
-                title, description, shortcode=self._config.internal_shortcode())
+                title, description, shortcode=self._config.summary_shortcode())
             self._store.label_add(item_id, SUMMARY_ORIGIN_LABEL)
             tid = self._store.create_step(step=DAILY_SUMMARY_STEP, role="agent", parent=item_id)
             self._store.start_day_summary(day, step_id=tid, spawn_count=count)

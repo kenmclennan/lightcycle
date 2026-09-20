@@ -1,7 +1,7 @@
 import datetime
 import unittest
 
-from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL
+from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
 from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_start_and_close
 from lightcycle.domain.work import item_cost
 from tests.support.fake_store import FakeStore
@@ -40,7 +40,7 @@ class TestReportUseCase(unittest.TestCase):
 
         self.assertEqual(resp.abandoned, 2)
 
-    def test_audit_is_counted_by_label_regardless_of_id_shortcode(self):
+    def test_automation_is_excluded_from_project_figures_by_label_regardless_of_id_shortcode(self):
         s = FakeStore()
         _closed_item(
             s, disposition="completed", closed_at="2026-01-01T10:00:00+00:00",
@@ -56,8 +56,20 @@ class TestReportUseCase(unittest.TestCase):
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
-        self.assertEqual(resp.audits, 2)
-        self.assertEqual(resp.completed, 3)
+        self.assertEqual(resp.automation_count, 2)
+        self.assertEqual(resp.completed, 1)
+
+    def test_all_automation_day_has_no_completed_and_a_non_zero_automation_count(self):
+        s = FakeStore()
+        _closed_item(
+            s, disposition="completed", closed_at="2026-01-01T10:00:00+00:00",
+            id="SUM-1", label=SUMMARY_ORIGIN_LABEL,
+        )
+
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
+
+        self.assertEqual(resp.completed, 0)
+        self.assertEqual(resp.automation_count, 1)
 
     def test_a_day_with_zero_closed_items_returns_a_valid_all_zero_response(self):
         s = FakeStore()
@@ -66,7 +78,7 @@ class TestReportUseCase(unittest.TestCase):
 
         self.assertEqual(resp.completed, 0)
         self.assertEqual(resp.abandoned, 0)
-        self.assertEqual(resp.audits, 0)
+        self.assertEqual(resp.automation_count, 0)
         self.assertEqual(resp.escalations, 0)
         self.assertEqual(resp.backlog_start, 0)
         self.assertEqual(resp.backlog_close, 0)

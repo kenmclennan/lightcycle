@@ -32,7 +32,8 @@ _ENV_OVERRIDE_VARS = {
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
-    "internal-shortcode": "LC_INTERNAL_SHORTCODE",
+    "audit-shortcode": "LC_AUDIT_SHORTCODE",
+    "summary-shortcode": "LC_SUMMARY_SHORTCODE",
     "memory-reserve-fraction": "LC_MEMORY_RESERVE_FRACTION",
     "suspend-pressure": "LC_SUSPEND_PRESSURE",
     "resume-pressure": "LC_RESUME_PRESSURE",
@@ -99,7 +100,8 @@ _SEED_KEYS = [
     ("tick-failure-cap", "5"),
     ("review-rounds-cap", "5"),
     ("context-artifact-types", "spec"),
-    ("internal-shortcode", "AUD"),
+    ("audit-shortcode", "AUD"),
+    ("summary-shortcode", "SUM"),
     ("memory-reserve-fraction", "0.25"),
     ("suspend-pressure", "0.85"),
     ("resume-pressure", "0.70"),
@@ -510,11 +512,17 @@ class Config:
             )
         return value
 
-    def internal_shortcode(self):
-        env = self._env("LC_INTERNAL_SHORTCODE")
+    def audit_shortcode(self):
+        env = self._env("LC_AUDIT_SHORTCODE")
         if env:
             return env
-        return self._required_str("internal-shortcode")
+        return self._required_str("audit-shortcode")
+
+    def summary_shortcode(self):
+        env = self._env("LC_SUMMARY_SHORTCODE")
+        if env:
+            return env
+        return self._required_str("summary-shortcode")
 
     def editor(self):
         raw = self._env("EDITOR")

@@ -286,6 +286,7 @@ _TAB_WIDGET_IDS = {
     "Backlog": "#tab-backlog",
     "Done": "#tab-done",
     "Report": "#tab-report",
+    "Automation": "#tab-automation",
 }
 
 
