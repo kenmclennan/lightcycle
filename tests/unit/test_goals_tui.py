@@ -257,6 +257,13 @@ class TestGoalHub(unittest.TestCase):
         for state in ("goal-hub#questions", "goal-hub#questions-empty"):
             self.assertNotIn(state, SCREENS)
 
+    def test_goal_hub_search_rows_carry_no_item_count(self):
+        for state in ("goal-hub#log-search", "goal-hub#items-search"):
+            search_row = next(
+                line for line in render(state).splitlines() if line.lstrip("│ ").startswith("SEARCH")
+            )
+            self.assertNotIn("items", search_row)
+
     def test_goal_hub_fits_a_narrow_terminal(self):
         frame = render("goal-hub#overview", size=(44, 30))
         self.assertIn("Overview", frame)

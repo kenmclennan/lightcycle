@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
@@ -13,6 +15,7 @@ from lightcycle.adapters.tui.row_grid import (
     ATOMIC_FIELD_GAP, FLEXIBLE_MINIMUM, GLYPH_WIDTHS, atomic_column_width, scrollbar_reservation_width,
 )
 from tests.support.fake_store import FakeStore
+from tests.support.filter_block import block_text, last_text_row
 from tests.support.screen_render import DEFAULT_SIZE as RENDER_SIZE
 from tests.support.screen_render import SCREENS as RENDER_SCREENS
 from tests.support.tui_harness import launch, make_test_container
@@ -606,71 +609,41 @@ def _picker_closed(ctx):
 
 @then(parsers.parse('the backlog is filtered to "{project}" without a poll interval elapsing'))
 def _backlog_filtered_immediately(ctx, project):
-    widget = ctx["session"].app.query_one("#backlog-filter-left")
-    assert _rendered_text(widget).strip() == project
+    assert "PROJECT %s" % project in block_text(ctx["session"].app, "backlog")
 
 
 @then('the backlog is still filtered to "All"')
 def _backlog_still_all(ctx):
-    widget = ctx["session"].app.query_one("#backlog-filter-left")
-    assert _rendered_text(widget).strip() == "All"
+    assert "PROJECT All" in block_text(ctx["session"].app, "backlog")
 
 
 @then(parsers.parse('the filter bar\'s left label reads "{text}"'))
 def _filter_bar_left(ctx, text):
-    widget = ctx["session"].app.query_one("#backlog-filter-left")
-    assert _rendered_text(widget).strip() == text
+    assert "PROJECT %s" % text in block_text(ctx["session"].app, "backlog")
 
 
 @then(parsers.parse('the filter bar\'s right label reads "{text}"'))
 def _filter_bar_right(ctx, text):
-    widget = ctx["session"].app.query_one("#backlog-filter-right")
-    assert _rendered_text(widget).strip() == text
+    assert last_text_row(ctx["session"].app, "backlog").rstrip().endswith(text)
 
 
 @then("the filter bar's composited frame shows the left label's own text")
 def _filter_bar_composited_left(ctx):
-    bar = ctx["session"].app.query_one("#backlog-filter-bar")
-    label = ctx["session"].app.query_one("#backlog-filter-label")
-    expected = _rendered_text(label).strip()
-    assert expected
-    row = _composited_text_at(ctx, bar)
-    assert row.startswith(expected), (
-        "composited filter bar row %r does not start with the left label %r" % (row, expected)
-    )
-
-
-@then("the search value and the project value start at the same column")
-def _search_and_project_value_aligned(ctx):
-    search_input = ctx["session"].app.query_one("#backlog-filter-text")
-    project_value = ctx["session"].app.query_one("#backlog-filter-left")
-    assert search_input.region.x == project_value.content_region.x, (
-        "search value starts at column %d but project value starts at column %d"
-        % (search_input.region.x, project_value.content_region.x)
-    )
+    text = block_text(ctx["session"].app, "backlog")
+    assert "PROJECT " in text, "composited filter block %r shows no PROJECT filter" % text
 
 
 @then("the filter bar's composited frame shows the right label's own text")
 def _filter_bar_composited_right(ctx):
-    bar = ctx["session"].app.query_one("#backlog-filter-bar")
-    right = ctx["session"].app.query_one("#backlog-filter-right")
-    expected = _rendered_text(right).strip()
-    assert expected
-    row = _composited_text_at(ctx, bar)
-    stripped = row.rstrip()
-    assert stripped.endswith(expected), (
-        "composited filter bar row %r does not end with the right label %r" % (row, expected)
-    )
-    before = stripped[: -len(expected)]
-    assert before.rstrip() != before, (
-        "composited filter bar row %r has no gap between the left and right labels" % row
+    row = last_text_row(ctx["session"].app, "backlog").rstrip()
+    assert re.search(r"\S {2,}\d+ items$", row) or re.fullmatch(r" +\d+ items", row), (
+        "last filter block row %r does not end with the item count" % row
     )
 
 
 @then("the filter bar does not show proj-b's own count")
 def _filter_bar_no_breakdown(ctx):
-    widget = ctx["session"].app.query_one("#backlog-filter-right")
-    assert "proj-b" not in _rendered_text(widget)
+    assert "proj-b" not in last_text_row(ctx["session"].app, "backlog")
 
 
 @then("the footer's composited frame shows each search-focused shortcut, in order")
