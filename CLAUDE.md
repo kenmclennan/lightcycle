@@ -90,7 +90,7 @@ If a change does not touch (1)-(3), it ships with a unit test, not an integratio
 Read by `write-code` and `review-code` when they run against this repo.
 
 - **Test identity is the pytest nodeid; a pytest-bdd step definition's is its step-text string** - including a `parsers.parse(...)`/`parsers.re(...)`-wrapped one - never the enclosing function name, which is arbitrary and often duplicated.
-- **Size the test fan to the pool, not the machine.** `tests/run.sh` is `uv run pytest -n auto`, which spawns one worker per CPU core on the assumption that the run owns the machine outright. Inside a pool of concurrent workers that assumption is wrong once per worker, and the runs contend until the host swaps. Set `PYTEST_XDIST_AUTO_NUM_WORKERS` to the machine's core count divided by this pool's `max-agents`, floored, minimum 1 - it overrides `-n auto` and survives any invocation, including `bash tests/run.sh tests/unit`. A trailing `-n <N>` also overrides, since `tests/run.sh` passes `"$@"` through, but the env var needs no knowledge of the flag or its position.
+- **`tests/run.sh` sizes its own test fan; do not size it by hand.** It reads `LC_MAX_AGENTS` from the environment, which the spawner exports to every worker, and runs `pytest -n <cores / cap>` (floored, minimum 1). Unset, empty, `0` or non-numeric all mean `-n auto`, so a hand run and CI - neither of which exports it - behave exactly as before. Nothing is left for a step prompt or an agent to compute: run the gate through `bash tests/run.sh` and it is already sized to this pool. A trailing `-n <N>` still overrides, since `"$@"` is passed through.
 
 ## Preferred skills (invoke before the work)
 
