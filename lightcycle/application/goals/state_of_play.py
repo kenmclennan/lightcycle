@@ -69,7 +69,7 @@ class RefreshGoalStateOfPlayUseCase:
         with self._store.transaction():
             item_id = self._store.create_item(
                 "State of play: %s" % goal_id, context,
-                shortcode=self._config.internal_shortcode())
+                shortcode=self._config.summary_shortcode())
             self._store.label_add(item_id, SUMMARY_ORIGIN_LABEL)
             step_id = self._store.create_step(
                 step=GOAL_STATE_OF_PLAY_STEP, role="agent", parent=item_id)

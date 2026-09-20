@@ -26,10 +26,10 @@ class FakeWorkers:
 
 
 class FakeConfig:
-    def __init__(self, is_worker=False, is_live_home=True, internal_shortcode="AUD"):
+    def __init__(self, is_worker=False, is_live_home=True, summary_shortcode="SUM"):
         self._is_worker = is_worker
         self._is_live_home = is_live_home
-        self._internal_shortcode = internal_shortcode
+        self._summary_shortcode = summary_shortcode
 
     def data_root(self):
         return "/home"
@@ -43,8 +43,8 @@ class FakeConfig:
     def reconcile_config(self):
         pass
 
-    def internal_shortcode(self):
-        return self._internal_shortcode
+    def summary_shortcode(self):
+        return self._summary_shortcode
 
 
 class FakeContainer:

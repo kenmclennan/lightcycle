@@ -56,7 +56,7 @@ class TestGoalsTab(unittest.TestCase):
         session = self._launch(FakeStore())
         strip = session.app.query_one(TabStrip)
         rendered = "".join(str(child.content) for child in strip.children)
-        self.assertEqual(rendered, "Goals · Current work · Backlog · Done · Report")
+        self.assertEqual(rendered, "Goals · Current work · Backlog · Done · Report · Automation")
 
     def test_landing_view_is_priority_with_an_empty_store_and_with_goals(self):
         for store in (FakeStore(), _goals_store()[0]):

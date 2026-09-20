@@ -6,7 +6,7 @@ Where `tests/feature/the-*-tab.feature` and `tests/feature/priority-list-renders
 
 ## Screens
 
-**The priority list** answers "what is happening, and what needs me". Its tab strip reads `Goals · Current work · Backlog · Done · Report`; the dashboard lands on Current work, and `[` from there reaches Goals. Goals, Backlog, Done and Report are the other views alongside Current work.
+**The priority list** answers "what is happening, and what needs me". Its tab strip reads `Goals · Current work · Backlog · Done · Report · Automation`; the dashboard lands on Current work, and `[` from there reaches Goals. Goals, Backlog, Done, Report and Automation are the other views alongside Current work.
 
 Current work is three fixed-order groups - needs-attention, active, queued - with one row per **item**, never per step. A row carries the item's id, its project, its title, the stage of its current or next step, and for active work a live approximate elapsed time. A terminal bell rings the moment something newly enters needs-attention, so it can be noticed in an unfocused pane, and never rings again for the same item while it stays there.
 

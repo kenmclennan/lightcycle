@@ -2,7 +2,11 @@ import argparse
 import datetime
 import sys
 
-from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL
+from lightcycle.application.flow.engine_steps import (
+    GOAL_STATE_OF_PLAY_STEP,
+    RETRO_ORIGIN_LABEL,
+    SUMMARY_ORIGIN_LABEL,
+)
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
@@ -663,6 +667,46 @@ def _report_store():
 
     store.add_project("kenmclennan/lightcycle")
     return store
+
+
+def _automation_store():
+    store = DemoStore(now=lambda: NOW.isoformat())
+    for index, (item_id, title, label, step_name, cost, minutes) in enumerate([
+        ("AUD-48", "Audit of recent work", RETRO_ORIGIN_LABEL, "audit", 0.42, 30),
+        ("SUM-3", "Daily summary: 2026-09-19", SUMMARY_ORIGIN_LABEL, "daily-summary", 0.11, 90),
+        ("SUM-4", "State of play: engine automation", SUMMARY_ORIGIN_LABEL, GOAL_STATE_OF_PLAY_STEP, 0.27, 150),
+        ("LC-12", "Labelled before the shortcode existed", RETRO_ORIGIN_LABEL, "audit", 0.35, 210),
+    ]):
+        item = store.item(item_id, title)
+        step = store.step("%s.1" % item_id, step=step_name, role="agent", parent=item)
+        store.claim_ready("agent")
+        store.record_usage(step, 100, 10, 0, 0, cost, "list", None)
+        store.complete_node(step, "done")
+        store.complete_node(item, "merged", disposition="completed")
+        store._records[item]["closed_at"] = _at(minutes)
+        store.label_add(item, label)
+    return store
+
+
+def _automation_populated(size):
+    session = _launch(_automation_store(), size=size)
+    for _ in range(4):
+        session.press("]")
+    return session
+
+
+def _automation_empty(size):
+    session = _launch(DemoStore(now=lambda: NOW.isoformat()), size=size)
+    for _ in range(4):
+        session.press("]")
+    return session
+
+
+def _report_with_automation(size):
+    session = _launch(_automation_store(), size=size)
+    for _ in range(3):
+        session.press("]")
+    return session
 
 
 def _report_today(size):
@@ -1422,6 +1466,9 @@ SCREENS = {
     "done#day-picker": _done_day_picker,
     "done#day-filtered": _done_day_filtered,
     "done#filter-wrapped": _done_filter_wrapped,
+    "automation#populated": _automation_populated,
+    "automation#empty": _automation_empty,
+    "report#with-automation": _report_with_automation,
     "report#today": _report_today,
     "report#day-picker": _report_day_picker,
     "report#historical-day": _report_historical_day,

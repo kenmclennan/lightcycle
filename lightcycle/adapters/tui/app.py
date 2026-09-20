@@ -17,6 +17,8 @@ from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_REST_INDEX,
     ACTIVE_GLYPH_TICKS_PER_SECOND,
     BACKLOG_EMPTY_SHORTCUTS,
+    AUTOMATION_EMPTY_SHORTCUTS,
+    AUTOMATION_SHORTCUTS,
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
     BACKLOG_SEARCH_EMPTY_SHORTCUTS,
     BACKLOG_SEARCH_SHORTCUTS,
@@ -71,6 +73,8 @@ from lightcycle.application.pool import (
 )
 from lightcycle.application.setup import UpgradeNoticeUseCase, upgrade
 from lightcycle.application.work import (
+    AutomationInput,
+    AutomationUseCase,
     BacklogInput,
     BacklogUseCase,
     DoneInput,
@@ -102,9 +106,10 @@ POOL_PROMPT_QUIT_LEAVE = "quit-leave"
 POOL_PROMPT_QUIT_STOP = "quit-stop"
 POOL_PROMPT_MIN_WIDTH = 52
 
-_VIEW_CYCLE = ("goals", "priority", "backlog", "done", "report")
+_VIEW_CYCLE = ("goals", "priority", "backlog", "done", "report", "automation")
 
 GOALS_EMPTY_MESSAGE = "No goals yet."
+AUTOMATION_EMPTY_MESSAGE = "No automation has run yet."
 
 STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
@@ -182,6 +187,8 @@ class TabStrip(Horizontal):
         yield Static("Done", id="tab-done", classes="tab-dim")
         yield Static(" · ", classes="tab-separator")
         yield Static("Report", id="tab-report", classes="tab-dim")
+        yield Static(" · ", classes="tab-separator")
+        yield Static("Automation", id="tab-automation", classes="tab-dim")
 
     def set_active(self, view) -> None:
         widgets = {
@@ -190,6 +197,7 @@ class TabStrip(Horizontal):
             "backlog": self.query_one("#tab-backlog", Static),
             "done": self.query_one("#tab-done", Static),
             "report": self.query_one("#tab-report", Static),
+            "automation": self.query_one("#tab-automation", Static),
         }
         for key, widget in widgets.items():
             widget.set_class(key == view, "tab-active")
@@ -274,17 +282,7 @@ class BacklogTable(PagingTable):
             pass
 
 
-class DoneTable(PagingTable):
-    def on_resize(self, event: events.Resize) -> None:
-        view = self.parent
-        if isinstance(view, DoneView):
-            view.refresh_column_width()
-
-    def on_show(self, event: events.Show) -> None:
-        view = self.parent
-        if isinstance(view, DoneView):
-            view.refresh_column_width()
-
+class CursorGlyphTable(PagingTable):
     def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
         super().watch_cursor_coordinate(old_coordinate, new_coordinate)
         if old_coordinate.row != new_coordinate.row:
@@ -303,6 +301,30 @@ class DoneTable(PagingTable):
             self.update_cell(row_key, "cursor", value)
         except CellDoesNotExist:
             pass
+
+
+class DoneTable(CursorGlyphTable):
+    def on_resize(self, event: events.Resize) -> None:
+        view = self.parent
+        if isinstance(view, DoneView):
+            view.refresh_column_width()
+
+    def on_show(self, event: events.Show) -> None:
+        view = self.parent
+        if isinstance(view, DoneView):
+            view.refresh_column_width()
+
+
+class AutomationTable(CursorGlyphTable):
+    def on_resize(self, event: events.Resize) -> None:
+        view = self.parent
+        if isinstance(view, AutomationView):
+            view.refresh_column_width()
+
+    def on_show(self, event: events.Show) -> None:
+        view = self.parent
+        if isinstance(view, AutomationView):
+            view.refresh_column_width()
 
 
 def _repaint_stacked_cursor(table, row_key, show) -> None:
@@ -800,8 +822,9 @@ def _report_rows(response):
         ("Items Completed", str(response.completed)),
         ("Items Closed", str(response.completed + response.abandoned)),
         ("Spend", _format_item_cost(response.spend)),
+        ("Automation Items", str(response.automation_count)),
+        ("Automation Spend", _format_item_cost(response.automation_spend)),
         ("Escalations", str(response.escalations)),
-        ("Audits", str(response.audits)),
         ("Starting Backlog Size", str(response.backlog_start)),
         ("Closing Backlog Size", str(response.backlog_close)),
         ("Backlog Delta", delta_text),
@@ -961,6 +984,151 @@ class ReportView(Vertical):
 
         for field in rows:
             table.add_row(*_report_row_cells(field, layout, row_budget), height=None, key=field[0])
+
+
+class AutomationView(Vertical):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._rows = ()
+        self._floor = False
+        self._last_shape = None
+        self._needs_rebuild = False
+        self._stacked = False
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="automation-tally")
+        yield AutomationTable(id="automation-table")
+        yield Static(id="automation-floor")
+        yield Static(AUTOMATION_EMPTY_MESSAGE, id="automation-empty")
+
+    def on_mount(self) -> None:
+        table = self.query_one(AutomationTable)
+        table.cursor_type = "row"
+        table.show_header = False
+
+    def apply_response(self, response, rows) -> None:
+        self.query_one("#automation-tally", Static).update(_automation_tally_text(response))
+        shape = tuple(r.id for r in rows)
+        layout = self._layout(self.query_one(AutomationTable), rows)
+        if shape == self._last_shape and not self._needs_rebuild and layout.stacked == self._stacked:
+            self._rows = rows
+            self._update_cells(rows)
+        else:
+            self._rebuild_table(rows)
+            self._last_shape = shape
+        self._toggle_state()
+
+    def refresh_column_width(self) -> None:
+        self._rebuild_table(self._rows)
+        self._toggle_state()
+
+    def _selected_row_id(self, table):
+        if table.row_count == 0:
+            return None
+        try:
+            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
+        except CellDoesNotExist:
+            return None
+        return cell_key.row_key.value
+
+    def _layout(self, table, rows):
+        atomic_values = {
+            "id": [row.id for row in rows],
+            "project": [row.project for row in rows],
+            "cost": [row.cost for row in rows],
+            "time": [row.time for row in rows],
+        }
+        row_budget = screen_row_budget_for(table, len(DONE_COLUMNS))
+        return compute_layout(row_budget, ["cursor"], atomic_values, DONE_CONTINUATION_INDENT)
+
+    def _rebuild_table(self, rows) -> None:
+        self._rows = rows
+        table = self.query_one(AutomationTable)
+        layout = self._layout(table, rows)
+        self._stacked = layout.stacked
+        self._floor = bool(rows) and layout.floor
+        if self._floor:
+            self._needs_rebuild = True
+            self.query_one("#automation-floor", Static).update(
+                Text(floor_message(layout, table, len(DONE_COLUMNS)), style=COLOURS["dim"])
+            )
+            return
+        self._needs_rebuild = False
+        selected_id = self._selected_row_id(table)
+
+        table.clear(columns=True)
+        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+        else:
+            widths = {
+                "cursor": GLYPH_WIDTHS["cursor"],
+                "id": layout.atomic_widths["id"],
+                "project": layout.atomic_widths["project"],
+                "title": layout.flexible_width,
+                "cost": layout.atomic_widths["cost"],
+                "time": layout.atomic_widths["time"],
+            }
+            for key in DONE_COLUMNS:
+                table.add_column(key, width=widths[key], key=key)
+
+        ids = [row.id for row in rows]
+        new_index = ids.index(selected_id) if selected_id in ids else 0
+        table._stacked_mode = layout.stacked
+        table._stacked_layout = layout
+        table._stacked_row_budget = row_budget
+        table._stacked_cell_builder = _done_stacked_cell_builder
+        stacked_rows = {}
+        for index, row in enumerate(rows):
+            cells = _done_row_cells(row, layout, row_budget, cursor=index == new_index)
+            if layout.stacked:
+                stacked_rows[row.id] = (row, None)
+            table.add_row(*cells, height=None, key=row.id)
+        table._stacked_rows = stacked_rows
+        if rows:
+            table.move_cursor(row=new_index)
+
+    def _update_cells(self, rows) -> None:
+        table = self.query_one(AutomationTable)
+        layout = self._layout(table, rows)
+        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
+        selected_id = self._selected_row_id(table)
+        for row in rows:
+            cells = _done_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
+            if layout.stacked:
+                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                continue
+            for key, value in zip(DONE_COLUMNS, cells):
+                if key == "cursor":
+                    continue
+                table.update_cell(row.id, key, value)
+
+    def _toggle_state(self) -> None:
+        empty = not self._rows
+        showing_floor = self._floor
+        self.query_one(AutomationTable).display = not empty and not showing_floor
+        self.query_one("#automation-floor", Static).display = showing_floor
+        self.query_one("#automation-empty", Static).display = empty
+
+    @property
+    def row_count(self) -> int:
+        return len(self._rows)
+
+
+def _automation_tally_text(response):
+    lines = list(response.tallies) + [response.total]
+    label_width = max(len(t.label) for t in lines)
+    count_width = max(len(str(t.count)) for t in lines)
+    text = Text()
+    for index, tally in enumerate(lines):
+        if index:
+            text.append("\n")
+        text.append(tally.label.ljust(label_width), style=COLOURS["dim"])
+        text.append("  ")
+        text.append(str(tally.count).rjust(count_width), style=COLOURS["text"])
+        text.append("  ")
+        text.append(_format_item_cost(tally.spend), style=COLOURS["text"])
+    return text
 
 
 PICKER_MIN_WIDTH = 40
@@ -1373,6 +1541,29 @@ class LightcycleApp(App):
         display: none;
     }}
 
+    AutomationView {{
+        display: none;
+    }}
+    #automation-tally {{
+        height: auto;
+        padding-bottom: 1;
+    }}
+    #automation-floor {{
+        color: {COLOURS["dim"]};
+        content-align: center middle;
+        height: 1fr;
+        display: none;
+    }}
+    AutomationTable {{
+        height: 1fr;
+        display: none;
+    }}
+    #automation-empty {{
+        color: {COLOURS["dim"]};
+        height: 1fr;
+        display: none;
+    }}
+
     ReportView {{
         display: none;
     }}
@@ -1539,6 +1730,9 @@ class LightcycleApp(App):
         report_view = ReportView(id="report-view")
         report_view.display = self._view == "report"
         yield report_view
+        automation_view = AutomationView(id="automation-view")
+        automation_view.display = self._view == "automation"
+        yield automation_view
         yield DashboardFooter(id="footer")
 
     def on_mount(self) -> None:
@@ -1563,6 +1757,7 @@ class LightcycleApp(App):
         self.refresh_priority_layout()
         self.query_one(BacklogView).refresh_column_width()
         self.query_one(DoneView).refresh_column_width()
+        self.query_one(AutomationView).refresh_column_width()
 
     def _check_upgrade(self):
         response = UpgradeNoticeUseCase(
@@ -1622,6 +1817,7 @@ class LightcycleApp(App):
         self._refresh_goals_view()
         self._refresh_backlog_view()
         self._refresh_done_view()
+        self._refresh_automation_view()
 
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
@@ -1759,6 +1955,15 @@ class LightcycleApp(App):
             self._done_day_filter,
         )
 
+    def _refresh_automation_view(self) -> None:
+        if self._view != "automation":
+            return
+        response = AutomationUseCase(self._container.store).execute(AutomationInput())
+        rows = build_done_rows(
+            self._container.store, response.rows, self._now(), self._done_cost_time_cache,
+        )
+        self.query_one(AutomationView).apply_response(response, rows)
+
     def _refresh_report_view(self) -> None:
         if self._view != "report":
             return
@@ -1781,6 +1986,7 @@ class LightcycleApp(App):
         self.query_one(BacklogView).display = self._view == "backlog"
         self.query_one(DoneView).display = self._view == "done"
         self.query_one(ReportView).display = self._view == "report"
+        self.query_one(AutomationView).display = self._view == "automation"
         self._sync_active_glyph_animation()
 
     def _desired_shortcuts(self):
@@ -1796,6 +2002,10 @@ class LightcycleApp(App):
             return DONE_SHORTCUTS
         if self._view == "report":
             return REPORT_SHORTCUTS
+        if self._view == "automation":
+            if self.query_one(AutomationView).row_count:
+                return AUTOMATION_SHORTCUTS
+            return AUTOMATION_EMPTY_SHORTCUTS
         if self._view == "goals":
             return GOALS_SHORTCUTS if self.query_one(GoalsView).count else GOALS_EMPTY_SHORTCUTS
         if self.focused is self.query_one(BacklogFilterInput):
@@ -1851,6 +2061,8 @@ class LightcycleApp(App):
             self._refresh_done_view()
         elif self._view == "report":
             self._refresh_report_view()
+        elif self._view == "automation":
+            self._refresh_automation_view()
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()
@@ -1863,6 +2075,8 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(BacklogTable))
         elif self._view == "report":
             self.set_focus(self.query_one(ReportView))
+        elif self._view == "automation":
+            self.set_focus(self.query_one(AutomationTable))
         else:
             self.set_focus(self.query_one(DoneTable))
 
@@ -1883,7 +2097,7 @@ class LightcycleApp(App):
         elif table.id == "goals-table":
             event.stop()
             self.push_screen(GoalHubScreen(self._container, row_id, self._now))
-        elif table.id in ("backlog-table", "done-table"):
+        elif table.id in ("backlog-table", "done-table", "automation-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))
 

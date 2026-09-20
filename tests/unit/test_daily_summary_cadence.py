@@ -13,15 +13,15 @@ from tests.unit.test_flow_usecases import METAS, flow_for
 
 
 class FakeConfig:
-    def __init__(self, debounce_seconds=600, internal_shortcode="AUD"):
+    def __init__(self, debounce_seconds=600, summary_shortcode="SUM"):
         self._debounce_seconds = debounce_seconds
-        self._internal_shortcode = internal_shortcode
+        self._summary_shortcode = summary_shortcode
 
     def daily_summary_debounce_seconds(self):
         return self._debounce_seconds
 
-    def internal_shortcode(self):
-        return self._internal_shortcode
+    def summary_shortcode(self):
+        return self._summary_shortcode
 
 
 class _Clock:
@@ -56,8 +56,8 @@ def _close_item(store, day, title="item", hour=10):
     return item
 
 
-def _gate(store, debounce_seconds=600, internal_shortcode="AUD"):
-    return DailySummaryCadenceUseCase(store, FakeConfig(debounce_seconds, internal_shortcode))
+def _gate(store, debounce_seconds=600, summary_shortcode="SUM"):
+    return DailySummaryCadenceUseCase(store, FakeConfig(debounce_seconds, summary_shortcode))
 
 
 def _spy_all_items_calls(store):
@@ -144,6 +144,7 @@ class TestDailySummaryCadenceDebounce(unittest.TestCase):
         self.assertEqual(step.stage, DAILY_SUMMARY_STEP)
         self.assertEqual(step.role, "agent")
         self.assertIn(SUMMARY_ORIGIN_LABEL, store.labels_of(step.item))
+        self.assertTrue(step.item.startswith("SUM-"))
         row = store.day_summary(day)
         self.assertEqual(row.step_id, tid)
         self.assertEqual(row.spawn_count, 1)
