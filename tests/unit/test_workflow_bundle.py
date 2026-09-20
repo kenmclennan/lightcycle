@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter, workflow_names
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter, parse_step, workflow_names
 from tests.support.fake_fs import FakeFs
 
 
@@ -50,6 +50,40 @@ class TestWorkflowNames(unittest.TestCase):
 
     def test_fake_fs_no_workflows_seeded_is_empty(self):
         self.assertEqual(FakeFs().workflow_names(), [])
+
+
+def _bundle(files):
+    root = tempfile.mkdtemp()
+    for rel, text in files.items():
+        os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+        with open(os.path.join(root, rel), "w") as f:
+            f.write(text)
+    return root
+
+
+class TestIncludeCycles(unittest.TestCase):
+    def test_self_including_fragment_names_the_cycle(self):
+        root = _bundle({"fragments/loop.md": "@include loop\n", "steps/s.md": "@include loop\n"})
+        with self.assertRaises(ValueError) as cm:
+            parse_step(root, "s")
+        self.assertIn("'loop'", str(cm.exception))
+        self.assertIn("loop -> loop", str(cm.exception))
+
+    def test_mutually_including_fragments_name_the_chain(self):
+        root = _bundle(
+            {
+                "fragments/a.md": "@include b\n",
+                "fragments/b.md": "@include a\n",
+                "steps/s.md": "@include a\n",
+            }
+        )
+        with self.assertRaises(ValueError) as cm:
+            parse_step(root, "s")
+        self.assertIn("a -> b -> a", str(cm.exception))
+
+    def test_repeated_non_cyclic_include_resolves(self):
+        root = _bundle({"fragments/x.md": "hi\n", "steps/s.md": "@include x\n@include x\n"})
+        self.assertEqual(parse_step(root, "s").body.count("hi"), 2)
 
 
 if __name__ == "__main__":

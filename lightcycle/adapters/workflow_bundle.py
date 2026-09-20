@@ -25,12 +25,17 @@ def step_roles(roots):
     return sorted(names)
 
 
-def _resolve_includes(roots, body, relpath):
+def _resolve_includes(roots, body, relpath, chain=()):
     lines = []
     for line in body.split("\n"):
         if line.startswith(INCLUDE_PREFIX) and line[len(INCLUDE_PREFIX) :].strip():
             name = line[len(INCLUDE_PREFIX) :].strip()
-            fragment = read_md(roots, os.path.join("fragments", "%s.md" % name))
+            if name in chain:
+                raise ValueError(
+                    "fragment %r included by %s forms a cycle: %s"
+                    % (name, relpath, " -> ".join(chain + (name,)))
+                )
+            fragment = read_md(roots, os.path.join("fragments", "%s.md" % name), chain + (name,))
             if fragment is None:
                 raise ValueError("fragment %r included by %s not found" % (name, relpath))
             lines.append(fragment.body.strip("\n"))
@@ -39,14 +44,14 @@ def _resolve_includes(roots, body, relpath):
     return "\n".join(lines)
 
 
-def read_md(roots, relpath):
+def read_md(roots, relpath, chain=()):
     for root in _roots(roots):
         path = os.path.join(root, relpath)
         if os.path.exists(path):
             with open(path) as f:
                 text = f.read()
             meta, body = frontmatter.split_frontmatter(text)
-            return StepPrompt(meta=meta, body=_resolve_includes(roots, body, relpath))
+            return StepPrompt(meta=meta, body=_resolve_includes(roots, body, relpath, chain))
     return None
 
 
