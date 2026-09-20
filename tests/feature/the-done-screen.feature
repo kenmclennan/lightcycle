@@ -117,7 +117,7 @@ Feature: The done screen
       | position | key     | action     |
       | 1        | ↑↓      | move       |
       | 2        | enter   | open       |
-      | 3        | esc     | back       |
+      | 3        | esc/tab | back       |
       | 4        | [/]     | switch tab |
       | 5        | q       | quit       |
 
@@ -131,7 +131,7 @@ Feature: The done screen
 
     Examples:
       | position | key     | action     |
-      | 1        | esc     | back       |
+      | 1        | esc/tab | back       |
       | 2        | [/]     | switch tab |
       | 3        | q       | quit       |
 
