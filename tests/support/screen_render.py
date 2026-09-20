@@ -80,8 +80,9 @@ def _populated_store(claimed_minutes_ago=14):
 
 
 LONG_DESCRIPTION = (
-    "This item exists to fix a header that grows without bound. " * 50
-).strip()
+    "## Problem\n\nWaits on [[LC-861]].\n\n"
+    + ("This item exists to fix a header that grows without bound. " * 50).strip()
+)
 
 
 def _long_description_store(description=LONG_DESCRIPTION):
@@ -90,6 +91,7 @@ def _long_description_store(description=LONG_DESCRIPTION):
     if description is not None:
         store.edit_node(item, description=description)
     store.step("LC-319.1.4", step="write-code", role="agent", parent=item)
+    store.item("LC-861", "Goals slice 4: the gate a human clears", workflow=WORKFLOW)
     return store, item
 
 
