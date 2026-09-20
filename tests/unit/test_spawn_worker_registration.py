@@ -5,7 +5,7 @@ from unittest import mock
 
 from lightcycle.adapters import spawner
 from lightcycle.adapters.workers import workers_path, workers_state
-from lightcycle.config import Config
+from lightcycle.config import Config, ConfigError
 
 
 class FakeProc:
@@ -19,7 +19,7 @@ class FakeProc:
 class TestSpawnWorkerRegistersBeforeCaptureResolves(unittest.TestCase):
     def test_registry_entry_exists_before_capture_pid_started_resolves(self):
         with tempfile.TemporaryDirectory() as root:
-            config = Config(environ={"LC_HOME": root})
+            config = Config(environ={"LC_HOME": root, "LC_MAX_AGENTS": "5"})
             seen = {}
 
             def never_resolving_capture(proc):
@@ -55,7 +55,7 @@ class TestSpawnWorkerTerminatesOnUnreadableRegistry(unittest.TestCase):
             os.makedirs(os.path.join(root, "logs"), exist_ok=True)
             with open(workers_path(root), "w") as f:
                 f.write("{not valid json")
-            config = Config(environ={"LC_HOME": root, "LC_SPAWN_CMD": "exec sleep 30"})
+            config = Config(environ={"LC_HOME": root, "LC_MAX_AGENTS": "5", "LC_SPAWN_CMD": "exec sleep 30"})
             spawned = {}
             real_popen = spawner.subprocess.Popen
 
@@ -74,6 +74,45 @@ class TestSpawnWorkerTerminatesOnUnreadableRegistry(unittest.TestCase):
             rc = spawned["proc"].wait(timeout=3)
             self.assertIsNotNone(rc)
             self.assertFalse(_pid_alive(spawned["proc"].pid))
+
+
+def _spawn_env(config):
+    with mock.patch(
+        "lightcycle.adapters.spawner.subprocess.Popen", return_value=FakeProc(pid=999)
+    ) as popen, mock.patch(
+        "lightcycle.adapters.spawner.capture_pid_started", return_value=1.0
+    ):
+        spawner.spawn_worker(config, "agent")
+    return popen.call_args.kwargs["env"]
+
+
+class TestSpawnWorkerExportsPoolCap(unittest.TestCase):
+    def test_cap_from_config_file_reaches_the_worker_env(self):
+        with tempfile.TemporaryDirectory() as root:
+            cfg = os.path.join(root, "config")
+            with open(cfg, "w") as f:
+                f.write("max-agents: 7\n")
+            config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg})
+            self.assertEqual(_spawn_env(config)["LC_MAX_AGENTS"], "7")
+
+    def test_env_cap_overrides_config_value_in_the_worker_env(self):
+        with tempfile.TemporaryDirectory() as root:
+            cfg = os.path.join(root, "config")
+            with open(cfg, "w") as f:
+                f.write("max-agents: 7\n")
+            config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg, "LC_MAX_AGENTS": "3"})
+            self.assertEqual(_spawn_env(config)["LC_MAX_AGENTS"], "3")
+
+    def test_unresolvable_cap_raises_and_spawns_nothing(self):
+        with tempfile.TemporaryDirectory() as root:
+            cfg = os.path.join(root, "config")
+            with open(cfg, "w") as f:
+                f.write("")
+            config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg})
+            with mock.patch("lightcycle.adapters.spawner.subprocess.Popen") as popen:
+                with self.assertRaises(ConfigError):
+                    spawner.spawn_worker(config, "agent")
+            popen.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -27,7 +27,8 @@ def spawn_worker(config, role):
     log = os.path.join(root, "logs", worker_log_filename(role, spawnid))
     os.makedirs(os.path.dirname(log), exist_ok=True)
     env = dict(config.base_env(), LC_HOME=root,
-               LC_SPAWNID=spawnid, LC_ROLE=role, LC_WORKER="1")
+               LC_SPAWNID=spawnid, LC_ROLE=role, LC_WORKER="1",
+               LC_MAX_AGENTS=str(config.max_agents()))
     pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
     override = config.spawn_cmd()
