@@ -65,6 +65,20 @@ class TestAssembler(_Base):
         positions = [text.index(m) for m in marks]
         self.assertEqual(positions, sorted(positions))
 
+    def test_a_wiki_link_in_the_description_reaches_the_generator_with_its_title(self):
+        item = self.store.create_item(
+            "the gate can suspend the last working worker", "d", shortcode="LC")
+        self.store.update_goal(
+            self.gid, description="## Constraints\n- keep [[%s]] intact\n- and [[LC-99999]]" % item)
+
+        text = assemble_goal_context(self.store, self.gid)
+
+        self.assertIn(
+            "## Constraints\n- keep the gate can suspend the last working worker (%s) intact" % item,
+            text)
+        self.assertIn("- and LC-99999 (not found)", text)
+        self.assertNotIn("[[", text)
+
     def test_no_linked_items_reads_none_in_both_sections(self):
         text = assemble_goal_context(self.store, self.gid)
 

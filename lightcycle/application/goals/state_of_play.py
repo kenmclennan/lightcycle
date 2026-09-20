@@ -2,7 +2,9 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import GOAL_STATE_OF_PLAY_STEP, SUMMARY_ORIGIN_LABEL
 from lightcycle.application.goals._common import require_goal
 from lightcycle.application.work.item_partition import is_closed_item
+from lightcycle.application.inspect.resolve_references import ResolveReferencesUseCase
 from lightcycle.domain.goals import goal_log_stamp
+from lightcycle.domain.prose import parse_prose, reference_ids, resolve_references
 from lightcycle.domain.work import State
 
 _NONE = "(none)"
@@ -12,6 +14,15 @@ def _item_lines(refs):
     if not refs:
         return _NONE
     return "\n".join("%s - %s" % (i, t) if t else i for i, t in refs)
+
+
+def _description_with_titles(store, description):
+    if not description:
+        return description
+    ids = reference_ids(parse_prose(description))
+    if not ids:
+        return description
+    return resolve_references(description, ResolveReferencesUseCase(store).execute(ids))
 
 
 def assemble_goal_context(store, goal_id):
@@ -33,7 +44,7 @@ def assemble_goal_context(store, goal_id):
     return "\n\n".join([
         "Goal %s: %s\nStatus: %s    Project: %s"
         % (goal.id, goal.title, goal.status, goal.project or "(none)"),
-        "## Description\n%s" % goal.description,
+        "## Description\n%s" % _description_with_titles(store, goal.description),
         "## Log (oldest first)\n%s" % ("\n\n".join(entries) if entries else _NONE),
         "## Open items\n%s" % _item_lines(open_items),
         "## Done items\n%s" % _item_lines(done_items),
