@@ -67,6 +67,7 @@ COLUMN_GRIDS = {
     "artifacts": ("type", "value"),
     "detail": ("key", "value"),
     "report": ("key", "value"),
+    "goal-items": ("cursor", "icon", "id", "title", "step"),
 }
 
 GLOBAL_SHORTCUTS = (

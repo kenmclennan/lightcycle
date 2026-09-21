@@ -1,3 +1,4 @@
+import re
 import unittest
 
 from lightcycle.adapters.tui.app import GoalsTable, GoalsView, TabStrip
@@ -27,6 +28,9 @@ from tests.support.fake_store import FakeStore
 from tests.support.screen_render import (
     GOAL_DESCRIPTION,
     SCREENS,
+    WORKFLOW,
+    DemoStore,
+    _at,
     _goals_store,
     _launch,
     render,
@@ -290,13 +294,12 @@ class TestGoalItemsTab(unittest.TestCase):
     def _cursor_rows(self, session):
         return [line for line in _rows(session) if "❯" in line]
 
-    def test_step_text_is_right_aligned_on_its_own_line(self):
+    def test_step_text_shares_the_title_line(self):
         session, _, _ = self._open()
-        lines = _rows(session)
-        index = next(i for i, line in enumerate(lines) if "LC-862" in line)
-        step_line = lines[index + 1]
-        self.assertTrue(step_line.rstrip().endswith("write-code"))
-        self.assertGreater(len(step_line) - len(step_line.lstrip()), 40)
+        line = next(line for line in _rows(session) if "LC-862" in line)
+        self.assertIn("state on the items tab", line)
+        self.assertIn("write-code", line)
+        self.assertGreater(line.index("write-code"), line.index("items tab"))
 
     def test_dependency_blocked_row_shows_the_blocker_in_place_of_the_step(self):
         session, _, _ = self._open()
@@ -311,28 +314,102 @@ class TestGoalItemsTab(unittest.TestCase):
                 self.assertRegex(line.strip(), r"^(❯\s+)?LC-85\d\s")
 
     def test_titles_wrap_instead_of_truncating_on_a_narrow_terminal(self):
-        session, _, _ = self._open(size=(40, 40))
+        session, _, _ = self._open(size=(40, 60))
         frame = _frame(session)
         self.assertNotIn("…", frame)
         for word in ("gate", "human", "clears", "progress", "statement"):
             self.assertIn(word, frame)
 
-    def test_cursor_starts_on_the_first_item_and_never_rests_on_a_header(self):
+    def test_cursor_starts_on_the_first_item(self):
         session, _, _ = self._open()
-        self.assertIn("LC-861", self._cursor_rows(session)[0])
-        seen = []
-        for _ in range(8):
-            session.press("down")
-            rows = self._cursor_rows(session)
-            self.assertEqual(len(rows), 1)
-            seen.append(rows[0])
-        for header in ("CURRENT WORK", "BACKLOG", "DONE"):
-            self.assertFalse(any(header in row for row in seen))
-        self.assertTrue(any("LC-858" in row for row in seen))
-        self.assertIn("LC-857", seen[-1])
-        for _ in range(8):
-            session.press("up")
-        self.assertIn("LC-861", self._cursor_rows(session)[0])
+        rows = self._cursor_rows(session)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("LC-861", rows[0])
+
+    def test_step_is_left_aligned_under_the_title_on_a_narrow_terminal(self):
+        session, _, _ = self._open(size=(40, 60))
+        lines = _rows(session)
+        index = next(i for i, line in enumerate(lines) if "LC-862" in line)
+        step_index = next(i for i in range(index, len(lines)) if "write-code" in lines[i])
+        self.assertGreater(step_index, index)
+        title_column = lines[index].index("Goals")
+        self.assertEqual(lines[step_index].index("write-code"), title_column)
+
+    def test_headers_sit_over_the_cursor_column_with_a_blank_line_below(self):
+        session, _, _ = self._open(size=(100, 45))
+        lines = _rows(session)
+        cursor_column = next(line for line in lines if "❯" in line).index("❯")
+        for position, label in enumerate(("CURRENT WORK", "BACKLOG", "DONE")):
+            index = next(i for i, line in enumerate(lines) if label in line)
+            self.assertEqual(lines[index].index(label), cursor_column)
+            self.assertEqual(lines[index + 1].strip(), "")
+            self.assertNotEqual(lines[index + 2].strip(), "")
+            if position:
+                self.assertEqual(lines[index - 1].strip(), "")
+                self.assertNotEqual(lines[index - 2].strip(), "")
+
+    def test_only_the_first_visible_header_drops_its_top_padding(self):
+        session, _, _ = self._open(size=(100, 45))
+        session.press("/")
+        self._type(session, "slice 1")
+        headers = session.run(
+            lambda: {
+                h.id: (h.display, h.has_class("first-visible"))
+                for h in session.app.screen.query(".goal-items-header")
+            }
+        )
+        self.assertEqual(
+            headers,
+            {
+                "goal-items-header-current": (False, False),
+                "goal-items-header-backlog": (True, True),
+                "goal-items-header-done": (False, False),
+            },
+        )
+
+    def test_ids_share_one_column_across_groups(self):
+        session, _, _ = self._open(size=(100, 45))
+        lines = _rows(session)
+        columns = {
+            item_id: next(line for line in lines if item_id in line).index(item_id)
+            for item_id in ("LC-861", "LC-858", "LC-857")
+        }
+        self.assertEqual(len(set(columns.values())), 1)
+
+    def test_exactly_one_cursor_glyph_and_one_highlighted_row(self):
+        session, _, _ = self._open(size=(100, 45))
+        self.assertEqual(_frame(session).count("❯"), 1)
+        self.assertEqual(len(self._highlighted_rows(session)), 1)
+        session.press("end")
+        self.assertEqual(_frame(session).count("❯"), 1)
+        self.assertEqual(len(self._highlighted_rows(session)), 1)
+        self.assertIn("LC-857", self._cursor_rows(session)[0])
+
+    def _highlighted_rows(self, session):
+        strips = session.run(lambda: session.app.screen._compositor.render_strips())
+        cursor_strip = next(s for s in strips if "❯" in "".join(seg.text for seg in s))
+        cursor_bg = next(
+            seg.style.bgcolor for seg in cursor_strip if "❯" in seg.text or "LC-" in seg.text
+        )
+        return [
+            index
+            for index, strip in enumerate(strips)
+            if any(
+                seg.style and seg.style.bgcolor == cursor_bg and "LC-" in seg.text
+                for seg in strip
+            )
+        ]
+
+    def test_a_click_on_another_groups_row_moves_the_single_cursor_there(self):
+        session, _, _ = self._open(size=(100, 45))
+        session._run(session.pilot.click("#goal-items-table-done", offset=(20, 0)))
+        session.pause()
+        rows = self._cursor_rows(session)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("LC-857", rows[0])
+        self.assertEqual(len(self._highlighted_rows(session)), 1)
+        session.press("up")
+        self.assertIn("LC-859", self._cursor_rows(session)[0])
 
     def test_enter_opens_the_step_hub_for_current_work_and_the_item_hub_otherwise(self):
         session, _, _ = self._open()
@@ -429,6 +506,188 @@ class TestGoalItemsTab(unittest.TestCase):
         lines = _rows(session)
         row = next(line for line in lines if "LC-862" in line)
         self.assertIn("○", row)
+
+
+def _items_store(current, backlog, done):
+    store = DemoStore(now=lambda: _at(30))
+    gid = store.create_goal("Ship the goals record", "", "lightcycle")
+    number = 100
+    ids = {"current": [], "backlog": [], "done": []}
+    for _ in range(current):
+        number += 1
+        item = store.item("LC-%d" % number, "Current item %d" % number, workflow=WORKFLOW)
+        store.step("LC-%d.1" % number, step="write-code", role="agent", parent=item)
+        store.link_goal_item(gid, item)
+        ids["current"].append("LC-%d" % number)
+    for _ in range(backlog):
+        number += 1
+        item = store.item("LC-%d" % number, "Backlog item %d" % number)
+        store.link_goal_item(gid, item)
+        ids["backlog"].append("LC-%d" % number)
+    for _ in range(done):
+        number += 1
+        item = store.item("LC-%d" % number, "Done item %d" % number)
+        store.complete_node(item, "merged")
+        store.link_goal_item(gid, item)
+        ids["done"].append("LC-%d" % number)
+    return store, ids
+
+
+def _cursor_id(session):
+    rows = [line for line in _rows(session) if "❯" in line]
+    assert len(rows) == 1, rows
+    return re.search(r"LC-\d+", rows[0]).group(0)
+
+
+class TestGoalItemsTraversal(unittest.TestCase):
+    def _open(self, current, backlog, done, size=(100, 45)):
+        store, ids = _items_store(current, backlog, done)
+        session = _launch(store, size=size)
+        self.addCleanup(session.close)
+        session.press("[")
+        session.press("enter")
+        for _ in range(2):
+            session.press("]")
+        return session, ids
+
+    def _order(self, ids):
+        return ids["current"] + ids["backlog"] + ids["done"]
+
+    def _walk(self, session, expected):
+        self.assertEqual(_cursor_id(session), expected[0])
+        visited = [_cursor_id(session)]
+        for _ in range(len(expected) - 1):
+            session.press("down")
+            visited.append(_cursor_id(session))
+        self.assertEqual(visited, expected)
+        session.press("down")
+        self.assertEqual(_cursor_id(session), expected[-1])
+        back = [_cursor_id(session)]
+        for _ in range(len(expected) - 1):
+            session.press("up")
+            back.append(_cursor_id(session))
+        self.assertEqual(back, list(reversed(expected)))
+        session.press("up")
+        self.assertEqual(_cursor_id(session), expected[0])
+
+    def test_down_and_up_visit_every_item_in_order_across_all_groups(self):
+        session, _ = self._open(4, 2, 1)
+        expected = [
+            "LC-101", "LC-102", "LC-103", "LC-104", "LC-105", "LC-106", "LC-107",
+        ]
+        self._walk(session, expected)
+
+    def test_shared_demo_store_walks_in_group_order(self):
+        store, _gid = _goals_store()
+        session = _launch(store, size=(100, 45))
+        self.addCleanup(session.close)
+        session.press("[")
+        session.press("enter")
+        for _ in range(2):
+            session.press("]")
+        self._walk(
+            session,
+            ["LC-861", "LC-862", "LC-863", "LC-864", "LC-858", "LC-859", "LC-857"],
+        )
+
+    def test_traversal_with_an_empty_group_and_single_row_groups(self):
+        for shape in ((3, 0, 2), (0, 3, 2), (3, 2, 0), (1, 1, 1), (2, 1, 2), (1, 0, 0), (0, 0, 1)):
+            with self.subTest(shape=shape):
+                session, ids = self._open(*shape)
+                self._walk(session, self._order(ids))
+                session.close()
+                self._cleanups.pop()
+
+    def test_search_hiding_groups_is_skipped_by_traversal(self):
+        session, ids = self._open(3, 2, 2)
+        session.press("/")
+        screen = session.app.screen
+        session.run(
+            lambda: setattr(screen.query_one(GoalItemsFilterInput), "value", "Backlog item")
+        )
+        session.pause()
+        session.run(screen.on_items_filter_settled)
+        session.pause()
+        session.press("escape")
+        self._walk(session, ids["backlog"])
+        frame = _frame(session)
+        self.assertNotIn("CURRENT WORK", frame)
+        self.assertNotIn("DONE", frame)
+
+    def test_refresh_keeps_the_cursor_on_its_row_in_another_group(self):
+        session, ids = self._open(2, 2, 1)
+        for _ in range(3):
+            session.press("down")
+        self.assertEqual(_cursor_id(session), ids["backlog"][1])
+        session.run(session.app.screen.poll_refresh)
+        session.pause()
+        self.assertEqual(_cursor_id(session), ids["backlog"][1])
+        self.assertIs(
+            session.app.screen.focused, session.app.screen.query_one("#goal-items-table-backlog")
+        )
+
+    def test_the_list_container_is_not_focusable(self):
+        session, _ = self._open(2, 2, 1)
+        self.assertFalse(session.app.screen.query_one("#goal-items-list").can_focus)
+
+    def _scroll_y(self, session):
+        return session.run(lambda: session.app.screen.query_one("#goal-items-list").scroll_y)
+
+    def _assert_cursor_visible_with_header(self, session, ids):
+        frame = _frame(session)
+        current = _cursor_id(session)
+        self.assertIn(current, frame)
+        for name, label in (("current", "CURRENT WORK"), ("backlog", "BACKLOG"), ("done", "DONE")):
+            if ids[name] and current == ids[name][0]:
+                self.assertIn(label, frame)
+
+    def test_the_cursor_stays_in_frame_and_group_headers_come_with_it(self):
+        session, ids = self._open(5, 3, 3, size=(100, 20))
+        order = self._order(ids)
+        self.assertEqual(self._scroll_y(session), 0)
+        for _ in range(len(order) - 1):
+            session.press("down")
+            self._assert_cursor_visible_with_header(session, ids)
+        for _ in range(len(order) - 1):
+            session.press("up")
+            self._assert_cursor_visible_with_header(session, ids)
+        self.assertEqual(_cursor_id(session), order[0])
+        self.assertEqual(self._scroll_y(session), 0)
+        self.assertIn("CURRENT WORK", _frame(session))
+
+    def test_paging_crosses_group_boundaries_without_stopping(self):
+        for down, up in (("pagedown", "pageup"), ("ctrl+d", "ctrl+u")):
+            with self.subTest(keys=down):
+                session, ids = self._open(5, 3, 3, size=(100, 20))
+                order = self._order(ids)
+                seen = [_cursor_id(session)]
+                for _ in range(len(order)):
+                    session.press(down)
+                    self._assert_cursor_visible_with_header(session, ids)
+                    seen.append(_cursor_id(session))
+                positions = [order.index(i) for i in seen]
+                self.assertEqual(positions, sorted(positions))
+                self.assertEqual(seen[-1], order[-1])
+                self.assertTrue(any(order.index(i) >= len(ids["current"]) for i in seen))
+                for earlier, later in zip(positions, positions[1:]):
+                    if earlier != len(order) - 1:
+                        self.assertGreater(later, earlier)
+                for _ in range(len(order)):
+                    session.press(up)
+                self.assertEqual(_cursor_id(session), order[0])
+                session.close()
+                self._cleanups.pop()
+
+    def test_home_and_end_span_the_whole_tab(self):
+        session, ids = self._open(3, 2, 2)
+        session.press("end")
+        self.assertEqual(_cursor_id(session), ids["done"][-1])
+        session.press("home")
+        self.assertEqual(_cursor_id(session), ids["current"][0])
+        session.press("ctrl+end")
+        self.assertEqual(_cursor_id(session), ids["done"][-1])
+        session.press("ctrl+home")
+        self.assertEqual(_cursor_id(session), ids["current"][0])
 
 
 def _rows(session):
