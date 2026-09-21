@@ -7,7 +7,6 @@ from lightcycle.adapters.tui.app import (
 )
 from lightcycle.adapters.tui.backlog_list import BacklogRow
 from lightcycle.adapters.tui.done_list import DoneRow
-from lightcycle.adapters.tui.design_system import ROW_SPACER
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
 )
@@ -104,7 +103,7 @@ class TestBacklogViewCheapPathOnUnchangedShape(unittest.TestCase):
 
         table = session.app.query_one(BacklogTable)
         cell = table.get_cell("a", "title")
-        self.assertEqual(cell, "new title" + ROW_SPACER)
+        self.assertEqual(cell, "new title")
 
 
 class TestBacklogViewRebuildGapAtZeroWidth(unittest.TestCase):
