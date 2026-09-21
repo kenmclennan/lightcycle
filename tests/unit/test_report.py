@@ -11,8 +11,10 @@ def _local_midnight_iso(day):
     return datetime.datetime.combine(day, datetime.time()).astimezone().isoformat()
 
 
-def _closed_item(store, *, disposition, closed_at, id=None, label=None):
+def _closed_item(store, *, disposition, closed_at, id=None, label=None, step=None):
     item = store.create_item("item", "a description", id=id)
+    if step:
+        store.complete_node(store.create_step(step=step, role="agent", parent=item), "done")
     store.complete_node(item, "merged", disposition=disposition)
     store._records[item]["closed_at"] = closed_at
     if label:
@@ -63,7 +65,7 @@ class TestReportUseCase(unittest.TestCase):
         s = FakeStore()
         _closed_item(
             s, disposition="completed", closed_at="2026-01-01T10:00:00+00:00",
-            id="SUM-1", label=SUMMARY_ORIGIN_LABEL,
+            id="SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary",
         )
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))

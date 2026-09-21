@@ -5,8 +5,7 @@ GOAL_DEFAULT_STATUS = "not started"
 
 Goal = namedtuple(
     "Goal",
-    "id title description project status created_at updated_at state_of_play state_of_play_at",
-    defaults=("", None),
+    "id title description project status created_at updated_at",
 )
 GoalLogEntry = namedtuple("GoalLogEntry", "id goal_id title body created_at")
 

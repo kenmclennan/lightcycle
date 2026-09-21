@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.flow.engine_steps import (
-    GOAL_STATE_OF_PLAY_STEP,
+    DAILY_SUMMARY_STEP,
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
@@ -16,12 +16,10 @@ AUTOMATION_LABELS = frozenset({SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL})
 
 KIND_AUDIT = "audit"
 KIND_DAILY_SUMMARY = "daily-summary"
-KIND_STATE_OF_PLAY = "state-of-play"
 
 KIND_DISPLAY = (
     (KIND_AUDIT, "Audits"),
     (KIND_DAILY_SUMMARY, "Daily summaries"),
-    (KIND_STATE_OF_PLAY, "State of play"),
 )
 
 _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
@@ -36,9 +34,8 @@ def automation_kind(store, item):
     if RETRO_ORIGIN_LABEL in labels:
         return KIND_AUDIT
     if SUMMARY_ORIGIN_LABEL in labels:
-        if any(c.stage == GOAL_STATE_OF_PLAY_STEP for c in store.children(item.id)):
-            return KIND_STATE_OF_PLAY
-        return KIND_DAILY_SUMMARY
+        if any(c.stage == DAILY_SUMMARY_STEP for c in store.children(item.id)):
+            return KIND_DAILY_SUMMARY
     return None
 
 

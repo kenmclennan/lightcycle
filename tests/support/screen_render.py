@@ -3,7 +3,6 @@ import datetime
 import sys
 
 from lightcycle.application.flow.engine_steps import (
-    GOAL_STATE_OF_PLAY_STEP,
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
@@ -674,7 +673,6 @@ def _automation_store():
     for index, (item_id, title, label, step_name, cost, minutes) in enumerate([
         ("AUD-48", "Audit of recent work", RETRO_ORIGIN_LABEL, "audit", 0.42, 30),
         ("SUM-3", "Daily summary: 2026-09-19", SUMMARY_ORIGIN_LABEL, "daily-summary", 0.11, 90),
-        ("SUM-4", "State of play: engine automation", SUMMARY_ORIGIN_LABEL, GOAL_STATE_OF_PLAY_STEP, 0.27, 150),
         ("LC-12", "Labelled before the shortcode existed", RETRO_ORIGIN_LABEL, "audit", 0.35, 210),
     ]):
         item = store.item(item_id, title)
@@ -1302,8 +1300,11 @@ def _goals_store(with_content=True):
         store.complete_node(finished, "merged")
         for linked in (gate, active, queued, held, finished):
             store.link_goal_item(gid, linked)
-        store.finish_goal_state_of_play(
-            gid, "Two slices are done.\n\n## Next\n\nThe gate slice ([[LC-861]]) is waiting on a human."
+        store.update_goal(
+            gid,
+            description=GOAL_DESCRIPTION
+            + "\n\n## State of play\n\nTwo slices are done.\n\n## Next\n\n"
+            "The gate slice ([[LC-861]]) is waiting on a human.",
         )
         store.add_goal_log(
             gid,

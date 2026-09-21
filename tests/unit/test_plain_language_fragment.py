@@ -7,7 +7,7 @@ from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter, parse_ste
 from lightcycle.config import Config
 
 ENGINE_PROMPTS = os.path.join(os.path.dirname(__file__), "..", "..", "lightcycle", "prompts")
-ENGINE_STEPS = ["daily-summary", "goal-state-of-play", "audit"]
+ENGINE_STEPS = ["daily-summary", "audit"]
 
 
 def _write(root, relpath, text):
@@ -104,7 +104,7 @@ class TestEnginePromptsResolve(unittest.TestCase):
             self.assertNotIn("do LC-861 first", raw, role)
 
     def test_summary_prompts_attach_through_a_heredoc_not_a_backslash_n(self):
-        for role in ("daily-summary", "goal-state-of-play"):
+        for role in ("daily-summary",):
             with open(os.path.join(ENGINE_PROMPTS, "steps", "%s.md" % role)) as f:
                 raw = f.read()
             self.assertIn("<<'EOF'", raw, role)

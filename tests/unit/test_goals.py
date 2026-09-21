@@ -203,6 +203,18 @@ class TestGoalCli(unittest.TestCase):
             self.assertEqual(ctx.exception.code, 2, argv)
         self.assertEqual(self.store.goal_log("G-1"), [])
 
+    def test_refresh_is_not_a_subcommand(self):
+        self._run("new", "g", "--project", "lightcycle")
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as ctx:
+            cli.cmd_goal(["refresh", "G-1"])
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_show_prints_the_description_and_no_generated_block(self):
+        self._run("new", "g", "--project", "lightcycle", "--description", "written by the driver")
+        out = self._run("show", "G-1")[1]
+        self.assertIn("written by the driver", out)
+        self.assertNotIn("State of play", out)
+
     def test_log_prints_confirmation(self):
         self._run("new", "g", "--project", "lightcycle")
         self.assertEqual(self._run("log", "G-1", "t", "b")[1].strip(), "logged to G-1")

@@ -236,7 +236,6 @@ COMMANDS = {
         "log": CommandSpec(prog="lc goal log", args=(Arg("id"), Arg("title"), Arg("body"))),
         "link": CommandSpec(prog="lc goal link", args=(Arg("id"), Arg("item"))),
         "unlink": CommandSpec(prog="lc goal unlink", args=(Arg("id"), Arg("item"))),
-        "refresh": CommandSpec(prog="lc goal refresh", args=(Arg("id"),)),
     }),
     "config": CommandSpec(prog="lc config", args=(
         Arg("--edit", action="store_true"),

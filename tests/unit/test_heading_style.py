@@ -54,16 +54,6 @@ class TestHeadingSurfaces(_GoalHub):
         self.assertTrue(_is_heading(_style_of(session, "Outcome")))
         self.assertFalse(_is_heading(_style_of(session, "The record is written by a person")))
 
-    def test_state_of_play_heading_is_heading_styled_and_its_stamp_is_dim(self):
-        session, _, _ = self._open(size=(100, 60))
-        self.assertTrue(_is_heading(_style_of(session, "State of play")))
-        self.assertTrue(_is_heading(_style_of(session, "Next")))
-        self.assertFalse(_is_heading(_style_of(session, "Two slices are done")))
-        stamp = next(
-            style for text, style in _painted(session) if "2026-" in text
-        )
-        self.assertFalse(_is_heading(stamp))
-
     def test_log_titles_are_heading_styled_and_bodies_are_not(self):
         session, _, _ = self._open(presses=("]",))
         self.assertTrue(_is_heading(_style_of(session, "Per-machine thresholds")))

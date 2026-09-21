@@ -1129,6 +1129,67 @@ class TestSqliteStoreDropsStepReflectionColumn(unittest.TestCase):
         self.assertEqual(t.created_at, "2026-01-01")
 
 
+class TestSqliteStoreDropsGoalStateOfPlayColumns(unittest.TestCase):
+    COLUMNS = {"id", "title", "description", "project", "status", "created_at", "updated_at"}
+
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        with open(cfg_path, "w") as f:
+            f.write("shortcode: GRID\n")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def _plant_legacy_goal(self, root):
+        config = self._config(root)
+        SqliteStore(config)._conn.close()
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.executescript(
+            "DROP TABLE goals;"
+            "CREATE TABLE goals (id TEXT PRIMARY KEY, title TEXT NOT NULL, "
+            "description TEXT NOT NULL DEFAULT '', project TEXT NOT NULL DEFAULT '', "
+            "status TEXT NOT NULL DEFAULT 'not started', created_at TEXT, updated_at TEXT, "
+            "state_of_play TEXT NOT NULL DEFAULT '', state_of_play_at TEXT, "
+            "state_of_play_step TEXT);"
+        )
+        conn.execute(
+            "INSERT INTO goals (id, title, description, project, status, state_of_play, "
+            "state_of_play_at, state_of_play_step) VALUES "
+            "('G-1', 'g', 'kept description', 'lightcycle', 'in progress', 'old plan', "
+            "'2026-09-01T10:00:00+01:00', 'LC-1.1')"
+        )
+        conn.commit()
+        conn.close()
+        return config
+
+    def _columns(self, store):
+        return {r[1] for r in store._conn.execute("PRAGMA table_info(goals)").fetchall()}
+
+    def test_existing_store_drops_the_three_columns_and_keeps_the_row(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._plant_legacy_goal(root))
+
+        self.assertEqual(self._columns(store), self.COLUMNS)
+        goal = store.get_goal("G-1")
+        self.assertEqual(
+            (goal.title, goal.description, goal.project, goal.status),
+            ("g", "kept description", "lightcycle", "in progress"),
+        )
+
+    def test_drop_is_idempotent_and_never_re_added_on_reopen(self):
+        root = tempfile.mkdtemp()
+        config = self._plant_legacy_goal(root)
+        SqliteStore(config)._conn.close()
+        store = SqliteStore(config)
+
+        self.assertEqual(self._columns(store), self.COLUMNS)
+        self.assertEqual(store.get_goal("G-1").description, "kept description")
+
+    def test_a_fresh_store_has_exactly_the_seven_columns(self):
+        root = tempfile.mkdtemp()
+        store = SqliteStore(self._config(root))
+
+        self.assertEqual(self._columns(store), self.COLUMNS)
+
+
 class TestSqliteStoreDropsStepTitleColumn(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
@@ -1292,11 +1353,8 @@ class TestSqliteStoreGoalsMigration(unittest.TestCase):
             cols,
             {
                 "id", "title", "description", "project", "status", "created_at", "updated_at",
-                "state_of_play", "state_of_play_at", "state_of_play_step",
             },
         )
-        self.assertEqual((goal.state_of_play, goal.state_of_play_at), ("", None))
-        self.assertIsNone(store.goal_state_of_play_step("G-1"))
         self.assertNotIn("goal_questions", self._tables(store))
         self.assertEqual([e.body for e in store.goal_log("G-1")], ["kept log"])
         self.assertEqual(store.goal_items("G-1"), ["LC-1"])

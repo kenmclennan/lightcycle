@@ -428,26 +428,6 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def start_goal_state_of_play(self, goal_id, step_id):
-        pass
-
-    @abstractmethod
-    def finish_goal_state_of_play(self, goal_id, text):
-        pass
-
-    @abstractmethod
-    def release_goal_state_of_play(self, goal_id):
-        pass
-
-    @abstractmethod
-    def goal_state_of_play_step(self, goal_id):
-        pass
-
-    @abstractmethod
-    def goal_for_state_of_play_step(self, step_id):
-        pass
-
-    @abstractmethod
     def add_goal_log(self, goal_id, title, body):
         pass
 
