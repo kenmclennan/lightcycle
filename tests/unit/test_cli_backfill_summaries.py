@@ -70,9 +70,14 @@ def _close_item(store, day, title="item"):
     return item
 
 
-def _run_backfill():
+def _run_backfill(*args):
     with mock.patch.object(cli.time, "time", return_value=_NOW_EPOCH):
-        return call(cli.main, "backfill-summaries")
+        return call(cli.main, "backfill-summaries", *args)
+
+
+def _summarize(store, day, count):
+    store.mark_day_summary_dirty(day)
+    store.finish_day_summary(day, "stored", count, clear_dirty=True)
 
 
 class TestCmdBackfillSummaries(unittest.TestCase):
@@ -135,6 +140,78 @@ class TestCmdBackfillSummaries(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("backfilled 0 day(s)", out)
         self.assertEqual(store.day_summary(day).step_id, tid)
+
+    def test_day_flag_spawns_for_today(self):
+        store = FakeStore()
+        _close_item(store, _TODAY)
+        with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)):
+            rc, out, err = _run_backfill("--day", _TODAY.isoformat())
+
+        self.assertEqual(rc, 0)
+        self.assertIn("backfilled 1 day(s)", out)
+        self.assertIsNotNone(store.day_summary(_TODAY).step_id)
+
+    def test_day_flag_touches_only_the_named_day(self):
+        store = FakeStore()
+        named = _TODAY - datetime.timedelta(days=3)
+        other = _TODAY - datetime.timedelta(days=2)
+        _close_item(store, named)
+        _close_item(store, other)
+        with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)):
+            rc, out, err = _run_backfill("--day", named.isoformat())
+
+        self.assertIn("backfilled 1 day(s)", out)
+        self.assertIsNone(store.day_summary(other))
+
+    def test_day_flag_without_force_skips_an_unchanged_count(self):
+        store = FakeStore()
+        day = _TODAY - datetime.timedelta(days=2)
+        _close_item(store, day)
+        _summarize(store, day, 1)
+        with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)):
+            rc, out, err = _run_backfill("--day", day.isoformat())
+
+        self.assertIn("backfilled 0 day(s)", out)
+
+    def test_force_regenerates_a_day_whose_count_has_not_moved(self):
+        store = FakeStore()
+        day = _TODAY - datetime.timedelta(days=2)
+        _close_item(store, day)
+        _summarize(store, day, 1)
+        with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)):
+            rc, out, err = _run_backfill("--day", day.isoformat(), "--force")
+
+        self.assertIn("backfilled 1 day(s)", out)
+        self.assertIsNotNone(store.day_summary(day).step_id)
+
+    def test_force_without_day_regenerates_the_window_but_not_today(self):
+        store = FakeStore()
+        day = _TODAY - datetime.timedelta(days=2)
+        _close_item(store, day)
+        _close_item(store, _TODAY)
+        _summarize(store, day, 1)
+        with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)):
+            rc, out, err = _run_backfill("--force")
+
+        self.assertIn("backfilled 1 day(s)", out)
+        self.assertIsNone(store.day_summary(_TODAY))
+
+    def test_force_on_a_day_already_in_flight_is_not_double_spawned(self):
+        store = FakeStore()
+        day = _TODAY - datetime.timedelta(days=2)
+        _close_item(store, day)
+        with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)):
+            _run_backfill("--day", day.isoformat())
+            rc, out, err = _run_backfill("--day", day.isoformat(), "--force")
+
+        self.assertIn("backfilled 0 day(s)", out)
+
+    def test_a_malformed_day_is_refused(self):
+        with mock.patch.object(cli, "Container", lambda: FakeContainer()):
+            rc, out, err = _run_backfill("--day", "yesterday")
+
+        self.assertEqual(rc, 1)
+        self.assertIn("YYYY-MM-DD", err)
 
 
 if __name__ == "__main__":
