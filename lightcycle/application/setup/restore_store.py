@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.pool import AcquireRunLockUseCase, ReleaseRunLockUseCase
+from lightcycle.application.pool.run_lock import AcquireRunLockUseCase, ReleaseRunLockUseCase
 
 
 @dataclass(frozen=True)
