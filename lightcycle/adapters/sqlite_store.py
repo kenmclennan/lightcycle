@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import asdict
 
 from lightcycle.adapters.fsio import DB_FILENAME
+from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL, RETROED_LABEL
 from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage, UsageResume
@@ -1747,8 +1748,9 @@ class SqliteStore(StorePort):
     def closed_unretroed_items(self):
         return self._select_items(
             "state = 'done' "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin') "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retroed')",
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?) "
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?)",
+            (RETRO_ORIGIN_LABEL, RETROED_LABEL),
         )
 
     def closed_unretroed_passes(self):
@@ -1756,8 +1758,9 @@ class SqliteStore(StorePort):
             "SELECT id, item, n, state, opened_at, closed_at FROM passes "
             "WHERE state = 'closed' "
             "AND item IN (SELECT id FROM items WHERE state != 'done') "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retro-origin') "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = 'retroed')"
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?) "
+            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?)",
+            (RETRO_ORIGIN_LABEL, RETROED_LABEL),
         ).fetchall()
         return [Pass(*r) for r in rows]
 

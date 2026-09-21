@@ -1,6 +1,7 @@
 from enum import Enum
 
-RETRO_ORIGIN_LABEL = "retro-origin"
+from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL as RETRO_ORIGIN_LABEL
+
 AUDIT_STEP = "audit"
 FINDINGS_STEP = "review-findings"
 SUMMARY_ORIGIN_LABEL = "summary-origin"

@@ -1,3 +1,7 @@
+RETRO_ORIGIN_LABEL = "retro-origin"
+RETROED_LABEL = "retroed"
+
+
 class Retro:
     def __init__(self, reflections):
         self._reflections = reflections

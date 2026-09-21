@@ -11,6 +11,7 @@ from lightcycle.ports.store import (
     ProjectEntry,
     StorePort,
 )
+from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL, RETROED_LABEL
 from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
@@ -889,7 +890,7 @@ class FakeStore(StorePort):
             if b.get("type") != "item" or b.get("state") != "done":
                 continue
             labels = b.get("labels") or []
-            if "retro-origin" in labels or "retroed" in labels:
+            if RETRO_ORIGIN_LABEL in labels or RETROED_LABEL in labels:
                 continue
             result.append(self._to_node(b))
         return result
@@ -902,7 +903,7 @@ class FakeStore(StorePort):
             item_rec = self._records.get(p.item)
             if item_rec is None or item_rec.get("state") == "done":
                 continue
-            if "retro-origin" in self.labels_of(p.id) or "retroed" in self.labels_of(p.id):
+            if RETRO_ORIGIN_LABEL in self.labels_of(p.id) or RETROED_LABEL in self.labels_of(p.id):
                 continue
             result.append(p)
         return result
