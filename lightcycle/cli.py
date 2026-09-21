@@ -994,7 +994,11 @@ def cmd_backlog(argv):
 
 def cmd_search(argv):
     a = build_parser(COMMANDS["search"]).parse_args(argv)
-    resp = SearchUseCase(_container.store).execute(SearchInput(text=a.text))
+    try:
+        resp = SearchUseCase(_container.store).execute(SearchInput(text=a.text))
+    except UseCaseError as e:
+        print(e, file=sys.stderr)
+        return 1
     for line in render_search(resp.matches, _container.config.max_title_length()):
         print(line)
     return 0

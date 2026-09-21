@@ -1,8 +1,9 @@
 import io
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 
 from lightcycle import cli
+from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work import SearchInput, SearchUseCase
 from lightcycle.domain.work import State
 from lightcycle.render import render_search
@@ -67,6 +68,50 @@ class TestSearchUseCase(unittest.TestCase):
         self.assertEqual(resp.matches[0].repo, "org/repo-a")
         self.assertEqual(resp.matches[0].project, "proj-a")
 
+    def test_terms_need_not_be_adjacent(self):
+        s = FakeStore()
+        tid = s.create_item("Step 5 teaches arithmetic the engine will do for you", "a description")
+        resp = SearchUseCase(s).execute(SearchInput(text="arithmetic engine"))
+        self.assertEqual([m.node.id for m in resp.matches], [tid])
+
+    def test_terms_may_be_satisfied_by_different_fields(self):
+        s = FakeStore()
+        tid = s.create_item("arithmetic lesson", "the engine does it")
+        resp = SearchUseCase(s).execute(SearchInput(text="arithmetic engine"))
+        self.assertEqual([m.node.id for m in resp.matches], [tid])
+
+    def test_term_order_does_not_matter(self):
+        s = FakeStore()
+        tid = s.create_item("teaches arithmetic the engine", "a description")
+        resp = SearchUseCase(s).execute(SearchInput(text="engine arithmetic"))
+        self.assertEqual([m.node.id for m in resp.matches], [tid])
+
+    def test_row_missing_a_term_is_excluded(self):
+        s = FakeStore()
+        tid = s.create_item("Arithmetic ENGINE", "a description")
+        s.create_item("arithmetic only", "a description")
+        resp = SearchUseCase(s).execute(SearchInput(text="arithmetic engine"))
+        self.assertEqual([m.node.id for m in resp.matches], [tid])
+
+    def test_snippet_on_term_path_is_centred_on_first_term(self):
+        s = FakeStore()
+        tid = s.create_item("a title", "a description")
+        s.edit_node(tid, description="x" * 80 + " engine " + "y" * 80 + " arithmetic " + "z" * 80)
+        resp = SearchUseCase(s).execute(SearchInput(text="engine arithmetic"))
+        self.assertEqual(resp.matches[0].field, "description")
+        self.assertIn("engine", resp.matches[0].snippet)
+
+    def test_none_description_and_notes_are_tolerated(self):
+        s = FakeStore()
+        tid = s.create_item("alpha beta", None)
+        resp = SearchUseCase(s).execute(SearchInput(text="ALPHA beta"))
+        self.assertEqual([m.node.id for m in resp.matches], [tid])
+
+    def test_empty_and_whitespace_queries_raise(self):
+        for text in ("", "   "):
+            with self.assertRaises(UseCaseError):
+                SearchUseCase(FakeStore()).execute(SearchInput(text=text))
+
 
 class TestRenderSearch(unittest.TestCase):
     def test_line_contains_id_state_and_snippet(self):
@@ -102,6 +147,15 @@ class TestCmdSearch(unittest.TestCase):
             rc = cli.cmd_search(["gh pr checks"]) or 0
         self.assertEqual(rc, 0)
         self.assertIn(tid, out.getvalue())
+
+    def test_empty_query_exits_one_with_message_on_stderr(self):
+        cli.set_container(FakeContainer(FakeStore()))
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = cli.cmd_search([""])
+        self.assertEqual(rc, 1)
+        self.assertIn("at least one term", err.getvalue())
+        self.assertEqual(out.getvalue(), "")
 
 
 if __name__ == "__main__":
