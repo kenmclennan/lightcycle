@@ -403,7 +403,7 @@ def _pool_prompt_session(size, worker_count):
 
 def _priority_pool_holding(size):
     store, _scan, _coding = _populated_store()
-    status = FakeMemoryGateStatus({"cap": 0, "system_pressure": 0.95})
+    status = FakeMemoryGateStatus({"cap": 0})
     return _launch(store, size=size, workers=_pool_workers(2), memory_gate_status=status)
 
 
@@ -435,7 +435,7 @@ def _priority_worker_suspended(size):
         ],
         alive_pids=(1,),
     )
-    status = FakeMemoryGateStatus({"pool_share": 0.05, "system_pressure": 0.9})
+    status = FakeMemoryGateStatus({"pool_share": 0.05})
     return _launch(store, size=size, workers=workers, memory_gate_status=status)
 
 

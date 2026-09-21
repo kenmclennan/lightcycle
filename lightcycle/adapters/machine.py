@@ -9,9 +9,6 @@ from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.machine import MachinePort
 
 _SUBPROCESS_TIMEOUT = 2
-_VM_STAT_PAGE_SIZE_RE = re.compile(r"page size of (\d+) bytes")
-_VM_STAT_COMPRESSOR_RE = re.compile(r"Pages occupied by compressor:\s*(\d+)\.")
-_PSI_AVG10_RE = re.compile(r"avg10=([\d.]+)")
 _SMAPS_PSS_RE = re.compile(r"^Pss:\s*(\d+) kB", re.MULTILINE)
 _SMAPS_SWAP_PSS_RE = re.compile(r"^SwapPss:\s*(\d+) kB", re.MULTILINE)
 _STATUS_VM_HWM_RE = re.compile(r"^VmHWM:\s*(\d+) kB", re.MULTILINE)
@@ -106,22 +103,6 @@ def _macos_pool_footprint_kb(workers):
     return (pool_kb, peak_kb)
 
 
-def _macos_memory_pressure(total_mem_kb):
-    if not total_mem_kb:
-        return None
-    out = _run(["vm_stat"])
-    if out is None:
-        return None
-    page_size_match = _VM_STAT_PAGE_SIZE_RE.search(out)
-    compressor_match = _VM_STAT_COMPRESSOR_RE.search(out)
-    if not page_size_match or not compressor_match:
-        return None
-    page_size = int(page_size_match.group(1))
-    compressor_pages = int(compressor_match.group(1))
-    compressor_kb = (compressor_pages * page_size) / 1024
-    return compressor_kb / total_mem_kb
-
-
 def _macos_total_memory_kb():
     out = _run(["sysctl", "-n", "hw.memsize"])
     if out is None:
@@ -143,7 +124,7 @@ def _headroom_macos(workers):
         if peak_kb is not None:
             peak_worker_share = peak_kb / total_mem_kb
     return MachineHeadroom(
-        system_pressure=_macos_memory_pressure(total_mem_kb), pool_share=pool_share,
+        pool_share=pool_share,
         peak_worker_share=peak_worker_share,
     )
 
@@ -221,20 +202,6 @@ def _linux_pool_footprint_kb(workers):
     return (pool_kb, peak_kb)
 
 
-def _linux_memory_pressure():
-    try:
-        with open("/proc/pressure/memory") as f:
-            text = f.read()
-    except OSError:
-        return None
-    for line in text.splitlines():
-        if line.startswith("full "):
-            match = _PSI_AVG10_RE.search(line)
-            if match:
-                return float(match.group(1)) / 100.0
-    return None
-
-
 def _headroom_linux(workers):
     meminfo = _proc_meminfo()
     total_mem_kb = meminfo.get("MemTotal") if meminfo else None
@@ -247,7 +214,7 @@ def _headroom_linux(workers):
         if peak_kb is not None:
             peak_worker_share = peak_kb / total_mem_kb
     return MachineHeadroom(
-        system_pressure=_linux_memory_pressure(), pool_share=pool_share,
+        pool_share=pool_share,
         peak_worker_share=peak_worker_share,
     )
 
@@ -258,7 +225,7 @@ class MachineAdapter(MachinePort):
             return _headroom_macos(workers)
         if sys.platform == "linux":
             return _headroom_linux(workers)
-        return MachineHeadroom(system_pressure=None, pool_share=None, peak_worker_share=None)
+        return MachineHeadroom(pool_share=None, peak_worker_share=None)
 
     def self_rss(self):
         out = _run(["ps", "-o", "rss=", "-p", str(os.getpid())])

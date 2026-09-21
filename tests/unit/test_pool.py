@@ -124,7 +124,7 @@ class FakeUsageGate:
 class FakeMemoryGate:
     def __init__(self, response=None):
         self._response = response if response is not None else MemoryGateResponse(
-            cap=None, pool_share=None, system_pressure=None
+            cap=None, pool_share=None
         )
         self.calls = []
 
@@ -999,7 +999,7 @@ class TestTick(unittest.TestCase):
         create_owned_step(s, "b1", step="build", role="agent")
         create_owned_step(s, "b2", step="build", role="agent")
         spawner = FakeSpawner()
-        memory_gate = FakeMemoryGate(MemoryGateResponse(cap=0, pool_share=0.9, system_pressure=None))
+        memory_gate = FakeMemoryGate(MemoryGateResponse(cap=0, pool_share=0.9))
         result = make_tick(
             s, FakeWorkers(), spawner, FakeConfig(max_agents=4), memory_gate=memory_gate
         ).execute(TickInput(now=1000.0))
@@ -1008,12 +1008,12 @@ class TestTick(unittest.TestCase):
 
     def test_memory_response_carried_on_tick_response_when_registry_readable(self):
         s = FakeStore()
-        memory_gate = FakeMemoryGate(MemoryGateResponse(cap=None, pool_share=0.5, system_pressure=None))
+        memory_gate = FakeMemoryGate(MemoryGateResponse(cap=None, pool_share=0.5))
         result = make_tick(
             s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4), memory_gate=memory_gate
         ).execute(TickInput(now=1000.0))
         self.assertEqual(
-            result.memory, MemoryGateResponse(cap=None, pool_share=0.5, system_pressure=None)
+            result.memory, MemoryGateResponse(cap=None, pool_share=0.5)
         )
 
     def test_breaker_half_open_spawns_exactly_one_probe(self):

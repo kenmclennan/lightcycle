@@ -109,41 +109,7 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
 
         self.assertTrue(result.holding)
 
-    def test_pressure_source_is_pool_when_cap_is_zero_even_when_system_pressure_is_higher(self):
-        workers = FakeWorkers(
-            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
-            alive_pids=(1,),
-        )
-        result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 0, "pool_share": 0.1, "system_pressure": 0.95}),
-            workers, FakeConfig(),
-        ).execute(workers.pid_alive)
-
-        self.assertEqual(result.pressure_source, "pool")
-
-    def test_pressure_source_is_machine_when_only_a_suspension_holds_and_system_pressure_dominates(self):
-        workers = FakeWorkers(
-            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True}],
-            alive_pids=(1,),
-        )
-        result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"pool_share": 0.1, "system_pressure": 0.9}), workers, FakeConfig(),
-        ).execute(workers.pid_alive)
-
-        self.assertEqual(result.pressure_source, "machine")
-
-    def test_pressure_source_is_pool_when_only_a_suspension_holds_and_pool_share_dominates(self):
-        workers = FakeWorkers(
-            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True}],
-            alive_pids=(1,),
-        )
-        result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"pool_share": 0.9, "system_pressure": 0.1}), workers, FakeConfig(),
-        ).execute(workers.pid_alive)
-
-        self.assertEqual(result.pressure_source, "pool")
-
-    def test_pressure_source_is_none_when_not_holding(self):
+    def test_is_not_holding_when_cap_is_not_zero_and_nothing_is_suspended(self):
         workers = FakeWorkers(
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
@@ -153,7 +119,6 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
         ).execute(workers.pid_alive)
 
         self.assertFalse(result.holding)
-        self.assertIsNone(result.pressure_source)
 
 
 if __name__ == "__main__":

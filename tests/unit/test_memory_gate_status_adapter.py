@@ -32,16 +32,16 @@ class TestMemoryGateStatusAdapter(unittest.TestCase):
         self.assertEqual(self.status.load(), {})
 
     def test_save_then_load_round_trips(self):
-        self.status.save({"cap": 0, "pool_share": 0.5, "system_pressure": 0.9})
+        self.status.save({"cap": 0, "pool_share": 0.5})
         self.assertEqual(
-            self.status.load(), {"cap": 0, "pool_share": 0.5, "system_pressure": 0.9}
+            self.status.load(), {"cap": 0, "pool_share": 0.5}
         )
 
     def test_state_survives_a_new_adapter_instance(self):
-        self.status.save({"cap": 0, "pool_share": 0.5, "system_pressure": 0.9})
+        self.status.save({"cap": 0, "pool_share": 0.5})
         reloaded = MemoryGateStatusAdapter(FakeConfig(self.root))
         self.assertEqual(
-            reloaded.load(), {"cap": 0, "pool_share": 0.5, "system_pressure": 0.9}
+            reloaded.load(), {"cap": 0, "pool_share": 0.5}
         )
 
     def test_corrupt_state_file_fails_open_and_warns(self):
@@ -60,7 +60,7 @@ class TestMemoryGateStatusAdapter(unittest.TestCase):
 
     def test_save_leaves_no_tmp_file_and_writes_via_replace(self):
         with patch("os.replace", side_effect=os.replace) as replace:
-            self.status.save({"cap": None, "pool_share": 0.1, "system_pressure": 0.2})
+            self.status.save({"cap": None, "pool_share": 0.1})
         target = os.path.join(self.root, "logs", "memory_gate.json")
         replace.assert_called_once()
         self.assertEqual(replace.call_args[0][1], target)
@@ -68,7 +68,7 @@ class TestMemoryGateStatusAdapter(unittest.TestCase):
         self.assertEqual(leftover, [])
         with open(target) as f:
             self.assertEqual(
-                f.read(), '{\n  "cap": null,\n  "pool_share": 0.1,\n  "system_pressure": 0.2\n}'
+                f.read(), '{\n  "cap": null,\n  "pool_share": 0.1\n}'
             )
 
 
