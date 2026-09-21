@@ -18,7 +18,6 @@ from lightcycle.adapters.tui.design_system import (
     GOAL_LOG_SHORTCUTS,
     HEADING_STYLE,
     HUB_SHORTCUTS,
-    ROW_SPACER,
     SEARCH_BAR_CSS,
     STATE_GLYPHS,
 )
@@ -417,18 +416,14 @@ class GoalHubScreen(Screen, inherit_bindings=False):
             first = False
             table.add_row(Text(""), header, height=None, key=HEADER_KEY_PREFIX + name)
             if name == "current":
-                for index, row in enumerate(rows):
+                for row in rows:
                     cell = _item_cells(
                         _row_icon(row), row.id, row.title, id_width, width, row.step, row.step_colour
                     )
-                    if index < len(rows) - 1:
-                        cell = cell + Text(ROW_SPACER)
                     table.add_row(Text(""), cell, height=None, key=row.id)
                 continue
-            for index, ref in enumerate(entries):
+            for ref in entries:
                 cell = _item_cells(Text(""), ref.id, ref.title, id_width, width)
-                if index < len(entries) - 1:
-                    cell = cell + Text(ROW_SPACER)
                 table.add_row(Text(""), cell, height=None, key=ref.id)
         self._items_step_ids = {r.id: r.step_id for r in rows}
         self._restore_items_cursor(table, previous)

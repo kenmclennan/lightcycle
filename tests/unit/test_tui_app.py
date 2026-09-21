@@ -59,7 +59,6 @@ from lightcycle.adapters.tui.design_system import (
     GLOBAL_SHORTCUTS,
     STATE_GLYPHS,
     REPORT_SHORTCUTS,
-    ROW_SPACER,
     SEARCH_MIN_WIDTH,
 )
 from lightcycle.adapters.tui.row_grid import (
@@ -1409,7 +1408,7 @@ class TestBacklogRows(unittest.TestCase):
         table = session.app.query_one(BacklogTable)
         self.assertIn(item, table.rows)
         self.assertEqual(_backlog_cell(session, item, "id"), item)
-        self.assertEqual(_backlog_cell(session, item, "title"), "todo item" + ROW_SPACER)
+        self.assertEqual(_backlog_cell(session, item, "title"), "todo item")
 
     def test_item_activated_disappears_from_backlog_without_restart(self):
         store = FakeStore()
@@ -2377,7 +2376,7 @@ class TestDoneRows(unittest.TestCase):
         table = session.app.query_one(DoneTable)
         self.assertIn(item, table.rows)
         self.assertEqual(_done_cell(session, item, "id"), item)
-        self.assertEqual(_done_cell(session, item, "title"), "done item" + ROW_SPACER)
+        self.assertEqual(_done_cell(session, item, "title"), "done item")
 
     def test_open_items_are_not_listed(self):
         store = FakeStore()
