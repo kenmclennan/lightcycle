@@ -1046,6 +1046,12 @@ class DescriptionPane(RichLog):
     ]
 
 
+def pane_text_width(pane) -> int:
+    if not pane.size.width:
+        return 0
+    return max(pane.size.width - pane.styles.scrollbar_size_vertical, 1)
+
+
 class ArtifactListTable(DataTable):
     _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
 
@@ -1296,6 +1302,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._toast_timer = None
         self._has_description = False
         self._last_description = None
+        self._description_text = None
 
     @property
     def container(self):
@@ -1365,6 +1372,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self.refresh_artifacts_width()
         self.refresh_detail_width()
         self.refresh_cost_width()
+        self._last_description = None
+        self._render_description(self._description_text)
 
     def on_screen_suspend(self) -> None:
         if self._poll_timer is not None:
@@ -1974,16 +1983,20 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._apply_tab_visibility()
 
     def _render_description(self, description) -> None:
+        self._description_text = description
         titles = resolve_titles(self._container.store, description)
-        key = (description, tuple(sorted(titles.items())))
+        self._has_description = bool(description)
+        pane = self.query_one(DescriptionPane)
+        width = pane_text_width(pane)
+        if not width:
+            return
+        key = (description, tuple(sorted(titles.items())), width)
         if key == self._last_description:
             return
         self._last_description = key
-        self._has_description = bool(description)
-        pane = self.query_one(DescriptionPane)
         pane.clear()
         if description:
-            pane.write(prose_text(description, titles))
+            pane.write(prose_text(description, titles), width=width)
 
     def update_pinned_ancestor(self) -> None:
         banner = self.query_one("#pinned-ancestor", Static)

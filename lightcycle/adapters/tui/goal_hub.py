@@ -27,6 +27,7 @@ from lightcycle.adapters.tui.hub import (
     HUB_TAB_STRIP_CSS,
     POLL_INTERVAL_SECONDS,
     DescriptionPane,
+    pane_text_width,
     HubTabStrip,
     NodeHubScreen,
 )
@@ -53,10 +54,8 @@ GOAL_DESCRIPTION_EMPTY_MESSAGE = "No description written yet."
 GOAL_LOG_EMPTY_MESSAGE = "No decisions logged yet."
 GOAL_LOG_NO_MATCH_MESSAGE = "No entries match."
 LOG_TITLE_STAMP_GAP = 2
-LOG_FALLBACK_WIDTH = 80
 GOAL_ITEMS_EMPTY_MESSAGE = "No items linked to this goal."
 GOAL_ITEMS_NO_MATCH_MESSAGE = "No items match."
-ITEMS_FALLBACK_WIDTH = 80
 ITEMS_ID_TITLE_GAP = 2
 HEADER_KEY_PREFIX = "header:"
 GROUP_HEADERS = (("current", "CURRENT WORK"), ("backlog", "BACKLOG"), ("done", "DONE"))
@@ -255,7 +254,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         table.cursor_type = "row"
         table.show_header = False
         table.add_column("cursor", width=GLYPH_WIDTHS["cursor"], key="cursor")
-        table.add_column("row", width=ITEMS_FALLBACK_WIDTH, key="row")
+        table.add_column("row", width=1, key="row")
         self._refresh()
         self._apply_tab_visibility()
         self.call_after_refresh(self._initial_refresh)
@@ -291,10 +290,12 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         )
         rows = self._current_rows(result)
         width = self._items_width()
+        overview_width = pane_text_width(self.query_one("#goal-description-view", DescriptionPane))
+        log_width = self._log_width()
         titles = self._reference_titles(view)
         key = (
-            view.goal, tuple(view.log), tuple(view.items), self._log_filter, self._log_width(),
-            self._items_filter, width, tuple(rows), tuple(result.backlog), tuple(result.done),
+            view.goal, tuple(view.log), tuple(view.items), self._log_filter, log_width,
+            overview_width, self._items_filter, width, tuple(rows), tuple(result.backlog), tuple(result.done),
             result.total, tuple(sorted(titles.items())),
         )
         if key == self._last_key:
@@ -305,9 +306,12 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         self._items_result = result
         self._items_rows = rows
         self._render_identity()
-        self._render_overview()
-        self._render_log()
-        self._render_items()
+        if overview_width:
+            self._render_overview(overview_width)
+        if log_width:
+            self._render_log()
+        if width:
+            self._render_items()
 
     def _reference_titles(self, view):
         goal = view.goal
@@ -334,7 +338,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
     def _items_width(self) -> int:
         table = self.query_one(GoalItemsTable)
         if not table.size.width:
-            return ITEMS_FALLBACK_WIDTH
+            return 0
         padding = 2 * table.cell_padding * 2
         return max(
             table.size.width - table.scrollbar_size_vertical - padding - GLYPH_WIDTHS["cursor"], 1
@@ -342,9 +346,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
 
     def _log_width(self) -> int:
         pane = self.query_one("#goal-log-view", DescriptionPane)
-        if not pane.size.width:
-            return LOG_FALLBACK_WIDTH
-        return pane.size.width - pane.styles.scrollbar_size_vertical
+        return pane_text_width(pane)
 
     def _render_identity(self) -> None:
         goal = self._view.goal
@@ -356,17 +358,14 @@ class GoalHubScreen(Screen, inherit_bindings=False):
             text.append(goal.project, style=COLOURS["dim"])
         self.query_one("#goal-hub-identity", Static).update(text)
 
-    def _render_overview(self) -> None:
+    def _render_overview(self, width: int) -> None:
         pane = self.query_one("#goal-description-view", DescriptionPane)
         pane.clear()
         description = self._view.goal.description
         if description:
-            pane.write(prose_text(description, self._titles))
+            pane.write(prose_text(description, self._titles), width=width)
         state_of_play = self._view.goal.state_of_play
         if state_of_play:
-            width = pane.size.width - pane.styles.scrollbar_size_vertical
-            if width <= 0:
-                width = LOG_FALLBACK_WIDTH
             if description:
                 pane.write(Text(""), width=width)
             stamp = goal_log_stamp(self._view.goal.state_of_play_at)
