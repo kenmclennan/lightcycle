@@ -51,10 +51,12 @@ class Flow:
         stages.discard(None)
 
         owner = {}
+        escalation = {}
         for stage in stages:
             meta = step_metas.get(graph.file_for(stage))
             if meta is None:
                 continue
+            escalation[stage] = bool(meta.get("escalation"))
             if meta.get("engine"):
                 owner[stage] = "engine"
             elif meta.get("model"):
@@ -64,7 +66,11 @@ class Flow:
 
         step_stages = stages | set(graph.workspaces) | set(graph.phases) | set(graph.display)
         steps = {
-            stage: replace(StepDef.from_graph(graph, stage), owner=owner.get(stage))
+            stage: replace(
+                StepDef.from_graph(graph, stage),
+                owner=owner.get(stage),
+                escalation=escalation.get(stage, False),
+            )
             for stage in step_stages
         }
         return cls(steps, graph.workspace, dict(graph.disposition))
