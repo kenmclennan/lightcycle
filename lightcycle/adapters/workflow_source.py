@@ -168,8 +168,4 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         parsed = parse_pin(pin) if pin else None
         bundle = self.pinned_bundle(parsed[0], parsed[2]) if parsed else None
         roots = [self._config.prompts_root()] + ([bundle] if bundle else [])
-        for root in roots:
-            prompt = self._workflow_bundle.parse_step(role, root)
-            if prompt is not None:
-                return prompt
-        return None
+        return self._workflow_bundle.parse_step(role, roots)

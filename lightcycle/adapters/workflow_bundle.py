@@ -95,7 +95,7 @@ class WorkflowBundleAdapter(WorkflowBundlePort):
         return step_roles([root]) if root else []
 
     def parse_step(self, role, root):
-        return parse_step([root], role) if root else None
+        return parse_step(root, role) if root else None
 
     def workflow_text(self, name, root):
         return workflow_text([root], name) if root else None

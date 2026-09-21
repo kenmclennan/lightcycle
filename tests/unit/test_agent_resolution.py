@@ -85,3 +85,24 @@ class TestResolveAgentForPin(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBundleStepIncludesEngineFragment(unittest.TestCase):
+    def test_bundle_step_include_resolves_against_the_engine_fragment(self):
+        prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.makedirs(os.path.join(prompts, "fragments"))
+        with open(os.path.join(prompts, "fragments", "plain-language.md"), "w") as f:
+            f.write("engine plain language rule\n")
+        _write_bundle_prompt(
+            data, "lightcycle", "sha1", "write-code", body="@include plain-language")
+        agent = _resolve_agent(
+            _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
+        self.assertIn("engine plain language rule", agent.body)
+        self.assertNotIn("@include", agent.body)
+
+    def test_engine_step_still_wins_over_a_bundle_step_of_the_same_name(self):
+        prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
+        _write_prompt(prompts, "audit", model="haiku")
+        _write_bundle_prompt(data, "lightcycle", "sha1", "audit", model="opus")
+        agent = _resolve_agent(_Cfg(prompts, data), "audit", "lightcycle/spec-driven@sha1")
+        self.assertEqual(agent.meta.get("model"), "haiku")

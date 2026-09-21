@@ -119,6 +119,9 @@ class FakeConfig:
     def projects_root(self):
         return self._projects_root
 
+    def prompts_root(self):
+        return "/prompts"
+
     def set_personal_origin(self, name):
         self.personal_origin_set = name
 

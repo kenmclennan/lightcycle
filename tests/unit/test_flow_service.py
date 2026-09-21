@@ -296,3 +296,34 @@ class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRoleMetasResolveEngineFragments(unittest.TestCase):
+    def test_bundle_step_include_of_an_engine_fragment_does_not_raise(self):
+        import os
+        import tempfile
+
+        from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
+
+        bundle, prompts = tempfile.mkdtemp(), tempfile.mkdtemp()
+        for root, relpath, text in (
+            (bundle, "steps/a.md", "---\nmodel: sonnet\n---\n@include plain-language\n"),
+            (prompts, "fragments/plain-language.md", "the rule\n"),
+        ):
+            path = os.path.join(root, relpath)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(text)
+
+        class _Cfg(_RefCfg):
+            def prompts_root(self):
+                return prompts
+
+        class _Source(_WFSource):
+            def pinned_bundle(self, origin, sha):
+                return bundle
+
+        flow = FlowService(
+            WorkflowBundleAdapter(), FakeStore(), config=_Cfg(), workflow_source=_Source(["w"]),
+        )
+        self.assertEqual(flow.role_metas("lightcycle/w@abc"), {"a": {"model": "sonnet"}})

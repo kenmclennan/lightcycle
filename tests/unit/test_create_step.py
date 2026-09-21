@@ -32,6 +32,9 @@ class _RefCfg:
     def default_origin(self):
         return "lightcycle"
 
+    def prompts_root(self):
+        return "/prompts"
+
 
 def _flow_with_single_default_origin(store):
     metas = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
