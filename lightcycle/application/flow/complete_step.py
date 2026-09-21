@@ -6,6 +6,7 @@ from lightcycle.application.flow.engine_steps import (
     AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
+from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
@@ -171,10 +172,10 @@ class CompleteStepUseCase:
     def _mark_retroed(self):
         for item in self._store.closed_unretroed_items():
             if has_feedback(self._store, item):
-                self._store.label_add(item.id, "retroed")
+                self._store.label_add(item.id, RETROED_LABEL)
         for pass_record in self._store.closed_unretroed_passes():
             if pass_reflection_count(self._store, pass_record) > 0:
-                self._store.label_add(pass_record.id, "retroed")
+                self._store.label_add(pass_record.id, RETROED_LABEL)
 
     def _cascade_close(self, node_id):
         if not node_id:

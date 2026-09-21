@@ -1,5 +1,6 @@
 import ast
 import pathlib
+import re
 import unittest
 
 from lightcycle.ports import __all__ as PORT_NAMES
@@ -206,6 +207,23 @@ class TestStoreFilenameHasOneDefinition(unittest.TestCase):
                     sites.append("%s:%d" % (path.relative_to(LIGHTCYCLE), lineno))
         self.assertEqual(len(sites), 1, "store.db respelled outside its constant: %s" % sites)
         self.assertEqual(sites[0].split(":")[0], "adapters/fsio.py")
+
+
+class TestRetroLabelsHaveOneDefinition(unittest.TestCase):
+    def _sites(self, label):
+        pattern = re.compile("[\"']%s[\"']" % re.escape(label))
+        sites = []
+        for path in sorted(LIGHTCYCLE.rglob("*.py")):
+            for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                if pattern.search(line):
+                    sites.append("%s:%d" % (path.relative_to(LIGHTCYCLE), lineno))
+        return sites
+
+    def test_each_retro_label_literal_appears_once_in_domain(self):
+        for label in ("retro-origin", "retroed"):
+            sites = self._sites(label)
+            self.assertEqual(len(sites), 1, "%s respelled: %s" % (label, sites))
+            self.assertEqual(sites[0].split(":")[0], "domain/feedback/retro.py")
 
 
 class TestNoSpecLiteralInEngineCore(unittest.TestCase):
