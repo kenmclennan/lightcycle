@@ -215,10 +215,7 @@ CREATE TABLE IF NOT EXISTS goals (
     project TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'not started',
     created_at TEXT,
-    updated_at TEXT,
-    state_of_play TEXT NOT NULL DEFAULT '',
-    state_of_play_at TEXT,
-    state_of_play_step TEXT
+    updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS goal_log (
@@ -328,6 +325,7 @@ class SqliteStore(StorePort):
         self._migrate_drop_step_title_column()
         self._migrate_abandoned_disposition_value()
         self._migrate_goals_description_and_project()
+        self._migrate_drop_goal_state_of_play_columns()
         self._commit()
 
     def _commit(self):
@@ -471,11 +469,6 @@ class SqliteStore(StorePort):
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
             ("claim_epoch", "INTEGER NOT NULL DEFAULT 0"),
         ),
-        "goals": (
-            ("state_of_play", "TEXT NOT NULL DEFAULT ''"),
-            ("state_of_play_at", "TEXT"),
-            ("state_of_play_step", "TEXT"),
-        ),
         "goal_log": (
             ("title", "TEXT NOT NULL DEFAULT ''"),
         ),
@@ -507,6 +500,12 @@ class SqliteStore(StorePort):
         if "title" in cols:
             self._conn.execute("UPDATE steps SET title = ''")
             self._conn.execute("ALTER TABLE steps DROP COLUMN title")
+
+    def _migrate_drop_goal_state_of_play_columns(self):
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(goals)").fetchall()}
+        for name in ("state_of_play", "state_of_play_at", "state_of_play_step"):
+            if name in cols:
+                self._conn.execute("ALTER TABLE goals DROP COLUMN %s" % name)
 
     def _migrate_abandoned_disposition_value(self):
         self._conn.execute(
@@ -1798,16 +1797,16 @@ class SqliteStore(StorePort):
 
     def get_goal(self, goal_id):
         row = self._conn.execute(
-            "SELECT id, title, description, project, status, created_at, updated_at, "
-            "state_of_play, state_of_play_at FROM goals WHERE id = ?",
+            "SELECT id, title, description, project, status, created_at, updated_at "
+            "FROM goals WHERE id = ?",
             (goal_id,),
         ).fetchone()
         return Goal(*row) if row else None
 
     def list_goals(self):
         rows = self._conn.execute(
-            "SELECT id, title, description, project, status, created_at, updated_at, "
-            "state_of_play, state_of_play_at FROM goals"
+            "SELECT id, title, description, project, status, created_at, updated_at "
+            "FROM goals"
         ).fetchall()
         goals = [Goal(*r) for r in rows]
         goals.sort(key=lambda g: int(g.id.split("-", 1)[1]))
@@ -1826,38 +1825,6 @@ class SqliteStore(StorePort):
             [v for _, v in sets] + [self._now(), goal_id],
         )
         self._commit()
-
-    def start_goal_state_of_play(self, goal_id, step_id):
-        self._conn.execute(
-            "UPDATE goals SET state_of_play_step = ? WHERE id = ?", (step_id, goal_id)
-        )
-        self._commit()
-
-    def finish_goal_state_of_play(self, goal_id, text):
-        self._conn.execute(
-            "UPDATE goals SET state_of_play = ?, state_of_play_at = ?, "
-            "state_of_play_step = NULL WHERE id = ?",
-            (text, self._now(), goal_id),
-        )
-        self._commit()
-
-    def release_goal_state_of_play(self, goal_id):
-        self._conn.execute(
-            "UPDATE goals SET state_of_play_step = NULL WHERE id = ?", (goal_id,)
-        )
-        self._commit()
-
-    def goal_state_of_play_step(self, goal_id):
-        row = self._conn.execute(
-            "SELECT state_of_play_step FROM goals WHERE id = ?", (goal_id,)
-        ).fetchone()
-        return row[0] if row else None
-
-    def goal_for_state_of_play_step(self, step_id):
-        row = self._conn.execute(
-            "SELECT id FROM goals WHERE state_of_play_step = ?", (step_id,)
-        ).fetchone()
-        return row[0] if row else None
 
     def add_goal_log(self, goal_id, title, body):
         self._conn.execute(

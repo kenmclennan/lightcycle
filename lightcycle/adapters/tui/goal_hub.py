@@ -49,7 +49,6 @@ from lightcycle.domain.goals import goal_log_stamp
 
 GOAL_TAB_ORDER = ("overview", "log", "items")
 
-STATE_OF_PLAY_TITLE = "State of play"
 GOAL_DESCRIPTION_EMPTY_MESSAGE = "No description written yet."
 GOAL_LOG_EMPTY_MESSAGE = "No decisions logged yet."
 GOAL_LOG_NO_MATCH_MESSAGE = "No entries match."
@@ -315,7 +314,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
 
     def _reference_titles(self, view):
         goal = view.goal
-        texts = [goal.description, goal.state_of_play] + [e.body for e in view.log]
+        texts = [goal.description] + [e.body for e in view.log]
         return resolve_titles(self._container.store, "\n".join(t for t in texts if t))
 
     def _current_rows(self, result):
@@ -364,18 +363,6 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         description = self._view.goal.description
         if description:
             pane.write(prose_text(description, self._titles), width=width)
-        state_of_play = self._view.goal.state_of_play
-        if state_of_play:
-            if description:
-                pane.write(Text(""), width=width)
-            stamp = goal_log_stamp(self._view.goal.state_of_play_at)
-            for text in _header_lines(STATE_OF_PLAY_TITLE, stamp, width):
-                split = len(text) - len(stamp)
-                header = Text(text[:split], style=HEADING_STYLE)
-                header.append(text[split:], style=COLOURS["dim"])
-                pane.write(header, width=width)
-            pane.write(Text(""), width=width)
-            pane.write(prose_text(state_of_play, self._titles), width=width)
 
     def _render_log(self) -> None:
         pane = self.query_one("#goal-log-view", DescriptionPane)
@@ -464,7 +451,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
             return
         tab = self._active_tab
         overview = tab == "overview"
-        has_description = bool(self._view.goal.description or self._view.goal.state_of_play)
+        has_description = bool(self._view.goal.description)
         self.query_one("#goal-description-view", DescriptionPane).display = (
             overview and has_description
         )
@@ -497,9 +484,7 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         if self._view is None:
             return
         tab = self._active_tab
-        if tab == "overview" and (
-            self._view.goal.description or self._view.goal.state_of_play
-        ):
+        if tab == "overview" and self._view.goal.description:
             self.set_focus(self.query_one("#goal-description-view", DescriptionPane))
         elif tab == "log" and self._view.log:
             self.set_focus(self.query_one("#goal-log-view", DescriptionPane))

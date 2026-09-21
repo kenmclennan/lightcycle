@@ -5,9 +5,6 @@ from lightcycle.application.goals.goal_items import GoalItems, GoalItemsUseCase
 from lightcycle.application.goals.link_goal_item import LinkGoalItemUseCase
 from lightcycle.application.goals.list_goals import ListGoalsUseCase
 from lightcycle.application.goals.show_goal import GoalItemRef, GoalView, ShowGoalUseCase
-from lightcycle.application.goals.state_of_play import (
-    RefreshGoalStateOfPlayUseCase, assemble_goal_context,
-)
 from lightcycle.application.goals.unlink_goal_item import UnlinkGoalItemUseCase
 
 __all__ = [
@@ -22,9 +19,7 @@ __all__ = [
     "GoalView",
     "LinkGoalItemUseCase",
     "ListGoalsUseCase",
-    "RefreshGoalStateOfPlayUseCase",
     "ShowGoalUseCase",
     "UnlinkGoalItemUseCase",
-    "assemble_goal_context",
     "log_entry_matches",
 ]

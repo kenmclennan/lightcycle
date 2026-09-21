@@ -2,7 +2,6 @@ import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import (
-    GOAL_STATE_OF_PLAY_STEP,
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
@@ -53,9 +52,13 @@ class TestMembershipIsByLabel(unittest.TestCase):
     def test_summary_kinds_are_told_apart_by_step_stage(self):
         s = FakeStore()
         daily = s.get_item(_closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary"))
-        sop = s.get_item(_closed(s, "SUM-2", label=SUMMARY_ORIGIN_LABEL, step=GOAL_STATE_OF_PLAY_STEP))
         self.assertEqual(automation_kind(s, daily), "daily-summary")
-        self.assertEqual(automation_kind(s, sop), "state-of-play")
+
+    def test_a_legacy_goal_state_of_play_item_has_no_kind_but_is_still_automation(self):
+        s = FakeStore()
+        legacy = s.get_item(_closed(s, "SUM-2", label=SUMMARY_ORIGIN_LABEL, step="goal-state-of-play"))
+        self.assertIsNone(automation_kind(s, legacy))
+        self.assertTrue(is_automation_item(s, legacy))
 
 
 class TestDoneExcludesAutomation(unittest.TestCase):
@@ -82,18 +85,28 @@ class TestDoneExcludesAutomation(unittest.TestCase):
 
 
 class TestAutomationUseCase(unittest.TestCase):
-    def test_tallies_are_always_three_in_order_with_absent_kind_at_zero(self):
+    def test_tallies_are_always_two_in_order_with_absent_kind_at_zero(self):
         s = FakeStore()
         _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit", cost=1.0)
         _closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary", cost=0.5)
 
         resp = AutomationUseCase(s).execute(AutomationInput())
 
-        self.assertEqual([t.kind for t in resp.tallies], ["audit", "daily-summary", "state-of-play"])
-        self.assertEqual([t.count for t in resp.tallies], [1, 1, 0])
-        self.assertFalse(resp.tallies[2].spend.cost_usd)
+        self.assertEqual([t.kind for t in resp.tallies], ["audit", "daily-summary"])
+        self.assertEqual([t.count for t in resp.tallies], [1, 1])
         self.assertEqual(resp.total.count, 2)
         self.assertEqual(resp.total.spend.cost_usd.micros, 1_500_000)
+
+    def test_a_legacy_goal_state_of_play_item_is_listed_and_counted_nowhere(self):
+        s = FakeStore()
+        _closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary")
+        _closed(s, "SUM-2", label=SUMMARY_ORIGIN_LABEL, step="goal-state-of-play")
+
+        resp = AutomationUseCase(s).execute(AutomationInput())
+
+        self.assertEqual([r.step.id for r in resp.rows], ["SUM-1"])
+        self.assertEqual([t.count for t in resp.tallies], [0, 1])
+        self.assertEqual(resp.total.count, 1)
 
     def test_day_filters_by_closed_date(self):
         s = FakeStore()
