@@ -7,6 +7,7 @@ from tests.support.factories import make_step
 FLOW = flow_from_metas(
     {
         "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
+        "rescope": {"step": "rescope", "escalation": True, "routes": {"rescoped": "build"}},
         "ready-merge": {"step": "ready-merge", "routes": {"merged": "cleanup", "changes": "build"}},
     }
 )
@@ -32,6 +33,11 @@ class TestClassifyForHuman(unittest.TestCase):
     def test_blocked_for_an_agent_step_the_flow_does_know_still_blocked(self):
         self.assertEqual(
             tk(step="build").classify_for_human(FLOW), ("blocked", ["done", "unblock"])
+        )
+
+    def test_a_human_step_declaring_escalation_is_blocked_without_an_unblock_outcome(self):
+        self.assertEqual(
+            tk(step="rescope").classify_for_human(FLOW), ("blocked", ["rescoped"])
         )
 
     def test_action_for_a_step_the_flow_does_not_know(self):

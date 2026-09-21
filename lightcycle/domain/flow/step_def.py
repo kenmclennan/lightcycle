@@ -35,6 +35,7 @@ class ReviewRoundsCap:
 @dataclass(frozen=True)
 class StepDef:
     owner: Optional[str] = None
+    escalation: bool = False
     routes: dict = field(default_factory=dict)
     pr_merge: Optional[str] = None
     pr_close: Optional[str] = None
