@@ -92,6 +92,7 @@ One vocabulary, shared by the priority list and the Workflow tab.
 | `▲` red | an escalation - a step parked for a decision |
 | `◆` cyan | active; it animates through `◇ ◈ ◆ ◈` while a worker runs, or while an engine-owned step is in flight |
 | `○` dim | queued, or done |
+| `‖` dim | suspended - a worker frozen under memory pressure; its own shape, so it cannot be mistaken for a still `◆` |
 | `□` dim | a human-role step, done or queued |
 | `⊣` dim | held by a dependency, drawn alongside the state glyph |
 
