@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import io
 import json
 import os
@@ -1019,9 +1020,16 @@ def cmd_backfill_usage(argv):
 
 
 def cmd_backfill_summaries(argv):
-    build_parser(COMMANDS["backfill-summaries"]).parse_args(argv)
+    a = build_parser(COMMANDS["backfill-summaries"]).parse_args(argv)
+    day = None
+    if a.day:
+        try:
+            day = datetime.date.fromisoformat(a.day)
+        except ValueError:
+            sys.stderr.write("--day must be YYYY-MM-DD, got %r\n" % a.day)
+            return 1
     gate = DailySummaryCadenceUseCase(_container.store, _container.config)
-    spawned = gate.backfill(time.time())
+    spawned = gate.backfill(time.time(), day=day, force=a.force)
     for day, tid in spawned:
         print("%s: spawned %s" % (day.isoformat(), tid))
     print("backfilled %d day(s)" % len(spawned))

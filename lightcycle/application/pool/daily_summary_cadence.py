@@ -81,16 +81,20 @@ class DailySummaryCadenceUseCase:
     def _open_summary(self):
         return any(s.state != State.DONE for s in self._store.steps_at_step(DAILY_SUMMARY_STEP))
 
-    def backfill(self, now):
-        today = _local_date(now)
+    def backfill(self, now, day=None, force=False):
+        if day is not None:
+            days = [day]
+        else:
+            today = _local_date(now)
+            days = [today - datetime.timedelta(days=n) for n in range(1, _BACKFILL_WINDOW_DAYS + 1)]
         spawned = []
-        for n in range(1, _BACKFILL_WINDOW_DAYS + 1):
-            day = today - datetime.timedelta(days=n)
-            row = self._store.day_summary(day)
+        for d in days:
+            count = closed_count(self._store, d)
+            row = self._store.day_summary(d)
             summarized = row.summarized_count if row else 0
-            if closed_count(self._store, day) <= summarized:
+            if count == 0 or (count <= summarized and not force):
                 continue
-            tid = self._spawn(day)
+            tid = self._spawn(d)
             if tid:
-                spawned.append((day, tid))
+                spawned.append((d, tid))
         return spawned

@@ -161,7 +161,9 @@ COMMANDS = {
     "backfill-usage": CommandSpec(prog="lc backfill-usage", args=(
         Arg("--repair", action="store_true"),
     )),
-    "backfill-summaries": CommandSpec(prog="lc backfill-summaries"),
+    "backfill-summaries": CommandSpec(prog="lc backfill-summaries", args=(
+        Arg("--day"), Arg("--force", action="store_true"),
+    )),
     "inbox": CommandSpec(prog="lc inbox", args=(
         Arg("n", nargs="?", type=int),
     )),
