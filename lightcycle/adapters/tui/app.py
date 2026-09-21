@@ -2346,7 +2346,7 @@ class LightcycleApp(App):
         active_glyph = self._active_glyph_char()
         selected_id = self._selected_row_id(table)
         for row in rows:
-            icon_override = active_glyph if row.group == "active" else None
+            icon_override = active_glyph if row.group == "active" and not row.suspended else None
             cells = self._row_cells(
                 row, layout, row_budget, cursor=(row.id == selected_id), icon_override=icon_override
             )
@@ -2458,7 +2458,7 @@ class LightcycleApp(App):
         stacked_rows = {}
         for index, row in enumerate(rows):
             is_cursor = index == new_index
-            icon_override = active_glyph if row.group == "active" else None
+            icon_override = active_glyph if row.group == "active" and not row.suspended else None
             cells = self._row_cells(row, layout, row_budget, cursor=is_cursor, icon_override=icon_override)
             if layout.stacked:
                 stacked_rows[row.id] = (row, icon_override)
