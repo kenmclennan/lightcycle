@@ -92,9 +92,15 @@ class FlowService:
         self._graph_cache[cache_key] = result
         return result
 
+    def _with_engine_fragments(self, root):
+        if not root or self._config is None:
+            return root
+        return [root, self._config.prompts_root()]
+
     def _role_metas_in(self, root):
+        include_roots = self._with_engine_fragments(root)
         return {
-            role: (self._fs.parse_step(role, root) or StepPrompt(meta={}, body="")).meta
+            role: (self._fs.parse_step(role, include_roots) or StepPrompt(meta={}, body="")).meta
             for role in self._fs.step_roles(root)
         }
 
@@ -116,7 +122,7 @@ class FlowService:
             graph, root = self._graph_and_root(self.resolve_selection(selection))
         except ValueError:
             return None
-        parsed = self._fs.parse_step(graph.file_for(stage), root)
+        parsed = self._fs.parse_step(graph.file_for(stage), self._with_engine_fragments(root))
         if not parsed or parsed.meta.get("model"):
             return None
         return (parsed.body or "").strip() or None
@@ -208,7 +214,7 @@ class FlowService:
 
     def meta_for_step(self, stage, name=None):
         graph, root = self._graph_and_root(name)
-        a = self._fs.parse_step(graph.file_for(stage), root)
+        a = self._fs.parse_step(graph.file_for(stage), self._with_engine_fragments(root))
         return a.meta if a else {}
 
     def meta_for_unpinned_step(self, stage):
