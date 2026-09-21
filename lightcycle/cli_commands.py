@@ -84,7 +84,7 @@ COMMANDS = {
         )),
         "list": CommandSpec(prog="lc workflow list"),
         "check": CommandSpec(prog="lc workflow check", args=(
-            Arg("workflow"), Arg("--json", action="store_true"),
+            Arg("workflow", nargs="?"), Arg("--json", action="store_true"), Arg("--dir"),
         )),
         "describe": CommandSpec(prog="lc workflow describe", args=(
             Arg("workflow"), Arg("--mermaid", action="store_true"),

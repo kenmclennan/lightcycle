@@ -111,7 +111,7 @@ signals:                    # stage  metric-name  outcome
 - Each **stage** names a step file (stage = file by default). The `nodes:` block maps a stage to a differently named file (or one step serving two positions); a target with no step file is a `for:human` terminal, and a step with no `model` is a human step.
 - The engine recognises a fixed set of **hooks** (`pr_merge`, `pr_close`, `pr_feedback`, `pr_conflict`/`_cap`/`_escalate`, `ci_failed_cap`, `mention_token`, `review_bot_allowlist`); the graph names which stage handles each. A workflow that omits `pr_*` never opens a PR.
 - The periodic retro **audit** is an **engine service**, not a workflow step - any item that produces feedback is audited on a cadence, with findings in `lc inbox`.
-- `lc workflow add <url>` and `lc workflow upgrade` validate a source at pull time and **refuse** rather than materialize a bundle that fails: the graph must compose, and every `lc` call and JSON field read in `steps/*.md` must exist on the engine doing the pull - a prompt naming a command, flag, state or field the engine does not have is a step that gets an error or a null at runtime, so the pull stops and the origin stays on its current sha. `lc workflow check [--json]` prints and statically checks the resolved graph.
+- `lc workflow add <url>` and `lc workflow upgrade` validate a source at pull time and **refuse** rather than materialize a bundle that fails: the graph must compose, and every `lc` call and JSON field read in `steps/*.md` must exist on the engine doing the pull - a prompt naming a command, flag, state or field the engine does not have is a step that gets an error or a null at runtime, so the pull stops and the origin stays on its current sha. `lc workflow check [--json]` prints and statically checks the resolved graph; `lc workflow check --dir <bundle-dir> [name]` runs the same checks on a bundle directory's working tree with no pin and no store write, and is the one `workflow` form a worker may run.
 
 **Selecting a workflow.** There is no default; selection lives on the item:
 
@@ -154,7 +154,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc active` / `lc queue [N]` / `lc ps` | steps running now / next N agent steps / running workers |
 | `lc logs <step\|stage\|run> [-f]` | tail a worker's or the loop's log |
 | `lc trace <item> [--json]` | an item end to end: artifacts + child steps + logs |
-| `lc workflow check [--json]` | print + check the assembled flow (stages, routes, contracts, composition) |
+| `lc workflow check [--json] [--dir <bundle-dir>]` | print + check the assembled flow (stages, routes, contracts, composition); `--dir` checks an uncommitted bundle without pinning it |
 | `lc sweep` | release orphaned claims (dead worker -> step reclaimable) |
 
 ## Steps and performers

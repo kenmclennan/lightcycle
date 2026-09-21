@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -90,6 +92,13 @@ from lightcycle.application.work import (
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
+from lightcycle.application.workflows.check_dir import (
+    DIR_ORIGIN,
+    DIR_SHA,
+    CheckWorkflowDirUseCase,
+    DirWorkflowSource,
+)
+from lightcycle.domain.workflows.identity import format_pin
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
@@ -330,6 +339,14 @@ def _set_flags(args):
     return vars(ns)
 
 
+def _workflow_flags(args):
+    try:
+        ns, _extras = build_parser(COMMANDS["workflow"]).parse_known_args(args)
+    except SystemExit:
+        return {}
+    return vars(ns)
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] in ("version", "--version"):
@@ -353,7 +370,11 @@ def main(argv=None):
         sys.stderr.write("unknown subcommand: %s\n" % cmd)
         return 2
     if _container.config.is_worker() and _container.config.is_live_home():
-        parsed_flags = _set_flags(argv[1:]) if cmd == "set" else {}
+        parsed_flags = {}
+        if cmd == "set":
+            parsed_flags = _set_flags(argv[1:])
+        elif cmd == "workflow":
+            parsed_flags = _workflow_flags(argv[1:])
         if not worker_permitted(cmd, parsed_flags):
             sys.stderr.write(worker_refusal_message(cmd))
             return 1
@@ -375,6 +396,11 @@ def cmd_workflow(argv):
         parser.print_help()
         return 2
     if a.sub == "check":
+        if a.dir:
+            return _workflow_check_dir(a.dir, a.workflow, a.json)
+        if a.workflow is None:
+            sys.stderr.write("lc workflow check: pass a workflow or --dir <bundle-dir>\n")
+            return 1
         return _workflow_check(a.workflow, a.json)
     if a.sub == "describe":
         return _workflow_describe(a.workflow, a.mermaid)
@@ -588,8 +614,41 @@ def cmd_specs_dir(argv):
     return 0
 
 
-def _workflow_check(selector, as_json):
-    flow = _flow()
+def _workflow_check_dir(directory, name, as_json):
+    c = _container
+    try:
+        resp = CheckWorkflowDirUseCase(c.workflow_bundle, c.fs).execute(directory, name)
+    except WorkflowSourceError as e:
+        sys.stderr.write("lc workflow check: %s\n" % e)
+        return 1
+    flow = make_flow_service(
+        c.workflow_bundle, c.store, c.config, DirWorkflowSource(directory))
+    rc = 1 if resp.problems else 0
+    for problem in resp.problems:
+        sys.stderr.write("%s\n" % problem)
+    multi = len(resp.names) > 1
+    json_out = {}
+    for n in resp.names:
+        if multi and not as_json:
+            print("== %s ==" % n)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf if as_json else sys.stdout):
+            wf_rc = _workflow_check(format_pin(DIR_ORIGIN, n, DIR_SHA), as_json, flow)
+        for message in resp.reference_problems.get(n, []):
+            sys.stderr.write("%s: %s\n" % (n, message))
+            wf_rc = 1
+        if as_json and buf.getvalue():
+            json_out[n] = json.loads(buf.getvalue())
+        if multi and not as_json:
+            print("%s: %s" % (n, "ok" if wf_rc == 0 else "FAILED"))
+        rc = rc or wf_rc
+    if as_json and json_out:
+        print(json.dumps(next(iter(json_out.values())) if not multi else json_out, indent=2))
+    return rc
+
+
+def _workflow_check(selector, as_json, flow=None):
+    flow = flow or _flow()
     try:
         selected = flow.resolve_selection(selector)
         resp = FlowCheckUseCase(flow).execute(FlowCheckInput(workflow=selected))
