@@ -64,6 +64,15 @@ class TestWorkerModeGuard(unittest.TestCase):
         r = run_worker("show", "X")
         self.assertNotIn("workers may not run", r.stderr)
 
+    def test_worker_may_run_workflow_check_dir_on_the_live_home(self):
+        r = run_worker_against_live_home("workflow", "check", "--dir", tempfile.mkdtemp())
+        self.assertNotIn("workers may not run", r.stderr)
+
+    def test_worker_still_cannot_add_a_workflow_on_the_live_home(self):
+        r = run_worker_against_live_home("workflow", "add", "https://example.invalid/x")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("workers may not run 'workflow'", r.stderr)
+
     def test_worker_against_temp_store_permitted(self):
         for args in (("rm", "X"), ("init",), ("set", "X", "--parent", "Y")):
             r = run_worker_against_temp_store(*args)
