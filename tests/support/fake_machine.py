@@ -4,7 +4,7 @@ from lightcycle.ports.machine import MachinePort
 
 class FakeMachine(MachinePort):
     def __init__(self, headroom=None, rss=None, worktree_pids=None):
-        self._headroom = headroom if headroom is not None else MachineHeadroom(None, None)
+        self._headroom = headroom if headroom is not None else MachineHeadroom(pool_share=None)
         self._rss = rss
         self._worktree_pids = worktree_pids or {}
 

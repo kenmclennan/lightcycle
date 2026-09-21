@@ -57,7 +57,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1, 2),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.9))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.9))
         result = _execute(workers, machine)
 
         self.assertEqual(result.suspended, "b")
@@ -74,7 +74,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.5, pool_share=0.05))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.05))
         worker_log = FakeFs()
         result = _execute(workers, machine, worker_log=worker_log)
 
@@ -88,7 +88,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.8, pool_share=0.8))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.8))
         result = _execute(workers, machine)
 
         self.assertIsNone(result.suspended)
@@ -101,7 +101,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=None, pool_share=None))
+        machine = FakeMachine(MachineHeadroom(pool_share=None))
         result = _execute(workers, machine)
 
         self.assertIsNone(result.cap)
@@ -114,7 +114,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
                       "suspended_at": 10, "log": "/logs/a.log"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.05))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.9))
         result = _execute(workers, machine)
 
         self.assertEqual(result.cap, 1)
@@ -130,7 +130,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1, 2, 3),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.9))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.9))
         result = _execute(workers, machine)
 
         self.assertEqual(result.suspended, "c")
@@ -141,14 +141,13 @@ class TestMemoryGateUseCase(unittest.TestCase):
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.8, pool_share=0.8))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.8))
         status = FakeMemoryGateStatus()
         result = _execute(workers, machine, memory_gate_status=status)
 
         self.assertEqual(
             status.load(),
             {"cap": result.cap, "pool_share": result.pool_share,
-             "system_pressure": result.system_pressure,
              "peak_worker_share": result.peak_worker_share},
         )
 
@@ -160,40 +159,40 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=None, pool_share=None))
+        machine = FakeMachine(MachineHeadroom(pool_share=None))
         result = _execute(workers, machine)
 
         self.assertIsNone(result.resumed)
         self.assertEqual(workers.resumed, [])
 
-    def test_admission_is_capped_to_zero_when_system_pressure_alone_is_at_suspend_threshold_and_a_worker_is_already_alive(self):
+    def test_admission_is_capped_to_zero_when_pool_share_is_at_suspend_threshold_and_a_worker_is_already_alive(self):
         workers = FakeWorkers(
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.1))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.85))
         result = _execute(workers, machine)
 
         self.assertEqual(result.cap, 0)
 
-    def test_admission_is_not_vetoed_when_pressure_is_between_the_thresholds(self):
+    def test_admission_is_not_vetoed_when_pool_share_is_between_the_thresholds(self):
         workers = FakeWorkers(
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.8, pool_share=0.1))
-        result = _execute(workers, machine)
+        machine = FakeMachine(MachineHeadroom(pool_share=0.8))
+        result = _execute(workers, machine, config=FakeConfig(memory_reserve_fraction=0.05))
 
         self.assertIsNone(result.cap)
 
-    def test_admission_still_floors_to_one_worker_when_none_are_alive_despite_high_system_pressure(self):
+    def test_admission_still_floors_to_one_worker_when_none_are_alive_despite_high_pool_share(self):
         workers = FakeWorkers(workers=[], alive_pids=())
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.95, pool_share=0.05))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.95))
         result = _execute(workers, machine)
 
         self.assertEqual(result.cap, 1)
 
-    def test_suspends_on_system_pressure_alone_when_pool_share_is_low(self):
+    def test_suspends_the_newest_worker_when_pool_share_equals_the_suspend_threshold(self):
         workers = FakeWorkers(
             workers=[
                 {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"},
@@ -201,13 +200,27 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1, 2),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.1))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.85))
         result = _execute(workers, machine)
 
-        self.assertIsNotNone(result.suspended)
+        self.assertEqual(result.suspended, "b")
         self.assertEqual(workers.suspended, [2])
 
-    def test_does_not_resume_while_system_pressure_remains_high_even_though_pool_share_is_low(self):
+    def test_does_not_suspend_when_pool_share_is_below_the_suspend_threshold(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"},
+                {"spawnid": "b", "pid": 2, "started": 5, "step": "s-2"},
+            ],
+            alive_pids=(1, 2),
+        )
+        machine = FakeMachine(MachineHeadroom(pool_share=0.1))
+        result = _execute(workers, machine)
+
+        self.assertIsNone(result.suspended)
+        self.assertEqual(workers.suspended, [])
+
+    def test_resumes_when_pool_share_is_below_the_resume_threshold(self):
         workers = FakeWorkers(
             workers=[
                 {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True,
@@ -215,20 +228,65 @@ class TestMemoryGateUseCase(unittest.TestCase):
             ],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.05))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.05))
+        result = _execute(workers, machine)
+
+        self.assertEqual(result.resumed, "a")
+
+    def test_does_not_resume_when_pool_share_equals_the_resume_threshold(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True,
+                 "suspended_at": 10, "log": "/logs/a.log"},
+            ],
+            alive_pids=(1,),
+        )
+        machine = FakeMachine(MachineHeadroom(pool_share=0.70))
         result = _execute(workers, machine)
 
         self.assertIsNone(result.resumed)
         self.assertEqual(workers.resumed, [])
+
+    def test_gate_is_inert_at_seeded_thresholds_when_pool_share_is_at_its_observed_peak(self):
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"},
+                {"spawnid": "b", "pid": 2, "started": 5, "step": "s-2"},
+            ],
+            alive_pids=(1, 2),
+        )
+        machine = FakeMachine(MachineHeadroom(pool_share=0.132))
+        result = _execute(workers, machine)
+
+        self.assertIsNone(result.cap)
+        self.assertIsNone(result.suspended)
+        self.assertEqual(workers.suspended, [])
 
     def test_persisted_cap_stays_pool_only_when_the_veto_alone_zeroes_the_returned_cap(self):
         workers = FakeWorkers(
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
         )
-        machine = FakeMachine(MachineHeadroom(system_pressure=0.9, pool_share=0.1))
+        machine = FakeMachine(MachineHeadroom(pool_share=0.9))
         status = FakeMemoryGateStatus()
-        result = _execute(workers, machine, memory_gate_status=status)
+        result = _execute(
+            workers, machine, memory_gate_status=status,
+            config=FakeConfig(memory_reserve_fraction=0.05),
+        )
 
         self.assertEqual(result.cap, 0)
         self.assertIsNone(status.load()["cap"])
+
+    def test_response_and_saved_status_carry_no_system_pressure(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
+            alive_pids=(1,),
+        )
+        machine = FakeMachine(MachineHeadroom(pool_share=0.3, peak_worker_share=0.1))
+        status = FakeMemoryGateStatus()
+        result = _execute(workers, machine, memory_gate_status=status)
+
+        self.assertFalse(hasattr(result, "system_pressure"))
+        self.assertEqual(
+            status.load(), {"cap": None, "pool_share": 0.3, "peak_worker_share": 0.1},
+        )

@@ -63,13 +63,17 @@ def test_colour_carries_the_state_tokens_the_plain_frame_drops():
 def test_a_pool_holding_state_renders_the_hold_segment_in_the_footer():
     frame = render("priority-list#pool-holding")
 
-    assert "holding · 2/5 · memory (pool)" in frame
+    assert "holding · 2/5 · memory" in frame
+    assert "(pool)" not in frame
+    assert "(machine)" not in frame
 
 
-def test_a_suspended_worker_renders_the_hold_segment_in_the_footer_attributed_to_machine():
+def test_a_suspended_worker_renders_the_hold_segment_in_the_footer():
     frame = render("priority-list#worker-suspended")
 
-    assert "holding · 1/5 · memory (machine)" in frame
+    assert "holding · 1/5 · memory" in frame
+    assert "(pool)" not in frame
+    assert "(machine)" not in frame
 
 
 def test_an_unpriced_step_shows_not_recorded_and_unpriced_basis_never_a_dollar_figure():

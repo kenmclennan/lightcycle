@@ -1,18 +1,3 @@
-def combined_pressure(pool_share, system_pressure):
-    values = [v for v in (pool_share, system_pressure) if v is not None]
-    return max(values) if values else None
-
-
-def pressure_source(pool_share, system_pressure):
-    if pool_share is None and system_pressure is None:
-        return None
-    if pool_share is None:
-        return "machine"
-    if system_pressure is None:
-        return "pool"
-    return "pool" if pool_share >= system_pressure else "machine"
-
-
 def admission_cap(headroom, alive_count, memory_reserve_fraction):
     if headroom is None or headroom.pool_share is None:
         return None
