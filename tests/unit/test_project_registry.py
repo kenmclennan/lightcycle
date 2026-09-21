@@ -71,3 +71,37 @@ class TestProjectRegistry(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _Cfg:
+    def __init__(self, path):
+        self._path = path
+
+    def config_path(self):
+        return self._path
+
+
+class TestAddProjectReservedShortcode(unittest.TestCase):
+    def _uc(self, store):
+        from tests.support.fake_fs import FakeFs
+        from tests.support.fake_git import FakeGit
+        from lightcycle.application.setup import AddProjectUseCase
+
+        return AddProjectUseCase(store, FakeGit(), _Cfg(__file__), FakeFs())
+
+    def test_explicit_shortcode_g_is_refused_with_the_reason(self):
+        from lightcycle.application.errors import UseCaseError
+        from lightcycle.application.setup import AddProjectInput
+
+        s = FakeStore()
+        with self.assertRaisesRegex(UseCaseError, "reserved.*goal ids"):
+            self._uc(s).execute(AddProjectInput(identity="acme/app", shortcode="g"))
+        self.assertIsNone(s.get_project("acme/app"))
+
+    def test_a_repo_whose_default_would_be_g_gets_another_shortcode(self):
+        from lightcycle.application.setup import AddProjectInput
+
+        s = FakeStore()
+        r = self._uc(s).execute(AddProjectInput(identity="acme/g"))
+        self.assertEqual(r.shortcode, "ACMEG")
+        self.assertEqual(s.get_project("acme/g").shortcode, "ACMEG")

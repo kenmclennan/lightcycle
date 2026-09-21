@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.work import ProjectIdentity
+from lightcycle.domain.work.project_identity import reserved_shortcode_reason
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
 
@@ -47,6 +48,9 @@ class AddProjectUseCase:
             input.shortcode or (existing.shortcode if existing else None)
             or identity.default_shortcode
         )
+        reason = reserved_shortcode_reason(shortcode)
+        if reason and shortcode != (existing.shortcode if existing else None):
+            raise UseCaseError(reason)
         remote = None
         if input.path:
             try:

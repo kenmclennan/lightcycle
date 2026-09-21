@@ -94,7 +94,7 @@ The periodic retro **audit** is no longer a workflow step - it is an **engine se
 
 ## Project registry
 
-- **project** - a registered codebase lightcycle files work against: an **identity**, a **shortcode**, a local path, and a remote URL. Stored in the project registry, managed with `lc project add|list|rm`.
+- **project** - a registered codebase lightcycle files work against: an **identity**, a **shortcode**, a local path, and a remote URL. Stored in the project registry, managed with `lc project add|list|rm`. The shortcode `G` is reserved for goal ids (`G-<n>`): `lc project add --shortcode G` refuses it, and a default that would be `G` falls back to owner plus name uppercased.
 
   Confusingly shares its name with an item's own `project` field (see "The model (nouns)"): a registered project here is always one repo; an item's `project` is a human-chosen label that may span several. `lc new --project` resolves the value against this registry to pick a shortcode, then stores it verbatim as the item's `project` regardless. When `--project` is omitted, `lc new --repo` and `lc attach <id> repo <value>` (only while the item's `project` is still unset) also resolve against this registry - deriving the item's `project` as the registry's short name for the match, and leaving `project` unset, silently, if the repo doesn't resolve. Beyond these paths, nothing else assumes an item's `project` corresponds to a registered entry.
 
