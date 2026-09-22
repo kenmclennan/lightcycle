@@ -8,7 +8,7 @@ from lightcycle.config import Config
 from lightcycle.domain.work import NodeSpec, State
 from tests.support.step_factory import create_owned_step
 
-_CTX = multiprocessing.get_context("fork")
+_CTX = multiprocessing.get_context("spawn")
 
 
 def _make_root(shortcode="GRID"):
@@ -79,7 +79,7 @@ class TestAtomicClaim(unittest.TestCase):
         for p in procs:
             p.join(timeout=60)
 
-        results = [q.get(timeout=30) for _ in range(n)]
+        results = [q.get() for _ in range(n)]
         self.assertTrue(all(not str(tid).startswith("ERROR") for _, tid in results), results)
         winners = [spawn for spawn, tid in results if tid == step_id]
         self.assertEqual(len(winners), 1, "expected one winner, got %r" % winners)
@@ -106,7 +106,7 @@ class TestAtomicComplete(unittest.TestCase):
         for p in procs:
             p.join(timeout=60)
 
-        results = [q.get(timeout=30) for _ in range(2)]
+        results = [q.get() for _ in range(2)]
         self.assertNotIn("ERROR", [r[1] for r in results], results)
         wins = [r for r in results if r[1] is True]
         self.assertEqual(len(wins), 1, "expected one winner, got %r" % results)
@@ -197,7 +197,7 @@ class TestConcurrentMinting(unittest.TestCase):
         for p in procs:
             p.join(timeout=60)
 
-        results = [q.get(timeout=30) for _ in range(n)]
+        results = [q.get() for _ in range(n)]
         self.assertTrue(all(not str(r[1]).startswith("ERROR") for r in results), results)
         ids = [r[1] for r in results]
         self.assertEqual(len(ids), len(set(ids)), results)
@@ -222,7 +222,7 @@ class TestConcurrentPassOpening(unittest.TestCase):
         for p in procs:
             p.join(timeout=60)
 
-        results = [q.get(timeout=30) for _ in range(n)]
+        results = [q.get() for _ in range(n)]
         self.assertTrue(all(not str(r[1]).startswith("ERROR") for r in results), results)
         pass_ids = [r[1] for r in results]
         self.assertEqual(len(pass_ids), len(set(pass_ids)), results)

@@ -24,6 +24,12 @@ def _imports_tui_harness(source):
     return False
 
 
+def _inner_worker_count(outer_workers, cores):
+    if not outer_workers or not outer_workers.isdigit() or int(outer_workers) < 1:
+        return "auto"
+    return str(max(1, cores // int(outer_workers)))
+
+
 def _tui_harness_test_files():
     files = []
     for base in ("tests/unit", "tests/feature"):
@@ -51,6 +57,18 @@ def test_tui_harness_test_files_discovers_the_real_current_file_set():
     assert "tests/unit/test_fake_store.py" not in files
 
 
+@pytest.mark.parametrize("outer,cores,expected", [
+    (None, 8, "auto"),
+    ("", 8, "auto"),
+    ("junk", 8, "auto"),
+    ("4", 8, "2"),
+    ("8", 8, "1"),
+    ("16", 8, "1"),
+])
+def test_inner_worker_count_shares_cores_with_the_outer_run(outer, cores, expected):
+    assert _inner_worker_count(outer, cores) == expected
+
+
 def test_tui_suite_passes_with_empty_home_and_lc_home():
     files = _tui_harness_test_files()
     assert files
@@ -60,9 +78,10 @@ def test_tui_suite_passes_with_empty_home_and_lc_home():
     env["HOME"] = empty_home
     env["LC_HOME"] = empty_home
     env.pop("LC_CONFIG", None)
+    inner = _inner_worker_count(os.environ.get("PYTEST_XDIST_WORKER_COUNT"), os.cpu_count() or 1)
 
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-n", "auto", "--dist=loadgroup", *files],
+        [sys.executable, "-m", "pytest", "-n", inner, "--dist=loadgroup", *files],
         cwd=str(REPO_ROOT),
         env=env,
         capture_output=True,
