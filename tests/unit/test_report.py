@@ -2,6 +2,7 @@ import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
+from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
 from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_start_and_close
 from lightcycle.domain.work import item_cost
 from tests.support.fake_store import FakeStore
@@ -162,6 +163,23 @@ class TestReportUseCaseBacklog(unittest.TestCase):
         self.assertEqual(resp.backlog_start, 1)
         self.assertEqual(resp.backlog_close, 0)
         self.assertEqual(resp.backlog_delta, -1)
+
+    def test_a_reopened_item_with_abandoned_steps_counts_as_backlog_like_lc_backlog_does(self):
+        s = FakeStore()
+        item = s.create_item("reopened", "a description")
+        s._records[item]["created_at"] = "2026-01-01T08:00:00"
+        step = s.create_step(step="build", role="agent", parent=item)
+        s._records[step]["created_at"] = "2026-01-02T08:00:00"
+        s.complete_node(step, "done")
+        s.complete_node(item, "abandoned", disposition="abandoned")
+        s.reopen(item)
+        day = datetime.date(2026, 1, 5)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=day))
+        listed = BacklogUseCase(s, None).execute(BacklogInput()).rows
+
+        self.assertEqual(len(listed), 1)
+        self.assertEqual(resp.backlog_close, len(listed))
 
 
 class TestReportUseCaseEscalations(unittest.TestCase):

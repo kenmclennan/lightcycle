@@ -4,6 +4,7 @@ from typing import Optional
 
 from lightcycle.application.work.automation import AutomationInput, AutomationUseCase
 from lightcycle.application.work.done import DoneInput, DoneUseCase
+from lightcycle.application.work.item_partition import is_backlogged_item
 from lightcycle.domain.work import ItemCost, item_cost, parse_timestamp
 
 
@@ -38,7 +39,7 @@ def _earliest_step_created_by_item(store):
     return earliest
 
 
-def _backlog_size_asof(items, earliest_step_by_item, day_start):
+def _backlog_size_asof(store, items, earliest_step_by_item, day_start):
     n = 0
     for item in items:
         created = parse_timestamp(item.created_at)
@@ -48,7 +49,7 @@ def _backlog_size_asof(items, earliest_step_by_item, day_start):
         if closed is not None and closed <= day_start:
             continue
         first_step = earliest_step_by_item.get(item.id)
-        if first_step is not None and first_step < day_start:
+        if first_step is not None and first_step < day_start and not is_backlogged_item(store, item):
             continue
         n += 1
     return n
@@ -61,8 +62,8 @@ def _local_midnight(day):
 def _backlog_start_and_close(store, day):
     items = store.all_items_including_done()
     earliest = _earliest_step_created_by_item(store)
-    start = _backlog_size_asof(items, earliest, _local_midnight(day))
-    close = _backlog_size_asof(items, earliest, _local_midnight(day + datetime.timedelta(days=1)))
+    start = _backlog_size_asof(store, items, earliest, _local_midnight(day))
+    close = _backlog_size_asof(store, items, earliest, _local_midnight(day + datetime.timedelta(days=1)))
     return start, close
 
 
