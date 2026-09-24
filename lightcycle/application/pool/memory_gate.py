@@ -50,7 +50,7 @@ class MemoryGateUseCase:
             resumed = resume_target.spawnid
 
         self._memory_gate_status.save(
-            {"cap": cap, "pool_share": pool_share,
+            {"cap": vetoed_cap, "pool_share": pool_share,
              "peak_worker_share": peak_worker_share}
         )
         return MemoryGateResponse(
