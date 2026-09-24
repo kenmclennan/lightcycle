@@ -187,8 +187,12 @@ COMMANDS = {
     )),
     "set": CommandSpec(prog="lc set", args=(
         *(Arg("--%s" % opt) for opt in (
-            "title", "description", "project", "workflow", "state", "label",
+            "title", "description", "project", "workflow", "label",
             "needs", "reason", "tried", "step", "notes",
+        )),
+        Arg("--state", help=(
+            "item: active, or backlogged (removes its open steps; refused while a worker "
+            "holds a step or an open run has a branch or PR); step: ready, waiting"
         )),
         Arg("--backlog", action="append"),
         Arg("--depends", action="append", help="item id to gate activation on, not a step"),

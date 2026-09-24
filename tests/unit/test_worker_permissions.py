@@ -24,6 +24,9 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_set_with_non_waiting_state_forbidden(self):
         self.assertFalse(worker_permitted("set", {"state": "active"}))
 
+    def test_set_with_state_backlogged_forbidden(self):
+        self.assertFalse(worker_permitted("set", {"state": "backlogged"}))
+
     def test_set_with_no_state_key_forbidden(self):
         self.assertFalse(worker_permitted("set", {}))
 
