@@ -242,6 +242,15 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(resp.origin, "acme")
         self.assertTrue(source.has_version("acme", "sha1"))
 
+    def test_add_never_prunes_the_version_it_just_registered_at_zero_retention(self):
+        source = FakeSource()
+        cfg = FakeConfig(retention=0)
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        resp = AddWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute(
+            url="u", ref="main", name=None)
+        self.assertEqual(resp.pruned, [])
+        self.assertTrue(source.has_version("acme", "sha1"))
+
 
 class TestAddCommitOrdering(unittest.TestCase):
     def test_clean_run_reports_no_prune_error(self):
@@ -325,6 +334,18 @@ class TestUpgrade(unittest.TestCase):
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha3")
         UpgradeWorkflowSourceUseCase(source, store, cfg, fs).execute("acme")
         self.assertEqual(set(source.materialized["acme"]), {"sha1", "sha3"})
+
+    def test_upgrade_never_prunes_the_current_version_at_zero_retention(self):
+        source = FakeSource()
+        cfg = FakeConfig(retention=0)
+        fs = FsAdapter(cfg)
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        AddWorkflowSourceUseCase(source, FakeStore(), cfg, fs).execute(
+            url="u", ref="main", name=None)
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
+        UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, fs).execute("acme")
+        self.assertEqual(source.read_registry("acme").current, "sha2")
+        self.assertEqual(source.materialized["acme"], ["sha2"])
 
 
 class TestUpgradeCommitOrdering(unittest.TestCase):
