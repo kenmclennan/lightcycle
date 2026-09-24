@@ -116,6 +116,17 @@ class TestEnginePromptsResolve(unittest.TestCase):
         self.assertIn("Plain language", raw)
         self.assertIn("outside the four-part bar", raw)
 
+    def test_audit_no_longer_names_reflections(self):
+        with open(os.path.join(ENGINE_PROMPTS, "steps", "audit.md")) as f:
+            raw = f.read()
+        self.assertNotIn("reflection", raw.lower())
+
+    def test_audit_step_4_reads_notes_and_park_through_lc_show(self):
+        with open(os.path.join(ENGINE_PROMPTS, "steps", "audit.md")) as f:
+            step_4 = next(l for l in f.read().splitlines() if l.startswith("4. Plain language"))
+        for needle in ("lc show", "notes", "park", "PARK RESOLVED:"):
+            self.assertIn(needle, step_4)
+
     def test_config_prompts_root_is_the_engine_dir(self):
         self.assertTrue(os.path.isfile(os.path.join(Config.prompts_root(None), "fragments", "plain-language.md")))
 

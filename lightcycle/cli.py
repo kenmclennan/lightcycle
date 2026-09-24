@@ -35,8 +35,8 @@ from lightcycle.domain.goals import goal_log_stamp
 from lightcycle.domain.work import (
     ALLOWED_STATES_BY_FLAG, DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal, State,
     UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, compose_step_title,
-    missing_for_state, refuse_fields, refuse_state, render_field_refusal, worker_permitted,
-    worker_refusal_message,
+    missing_for_state, refuse_fields, refuse_state, render_cap_refusal, render_field_refusal,
+    worker_permitted, worker_refusal_message,
 )
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.goals import (
@@ -846,6 +846,14 @@ def _workflow_simulate(selector, trace=False):
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def _refuse_over_cap(fields):
+    refusal = render_cap_refusal(fields)
+    if not refusal:
+        return None
+    sys.stderr.write("%s\n" % refusal)
+    return 2
+
+
 def cmd_done(argv):
     a = build_parser(COMMANDS["done"]).parse_args(argv)
     note = " ".join(a.note) if a.note else None
@@ -862,6 +870,9 @@ def cmd_done(argv):
     if refusal is not None:
         sys.stderr.write("%s\n" % render_field_refusal(refusal))
         return 2
+    rc = _refuse_over_cap([("--note", note)])
+    if rc is not None:
+        return rc
     try:
         if node_type == "step":
             resp = CompleteStepUseCase(
@@ -902,6 +913,9 @@ def cmd_close(argv):
         )
         return 2
     note = " ".join(a.note) if a.note else None
+    rc = _refuse_over_cap([("--note", note)])
+    if rc is not None:
+        return rc
     try:
         CloseItemUseCase(_container.store, _worktrees()).execute(
             CloseItemInput(item=a.id, reason=a.outcome, disposition=a.disposition, note=note)
@@ -1179,6 +1193,9 @@ def cmd_new(argv):
                 "--parent <item> is required for 'lc new step'; it names the owning item\n"
             )
             return 2
+        rc = _refuse_over_cap([("--note", " ".join(a.note) if a.note else None)])
+        if rc is not None:
+            return rc
         try:
             resp = CreateStepUseCase(_container.store, _flow()).execute(
                 CreateStepInput(
@@ -1334,6 +1351,11 @@ def cmd_set(argv):
                     % (field, _WAITING_FIELD_HINTS[field])
                 )
                 return 2
+            rc = _refuse_over_cap(
+                [("--needs", a.needs), ("--reason", a.reason), ("--tried", a.tried)]
+            )
+            if rc is not None:
+                return rc
             BlockStepUseCase(_container.store).execute(
                 BlockInput(step=a.id, needs=a.needs, reason=a.reason, tried=a.tried)
             )
