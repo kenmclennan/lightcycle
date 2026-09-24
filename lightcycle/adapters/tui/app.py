@@ -86,6 +86,7 @@ from lightcycle.application.work import (
 from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.application.work.project_of import short_project_label
 from lightcycle.application.work.suspended_steps import suspended_step_ids
+from lightcycle.render import format_elapsed
 
 POLL_INTERVAL_SECONDS = 10
 POOL_TRANSITION_POLL_SECONDS = 1
@@ -817,6 +818,10 @@ class DoneView(Vertical):
 def _report_rows(response):
     delta = response.backlog_delta
     delta_text = "+%d" % delta if delta >= 0 else str(delta)
+    slow_rows = tuple(
+        (slow.step.id, "%s - %s active - %s" % (slow.step.stage, format_elapsed(slow.active_seconds), slow.kind))
+        for slow in response.slow_steps
+    )
     return (
         ("Items Completed", str(response.completed)),
         ("Items Closed", str(response.completed + response.abandoned)),
@@ -824,6 +829,8 @@ def _report_rows(response):
         ("Automation Items", str(response.automation_count)),
         ("Automation Spend", _format_item_cost(response.automation_spend)),
         ("Escalations", str(response.escalations)),
+        ("Slow Steps", str(len(response.slow_steps))),
+    ) + slow_rows + (
         ("Starting Backlog Size", str(response.backlog_start)),
         ("Closing Backlog Size", str(response.backlog_close)),
         ("Backlog Delta", delta_text),

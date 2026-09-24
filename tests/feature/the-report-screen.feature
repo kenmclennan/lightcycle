@@ -2,8 +2,8 @@ Feature: The report screen
 
   The report tab is the fourth top-level screen, reached from the done tab by
   Tab or the tab strip (priority list -> backlog -> done -> report -> priority
-  list). It shows nine store-wide rows for one day, as a table: items
-  completed, items closed, cost, automation items, automation cost, escalations, starting backlog
+  list). It shows ten store-wide rows for one day, as a table: items
+  completed, items closed, cost, automation items, automation cost, escalations, slow steps (a count, followed by one row per slow step), starting backlog
   size (as of that day's midnight), closing backlog size (as of the next
   midnight) and backlog delta (closing minus starting) - defaulting to
   today. On the current day the closing size is live and keeps moving. Below the table, it shows the day's

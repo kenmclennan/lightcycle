@@ -258,5 +258,83 @@ class TestReportUseCaseSummary(unittest.TestCase):
         self.assertIsNone(resp.summary)
 
 
+def _seed_step(store, item, stage, seconds, *, turns=0, closed_at=None, finish=True):
+    step = store.create_step(step=stage, role="agent", parent=item)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([step], seconds)
+    if turns:
+        store.record_attribution(step, turns, {})
+    if finish:
+        store.complete_node(step, "done")
+        store._records[step]["closed_at"] = closed_at
+    return step
+
+
+def _seed_history(store, item, stage, count, closed_at):
+    for n in range(count):
+        _seed_step(store, item, stage, 60 * (n + 1), turns=6 * (n + 1), closed_at=closed_at)
+
+
+class TestReportUseCaseSlowSteps(unittest.TestCase):
+    DAY = datetime.date(2026, 1, 1)
+    ON_DAY = "2026-01-01T10:00:00+00:00"
+    OTHER_DAY = "2026-01-02T10:00:00+00:00"
+
+    def _store_with_history(self, count=20, stage="review-code"):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        _seed_history(s, item, stage, count, "2025-12-20T10:00:00+00:00")
+        return s, item
+
+    def test_a_slow_step_closed_on_the_day_is_listed(self):
+        s, item = self._store_with_history()
+        slow = _seed_step(s, item, "review-code", 3167.5, turns=87, closed_at=self.ON_DAY)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
+
+        self.assertEqual([r.step.id for r in resp.slow_steps], [slow])
+
+    def test_the_same_step_closed_on_another_day_is_not_listed(self):
+        s, item = self._store_with_history()
+        _seed_step(s, item, "review-code", 3167.5, turns=87, closed_at=self.OTHER_DAY)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
+
+        self.assertEqual(resp.slow_steps, [])
+
+    def test_a_running_step_is_not_listed(self):
+        s, item = self._store_with_history()
+        _seed_step(s, item, "review-code", 3167.5, turns=87, finish=False)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
+
+        self.assertEqual(resp.slow_steps, [])
+
+    def test_a_day_with_two_slow_steps_lists_only_the_one_in_a_measured_stage(self):
+        s, item = self._store_with_history(count=20, stage="review-code")
+        _seed_history(s, item, "spec-writer", 19, "2025-12-20T10:00:00+00:00")
+        measured = _seed_step(s, item, "review-code", 3000, turns=30, closed_at=self.ON_DAY)
+        _seed_step(s, item, "spec-writer", 9000, turns=30, closed_at=self.ON_DAY)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
+
+        self.assertEqual([r.step.id for r in resp.slow_steps], [measured])
+
+    def test_execute_reads_all_steps_exactly_once(self):
+        s, item = self._store_with_history()
+        calls = {"n": 0}
+        original = s.all_steps_including_done
+
+        def counted():
+            calls["n"] += 1
+            return original()
+
+        s.all_steps_including_done = counted
+
+        ReportUseCase(s).execute(ReportInput(day=self.DAY))
+
+        self.assertEqual(calls["n"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

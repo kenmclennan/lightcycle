@@ -3205,7 +3205,7 @@ class TestReportTabSwitch(unittest.TestCase):
 
 
 class TestReportFigures(unittest.TestCase):
-    def test_shows_nine_rows_for_today_by_default(self):
+    def test_shows_ten_rows_for_today_by_default(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
         step = store.create_step(step="build", role="agent", parent=item)
@@ -3226,13 +3226,40 @@ class TestReportFigures(unittest.TestCase):
                 ("Automation Items", "0"),
                 ("Automation Spend", "not recorded"),
                 ("Escalations", "0"),
+                ("Slow Steps", "0"),
                 ("Starting Backlog Size", "0"),
                 ("Closing Backlog Size", "0"),
                 ("Backlog Delta", "+0"),
             ],
         )
 
-    def test_zero_activity_day_still_renders_all_nine_rows(self):
+    def test_a_slow_step_adds_the_count_and_a_keyed_row_with_stage_elapsed_and_kind(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        for n in range(20):
+            step = store.create_step(step="review-code", role="agent", parent=item)
+            store.claim_ready("agent")
+            store.accrue_active_seconds([step], 60 * (n + 1))
+            store.record_attribution(step, 7 * (n + 1), {})
+            store.complete_node(step, "done")
+        slow = store.create_step(step="review-code", role="agent", parent=item)
+        store.claim_ready("agent")
+        store.accrue_active_seconds([slow], 3167.5)
+        store.record_attribution(slow, 87, {})
+        store.complete_node(slow, "done")
+
+        session = _launch_report(store)
+        self.addCleanup(session.close)
+
+        rows = _report_rows_shown(session)
+        self.assertEqual(rows[5:8], [
+            ("Escalations", "0"),
+            ("Slow Steps", "1"),
+            (slow, "review-code - 52m active - waiting"),
+        ])
+        self.assertEqual(rows[8][0], "Starting Backlog Size")
+
+    def test_zero_activity_day_still_renders_all_ten_rows(self):
         session = _launch_report(FakeStore())
         self.addCleanup(session.close)
 
@@ -3245,6 +3272,7 @@ class TestReportFigures(unittest.TestCase):
                 ("Automation Items", "0"),
                 ("Automation Spend", "not recorded"),
                 ("Escalations", "0"),
+                ("Slow Steps", "0"),
                 ("Starting Backlog Size", "0"),
                 ("Closing Backlog Size", "0"),
                 ("Backlog Delta", "+0"),
