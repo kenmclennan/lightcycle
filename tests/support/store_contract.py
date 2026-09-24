@@ -366,6 +366,26 @@ class StoreContractBase:
         self.assertTrue(claimed.claimed_by)
         self.assertTrue(all(t.claimed_by for t in s.claimed_steps()))
 
+    def test_create_item_with_a_shortcode_mints_prefixed_ids_from_a_per_prefix_counter(self):
+        s = self.make_store()
+        horde_first = s.create_item("h1", "a description", shortcode="HORDE")
+        saga_first = s.create_item("s1", "a description", shortcode="SAGA")
+        horde_second = s.create_item("h2", "a description", shortcode="HORDE")
+        self.assertEqual((horde_first, saga_first, horde_second), ("HORDE-1", "SAGA-1", "HORDE-2"))
+
+    def test_create_item_with_an_explicit_id_ignores_the_shortcode(self):
+        s = self.make_store()
+        iid = s.create_item("item: foo", "a description", shortcode="HORDE", id="fixed-1")
+        self.assertEqual(iid, "fixed-1")
+        self.assertEqual(s.create_item("h1", "a description", shortcode="HORDE"), "HORDE-1")
+
+    def test_create_item_with_neither_id_nor_shortcode_refuses_rather_than_falling_back(self):
+        s = self.make_store()
+        with self.assertRaises(ValueError):
+            s.create_item("item: foo", "a description")
+        with self.assertRaises(ValueError):
+            s.create_item("item: foo", "a description", shortcode="")
+
     def test_reassign_to_human_is_waiting(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

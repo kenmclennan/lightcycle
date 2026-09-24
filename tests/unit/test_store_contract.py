@@ -10,13 +10,13 @@ from tests.support.step_factory import create_owned_step
 
 class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
     def make_store(self, now=None):
-        return FakeStore(now=now)
+        return FakeStore(now=now, strict_shortcode=True)
 
     def make_store_with_context_artifact_types(self, types):
         cfg_path = os.path.join(tempfile.mkdtemp(), "config")
         with open(cfg_path, "w") as f:
             f.write("context-artifact-types: %s\n" % " ".join(types))
-        store = FakeStore()
+        store = FakeStore(strict_shortcode=True)
         store.bind_config(Config(environ={"LC_CONFIG": cfg_path}))
         return store
 
@@ -66,12 +66,12 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_stories_excluded_from_ready(self):
         s = self.make_store()
-        s.create_item("item: foo", "a description")
+        s.create_item("item: foo", "a description", shortcode="GRID")
         self.assertEqual(s.ready_steps(), [])
 
     def test_children_returns_child_records(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         tid = s.create_step(parent=sid)
         kids = s.children(sid)
         self.assertEqual(len(kids), 1)
@@ -79,7 +79,7 @@ class TestFakeStoreContract(StoreContractBase, unittest.TestCase):
 
     def test_task_view_inherits_story_artifacts(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         tid = s.create_step(parent=sid)
         s.add_artifact(sid, "branch", "feat/foo")
         view = s.node_view(tid)

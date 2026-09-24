@@ -131,7 +131,7 @@ _TX_ATTRS = (
 
 
 class FakeStore(StorePort):
-    def __init__(self, now=None, config=None):
+    def __init__(self, now=None, config=None, strict_shortcode=False):
         self._records = {}
         self._labels = {}
         self._passes = []
@@ -150,6 +150,7 @@ class FakeStore(StorePort):
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
         self._tx_depth = 0
+        self._strict_shortcode = strict_shortcode
 
     def bind_config(self, config):
         self._config = config
@@ -767,8 +768,10 @@ class FakeStore(StorePort):
         )
         if id is not None:
             fields["id"] = id
-        elif shortcode is not None:
+        elif shortcode:
             fields["id"] = self._mint_id(shortcode)
+        elif self._strict_shortcode:
+            raise ValueError("create_item needs an explicit shortcode or id; nothing fills one in")
         b = self._new_record(**fields)
         tid = b["id"]
         self._records[tid] = b
