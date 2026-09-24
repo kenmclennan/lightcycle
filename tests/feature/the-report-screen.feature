@@ -17,7 +17,7 @@ Feature: The report screen
     When I switch to the report tab
     Then the report tab is shown
 
-  Scenario: The report tab shows eight rows for today by default
+  Scenario: The report tab shows its rows for today by default
     Given the store has a closed item today, costing money, with a completed disposition
     When I switch to the report tab
     Then the report table shows 1 items completed and 1 items closed
