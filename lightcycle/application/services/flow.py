@@ -1,4 +1,5 @@
 from lightcycle.application.flow.engine_steps import engine_display_of
+from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.pool import ReadyQueue
@@ -93,9 +94,7 @@ class FlowService:
         return result
 
     def _with_engine_fragments(self, root):
-        if not root or self._config is None:
-            return root
-        return [root, self._config.prompts_root()]
+        return with_engine_fragments(root, self._config)
 
     def _role_metas_in(self, root):
         include_roots = self._with_engine_fragments(root)
